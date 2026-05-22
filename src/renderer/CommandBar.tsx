@@ -1929,6 +1929,7 @@ export default function CommandBar({
               <Hint label="Open chat" keys={<Kbd>↵</Kbd>} />
               <Hint label="New chat" keys={<><Kbd>⌘</Kbd><Kbd>N</Kbd></>} />
               <Hint label="Exit AI" keys={<Kbd>Esc</Kbd>} />
+              <Hint label="Close window" keys={<><Kbd>Esc</Kbd><Kbd>⌘</Kbd></>} />
             </>
           ) : (
             <>

@@ -15,8 +15,8 @@
        inside it (surfaces inset the window by 8px), so inner corners
        appear visually parallel to the window corner. Each subsequent
        level steps down by ~4–6px to keep the hierarchy readable.
-       window (24) ⟶ panel / card (16) ⟶ row (10) ⟶ field (8) ⟶ chip (6) */
-    --r-window: 24px;
+       window (card + 8px inset) ⟶ panel / card (16) ⟶ row (10) ⟶ field (8) ⟶ chip (6) */
+    --r-window: calc(var(--r-card) + var(--s-2));
     --r-panel: 16px;
     --r-card: 16px;
     --r-row: 10px;
@@ -829,4 +829,3 @@
   border-color: rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.05);
 }
-

@@ -537,8 +537,7 @@ function createWindow(): void {
     transparent: true,
     backgroundColor: '#00000000',
     hasShadow: false,
-    vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
-    visualEffectState: 'active',
+    roundedCorners: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

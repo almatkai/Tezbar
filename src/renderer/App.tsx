@@ -240,7 +240,7 @@ export default function App(): JSX.Element {
   }, [surface])
 
   return (
-    <div className="drag-region relative flex h-screen w-full overflow-hidden bg-transparent p-2">
+    <div className="glass-shell drag-region flex h-screen w-full p-2">
       <div
         aria-hidden
         className={[
