@@ -11,7 +11,42 @@ import type {
   ChatTurn,
 } from '../../shared/chat'
 
-import type { SessionRow, TurnRow } from './sessionStore'
+type SessionRow = {
+  id: string
+  title: string
+  created_at: number
+  updated_at: number
+}
+
+type TurnRow = {
+  id: string
+  session_id: string
+  role: string
+  text: string
+  stages_json: string | null
+  error: string | null
+  created_at: number
+}
+
+function safeParseStages(raw: string | null): Stage[] | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return undefined
+    const stages = parsed.filter((item): item is Stage => {
+      if (!item || typeof item !== 'object') return false
+      const stage = item as Partial<Stage>
+      return (
+        typeof stage.index === 'number' &&
+        typeof stage.label === 'string' &&
+        (stage.status === 'running' || stage.status === 'done' || stage.status === 'failed')
+      )
+    })
+    return stages.length > 0 ? stages : undefined
+  } catch {
+    return undefined
+  }
+}
 
 function dbPath(): string {
   const dir = join(app.getPath('userData'), 'chat')
@@ -120,7 +155,7 @@ class ChatSessionDatabase {
         text: t.text,
         stages: safeParseStages(t.stages_json),
         error: t.error ?? undefined,
-        createdAt: t.createdAt,
+        createdAt: t.created_at,
       })),
     }
   }

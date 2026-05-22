@@ -52,11 +52,13 @@ export interface ChatSessionSummary {
 export const CHAT_CONTINUATION_WINDOW_MS = 30_000
 
 /** Hard cap on how many turns we pack into the context prompt. Older
- *  turns are still kept in storage; we just stop sending them to pi so
- *  the prompt does not balloon beyond what the model can handle. */
+ *  turns are still kept in storage; we just stop sending them to the
+ *  chat provider so the prompt does not balloon beyond what the model
+ *  can handle. */
 export const CHAT_CONTEXT_MAX_TURNS = 16
 
 export const CHAT_IPC = {
+  RUN: 'chat:run',
   LIST: 'chat:list',
   GET: 'chat:get',
   APPEND: 'chat:append',

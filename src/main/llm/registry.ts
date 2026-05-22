@@ -4,6 +4,7 @@ import { readRawConfig } from './configStore'
 import { CopilotProvider } from './copilot'
 import { OllamaProvider } from './ollama'
 import { OpenAIProvider } from './openai'
+import { OpenCodeProvider } from './opencode'
 import type { LLMProvider } from './provider'
 
 export type OpenRayLLMConfig = {
@@ -27,6 +28,11 @@ export type OpenRayLLMConfig = {
   uiStateRetentionMs?: number
 }
 
+type PiProviderBridge = {
+  modelPattern: string
+  providerJson: string
+}
+
 const DEFAULT_OLLAMA_BASE = 'http://localhost:11434'
 const DEFAULT_OLLAMA_MODEL = 'llama3.2'
 const DEFAULT_GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/openai'
@@ -44,6 +50,7 @@ function normalizeFromRaw(raw: Record<string, unknown>): OpenRayLLMConfig {
     p === 'ollama' ||
     p === 'copilot' ||
     p === 'gemini' ||
+    p === 'opencode' ||
     p === 'deepseek'
       ? p
       : hasCopilotToken
@@ -144,6 +151,8 @@ function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
         cfg.geminiApiKey ?? cfg.apiKey ?? '',
         cfg.model ?? DEFAULT_GEMINI_MODEL,
       )
+    case 'opencode':
+      return new OpenCodeProvider(cfg.model ?? 'opencode/big-pickle')
     case 'deepseek':
       return new OpenAIProvider(
         cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE,
@@ -183,4 +192,84 @@ export function getProviderForTask(task: LlmTask): LLMProvider {
     model: modelOverride ?? cfg.model,
   }
   return buildProvider(merged)
+}
+
+export function getSelectedPiModelPattern(): string | undefined {
+  const cfg = readLLMConfig()
+  const model = cfg.model?.trim()
+  if (!model) return undefined
+
+  const provider = cfg.provider
+  if (provider === 'opencode') {
+    if (model.startsWith('opencode/opencode/')) return model
+    if (model.startsWith('opencode/')) return `opencode/${model}`
+    return `opencode/opencode/${model}`
+  }
+  if (model.startsWith(`${provider}/`)) return model
+  if (model.includes('/')) return model
+  return `${provider}/${model}`
+}
+
+function stripProviderPrefix(model: string, provider: ProviderId): string {
+  const prefix = `${provider}/`
+  let normalized = model.trim()
+  while (normalized.startsWith(prefix)) {
+    normalized = normalized.slice(prefix.length)
+  }
+  return normalized
+}
+
+function openAiCompatBaseUrl(cfg: OpenRayLLMConfig): string | undefined {
+  if (cfg.provider === 'openai') return cfg.baseURL ?? 'https://api.openai.com/v1'
+  if (cfg.provider === 'openai-compatible') return cfg.openaiCompatibleBaseURL ?? cfg.baseURL
+  if (cfg.provider === 'gemini') return cfg.baseURL ?? DEFAULT_GEMINI_BASE
+  if (cfg.provider === 'deepseek') return cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE
+  if (cfg.provider === 'ollama') {
+    const base = cfg.baseURL ?? DEFAULT_OLLAMA_BASE
+    return base.endsWith('/v1') ? base : `${base.replace(/\/+$/, '')}/v1`
+  }
+  return undefined
+}
+
+function piApiKey(cfg: OpenRayLLMConfig): string | undefined {
+  if (cfg.provider === 'gemini') return cfg.geminiApiKey ?? cfg.apiKey
+  if (cfg.provider === 'ollama') return 'ollama'
+  return cfg.apiKey
+}
+
+export function getSelectedPiProviderBridge(): PiProviderBridge | undefined {
+  const cfg = readLLMConfig()
+  const model = cfg.model?.trim()
+  if (!model) return undefined
+
+  const modelId = stripProviderPrefix(model, cfg.provider)
+  if (!modelId) return undefined
+
+  const isAnthropic = cfg.provider === 'anthropic'
+  const baseUrl = isAnthropic ? cfg.baseURL ?? 'https://api.anthropic.com' : openAiCompatBaseUrl(cfg)
+  const apiKey = isAnthropic ? cfg.apiKey : piApiKey(cfg)
+  if (!baseUrl || !apiKey) return undefined
+
+  const providerJson = JSON.stringify({
+    baseUrl,
+    apiKey,
+    api: isAnthropic ? 'anthropic-messages' : 'openai-completions',
+    authHeader: true,
+    models: [
+      {
+        id: modelId,
+        name: `Raymes ${cfg.provider} ${modelId}`,
+        reasoning: /reason|think|r1|o\d|gpt-5|claude|deepseek/i.test(modelId),
+        input: ['text'],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128000,
+        maxTokens: 8192,
+      },
+    ],
+  })
+
+  return {
+    modelPattern: `raymes/${modelId}`,
+    providerJson,
+  }
 }

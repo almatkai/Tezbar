@@ -291,6 +291,8 @@ function AiIcon(): JSX.Element {
 }
 
 export default function CommandBar({
+  initialValue = '',
+  initialSelectedChatId = null,
   onOpenAiChat,
   onOpenProviders,
   onOpenSettings,
@@ -302,6 +304,8 @@ export default function CommandBar({
   onOpenNotesPage,
   onOpenEmojiPicker,
 }: {
+  initialValue?: string
+  initialSelectedChatId?: string | null
   onOpenAiChat: (boot: AiChatBoot) => void
   onOpenProviders: () => void
   onOpenSettings: () => void
@@ -313,7 +317,7 @@ export default function CommandBar({
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
   onOpenEmojiPicker: () => void
 }): JSX.Element {
-  const [value, setValue] = useState('')
+  const [value, setValue] = useState(initialValue)
   const [lastIntent, setLastIntent] = useState<Intent | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [streamText, setStreamText] = useState('')
@@ -381,6 +385,12 @@ export default function CommandBar({
     setPinnedCommands(readPinnedCommands())
     void window.raymes.chatList(8).then(setChatHistory)
   }, [])
+
+  useEffect(() => {
+    if (!initialSelectedChatId || !isAiMode || chatHistory.length === 0) return
+    const index = chatHistory.findIndex((chat) => chat.id === initialSelectedChatId)
+    if (index >= 0) setSelectedSearch(index)
+  }, [chatHistory, initialSelectedChatId, isAiMode])
 
   useEffect(() => {
     const offToken = window.raymes.onStreamToken((t) => {
@@ -1001,9 +1011,9 @@ export default function CommandBar({
         return true
       }
       if (valueRef.current.startsWith(' ')) {
-        // Space prefix = AI mode. Escape drops the prefix and returns to
-        // normal mode without hiding the launcher.
-        setValue((v) => v.replace(/^ +/, ''))
+        // Space prefix = AI mode. Escape clears the typed prompt but keeps
+        // the command bar in AI mode.
+        setValue(' ')
         focusCommandInput()
         return true
       }
@@ -1369,7 +1379,12 @@ export default function CommandBar({
                 onTouchEnd={stopDictation}
                 title="Hold to speak — or keep Option+Space held after opening Raymes (macOS)"
               >
-                {isDictating ? 'Listening' : isTranscribing ? 'Transcribing…' : 'Hold to speak'}
+                {isDictating ? 'Listening' : isTranscribing ? 'Transcribing…' : (
+                  <span className="group">
+                    <span className="group-hover:hidden">Hold to speak</span>
+                    <span className="hidden group-hover:inline">hold cmd+space</span>
+                  </span>
+                )}
               </button>
             ) : null}
             {isAiMode ? (

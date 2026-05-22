@@ -1,33 +1,5 @@
 import type { Stage } from '../../shared/agent'
-import {
-  CHAT_CONTEXT_MAX_TURNS,
-  type ChatSession,
-} from '../../shared/chat'
 import { cx } from '../ui/primitives'
-
-/** Random id generator for chat sessions + turns. */
-export function makeChatId(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
-}
-
-export function summarizeChatTitle(firstUserText: string): string {
-  const firstLine = firstUserText.split('\n').find((l) => l.trim()) ?? ''
-  const cleaned = firstLine.trim()
-  if (!cleaned) return 'New chat'
-  return cleaned.length > 64 ? cleaned.slice(0, 61) + '…' : cleaned
-}
-
-export function buildAgentPromptFromChat(session: ChatSession, nextUserText: string): string {
-  const priorTurns = session.turns.slice(-CHAT_CONTEXT_MAX_TURNS)
-  if (priorTurns.length === 0) return nextUserText
-  const lines: string[] = ['Prior conversation (for context only):']
-  for (const turn of priorTurns) {
-    const label = turn.role === 'user' ? 'User' : 'Assistant'
-    lines.push(`${label}: ${turn.text}`.trim())
-  }
-  lines.push('', 'New message from the user:', nextUserText)
-  return lines.join('\n\n')
-}
 
 export function AgentStageList({
   stages,

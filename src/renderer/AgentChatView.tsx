@@ -17,15 +17,32 @@ import { RAYMES_AI_NEW_CHAT_EVENT } from '../shared/aiChatSurface'
 import { Hint, HintBar, Kbd, cx } from './ui/primitives'
 import { Markdown } from './ui/Markdown'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
+import { AgentStageList } from './agentChat/shared'
 import {
-  AgentStageList,
   buildAgentPromptFromChat,
   makeChatId,
   summarizeChatTitle,
-} from './agentChat/shared'
+} from './agentChat/model'
 
 function focusChatInput(): void {
   document.getElementById('ai-chat-input')?.focus()
+}
+
+const QUESTION_PREFIX_RE = /^(what|why|how|who|when|is|are|can|does)\b/i
+const AGENT_TASK_RE =
+  /\b(cd|git|clone|mkdir|touch|rm|mv|cp|pnpm|npm|yarn|bun|cargo|go|python|node|run|execute|install|build|test|fix|create|open|move|delete|rename|write|edit|commit|push|pull|list|show|find)\b/i
+const LOCAL_PATH_RE = /(?:~\/|\.{1,2}\/|\/Users\/|\bdesktop\/|\bdesktop\\|\bcode\/|\bcode\\)/i
+const MACHINE_QUERY_RE =
+  /\b(i have|my mac|my computer|my system|installed|applications?|apps?|code editors?|editors?|on this machine|on my machine)\b/i
+
+function shouldRunAgent(message: string): boolean {
+  const trimmed = message.trim()
+  if (!trimmed) return false
+  if (/```|[$>] /.test(trimmed)) return true
+  if (LOCAL_PATH_RE.test(trimmed)) return true
+  if (MACHINE_QUERY_RE.test(trimmed)) return true
+  if (trimmed.endsWith('?') || QUESTION_PREFIX_RE.test(trimmed)) return false
+  return AGENT_TASK_RE.test(trimmed)
 }
 
 export default function AgentChatView({
@@ -89,10 +106,24 @@ export default function AgentChatView({
     }
   }, [])
 
+  const stopRun = useCallback((): void => {
+    if (!currentAgentRunIdRef.current) return
+    void window.raymes.agentCancel()
+    currentAgentRunIdRef.current = null
+    agentStatusRef.current = 'idle'
+    agentErrorRef.current = null
+    agentStreamTextRef.current = ''
+    agentStagesRef.current = []
+    setAgentStatus('idle')
+    setAgentError(null)
+    setAgentStreamText('')
+    setAgentStages([])
+    focusChatInput()
+  }, [])
+
   const startNewChat = useCallback((): void => {
     if (currentAgentRunIdRef.current) {
-      void window.raymes.agentCancel()
-      currentAgentRunIdRef.current = null
+      stopRun()
     }
     setChatSession(null)
     chatSessionRef.current = null
@@ -103,16 +134,13 @@ export default function AgentChatView({
     setHistoryOpen(false)
     setRunLogs([])
     focusChatInput()
-  }, [])
+  }, [stopRun])
 
   const loadChatSession = useCallback(async (id: string): Promise<void> => {
     try {
       const full = await window.raymes.chatGet(id)
       if (!full) return
-      if (currentAgentRunIdRef.current) {
-        void window.raymes.agentCancel()
-        currentAgentRunIdRef.current = null
-      }
+      stopRun()
       setChatSession(full)
       chatSessionRef.current = full
       setAgentStages([])
@@ -125,7 +153,7 @@ export default function AgentChatView({
     } catch {
       /* ignore */
     }
-  }, [])
+  }, [stopRun])
 
   const deleteChatFromHistory = useCallback(
     async (id: string): Promise<void> => {
@@ -153,11 +181,9 @@ export default function AgentChatView({
       if (!trimmed) return
       const now = Date.now()
       const existing = chatSessionRef.current
-      const isContinuation =
-        !!existing && now - existing.updatedAt < CHAT_CONTINUATION_WINDOW_MS
 
-      const session: ChatSession = isContinuation
-        ? existing!
+      const session: ChatSession = existing
+        ? existing
         : {
             id: makeChatId(),
             title: summarizeChatTitle(trimmed),
@@ -198,15 +224,16 @@ export default function AgentChatView({
       setAgentStatus('running')
       setRunLogs([])
 
-      const prompt = buildAgentPromptFromChat(nextSession, trimmed)
       try {
-        const result = await window.raymes.agentRun(prompt)
+        const result = shouldRunAgent(trimmed)
+          ? await window.raymes.agentRun(buildAgentPromptFromChat(nextSession, trimmed))
+          : await window.raymes.chatRun(nextSession.turns)
         if (!result.ok) {
-          setAgentError(result.error || 'Agent failed to start')
+          setAgentError(result.error || 'Run failed to start')
           setAgentStatus('error')
         }
       } catch (err) {
-        setAgentError(err instanceof Error ? err.message : 'Agent failed to start')
+        setAgentError(err instanceof Error ? err.message : 'Run failed to start')
         setAgentStatus('error')
       }
     },
@@ -214,7 +241,13 @@ export default function AgentChatView({
   )
 
   const bootKey =
-    boot.kind === 'submit' ? `submit:${boot.prompt}` : boot.kind === 'panel' ? 'panel' : 'newChat'
+    boot.kind === 'submit'
+      ? `submit:${boot.prompt}`
+      : boot.kind === 'resume'
+        ? `resume:${boot.sessionId}`
+        : boot.kind === 'panel'
+          ? 'panel'
+          : 'newChat'
 
   // First paint: honour boot + hydrate history.
   useEffect(() => {
@@ -226,6 +259,11 @@ export default function AgentChatView({
 
         if (boot.kind === 'newChat') {
           startNewChat()
+          return
+        }
+
+        if (boot.kind === 'resume') {
+          await loadChatSession(boot.sessionId)
           return
         }
 
@@ -402,12 +440,7 @@ export default function AgentChatView({
   useEffect(() => {
     setCommandSurfaceEscapeConsumer(() => {
       if (currentAgentRunIdRef.current) {
-        void window.raymes.agentCancel()
-        setAgentStatus('idle')
-        setAgentError(null)
-        setAgentStages([])
-        setAgentStreamText('')
-        focusChatInput()
+        stopRun()
         return true
       }
       if (historyOpenRef.current) {
@@ -420,7 +453,7 @@ export default function AgentChatView({
     return () => {
       setCommandSurfaceEscapeConsumer(null)
     }
-  }, [])
+  }, [stopRun])
 
   useEffect(() => {
     requestAnimationFrame(() => focusChatInput())
@@ -449,7 +482,7 @@ export default function AgentChatView({
             {chatSession ? (
               <p className="truncate text-[12.5px] text-ink-1">{chatSession.title}</p>
             ) : (
-              <p className="text-[12.5px] text-ink-3">Ask the coding agent (pi)</p>
+              <p className="text-[12.5px] text-ink-3">Ask anything</p>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -465,12 +498,12 @@ export default function AgentChatView({
             {agentStatus === 'running' ? (
               <button
                 type="button"
-                className="rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
+                className="rounded-raymes-chip border border-rose-400/35 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-200 transition hover:border-rose-300/60 hover:bg-rose-500/16 hover:text-rose-100"
                 onClick={() => {
-                  void window.raymes.agentCancel()
+                  stopRun()
                 }}
               >
-                Cancel
+                Stop
               </button>
             ) : null}
             <button
@@ -654,11 +687,9 @@ export default function AgentChatView({
             agentStatus === 'idle' && !agentStreamText ? (
               <div className="flex flex-1 items-center justify-center px-4 py-6 text-center">
                 <div className="max-w-[440px] space-y-2 text-ink-3">
-                  <p className="text-[13px] text-ink-2">Pi agent chat</p>
+                  <p className="text-[13px] text-ink-2">AI chat</p>
                   <p className="text-[12px] text-ink-4">
-                    Type below and press Enter. If nothing appears,                     Agent log (below) shows stderr from the pi CLI (model auth, config, crashes). The
-                    same lines are printed in the main process console as{' '}
-                    <span className="font-mono text-ink-2">[raymes:agent]</span>.
+                    Type below and press Enter.
                   </p>
                 </div>
               </div>

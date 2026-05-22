@@ -58,6 +58,10 @@ export default function App(): JSX.Element {
   const [surface, setSurface] = useState<Surface>('command')
   const [openPortsInitialTab, setOpenPortsInitialTab] = useState<'listen' | 'named'>('listen')
   const [notesInitialSelectedId, setNotesInitialSelectedId] = useState<number | null>(null)
+  const [commandInitialValue, setCommandInitialValue] = useState('')
+  const [commandInitialSelectedChatId, setCommandInitialSelectedChatId] = useState<string | null>(
+    null,
+  )
   const [aiChatBoot, setAiChatBoot] = useState<AiChatBoot>({ kind: 'panel' })
   const [aiChatKey, setAiChatKey] = useState(0)
   const [extensionRuntimeInitial, setExtensionRuntimeInitial] = useState<Extract<
@@ -191,6 +195,7 @@ export default function App(): JSX.Element {
         e.preventDefault()
         if (surface === 'ai-chat') {
           if (tryConsumeCommandSurfaceEscape()) return
+          setCommandInitialValue(' ')
           setSurface('command')
           return
         }
@@ -304,8 +309,14 @@ export default function App(): JSX.Element {
           />
         ) : (
           <CommandBar
+            initialValue={commandInitialValue}
+            initialSelectedChatId={commandInitialSelectedChatId}
             onOpenAiChat={(nextBoot) => {
               setAiChatBoot(nextBoot)
+              setCommandInitialValue('')
+              setCommandInitialSelectedChatId(
+                nextBoot.kind === 'resume' ? nextBoot.sessionId : null,
+              )
               setAiChatKey((k) => k + 1)
               setSurface('ai-chat')
             }}

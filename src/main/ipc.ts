@@ -1,7 +1,7 @@
 import { BrowserWindow, clipboard, ipcMain, shell } from 'electron'
 import { setSuppressBlurHide } from './windowState'
 import { AGENT_IPC, type AgentRunEvent, type Stage } from '../shared/agent'
-import { CHAT_IPC, type ChatSession, type ChatTurn } from '../shared/chat'
+import { CHAT_CONTEXT_MAX_TURNS, CHAT_IPC, type ChatSession, type ChatTurn } from '../shared/chat'
 import { disposeSharedBridge, getSharedBridge } from './agent/bridge'
 import {
   appendChatTurn,
@@ -21,6 +21,7 @@ import {
   parseVoiceTranscribeRequest,
 } from '../shared/ipc'
 import type { SearchAction } from '../shared/search'
+import type { Message } from './llm/provider'
 import { streamAnswerToRenderer } from './llm/answerStream'
 import { setLauncherContentHeight } from './windowBounds'
 import {
@@ -37,7 +38,14 @@ import {
   startGithubDeviceFlow,
 } from './llm/githubCopilotAuth'
 import { listModelsForProvider } from './llm/listModels'
-import { buildProviderForId, invalidateProviderCache, readLLMConfig } from './llm/registry'
+import {
+  buildProviderForId,
+  getProviderForTask,
+  getSelectedPiProviderBridge,
+  getSelectedPiModelPattern,
+  invalidateProviderCache,
+  readLLMConfig,
+} from './llm/registry'
 import type { ProviderId } from '../shared/llmConfig'
 import { classifyIntent } from './router'
 import {
@@ -121,6 +129,9 @@ let answerAbort: AbortController | null = null
 let agentAbort: AbortController | null = null
 let agentRunId: string | null = null
 
+const CHAT_SYSTEM_PROMPT =
+  'You are Raymes, a helpful assistant. Answer clearly and concisely unless the user asks for more detail.'
+
 type DragMonitorControls = {
   startWindowDragMonitoring: (win: BrowserWindow) => void
   stopWindowDragMonitoring: (win: BrowserWindow) => void
@@ -136,6 +147,7 @@ function startAgentRun(sender: Electron.WebContents, task: string): string {
   const ac = agentAbort
   const runId = (agentRunId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
   const bridge = getSharedBridge()
+  const piProvider = getSelectedPiProviderBridge()
 
   sendAgentEvent(sender, { type: 'start', runId, task })
 
@@ -153,6 +165,8 @@ function startAgentRun(sender: Electron.WebContents, task: string): string {
   void bridge
     .run(task, {
       runId,
+      model: piProvider?.modelPattern ?? getSelectedPiModelPattern(),
+      raymesProviderJson: piProvider?.providerJson,
       signal: ac.signal,
       onStage,
       onMessageDelta,
@@ -171,6 +185,74 @@ function startAgentRun(sender: Electron.WebContents, task: string): string {
       if (agentAbort === ac) agentAbort = null
       if (agentRunId === runId) agentRunId = null
     })
+
+  return runId
+}
+
+function normalizeChatTurns(raw: unknown): ChatTurn[] | null {
+  if (!Array.isArray(raw)) return null
+  const turns: ChatTurn[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') return null
+    const turn = item as Partial<ChatTurn>
+    if (
+      typeof turn.id !== 'string' ||
+      (turn.role !== 'user' && turn.role !== 'assistant') ||
+      typeof turn.text !== 'string' ||
+      typeof turn.createdAt !== 'number'
+    ) {
+      return null
+    }
+    turns.push({
+      id: turn.id,
+      role: turn.role,
+      text: turn.text,
+      createdAt: turn.createdAt,
+    })
+  }
+  return turns
+}
+
+function startChatRun(sender: Electron.WebContents, turns: ChatTurn[]): string {
+  agentAbort?.abort()
+  agentAbort = new AbortController()
+  const ac = agentAbort
+  const runId = (agentRunId = `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
+  const contextTurns = turns.slice(-CHAT_CONTEXT_MAX_TURNS)
+  const messages: Message[] = [
+    { role: 'system', content: CHAT_SYSTEM_PROMPT },
+    ...contextTurns.map((turn) => ({ role: turn.role, content: turn.text }) satisfies Message),
+  ]
+
+  sendAgentEvent(sender, { type: 'start', runId, task: turns.at(-1)?.text ?? '' })
+
+  void (async () => {
+    let fullText = ''
+    try {
+      const provider = getProviderForTask('chat')
+      const stream = await provider.chat(messages, undefined, { signal: ac.signal })
+      for await (const delta of stream) {
+        if (ac.signal.aborted) return
+        if (delta.text) {
+          fullText += delta.text
+          sendAgentEvent(sender, { type: 'message', runId, delta: delta.text })
+        }
+      }
+      sendAgentEvent(sender, { type: 'answer', runId, text: fullText })
+    } catch (err) {
+      if (!ac.signal.aborted) {
+        sendAgentEvent(sender, {
+          type: 'error',
+          runId,
+          message: err instanceof Error ? err.message : String(err),
+        })
+      }
+    } finally {
+      if (!ac.signal.aborted) sendAgentEvent(sender, { type: 'done', runId })
+      if (agentAbort === ac) agentAbort = null
+      if (agentRunId === runId) agentRunId = null
+    }
+  })()
 
   return runId
 }
@@ -209,7 +291,7 @@ export function registerIpcHandlers(
 
     ipcMain.handle('llm-provider-statuses', async () => {
       const cfg = readLLMConfig()
-      const ids: ProviderId[] = ['openai', 'openai-compatible', 'anthropic', 'ollama', 'copilot', 'gemini', 'opencode']
+      const ids: ProviderId[] = ['openai', 'openai-compatible', 'anthropic', 'ollama', 'copilot', 'gemini', 'opencode', 'deepseek']
       const entries = await Promise.all(
       ids.map(async (id) => {
         try {
@@ -232,7 +314,8 @@ export function registerIpcHandlers(
         id !== 'ollama' &&
         id !== 'copilot' &&
         id !== 'gemini' &&
-        id !== 'opencode'
+        id !== 'opencode' &&
+        id !== 'deepseek'
       )
         return []
     try {
@@ -450,6 +533,15 @@ export function registerIpcHandlers(
   // The renderer owns the conversation state machine (30s continuation window,
   // active session, etc.) and tells us what to persist. We just provide
   // durable storage + list/get/delete/clear operations against sqlite.
+  ipcMain.handle(CHAT_IPC.RUN, async (event, rawTurns: unknown) => {
+    const turns = normalizeChatTurns(rawTurns)
+    if (!turns || turns.length === 0) {
+      return { ok: false, error: 'Invalid chat run payload' }
+    }
+    const runId = startChatRun(event.sender, turns)
+    return { ok: true, runId }
+  })
+
   ipcMain.handle(CHAT_IPC.LIST, async (_event, rawLimit: unknown) => {
     const limit =
       typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit > 0

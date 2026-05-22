@@ -26,8 +26,10 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import { dialog } from 'electron'
 
 import { createLoopDriver, type PiEvent } from './loop'
 import type { Stage } from '../../shared/agent'
@@ -41,6 +43,9 @@ const PI_BIN_CANDIDATES = [
   path.join(homedir(), '.local', 'share', 'pnpm', 'pi'),
 ]
 
+const RAYMES_PI_EXTENSION = path.join(process.cwd(), 'src', 'main', 'agent', 'raymes-pi-policy.ts')
+const OPENCODE_PI_EXTENSION = path.join(homedir(), '.pi', 'agent', 'extensions', 'opencode', 'index.ts')
+
 function resolvePiBinary(override?: string): string {
   if (override && override.trim()) return override.trim()
   const envOverride = process.env['RAYMES_PI_BIN']
@@ -48,14 +53,7 @@ function resolvePiBinary(override?: string): string {
   // First candidate is the canonical one on this machine; if neither
   // exists we still try `pi` on PATH, which is what the user expects.
   for (const candidate of PI_BIN_CANDIDATES) {
-    try {
-      // require a sync existsCheck to avoid a runtime import cycle
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const fs = require('node:fs') as typeof import('node:fs')
-      if (fs.existsSync(candidate)) return candidate
-    } catch {
-      // fall through
-    }
+    if (existsSync(candidate)) return candidate
   }
   return 'pi'
 }
@@ -65,6 +63,8 @@ export interface BridgeRunOptions {
   cwd?: string
   /** Model pattern, forwarded as `--model`. */
   model?: string
+  /** Raymes-owned pi provider definition, passed through the child env. */
+  raymesProviderJson?: string
   /** Additional pi CLI args (advanced). */
   extraArgs?: readonly string[]
   /** If set, pi runs with `--no-session`. Default: true (ephemeral runs). */
@@ -127,17 +127,27 @@ function spawnRpc(options: {
   piBin: string
   ephemeral: boolean
   model?: string
+  raymesProviderJson?: string
   extraArgs: readonly string[]
 }): ChildProcessWithoutNullStreams {
   const args: string[] = ['--mode', 'rpc']
   if (options.ephemeral) args.push('--no-session')
+  args.push('--no-extensions')
   if (options.model) args.push('--model', options.model)
+  if (options.model) args.push('--models', options.model)
+  if (existsSync(RAYMES_PI_EXTENSION)) args.push('--extension', RAYMES_PI_EXTENSION)
+  if (options.model?.startsWith('opencode/') && existsSync(OPENCODE_PI_EXTENSION)) {
+    args.push('--extension', OPENCODE_PI_EXTENSION)
+  }
   args.push(...options.extraArgs)
 
   // stdio: stdin/stdout for the protocol, stderr captured for diagnostics.
   const child = spawn(options.piBin, args, {
     cwd: options.cwd,
-    env: process.env,
+    env: {
+      ...process.env,
+      ...(options.raymesProviderJson ? { RAYMES_PI_PROVIDER_JSON: options.raymesProviderJson } : {}),
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
   }) as ChildProcessWithoutNullStreams
 
@@ -145,6 +155,49 @@ function spawnRpc(options: {
   child.stderr.setEncoding('utf8')
 
   return child
+}
+
+function shouldSuppressPiStderr(line: string): boolean {
+  return /^Warning: No models match pattern "opencode\/opencode\/[^"]+"$/.test(line.trim())
+}
+
+async function handleExtensionUiRequest(
+  handle: RpcSessionHandle,
+  msg: {
+    id?: string
+    method?: string
+    title?: string
+    message?: string
+    options?: string[]
+    placeholder?: string
+    prefill?: string
+  },
+): Promise<void> {
+  const id = msg.id
+  if (typeof id !== 'string') return
+
+  if (msg.method === 'confirm') {
+    const title = msg.title || 'Allow command?'
+    const detail = msg.message || ''
+    const result = await dialog.showMessageBox({
+      type: 'warning',
+      title,
+      message: title,
+      detail,
+      buttons: ['Cancel', 'Allow'],
+      cancelId: 0,
+      defaultId: 0,
+      noLink: true,
+    })
+    writeCommand(handle.child, {
+      type: 'extension_ui_response',
+      id,
+      confirmed: result.response === 1,
+    })
+    return
+  }
+
+  writeCommand(handle.child, { type: 'extension_ui_response', id, cancelled: true })
 }
 
 /**
@@ -192,13 +245,7 @@ function attachHandlers(handle: RpcSessionHandle, onStderrLine?: (line: string) 
       return
     }
     if (msg.type === 'extension_ui_request') {
-      // We do not host extension UI in Raymes yet. Auto-decline dialogs so
-      // pi extensions that ask for confirmation time out harmlessly, but
-      // acknowledge fire-and-forget requests (no response expected).
-      const id = (msg as { id?: string }).id
-      if (typeof id === 'string') {
-        writeCommand(handle.child, { type: 'extension_ui_response', id, cancelled: true })
-      }
+      void handleExtensionUiRequest(handle, msg)
       return
     }
     if (typeof msg.type === 'string') {
@@ -207,6 +254,7 @@ function attachHandlers(handle: RpcSessionHandle, onStderrLine?: (line: string) 
   })
 
   attachLineReader(handle.child.stderr, (line) => {
+    if (shouldSuppressPiStderr(line)) return
     handle.stderrBuffer.push(line)
     onStderrLine?.(line)
     // Keep only the last 50 lines so we do not leak memory on chatty runs.
@@ -311,6 +359,7 @@ export function createBridge(): Bridge {
         piBin,
         ephemeral,
         model: options.model,
+        raymesProviderJson: options.raymesProviderJson,
         extraArgs: options.extraArgs ?? [],
       })
       trackChild(child)

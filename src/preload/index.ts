@@ -212,6 +212,7 @@ contextBridge.exposeInMainWorld('raymes', {
       ipcRenderer.removeListener('extension:install-progress', handler)
     }
   },
+  chatRun: (turns: ChatTurn[]) => ipcRenderer.invoke(CHAT_IPC.RUN, turns),
   chatList: (limit?: number) => ipcRenderer.invoke(CHAT_IPC.LIST, limit),
   chatGet: (id: string) => ipcRenderer.invoke(CHAT_IPC.GET, id),
   chatAppend: (payload: {

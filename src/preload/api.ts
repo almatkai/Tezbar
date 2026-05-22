@@ -174,6 +174,7 @@ export type RaymesApi = {
   /** Subscribe to extension install progress updates (0-100). */
   onExtensionInstallProgress: (listener: (payload: { id: string; progress: number }) => void) => () => void
   /** Chat session history (AI-mode multi-turn conversations). */
+  chatRun: (turns: ChatTurn[]) => Promise<{ ok: boolean; runId?: string; error?: string }>
   chatList: (limit?: number) => Promise<ChatSessionSummary[]>
   chatGet: (id: string) => Promise<ChatSession | null>
   chatAppend: (payload: {
