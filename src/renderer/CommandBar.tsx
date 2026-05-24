@@ -9,6 +9,7 @@ import { GlideList } from './ui/GlideList'
 import { Markdown } from './ui/Markdown'
 import { useHoldToSpeak } from './hooks/useHoldToSpeak'
 import { evaluateExpression, type CalcResult } from './calculator'
+import { buildColorConversionResults } from './colorConverter'
 import { parseCurrencyQuery } from './currency/parseCurrencyQuery'
 import type { ChatSessionSummary } from '../shared/chat'
 import type { AiChatBoot } from '../shared/aiChatSurface'
@@ -499,6 +500,11 @@ export default function CommandBar({
     }
   }, [calc, currencyCalc])
 
+  const colorConversionRows = useMemo<SearchResult[]>(() => {
+    if (isSlashInput) return []
+    return buildColorConversionResults(value)
+  }, [isSlashInput, value])
+
   const shouldOfferKillPortCommand = useMemo(() => {
     const q = value.trim().toLowerCase()
     if (killPortMode) return true
@@ -539,12 +545,16 @@ export default function CommandBar({
     const withoutDuplicatePort = killPortCommandResult
       ? searchResults.filter((item) => item.id !== 'extcmd:raycast.port-manager:kill-listening-process')
       : searchResults
+    const withoutDuplicateColorRows = colorConversionRows.length > 0
+      ? withoutDuplicatePort.filter((item) => item.category !== 'color-converter')
+      : withoutDuplicatePort
     const base = [
       ...(killPortCommandResult ? [killPortCommandResult] : []),
-      ...withoutDuplicatePort,
+      ...colorConversionRows,
+      ...withoutDuplicateColorRows,
     ]
     return calcResultRow ? [calcResultRow, ...base] : base
-  }, [calcResultRow, killPortCommandResult, killPortMode, searchResults])
+  }, [calcResultRow, colorConversionRows, killPortCommandResult, killPortMode, searchResults])
   const visibleSearchCount = visibleSearchResults.length
   const topResult = visibleSearchResults[0] ?? null
   const canEnterKillPortMode =
@@ -1229,8 +1239,8 @@ export default function CommandBar({
             showActionMsg('No command selected to pin or unpin')
             return
           }
-          if (selected.category === 'calculator') {
-            showActionMsg('Calculator results can’t be pinned')
+          if (selected.category === 'calculator' || selected.category === 'color-converter') {
+            showActionMsg('Temporary results can’t be pinned')
             return
           }
           const isPinned = pinnedCommands.some((pin) => pin.id === selected.id)
@@ -1946,14 +1956,17 @@ export default function CommandBar({
             {visibleSearchResults.map((item, i) => {
               const pinnedMeta = pinnedMetaById.get(item.id)
               const isCalc = item.category === 'calculator'
+              const isColorConversion = item.category === 'color-converter'
               const isCurrencyRow = isCalc && item.id.startsWith('currency:')
+              const colorSwatch =
+                isColorConversion && item.action.type === 'copy-text' ? item.action.text : item.title
               return (
                 <li key={item.id} className="relative z-[1]">
                   <button
                     type="button"
                     className={cx(
                       'relative flex w-full items-center justify-between gap-3 rounded-raymes-row text-left transition',
-                      isCalc ? 'px-3 py-2.5' : 'px-3 py-2',
+                      isCalc || isColorConversion ? 'px-3 py-2.5' : 'px-3 py-2',
                     )}
                     onMouseEnter={() => {
                       setFollowSearchSelection(false)
@@ -1965,14 +1978,19 @@ export default function CommandBar({
                       void runSelectedSearchResult(item, i + 1)
                     }}
                   >
-                    {isCalc ? (
+                    {isCalc || isColorConversion ? (
                       <>
                         <span className="flex min-w-0 flex-1 items-center gap-2.5">
                           <span
                             aria-hidden
                             className="grid h-7 w-7 shrink-0 place-items-center rounded-raymes-chip border border-white/10 bg-white/[0.04] text-ink-3"
                           >
-                            {isCurrencyRow ? (
+                            {isColorConversion ? (
+                              <span
+                                className="h-[18px] w-[18px] rounded-full border border-white/30 shadow-[0_0_14px_rgba(255,255,255,0.18)]"
+                                style={{ background: colorSwatch }}
+                              />
+                            ) : isCurrencyRow ? (
                               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                                 <circle
                                   cx="7"
@@ -2020,7 +2038,9 @@ export default function CommandBar({
                               {item.title}
                             </span>
                             <span className="mt-0.5 block truncate text-[11px] text-ink-3">
-                              <span className="text-ink-4">{isCurrencyRow ? 'Currency' : 'Calculator'}</span>
+                              <span className="text-ink-4">
+                                {isColorConversion ? 'Color' : isCurrencyRow ? 'Currency' : 'Calculator'}
+                              </span>
                               <span className="mx-1.5 text-ink-4">·</span>
                               <span className="font-mono">{item.subtitle}</span>
                             </span>

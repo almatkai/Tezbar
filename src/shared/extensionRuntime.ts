@@ -22,6 +22,7 @@ export type InstalledRegistryExtension = {
   description: string
   author?: string
   owner?: string
+  authorIconUrl?: string
   downloadCount?: number
   iconPath?: string | undefined
   packageJsonPath: string
@@ -45,6 +46,7 @@ export type ExtensionRuntimeNode = {
   type: string
   props?: Record<string, unknown>
   children?: ExtensionRuntimeNode[]
+  metadata?: ExtensionRuntimeNode
 }
 
 export type ExtensionRunCommandRequest = {

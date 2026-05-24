@@ -22,6 +22,7 @@ import {
 } from '../shared/ipc'
 import type { SearchAction } from '../shared/search'
 import type { Message } from './llm/provider'
+import { appIconDataUrl } from './appIcon'
 import { streamAnswerToRenderer } from './llm/answerStream'
 import { setLauncherContentHeight } from './windowBounds'
 import {
@@ -451,6 +452,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle('clipboard:clear', async () => {
     clearClipboardHistory()
+  })
+
+  ipcMain.handle('app-icon:data-url', async (_event, raw: unknown) => {
+    const appPath = typeof raw === 'string' ? raw.trim() : ''
+    if (!appPath.endsWith('.app')) return null
+    return (await appIconDataUrl(appPath)) ?? null
   })
 
   ipcMain.handle('snippets:list', async () => listSnippetsForUi())

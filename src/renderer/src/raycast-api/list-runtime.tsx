@@ -6,8 +6,24 @@ type ListRow = {
   id: string
   title: string
   subtitle: string
+  icon?: {
+    fileIcon?: string
+  }
   section?: string
   actionIds?: string[]
+}
+
+function cleanSubtitle(value: unknown): string {
+  const subtitle = typeof value === 'string' ? value.trim() : ''
+  return /^by\s*$/i.test(subtitle) ? '' : subtitle
+}
+
+function parseRowIcon(value: unknown): ListRow['icon'] | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const icon = value as { fileIcon?: unknown }
+  return typeof icon.fileIcon === 'string' && icon.fileIcon.trim()
+    ? { fileIcon: icon.fileIcon.trim() }
+    : undefined
 }
 
 function parseListRows(node: ExtensionRuntimeNode): ListRow[] {
@@ -16,12 +32,13 @@ function parseListRows(node: ExtensionRuntimeNode): ListRow[] {
   const walk = (entry: ExtensionRuntimeNode, section?: string): void => {
     if (entry.type === 'List.Item') {
       const title = typeof entry.props?.title === 'string' ? entry.props.title : 'Untitled'
-      const subtitle = typeof entry.props?.subtitle === 'string' ? entry.props.subtitle : ''
+      const subtitle = cleanSubtitle(entry.props?.subtitle)
+      const icon = parseRowIcon(entry.props?.icon)
       const id = typeof entry.props?.id === 'string' ? entry.props.id : `${section || 'list'}:${rows.length}`
       const actionIds = Array.isArray(entry.props?.actionIds)
         ? entry.props.actionIds.filter((value): value is string => typeof value === 'string')
         : undefined
-      rows.push({ id, title, subtitle, section, actionIds })
+      rows.push({ id, title, subtitle, icon, section, actionIds })
       return
     }
 
@@ -40,6 +57,35 @@ function parseListRows(node: ExtensionRuntimeNode): ListRow[] {
 
   walk(node)
   return rows
+}
+
+function FileIcon({ path, title }: { path: string; title: string }): JSX.Element {
+  const [src, setSrc] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setSrc(null)
+    void window.raymes.getAppIconDataUrl(path)
+      .then((value) => {
+        if (!cancelled) setSrc(value)
+      })
+      .catch(() => {
+        if (!cancelled) setSrc(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [path])
+
+  if (src) {
+    return <img src={src} alt="" className="h-7 w-7 shrink-0 rounded-[7px]" draggable={false} />
+  }
+
+  return (
+    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] border border-white/10 bg-white/[0.04] text-[11px] font-semibold text-ink-3">
+      {title.slice(0, 1).toUpperCase()}
+    </span>
+  )
 }
 
 function groupBySection(rows: ListRow[]): { section: string | undefined; items: ListRow[] }[] {
@@ -237,13 +283,20 @@ export function ListRuntime({
                           type="button"
                           data-idx={globalIdx}
                           onMouseEnter={() => setSelected(globalIdx)}
-                          onClick={onRunPrimaryAction}
+                          onClick={() => onRunPrimaryAction(row.actionIds?.[0])}
                           className={`w-full rounded-raymes-row px-3 py-2 text-left transition ${
                             globalIdx === selected ? 'bg-white/15 text-ink-1' : 'text-ink-2 hover:bg-white/8'
                           }`}
                         >
-                          <p className="truncate text-[13px] font-medium">{row.title}</p>
-                          {row.subtitle ? <p className="truncate text-[11px] text-ink-3">{row.subtitle}</p> : null}
+                          <span className="flex min-w-0 items-center gap-2.5">
+                            {row.icon?.fileIcon ? (
+                              <FileIcon path={row.icon.fileIcon} title={row.title} />
+                            ) : null}
+                            <span className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-medium">{row.title}</p>
+                              {row.subtitle ? <p className="truncate text-[11px] text-ink-3">{row.subtitle}</p> : null}
+                            </span>
+                          </span>
                         </button>
                       </li>
                     )

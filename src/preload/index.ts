@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('raymes', {
   clipboardReadText: () => ipcRenderer.invoke('clipboard:read'),
   clipboardWriteText: (text: string) => ipcRenderer.invoke('clipboard:write', text),
   shellOpen: (target: string) => ipcRenderer.invoke('shell:open', target),
+  getAppIconDataUrl: (appPath: string) => ipcRenderer.invoke('app-icon:data-url', appPath),
   getExtensionPreferences: (payload: { extensionId: string; commandName?: string }) =>
     ipcRenderer.invoke('preferences:get', payload),
   searchAll: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_ALL, query),

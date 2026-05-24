@@ -79,6 +79,7 @@ export type RaymesApi = {
   clipboardReadText: () => Promise<string>
   clipboardWriteText: (text: string) => Promise<{ ok: boolean }>
   shellOpen: (target: string) => Promise<{ ok: boolean }>
+  getAppIconDataUrl: (appPath: string) => Promise<string | null>
   getExtensionPreferences: (payload: {
     extensionId: string
     commandName?: string

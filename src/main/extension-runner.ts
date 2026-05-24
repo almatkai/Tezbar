@@ -1,11 +1,16 @@
-import { clipboard, shell } from 'electron'
+import { app, BrowserWindow, clipboard, shell } from 'electron'
 import * as esbuild from 'esbuild'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { execFile, execSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { get as httpGet } from 'node:http'
+import { get as httpsGet } from 'node:https'
 import { homedir } from 'node:os'
 import { createRequire, builtinModules } from 'node:module'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
+import { promisify } from 'node:util'
 import vm from 'node:vm'
+import { setSuppressBlurHide } from './windowState'
 import type {
   ExtensionInvokeActionRequest,
   ExtensionInvokeActionResult,
@@ -66,6 +71,13 @@ type RuntimeSession = {
   promiseCache: Map<string, { data: unknown; error: unknown }>
   effectCleanups: Map<number, (() => void)>
   hookStateSnapshot: string | null
+  pickedColor: {
+    red: number
+    green: number
+    blue: number
+    alpha: number
+    colorSpace: string
+  } | null
 }
 
 type JsxNode = {
@@ -85,6 +97,7 @@ const RUNTIME_RECURSION_LIMIT = 80
 const SESSIONS_SOFT_LIMIT = 30
 const BUILTIN_SET = new Set<string>(builtinModules)
 const JSX_FRAGMENT = Symbol.for('raymes.jsx.fragment')
+const execFileAsync = promisify(execFile)
 
 const sessions = new Map<string, RuntimeSession>()
 
@@ -101,6 +114,182 @@ function makeId(prefix: string): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function axiosGetShim(url: string, options?: { responseType?: string }): Promise<{ data: unknown; status: number; headers: Record<string, string> }> {
+  if (options?.responseType !== 'stream') {
+    return fetch(url).then(async (response) => {
+      const text = await response.text()
+      let data: unknown = text
+      try {
+        if (response.headers.get('content-type')?.includes('application/json')) {
+          data = JSON.parse(text)
+        }
+      } catch {
+        // Fallback to text
+      }
+      const headers: Record<string, string> = {}
+      response.headers.forEach((v, k) => {
+        headers[k] = v
+      })
+      return { data, status: response.status, headers }
+    })
+  }
+
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith('https:') ? httpsGet : httpGet
+    const request = client(url, (response) => {
+      const status = response.statusCode ?? 0
+      if (status >= 300 && status < 400 && response.headers.location) {
+        void axiosGetShim(new URL(response.headers.location, url).toString(), options).then(resolve, reject)
+        response.resume()
+        return
+      }
+      if (status < 200 || status >= 300) {
+        response.resume()
+        reject(new Error(`Request failed with status ${status}`))
+        return
+      }
+      const headers: Record<string, string> = {}
+      for (const [k, v] of Object.entries(response.headers)) {
+        if (v !== undefined) headers[k] = Array.isArray(v) ? v.join(', ') : v
+      }
+      resolve({ data: response, status, headers })
+    })
+    request.on('error', reject)
+  })
+}
+
+async function runAppleScript(source: string): Promise<string> {
+  if (process.platform !== 'darwin') {
+    throw new Error('AppleScript is only available on macOS')
+  }
+  if (typeof source !== 'string' || source.trim().length === 0) {
+    return ''
+  }
+
+  const { stdout } = await execFileAsync('/usr/bin/osascript', ['-e', source], {
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  })
+  return String(stdout).replace(/\r?\n$/, '')
+}
+
+function nativeColorPickerBinaryPath(): string {
+  return join(app.getPath('userData'), 'native', 'color-picker')
+}
+
+function nativeColorPickerSourcePath(): string | null {
+  const candidates = [
+    join(process.cwd(), 'native', 'color-picker', 'main.swift'),
+    join(process.cwd(), 'src', 'native', 'color-picker.swift'),
+    join(app.getAppPath(), 'native', 'color-picker', 'main.swift'),
+    join(app.getAppPath(), 'src', 'native', 'color-picker.swift'),
+  ]
+  return candidates.find((candidate) => existsSync(candidate)) ?? null
+}
+
+async function ensureNativeColorPickerBinary(): Promise<string | null> {
+  const binaryPath = nativeColorPickerBinaryPath()
+  if (existsSync(binaryPath)) return binaryPath
+
+  const sourcePath = nativeColorPickerSourcePath()
+  if (!sourcePath) return null
+
+  const moduleCachePath = join(dirname(binaryPath), 'swift-module-cache')
+  mkdirSync(dirname(binaryPath), { recursive: true })
+  mkdirSync(moduleCachePath, { recursive: true })
+  try {
+    await execFileAsync('/usr/bin/swiftc', [
+      '-module-cache-path',
+      moduleCachePath,
+      '-O',
+      '-o',
+      binaryPath,
+      sourcePath,
+      '-framework',
+      'AppKit',
+    ])
+    return existsSync(binaryPath) ? binaryPath : null
+  } catch (error) {
+    console.error('[ColorPicker] Failed to compile native helper:', error)
+    return null
+  }
+}
+
+async function pickColorWithNativeSampler(): Promise<{
+  red: number
+  green: number
+  blue: number
+  alpha: number
+  colorSpace: string
+} | null> {
+  const visibleWindows = BrowserWindow.getAllWindows().filter((window) => window.isVisible())
+  try {
+    const binaryPath = await ensureNativeColorPickerBinary()
+    if (!binaryPath) {
+      return null
+    }
+
+    setSuppressBlurHide(true)
+    for (const window of visibleWindows) {
+      window.hide()
+    }
+    app.hide()
+    await delay(80)
+    const { stdout } = await execFileAsync(binaryPath)
+    const trimmed = stdout.trim()
+    if (!trimmed || trimmed === 'null') return null
+
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    const toUnitRange = (value: unknown): number | null => {
+      const numeric = Number(value)
+      if (!Number.isFinite(numeric)) return null
+      if (numeric > 1) return Math.max(0, Math.min(1, numeric / 255))
+      return Math.max(0, Math.min(1, numeric))
+    }
+
+    const red = toUnitRange(parsed.red)
+    const green = toUnitRange(parsed.green)
+    const blue = toUnitRange(parsed.blue)
+    const alpha = toUnitRange(parsed.alpha ?? 1)
+    if (red === null || green === null || blue === null || alpha === null) return null
+
+    return {
+      red,
+      green,
+      blue,
+      alpha,
+      colorSpace: typeof parsed.colorSpace === 'string' && parsed.colorSpace.trim()
+        ? parsed.colorSpace
+        : 'srgb',
+    }
+  } catch {
+    return null
+  } finally {
+    setSuppressBlurHide(false)
+    app.show()
+    for (const window of visibleWindows) {
+      if (!window.isDestroyed()) {
+        window.show()
+        window.focus()
+      }
+    }
+  }
+}
+
+function colorWheelMarkdown(): string {
+  return '![RGB Color Wheel](rgb-color-wheel.webp?&raycast-height=350)'
+}
+
+function attachRuntimeRootMetadata(root: ExtensionRuntimeNode, session: RuntimeSession): void {
+  root.props = {
+    ...(root.props ?? {}),
+    assetsPath: join(session.packageRoot, 'assets'),
+  }
+  if (typeof root.props.markdown === 'string') {
+    root.props.markdown = resolveExtensionMarkdownAssets(root.props.markdown, session.packageRoot)
+  }
 }
 
 function parsePackageJson(path: string): ExtensionPackageJson {
@@ -322,6 +511,8 @@ function normalizeActionTitle(typeName: string, props: Record<string, unknown>):
   switch (typeName) {
     case 'Action.CopyToClipboard':
       return 'Copy to Clipboard'
+    case 'Action.Paste':
+      return 'Paste'
     case 'Action.OpenInBrowser':
       return 'Open in Browser'
     case 'Action.Push':
@@ -335,6 +526,14 @@ function normalizeActionTitle(typeName: string, props: Record<string, unknown>):
     default:
       return 'Action'
   }
+}
+
+function stableActionId(index: number, typeName: string, title: string): string {
+  const hash = createHash('sha1')
+    .update(`${index}:${typeName}:${title}`)
+    .digest('hex')
+    .slice(0, 12)
+  return `ext-action-${index}-${hash}`
 }
 
 function parseShortcut(shortcut: unknown): ExtensionRuntimeAction['shortcut'] | undefined {
@@ -516,12 +715,30 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     Item: makeToken('Grid.Item'),
     Section: makeToken('Grid.Section'),
     EmptyView: makeToken('Grid.EmptyView'),
+    Dropdown: List.Dropdown,
   })
 
-  const Detail = makeToken('Detail')
+  const Detail = Object.assign(makeToken('Detail'), {
+    Metadata: Object.assign(makeToken('Detail.Metadata'), {
+      Label: makeToken('Detail.Metadata.Label'),
+      TagList: Object.assign(makeToken('Detail.Metadata.TagList'), {
+        Item: makeToken('Detail.Metadata.TagList.Item'),
+      }),
+      Separator: makeToken('Detail.Metadata.Separator'),
+      Link: makeToken('Detail.Metadata.Link'),
+    }),
+  })
+
+  const MenuBarExtra = Object.assign(makeToken('MenuBarExtra'), {
+    Item: makeToken('MenuBarExtra.Item'),
+    Section: makeToken('MenuBarExtra.Section'),
+    Separator: makeToken('MenuBarExtra.Separator'),
+    Submenu: makeToken('MenuBarExtra.Submenu'),
+  })
 
   const Action = Object.assign(makeToken('Action'), {
     CopyToClipboard: makeToken('Action.CopyToClipboard'),
+    Paste: makeToken('Action.Paste'),
     OpenInBrowser: makeToken('Action.OpenInBrowser'),
     Push: makeToken('Action.Push'),
     Pop: makeToken('Action.Pop'),
@@ -542,6 +759,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     Form,
     Grid,
     Detail,
+    MenuBarExtra,
     Action,
     ActionPanel,
     Icon: iconProxy,
@@ -563,6 +781,10 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
         Animated: 'animated',
       },
     },
+    LaunchType: {
+      UserInitiated: 'userInitiated',
+      Background: 'background',
+    },
     environment: {
       raycastVersion: '1.80.0',
       extensionName: session.extensionId,
@@ -577,6 +799,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     },
     LocalStorage: createLocalStorageShim(session.packageRoot),
     Cache: createCacheShim(session.packageRoot),
+    runAppleScript,
     Clipboard: {
       copy: async (value: unknown): Promise<void> => {
         clipboard.writeText(String(value ?? ''))
@@ -591,6 +814,9 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       readText: async (): Promise<string> => clipboard.readText(),
     },
     getPreferenceValues: (): Record<string, unknown> => session.preferences,
+    launchCommand: async (): Promise<void> => {
+      // Background/menu-bar command relaunches are best-effort in Raymes.
+    },
     useNavigation: () => ({
       push: (next: unknown): void => {
         session.stack.push(next)
@@ -700,6 +926,10 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     openCommandPreferences: async (): Promise<void> => {
       // Preferences editing is handled by Raymes settings.
     },
+    updateCommandMetadata: async (): Promise<void> => {
+      // Raymes does not currently surface dynamic command subtitles, but
+      // extensions call this after dependency checks and expect it to exist.
+    },
     closeMainWindow: async (): Promise<void> => {},
     popToRoot: async (): Promise<void> => {},
     clearSearchBar: async (): Promise<void> => {},
@@ -707,6 +937,40 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
 }
 
 function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown> {
+  const CacheShim = createCacheShim(session.packageRoot)
+  const cache = new CacheShim()
+
+  const useCachedState = <T,>(
+    key: string,
+    initialValue: T | (() => T),
+  ): [T, (next: T | ((prev: T) => T)) => void] => {
+    const hookIdx = session.hookIndex++
+    const existing = session.hookStates[hookIdx] as [T, (next: T | ((prev: T) => T)) => void] | undefined
+    if (existing) return existing
+
+    const getInitialValue = (): T => {
+      const raw = cache.get(String(key))
+      if (typeof raw === 'string') {
+        try {
+          return JSON.parse(raw) as T
+        } catch {
+          return raw as T
+        }
+      }
+      return typeof initialValue === 'function' ? (initialValue as () => T)() : initialValue
+    }
+
+    let current = getInitialValue()
+    const setValue = (next: T | ((prev: T) => T)): void => {
+      current = typeof next === 'function' ? (next as (prev: T) => T)(current) : next
+      cache.set(String(key), JSON.stringify(current))
+      session.hookStates[hookIdx] = [current, setValue]
+    }
+    const tuple: [T, (next: T | ((prev: T) => T)) => void] = [current, setValue]
+    session.hookStates[hookIdx] = tuple
+    return tuple
+  }
+
   const cacheKey = (fn: unknown, args: unknown[]): string => {
     const fnSig = typeof fn === 'function' ? fn.toString().slice(0, 120) : String(fn)
     let argsKey: string
@@ -778,9 +1042,11 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
   }
 
   return {
+    useCachedState,
     usePromise: makePromiseHook(),
     useFetch: makePromiseHook(),
     useCachedPromise: makePromiseHook(),
+    runAppleScript,
     showFailureToast: (error: unknown): void => {
       pushFeedback(session, {
         kind: 'toast',
@@ -829,16 +1095,61 @@ function sanitizeValue(value: unknown): unknown {
   return undefined
 }
 
+function mimeTypeForAsset(path: string): string {
+  switch (extname(path).toLowerCase()) {
+    case '.svg':
+      return 'image/svg+xml'
+    case '.png':
+      return 'image/png'
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg'
+    case '.gif':
+      return 'image/gif'
+    case '.webp':
+      return 'image/webp'
+    case '.ico':
+      return 'image/x-icon'
+    default:
+      return 'application/octet-stream'
+  }
+}
+
+function resolveExtensionMarkdownAssets(markdown: string, packageRoot: string): string {
+  return markdown.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (match, alt: string, rawSrc: string) => {
+    const src = String(rawSrc || '').trim()
+    if (!src || /^(?:https?:|data:|file:)/i.test(src)) return match
+
+    const cleanSrc = src.split(/[?#]/)[0]?.replace(/^\.?\//, '') ?? ''
+    if (!cleanSrc || cleanSrc.startsWith('/') || cleanSrc.includes('..')) return match
+
+    const assetPath = join(packageRoot, 'assets', cleanSrc)
+    if (!existsSync(assetPath)) {
+      console.warn(`[ExtensionAssets] Missing markdown asset: ${assetPath}`)
+      return match
+    }
+
+    try {
+      const encoded = readFileSync(assetPath).toString('base64')
+      console.log(`[ExtensionAssets] Inlined markdown asset: ${assetPath}`)
+      return `![${alt}](data:${mimeTypeForAsset(assetPath)};base64,${encoded})`
+    } catch {
+      return match
+    }
+  })
+}
+
 function registerAction(
   typeName: string,
   props: Record<string, unknown>,
   session: RuntimeSession,
 ): void {
-  const id = makeId('ext-action')
+  const index = session.currentActions.length
   const title = normalizeActionTitle(typeName, props)
+  const id = stableActionId(index, typeName, title)
 
   const kind: ExtensionRuntimeAction['kind'] =
-    typeName === 'Action.CopyToClipboard'
+    typeName === 'Action.CopyToClipboard' || typeName === 'Action.Paste'
       ? 'copy'
       : typeName === 'Action.OpenInBrowser'
         ? 'open'
@@ -870,6 +1181,9 @@ function registerAction(
     if (kind === 'copy') {
       const content = props.content ?? props.title ?? ''
       clipboard.writeText(String(content ?? ''))
+      if (typeof props.onPaste === 'function') {
+        await Promise.resolve((props.onPaste as () => unknown)())
+      }
     }
 
     if (kind === 'open') {
@@ -973,6 +1287,10 @@ function walkRuntimeNodes(
   }
   const actionIds = session.currentActions.slice(actionStart).map((action) => action.id)
 
+  const metadataNodes = props.metadata !== undefined
+    ? walkRuntimeNodes(props.metadata, session, depth + 1, budget)
+    : []
+
   budget.remaining -= 1
   const sanitizedProps = sanitizeValue(props) as Record<string, unknown> | undefined
   if (actionIds.length > 0) {
@@ -984,6 +1302,7 @@ function walkRuntimeNodes(
     type: typeName,
     props: sanitizedProps,
     children: walkRuntimeNodes(props.children, session, depth + 1, budget),
+    metadata: metadataNodes[0],
   }
 
   return [node]
@@ -1020,6 +1339,7 @@ function renderCurrentView(session: RuntimeSession): ExtensionRunCommandResult |
     props: { markdown: 'This extension returned an empty view.' },
     children: [],
   }
+  attachRuntimeRootMetadata(root, session)
 
   return {
     ok: true,
@@ -1149,6 +1469,92 @@ function runBundle(
     if (specifier === 'react/jsx-runtime' || specifier === 'react/jsx-dev-runtime') {
       return jsxRuntimeShim
     }
+    if (specifier === 'raycast-cross-extension') {
+      return {
+        callbackLaunchCommand: async (): Promise<void> => {},
+        launchCommand: async (): Promise<void> => {},
+      }
+    }
+    if (specifier === 'sha256-file') {
+      return (filename: string, callback: (error: Error | null, sum?: string) => void): void => {
+        try {
+          const sum = createHash('sha256').update(readFileSync(filename)).digest('hex')
+          callback(null, sum)
+        } catch (error) {
+          callback(error instanceof Error ? error : new Error(String(error)))
+        }
+      }
+    }
+    if (specifier === 'axios') {
+      const axiosShim: any = {
+        get: axiosGetShim,
+        post: async (url: string, data?: unknown, options?: unknown) => {
+          // Some extensions might use POST for speedtest (though unlikely)
+          return { data: {}, status: 200, headers: {} }
+        },
+        defaults: { headers: { common: {} } },
+        interceptors: {
+          request: { use: () => 0, eject: () => {} },
+          response: { use: () => 0, eject: () => {} },
+        },
+        __esModule: true,
+      }
+      axiosShim.create = () => axiosShim
+      axiosShim.default = axiosShim
+      return axiosShim
+    }
+    if (specifier === 'tar') {
+      const extract = async (options: { file?: string; cwd?: string; filter?: (path: string | ((path: string) => boolean)) => boolean }): Promise<void> => {
+        if (!options?.file || !options.cwd) throw new Error('tar.extract requires file and cwd')
+        mkdirSync(options.cwd, { recursive: true })
+        // Use -x (extract), -z (gzip), -f (file). -k (keep old files) can be risky, so we use -o (overwrite) which is default.
+        const args = ['-xzf', options.file, '-C', options.cwd]
+        
+        // Raycast speedtest-net shim usually passes a filter function.
+        // If it asks for 'speedtest', we extract specifically that.
+        try {
+          if (typeof options.filter === 'function') {
+             if (options.filter('speedtest')) args.push('speedtest')
+          } else if (options.filter === 'speedtest') {
+             args.push('speedtest')
+          }
+        } catch {
+          // ignore filter errors
+        }
+        
+        await execFileAsync('/usr/bin/tar', args)
+      }
+      return {
+        extract,
+        x: extract,
+        default: { extract, x: extract },
+        __esModule: true,
+      }
+    }
+    if (specifier === 'extract-zip') {
+      const extractZip = async (file: string, options?: { dir?: string }): Promise<void> => {
+        const dir = options?.dir
+        if (!dir) throw new Error('extract-zip requires dir')
+        mkdirSync(dir, { recursive: true })
+        await execFileAsync('/usr/bin/unzip', ['-o', file, '-d', dir])
+      }
+      return {
+        default: extractZip,
+        __esModule: true,
+      }
+    }
+    if (specifier.startsWith('swift:') || specifier.startsWith('rust:')) {
+      const pickColor = async (): Promise<Awaited<ReturnType<typeof pickColorWithNativeSampler>>> => {
+        if (session.commandName === 'color-wheel') return null
+        const picked = await pickColorWithNativeSampler()
+        session.pickedColor = picked
+        return picked
+      }
+      return {
+        pickColor,
+        pick_color: pickColor,
+      }
+    }
 
     if (specifier.startsWith('./') || specifier.startsWith('../') || specifier.startsWith('/')) {
       return fileRequire(specifier)
@@ -1189,7 +1595,11 @@ function runBundle(
     URL,
   })
 
-  const wrapped = `(function(exports, require, module, __filename, __dirname) {\n${code}\n})`
+  const runtimeCode = code.replace(
+    /\bimport\(\s*(["'])(swift:[^"']+|rust:[^"']+)\1\s*\)/g,
+    (_match, quote: string, specifier: string) => `Promise.resolve(require(${quote}${specifier}${quote}))`,
+  )
+  const wrapped = `(function(exports, require, module, __filename, __dirname) {\n${runtimeCode}\n})`
   const script = new vm.Script(wrapped, {
     filename: join(packageRoot, '.raymes-runtime-bundle.cjs'),
   })
@@ -1254,6 +1664,7 @@ async function runCommandFromPackagePath(
       promiseCache: new Map(),
       effectCleanups: new Map(),
       hookStateSnapshot: null,
+      pickedColor: null,
   }
 
   const moduleExports = runBundle(bundled, packageRoot, session)
@@ -1309,6 +1720,21 @@ async function runCommandFromPackagePath(
 
     await executePass(`Pass ${p}`)
     prevSnapshot = snapshotHookStates()
+  }
+
+  if (commandName === 'pick-color' && session.pickedColor) {
+    session.title = 'Color Wheel'
+    session.stack = [{
+      __jsx: true,
+      type: makeToken('Detail'),
+      props: {
+        markdown: colorWheelMarkdown(),
+        initialColor: session.pickedColor,
+      },
+    }]
+    sessions.set(session.id, session)
+    pruneSessions()
+    return renderCurrentView(session)
   }
 
   if (mode === 'no-view' || !isJsxNode(result)) {

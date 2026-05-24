@@ -15,7 +15,7 @@
  */
 
 import { app, dialog } from 'electron';
-import { exec } from 'child_process';
+import { exec, execFileSync } from 'child_process';
 import { EventEmitter } from 'events';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -1626,6 +1626,68 @@ function normalizeRegistryCommand(command: ExtensionCommandInfo): ExtensionRegis
   };
 }
 
+function githubAvatarUrlForHandle(value: unknown): string | undefined {
+  const raw =
+    typeof value === 'object' && value
+      ? String((value as { handle?: unknown; name?: unknown }).handle || (value as { name?: unknown }).name || '')
+      : String(value || '');
+  const handle = raw
+    .split('<')[0]
+    .split('(')[0]
+    .trim()
+    .replace(/^@/, '');
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/i.test(handle)) return undefined;
+  if (handle.toLowerCase() === 'raycast community') return undefined;
+  return `https://github.com/${handle}.png?size=96`;
+}
+
+function resolveInstalledIconPath(extensionPath: string, icon: unknown): string | undefined {
+  if (typeof icon !== 'string' || !icon.trim()) return undefined;
+  if (/^https?:\/\//i.test(icon)) return icon;
+
+  const normalized = icon.replace(/^\.?\//, '');
+  const candidates = [
+    path.join(extensionPath, normalized),
+    path.join(extensionPath, 'assets', normalized),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+function readAppBundleIdentifier(appPath: string): string | undefined {
+  const infoPlistPath = path.join(appPath, 'Contents', 'Info.plist');
+  if (!fs.existsSync(infoPlistPath)) return undefined;
+  try {
+    return execFileSync('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', infoPlistPath], {
+      encoding: 'utf8',
+      timeout: 1000,
+    }).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function appPickerValue(name: string, appPath: string): Record<string, string> | null {
+  if (!fs.existsSync(appPath)) return null;
+  return {
+    name,
+    path: appPath,
+    bundleId: readAppBundleIdentifier(appPath) || '',
+  };
+}
+
+function resolveAppPickerDefault(pref: any): Record<string, string> | string {
+  const candidates =
+    pref?.name === 'uninstaller_app' || pref?.key === 'uninstaller_app'
+      ? [
+          appPickerValue('AppCleaner', '/Applications/AppCleaner.app'),
+          appPickerValue('Pearcleaner', '/Applications/PearCleaner.app'),
+          appPickerValue('TrashMe 3', '/Applications/TrashMe 3.app'),
+          appPickerValue('App Cleaner 8', '/Applications/App Cleaner 8.app'),
+        ]
+      : [];
+  return candidates.find((candidate): candidate is Record<string, string> => Boolean(candidate)) || '';
+}
+
 export function listInstalledRegistryExtensions(): InstalledRegistryExtension[] {
   const commands = discoverInstalledExtensionCommands();
   const commandsBySlug = new Map<string, ExtensionCommandInfo[]>();
@@ -1650,10 +1712,8 @@ export function listInstalledRegistryExtensions(): InstalledRegistryExtension[] 
         typeof ownerRaw === 'object'
           ? String(ownerRaw?.handle || ownerRaw?.name || '')
           : String(ownerRaw || '');
-      const iconPath =
-        typeof pkg.icon === 'string' && pkg.icon.trim()
-          ? path.join(extensionPath, pkg.icon)
-          : undefined;
+      const authorIconUrl = githubAvatarUrlForHandle(authorRaw);
+      const iconPath = resolveInstalledIconPath(extensionPath, pkg.icon || 'icon.png');
 
       return {
         id,
@@ -1663,6 +1723,7 @@ export function listInstalledRegistryExtensions(): InstalledRegistryExtension[] 
         description: String(pkg.description || ''),
         author: author || undefined,
         owner: owner || undefined,
+        authorIconUrl,
         iconPath,
         packageJsonPath: path.join(extensionPath, 'package.json'),
         extensionPath,
@@ -1713,6 +1774,12 @@ export async function searchExtensionCatalog(query: string): Promise<ExtensionMa
       version: 'latest',
       repository: `https://github.com/raycast/extensions/tree/main/extensions/${entry.name}`,
       downloadCount: entry.installCount,
+      icon: entry.icon,
+      iconUrl: entry.iconUrl,
+      authorIconUrl: githubAvatarUrlForHandle(entry.author || entry.contributors?.[0]),
+      screenshotUrls: entry.screenshotUrls,
+      categories: entry.categories,
+      commands: entry.commands,
       owner: entry.author || undefined,
     }));
 }
@@ -1769,6 +1836,8 @@ export function getExtensionPreferences(extensionId: string, commandName?: strin
         values[pref.name] = false;
       } else if (pref.type === 'dropdown') {
         values[pref.name] = pref.data?.[0]?.value ?? '';
+      } else if (pref.type === 'appPicker') {
+        values[pref.name] = resolveAppPickerDefault(pref);
       } else {
         values[pref.name] = '';
       }

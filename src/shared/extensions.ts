@@ -7,6 +7,16 @@ export type ExtensionManifest = {
   repository?: string
   downloadCount?: number
   owner?: string
+  icon?: string
+  iconUrl?: string
+  authorIconUrl?: string
+  screenshotUrls?: string[]
+  categories?: string[]
+  commands?: Array<{
+    name?: string
+    title?: string
+    description?: string
+  }>
 }
 
 export type InstalledExtension = ExtensionManifest & {

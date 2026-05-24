@@ -11,6 +11,7 @@ export type SearchCategory =
   | 'snippets'
   | 'quick-links'
   | 'calculator'
+  | 'color-converter'
 
 export type ExtensionCommandArgument = {
   name: string

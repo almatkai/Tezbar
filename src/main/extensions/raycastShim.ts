@@ -16,9 +16,11 @@
  *  "not supported yet" message via `executeExtensionCommandRuntime`. */
 
 import { app, clipboard, nativeImage, shell } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 
 export type RuntimeFeedback = {
   kind: 'toast' | 'hud'
@@ -43,6 +45,23 @@ const TOAST_STYLE = {
   Failure: 'failure',
   Animated: 'animated',
 } as const
+
+const execFileAsync = promisify(execFile)
+
+async function runAppleScript(source: string): Promise<string> {
+  if (process.platform !== 'darwin') {
+    throw new Error('AppleScript is only available on macOS')
+  }
+  if (typeof source !== 'string' || source.trim().length === 0) {
+    return ''
+  }
+
+  const { stdout } = await execFileAsync('/usr/bin/osascript', ['-e', source], {
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  })
+  return String(stdout).replace(/\r?\n$/, '')
+}
 
 /** An identity-style proxy used for rendering primitives. Any property
  *  access returns another proxy; it's callable (returns itself) so
@@ -234,6 +253,7 @@ export function createRaycastApi(ctx: ShimContext): Record<string, unknown> {
     getPreferenceValues: (): Record<string, unknown> => readPreferences(ctx.packageRoot),
     getSelectedText: async (): Promise<string> => '',
     getApplications: async (): Promise<Array<Record<string, unknown>>> => [],
+    runAppleScript,
 
     open: async (target: unknown): Promise<void> => {
       if (typeof target !== 'string') return
@@ -372,7 +392,7 @@ export function createRaycastUtils(ctx: ShimContext): Record<string, unknown> {
       handleSubmit: () => async () => true,
     }),
     FormValidation: { Required: () => undefined },
-    runAppleScript: async (_source: string): Promise<string> => '',
+    runAppleScript,
     showFailureToast: (error: unknown): void => {
       ctx.feedback.push({
         kind: 'toast',
