@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('raymes', {
   getExtensionPreferences: (payload: { extensionId: string; commandName?: string }) =>
     ipcRenderer.invoke('preferences:get', payload),
   searchAll: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_ALL, query),
+  completePath: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.PATH_COMPLETE, query),
   runSearchBenchmark: () => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_BENCHMARK_RUN),
   getSearchBenchmarkHistory: () => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_BENCHMARK_HISTORY),
   listOpenPorts: () => ipcRenderer.invoke('open-ports:list'),

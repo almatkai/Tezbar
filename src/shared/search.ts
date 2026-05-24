@@ -24,6 +24,7 @@ export type ExtensionCommandArgument = {
 export type SearchAction =
   | { type: 'open-app'; appName: string }
   | { type: 'open-file'; path: string }
+  | { type: 'open-with-app'; path: string; appName?: string }
   | { type: 'copy-text'; text: string }
   | { type: 'copy-and-paste-text'; text: string }
   | { type: 'add-note'; text: string }
@@ -54,6 +55,21 @@ export type SearchResult = {
   category: SearchCategory
   score: number
   action: SearchAction
+}
+
+export type PathCompletionItem = {
+  id: string
+  title: string
+  subtitle: string
+  kind: 'directory' | 'file' | 'application'
+  section?: 'recommended' | 'default' | 'applications'
+  badge?: string
+  value: string
+  path?: string
+  appName?: string
+  iconDataUrl?: string
+  applicationAction?: 'open' | 'open-with'
+  score: number
 }
 
 export type SearchExecuteResult = {

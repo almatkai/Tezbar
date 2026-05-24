@@ -22,6 +22,7 @@ import type { QuickNoteEntry } from '../shared/quickNotes'
 import type { SnippetListRow, SnippetWritePayload } from '../shared/snippets'
 import type {
   OpenPortProcess,
+  PathCompletionItem,
   SearchAction,
   SearchBenchmarkReport,
   SearchExecuteContext,
@@ -83,6 +84,7 @@ export type RaymesApi = {
     commandName?: string
   }) => Promise<Record<string, unknown>>
   searchAll: (query: string) => Promise<SearchResult[]>
+  completePath: (query: string) => Promise<PathCompletionItem[]>
   runSearchBenchmark: () => Promise<SearchBenchmarkReport>
   getSearchBenchmarkHistory: () => Promise<SearchBenchmarkReport[]>
   listOpenPorts: () => Promise<OpenPortProcess[]>

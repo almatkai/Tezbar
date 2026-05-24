@@ -1,9 +1,9 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import type { Intent } from '../shared/intent'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
-import type { SearchResult } from '../shared/search'
+import type { PathCompletionItem, SearchResult } from '../shared/search'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
-import { Button, Hint, HintBar, Kbd, Message, SelectField, TextField, cx } from './ui/primitives'
+import { Hint, HintBar, Kbd, Message, SelectField, TextField, cx } from './ui/primitives'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { GlideList } from './ui/GlideList'
 import { Markdown } from './ui/Markdown'
@@ -24,29 +24,9 @@ const DEFAULT_MODEL: Record<ProviderId, string> = {
   ollama: 'llama3.2',
   copilot: 'gpt-4o',
   opencode: 'opencode/big-pickle',
+  deepseek: 'deepseek-chat',
 }
 
-/** Built-in palette entries only — extension views (e.g. open ports) use search, not this list. */
-const SYSTEM_SLASH_COMMANDS = [
-  '/providers',
-  '/settings',
-  '/extensions',
-  '/snippets',
-  '/notes',
-  '/emoji',
-  '/quit',
-] as const
-type SystemSlashCommand = (typeof SYSTEM_SLASH_COMMANDS)[number]
-
-function normalizeSystemSlashCommand(raw: string): SystemSlashCommand | null {
-  const first = raw.trim().split(/\s+/)[0]?.toLowerCase()
-  if (!first || !first.startsWith('/')) return null
-  if (first === '/setttings') return '/settings'
-  return (SYSTEM_SLASH_COMMANDS as readonly string[]).includes(first) ? (first as SystemSlashCommand) : null
-}
-
-const RECENT_SLASH_KEY = 'raymes:recent-slash-commands'
-const RECENT_SLASH_LIMIT = 8
 const RECENT_EXTENSION_COMMANDS_KEY = 'raymes:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
 const PINNED_COMMANDS_KEY = 'raymes:pinned-commands'
@@ -104,38 +84,6 @@ type ExtensionRuntimeViewPayload = Extract<ExtensionRunCommandResult, { ok: true
 
 function buildRecentExtensionCommandId(extensionId: string, commandName: string): string {
   return `extcmd:${extensionId}:${commandName}`
-}
-
-function readRecentSlashCommands(): string[] {
-  try {
-    const raw = window.localStorage.getItem(RECENT_SLASH_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    const seen = new Set<string>()
-    const out: string[] = []
-    for (const v of parsed) {
-      if (typeof v !== 'string') continue
-      const n = normalizeSystemSlashCommand(v)
-      if (!n || seen.has(n)) continue
-      seen.add(n)
-      out.push(n)
-      if (out.length >= RECENT_SLASH_LIMIT) break
-    }
-    const naive = parsed
-      .filter((v): v is string => typeof v === 'string' && v.startsWith('/'))
-      .slice(0, RECENT_SLASH_LIMIT)
-    if (JSON.stringify(out) !== JSON.stringify(naive)) {
-      window.localStorage.setItem(RECENT_SLASH_KEY, JSON.stringify(out))
-    }
-    return out
-  } catch {
-    return []
-  }
-}
-
-function writeRecentSlashCommands(next: string[]): void {
-  window.localStorage.setItem(RECENT_SLASH_KEY, JSON.stringify(next.slice(0, RECENT_SLASH_LIMIT)))
 }
 
 function readRecentExtensionCommands(): string[] {
@@ -298,18 +246,11 @@ function AiIcon(): JSX.Element {
   )
 }
 
-function PowerIcon(): JSX.Element {
-  return (
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden>
-      <path
-        d="M7 1.5v5M4.2 3.6a5 5 0 1 0 5.6 0"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
+function pathCompletionSectionLabel(section: PathCompletionItem['section']): string | null {
+  if (section === 'recommended') return 'Recommended'
+  if (section === 'default') return 'Default'
+  if (section === 'applications') return 'All Applications'
+  return null
 }
 
 export default function CommandBar({
@@ -347,7 +288,7 @@ export default function CommandBar({
   const [isStreaming, setIsStreaming] = useState(false)
   const [cfg, setCfg] = useState<LlmConfigRecord>({})
   const [emptyAnswer, setEmptyAnswer] = useState(false)
-  const [recentSlash, setRecentSlash] = useState<string[]>([])
+  const [pathCompletions, setPathCompletions] = useState<PathCompletionItem[]>([])
   const [recentExtensionCommands, setRecentExtensionCommands] = useState<string[]>([])
   const [pinnedCommands, setPinnedCommands] = useState<PinnedCommand[]>([])
   const [chatHistory, setChatHistory] = useState<ChatSessionSummary[]>([])
@@ -410,7 +351,6 @@ export default function CommandBar({
   }, [killPortMode])
 
   useEffect(() => {
-    setRecentSlash(readRecentSlashCommands())
     setRecentExtensionCommands(readRecentExtensionCommands())
     setPinnedCommands(readPinnedCommands())
     void window.raymes.chatList(8).then(setChatHistory)
@@ -518,7 +458,6 @@ export default function CommandBar({
   const model = useMemo(() => cfg.model ?? DEFAULT_MODEL[provider], [cfg.model, provider])
 
   const slashQuery = value.trimStart()
-  const slashTerm = slashQuery.startsWith('/') ? slashQuery.slice(1).toLowerCase() : ''
   const isSlashInput = slashQuery.startsWith('/')
 
   const showChatHistory = isAiMode && !agentTask.trim() && chatHistory.length > 0
@@ -622,18 +561,28 @@ export default function CommandBar({
     return out
   }, [pinnedCommands])
 
-  const suggestions = useMemo(() => {
-    if (!isSlashInput) return []
-    const recentsFiltered = recentSlash.filter((cmd) => cmd.slice(1).toLowerCase().includes(slashTerm))
-    const knownFiltered = SYSTEM_SLASH_COMMANDS.filter((cmd) =>
-      cmd.slice(1).toLowerCase().includes(slashTerm),
-    )
-    const ordered =
-      slashTerm.length === 0
-        ? [...recentsFiltered, ...knownFiltered]
-        : [...knownFiltered, ...recentsFiltered]
-    return Array.from(new Set(ordered))
-  }, [isSlashInput, recentSlash, slashTerm])
+  const suggestions = useMemo(
+    () => (isSlashInput ? pathCompletions : []),
+    [isSlashInput, pathCompletions],
+  )
+
+  useEffect(() => {
+    if (!isSlashInput) {
+      setPathCompletions([])
+      return
+    }
+
+    let cancelled = false
+    const t = setTimeout(() => {
+      void window.raymes.completePath(value).then((items) => {
+        if (!cancelled) setPathCompletions(items)
+      })
+    }, 45)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [isSlashInput, value])
 
   useEffect(() => {
     let cancelled = false
@@ -671,66 +620,15 @@ export default function CommandBar({
   // keep it in range so Enter always targets a real row.
   useEffect(() => {
     if (suggestions.length === 0) return
+    const firstAppIndex = suggestions.findIndex(
+      (item) => item.kind === 'application' && item.applicationAction === 'open-with' && item.section !== 'default',
+    )
+    if (firstAppIndex >= 0) {
+      setSelectedSuggestion(firstAppIndex)
+      return
+    }
     setSelectedSuggestion((i) => Math.min(Math.max(-1, i), suggestions.length - 1))
   }, [suggestions])
-
-  const trackSlashCommand = (raw: string): void => {
-    const cmd = normalizeSystemSlashCommand(raw)
-    if (!cmd) return
-    const next = [cmd, ...recentSlash.filter((v) => v !== cmd)].slice(0, RECENT_SLASH_LIMIT)
-    setRecentSlash(next)
-    writeRecentSlashCommands(next)
-  }
-
-  /** Navigate for a known slash command. Returns true if handled. */
-  const dispatchKnownSlashCommand = (cmd: string): boolean => {
-    const c = cmd.trim()
-    if (!c.startsWith('/')) return false
-
-    if (c === '/providers') {
-      trackSlashCommand(c)
-      setValue('')
-      onOpenProviders()
-      return true
-    }
-    if (c === '/settings') {
-      trackSlashCommand(c)
-      setValue('')
-      onOpenSettings()
-      return true
-    }
-    if (c === '/extensions') {
-      trackSlashCommand(c)
-      setValue('')
-      onOpenExtensions()
-      return true
-    }
-    if (c === '/snippets') {
-      trackSlashCommand(c)
-      setValue('')
-      onOpenSnippetsPage()
-      return true
-    }
-    if (c === '/notes') {
-      trackSlashCommand(c)
-      setValue('')
-      onOpenNotesPage()
-      return true
-    }
-    if (c === '/emoji') {
-      trackSlashCommand(c)
-      setValue('')
-      onOpenEmojiPicker()
-      return true
-    }
-    if (c === '/quit') {
-      trackSlashCommand(c)
-      setValue('')
-      void window.raymes.appQuit()
-      return true
-    }
-    return false
-  }
 
   const trackExtensionCommand = (extensionId: string, commandName: string): void => {
     const id = buildRecentExtensionCommandId(extensionId, commandName)
@@ -964,6 +862,41 @@ export default function CommandBar({
   }
 
   async function runSelectedSearchResult(result: SearchResult, rank = selectedSearch + 1): Promise<void> {
+    if (result.action.type === 'invoke-command') {
+      clearPendingAction()
+      showActionMsg(null)
+      setValue('')
+
+      if (result.action.commandId === 'open-providers') {
+        onOpenProviders()
+        return
+      }
+      if (result.action.commandId === 'open-settings') {
+        onOpenSettings()
+        return
+      }
+      if (result.action.commandId === 'open-extensions') {
+        onOpenExtensions()
+        return
+      }
+      if (result.action.commandId === 'open-snippets') {
+        onOpenSnippetsPage()
+        return
+      }
+      if (result.action.commandId === 'open-notes') {
+        onOpenNotesPage()
+        return
+      }
+      if (result.action.commandId === 'open-emoji-picker') {
+        onOpenEmojiPicker()
+        return
+      }
+      if (result.action.commandId === 'quit-raymes') {
+        await window.raymes.appQuit()
+        return
+      }
+    }
+
     const quickNoteIdMatch = /^note:(\d+)$/.exec(result.id)
     if (result.category === 'quick-notes' && quickNoteIdMatch?.[1]) {
       const createdAt = Number(quickNoteIdMatch[1])
@@ -1155,6 +1088,41 @@ export default function CommandBar({
     document.getElementById('command-input')?.focus()
   }
 
+  async function openPathCompletion(item: PathCompletionItem): Promise<void> {
+    if (!item.path) {
+      setValue(item.value)
+      requestAnimationFrame(() => focusCommandInput())
+      return
+    }
+
+    const action =
+      item.kind === 'application'
+        ? item.applicationAction === 'open'
+          ? { type: 'open-app' as const, appName: item.appName ?? item.title }
+          : { type: 'open-with-app' as const, path: item.path, appName: item.appName }
+        : { type: 'open-file' as const, path: item.path }
+
+    const result = await window.raymes.executeSearchAction(action, {
+      query: value.trim(),
+      resultId: item.id,
+    })
+    showActionMsg(result.message)
+    if (result.ok) {
+      setValue('')
+      setPathCompletions([])
+    }
+  }
+
+  function completePathInput(item: PathCompletionItem): void {
+    if (item.kind === 'application' || item.kind === 'file') {
+      void openPathCompletion(item)
+      return
+    }
+    setValue(item.value)
+    setSelectedSuggestion(0)
+    requestAnimationFrame(() => focusCommandInput())
+  }
+
   pinPickerOpenRef.current = pinPickerTarget !== null
   pendingOpenRef.current = pendingAction !== null
 
@@ -1304,7 +1272,6 @@ export default function CommandBar({
       await runKillPortCommand()
       return
     }
-    const q = value.trim()
     if (pendingAction) {
       const pendingFieldFocused = argInputRefs.current.some((el) => el === document.activeElement)
       if (pendingFieldFocused) {
@@ -1341,61 +1308,25 @@ export default function CommandBar({
       }
     }
 
-    // Slash palette: Enter should run the *highlighted* suggestion, not
-    // require a second Enter after the input text exactly matches. When
-    // the buffer is e.g. `/set` and the first row is `/settings`, we
-    // dispatch `/settings` immediately (same as Raycast-style pickers).
     if (isSlashInput && suggestions.length > 0) {
       const idx = Math.min(Math.max(0, selectedSuggestion), suggestions.length - 1)
-      const cmd = suggestions[idx]
-      if (cmd && dispatchKnownSlashCommand(cmd)) {
+      const item = suggestions[idx]
+      if (item) {
+        completePathInput(item)
         return
       }
     }
 
-    if (q.startsWith('/')) {
-      trackSlashCommand(q)
-    }
-    if (q === '/providers') {
+    if (isSlashInput && value.trim()) {
+      await window.raymes.executeSearchAction(
+        { type: 'open-file', path: value.trim() },
+        { query: value.trim(), resultId: `path-direct:${value.trim()}` },
+      )
       setValue('')
-      onOpenProviders()
+      setPathCompletions([])
       return
     }
-    if (q === '/settings') {
-      setValue('')
-      onOpenSettings()
-      return
-    }
-    if (q === '/extensions') {
-      setValue('')
-      onOpenExtensions()
-      return
-    }
-    if (q === '/snippets') {
-      setValue('')
-      onOpenSnippetsPage()
-      return
-    }
-    if (q === '/notes') {
-      setValue('')
-      onOpenNotesPage()
-      return
-    }
-    if (q === '/emoji') {
-      setValue('')
-      onOpenEmojiPicker()
-      return
-    }
-    if (q === '/quit') {
-      setValue('')
-      void window.raymes.appQuit()
-      return
-    }
-    if (q === '/open-ports') {
-      setValue('')
-      onOpenPortsPage()
-      return
-    }
+
     try {
       const intent = await window.raymes.query(value)
       if (intent.type === 'answer' || intent.type === 'ai') {
@@ -1462,6 +1393,12 @@ export default function CommandBar({
         setFollowSuggestionSelection(true)
         setSelectedSuggestion((i) => Math.max(i - 1, 0))
       }
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        const item = suggestions[Math.min(Math.max(0, selectedSuggestion), suggestions.length - 1)]
+        if (item) void openPathCompletion(item)
+        return
+      }
     } else if (showChatHistory) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -1502,7 +1439,8 @@ export default function CommandBar({
         return
       }
       if (isSlashInput) {
-        setValue(suggestions[selectedSuggestion] ?? value)
+        const item = suggestions[selectedSuggestion]
+        if (item) completePathInput(item)
         return
       }
       if (canEnterKillPortMode) {
@@ -1638,7 +1576,7 @@ export default function CommandBar({
           panels scroll (GlideList, answer, …) instead of this outer region. */}
       <div className="flex min-h-0 flex-1 flex-col gap-[var(--s-2)] overflow-hidden pr-0.5">
       {/* Pinned commands */}
-      {pinnedCommands.length > 0 ? (
+      {pinnedCommands.length > 0 && !isSlashInput ? (
         <div className="glass-card animate-raymes-scale-in px-2 py-2">
           <div className="flex items-center gap-1.5 overflow-x-auto">
             {pinnedCommands.map((pin, index) => (
@@ -1739,7 +1677,7 @@ export default function CommandBar({
       {/* Slash suggestions */}
       {showSuggestions ? (
         <div
-          className="glass-card animate-raymes-scale-in overflow-hidden px-2 py-2"
+          className="glass-card animate-raymes-scale-in flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2"
           onWheelCapture={() => setFollowSuggestionSelection(false)}
           onMouseLeave={() => {
             setFollowSuggestionSelection(false)
@@ -1750,29 +1688,64 @@ export default function CommandBar({
             selectedIndex={selectedSuggestion}
             itemCount={suggestions.length}
             followSelected={followSuggestionSelection}
-            className="max-h-44 overflow-y-auto"
+            className="min-h-0 flex-1 overflow-y-auto"
           >
-            {suggestions.map((cmd, i) => (
-              <li key={cmd} className="relative z-[1]">
-                <button
-                  type="button"
-                  className="relative flex w-full items-center justify-between rounded-raymes-row px-3 py-2 text-left text-[13px] text-ink-2 transition hover:text-ink-1"
-                  onMouseEnter={() => {
-                    setFollowSuggestionSelection(false)
-                    setSelectedSuggestion(i)
-                  }}
-                  onMouseDown={(ev) => ev.preventDefault()}
-                  onClick={() => setValue(cmd)}
-                >
-                  <span className="font-mono text-[12.5px] tracking-tight text-ink-1">{cmd}</span>
-                  {recentSlash.includes(cmd) ? (
-                    <span className="text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-4">
-                      Recent
-                    </span>
+            {suggestions.map((item, i) => {
+              const sectionLabel =
+                i === 0 || suggestions[i - 1]?.section !== item.section
+                  ? pathCompletionSectionLabel(item.section)
+                  : null
+              return (
+                <li key={item.id} className="relative z-[1]">
+                  {sectionLabel ? (
+                    <div className="px-3 pb-1 pt-2 text-[9.5px] font-bold uppercase tracking-[0.16em] text-ink-4">
+                      {sectionLabel}
+                    </div>
                   ) : null}
-                </button>
-              </li>
-            ))}
+                  <button
+                    type="button"
+                    className="relative flex w-full items-center justify-between gap-3 rounded-raymes-row px-3 py-2 text-left text-[13px] text-ink-2 transition hover:text-ink-1"
+                    onMouseEnter={() => {
+                      setFollowSuggestionSelection(false)
+                      setSelectedSuggestion(i)
+                    }}
+                    onMouseDown={(ev) => ev.preventDefault()}
+                    onClick={() => completePathInput(item)}
+                  >
+                    <span className="flex min-w-0 flex-1 items-center gap-3">
+                      {item.iconDataUrl ? (
+                        <img
+                          src={item.iconDataUrl}
+                          alt=""
+                          className="h-7 w-7 shrink-0 rounded-[7px]"
+                          draggable={false}
+                        />
+                      ) : item.kind === 'application' ? (
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] border border-white/10 bg-white/[0.04] text-[11px] font-semibold text-ink-3">
+                          {item.title.slice(0, 1).toUpperCase()}
+                        </span>
+                      ) : null}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-mono text-[12.5px] tracking-tight text-ink-1">
+                          {item.title}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[10.5px] text-ink-4">
+                          {item.subtitle}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="ml-3 shrink-0 text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-4">
+                      {item.badge ??
+                        (item.kind === 'directory'
+                          ? 'Folder'
+                          : item.kind === 'application'
+                            ? 'Open With'
+                            : 'File')}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
           </GlideList>
         </div>
       ) : null}
@@ -2171,11 +2144,20 @@ export default function CommandBar({
             </>
           ) : (
             <>
-              <Hint label="Pin / Unpin" keys={<><Kbd>⌘</Kbd><Kbd>P</Kbd></>} />
-              <Hint label="Pinned" keys={<><Kbd>⌥</Kbd><Kbd>1-9</Kbd></>} />
-              <Hint label="Save note" keys={<><Kbd>⌘</Kbd><Kbd>N</Kbd></>} />
+              {isSlashInput ? (
+                <>
+                  <Hint label="Complete" keys={<Kbd>↵</Kbd>} />
+                  <Hint label="Open" keys={<><Kbd>⌘</Kbd><Kbd>↵</Kbd></>} />
+                </>
+              ) : (
+                <>
+                  <Hint label="Pin / Unpin" keys={<><Kbd>⌘</Kbd><Kbd>P</Kbd></>} />
+                  <Hint label="Pinned" keys={<><Kbd>⌥</Kbd><Kbd>1-9</Kbd></>} />
+                  <Hint label="Save note" keys={<><Kbd>⌘</Kbd><Kbd>N</Kbd></>} />
+                </>
+              )}
               <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
-              <Hint label="Run" keys={<Kbd>↵</Kbd>} />
+              {!isSlashInput ? <Hint label="Run" keys={<Kbd>↵</Kbd>} /> : null}
               <Hint
                 label={pinPickerTarget ? 'Cancel picker' : 'Close'}
                 keys={

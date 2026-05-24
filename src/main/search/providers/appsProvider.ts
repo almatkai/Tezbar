@@ -3,16 +3,25 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { IndexedDocument, SearchProvider } from './types'
 
-function listApplications(): Array<{ name: string; path: string }> {
-  const roots = ['/Applications', join(homedir(), 'Applications')]
+export function listApplications(): Array<{ name: string; path: string }> {
+  const roots = [
+    '/Applications',
+    '/System/Applications',
+    '/System/Applications/Utilities',
+    join(homedir(), 'Applications'),
+  ]
   const out: Array<{ name: string; path: string }> = []
+  const seen = new Set<string>()
 
   for (const root of roots) {
     try {
       for (const entry of readdirSync(root)) {
         if (!entry.endsWith('.app')) continue
+        const name = entry.replace(/\.app$/, '')
+        if (seen.has(name)) continue
+        seen.add(name)
         out.push({
-          name: entry.replace(/\.app$/, ''),
+          name,
           path: join(root, entry),
         })
       }

@@ -1,9 +1,14 @@
 import { app, BrowserWindow, clipboard, shell } from 'electron'
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type {
   ExtensionCommandArgument,
   OpenPortProcess,
+  PathCompletionItem,
   SearchAction,
   SearchBenchmarkReport,
   SearchCategory,
@@ -30,7 +35,7 @@ import { commandBus } from './commandBus'
 // Fix imports from indexDb
 import { getInstance, readBenchmarkHistory, runOfflineBenchmarks, type SearchIndexRow } from './indexDb'
 import { SearchIndexDatabase } from './indexDb'
-import { appsProvider } from './providers/appsProvider'
+import { listApplications } from './providers/appsProvider'
 import { captureClipboardSnapshot, clipboardProvider } from './providers/clipboardProvider'
 import { commandsProvider } from './providers/commandsProvider'
 import { extensionsProvider } from './providers/extensionsProvider'
@@ -57,6 +62,18 @@ let bootstrapPromise: Promise<void> | null = null
 let stopFileWatcher: (() => void) | null = null
 let providerRefreshTimer: NodeJS.Timeout | null = null
 let lastExtensionRefreshAt = 0
+const appIconCache = new Map<string, string | null>()
+
+type OpenWithUsageEntry = {
+  count: number
+  lastUsedAt: number
+}
+
+type OpenWithUsageStore = {
+  version: 1
+  keys: Record<string, Record<string, OpenWithUsageEntry>>
+  aliases?: Record<string, Record<string, OpenWithUsageEntry>>
+}
 
 function isPresent<T>(value: T | null | undefined): value is T {
   return value !== null && value !== undefined
@@ -81,6 +98,8 @@ function actionIdFromResult(action: SearchAction, resultId?: string): string {
       return `open-app:${action.appName}`
     case 'open-file':
       return `open-file:${action.path}`
+    case 'open-with-app':
+      return `open-with-app:${action.appName ?? 'default'}:${action.path}`
     case 'copy-text':
       return `copy-text:${action.text.slice(0, 64)}`
     case 'copy-and-paste-text':
@@ -696,6 +715,455 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     .slice(0, MAX_RESULTS)
 }
 
+function expandUserPath(input: string): string {
+  if (input === '~') return homedir()
+  if (input.startsWith('~/')) return join(homedir(), input.slice(2))
+  return input
+}
+
+function resolveSlashPathInput(input: string): string {
+  if (!input.startsWith('/')) return expandUserPath(input)
+
+  const absolutePrefixes = ['/Users/', '/Volumes/', '/private/', '/tmp/', '/var/', '/System/', '/Library/']
+  if (absolutePrefixes.some((prefix) => input.startsWith(prefix))) {
+    return input
+  }
+
+  if (input === '/Users' || input === '/Volumes') {
+    return input
+  }
+
+  return join(homedir(), input.slice(1))
+}
+
+function displayUserPath(path: string): string {
+  const home = homedir()
+  if (path === home) return '~'
+  if (path.startsWith(`${home}/`)) return `~/${path.slice(home.length + 1)}`
+  return path
+}
+
+function splitPathCompletionQuery(raw: string): {
+  targetPath: string
+  appTerm: string
+  appMode: boolean
+} {
+  const query = raw.trimStart()
+  const body = query === '/' ? '' : query
+  const expandedBody = resolveSlashPathInput(body)
+
+  let appMode = false
+  let targetPart = expandedBody
+  let appTerm = ''
+
+  const trimmedBody = expandedBody.trimEnd()
+  if (expandedBody.endsWith(' ') && trimmedBody && existsSync(trimmedBody)) {
+    appMode = true
+    targetPart = trimmedBody
+    appTerm = ''
+  } else if (!existsSync(expandedBody)) {
+    let splitAt = -1
+    for (let index = expandedBody.length - 1; index >= 0; index--) {
+      if (expandedBody[index] !== ' ') continue
+      const beforeSpace = expandedBody.slice(0, index).trimEnd()
+      if (beforeSpace && existsSync(beforeSpace)) {
+        splitAt = index
+        break
+      }
+    }
+    if (splitAt >= 0) {
+      appMode = true
+      targetPart = expandedBody.slice(0, splitAt).trimEnd()
+      appTerm = expandedBody.slice(splitAt + 1).trimStart()
+    }
+  }
+
+  if (!targetPart) {
+    return { targetPath: homedir(), appTerm, appMode }
+  }
+
+  if (targetPart.startsWith('/')) {
+    return { targetPath: targetPart, appTerm, appMode }
+  }
+
+  if (targetPart.startsWith('~')) {
+    return { targetPath: expandUserPath(targetPart), appTerm, appMode }
+  }
+
+  return { targetPath: resolve(homedir(), targetPart), appTerm, appMode }
+}
+
+function pathCompletionBase(targetPath: string): { directory: string; prefix: string } {
+  if (targetPath.endsWith('/')) return { directory: targetPath, prefix: '' }
+  try {
+    if (existsSync(targetPath) && statSync(targetPath).isDirectory()) {
+      return { directory: targetPath, prefix: '' }
+    }
+  } catch {
+    // Fall through to dirname/prefix parsing.
+  }
+  return { directory: dirname(targetPath), prefix: basename(targetPath) }
+}
+
+function openWithUsageStorePath(): string {
+  return join(app.getPath('userData'), 'open-with-usage.json')
+}
+
+function readOpenWithUsageStore(): OpenWithUsageStore {
+  try {
+    const parsed = JSON.parse(readFileSync(openWithUsageStorePath(), 'utf8'))
+    if (!parsed || typeof parsed !== 'object' || parsed.version !== 1 || typeof parsed.keys !== 'object') {
+      return { version: 1, keys: {} }
+    }
+    if (!parsed.aliases || typeof parsed.aliases !== 'object') {
+      parsed.aliases = {}
+    }
+    return parsed as OpenWithUsageStore
+  } catch {
+    return { version: 1, keys: {} }
+  }
+}
+
+function writeOpenWithUsageStore(store: OpenWithUsageStore): void {
+  const path = openWithUsageStorePath()
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, JSON.stringify(store), 'utf8')
+}
+
+function openWithUsageKeysForPath(targetPath: string): string[] {
+  try {
+    const stat = statSync(targetPath)
+    if (stat.isDirectory()) {
+      return [`folder:${targetPath}`, `sibling-folder:${dirname(targetPath)}`]
+    }
+  } catch {
+    // Missing paths still fall through to extension-based hints.
+  }
+
+  const ext = extname(targetPath).toLowerCase()
+  const parent = dirname(targetPath)
+  const keys = [`parent:${parent}`]
+  if (ext) {
+    keys.push(`parent-ext:${parent}:${ext}`, `ext:${ext}`)
+  }
+  return keys
+}
+
+function recordOpenWithUsage(targetPath: string, appName: string): void {
+  const cleanAppName = appName.trim()
+  if (!targetPath || !cleanAppName) return
+
+  try {
+    const store = readOpenWithUsageStore()
+    const now = Date.now()
+    for (const key of openWithUsageKeysForPath(targetPath)) {
+      const bucket = (store.keys[key] ??= {})
+      const existing = bucket[cleanAppName]
+      bucket[cleanAppName] = {
+        count: (existing?.count ?? 0) + 1,
+        lastUsedAt: now,
+      }
+    }
+    writeOpenWithUsageStore(store)
+  } catch (error) {
+    console.warn('[Search] Failed to record open-with usage:', error)
+  }
+}
+
+function normalizeAppSearchTerm(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '')
+}
+
+function appAcronym(name: string): string {
+  return name
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toLowerCase() ?? '')
+    .join('')
+}
+
+function builtInAppAliases(appName: string): string[] {
+  const n = appName.toLowerCase()
+  if (n === 'visual studio code') return ['vscode', 'vsc', 'code', 'vs code']
+  if (n === 'quicktime player') return ['quicktime', 'qt', 'qtp']
+  if (n === 'activity monitor') return ['activity', 'taskmanager', 'task monitor']
+  if (n === 'terminal') return ['term', 'shell']
+  if (n === 'finder') return ['files', 'filemanager']
+  return []
+}
+
+function appMatchesTerm(appName: string, term: string, learnedAliases?: Record<string, OpenWithUsageEntry>): boolean {
+  const normalizedTerm = normalizeAppSearchTerm(term)
+  if (!normalizedTerm) return true
+
+  const normalizedName = normalizeAppSearchTerm(appName)
+  if (normalizedName.includes(normalizedTerm)) return true
+  if (appAcronym(appName).includes(normalizedTerm)) return true
+  if (builtInAppAliases(appName).some((alias) => normalizeAppSearchTerm(alias).includes(normalizedTerm))) {
+    return true
+  }
+  return Boolean(learnedAliases?.[appName])
+}
+
+function recordOpenWithAlias(term: string, appName: string): void {
+  const alias = normalizeAppSearchTerm(term)
+  const cleanAppName = appName.trim()
+  if (!alias || !cleanAppName) return
+  if (normalizeAppSearchTerm(cleanAppName).includes(alias)) return
+
+  try {
+    const store = readOpenWithUsageStore()
+    const aliases = (store.aliases ??= {})
+    const bucket = (aliases[alias] ??= {})
+    const existing = bucket[cleanAppName]
+    bucket[cleanAppName] = {
+      count: (existing?.count ?? 0) + 1,
+      lastUsedAt: Date.now(),
+    }
+    writeOpenWithUsageStore(store)
+  } catch (error) {
+    console.warn('[Search] Failed to record open-with alias:', error)
+  }
+}
+
+function learnedAliasScores(term: string): Record<string, OpenWithUsageEntry> | undefined {
+  const alias = normalizeAppSearchTerm(term)
+  if (!alias) return undefined
+  return readOpenWithUsageStore().aliases?.[alias]
+}
+
+function recommendedOpenWithApps(targetPath: string): Array<{ appName: string; score: number }> {
+  const store = readOpenWithUsageStore()
+  const weights = new Map<string, number>()
+  const now = Date.now()
+
+  openWithUsageKeysForPath(targetPath).forEach((key, index) => {
+    const bucket = store.keys[key]
+    if (!bucket) return
+    const keyWeight = index === 0 ? 5 : index === 1 ? 3 : 1
+    for (const [appName, entry] of Object.entries(bucket)) {
+      const ageDays = Math.max(0, (now - entry.lastUsedAt) / 86_400_000)
+      const recencyBoost = Math.max(0, 14 - ageDays)
+      weights.set(appName, (weights.get(appName) ?? 0) + keyWeight * entry.count + recencyBoost)
+    }
+  })
+
+  return Array.from(weights.entries())
+    .map(([appName, score]) => ({ appName, score }))
+    .sort((a, b) => b.score - a.score || a.appName.localeCompare(b.appName))
+}
+
+async function appIconDataUrl(appPath: string): Promise<string | undefined> {
+  if (appIconCache.has(appPath)) return appIconCache.get(appPath) ?? undefined
+  try {
+    const resourceDir = join(appPath, 'Contents', 'Resources')
+    const iconName = readdirSync(resourceDir).find((entry) => entry.toLowerCase().endsWith('.icns'))
+    if (!iconName) {
+      appIconCache.set(appPath, null)
+      return undefined
+    }
+
+    const iconPath = join(resourceDir, iconName)
+    const cacheDir = join(app.getPath('userData'), 'icon-cache')
+    mkdirSync(cacheDir, { recursive: true })
+    const cacheName = `${createHash('sha1').update(iconPath).digest('hex')}.png`
+    const pngPath = join(cacheDir, cacheName)
+
+    if (!existsSync(pngPath)) {
+      await execFileAsync('/usr/bin/sips', ['-s', 'format', 'png', iconPath, '--out', pngPath])
+    }
+
+    const dataUrl = `data:image/png;base64,${readFileSync(pngPath).toString('base64')}`
+    appIconCache.set(appPath, dataUrl)
+    return dataUrl
+  } catch {
+    appIconCache.set(appPath, null)
+    return undefined
+  }
+}
+
+function isApplicationsDirectory(path: string): boolean {
+  const normalized = path.replace(/\/+$/, '')
+  return (
+    normalized === '/Applications' ||
+    normalized === '/System/Applications' ||
+    normalized === '/System/Applications/Utilities' ||
+    normalized === join(homedir(), 'Applications')
+  )
+}
+
+function inferredDefaultAppName(targetPath: string): string {
+  try {
+    if (statSync(targetPath).isDirectory()) return 'Finder'
+  } catch {
+    // Fall through to extension/name heuristics.
+  }
+
+  const ext = extname(targetPath).toLowerCase()
+  const parent = dirname(targetPath).toLowerCase()
+  if (/\b(movie|movies|video|videos)\b/.test(parent) && ['.ts', '.m2ts', '.mts'].includes(ext)) {
+    return 'QuickTime Player'
+  }
+  if (['.png', '.jpg', '.jpeg', '.gif', '.heic', '.webp', '.tiff', '.bmp', '.pdf'].includes(ext)) {
+    return 'Preview'
+  }
+  if (['.mov', '.mp4', '.m4v', '.avi', '.mkv', '.m2ts', '.mts'].includes(ext)) {
+    return 'QuickTime Player'
+  }
+  return 'Default App'
+}
+
+async function applicationCompletionItem(
+  targetPath: string,
+  appInfo: { name: string; path: string },
+  index: number,
+  section: 'recommended' | 'applications',
+  score: number,
+): Promise<PathCompletionItem> {
+  return {
+    id: `path-app:${section}:${appInfo.path}`,
+    title: appInfo.name,
+    subtitle: `Open ${displayUserPath(targetPath)} with ${appInfo.name}`,
+    kind: 'application',
+    section,
+    badge: section === 'recommended' ? 'Recommended' : 'Open With',
+    value: `${targetPath} ${appInfo.name}`,
+    path: targetPath,
+    appName: appInfo.name,
+    applicationAction: 'open-with',
+    iconDataUrl: await appIconDataUrl(appInfo.path),
+    score: score - index,
+  }
+}
+
+async function installedApplicationItem(
+  appInfo: { name: string; path: string },
+  index: number,
+): Promise<PathCompletionItem> {
+  return {
+    id: `path-installed-app:${appInfo.path}`,
+    title: appInfo.name,
+    subtitle: displayUserPath(appInfo.path),
+    kind: 'application',
+    badge: 'Application',
+    value: appInfo.path,
+    path: appInfo.path,
+    appName: appInfo.name,
+    applicationAction: 'open',
+    iconDataUrl: await appIconDataUrl(appInfo.path),
+    score: 2_000 - index,
+  }
+}
+
+export async function completePath(query: string, limit = 50): Promise<PathCompletionItem[]> {
+  const { targetPath, appTerm, appMode } = splitPathCompletionQuery(query)
+
+  if (!appMode && isApplicationsDirectory(targetPath)) {
+    const apps = listApplications()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, limit)
+    return Promise.all(apps.map((item, index) => installedApplicationItem(item, index)))
+  }
+
+  if (appMode) {
+    const learnedAliases = learnedAliasScores(appTerm)
+    const allApps = listApplications()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .filter((item) => appMatchesTerm(item.name, appTerm, learnedAliases))
+    const appsByName = new Map(allApps.map((item) => [item.name, item]))
+    const learnedRecommended = Object.entries(learnedAliases ?? {})
+      .sort((a, b) => b[1].count - a[1].count || b[1].lastUsedAt - a[1].lastUsedAt)
+      .map(([appName]) => appsByName.get(appName))
+      .filter(isPresent)
+    const usageRecommended = recommendedOpenWithApps(targetPath)
+      .map((item) => appsByName.get(item.appName))
+      .filter(isPresent)
+    const recommended = [...learnedRecommended, ...usageRecommended]
+      .filter((item, index, items) => items.findIndex((other) => other.name === item.name) === index)
+      .slice(0, 5)
+    const recommendedNames = new Set(recommended.map((item) => item.name))
+    const rest = allApps.filter((item) => !recommendedNames.has(item.name)).slice(0, limit)
+
+    const recommendedItems = await Promise.all(
+      recommended.map((item, index) =>
+        applicationCompletionItem(targetPath, item, index, 'recommended', 4_000),
+      ),
+    )
+    const appItems = await Promise.all(
+      rest.slice(0, Math.max(0, limit - recommendedItems.length - 1)).map((item, index) =>
+        applicationCompletionItem(targetPath, item, index, 'applications', 1_000),
+      ),
+    )
+    const defaultItem = {
+      id: `path-default:${targetPath}`,
+      title: `Open in ${inferredDefaultAppName(targetPath)}`,
+      subtitle: `Open ${displayUserPath(targetPath)}`,
+      kind: 'application' as const,
+      section: 'default' as const,
+      badge: 'Default',
+      value: `${targetPath} `,
+      path: targetPath,
+      applicationAction: 'open-with' as const,
+      score: 2_000,
+    }
+
+    if (appTerm.trim()) {
+      return [
+        ...recommendedItems,
+        ...appItems,
+        defaultItem,
+      ]
+    }
+
+    return [
+      ...recommendedItems,
+      defaultItem,
+      ...appItems,
+    ]
+  }
+
+  const { directory, prefix } = pathCompletionBase(targetPath)
+  const normalizedPrefix = prefix.toLowerCase()
+
+  try {
+    const entries = readdirSync(directory, { withFileTypes: true })
+    return entries
+      .filter((entry) => !entry.name.startsWith('.'))
+      .filter((entry) => !normalizedPrefix || entry.name.toLowerCase().includes(normalizedPrefix))
+      .map<PathCompletionItem | null>((entry) => {
+        const absolute = join(directory, entry.name)
+        const isDirectory = entry.isDirectory()
+        const isFile = entry.isFile()
+        if (!isDirectory && !isFile) return null
+        const kind = isDirectory ? 'directory' : 'file'
+        const lowerName = entry.name.toLowerCase()
+        return {
+          id: `path:${absolute}`,
+          title: entry.name,
+          subtitle: displayUserPath(absolute),
+          kind,
+          value: isDirectory ? `${absolute}/` : absolute,
+          path: absolute,
+          score:
+            (isDirectory ? 1_000 : 500) +
+            (lowerName === normalizedPrefix ? 1_000 : lowerName.startsWith(normalizedPrefix) ? 100 : 0),
+        }
+      })
+      .filter(isPresent)
+      .sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
+        return b.score - a.score || a.title.localeCompare(b.title)
+      })
+      .slice(0, limit)
+  } catch {
+    return []
+  }
+}
+
 async function searchPortManagerOpenPorts(query: string): Promise<SearchResult[]> {
   const normalizedQuery = query.trim().toLowerCase()
   if (!normalizedQuery) return []
@@ -810,6 +1278,19 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
         return { ok: false, message: opened }
       }
       return { ok: true, message: 'Opened file' }
+    }
+
+    case 'open-with-app': {
+      if (action.appName) {
+        await execFileAsync('open', ['-a', action.appName, action.path])
+        recordOpenWithUsage(action.path, action.appName)
+        return { ok: true, message: `Opened with ${action.appName}` }
+      }
+      const opened = await shell.openPath(action.path)
+      if (opened) {
+        return { ok: false, message: opened }
+      }
+      return { ok: true, message: 'Opened' }
     }
 
     case 'copy-text': {
@@ -938,6 +1419,13 @@ export async function executeSearchAction(
 
   const actionId = actionIdFromResult(action, context?.resultId)
   indexDb.recordAction(actionId, result.ok)
+
+  if (result.ok && action.type === 'open-with-app' && action.appName && context?.query) {
+    const parsed = splitPathCompletionQuery(context.query)
+    if (parsed.appMode && parsed.appTerm) {
+      recordOpenWithAlias(parsed.appTerm, action.appName)
+    }
+  }
 
   if (context?.query && typeof context.rank === "number" && Number.isFinite(context.rank)) {
     indexDb.recordClick(context.query, actionId, context.rank, result.ok)

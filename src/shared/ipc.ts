@@ -3,6 +3,7 @@ import type { SearchAction, SearchExecuteContext } from './search'
 export const IPC_CHANNELS = {
   QUERY: 'query',
   SEARCH_ALL: 'search:all',
+  PATH_COMPLETE: 'path:complete',
   SEARCH_EXECUTE: 'search:execute',
   SEARCH_BENCHMARK_RUN: 'search:benchmark:run',
   SEARCH_BENCHMARK_HISTORY: 'search:benchmark:history',

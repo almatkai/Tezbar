@@ -72,6 +72,7 @@ import {
 } from './extension-runner'
 import {
   executeSearchAction,
+  completePath,
   getSearchBenchmarkHistory,
   listOpenPorts,
   reindexExtensions,
@@ -901,6 +902,11 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.SEARCH_ALL, async (_event, query: unknown) => {
     const q = typeof query === 'string' ? query : ''
     return searchEverything(q)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PATH_COMPLETE, async (_event, query: unknown) => {
+    const q = typeof query === 'string' ? query : ''
+    return completePath(q)
   })
 
   ipcMain.handle(IPC_CHANNELS.SEARCH_BENCHMARK_RUN, async () => {
