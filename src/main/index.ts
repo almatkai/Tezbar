@@ -1,5 +1,30 @@
-import { app, BrowserWindow, globalShortcut, Menu, nativeImage, screen, session, Tray } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  Menu,
+  nativeImage,
+  screen,
+  session,
+  Tray,
+} from 'electron'
 import { join } from 'node:path'
+
+function isStdioWriteEio(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as NodeJS.ErrnoException).code === 'EIO' &&
+    (error as NodeJS.ErrnoException).syscall === 'write'
+  )
+}
+
+process.stdout?.on('error', () => {})
+process.stderr?.on('error', () => {})
+process.on('uncaughtException', (error) => {
+  if (isStdioWriteEio(error)) return
+  throw error
+})
 import { getUiStateRetentionMs, flushConfig } from './llm/configStore'
 import { registerIpcHandlers, shutdownIpcHandlers } from './ipc'
 import {
@@ -27,6 +52,8 @@ import {
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let commandBarVisible = false
+let isAppQuitting = false
+type AppSurface = 'command' | 'settings' | 'providers' | 'clipboard'
 /** Set when the palette is hidden; used to decide whether to reset renderer UI on reopen. */
 let lastPaletteHideAt: number | null = null
 
@@ -278,6 +305,7 @@ function stopFocusedAltSpaceGesture(): void {
 }
 
 function toggleCommandBarImmediate(): void {
+  if (isAppQuitting) return
   if (!mainWindow) return
 
   if (commandBarVisible) {
@@ -296,6 +324,7 @@ function toggleCommandBarImmediate(): void {
 }
 
 function activateMicFromAltSpaceHold(): void {
+  if (isAppQuitting) return
   if (!mainWindow || mainWindow.isDestroyed()) return
 
   // Hold gesture semantics:
@@ -366,6 +395,7 @@ function isMouseReleaseInput(input: Electron.Input): boolean {
 }
 
 function startAltSpaceHoldWatcher(): void {
+  if (isAppQuitting) return
   stopAltSpaceHoldWatcher()
   if (process.platform !== 'darwin') {
     toggleCommandBarImmediate()
@@ -422,6 +452,7 @@ function startAltSpaceHoldWatcher(): void {
 }
 
 function handleAltSpaceHotkey(): void {
+  if (isAppQuitting) return
   if (!mainWindow || mainWindow.isDestroyed()) return
 
   if (commandBarVisible && mainWindow.isFocused()) {
@@ -479,6 +510,7 @@ function placeWindow(win: BrowserWindow): void {
 }
 
 function showCommandBar(): void {
+  if (isAppQuitting) return
   if (!mainWindow) return
 
   // macOS keeps a window attached to its last Space; temporarily showing on all
@@ -505,6 +537,13 @@ function showCommandBar(): void {
       })
     }, 0)
   }
+}
+
+function openAppSurface(surface: AppSurface): void {
+  if (isAppQuitting) return
+  showCommandBar()
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('app:open-surface', surface)
 }
 
 function hideCommandBar(): void {
@@ -614,6 +653,72 @@ function createWindow(): void {
   }
 }
 
+async function confirmAndQuitRaymes(): Promise<void> {
+  if (isAppQuitting) return
+  const result = await dialog.showMessageBox(
+    mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
+    {
+      type: 'question',
+      buttons: ['Cancel', 'Quit'],
+      defaultId: 1,
+      cancelId: 0,
+      title: 'Quit Raymes',
+      message: 'Quit Raymes?',
+      detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
+      noLink: true,
+    },
+  )
+  if (result.response !== 1) return
+
+  isAppQuitting = true
+  commandBarVisible = false
+  globalShortcut.unregisterAll()
+  BrowserWindow.getAllWindows().forEach((window) => {
+    if (!window.isDestroyed()) window.hide()
+  })
+  app.quit()
+  setTimeout(() => {
+    app.exit(0)
+  }, 500)
+}
+
+function buildTrayMenu(): Electron.Menu {
+  return Menu.buildFromTemplate([
+    {
+      label: `Raymes ${app.getVersion()}`,
+      enabled: false,
+    },
+    {
+      label: 'Shortcut: Option+Space',
+      enabled: false,
+    },
+    { type: 'separator' },
+    {
+      label: 'Show Raymes',
+      click: () => openAppSurface('command'),
+    },
+    {
+      label: 'Settings',
+      click: () => openAppSurface('settings'),
+    },
+    {
+      label: 'Providers',
+      click: () => openAppSurface('providers'),
+    },
+    {
+      label: 'Clipboard History',
+      click: () => openAppSurface('clipboard'),
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit Raymes',
+      click: () => {
+        void confirmAndQuitRaymes()
+      },
+    },
+  ])
+}
+
 function registerHotkey(): void {
   const okSpace = globalShortcut.register('Alt+Space', handleAltSpaceHotkey)
   const okEnter = globalShortcut.register('Alt+Enter', toggleCommandBarImmediate)
@@ -676,7 +781,16 @@ app.whenReady().then(() => {
 
   tray = new Tray(createTrayIcon())
   tray.setToolTip('Raymes')
+  if (process.platform === 'darwin') {
+    tray.setTitle('Raymes')
+  }
+  tray.setContextMenu(buildTrayMenu())
   tray.on('click', () => {
+    if (isAppQuitting) return
+    if (process.platform === 'darwin') {
+      tray?.popUpContextMenu()
+      return
+    }
     showCommandBar()
   })
 
@@ -688,16 +802,26 @@ app.whenReady().then(() => {
   startClipboardWatcher()
 
   app.on('activate', () => {
+    if (isAppQuitting) return
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
     }
   })
 })
 
+app.on('before-quit', () => {
+  isAppQuitting = true
+  commandBarVisible = false
+  globalShortcut.unregisterAll()
+})
+
 app.on('will-quit', () => {
+  isAppQuitting = true
   stopFocusedAltSpaceGesture()
   stopAltSpaceHoldWatcher()
   globalShortcut.unregisterAll()
+  tray?.destroy()
+  tray = null
   stopClipboardWatcher()
   shutdownIpcHandlers()
   flushConfig()

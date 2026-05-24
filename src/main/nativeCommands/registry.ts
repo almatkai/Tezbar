@@ -254,6 +254,15 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     keywords: ['path', 'finder', 'copy', 'directory'],
     macOnly: true,
   },
+  'quit-raymes': {
+    id: 'quit-raymes',
+    title: 'Quit Raymes',
+    subtitle: 'Quit Raymes and terminate all background processes.',
+    category: 'system',
+    strategy: 'native-helper',
+    keywords: ['quit', 'raymes', 'exit', 'close', 'shutdown', 'terminate', 'app'],
+    macOnly: false,
+  },
 
   'show-macos-version': {
     id: 'show-macos-version',

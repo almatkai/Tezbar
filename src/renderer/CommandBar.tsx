@@ -3,7 +3,7 @@ import type { Intent } from '../shared/intent'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { SearchResult } from '../shared/search'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
-import { Hint, HintBar, Kbd, Message, SelectField, TextField, cx } from './ui/primitives'
+import { Button, Hint, HintBar, Kbd, Message, SelectField, TextField, cx } from './ui/primitives'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { GlideList } from './ui/GlideList'
 import { Markdown } from './ui/Markdown'
@@ -27,7 +27,15 @@ const DEFAULT_MODEL: Record<ProviderId, string> = {
 }
 
 /** Built-in palette entries only — extension views (e.g. open ports) use search, not this list. */
-const SYSTEM_SLASH_COMMANDS = ['/providers', '/settings', '/extensions', '/snippets', '/notes', '/emoji'] as const
+const SYSTEM_SLASH_COMMANDS = [
+  '/providers',
+  '/settings',
+  '/extensions',
+  '/snippets',
+  '/notes',
+  '/emoji',
+  '/quit',
+] as const
 type SystemSlashCommand = (typeof SYSTEM_SLASH_COMMANDS)[number]
 
 function normalizeSystemSlashCommand(raw: string): SystemSlashCommand | null {
@@ -290,6 +298,20 @@ function AiIcon(): JSX.Element {
   )
 }
 
+function PowerIcon(): JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <path
+        d="M7 1.5v5M4.2 3.6a5 5 0 1 0 5.6 0"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export default function CommandBar({
   initialValue = '',
   initialSelectedChatId = null,
@@ -369,15 +391,23 @@ export default function CommandBar({
     | null
   >(null)
   const [argumentValues, setArgumentValues] = useState<Record<string, string>>({})
+  const [killPortMode, setKillPortMode] = useState(false)
+  const [killPortQuery, setKillPortQuery] = useState('')
+  const [killPortValue, setKillPortValue] = useState('')
   const argInputRefs = useRef<Array<HTMLInputElement | HTMLSelectElement | null>>([])
   const gotAnyTokenRef = useRef(false)
   const pinPickerOpenRef = useRef(false)
   const pendingOpenRef = useRef(false)
   const valueRef = useRef(value)
+  const killPortModeRef = useRef(killPortMode)
 
   useEffect(() => {
     valueRef.current = value
   }, [value])
+
+  useEffect(() => {
+    killPortModeRef.current = killPortMode
+  }, [killPortMode])
 
   useEffect(() => {
     setRecentSlash(readRecentSlashCommands())
@@ -530,11 +560,60 @@ export default function CommandBar({
     }
   }, [calc, currencyCalc])
 
-  const visibleSearchResults = useMemo(
-    () => (calcResultRow ? [calcResultRow, ...searchResults] : searchResults),
-    [calcResultRow, searchResults],
-  )
+  const shouldOfferKillPortCommand = useMemo(() => {
+    const q = value.trim().toLowerCase()
+    if (killPortMode) return true
+    if (!/\bkill\b/.test(q) || !/\bport\b/.test(q)) return false
+    return true
+  }, [killPortMode, value])
+
+  const killPortCommandResult = useMemo<SearchResult | null>(() => {
+    if (!shouldOfferKillPortCommand) return null
+    const port = killPortValue.trim()
+    return {
+      id: 'extcmd:raycast.port-manager:kill-listening-process',
+      title: 'Kill Process Listening On',
+      subtitle: 'Port Manager',
+      category: 'extensions',
+      score: 20_000,
+      action: {
+        type: 'run-extension-command',
+        extensionId: 'raycast.port-manager',
+        commandName: 'kill-listening-process',
+        title: 'Kill Process Listening On',
+        argumentValues: port ? { port } : undefined,
+        commandArgumentDefinitions: [
+          { name: 'port', title: 'Port', placeholder: 'Port', required: true, type: 'text' },
+        ],
+      },
+    }
+  }, [killPortValue, shouldOfferKillPortCommand])
+
+  const visibleSearchResults = useMemo(() => {
+    if (killPortMode) {
+      const killProcessResult = searchResults.find((item) => item.id === 'extcmd:raycast.kill-process:index')
+      return [
+        ...(killPortCommandResult ? [killPortCommandResult] : []),
+        ...(killProcessResult ? [killProcessResult] : []),
+      ]
+    }
+    const withoutDuplicatePort = killPortCommandResult
+      ? searchResults.filter((item) => item.id !== 'extcmd:raycast.port-manager:kill-listening-process')
+      : searchResults
+    const base = [
+      ...(killPortCommandResult ? [killPortCommandResult] : []),
+      ...withoutDuplicatePort,
+    ]
+    return calcResultRow ? [calcResultRow, ...base] : base
+  }, [calcResultRow, killPortCommandResult, killPortMode, searchResults])
   const visibleSearchCount = visibleSearchResults.length
+  const topResult = visibleSearchResults[0] ?? null
+  const canEnterKillPortMode =
+    !killPortMode &&
+    !pendingAction &&
+    !isSlashInput &&
+    !isAiMode &&
+    topResult?.id === 'extcmd:raycast.kill-process:index'
   const pinnedMetaById = useMemo(() => {
     const out = new Map<string, { slot: number; icon: PinIcon }>()
     pinnedCommands.forEach((pin) => {
@@ -642,6 +721,12 @@ export default function CommandBar({
       trackSlashCommand(c)
       setValue('')
       onOpenEmojiPicker()
+      return true
+    }
+    if (c === '/quit') {
+      trackSlashCommand(c)
+      setValue('')
+      void window.raymes.appQuit()
       return true
     }
     return false
@@ -774,6 +859,49 @@ export default function CommandBar({
     setArgumentValues({})
   }
 
+  const enterKillPortMode = (): void => {
+    setKillPortQuery(value.trim() || 'kill process')
+    setKillPortValue('')
+    setKillPortMode(true)
+    showActionMsg('Type a port, then press Enter')
+    requestAnimationFrame(() => focusCommandInput())
+  }
+
+  const exitKillPortMode = (): void => {
+    setKillPortMode(false)
+    setKillPortValue('')
+    showActionMsg(null)
+    requestAnimationFrame(() => focusCommandInput())
+  }
+
+  const ensureExtensionInstalled = async (extensionId: string): Promise<void> => {
+    const installed = await window.raymes.extensionList()
+    if (installed.some((extension) => extension.id === extensionId)) return
+    showActionMsg(`Installing ${extensionId.replace(/^raycast\./, '')}…`)
+    await window.raymes.extensionInstall(extensionId)
+  }
+
+  const runKillPortCommand = async (): Promise<void> => {
+    const port = killPortValue.trim()
+    if (!/^\d{1,5}$/.test(port) || Number(port) <= 0 || Number(port) > 65535) {
+      showActionMsg('Enter a valid TCP port')
+      return
+    }
+
+    await ensureExtensionInstalled('raycast.port-manager')
+
+    const ok = await executeExtensionCommandViaRuntime({
+      extensionId: 'raycast.port-manager',
+      commandName: 'kill-listening-process',
+      argumentValues: { port },
+    })
+    if (ok) {
+      setKillPortMode(false)
+      setKillPortValue('')
+      setKillPortQuery('')
+    }
+  }
+
   const cancelPendingAction = (): void => {
     clearPendingAction()
     focusCommandInput()
@@ -785,6 +913,9 @@ export default function CommandBar({
     argumentValues?: Record<string, string>
   }): Promise<boolean> {
     try {
+      if (payload.extensionId === 'raycast.port-manager') {
+        await ensureExtensionInstalled('raycast.port-manager')
+      }
       const result = await window.raymes.extensionRunCommand(payload)
       if (!result.ok) {
         showActionMsg(result.message)
@@ -927,7 +1058,39 @@ export default function CommandBar({
       return
     }
 
+    if (
+      result.action.type === 'run-native-command' &&
+      result.action.commandId === 'quit-raymes'
+    ) {
+      clearPendingAction()
+      showActionMsg(null)
+      await window.raymes.appQuit()
+      return
+    }
+
     if (result.action.type === 'run-extension-command') {
+      if (
+        result.action.extensionId === 'raycast.port-manager' &&
+        result.action.commandName === 'kill-listening-process'
+      ) {
+        const port = result.action.argumentValues?.port || ''
+        if (port) {
+          await executeExtensionCommandViaRuntime({
+            extensionId: result.action.extensionId,
+            commandName: result.action.commandName,
+            argumentValues: { port },
+          })
+          return
+        }
+        clearPendingAction()
+        setKillPortQuery(value.trim() || 'kill port')
+        setKillPortValue('')
+        setKillPortMode(true)
+        showActionMsg('Type a port, then press Enter')
+        requestAnimationFrame(() => focusCommandInput())
+        return
+      }
+
       const defs =
         Array.isArray(result.action.commandArgumentDefinitions) && result.action.commandArgumentDefinitions.length > 0
           ? result.action.commandArgumentDefinitions
@@ -1006,6 +1169,13 @@ export default function CommandBar({
       if (pendingOpenRef.current) {
         setPendingAction(null)
         setArgumentValues({})
+        showActionMsg(null)
+        focusCommandInput()
+        return true
+      }
+      if (killPortModeRef.current) {
+        setKillPortMode(false)
+        setKillPortValue('')
         showActionMsg(null)
         focusCommandInput()
         return true
@@ -1130,10 +1300,19 @@ export default function CommandBar({
     setIsStreaming(false)
     setEmptyAnswer(false)
     gotAnyTokenRef.current = false
+    if (killPortMode) {
+      await runKillPortCommand()
+      return
+    }
     const q = value.trim()
     if (pendingAction) {
-      await submitPendingAction()
-      return
+      const pendingFieldFocused = argInputRefs.current.some((el) => el === document.activeElement)
+      if (pendingFieldFocused) {
+        await submitPendingAction()
+        return
+      }
+      clearPendingAction()
+      showActionMsg(null)
     }
 
     // AI mode: open the dedicated AI Chat surface and submit the prompt
@@ -1207,6 +1386,11 @@ export default function CommandBar({
       onOpenEmojiPicker()
       return
     }
+    if (q === '/quit') {
+      setValue('')
+      void window.raymes.appQuit()
+      return
+    }
     if (q === '/open-ports') {
       setValue('')
       onOpenPortsPage()
@@ -1250,6 +1434,20 @@ export default function CommandBar({
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (pinPickerTarget) {
       // While pin picker is open, global key handling owns navigation.
+      return
+    }
+
+    if (killPortMode) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        exitKillPortMode()
+        return
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        exitKillPortMode()
+        return
+      }
       return
     }
 
@@ -1307,6 +1505,10 @@ export default function CommandBar({
         setValue(suggestions[selectedSuggestion] ?? value)
         return
       }
+      if (canEnterKillPortMode) {
+        enterKillPortMode()
+        return
+      }
       // If we are in results, and hit tab, we go to emoji
       if (showSearchResults) {
         const selected = visibleSearchResults[selectedSearch] ?? visibleSearchResults[0]
@@ -1337,22 +1539,58 @@ export default function CommandBar({
                 AI
               </span>
             ) : null}
+            {killPortMode ? (
+              <>
+                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1">
+                  {killPortQuery}
+                </span>
+                <span
+                  aria-label="Port mode"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-raymes-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
+                >
+                  <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-emerald-400/25 text-emerald-100">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
+                      <path
+                        d="M2.5 8.8 8.8 2.5M4.5 9.5H2v-2.5M7.5 2H10v2.5"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  Port
+                </span>
+              </>
+            ) : null}
             <input
               id="command-input"
               type="text"
-              value={value}
+              value={killPortMode ? killPortValue : value}
               onChange={(e) => {
-                setValue(e.target.value)
-                setSelectedSuggestion(0)
-                setSelectedSearch(0)
+                if (killPortMode) {
+                  setKillPortValue(e.target.value.replace(/[^\d]/g, '').slice(0, 5))
+                } else {
+                  if (pendingAction) {
+                    clearPendingAction()
+                    showActionMsg(null)
+                  }
+                  setValue(e.target.value)
+                  setSelectedSuggestion(0)
+                  setSelectedSearch(0)
+                }
               }}
               onKeyDown={handleInputKeyDown}
               placeholder={
-                isAiMode ? 'Ask or command the agent…' : 'Ask anything or type / for commands'
+                killPortMode
+                  ? 'Port'
+                  : isAiMode
+                    ? 'Ask or command the agent…'
+                    : 'Ask anything or type / for commands'
               }
               autoComplete="off"
               spellCheck={false}
-              className="w-full border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0"
+              className="min-w-0 flex-1 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0"
             />
             {dictationSupported ? (
               <button

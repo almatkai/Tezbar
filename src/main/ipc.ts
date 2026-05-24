@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, shell } from 'electron'
 import { setSuppressBlurHide } from './windowState'
 import { AGENT_IPC, type AgentRunEvent, type Stage } from '../shared/agent'
 import { CHAT_CONTEXT_MAX_TURNS, CHAT_IPC, type ChatSession, type ChatTurn } from '../shared/chat'
@@ -74,6 +74,7 @@ import {
   executeSearchAction,
   getSearchBenchmarkHistory,
   listOpenPorts,
+  reindexExtensions,
   reindexQuickNotes,
   reindexSnippets,
   runSearchBenchmarks,
@@ -128,6 +129,65 @@ const LLM_DEFAULTS = {
 let answerAbort: AbortController | null = null
 let agentAbort: AbortController | null = null
 let agentRunId: string | null = null
+let quitConfirmationOpen = false
+let quitConfirmed = false
+
+function quitRaymesNow(): void {
+  quitConfirmed = true
+  globalShortcut.unregisterAll()
+  BrowserWindow.getAllWindows().forEach((window) => {
+    if (!window.isDestroyed()) window.hide()
+  })
+  app.quit()
+  setTimeout(() => {
+    app.exit(0)
+  }, 500)
+}
+
+async function confirmQuitRaymes(getWindow: () => BrowserWindow | null): Promise<boolean> {
+  if (quitConfirmed) return true
+  if (quitConfirmationOpen) return false
+
+  quitConfirmationOpen = true
+  const win = getWindow()
+  setSuppressBlurHide(true)
+  try {
+    if (win && !win.isDestroyed()) {
+      win.show()
+      win.focus()
+    }
+    app.focus({ steal: true })
+    const result = win && !win.isDestroyed()
+      ? await dialog.showMessageBox(win, {
+          type: 'question',
+          buttons: ['Cancel', 'Quit'],
+          defaultId: 1,
+          cancelId: 0,
+          title: 'Quit Raymes',
+          message: 'Quit Raymes?',
+          detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
+          noLink: true,
+        })
+      : await dialog.showMessageBox({
+          type: 'question',
+          buttons: ['Cancel', 'Quit'],
+          defaultId: 1,
+          cancelId: 0,
+          title: 'Quit Raymes',
+          message: 'Quit Raymes?',
+          detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
+          noLink: true,
+        })
+
+    quitConfirmed = result.response === 1
+    return quitConfirmed
+  } finally {
+    quitConfirmationOpen = false
+    if (!quitConfirmed) {
+      setSuppressBlurHide(false)
+    }
+  }
+}
 
 const CHAT_SYSTEM_PROMPT =
   'You are Raymes, a helpful assistant. Answer clearly and concisely unless the user asks for more detail.'
@@ -632,6 +692,23 @@ export function registerIpcHandlers(
     }
   })
 
+  ipcMain.handle('app:confirm-quit', async () => confirmQuitRaymes(getWindow))
+
+  ipcMain.on('app:quit-confirmed', () => {
+    if (!quitConfirmed) return
+    quitRaymesNow()
+  })
+
+  ipcMain.on('app:request-quit', () => {
+    void confirmQuitRaymes(getWindow)
+      .then((confirmed) => {
+        if (confirmed) quitRaymesNow()
+      })
+      .catch(() => {
+        setSuppressBlurHide(false)
+      })
+  })
+
   ipcMain.handle('get-extensions', async () => {
     return listInstalledExtensions()
   })
@@ -649,14 +726,18 @@ export function registerIpcHandlers(
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
-    return installExtension(extensionId)
+    const result = await installExtension(extensionId)
+    await reindexExtensions()
+    return result
   })
 
   ipcMain.handle('extensions:uninstall', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
-    return uninstallExtension(extensionId)
+    const result = await uninstallExtension(extensionId)
+    await reindexExtensions()
+    return result
   })
 
   ipcMain.handle('extensions:integrity', async (_event, extensionId: unknown) => {
@@ -691,14 +772,18 @@ export function registerIpcHandlers(
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
-    return installRegistryExtension(extensionId)
+    const result = await installRegistryExtension(extensionId)
+    await reindexExtensions()
+    return result
   })
 
   ipcMain.handle('extension:uninstall', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
-    return uninstallRegistryExtension(extensionId)
+    const result = uninstallRegistryExtension(extensionId)
+    await reindexExtensions()
+    return result
   })
 
   ipcMain.handle('extension:run-command', async (_event, payload: unknown) => {

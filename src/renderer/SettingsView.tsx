@@ -499,6 +499,19 @@ export default function SettingsView({
             </span>
           </div>
         </Section>
+
+        <Section title="Danger Zone" description="Quit the application and terminate all background processes.">
+          <div className="mt-2">
+            <Button
+              variant="danger"
+              onClick={() => {
+                void window.raymes.appQuit()
+              }}
+            >
+              Quit Raymes
+            </Button>
+          </div>
+        </Section>
       </div>
 
       <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">

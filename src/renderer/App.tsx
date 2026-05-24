@@ -112,6 +112,13 @@ export default function App(): JSX.Element {
   }, [])
 
   useEffect(() => {
+    return window.raymes.onAppSurfaceOpen((nextSurface) => {
+      setSurface(nextSurface)
+      focusSurface(nextSurface)
+    })
+  }, [])
+
+  useEffect(() => {
     let dragActive = false
 
     const isNoDragTarget = (target: HTMLElement): boolean => {

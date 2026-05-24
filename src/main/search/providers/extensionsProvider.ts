@@ -16,7 +16,7 @@ export const extensionsProvider: SearchProvider = {
           id: `extcmd:${ext.id}:${cmd.name}`,
           category: 'extensions',
           title: cmd.title,
-          subtitle: `${ext.name} · ${cmd.subtitle || cmd.name}`,
+          subtitle: ext.name,
           tokens: `${cmd.title} ${cmd.name} ${ext.name} ${ext.slug} ${ext.id} ${ext.description || ''}`,
           action: {
             type: 'run-extension-command',

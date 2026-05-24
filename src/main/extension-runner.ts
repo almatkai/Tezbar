@@ -88,8 +88,19 @@ const JSX_FRAGMENT = Symbol.for('raymes.jsx.fragment')
 
 const sessions = new Map<string, RuntimeSession>()
 
+const iconProxy = new Proxy(
+  {},
+  {
+    get: (_target, prop) => String(prop),
+  },
+)
+
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function parsePackageJson(path: string): ExtensionPackageJson {
@@ -132,6 +143,10 @@ function resolveCommandEntry(
     join(src, commandName, 'index.ts'),
     join(src, commandName, 'index.jsx'),
     join(src, commandName, 'index.js'),
+    join(src, 'commands', `${commandName}.tsx`),
+    join(src, 'commands', `${commandName}.ts`),
+    join(src, 'commands', `${commandName}.jsx`),
+    join(src, 'commands', `${commandName}.js`),
   ]
 
   const candidate = [...explicit, ...defaults].find((entry) => existsSync(entry))
@@ -142,6 +157,12 @@ function resolveCommandEntry(
 }
 
 async function bundleCommand(entryPath: string, packageRoot: string): Promise<string> {
+  if (entryPath.includes(`${join('.sc-build', '')}`) || entryPath.includes('/.sc-build/')) {
+    const prebuilt = readFileSync(entryPath, 'utf8')
+    if (!prebuilt.trim()) throw new Error(`Prebuilt extension bundle is empty: ${entryPath}`)
+    return prebuilt
+  }
+
   const result = await esbuild.build({
     entryPoints: [entryPath],
     absWorkingDir: packageRoot,
@@ -157,6 +178,7 @@ async function bundleCommand(entryPath: string, packageRoot: string): Promise<st
       'react/jsx-runtime',
       'react/jsx-dev-runtime',
     ],
+    nodePaths: [join(packageRoot, 'node_modules')],
     logLevel: 'silent',
   })
 
@@ -473,6 +495,10 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     Item: makeToken('List.Item'),
     Section: makeToken('List.Section'),
     EmptyView: makeToken('List.EmptyView'),
+    Dropdown: Object.assign(makeToken('List.Dropdown'), {
+      Section: makeToken('List.Dropdown.Section'),
+      Item: makeToken('List.Dropdown.Item'),
+    }),
   })
 
   const Form = Object.assign(makeToken('Form'), {
@@ -501,9 +527,15 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     Pop: makeToken('Action.Pop'),
     ShowInFinder: makeToken('Action.ShowInFinder'),
     SubmitForm: makeToken('Action.SubmitForm'),
+    Style: {
+      Regular: 'regular',
+      Destructive: 'destructive',
+    },
   })
 
-  const ActionPanel = makeToken('ActionPanel')
+  const ActionPanel = Object.assign(makeToken('ActionPanel'), {
+    Section: makeToken('ActionPanel.Section'),
+  })
 
   return {
     List,
@@ -512,6 +544,18 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     Detail,
     Action,
     ActionPanel,
+    Icon: iconProxy,
+    Color: iconProxy,
+    Keyboard: {
+      Shortcut: {
+        Common: {
+          Copy: { modifiers: ['cmd'], key: 'c' },
+          CopyPath: { modifiers: ['cmd', 'shift'], key: 'c' },
+          Refresh: { modifiers: ['cmd'], key: 'r' },
+        },
+      },
+      Key: iconProxy,
+    },
     Toast: {
       Style: {
         Success: 'success',
@@ -646,7 +690,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
         return null
       }
     },
-    getDefaultApplication: async (_pathOrUrl: string): Promise<{ name: string; path: string } | null> => {
+    getDefaultApplication: async (): Promise<{ name: string; path: string } | null> => {
       return null
     },
     confirmAlert: async (): Promise<boolean> => true,
@@ -656,6 +700,9 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     openCommandPreferences: async (): Promise<void> => {
       // Preferences editing is handled by Raymes settings.
     },
+    closeMainWindow: async (): Promise<void> => {},
+    popToRoot: async (): Promise<void> => {},
+    clearSearchBar: async (): Promise<void> => {},
   }
 }
 
@@ -909,7 +956,7 @@ function walkRuntimeNodes(
   if (!typeName) return []
 
   if (typeName.startsWith('Action')) {
-    if (typeName === 'ActionPanel') {
+    if (typeName === 'ActionPanel' || typeName.startsWith('ActionPanel.')) {
       return walkRuntimeNodes(props.children, session, depth + 1, budget)
     }
     registerAction(typeName, props, session)
@@ -920,10 +967,22 @@ function walkRuntimeNodes(
     session.searchTextChangeHandler = props.onSearchTextChange as (text: string) => void
   }
 
+  const actionStart = session.currentActions.length
+  if (props.actions !== undefined) {
+    walkRuntimeNodes(props.actions, session, depth + 1, budget)
+  }
+  const actionIds = session.currentActions.slice(actionStart).map((action) => action.id)
+
   budget.remaining -= 1
+  const sanitizedProps = sanitizeValue(props) as Record<string, unknown> | undefined
+  if (actionIds.length > 0) {
+    if (sanitizedProps) {
+      sanitizedProps.actionIds = actionIds
+    }
+  }
   const node: ExtensionRuntimeNode = {
     type: typeName,
-    props: sanitizeValue(props) as Record<string, unknown> | undefined,
+    props: sanitizedProps,
     children: walkRuntimeNodes(props.children, session, depth + 1, budget),
   }
 
@@ -1102,10 +1161,25 @@ function runBundle(
     return fileRequire(specifier)
   }
 
+  const webGlobals = globalThis as typeof globalThis & {
+    fetch?: typeof fetch
+    AbortController?: typeof AbortController
+    AbortSignal?: typeof AbortSignal
+    Headers?: typeof Headers
+    Request?: typeof Request
+    Response?: typeof Response
+  }
+
   const context = vm.createContext({
     console,
     Buffer,
     process,
+    fetch: webGlobals.fetch?.bind(globalThis),
+    AbortController: webGlobals.AbortController,
+    AbortSignal: webGlobals.AbortSignal,
+    Headers: webGlobals.Headers,
+    Request: webGlobals.Request,
+    Response: webGlobals.Response,
     setTimeout,
     clearTimeout,
     setInterval,
@@ -1214,8 +1288,12 @@ async function runCommandFromPackagePath(
   await executePass('Pass 1')
   let prevSnapshot = snapshotHookStates()
 
-  // Pass 2+: effects may have triggered setState → re-render to pick up new state
+  // Pass 2+: effects may have triggered setState → re-render to pick up new state.
+  // Some Raycast extensions fetch data inside plain useEffect callbacks instead
+  // of @raycast/utils hooks, so give those microtasks/subprocess callbacks a
+  // brief chance to commit state before deciding whether another render is needed.
   for (let p = 2; p <= 5; p += 1) {
+    await delay(180)
     const currSnapshot = snapshotHookStates()
     const hasPromises = session.pendingPromises.length > 0
     const stateChanged = currSnapshot !== prevSnapshot

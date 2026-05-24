@@ -344,6 +344,13 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
         }
       }
 
+      case 'quit-raymes': {
+        return {
+          ok: false,
+          message: 'Quit Raymes is handled by the launcher so it can show the confirmation dialog.',
+        }
+      }
+
       case 'brew-update': {
         try {
           const out = await runShell('brew update')

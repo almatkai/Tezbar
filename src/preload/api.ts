@@ -165,6 +165,10 @@ export type RaymesApi = {
   deleteQuickNote: (createdAt: number) => Promise<boolean>
   /** Fired when the user presses ⌘N / Ctrl+N (global) — save command-bar text to notes. */
   onQuickNoteSaveShortcut: (listener: () => void) => () => void
+  /** Fired from the top-bar tray menu to open a built-in Raymes surface. */
+  onAppSurfaceOpen: (
+    listener: (surface: 'command' | 'settings' | 'providers' | 'clipboard') => void,
+  ) => () => void
   /** Kick off a pi-backed agent run. Events stream via `onAgentEvent`. */
   agentRun: (task: string) => Promise<{ ok: boolean; runId?: string; error?: string }>
   /** Abort the currently running agent task, if any. */
@@ -184,4 +188,5 @@ export type RaymesApi = {
   chatUpdateTitle: (id: string, title: string) => Promise<{ ok: boolean }>
   chatDelete: (id: string) => Promise<{ ok: boolean }>
   chatClear: () => Promise<{ ok: boolean }>
+  appQuit: () => Promise<void>
 }

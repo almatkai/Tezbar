@@ -7,6 +7,7 @@ type ListRow = {
   title: string
   subtitle: string
   section?: string
+  actionIds?: string[]
 }
 
 function parseListRows(node: ExtensionRuntimeNode): ListRow[] {
@@ -17,7 +18,10 @@ function parseListRows(node: ExtensionRuntimeNode): ListRow[] {
       const title = typeof entry.props?.title === 'string' ? entry.props.title : 'Untitled'
       const subtitle = typeof entry.props?.subtitle === 'string' ? entry.props.subtitle : ''
       const id = typeof entry.props?.id === 'string' ? entry.props.id : `${section || 'list'}:${rows.length}`
-      rows.push({ id, title, subtitle, section })
+      const actionIds = Array.isArray(entry.props?.actionIds)
+        ? entry.props.actionIds.filter((value): value is string => typeof value === 'string')
+        : undefined
+      rows.push({ id, title, subtitle, section, actionIds })
       return
     }
 
@@ -74,7 +78,7 @@ export function ListRuntime({
   root: ExtensionRuntimeNode
   title: string
   onBack: () => void
-  onRunPrimaryAction: () => void
+  onRunPrimaryAction: (actionId?: string) => void
   onOpenActions: () => void
   onSearchTextChanged: (searchText: string) => Promise<void> | void
 }): JSX.Element {
@@ -158,7 +162,7 @@ export function ListRuntime({
 
     if (e.key === 'Enter' && !e.repeat) {
       e.preventDefault()
-      onRunPrimaryAction()
+      onRunPrimaryAction(filteredRows[selected]?.actionIds?.[0])
       return
     }
   }

@@ -160,6 +160,9 @@ async function runWithSafety<T extends SearchExecuteResult>(
 
 async function upsertProvider(provider: SearchProvider): Promise<void> {
   const docs = await provider.buildDocuments()
+  if (provider.providerId === 'extensions') {
+    indexDb?.removeDocumentsByCategory('extensions')
+  }
   if (docs.length > 0) {
     indexDb?.upsertDocuments(docs)
   }
@@ -250,6 +253,14 @@ export async function reindexQuickNotes(): Promise<void> {
 export async function reindexSnippets(): Promise<void> {
   await bootstrapSearchIndex()
   indexDb?.removeDocumentsByCategory('snippets')
+  indexDb?.clearSearchCache()
+}
+
+/** Rebuild extension command rows after extension install/uninstall. */
+export async function reindexExtensions(): Promise<void> {
+  await bootstrapSearchIndex()
+  await upsertProvider(extensionsProvider)
+  lastExtensionRefreshAt = Date.now()
   indexDb?.clearSearchCache()
 }
 
@@ -422,8 +433,8 @@ function rankRows(query: string, docs: Array<{ doc: IndexedDocument; lexical: nu
 function recommendationBoost(id: string): number {
   if (id === 'native:open-clipboard-history') return 900
   if (id === 'native:open-snippets') return 880
-  if (id === 'native:list-listening-ports') return 680
-  if (id === 'extcmd:raycast.port-manager:kill-listening-process') return 840
+  if (id === 'extcmd:raycast.kill-process:index') return 860
+  if (id === 'extcmd:raycast.port-manager:kill-listening-process') return 760
   if (id === 'extcmd:raycast.port-manager:open-ports') return 720
   if (id === 'extcmd:raycast.port-manager:open-ports-menu-bar') return 700
   return 0
@@ -461,7 +472,7 @@ function buildRecommendations(): SearchResult[] {
     'native:open-clipboard-history',
     'native:open-snippets',
     'extcmd:raycast.port-manager:kill-listening-process',
-    'native:list-listening-ports',
+    'extcmd:raycast.kill-process:index',
     'extcmd:raycast.port-manager:open-ports',
     'extcmd:raycast.port-manager:open-ports-menu-bar',
   ]
@@ -508,7 +519,44 @@ function buildRecommendations(): SearchResult[] {
     .slice(0, MAX_RESULTS)
 }
 
-function parseOpenPortProcesses(stdout: string): OpenPortProcess[] {
+function decodeLsofCommandName(value: string): string {
+  return value.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16)),
+  )
+}
+
+function displayProcessNameFromCommand(command: string): string {
+  const trimmed = command.trim()
+  if (!trimmed) return ''
+
+  const parts = trimmed.split('/').filter(Boolean)
+  return decodeLsofCommandName(parts.at(-1) ?? trimmed)
+}
+
+function parseProcessNameMap(stdout: string): Map<string, string> {
+  const names = new Map<string, string>()
+
+  for (const line of stdout.split('\n')) {
+    const match = line.match(/^\s*(\d+)\s+(.+?)\s*$/)
+    if (!match) continue
+
+    const name = displayProcessNameFromCommand(match[2])
+    if (name) names.set(match[1], name)
+  }
+
+  return names
+}
+
+async function readProcessNameMap(): Promise<Map<string, string>> {
+  try {
+    const { stdout } = await execFileAsync('/bin/ps', ['-axo', 'pid=,comm='])
+    return parseProcessNameMap(stdout)
+  } catch {
+    return new Map<string, string>()
+  }
+}
+
+function parseOpenPortProcesses(stdout: string, processNames: Map<string, string> = new Map()): OpenPortProcess[] {
   const lines = stdout
     .split('\n')
     .map((line) => line.trim())
@@ -530,15 +578,14 @@ function parseOpenPortProcesses(stdout: string): OpenPortProcess[] {
     const parts = line.split(/\s+/)
     if (parts.length < 3) continue
 
-    const nameField = parts.at(-1) ?? ''
-    const match = nameField.match(/:(\d+)\s*\(LISTEN\)$/)
+    const match = line.match(/:(\d+)\s+\(LISTEN\)$/)
     if (!match) continue
 
     const port = Number(match[1])
     if (!Number.isFinite(port)) continue
 
-    const process = parts[0] ?? 'unknown'
     const pid = parts[1] ?? '?'
+    const process = processNames.get(pid) ?? decodeLsofCommandName(parts[0] ?? 'unknown')
     const user = parts[2] ?? 'unknown'
     const key = `${process}:${pid}:${user}`
 
@@ -603,7 +650,10 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     action: item.action,
   }))
 
-  const resultsWithoutFiles = asResults.filter((result) => result.category !== 'files')
+  const resultsWithoutFiles = asResults.filter((result) => {
+    if (result.category === 'files') return false
+    return true
+  })
   const fileResults = asResults.filter((result) => result.category === 'files')
 
   let fallbackFiles: SearchResult[] = []
@@ -611,7 +661,6 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     fallbackFiles = await spotlightFallback(trimmed)
   }
 
-  const portCatalogResults = buildPortManagerCatalogSearchResults(trimmed)
   const emojiPickerResult = buildEmojiPickerSearchResult(trimmed)
   const openPortResults = await searchPortManagerOpenPorts(trimmed)
 
@@ -640,7 +689,6 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     ...emojiPickerResult,
     ...fileResults,
     ...fallbackFiles,
-    ...portCatalogResults,
     ...openPortResults,
     ...noteAdd,
   ])
@@ -698,82 +746,6 @@ async function searchPortManagerOpenPorts(query: string): Promise<SearchResult[]
     .slice(0, 12)
 }
 
-function buildPortManagerCatalogSearchResults(trimmed: string): SearchResult[] {
-  const base = portManagerCatalogQueryScore(trimmed)
-  if (base <= 0) return []
-
-  const subtitle = 'Port Manager'
-
-  return [
-    {
-      id: 'port-catalog:named-ports',
-      title: 'Named Ports',
-      subtitle,
-      category: 'extensions' as const,
-      score: base + 12,
-      action: {
-        type: 'run-extension-command',
-        extensionId: 'raycast.port-manager',
-        commandName: 'named-ports',
-        title: 'Named Ports',
-      },
-    },
-    {
-      id: 'port-catalog:open-ports',
-      title: 'Open Ports',
-      subtitle,
-      category: 'extensions' as const,
-      score: base + 10,
-      action: {
-        type: 'run-extension-command',
-        extensionId: 'raycast.port-manager',
-        commandName: 'open-ports',
-        title: 'Open Ports',
-      },
-    },
-    {
-      id: 'port-catalog:open-ports-menu-bar',
-      title: 'Open Ports in Menu Bar',
-      subtitle,
-      category: 'extensions' as const,
-      score: base + 8,
-      action: {
-        type: 'run-extension-command',
-        extensionId: 'raycast.port-manager',
-        commandName: 'open-ports-menu-bar',
-        title: 'Open Ports in Menu Bar',
-      },
-    },
-    {
-      id: 'port-catalog:kill-listening',
-      title: 'Kill Process Listening On',
-      subtitle,
-      category: 'extensions' as const,
-      score: base + 6,
-      action: {
-        type: 'run-extension-command',
-        extensionId: 'raycast.port-manager',
-        commandName: 'kill-listening-process',
-        title: 'Kill Process Listening On',
-        commandArgumentDefinitions: [
-          { name: 'port', title: 'Port', placeholder: 'e.g. 3000', required: true, type: 'text' },
-        ],
-      },
-    },
-  ]
-}
-
-function portManagerCatalogQueryScore(q: string): number {
-  const n = q.trim().toLowerCase()
-  if (!n) return 0
-  if (n.includes('port manager')) return 520
-  if (/\b(listening|listen)\b/.test(n) && /\bport/.test(n)) return 510
-  if (n.includes('list listening') || n.includes('lsof')) return 500
-  if (/\bports?\b/.test(n)) return 430
-  if (/\b(kill|stop|terminate|process)/.test(n) && /\bport/.test(n)) return 410
-  return 0
-}
-
 function buildEmojiPickerSearchResult(query: string): SearchResult[] {
   const n = query.trim().toLowerCase()
   if (!n) return []
@@ -810,10 +782,18 @@ function buildEmojiPickerSearchResult(query: string): SearchResult[] {
 
 export async function listOpenPorts(): Promise<OpenPortProcess[]> {
   try {
-    const { stdout } = await execFileAsync('bash', ['-lc', 'lsof -nP -iTCP -sTCP:LISTEN'])
-    return parseOpenPortProcesses(stdout)
-  } catch {
-    return []
+    const { stdout } = await execFileAsync('/usr/sbin/lsof', ['-nP', '-iTCP', '-sTCP:LISTEN'])
+    const processNames = await readProcessNameMap()
+    return parseOpenPortProcesses(stdout, processNames)
+  } catch (error) {
+    console.error('[OpenPorts] Failed to list listening ports:', error)
+    try {
+      const { stdout } = await execFileAsync('/usr/sbin/lsof', ['-nP', '-iTCP', '-sTCP:LISTEN'])
+      return parseOpenPortProcesses(stdout)
+    } catch (fallbackError) {
+      console.error('[OpenPorts] Fallback listing failed:', fallbackError)
+      return []
+    }
   }
 }
 

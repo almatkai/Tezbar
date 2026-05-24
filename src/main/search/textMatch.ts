@@ -50,7 +50,9 @@ export function levenshteinDistance(left: string, right: string): number {
 }
 
 export function buildFtsQuery(query: string): string {
-  const tokens = tokenizeQuery(query)
+  const tokens = query
+    .toLowerCase()
+    .match(/[a-z0-9]+/g) ?? []
   if (tokens.length === 0) return ''
   return tokens.map((token) => `${token}*`).join(' OR ')
 }

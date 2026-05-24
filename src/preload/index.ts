@@ -187,6 +187,24 @@ contextBridge.exposeInMainWorld('raymes', {
       ipcRenderer.removeListener(channel, handler)
     }
   },
+  onAppSurfaceOpen: (
+    listener: (surface: 'command' | 'settings' | 'providers' | 'clipboard') => void,
+  ) => {
+    const handler = (_event: IpcRendererEvent, surface: unknown): void => {
+      if (
+        surface === 'command' ||
+        surface === 'settings' ||
+        surface === 'providers' ||
+        surface === 'clipboard'
+      ) {
+        listener(surface)
+      }
+    }
+    ipcRenderer.on('app:open-surface', handler)
+    return (): void => {
+      ipcRenderer.removeListener('app:open-surface', handler)
+    }
+  },
   agentRun: (task: string): Promise<{ ok: boolean; runId?: string; error?: string }> =>
     ipcRenderer.invoke(AGENT_IPC.RUN, task),
   agentCancel: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(AGENT_IPC.CANCEL),
@@ -223,4 +241,7 @@ contextBridge.exposeInMainWorld('raymes', {
     ipcRenderer.invoke(CHAT_IPC.UPDATE_TITLE, { id, title }),
   chatDelete: (id: string) => ipcRenderer.invoke(CHAT_IPC.DELETE, id),
   chatClear: () => ipcRenderer.invoke(CHAT_IPC.CLEAR),
+  appQuit: async () => {
+    ipcRenderer.send('app:request-quit')
+  },
 })

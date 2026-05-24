@@ -90,9 +90,10 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
     return () => window.removeEventListener('keydown', onKey, true)
   }, [onInvokeAction, primaryAction])
 
-  const onRunPrimaryAction = (): void => {
-    if (!primaryAction) return
-    void onInvokeAction(primaryAction.id)
+  const onRunPrimaryAction = (actionId?: string): void => {
+    const id = actionId || primaryAction?.id
+    if (!id) return
+    void onInvokeAction(id)
   }
 
   const onSubmitForm = (values: Record<string, string>): void => {
