@@ -1,6 +1,6 @@
-import type { AiModelCapability, AiProviderModel, LlmConfigRecord, ProviderId } from './llmConfig'
+import type { AiModelCapability, AiProviderModel, BuiltInProviderId, LlmConfigRecord, ProviderId } from './llmConfig'
 
-export const AI_PROVIDER_ROWS: Array<{ id: ProviderId; title: string; subtitle: string }> = [
+export const AI_PROVIDER_ROWS: Array<{ id: BuiltInProviderId; title: string; subtitle: string }> = [
   { id: 'openai', title: 'OpenAI', subtitle: 'Official Chat Completions API' },
   { id: 'deepseek', title: 'DeepSeek', subtitle: 'DeepSeek V4, V3, and R1' },
   { id: 'openai-compatible', title: 'OpenAI Compatible', subtitle: 'Custom OpenAI-style endpoint' },
@@ -17,7 +17,7 @@ export const AI_CAPABILITIES: Array<{ id: AiModelCapability; label: string }> = 
   { id: 'tools', label: 'Tools' },
 ]
 
-export const RECOMMENDED_AI_MODEL: Record<ProviderId, string> = {
+export const RECOMMENDED_AI_MODEL: Record<BuiltInProviderId, string> = {
   openai: 'gpt-4o-mini',
   deepseek: 'deepseek-v4-flash',
   'openai-compatible': 'gpt-4o-mini',
@@ -28,7 +28,7 @@ export const RECOMMENDED_AI_MODEL: Record<ProviderId, string> = {
   opencode: 'opencode/big-pickle',
 }
 
-export const DEFAULT_BASE_URL: Partial<Record<ProviderId, string>> = {
+export const DEFAULT_BASE_URL: Partial<Record<BuiltInProviderId, string>> = {
   openai: 'https://api.openai.com/v1',
   deepseek: 'https://api.deepseek.com',
   'openai-compatible': 'https://api.openai.com/v1',
@@ -37,7 +37,7 @@ export const DEFAULT_BASE_URL: Partial<Record<ProviderId, string>> = {
   ollama: 'http://localhost:11434',
 }
 
-export const DEFAULT_PROVIDER_MODELS: Record<ProviderId, AiProviderModel[]> = {
+export const DEFAULT_PROVIDER_MODELS: Record<BuiltInProviderId, AiProviderModel[]> = {
   openai: [
     { id: 'gpt-4o-mini', capabilities: ['vision', 'tools'], contextWindow: 128000 },
     { id: 'gpt-4o', capabilities: ['vision', 'tools'], contextWindow: 128000 },
@@ -72,12 +72,39 @@ export const DEFAULT_PROVIDER_MODELS: Record<ProviderId, AiProviderModel[]> = {
   ],
 }
 
-export function providerTitle(id: ProviderId): string {
-  return AI_PROVIDER_ROWS.find((provider) => provider.id === id)?.title ?? id
+export function isCustomProvider(id: ProviderId): id is `custom:${string}` {
+  return id.startsWith('custom:')
+}
+
+export function providerRows(config: Pick<LlmConfigRecord, 'customProviders'>): Array<{ id: ProviderId; title: string; subtitle: string }> {
+  return [
+    ...AI_PROVIDER_ROWS,
+    ...(config.customProviders ?? []).map((provider) => ({
+      id: provider.id,
+      title: provider.title,
+      subtitle: provider.subtitle ?? 'Custom OpenAI-compatible endpoint',
+    })),
+  ]
+}
+
+export function providerTitle(id: ProviderId, config?: Pick<LlmConfigRecord, 'customProviders'>): string {
+  return providerRows(config ?? {}).find((provider) => provider.id === id)?.title ?? id
+}
+
+export function recommendedModel(provider: ProviderId): string {
+  return isCustomProvider(provider) ? '' : RECOMMENDED_AI_MODEL[provider]
+}
+
+export function defaultModels(provider: ProviderId): AiProviderModel[] {
+  return isCustomProvider(provider) ? [] : DEFAULT_PROVIDER_MODELS[provider]
+}
+
+export function defaultBaseUrl(provider: ProviderId): string {
+  return isCustomProvider(provider) ? '' : (DEFAULT_BASE_URL[provider] ?? '')
 }
 
 export function isAiProviderConfigured(config: LlmConfigRecord, provider: ProviderId): boolean {
-  const models = config.providerModels?.[provider] ?? DEFAULT_PROVIDER_MODELS[provider]
+  const models = config.providerModels?.[provider] ?? defaultModels(provider)
   if (models.length === 0) return false
   if (provider === 'ollama' || provider === 'opencode') return true
 
@@ -133,7 +160,7 @@ export function normalizeModelList(models: AiProviderModel[], fallbackId: string
       return true
     })
 
-  if (!seen.has(fallbackId)) {
+  if (fallbackId && !seen.has(fallbackId)) {
     normalized.unshift({ id: fallbackId, capabilities: inferCapabilities(fallbackId) })
   }
 
@@ -144,6 +171,10 @@ export function normalizeProviderModelList(
   provider: ProviderId,
   models: AiProviderModel[]
 ): AiProviderModel[] {
+  if (isCustomProvider(provider)) {
+    return normalizeModelList(models, models[0]?.id ?? '')
+  }
+
   if (provider === 'openai-compatible') {
     return normalizeModelList(models, RECOMMENDED_AI_MODEL[provider])
   }
@@ -151,7 +182,7 @@ export function normalizeProviderModelList(
   const ownDefaults = new Set(DEFAULT_PROVIDER_MODELS[provider].map((model) => model.id))
   const otherDefaults = new Set<string>()
   for (const [otherProvider, otherModels] of Object.entries(DEFAULT_PROVIDER_MODELS) as Array<
-    [ProviderId, AiProviderModel[]]
+    [BuiltInProviderId, AiProviderModel[]]
   >) {
     if (otherProvider === provider) continue
     for (const model of otherModels) {

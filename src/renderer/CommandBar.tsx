@@ -1,12 +1,12 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import type { Intent } from '../shared/intent'
 import {
-  AI_PROVIDER_ROWS,
-  DEFAULT_PROVIDER_MODELS,
-  RECOMMENDED_AI_MODEL,
+  defaultModels,
   isAiProviderConfigured,
   normalizeProviderModelList,
+  providerRows,
   providerTitle,
+  recommendedModel,
 } from '../shared/aiProviders'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { PathCompletionItem, SearchResult } from '../shared/search'
@@ -88,6 +88,15 @@ type ExtensionRuntimeViewPayload = Extract<ExtensionRunCommandResult, { ok: true
 
 function buildRecentExtensionCommandId(extensionId: string, commandName: string): string {
   return `extcmd:${extensionId}:${commandName}`
+}
+
+function formatExtensionRunError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error || '')
+  const missingModule = /Cannot find module ['"]([^'"]+)['"]/i.exec(message)
+  if (missingModule?.[1]) {
+    return `Extension dependency missing: ${missingModule[1]}. Reinstall the extension and try again.`
+  }
+  return message.split(/\r?\n/)[0] || 'Extension command failed'
 }
 
 function readRecentExtensionCommands(): string[] {
@@ -348,6 +357,7 @@ export default function CommandBar({
   const pinPickerOpenRef = useRef(false)
   const pendingOpenRef = useRef(false)
   const modelMenuOpenRef = useRef(false)
+  const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const valueRef = useRef(value)
   const killPortModeRef = useRef(killPortMode)
 
@@ -396,6 +406,17 @@ export default function CommandBar({
   useEffect(() => {
     void window.raymes.getLlmConfig().then((c) => setCfg(c as LlmConfigRecord))
   }, [])
+
+  useEffect(() => {
+    if (!modelMenuOpen) return
+    const closeIfOutside = (event: PointerEvent): void => {
+      if (!modelMenuRef.current?.contains(event.target as Node)) {
+        setModelMenuOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', closeIfOutside)
+    return () => document.removeEventListener('pointerdown', closeIfOutside)
+  }, [modelMenuOpen])
 
   useEffect(() => {
     const onQuickNoteShortcut = (): void => {
@@ -465,13 +486,14 @@ export default function CommandBar({
 
   const provider = (cfg.provider ?? 'ollama') as ProviderId
   const model = useMemo(
-    () => cfg.providerSelectedModels?.[provider] ?? cfg.model ?? RECOMMENDED_AI_MODEL[provider],
+    () => cfg.providerSelectedModels?.[provider] ?? cfg.model ?? recommendedModel(provider),
     [cfg.model, cfg.providerSelectedModels, provider]
   )
+  const availableProviders = providerRows(cfg)
   const previewProvider = modelMenuProvider ?? provider
   const previewModels = normalizeProviderModelList(
     previewProvider,
-    cfg.providerModels?.[previewProvider] ?? DEFAULT_PROVIDER_MODELS[previewProvider]
+    cfg.providerModels?.[previewProvider] ?? defaultModels(previewProvider)
   )
   const previewConfigured = isAiProviderConfigured(cfg, previewProvider)
 
@@ -882,7 +904,7 @@ export default function CommandBar({
       focusCommandInput()
       return true
     } catch (err) {
-      showActionMsg(err instanceof Error ? err.message : 'Action failed')
+      showActionMsg(formatExtensionRunError(err))
       return false
     }
   }
@@ -1542,7 +1564,7 @@ export default function CommandBar({
       ...cfg.providerModels,
       [nextProvider]: normalizeProviderModelList(
         nextProvider,
-        cfg.providerModels?.[nextProvider] ?? DEFAULT_PROVIDER_MODELS[nextProvider]
+        cfg.providerModels?.[nextProvider] ?? defaultModels(nextProvider)
       ),
     }
     const providerSelectedModels = {
@@ -1636,7 +1658,7 @@ export default function CommandBar({
               />
             </div>
             {isAiMode ? (
-              <div className="relative flex h-6 shrink-0 items-center">
+              <div ref={modelMenuRef} className="relative flex h-6 shrink-0 items-center">
                 <button
                   type="button"
                   className="inline-flex h-6 items-center rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 font-mono text-[10px] leading-none tabular-nums text-ink-3 transition hover:border-accent/40 hover:text-ink-1"
@@ -1650,7 +1672,7 @@ export default function CommandBar({
                 {modelMenuOpen ? (
                   <div className="raymes-popover absolute right-0 top-7 z-50 grid h-[340px] w-[500px] grid-cols-[170px_minmax(0,1fr)] overflow-hidden p-1.5">
                     <ul className="min-h-0 overflow-y-auto border-r border-white/[0.07] pr-1">
-                      {AI_PROVIDER_ROWS.map((row) => (
+                      {availableProviders.map((row) => (
                         <li key={row.id}>
                           <button
                             type="button"
@@ -1663,18 +1685,31 @@ export default function CommandBar({
                             onMouseEnter={() => setModelMenuProvider(row.id)}
                             onFocus={() => setModelMenuProvider(row.id)}
                           >
-                            <span className="truncate">{providerTitle(row.id)}</span>
+                            <span className="truncate">{providerTitle(row.id, cfg)}</span>
                             {provider === row.id ? (
                               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
                             ) : null}
                           </button>
                         </li>
                       ))}
+                      <li className="mt-1 border-t border-white/[0.07] pt-1">
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-raymes-row px-2 py-2 text-left text-[12px] font-semibold text-ink-2 transition hover:bg-accent/10 hover:text-ink-1"
+                          onClick={() => {
+                            setModelMenuOpen(false)
+                            onConfigureAi()
+                          }}
+                        >
+                          <span className="text-[15px] leading-none text-accent-strong">+</span>
+                          Add provider
+                        </button>
+                      </li>
                     </ul>
                     <div className="flex min-w-0 flex-col pl-1.5">
                       <div className="flex shrink-0 items-center justify-between gap-2 px-2 pb-1.5 pt-1">
                         <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-4">
-                          {providerTitle(previewProvider)}
+                          {providerTitle(previewProvider, cfg)}
                         </p>
                         <button
                           type="button"

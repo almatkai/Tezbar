@@ -46,6 +46,7 @@ function rootKind(root: ExtensionRuntimeNode): 'list' | 'form' | 'grid' | 'detai
 export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JSX.Element {
   const { title, extensionId, commandName, root, actions, onBack, onSearchTextChanged, onInvokeAction } = props
   const [showActions, setShowActions] = useState(false)
+  const [actionFilterIds, setActionFilterIds] = useState<string[] | null>(null)
 
   useEffect(() => {
     setRuntimeContext(extensionId, commandName)
@@ -97,6 +98,11 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
     void onInvokeAction(id)
   }
 
+  const openActions = (ids?: string[]): void => {
+    setActionFilterIds(ids && ids.length > 0 ? ids : null)
+    setShowActions(true)
+  }
+
   const onSubmitForm = (values: Record<string, string>): void => {
     const submitAction = actions.find((action) => action.kind === 'submit-form') || primaryAction
     if (!submitAction) return
@@ -113,7 +119,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
               title={title}
               onBack={onBack}
               onSubmitForm={onSubmitForm}
-              onOpenActions={() => setShowActions(true)}
+              onOpenActions={() => openActions()}
             />
           ) : kind === 'grid' ? (
             <GridRuntime
@@ -121,7 +127,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
               title={title}
               onBack={onBack}
               onRunPrimaryAction={onRunPrimaryAction}
-              onOpenActions={() => setShowActions(true)}
+              onOpenActions={openActions}
             />
           ) : kind === 'detail' ? (
             <DetailRuntime
@@ -129,7 +135,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
               title={title}
               onBack={onBack}
               onRunPrimaryAction={onRunPrimaryAction}
-              onOpenActions={() => setShowActions(true)}
+              onOpenActions={() => openActions()}
             />
           ) : (
             <ListRuntime
@@ -137,17 +143,21 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
               title={title}
               onBack={onBack}
               onRunPrimaryAction={onRunPrimaryAction}
-              onOpenActions={() => setShowActions(true)}
+              onOpenActions={() => openActions()}
               onSearchTextChanged={onSearchTextChanged}
             />
           )}
 
           {showActions && actions.length > 0 ? (
             <ActionPanelOverlay
-              actions={actions}
-              onClose={() => setShowActions(false)}
+              actions={actionFilterIds ? actions.filter((action) => actionFilterIds.includes(action.id)) : actions}
+              onClose={() => {
+                setShowActions(false)
+                setActionFilterIds(null)
+              }}
               onExecute={(action) => {
                 setShowActions(false)
+                setActionFilterIds(null)
                 void onInvokeAction(action.id)
               }}
             />

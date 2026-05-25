@@ -1,9 +1,11 @@
 import {
   DEFAULT_PROVIDER_MODELS,
-  RECOMMENDED_AI_MODEL,
+  defaultModels,
+  isCustomProvider,
   normalizeProviderModelList,
+  recommendedModel,
 } from '../../shared/aiProviders'
-import type { AiProviderConfig, AiProviderModel, LlmTask, ProviderId } from '../../shared/llmConfig'
+import type { AiProviderConfig, AiProviderModel, CustomAiProvider, LlmTask, ProviderId } from '../../shared/llmConfig'
 import { AnthropicProvider } from './anthropic'
 import { readRawConfig } from './configStore'
 import { CopilotProvider } from './copilot'
@@ -14,6 +16,7 @@ import type { LLMProvider } from './provider'
 
 export type OpenRayLLMConfig = {
   provider: ProviderId
+  customProviders?: CustomAiProvider[]
   providerConfigs?: Partial<Record<ProviderId, AiProviderConfig>>
   apiKey?: string
   baseURL?: string
@@ -48,10 +51,30 @@ const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash'
 const DEFAULT_DEEPSEEK_BASE = 'https://api.deepseek.com'
 const DEFAULT_DEEPSEEK_MODEL = 'deepseek-v4-flash'
 
-function normalizeProviderModels(raw: unknown): Partial<Record<ProviderId, AiProviderModel[]>> | undefined {
+function normalizeCustomProviders(raw: unknown): CustomAiProvider[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((value) => {
+    if (!value || typeof value !== 'object') return []
+    const entry = value as Record<string, unknown>
+    const id = typeof entry.id === 'string' ? entry.id.trim() : ''
+    const title = typeof entry.title === 'string' ? entry.title.trim() : ''
+    if (!id.startsWith('custom:') || !title) return []
+    return [{
+      id: id as `custom:${string}`,
+      title,
+      subtitle: typeof entry.subtitle === 'string' ? entry.subtitle.trim() : undefined,
+    }]
+  })
+}
+
+function providerIds(customProviders: CustomAiProvider[]): ProviderId[] {
+  return [...(Object.keys(DEFAULT_PROVIDER_MODELS) as ProviderId[]), ...customProviders.map((provider) => provider.id)]
+}
+
+function normalizeProviderModels(raw: unknown, ids: ProviderId[]): Partial<Record<ProviderId, AiProviderModel[]>> | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const result: Partial<Record<ProviderId, AiProviderModel[]>> = {}
-  for (const provider of Object.keys(DEFAULT_PROVIDER_MODELS) as ProviderId[]) {
+  for (const provider of ids) {
     const models = (raw as Partial<Record<ProviderId, unknown>>)[provider]
     if (!Array.isArray(models)) continue
     result[provider] = normalizeProviderModelList(provider, models as AiProviderModel[])
@@ -59,20 +82,20 @@ function normalizeProviderModels(raw: unknown): Partial<Record<ProviderId, AiPro
   return result
 }
 
-function normalizeProviderSelectedModels(raw: unknown): Partial<Record<ProviderId, string>> | undefined {
+function normalizeProviderSelectedModels(raw: unknown, ids: ProviderId[]): Partial<Record<ProviderId, string>> | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const result: Partial<Record<ProviderId, string>> = {}
-  for (const provider of Object.keys(DEFAULT_PROVIDER_MODELS) as ProviderId[]) {
+  for (const provider of ids) {
     const value = (raw as Partial<Record<ProviderId, unknown>>)[provider]
     if (typeof value === 'string' && value.trim()) result[provider] = value.trim()
   }
   return result
 }
 
-function normalizeProviderConfigs(raw: unknown): Partial<Record<ProviderId, AiProviderConfig>> | undefined {
+function normalizeProviderConfigs(raw: unknown, ids: ProviderId[]): Partial<Record<ProviderId, AiProviderConfig>> | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const result: Partial<Record<ProviderId, AiProviderConfig>> = {}
-  for (const provider of Object.keys(DEFAULT_PROVIDER_MODELS) as ProviderId[]) {
+  for (const provider of ids) {
     const value = (raw as Partial<Record<ProviderId, unknown>>)[provider]
     if (!value || typeof value !== 'object') continue
     const config = value as Record<string, unknown>
@@ -92,9 +115,12 @@ function normalizeProviderConfigs(raw: unknown): Partial<Record<ProviderId, AiPr
 }
 
 function normalizeFromRaw(raw: Record<string, unknown>): OpenRayLLMConfig {
+  const customProviders = normalizeCustomProviders(raw.customProviders)
+  const ids = providerIds(customProviders)
   const p = raw.provider
   const hasCopilotToken = typeof raw.copilotGithubToken === 'string' && raw.copilotGithubToken.length > 0
   const provider: ProviderId =
+    (typeof p === 'string' && customProviders.some((provider) => provider.id === p)) ||
     p === 'openai' ||
     p === 'openai-compatible' ||
     p === 'anthropic' ||
@@ -103,19 +129,20 @@ function normalizeFromRaw(raw: Record<string, unknown>): OpenRayLLMConfig {
     p === 'gemini' ||
     p === 'opencode' ||
     p === 'deepseek'
-      ? p
+      ? (p as ProviderId)
       : hasCopilotToken
         ? 'copilot'
         : 'ollama'
-  const providerModels = normalizeProviderModels(raw.providerModels)
-  const providerSelectedModels = normalizeProviderSelectedModels(raw.providerSelectedModels)
-  const providerConfigs = normalizeProviderConfigs(raw.providerConfigs)
+  const providerModels = normalizeProviderModels(raw.providerModels, ids)
+  const providerSelectedModels = normalizeProviderSelectedModels(raw.providerSelectedModels, ids)
+  const providerConfigs = normalizeProviderConfigs(raw.providerConfigs, ids)
   const selectedModel = providerSelectedModels?.[provider]
   const providerConfig = providerConfigs?.[provider] ?? {}
   const allowLegacyProviderFields = !providerConfigs || Object.keys(providerConfigs).length === 0
 
   return {
     provider,
+    customProviders,
     providerConfigs,
     apiKey:
       providerConfig.apiKey ??
@@ -230,7 +257,7 @@ export function configForProvider(cfg: OpenRayLLMConfig, provider: ProviderId): 
   }
   return {
     ...next,
-    model: next.model ?? RECOMMENDED_AI_MODEL[provider],
+    model: next.model ?? (recommendedModel(provider) || defaultModels(provider)[0]?.id),
   }
 }
 
@@ -239,6 +266,14 @@ export function buildProviderForId(id: ProviderId, cfg: OpenRayLLMConfig): LLMPr
 }
 
 function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
+  if (isCustomProvider(cfg.provider)) {
+    return new OpenAIProvider(
+      cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? '',
+      cfg.apiKey ?? '',
+      cfg.model ?? '',
+      cfg.customProviders?.find((provider) => provider.id === cfg.provider)?.title ?? 'Custom provider',
+    )
+  }
   switch (cfg.provider) {
     case 'openai':
       return new OpenAIProvider(
@@ -345,6 +380,7 @@ function openAiCompatBaseUrl(cfg: OpenRayLLMConfig): string | undefined {
   if (cfg.provider === 'openai-compatible') return cfg.openaiCompatibleBaseURL ?? cfg.baseURL
   if (cfg.provider === 'gemini') return cfg.baseURL ?? DEFAULT_GEMINI_BASE
   if (cfg.provider === 'deepseek') return cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE
+  if (isCustomProvider(cfg.provider)) return cfg.openaiCompatibleBaseURL ?? cfg.baseURL
   if (cfg.provider === 'ollama') {
     const base = cfg.baseURL ?? DEFAULT_OLLAMA_BASE
     return base.endsWith('/v1') ? base : `${base.replace(/\/+$/, '')}/v1`

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, shell } from 'electron'
+import { app, BrowserWindow, clipboard, nativeImage, shell } from 'electron'
 import * as esbuild from 'esbuild'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFile, execSync, spawn as nodeSpawn } from 'node:child_process'
@@ -95,6 +95,14 @@ type JsxNode = {
   key?: unknown
 }
 
+type ReactContextShim<T = unknown> = {
+  $$typeof: symbol
+  _currentValue: T
+  _defaultValue: T
+  Provider: (props: { value?: T; children?: unknown }) => unknown
+  Consumer: (props: { children?: ((value: T) => unknown) | unknown }) => unknown
+}
+
 type RaycastComponentToken = {
   __raycastComponent: true
   name: string
@@ -105,6 +113,7 @@ const RUNTIME_RECURSION_LIMIT = 80
 const SESSIONS_SOFT_LIMIT = 30
 const BUILTIN_SET = new Set<string>(builtinModules)
 const JSX_FRAGMENT = Symbol.for('raymes.jsx.fragment')
+const REACT_CONTEXT = Symbol.for('react.context')
 const execFileAsync = promisify(execFile)
 
 const sessions = new Map<string, RuntimeSession>()
@@ -166,6 +175,31 @@ function axiosGetShim(url: string, options?: { responseType?: string }): Promise
     })
     request.on('error', reject)
   })
+}
+
+function createFetchModuleShim(): typeof fetch & {
+  default: typeof fetch
+  fetch: typeof fetch
+  Headers: typeof Headers | undefined
+  Request: typeof Request | undefined
+  Response: typeof Response | undefined
+  __esModule: true
+} {
+  const boundFetch = fetch.bind(globalThis) as typeof fetch & {
+    default: typeof fetch
+    fetch: typeof fetch
+    Headers: typeof Headers | undefined
+    Request: typeof Request | undefined
+    Response: typeof Response | undefined
+    __esModule: true
+  }
+  boundFetch.default = boundFetch
+  boundFetch.fetch = boundFetch
+  boundFetch.Headers = globalThis.Headers
+  boundFetch.Request = globalThis.Request
+  boundFetch.Response = globalThis.Response
+  boundFetch.__esModule = true
+  return boundFetch
 }
 
 async function runAppleScript(source: string): Promise<string> {
@@ -473,6 +507,24 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       }
       return jsx(type, nextProps)
     },
+    createContext: <T,>(defaultValue: T): ReactContextShim<T> => {
+      const context = {
+        $$typeof: REACT_CONTEXT,
+        _currentValue: defaultValue,
+        _defaultValue: defaultValue,
+      } as ReactContextShim<T>
+      context.Provider = (props: { value?: T; children?: unknown }): unknown => {
+        context._currentValue = props.value as T
+        return props.children
+      }
+      context.Consumer = (props: { children?: ((value: T) => unknown) | unknown }): unknown => {
+        if (typeof props.children === 'function') {
+          return (props.children as (value: T) => unknown)(context._currentValue)
+        }
+        return props.children ?? null
+      }
+      return context
+    },
     useState: <T,>(initial: T | (() => T)): [T, (next: T | ((prev: T) => T)) => void] => {
       const idx = session.hookIndex++
       if (session.hookStates.length > idx) {
@@ -508,9 +560,11 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       session.hookIndex++
       return { current: value }
     },
-    useContext: (): null => {
+    useContext: <T,>(context?: ReactContextShim<T>): T | null => {
       session.hookIndex++
-      return null
+      return context && context.$$typeof === REACT_CONTEXT
+        ? context._currentValue
+        : null
     },
     useReducer: <S, A>(
       reducer: (state: S, action: A) => S,
@@ -740,6 +794,36 @@ function createCacheShim(packageRoot: string): new (
   }
 }
 
+function copyToSystemClipboard(value: unknown): void {
+  if (value && typeof value === 'object') {
+    const payload = value as { text?: unknown; file?: unknown; html?: unknown }
+    if (typeof payload.file === 'string' && payload.file.trim()) {
+      const filePath = payload.file.trim()
+      const image = nativeImage.createFromPath(filePath)
+      if (!image.isEmpty()) {
+        clipboard.writeImage(image)
+        return
+      }
+      clipboard.writeText(filePath)
+      return
+    }
+    if (typeof payload.html === 'string' && typeof payload.text === 'string') {
+      clipboard.write({ html: payload.html, text: payload.text })
+      return
+    }
+    if (typeof payload.html === 'string') {
+      clipboard.write({ html: payload.html, text: payload.html })
+      return
+    }
+    if (typeof payload.text === 'string') {
+      clipboard.writeText(payload.text)
+      return
+    }
+  }
+
+  clipboard.writeText(String(value ?? ''))
+}
+
 function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> {
   const ListItemDetailMetadata = Object.assign(makeToken('List.Item.Detail.Metadata'), {
     Label: makeToken('List.Item.Detail.Metadata.Label'),
@@ -781,6 +865,11 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     Section: makeToken('Grid.Section'),
     EmptyView: makeToken('Grid.EmptyView'),
     Dropdown: List.Dropdown,
+    Inset: {
+      Small: 'small',
+      Medium: 'medium',
+      Large: 'large',
+    },
   })
 
   const Detail = Object.assign(makeToken('Detail'), {
@@ -867,10 +956,10 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     runAppleScript,
     Clipboard: {
       copy: async (value: unknown): Promise<void> => {
-        clipboard.writeText(String(value ?? ''))
+        copyToSystemClipboard(value)
       },
       paste: async (value: unknown): Promise<void> => {
-        clipboard.writeText(String(value ?? ''))
+        copyToSystemClipboard(value)
       },
       read: async (): Promise<{ text?: string }> => {
         const text = clipboard.readText()
@@ -1245,7 +1334,7 @@ function registerAction(
   const handler: RuntimeActionHandler = async (formValues) => {
     if (kind === 'copy') {
       const content = props.content ?? props.title ?? ''
-      clipboard.writeText(String(content ?? ''))
+      copyToSystemClipboard(content)
       if (typeof props.onPaste === 'function') {
         await Promise.resolve((props.onPaste as () => unknown)())
       }
@@ -1321,7 +1410,8 @@ function walkRuntimeNodes(
     let rendered: unknown
     try {
       rendered = type(props)
-    } catch {
+    } catch (error) {
+      console.error('[ExtensionRuntime] Component render failed:', error)
       return []
     }
     return walkRuntimeNodes(rendered, session, depth + 1, budget)
@@ -1700,6 +1790,9 @@ function runBundle(
       axiosShim.create = () => axiosShim
       axiosShim.default = axiosShim
       return axiosShim
+    }
+    if (specifier === 'node-fetch' || specifier === 'cross-fetch') {
+      return createFetchModuleShim()
     }
     if (specifier === 'undici') {
       class ProxyAgent {

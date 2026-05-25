@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { ProviderConnectionStatuses } from '../preload/api'
+import { recommendedModel } from '../shared/aiProviders'
 import {
   Button,
   FieldLabel,
@@ -27,7 +28,7 @@ const ROWS: { id: ProviderId; title: string; subtitle: string }[] = [
   { id: 'opencode', title: 'OpenCode', subtitle: 'opencode.ai via CLI' },
 ]
 
-const DEFAULT_MODEL: Record<ProviderId, string> = {
+const DEFAULT_MODEL: Partial<Record<ProviderId, string>> = {
   openai: 'gpt-4o-mini',
   deepseek: 'deepseek-v4-flash',
   'openai-compatible': 'gpt-4o-mini',
@@ -36,6 +37,10 @@ const DEFAULT_MODEL: Record<ProviderId, string> = {
   ollama: 'llama3.2',
   copilot: 'gpt-4o',
   opencode: 'opencode/big-pickle',
+}
+
+function defaultModelForProvider(id: ProviderId): string {
+  return DEFAULT_MODEL[id] ?? recommendedModel(id)
 }
 
 type Panel = 'list' | { type: 'detail'; id: ProviderId }
@@ -74,7 +79,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
   useEffect(() => {
     setApiKey(cfg.apiKey ?? '')
     setBaseURL(cfg.baseURL ?? '')
-    setModel(cfg.model ?? DEFAULT_MODEL[id])
+    setModel(cfg.model ?? defaultModelForProvider(id))
     setCopilotToken(cfg.copilotGithubToken ?? '')
     setOauthClientId(cfg.githubOAuthClientId ?? '')
     setMsg(null)
@@ -90,34 +95,34 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
     if (id === 'openai' || id === 'anthropic') {
       patch.apiKey = apiKey
       if (baseURL.trim()) patch.baseURL = baseURL.trim()
-      patch.model = model.trim() || DEFAULT_MODEL[id]
+      patch.model = model.trim() || defaultModelForProvider(id)
     }
     if (id === 'deepseek') {
       patch.apiKey = apiKey
       patch.baseURL = baseURL.trim() || 'https://api.deepseek.com'
-      patch.model = model.trim() || DEFAULT_MODEL[id]
+      patch.model = model.trim() || defaultModelForProvider(id)
     }
     if (id === 'openai-compatible') {
       patch.apiKey = apiKey
       patch.openaiCompatibleBaseURL = baseURL.trim() || 'https://api.openai.com/v1'
-      patch.model = model.trim() || DEFAULT_MODEL[id]
+      patch.model = model.trim() || defaultModelForProvider(id)
     }
     if (id === 'gemini') {
       patch.geminiApiKey = apiKey
       patch.baseURL = baseURL.trim() || 'https://generativelanguage.googleapis.com/v1beta/openai'
-      patch.model = model.trim() || DEFAULT_MODEL[id]
+      patch.model = model.trim() || defaultModelForProvider(id)
     }
     if (id === 'ollama') {
       patch.baseURL = baseURL.trim() || 'http://localhost:11434'
-      patch.model = model.trim() || DEFAULT_MODEL[id]
+      patch.model = model.trim() || defaultModelForProvider(id)
     }
     if (id === 'copilot') {
       patch.copilotGithubToken = copilotToken
       patch.githubOAuthClientId = oauthClientId
-      patch.model = model.trim() || DEFAULT_MODEL[id]
+      patch.model = model.trim() || defaultModelForProvider(id)
     }
     if (id === 'opencode') {
-      patch.model = model.trim() || DEFAULT_MODEL[id]
+      patch.model = model.trim() || defaultModelForProvider(id)
     }
     await window.raymes.setLlmConfig(patch)
     await onReload()

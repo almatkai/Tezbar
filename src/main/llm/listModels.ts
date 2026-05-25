@@ -1,3 +1,4 @@
+import { isCustomProvider } from '../../shared/aiProviders'
 import type { ProviderId } from '../../shared/llmConfig'
 import { CopilotProvider } from './copilot'
 import { configForProvider, readLLMConfig } from './registry'
@@ -72,6 +73,23 @@ async function fetchCopilotModelIds(accessToken: string, signal?: AbortSignal): 
 
 export async function listModelsForProvider(id: ProviderId, signal?: AbortSignal): Promise<string[]> {
   const cfg = configForProvider(readLLMConfig(), id)
+
+  if (isCustomProvider(id)) {
+    const base = cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? ''
+    const key = cfg.apiKey ?? ''
+    if (!base.trim() || !key.trim()) return []
+    try {
+      const res = await fetch(modelsUrl(base), {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${key}` },
+        signal: signal ?? AbortSignal.timeout(12_000),
+      })
+      if (!res.ok) return []
+      return extractModelIds(await res.json())
+    } catch {
+      return []
+    }
+  }
 
   switch (id) {
     case 'openai': {

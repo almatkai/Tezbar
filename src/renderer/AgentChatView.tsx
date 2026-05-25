@@ -7,12 +7,12 @@ import {
 } from 'react'
 import type { AgentRunEvent, Stage } from '../shared/agent'
 import {
-  AI_PROVIDER_ROWS,
-  DEFAULT_PROVIDER_MODELS,
-  RECOMMENDED_AI_MODEL,
+  defaultModels,
   isAiProviderConfigured,
   normalizeProviderModelList,
+  providerRows,
   providerTitle,
+  recommendedModel,
 } from '../shared/aiProviders'
 import {
   CHAT_CONTINUATION_WINDOW_MS,
@@ -58,7 +58,7 @@ function shouldRunAgent(message: string): boolean {
 function modelsForProvider(cfg: LlmConfigRecord, provider: ProviderId): AiProviderModel[] {
   return normalizeProviderModelList(
     provider,
-    cfg.providerModels?.[provider] ?? DEFAULT_PROVIDER_MODELS[provider]
+    cfg.providerModels?.[provider] ?? defaultModels(provider)
   )
 }
 
@@ -81,6 +81,7 @@ export default function AgentChatView({
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const [hoveredProvider, setHoveredProvider] = useState<ProviderId | null>(null)
   const [modelSearch, setModelSearch] = useState('')
+  const modelPickerRef = useRef<HTMLDivElement | null>(null)
 
   const chatThreadRef = useRef<HTMLDivElement>(null)
   const historyOpenRef = useRef(false)
@@ -109,13 +110,14 @@ export default function AgentChatView({
   const activeModel =
     llmConfig.providerSelectedModels?.[activeProvider] ??
     llmConfig.model ??
-    RECOMMENDED_AI_MODEL[activeProvider]
+    recommendedModel(activeProvider)
+  const availableProviders = providerRows(llmConfig)
   const previewModels = modelsForProvider(llmConfig, previewProvider)
   const previewConfigured = isAiProviderConfigured(llmConfig, previewProvider)
   const filteredPreviewModels = previewModels.filter((model) => {
     const query = modelSearch.trim().toLowerCase()
     if (!query) return true
-    const haystack = `${model.id} ${providerTitle(previewProvider)} ${model.capabilities.join(' ')}`
+    const haystack = `${model.id} ${providerTitle(previewProvider, llmConfig)} ${model.capabilities.join(' ')}`
       .toLowerCase()
     return haystack.includes(query)
   })
@@ -128,6 +130,16 @@ export default function AgentChatView({
       /* ignore */
     })
   }, [])
+  useEffect(() => {
+    if (!modelPickerOpen) return
+    const closeIfOutside = (event: PointerEvent): void => {
+      if (!modelPickerRef.current?.contains(event.target as Node)) {
+        setModelPickerOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', closeIfOutside)
+    return () => document.removeEventListener('pointerdown', closeIfOutside)
+  }, [modelPickerOpen])
   useEffect(() => {
     agentStreamTextRef.current = agentStreamText
   }, [agentStreamText])
@@ -571,6 +583,7 @@ export default function AgentChatView({
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <div
+              ref={modelPickerRef}
               className="relative"
               onMouseLeave={() => {
                 setHoveredProvider(null)
@@ -591,13 +604,13 @@ export default function AgentChatView({
                 <div className="raymes-popover absolute right-0 top-7 z-30 grid h-[390px] w-[560px] grid-cols-[190px_minmax(0,1fr)] overflow-hidden p-1.5">
                   <div className="flex min-h-0 flex-col border-r border-white/[0.07] pr-1">
                     <ul className="min-h-0 flex-1 overflow-y-auto">
-                      {AI_PROVIDER_ROWS.map((provider) => {
+                      {availableProviders.map((provider) => {
                         const configured = isAiProviderConfigured(llmConfig, provider.id)
                         const active = provider.id === activeProvider
                         const hovered = provider.id === previewProvider
                         const selectedModel =
                           llmConfig.providerSelectedModels?.[provider.id] ??
-                          (provider.id === activeProvider ? activeModel : RECOMMENDED_AI_MODEL[provider.id])
+                          (provider.id === activeProvider ? activeModel : recommendedModel(provider.id))
                         return (
                           <li key={provider.id}>
                             <button
@@ -648,7 +661,7 @@ export default function AgentChatView({
                     <div className="flex shrink-0 items-center gap-2 px-2 pb-1 pt-1">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[12px] font-semibold text-ink-1">
-                          {providerTitle(previewProvider)}
+                          {providerTitle(previewProvider, llmConfig)}
                         </p>
                         <p className="text-[10px] uppercase tracking-[0.14em] text-ink-4">
                           Models
@@ -701,7 +714,7 @@ export default function AgentChatView({
                                     {model.id}
                                   </span>
                                   <span className="mt-0.5 block truncate text-[10.5px] text-ink-4">
-                                    {providerTitle(previewProvider)}
+                                    {providerTitle(previewProvider, llmConfig)}
                                   </span>
                                 </span>
                                 {index < 9 ? (

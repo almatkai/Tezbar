@@ -1,4 +1,6 @@
-export type ProviderId = 'openai' | 'openai-compatible' | 'anthropic' | 'ollama' | 'copilot' | 'gemini' | 'opencode' | 'deepseek'
+export type BuiltInProviderId = 'openai' | 'openai-compatible' | 'anthropic' | 'ollama' | 'copilot' | 'gemini' | 'opencode' | 'deepseek'
+
+export type ProviderId = BuiltInProviderId | `custom:${string}`
 
 export type LlmTask = 'chat' | 'search' | 'action' | 'voice'
 
@@ -19,8 +21,15 @@ export type AiProviderConfig = {
   githubOAuthClientId?: string
 }
 
+export type CustomAiProvider = {
+  id: `custom:${string}`
+  title: string
+  subtitle?: string
+}
+
 export type LlmConfigRecord = {
   provider?: ProviderId
+  customProviders?: CustomAiProvider[]
   providerConfigs?: Partial<Record<ProviderId, AiProviderConfig>>
   apiKey?: string
   baseURL?: string

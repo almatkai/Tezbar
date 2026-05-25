@@ -383,6 +383,8 @@ export function registerIpcHandlers(
 
   ipcMain.handle('llm-list-models', async (_event, providerId: unknown) => {
     const id = providerId as ProviderId
+    const customProvider =
+      typeof id === 'string' && readLLMConfig().customProviders?.some((provider) => provider.id === id)
     if (
       id !== 'openai' &&
       id !== 'openai-compatible' &&
@@ -391,7 +393,8 @@ export function registerIpcHandlers(
       id !== 'copilot' &&
       id !== 'gemini' &&
       id !== 'opencode' &&
-      id !== 'deepseek'
+      id !== 'deepseek' &&
+      !customProvider
     )
       return []
     try {

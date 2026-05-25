@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   AI_CAPABILITIES,
-  AI_PROVIDER_ROWS,
-  DEFAULT_BASE_URL,
   DEFAULT_PROVIDER_MODELS,
   RECOMMENDED_AI_MODEL,
+  defaultBaseUrl,
+  defaultModels,
   inferCapabilities,
+  isCustomProvider,
   normalizeProviderModelList,
+  providerRows,
+  recommendedModel,
 } from '../shared/aiProviders'
 import type {
   AiModelCapability,
   AiProviderConfig,
   AiProviderModel,
+  CustomAiProvider,
   LlmConfigRecord,
   LlmTask,
   ProviderId,
@@ -272,6 +276,11 @@ export default function SettingsView({
     useState<Partial<Record<ProviderId, AiProviderModel[]>>>(DEFAULT_PROVIDER_MODELS)
   const [aiProviderSelectedModels, setAiProviderSelectedModels] =
     useState<Partial<Record<ProviderId, string>>>({})
+  const [customProviders, setCustomProviders] = useState<CustomAiProvider[]>([])
+  const [addProviderOpen, setAddProviderOpen] = useState(false)
+  const [newProviderName, setNewProviderName] = useState('')
+  const [newProviderBaseURL, setNewProviderBaseURL] = useState('')
+  const [newProviderModel, setNewProviderModel] = useState('')
   const [aiTaskProviderOverrides, setAiTaskProviderOverrides] =
     useState<Partial<Record<LlmTask, ProviderId>>>({})
   const [aiTaskModelOverrides, setAiTaskModelOverrides] =
@@ -292,7 +301,7 @@ export default function SettingsView({
       const models = await window.raymes.listLlmModels(provider)
       if (models.length > 0) {
         setAiProviderModels((prev) => {
-          const existing = prev[provider] ?? DEFAULT_PROVIDER_MODELS[provider]
+          const existing = prev[provider] ?? defaultModels(provider)
           const discovered = models.map((id) => ({ id, capabilities: inferCapabilities(id) }))
           return {
             ...prev,
@@ -328,6 +337,7 @@ export default function SettingsView({
   const reload = useCallback(async () => {
     const c = (await window.raymes.getLlmConfig()) as LlmConfigRecord
     const provider = c.provider ?? 'ollama'
+    const configuredProviders = c.customProviders ?? []
     const ms = typeof c.uiStateRetentionMs === 'number' ? c.uiStateRetentionMs : 60_000
     setRetentionSec(String(Math.max(0, Math.round(ms / 1000))))
     setMemoryEnabled(c.memoryEnabled !== false)
@@ -336,6 +346,7 @@ export default function SettingsView({
     setActionRedactionEnabled(c.aiActionRedactionEnabled !== false)
     const providerConfig = readProviderConfig(c, provider)
     setAiProviderConfigs(c.providerConfigs ?? {})
+    setCustomProviders(configuredProviders)
     setAiProvider(provider)
     setAiApiKey(
       provider === 'gemini'
@@ -346,18 +357,21 @@ export default function SettingsView({
     )
     setAiBaseURL(
       provider === 'openai-compatible'
-        ? (providerConfig.openaiCompatibleBaseURL ?? c.openaiCompatibleBaseURL ?? c.baseURL ?? DEFAULT_BASE_URL[provider] ?? '')
-        : (providerConfig.baseURL ?? c.baseURL ?? DEFAULT_BASE_URL[provider] ?? '')
+        ? (providerConfig.openaiCompatibleBaseURL ?? c.openaiCompatibleBaseURL ?? c.baseURL ?? defaultBaseUrl(provider))
+        : isCustomProvider(provider)
+          ? (providerConfig.openaiCompatibleBaseURL ?? providerConfig.baseURL ?? '')
+          : (providerConfig.baseURL ?? c.baseURL ?? defaultBaseUrl(provider))
     )
     const providerModels: Partial<Record<ProviderId, AiProviderModel[]>> = { ...DEFAULT_PROVIDER_MODELS }
-    for (const row of AI_PROVIDER_ROWS) {
+    for (const row of providerRows(c)) {
       providerModels[row.id] = normalizeProviderModelList(
         row.id,
-        c.providerModels?.[row.id] ?? DEFAULT_PROVIDER_MODELS[row.id]
+        c.providerModels?.[row.id] ?? defaultModels(row.id)
       )
     }
     const selectedModels = c.providerSelectedModels ?? {}
-    const selectedModel = selectedModels[provider] ?? c.model ?? RECOMMENDED_AI_MODEL[provider]
+    const selectedModel =
+      selectedModels[provider] ?? c.model ?? providerModels[provider]?.[0]?.id ?? recommendedModel(provider)
     setAiProviderModels(providerModels)
     setAiProviderSelectedModels(selectedModels)
     setAiTaskProviderOverrides(c.taskProviderOverrides ?? {})
@@ -408,14 +422,14 @@ export default function SettingsView({
         ? { ...aiProviderConfigs[aiProvider], geminiApiKey: aiApiKey, baseURL: aiBaseURL }
         : aiProvider === 'copilot'
           ? { ...aiProviderConfigs[aiProvider], copilotGithubToken: aiApiKey }
-          : aiProvider === 'openai-compatible'
+          : aiProvider === 'openai-compatible' || isCustomProvider(aiProvider)
             ? { ...aiProviderConfigs[aiProvider], apiKey: aiApiKey, openaiCompatibleBaseURL: aiBaseURL }
             : { ...aiProviderConfigs[aiProvider], apiKey: aiApiKey, baseURL: aiBaseURL }
     const nextProviderConfig = aiProviderConfigs[provider] ?? {}
     setAiProviderSelectedModels((prev) => ({ ...prev, [aiProvider]: aiModel }))
     setAiProviderConfigs((prev) => ({ ...prev, [aiProvider]: currentProviderConfig }))
     setAiProvider(provider)
-    setAiModel(aiProviderSelectedModels[provider] ?? aiProviderModels[provider]?.[0]?.id ?? RECOMMENDED_AI_MODEL[provider])
+    setAiModel(aiProviderSelectedModels[provider] ?? aiProviderModels[provider]?.[0]?.id ?? recommendedModel(provider))
     setAiApiKey(
       provider === 'gemini'
         ? (nextProviderConfig.geminiApiKey ?? '')
@@ -424,9 +438,9 @@ export default function SettingsView({
           : (nextProviderConfig.apiKey ?? '')
     )
     setAiBaseURL(
-      provider === 'openai-compatible'
-        ? (nextProviderConfig.openaiCompatibleBaseURL ?? DEFAULT_BASE_URL[provider] ?? '')
-        : (nextProviderConfig.baseURL ?? DEFAULT_BASE_URL[provider] ?? '')
+      provider === 'openai-compatible' || isCustomProvider(provider)
+        ? (nextProviderConfig.openaiCompatibleBaseURL ?? defaultBaseUrl(provider))
+        : (nextProviderConfig.baseURL ?? defaultBaseUrl(provider))
     )
     setAiNewModelId('')
     void loadAiModels(provider)
@@ -434,29 +448,30 @@ export default function SettingsView({
 
   const buildAiProviderPatch = (): LlmConfigRecord => {
     const provider = aiProvider
-    const model = aiModel.trim() || RECOMMENDED_AI_MODEL[provider]
+    const model = aiModel.trim() || recommendedModel(provider)
     const baseURL = aiBaseURL.trim()
     const apiKey = aiApiKey.trim()
     const providerModels = {
       ...aiProviderModels,
-      [provider]: normalizeProviderModelList(provider, aiProviderModels[provider] ?? []),
+      [provider]: normalizeProviderModelList(provider, aiProviderModels[provider] ?? defaultModels(provider)),
     }
     const providerSelectedModels = { ...aiProviderSelectedModels, [provider]: model }
     const providerConfig: AiProviderConfig =
       provider === 'gemini'
-        ? { ...aiProviderConfigs[provider], geminiApiKey: apiKey, baseURL: baseURL || DEFAULT_BASE_URL[provider] }
+        ? { ...aiProviderConfigs[provider], geminiApiKey: apiKey, baseURL: baseURL || defaultBaseUrl(provider) }
         : provider === 'copilot'
           ? { ...aiProviderConfigs[provider], copilotGithubToken: aiApiKey }
-          : provider === 'openai-compatible'
+          : provider === 'openai-compatible' || isCustomProvider(provider)
             ? {
                 ...aiProviderConfigs[provider],
                 apiKey,
-                openaiCompatibleBaseURL: baseURL || DEFAULT_BASE_URL[provider],
+                openaiCompatibleBaseURL: baseURL || defaultBaseUrl(provider),
               }
-            : { ...aiProviderConfigs[provider], apiKey, baseURL: baseURL || DEFAULT_BASE_URL[provider] }
+            : { ...aiProviderConfigs[provider], apiKey, baseURL: baseURL || defaultBaseUrl(provider) }
     const providerConfigs = { ...aiProviderConfigs, [provider]: providerConfig }
     const patch: LlmConfigRecord = {
       provider,
+      customProviders,
       model,
       providerConfigs,
       providerModels,
@@ -471,14 +486,18 @@ export default function SettingsView({
     }
     if (provider === 'openai-compatible') {
       patch.apiKey = apiKey
-      patch.openaiCompatibleBaseURL = baseURL || DEFAULT_BASE_URL[provider]
+      patch.openaiCompatibleBaseURL = baseURL || defaultBaseUrl(provider)
     }
     if (provider === 'gemini') {
       patch.geminiApiKey = apiKey
-      patch.baseURL = baseURL || DEFAULT_BASE_URL[provider]
+      patch.baseURL = baseURL || defaultBaseUrl(provider)
     }
     if (provider === 'ollama') {
-      patch.baseURL = baseURL || DEFAULT_BASE_URL[provider]
+      patch.baseURL = baseURL || defaultBaseUrl(provider)
+    }
+    if (isCustomProvider(provider)) {
+      patch.apiKey = apiKey
+      patch.openaiCompatibleBaseURL = baseURL
     }
     if (provider === 'copilot') {
       patch.copilotGithubToken = aiApiKey
@@ -490,14 +509,14 @@ export default function SettingsView({
   const addAiModel = (): void => {
     const id = aiNewModelId.trim()
     if (!id) return
-    const current = aiProviderModels[aiProvider] ?? DEFAULT_PROVIDER_MODELS[aiProvider]
+    const current = aiProviderModels[aiProvider] ?? defaultModels(aiProvider)
     const normalized = normalizeProviderModelList(aiProvider, [
       ...current,
       { id, capabilities: inferCapabilities(id) },
     ])
     const nextSelected = normalized.some((model) => model.id === id)
       ? id
-      : (normalized[0]?.id ?? RECOMMENDED_AI_MODEL[aiProvider])
+      : (normalized[0]?.id ?? recommendedModel(aiProvider))
     setAiProviderModels((prev) => ({ ...prev, [aiProvider]: normalized }))
     setAiProviderSelectedModels((prev) => ({ ...prev, [aiProvider]: nextSelected }))
     setAiModel(nextSelected)
@@ -506,11 +525,11 @@ export default function SettingsView({
 
   const removeAiModel = (id: string): void => {
     setAiProviderModels((prev) => {
-      const nextModels = (prev[aiProvider] ?? DEFAULT_PROVIDER_MODELS[aiProvider]).filter(
+      const nextModels = (prev[aiProvider] ?? defaultModels(aiProvider)).filter(
         (model) => model.id !== id
       )
       const normalized = normalizeProviderModelList(aiProvider, nextModels)
-      const nextSelected = normalized[0]?.id ?? RECOMMENDED_AI_MODEL[aiProvider]
+      const nextSelected = normalized[0]?.id ?? recommendedModel(aiProvider)
       if (aiModel === id) {
         setAiModel(nextSelected)
         setAiProviderSelectedModels((selected) => ({ ...selected, [aiProvider]: nextSelected }))
@@ -521,7 +540,7 @@ export default function SettingsView({
 
   const toggleAiModelCapability = (modelId: string, capability: AiModelCapability): void => {
     setAiProviderModels((prev) => {
-      const current = prev[aiProvider] ?? DEFAULT_PROVIDER_MODELS[aiProvider]
+      const current = prev[aiProvider] ?? defaultModels(aiProvider)
       return {
         ...prev,
         [aiProvider]: current.map((model) => {
@@ -536,6 +555,38 @@ export default function SettingsView({
         }),
       }
     })
+  }
+
+  const addCustomProvider = (): void => {
+    const title = newProviderName.trim()
+    const baseURL = newProviderBaseURL.trim()
+    const modelId = newProviderModel.trim()
+    if (!title || !baseURL || !modelId) {
+      setMsg({ tone: 'error', text: 'Provider name, endpoint, and initial model are required' })
+      return
+    }
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'provider'
+    let id: `custom:${string}` = `custom:${slug}`
+    let suffix = 2
+    while (customProviders.some((provider) => provider.id === id)) {
+      id = `custom:${slug}-${suffix}`
+      suffix += 1
+    }
+    const provider: CustomAiProvider = { id, title, subtitle: 'Custom OpenAI-compatible endpoint' }
+    const models = normalizeProviderModelList(id, [{ id: modelId, capabilities: inferCapabilities(modelId) }])
+    setCustomProviders((prev) => [...prev, provider])
+    setAiProviderModels((prev) => ({ ...prev, [id]: models }))
+    setAiProviderSelectedModels((prev) => ({ ...prev, [id]: modelId }))
+    setAiProviderConfigs((prev) => ({ ...prev, [id]: { apiKey: '', openaiCompatibleBaseURL: baseURL } }))
+    setAiProvider(id)
+    setAiApiKey('')
+    setAiBaseURL(baseURL)
+    setAiModel(modelId)
+    setAddProviderOpen(false)
+    setNewProviderName('')
+    setNewProviderBaseURL('')
+    setNewProviderModel('')
+    setMsg({ tone: 'success', text: 'Custom provider added. Add its API key, then save AI Settings.' })
   }
 
   const save = (): void => {
@@ -648,8 +699,9 @@ export default function SettingsView({
     </ul>
   )
 
-  const currentAiModels = aiProviderModels[aiProvider] ?? DEFAULT_PROVIDER_MODELS[aiProvider]
+  const currentAiModels = aiProviderModels[aiProvider] ?? defaultModels(aiProvider)
   const configured = isProviderConfigured(aiProvider, aiApiKey, aiBaseURL, currentAiModels)
+  const availableProviders = providerRows({ customProviders })
 
   return (
     <div
@@ -778,30 +830,61 @@ export default function SettingsView({
             <div className="mx-auto max-w-[610px]">
               <SettingsRow
                 label="Provider"
-                detail={AI_PROVIDER_ROWS.find((provider) => provider.id === aiProvider)?.subtitle}
+                detail={availableProviders.find((provider) => provider.id === aiProvider)?.subtitle}
               >
-                <div className="flex items-center gap-2.5">
-                  <SelectField
-                    value={aiProvider}
-                    onChange={(event) => selectAiProvider(event.target.value as ProviderId)}
-                    className="max-w-[280px]"
-                  >
-                    {AI_PROVIDER_ROWS.map((provider) => (
-                      <option key={provider.id} value={provider.id}>
-                        {provider.title}
-                      </option>
-                    ))}
-                  </SelectField>
-                  <span
-                    className={cx(
-                      'rounded-raymes-chip border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em]',
-                      configured
-                        ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
-                        : 'border-amber-400/30 bg-amber-500/10 text-amber-200'
-                    )}
-                  >
-                    {configured ? 'Configured' : 'Not configured'}
-                  </span>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <SelectField
+                      value={aiProvider}
+                      onChange={(event) => selectAiProvider(event.target.value as ProviderId)}
+                      className="max-w-[280px]"
+                    >
+                      {availableProviders.map((provider) => (
+                        <option key={provider.id} value={provider.id}>
+                          {provider.title}
+                        </option>
+                      ))}
+                    </SelectField>
+                    <span
+                      className={cx(
+                        'rounded-raymes-chip border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em]',
+                        configured
+                          ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
+                          : 'border-amber-400/30 bg-amber-500/10 text-amber-200'
+                      )}
+                    >
+                      {configured ? 'Configured' : 'Not configured'}
+                    </span>
+                    <Button variant="ghost" onClick={() => setAddProviderOpen((open) => !open)}>
+                      {addProviderOpen ? 'Cancel' : 'Add provider'}
+                    </Button>
+                  </div>
+                  {addProviderOpen ? (
+                    <div className="space-y-2 rounded-raymes-row border border-white/10 bg-white/[0.025] p-3">
+                      <TextField
+                        value={newProviderName}
+                        onChange={(event) => setNewProviderName(event.target.value)}
+                        placeholder="Provider name"
+                      />
+                      <TextField
+                        value={newProviderBaseURL}
+                        onChange={(event) => setNewProviderBaseURL(event.target.value)}
+                        placeholder="https://your-provider.example/v1"
+                        spellCheck={false}
+                      />
+                      <div className="flex items-center gap-2">
+                        <TextField
+                          value={newProviderModel}
+                          onChange={(event) => setNewProviderModel(event.target.value)}
+                          placeholder="Initial model id"
+                          spellCheck={false}
+                        />
+                        <Button variant="primary" onClick={addCustomProvider}>
+                          Create
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </SettingsRow>
               <Divider />
@@ -854,7 +937,7 @@ export default function SettingsView({
                     <TextField
                       value={aiBaseURL}
                       onChange={(event) => setAiBaseURL(event.target.value)}
-                      placeholder={DEFAULT_BASE_URL[aiProvider] ?? ''}
+                      placeholder={defaultBaseUrl(aiProvider)}
                     />
                   </SettingsRow>
                   <Divider />
