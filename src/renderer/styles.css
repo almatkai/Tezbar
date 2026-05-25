@@ -58,7 +58,11 @@
   html,
   body {
     font-family:
-      'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      'Geist',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
     font-feature-settings: 'cv11', 'ss01', 'ss03';
     letter-spacing: -0.005em;
   }
@@ -143,11 +147,7 @@
     overflow: hidden;
     border-radius: var(--r-window);
     background:
-      linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.04) 0%,
-        rgba(255, 255, 255, 0) 40%
-      ),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 40%),
       rgba(12, 13, 17, 0.92);
     backdrop-filter: blur(48px) saturate(180%);
     -webkit-backdrop-filter: blur(48px) saturate(180%);
@@ -162,11 +162,7 @@
     -webkit-app-region: drag;
     position: relative;
     border-radius: var(--r-panel);
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.03) 0%,
-      rgba(255, 255, 255, 0) 60%
-    );
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 60%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.05),
       inset 0 0 0 1px rgba(255, 255, 255, 0.05);
@@ -178,11 +174,7 @@
     position: relative;
     border-radius: var(--r-card);
     background:
-      linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.04) 0%,
-        rgba(255, 255, 255, 0) 45%
-      ),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 45%),
       rgba(18, 20, 26, 0.55);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
@@ -191,9 +183,84 @@
       inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 
+  .rolling-command-hint {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    color: rgb(var(--c-text-4));
+    font-size: 15px;
+  }
+
+  .rolling-command-hint__item {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    animation: raymes-rolling-hint 3200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .rolling-command-hint__shortcut {
+    display: inline-flex;
+    height: 20px;
+    flex-shrink: 0;
+    align-items: center;
+    border: 1px solid rgba(180, 177, 255, 0.2);
+    border-radius: 6px;
+    background: rgba(127, 118, 230, 0.1);
+    padding: 0 7px;
+    color: rgb(var(--c-accent-strong));
+    font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .rolling-command-hint__label {
+    min-width: 0;
+    overflow: hidden;
+    color: rgb(var(--c-text-4));
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .glass-card > *,
   .glass-panel > * {
     -webkit-app-region: no-drag;
+  }
+
+  .raymes-popover {
+    -webkit-app-region: no-drag;
+    border-radius: var(--r-card);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgb(var(--c-panel));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 22px 52px rgba(0, 0, 0, 0.72);
+  }
+
+  .raymes-settings-window {
+    -webkit-app-region: drag;
+    position: relative;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 42%),
+      rgba(30, 31, 46, 0.96);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 22px 60px rgba(0, 0, 0, 0.26);
+  }
+
+  .raymes-settings-window > * {
+    -webkit-app-region: no-drag;
+  }
+
+  .raymes-settings-window--native {
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
   }
 
   .window-snap-guides {
@@ -365,11 +432,7 @@
 
   .btn-primary {
     background:
-      linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.14) 0%,
-        rgba(255, 255, 255, 0) 100%
-      ),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 100%),
       rgb(118, 120, 240);
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.2) inset,
@@ -378,11 +441,7 @@
 
   .btn-primary:hover:not(:disabled) {
     background:
-      linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.18) 0%,
-        rgba(255, 255, 255, 0) 100%
-      ),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 100%),
       rgb(139, 141, 247);
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.25) inset,
@@ -430,8 +489,7 @@
     min-width: 16px;
     height: 16px;
     padding: 0 0.3rem;
-    font-family:
-      'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 9px;
     font-weight: 500;
     line-height: 1;
@@ -542,8 +600,33 @@
   }
 }
 
+@keyframes raymes-rolling-hint {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(2px);
+  }
+  12%,
+  82% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+    filter: blur(2px);
+  }
+}
+
 .raymes-thinking {
   animation: raymes-thinking 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rolling-command-hint__item {
+    animation: none;
+  }
 }
 
 /* Stagger helpers — applied to list items for on-mount cascade */

@@ -6,8 +6,11 @@ import type { IndexedDocument, SearchProvider } from './types'
 export function listApplications(): Array<{ name: string; path: string }> {
   const roots = [
     '/Applications',
+    '/Applications/Utilities',
     '/System/Applications',
     '/System/Applications/Utilities',
+    '/System/Library/CoreServices/Applications',
+    '/System/Library/CoreServices',
     join(homedir(), 'Applications'),
   ]
   const out: Array<{ name: string; path: string }> = []

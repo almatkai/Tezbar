@@ -1866,3 +1866,87 @@ export function getExtensionPreferences(extensionId: string, commandName?: strin
 
   return values;
 }
+
+export function getExtensionPreferenceSetup(extensionId: string, commandName?: string): {
+  extensionId: string;
+  commandName?: string;
+  title: string;
+  iconPath?: string;
+  preferences: any[];
+  values: Record<string, unknown>;
+  hasSavedPreferences: boolean;
+} {
+  const slug = slugFromRaymesExtensionId(extensionId);
+  const pkg = readInstalledPackage(slug);
+  const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
+  const command = Array.isArray(pkg.commands)
+    ? pkg.commands.find((cmd: any) => cmd?.name === commandName)
+    : null;
+  const preferences = [
+    ...(Array.isArray(pkg.preferences) ? pkg.preferences : []),
+    ...(Array.isArray(command?.preferences) ? command.preferences : []),
+  ];
+  const preferencesPath = path.join(extensionPath, 'preferences.json');
+
+  return {
+    extensionId: normalizeRaymesExtensionId(slug),
+    commandName,
+    title: String(pkg.title || extensionNameFromSlug(slug)),
+    iconPath: resolveInstalledIconPath(extensionPath, pkg.icon || 'icon.png') || undefined,
+    preferences,
+    values: getExtensionPreferences(extensionId, commandName),
+    hasSavedPreferences: fs.existsSync(preferencesPath),
+  };
+}
+
+export function shouldShowExtensionPreferenceSetup(extensionId: string, commandName?: string): boolean {
+  const setup = getExtensionPreferenceSetup(extensionId, commandName);
+  if (setup.preferences.length === 0) return false;
+  const needsRequiredValue = setup.preferences.some((pref: any) => {
+    if (!pref?.required || !pref?.name) return false;
+    const value = setup.values[pref.name];
+    return value === undefined || value === null || String(value).trim() === '';
+  });
+  if (needsRequiredValue) return true;
+
+  // Raycast shows this onboarding once for preference-backed extensions. It
+  // matters for Google Translate because users need to confirm language
+  // direction before no-view commands start copying/pasting text.
+  return !setup.hasSavedPreferences && extensionId === 'raycast.google-translate';
+}
+
+export function saveExtensionPreferences(
+  extensionId: string,
+  values: Record<string, unknown>,
+  commandName?: string,
+): Record<string, unknown> {
+  const slug = slugFromRaymesExtensionId(extensionId);
+  const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
+  fs.mkdirSync(extensionPath, { recursive: true });
+  const preferencesPath = path.join(extensionPath, 'preferences.json');
+  let existing: Record<string, any> = {};
+  if (fs.existsSync(preferencesPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(preferencesPath, 'utf-8'));
+      if (parsed && typeof parsed === 'object') existing = parsed;
+    } catch {}
+  }
+
+  if (commandName) {
+    existing.commands = existing.commands && typeof existing.commands === 'object'
+      ? existing.commands
+      : {};
+    existing.commands[commandName] = {
+      ...(existing.commands[commandName] || {}),
+      ...values,
+    };
+  } else {
+    existing = {
+      ...existing,
+      ...values,
+    };
+  }
+
+  fs.writeFileSync(preferencesPath, JSON.stringify(existing, null, 2));
+  return getExtensionPreferences(extensionId, commandName);
+}

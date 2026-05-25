@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, type IpcRendererEvent } from 'electron'
 import type { ProviderId } from '../shared/llmConfig'
 import { AGENT_IPC, type AgentRunEvent } from '../shared/agent'
 import { CHAT_IPC, type ChatSession, type ChatTurn } from '../shared/chat'
@@ -11,13 +11,16 @@ import type { VoiceModelId } from '../shared/voice'
 contextBridge.exposeInMainWorld('raymes', {
   hide: () => ipcRenderer.invoke('window:hide'),
   show: () => ipcRenderer.invoke('window:show'),
+  openSettingsWindow: () => ipcRenderer.invoke('settings:open-window'),
+  closeCurrentWindow: () => ipcRenderer.invoke('window:close-current'),
   query: (text: string) => ipcRenderer.invoke(IPC_CHANNELS.QUERY, text),
   cancel: () => ipcRenderer.invoke('cancel'),
   getExtensions: () => ipcRenderer.invoke('get-extensions'),
   listInstalledExtensions: () => ipcRenderer.invoke('extensions:listInstalled'),
   searchStoreExtensions: (query: string) => ipcRenderer.invoke('extensions:searchStore', query),
   installExtension: (extensionId: string) => ipcRenderer.invoke('extensions:install', extensionId),
-  uninstallExtension: (extensionId: string) => ipcRenderer.invoke('extensions:uninstall', extensionId),
+  uninstallExtension: (extensionId: string) =>
+    ipcRenderer.invoke('extensions:uninstall', extensionId),
   inspectExtension: (extensionId: string) =>
     ipcRenderer.invoke('extensions:integrity', extensionId),
   reinstallExtension: (extensionId: string) =>
@@ -27,7 +30,8 @@ contextBridge.exposeInMainWorld('raymes', {
   extensionList: () => ipcRenderer.invoke('extension:list'),
   extensionSearchStore: (query: string) => ipcRenderer.invoke('extension:search-store', query),
   extensionInstall: (extensionId: string) => ipcRenderer.invoke('extension:install', extensionId),
-  extensionUninstall: (extensionId: string) => ipcRenderer.invoke('extension:uninstall', extensionId),
+  extensionUninstall: (extensionId: string) =>
+    ipcRenderer.invoke('extension:uninstall', extensionId),
   extensionRunCommand: (payload: {
     extensionId: string
     commandName: string
@@ -38,16 +42,21 @@ contextBridge.exposeInMainWorld('raymes', {
     actionId: string
     formValues?: Record<string, string>
   }) => ipcRenderer.invoke('extension:invoke-action', payload),
-  extensionSearchTextChanged: (payload: {
-    sessionId: string
-    searchText: string
-  }) => ipcRenderer.invoke('extension:search-text-changed', payload),
+  extensionSearchTextChanged: (payload: { sessionId: string; searchText: string }) =>
+    ipcRenderer.invoke('extension:search-text-changed', payload),
+  extensionRefreshSession: (payload: { sessionId: string }) =>
+    ipcRenderer.invoke('extension:refresh-session', payload),
   clipboardReadText: () => ipcRenderer.invoke('clipboard:read'),
   clipboardWriteText: (text: string) => ipcRenderer.invoke('clipboard:write', text),
   shellOpen: (target: string) => ipcRenderer.invoke('shell:open', target),
   getAppIconDataUrl: (appPath: string) => ipcRenderer.invoke('app-icon:data-url', appPath),
   getExtensionPreferences: (payload: { extensionId: string; commandName?: string }) =>
     ipcRenderer.invoke('preferences:get', payload),
+  saveExtensionPreferences: (payload: {
+    extensionId: string
+    commandName?: string
+    values: Record<string, unknown>
+  }) => ipcRenderer.invoke('preferences:set', payload),
   searchAll: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_ALL, query),
   completePath: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.PATH_COMPLETE, query),
   runSearchBenchmark: () => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_BENCHMARK_RUN),
@@ -109,7 +118,9 @@ contextBridge.exposeInMainWorld('raymes', {
   setLlmConfig: (patch: Record<string, unknown>) => ipcRenderer.invoke('llm-config-set', patch),
   getLlmProviderStatuses: () => ipcRenderer.invoke('llm-provider-statuses'),
   listLlmModels: (providerId: ProviderId) => ipcRenderer.invoke('llm-list-models', providerId),
-  setWindowContentHeight: (height: number) => ipcRenderer.invoke('window-set-content-height', height),
+  getWindowZoomFactor: () => webFrame.getZoomFactor(),
+  setWindowContentHeight: (height: number, zoomFactor: number) =>
+    ipcRenderer.invoke('window-set-content-height', { height, zoomFactor }),
   openExternalUrl: (url: string) => ipcRenderer.invoke('open-external-url', url),
   githubDeviceStart: (clientId: string) => ipcRenderer.invoke('github-device-start', clientId),
   githubDevicePoll: () => ipcRenderer.invoke('github-device-poll'),
@@ -129,7 +140,7 @@ contextBridge.exposeInMainWorld('raymes', {
     const channel = 'window:snap-guides'
     const handler = (
       _event: IpcRendererEvent,
-      payload: { visible?: boolean; active?: boolean },
+      payload: { visible?: boolean; active?: boolean }
     ): void => {
       listener({ visible: payload?.visible === true, active: payload?.active === true })
     }
@@ -190,13 +201,12 @@ contextBridge.exposeInMainWorld('raymes', {
     }
   },
   onAppSurfaceOpen: (
-    listener: (surface: 'command' | 'settings' | 'providers' | 'clipboard') => void,
+    listener: (surface: 'command' | 'settings' | 'clipboard') => void
   ) => {
     const handler = (_event: IpcRendererEvent, surface: unknown): void => {
       if (
         surface === 'command' ||
         surface === 'settings' ||
-        surface === 'providers' ||
         surface === 'clipboard'
       ) {
         listener(surface)

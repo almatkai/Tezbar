@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { ProviderConnectionStatuses } from '../preload/api'
-import type { SelectFieldProps, TextAreaProps, TextFieldProps } from './ui/primitives'
 import {
   Button,
   FieldLabel,

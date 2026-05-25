@@ -35,7 +35,7 @@ import { commandBus } from './commandBus'
 // Fix imports from indexDb
 import { getInstance, readBenchmarkHistory, runOfflineBenchmarks, type SearchIndexRow } from './indexDb'
 import { SearchIndexDatabase } from './indexDb'
-import { listApplications } from './providers/appsProvider'
+import { appsProvider, listApplications } from './providers/appsProvider'
 import { captureClipboardSnapshot, clipboardProvider } from './providers/clipboardProvider'
 import { commandsProvider } from './providers/commandsProvider'
 import { extensionsProvider } from './providers/extensionsProvider'
@@ -179,12 +179,18 @@ async function runWithSafety<T extends SearchExecuteResult>(
 
 async function upsertProvider(provider: SearchProvider): Promise<void> {
   const docs = await provider.buildDocuments()
-  if (provider.providerId === 'extensions') {
-    indexDb?.removeDocumentsByCategory('extensions')
+  if (provider.providerId === 'commands') {
+    indexDb.removeDocumentsByCategory('commands')
+    indexDb.removeDocumentsByCategory('native-command')
+  } else if (provider.providerId === 'apps') {
+    indexDb.removeDocumentsByCategory('applications')
+  } else if (provider.providerId === 'extensions') {
+    indexDb.removeDocumentsByCategory('extensions')
   }
   if (docs.length > 0) {
-    indexDb?.upsertDocuments(docs)
+    indexDb.upsertDocuments(docs)
   }
+  indexDb.clearSearchCache()
 }
 
 async function refreshAllProviders(): Promise<void> {
@@ -195,6 +201,7 @@ async function refreshAllProviders(): Promise<void> {
     upsertProvider(snippetsProvider),
     upsertProvider(quickLinksProvider),
     upsertProvider(extensionsProvider),
+    upsertProvider(appsProvider),
   ])
 }
 
@@ -635,7 +642,7 @@ function parseOpenPortProcesses(stdout: string, processNames: Map<string, string
 
 
 export async function searchEverything(query: string): Promise<SearchResult[]> {
-  await indexDb.ensureInitialized()
+  await bootstrapSearchIndex()
   await refreshVolatileProviders()
 
   const trimmed = query.trim()
@@ -1060,6 +1067,15 @@ async function installedApplicationItem(
 }
 
 export async function completePath(query: string, limit = 50): Promise<PathCompletionItem[]> {
+  const applicationQuery = query.trimStart()
+  if (applicationQuery.startsWith('`')) {
+    const appTerm = applicationQuery.slice(1).trim()
+    const apps = listApplications()
+      .filter((item) => appMatchesTerm(item.name, appTerm))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    return Promise.all(apps.map((item, index) => installedApplicationItem(item, index)))
+  }
+
   const { targetPath, appTerm, appMode } = splitPathCompletionQuery(query)
 
   if (!appMode && isApplicationsDirectory(targetPath)) {

@@ -9,6 +9,7 @@ import type {
 } from '../shared/extensions'
 import type {
   ExtensionInvokeActionResult,
+  ExtensionRefreshSessionRequest,
   ExtensionRunCommandResult,
   ExtensionSearchTextChangedResult,
   InstalledRegistryExtension,
@@ -48,6 +49,8 @@ export type GithubPollResult =
 export type RaymesApi = {
   hide: () => Promise<void>
   show: () => Promise<void>
+  openSettingsWindow: () => Promise<void>
+  closeCurrentWindow: () => Promise<void>
   query: (text: string) => Promise<Intent>
   cancel: () => Promise<unknown>
   getExtensions: () => Promise<InstalledExtension[]>
@@ -76,6 +79,9 @@ export type RaymesApi = {
     sessionId: string
     searchText: string
   }) => Promise<ExtensionSearchTextChangedResult>
+  extensionRefreshSession: (
+    payload: ExtensionRefreshSessionRequest
+  ) => Promise<ExtensionRunCommandResult>
   clipboardReadText: () => Promise<string>
   clipboardWriteText: (text: string) => Promise<{ ok: boolean }>
   shellOpen: (target: string) => Promise<{ ok: boolean }>
@@ -83,6 +89,11 @@ export type RaymesApi = {
   getExtensionPreferences: (payload: {
     extensionId: string
     commandName?: string
+  }) => Promise<Record<string, unknown>>
+  saveExtensionPreferences: (payload: {
+    extensionId: string
+    commandName?: string
+    values: Record<string, unknown>
   }) => Promise<Record<string, unknown>>
   searchAll: (query: string) => Promise<SearchResult[]>
   completePath: (query: string) => Promise<PathCompletionItem[]>
@@ -92,7 +103,10 @@ export type RaymesApi = {
   listNamedPorts: () => Promise<NamedPortEntry[]>
   addNamedPort: (payload: { name: string; port: number }) => Promise<NamedPortEntry | null>
   removeNamedPort: (id: string) => Promise<boolean>
-  executeSearchAction: (action: SearchAction, context?: SearchExecuteContext) => Promise<SearchExecuteResult>
+  executeSearchAction: (
+    action: SearchAction,
+    context?: SearchExecuteContext
+  ) => Promise<SearchExecuteResult>
   runAiAction: (payload: {
     instruction: string
     selectedText?: string
@@ -107,8 +121,7 @@ export type RaymesApi = {
     mimeType?: string
     language?: string
   }) => Promise<
-    | { ok: true; text: string; engine: string }
-    | { ok: false; error: string; hint?: string }
+    { ok: true; text: string; engine: string } | { ok: false; error: string; hint?: string }
   >
   setSuppressBlurHide: (value: boolean) => Promise<{ ok: boolean }>
   listVoiceSttModes: () => Promise<string[]>
@@ -123,7 +136,8 @@ export type RaymesApi = {
   setLlmConfig: (patch: LlmConfigRecord) => Promise<void>
   getLlmProviderStatuses: () => Promise<ProviderConnectionStatuses>
   listLlmModels: (providerId: ProviderId) => Promise<string[]>
-  setWindowContentHeight: (height: number) => Promise<void>
+  getWindowZoomFactor: () => number
+  setWindowContentHeight: (height: number, zoomFactor: number) => Promise<void>
   openExternalUrl: (url: string) => Promise<void>
   githubDeviceStart: (clientId: string) => Promise<{
     device_code: string
@@ -137,7 +151,9 @@ export type RaymesApi = {
   onWindowShown: (listener: (payload: { resetUi: boolean }) => void) => () => void
   startWindowSnapDrag: () => Promise<void>
   endWindowSnapDrag: () => Promise<void>
-  onWindowSnapGuides: (listener: (payload: { visible: boolean; active: boolean }) => void) => () => void
+  onWindowSnapGuides: (
+    listener: (payload: { visible: boolean; active: boolean }) => void
+  ) => () => void
   /** Alt+Space held after opening the launcher — same pipeline as the Hold to speak control. */
   onVoiceHotkeyHold: (listener: (payload: { phase: 'press' | 'release' }) => void) => () => void
   getPermissions: () => Promise<PermissionsSnapshot>
@@ -157,8 +173,13 @@ export type RaymesApi = {
   clearClipboardHistory: () => Promise<void>
   listSnippets: () => Promise<SnippetListRow[]>
   copySnippet: (id: string) => Promise<{ ok: boolean; message: string }>
-  addSnippet: (payload: SnippetWritePayload) => Promise<{ ok: boolean; message: string; id?: string }>
-  updateSnippet: (id: string, payload: SnippetWritePayload) => Promise<{ ok: boolean; message: string }>
+  addSnippet: (
+    payload: SnippetWritePayload
+  ) => Promise<{ ok: boolean; message: string; id?: string }>
+  updateSnippet: (
+    id: string,
+    payload: SnippetWritePayload
+  ) => Promise<{ ok: boolean; message: string }>
   deleteSnippet: (id: string) => Promise<{ ok: boolean; message: string }>
   /** ECB rates via Frankfurter (main process; avoids renderer CORS). */
   fetchFrankfurterLatest: (from: string) => Promise<FrankfurterLatestResponse>
@@ -170,7 +191,7 @@ export type RaymesApi = {
   onQuickNoteSaveShortcut: (listener: () => void) => () => void
   /** Fired from the top-bar tray menu to open a built-in Raymes surface. */
   onAppSurfaceOpen: (
-    listener: (surface: 'command' | 'settings' | 'providers' | 'clipboard') => void,
+    listener: (surface: 'command' | 'settings' | 'clipboard') => void
   ) => () => void
   /** Kick off a pi-backed agent run. Events stream via `onAgentEvent`. */
   agentRun: (task: string) => Promise<{ ok: boolean; runId?: string; error?: string }>
@@ -179,7 +200,9 @@ export type RaymesApi = {
   /** Subscribe to agent run events (stages, message deltas, answers, errors). */
   onAgentEvent: (listener: (event: AgentRunEvent) => void) => () => void
   /** Subscribe to extension install progress updates (0-100). */
-  onExtensionInstallProgress: (listener: (payload: { id: string; progress: number }) => void) => () => void
+  onExtensionInstallProgress: (
+    listener: (payload: { id: string; progress: number }) => void
+  ) => () => void
   /** Chat session history (AI-mode multi-turn conversations). */
   chatRun: (turns: ChatTurn[]) => Promise<{ ok: boolean; runId?: string; error?: string }>
   chatList: (limit?: number) => Promise<ChatSessionSummary[]>

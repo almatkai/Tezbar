@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
 import type { ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
 import { Hint, HintBar, Kbd, ViewHeader } from '../../ui/primitives'
+import { MetadataItem, MetadataSidebar } from './detail-runtime'
 
 type ListRow = {
   id: string
@@ -8,7 +10,10 @@ type ListRow = {
   subtitle: string
   icon?: {
     fileIcon?: string
+    source?: unknown
   }
+  accessories?: Array<{ text?: unknown; tag?: unknown; date?: unknown; icon?: unknown }>
+  detail?: ExtensionRuntimeNode
   section?: string
   actionIds?: string[]
 }
@@ -19,11 +24,47 @@ function cleanSubtitle(value: unknown): string {
 }
 
 function parseRowIcon(value: unknown): ListRow['icon'] | undefined {
+  if (typeof value === 'string' && value.trim()) {
+    return { source: value.trim() }
+  }
   if (!value || typeof value !== 'object') return undefined
   const icon = value as { fileIcon?: unknown }
-  return typeof icon.fileIcon === 'string' && icon.fileIcon.trim()
-    ? { fileIcon: icon.fileIcon.trim() }
-    : undefined
+  if (typeof icon.fileIcon === 'string' && icon.fileIcon.trim()) {
+    return { fileIcon: icon.fileIcon.trim() }
+  }
+  if ('source' in icon) return { source: (icon as { source?: unknown }).source }
+  return undefined
+}
+
+function textValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (value && typeof value === 'object') {
+    const candidate = value as { value?: unknown; text?: unknown }
+    if (candidate.value !== undefined) return textValue(candidate.value)
+    if (candidate.text !== undefined) return textValue(candidate.text)
+  }
+  return ''
+}
+
+function parseAccessories(value: unknown): ListRow['accessories'] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    .map((entry) => ({
+      text: entry.text,
+      tag: entry.tag,
+      date: entry.date,
+      icon: entry.icon,
+    }))
+}
+
+function parseDetailFromChildren(entry: ExtensionRuntimeNode): ExtensionRuntimeNode | undefined {
+  const propDetail = entry.props?.detail
+  if (propDetail && typeof propDetail === 'object' && 'type' in propDetail) {
+    return propDetail as ExtensionRuntimeNode
+  }
+  return (entry.children ?? []).find((child) => child.type === 'List.Item.Detail')
 }
 
 function parseListRows(node: ExtensionRuntimeNode): ListRow[] {
@@ -35,10 +76,12 @@ function parseListRows(node: ExtensionRuntimeNode): ListRow[] {
       const subtitle = cleanSubtitle(entry.props?.subtitle)
       const icon = parseRowIcon(entry.props?.icon)
       const id = typeof entry.props?.id === 'string' ? entry.props.id : `${section || 'list'}:${rows.length}`
+      const accessories = parseAccessories(entry.props?.accessories)
+      const detail = parseDetailFromChildren(entry)
       const actionIds = Array.isArray(entry.props?.actionIds)
         ? entry.props.actionIds.filter((value): value is string => typeof value === 'string')
         : undefined
-      rows.push({ id, title, subtitle, icon, section, actionIds })
+      rows.push({ id, title, subtitle, icon, accessories, detail, section, actionIds })
       return
     }
 
@@ -85,6 +128,135 @@ function FileIcon({ path, title }: { path: string; title: string }): JSX.Element
     <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] border border-white/10 bg-white/[0.04] text-[11px] font-semibold text-ink-3">
       {title.slice(0, 1).toUpperCase()}
     </span>
+  )
+}
+
+function SymbolIcon({ icon, title }: { icon: unknown; title: string }): JSX.Element {
+  const token = textValue(icon && typeof icon === 'object' ? (icon as { source?: unknown }).source : icon)
+    .replace(/^Icon\./, '')
+    .toLowerCase()
+  const label = token || title.slice(0, 1).toLowerCase()
+
+  return (
+    <span className="grid h-5 w-5 shrink-0 place-items-center text-accent-1" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+        {label.includes('globe') || label.includes('network') || label.includes('wifi') ? (
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18M12 3c2.5 2.7 3.7 5.7 3.7 9S14.5 18.3 12 21M12 3c-2.5 2.7-3.7 5.7-3.7 9S9.5 18.3 12 21" />
+          </>
+        ) : label.includes('download') ? (
+          <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" />
+        ) : label.includes('upload') ? (
+          <path d="M12 21V9m0 0 4 4m-4-4-4 4M5 5h14" />
+        ) : label.includes('link') ? (
+          <path d="M10 13a5 5 0 0 0 7.1 0l1.4-1.4a5 5 0 0 0-7.1-7.1L10.5 5M14 11a5 5 0 0 0-7.1 0l-1.4 1.4a5 5 0 0 0 7.1 7.1l.9-.9" />
+        ) : label.includes('phone') || label.includes('voice') ? (
+          <path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7l.5 2.8a2 2 0 0 1-.6 1.8L7.9 9.4a16 16 0 0 0 6.7 6.7l1.1-1.1a2 2 0 0 1 1.8-.6l2.8.5a2 2 0 0 1 1.7 2Z" />
+        ) : label.includes('video') || label.includes('play') ? (
+          <>
+            <rect x="3" y="6" width="18" height="12" rx="2" />
+            <path d="m10 9 5 3-5 3V9Z" />
+          </>
+        ) : label.includes('server') || label.includes('harddrive') ? (
+          <>
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="M7 15h.01M11 15h6" />
+          </>
+        ) : label.includes('question') || label.includes('ping') ? (
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M9.5 9a2.8 2.8 0 0 1 5.2 1.4c0 2-2.7 2.2-2.7 4M12 18h.01" />
+          </>
+        ) : (
+          <>
+            <circle cx="12" cy="12" r="8" />
+            <path d="M12 8v8M8 12h8" />
+          </>
+        )}
+      </svg>
+    </span>
+  )
+}
+
+function RowIcon({ row }: { row: ListRow }): JSX.Element | null {
+  if (row.icon?.fileIcon) return <FileIcon path={row.icon.fileIcon} title={row.title} />
+  if (row.icon?.source) return <SymbolIcon icon={row.icon.source} title={row.title} />
+  return null
+}
+
+function accessoryText(accessory: NonNullable<ListRow['accessories']>[number]): string {
+  const tag = textValue(accessory.tag)
+  if (tag) return tag
+  const text = textValue(accessory.text)
+  if (text) return text
+  if (accessory.date) {
+    const date = new Date(String(accessory.date))
+    if (!Number.isNaN(date.getTime())) return date.toLocaleDateString()
+  }
+  return ''
+}
+
+function markdownFromListDetail(detail: ExtensionRuntimeNode | undefined): string {
+  if (!detail) return ''
+  if (typeof detail.props?.markdown === 'string') return detail.props.markdown
+  for (const child of detail.children ?? []) {
+    if (typeof child.props?.markdown === 'string') return child.props.markdown
+  }
+  return ''
+}
+
+function metadataFromListDetail(detail: ExtensionRuntimeNode | undefined): ExtensionRuntimeNode | undefined {
+  if (!detail) return undefined
+  const propMetadata = detail.props?.metadata
+  if (propMetadata && typeof propMetadata === 'object' && 'type' in propMetadata) {
+    return propMetadata as ExtensionRuntimeNode
+  }
+  if (detail.metadata) return detail.metadata
+  return (detail.children ?? []).find((child) => child.type === 'List.Item.Detail.Metadata')
+}
+
+function InlineMetadata({ root }: { root: ExtensionRuntimeNode }): JSX.Element {
+  return (
+    <div className="h-full overflow-y-auto px-4 py-4">
+      <div className="max-w-[520px]">
+        {(root.children ?? []).map((child, index) => (
+          <MetadataItem key={index} node={child} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ListDetailPane({ row }: { row?: ListRow }): JSX.Element {
+  const markdown = markdownFromListDetail(row?.detail)
+  const metadata = metadataFromListDetail(row?.detail)
+
+  if (!row?.detail) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center text-[12px] text-ink-4">
+        Select an item to see details.
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full min-h-0 overflow-hidden">
+      {metadata && !markdown ? (
+        <InlineMetadata root={metadata} />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        {markdown ? (
+          <article className="prose prose-invert max-w-none text-[13px] leading-relaxed">
+            <ReactMarkdown urlTransform={(url) => url}>{markdown}</ReactMarkdown>
+          </article>
+        ) : metadata ? null : (
+          <div className="text-[12px] text-ink-4">No detail content</div>
+        )}
+        </div>
+      )}
+      {metadata && markdown ? <MetadataSidebar root={metadata} /> : null}
+    </div>
   )
 }
 
@@ -177,6 +349,8 @@ export function ListRuntime({
   }, [hasServerSearch, rows, query])
 
   const groupedSections = useMemo(() => groupBySection(filteredRows), [filteredRows])
+  const selectedRow = filteredRows[selected]
+  const hasDetails = filteredRows.some((row) => row.detail)
 
   useEffect(() => {
     if (selected >= filteredRows.length) {
@@ -208,7 +382,8 @@ export function ListRuntime({
 
     if (e.key === 'Enter' && !e.repeat) {
       e.preventDefault()
-      onRunPrimaryAction(filteredRows[selected]?.actionIds?.[0])
+      const actionId = filteredRows[selected]?.actionIds?.[0]
+      if (actionId) onRunPrimaryAction(actionId)
       return
     }
   }
@@ -249,7 +424,12 @@ export function ListRuntime({
         </div>
       </div>
 
-      <div ref={listRef} className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2 animate-raymes-scale-in">
+      <div
+        ref={listRef}
+        className={`glass-card grid min-h-0 flex-1 overflow-hidden animate-raymes-scale-in ${
+          hasDetails ? 'grid-cols-[minmax(290px,34%)_minmax(0,1fr)]' : 'grid-cols-1 px-2 py-2'
+        }`}
+      >
         {filteredRows.length === 0 ? (
           <div className="flex h-full items-center justify-center text-center">
             <div>
@@ -264,7 +444,8 @@ export function ListRuntime({
             </div>
           </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
+          <>
+          <div className="min-h-0 overflow-y-auto px-3 py-3">
             {groupedSections.map((group, groupIdx) => (
               <div key={groupIdx} className="mb-1">
                 {group.section ? (
@@ -283,19 +464,29 @@ export function ListRuntime({
                           type="button"
                           data-idx={globalIdx}
                           onMouseEnter={() => setSelected(globalIdx)}
-                          onClick={() => onRunPrimaryAction(row.actionIds?.[0])}
+                          onClick={() => {
+                            setSelected(globalIdx)
+                            if (row.actionIds?.[0]) onRunPrimaryAction(row.actionIds[0])
+                          }}
                           className={`w-full rounded-raymes-row px-3 py-2 text-left transition ${
                             globalIdx === selected ? 'bg-white/15 text-ink-1' : 'text-ink-2 hover:bg-white/8'
                           }`}
                         >
                           <span className="flex min-w-0 items-center gap-2.5">
-                            {row.icon?.fileIcon ? (
-                              <FileIcon path={row.icon.fileIcon} title={row.title} />
-                            ) : null}
+                            <RowIcon row={row} />
                             <span className="min-w-0 flex-1">
                               <p className="truncate text-[13px] font-medium">{row.title}</p>
                               {row.subtitle ? <p className="truncate text-[11px] text-ink-3">{row.subtitle}</p> : null}
                             </span>
+                            {row.accessories?.map((accessory, index) => {
+                              const value = accessoryText(accessory)
+                              if (!value) return null
+                              return (
+                                <span key={index} className="max-w-[190px] shrink-0 truncate text-[12px] text-ink-3">
+                                  {value}
+                                </span>
+                              )
+                            })}
                           </span>
                         </button>
                       </li>
@@ -305,6 +496,12 @@ export function ListRuntime({
               </div>
             ))}
           </div>
+          {hasDetails ? (
+            <div className="min-h-0 border-l border-white/8 bg-black/5">
+              <ListDetailPane row={selectedRow} />
+            </div>
+          ) : null}
+          </>
         )}
       </div>
 

@@ -1,5 +1,13 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import type { Intent } from '../shared/intent'
+import {
+  AI_PROVIDER_ROWS,
+  DEFAULT_PROVIDER_MODELS,
+  RECOMMENDED_AI_MODEL,
+  isAiProviderConfigured,
+  normalizeProviderModelList,
+  providerTitle,
+} from '../shared/aiProviders'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { PathCompletionItem, SearchResult } from '../shared/search'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
@@ -7,6 +15,7 @@ import { Hint, HintBar, Kbd, Message, SelectField, TextField, cx } from './ui/pr
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { GlideList } from './ui/GlideList'
 import { Markdown } from './ui/Markdown'
+import { RollingText } from './ui/RollingText'
 import { useHoldToSpeak } from './hooks/useHoldToSpeak'
 import { evaluateExpression, type CalcResult } from './calculator'
 import { buildColorConversionResults } from './colorConverter'
@@ -17,21 +26,15 @@ import { RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 
-const DEFAULT_MODEL: Record<ProviderId, string> = {
-  openai: 'gpt-4o-mini',
-  'openai-compatible': 'gpt-4o-mini',
-  gemini: 'gemini-2.0-flash',
-  anthropic: 'claude-3-5-haiku-20241022',
-  ollama: 'llama3.2',
-  copilot: 'gpt-4o',
-  opencode: 'opencode/big-pickle',
-  deepseek: 'deepseek-chat',
-}
-
 const RECENT_EXTENSION_COMMANDS_KEY = 'raymes:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
 const PINNED_COMMANDS_KEY = 'raymes:pinned-commands'
 const MAX_PINNED_COMMANDS = 9
+const COMMAND_HINTS = [
+  { shortcut: '/directory', label: 'Search files and folders' },
+  { shortcut: '`', label: 'Browse applications' },
+  { shortcut: 'SPACE', label: 'Enter AI Space' },
+] as const
 const PIN_ICON_CHOICES = [
   '📌',
   '⭐',
@@ -258,8 +261,8 @@ export default function CommandBar({
   initialValue = '',
   initialSelectedChatId = null,
   onOpenAiChat,
-  onOpenProviders,
   onOpenSettings,
+  onConfigureAi,
   onOpenExtensions,
   onOpenExtensionRuntime,
   onOpenPortsPage,
@@ -271,8 +274,8 @@ export default function CommandBar({
   initialValue?: string
   initialSelectedChatId?: string | null
   onOpenAiChat: (boot: AiChatBoot) => void
-  onOpenProviders: () => void
   onOpenSettings: () => void
+  onConfigureAi: () => void
   onOpenExtensions: () => void
   onOpenExtensionRuntime: (initial: ExtensionRuntimeViewPayload) => void
   onOpenPortsPage: (opts?: { tab?: 'listen' | 'named' }) => void
@@ -288,6 +291,8 @@ export default function CommandBar({
   const [streamError, setStreamError] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
   const [cfg, setCfg] = useState<LlmConfigRecord>({})
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const [modelMenuProvider, setModelMenuProvider] = useState<ProviderId | null>(null)
   const [emptyAnswer, setEmptyAnswer] = useState(false)
   const [pathCompletions, setPathCompletions] = useState<PathCompletionItem[]>([])
   const [recentExtensionCommands, setRecentExtensionCommands] = useState<string[]>([])
@@ -299,7 +304,9 @@ export default function CommandBar({
   const [selectedSuggestion, setSelectedSuggestion] = useState(0)
   const [followSuggestionSelection, setFollowSuggestionSelection] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const [selectedSearch, setSelectedSearch] = useState(0)
+  const [selectedSearch, setSelectedSearch] = useState(
+    initialValue.startsWith(' ') || initialValue.endsWith('  ') ? -1 : 0
+  )
   const [followSearchSelection, setFollowSearchSelection] = useState(false)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
   const actionMsgTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -340,6 +347,7 @@ export default function CommandBar({
   const gotAnyTokenRef = useRef(false)
   const pinPickerOpenRef = useRef(false)
   const pendingOpenRef = useRef(false)
+  const modelMenuOpenRef = useRef(false)
   const valueRef = useRef(value)
   const killPortModeRef = useRef(killPortMode)
 
@@ -354,7 +362,7 @@ export default function CommandBar({
   useEffect(() => {
     setRecentExtensionCommands(readRecentExtensionCommands())
     setPinnedCommands(readPinnedCommands())
-    void window.raymes.chatList(8).then(setChatHistory)
+    void window.raymes.chatList(40).then(setChatHistory)
   }, [])
 
   useEffect(() => {
@@ -456,25 +464,45 @@ export default function CommandBar({
   })
 
   const provider = (cfg.provider ?? 'ollama') as ProviderId
-  const model = useMemo(() => cfg.model ?? DEFAULT_MODEL[provider], [cfg.model, provider])
+  const model = useMemo(
+    () => cfg.providerSelectedModels?.[provider] ?? cfg.model ?? RECOMMENDED_AI_MODEL[provider],
+    [cfg.model, cfg.providerSelectedModels, provider]
+  )
+  const previewProvider = modelMenuProvider ?? provider
+  const previewModels = normalizeProviderModelList(
+    previewProvider,
+    cfg.providerModels?.[previewProvider] ?? DEFAULT_PROVIDER_MODELS[previewProvider]
+  )
+  const previewConfigured = isAiProviderConfigured(cfg, previewProvider)
 
   const slashQuery = value.trimStart()
   const isSlashInput = slashQuery.startsWith('/')
+  const isApplicationInput = slashQuery.startsWith('`')
+  const isCompletionInput = isSlashInput || isApplicationInput
 
-  const showChatHistory = isAiMode && !agentTask.trim() && chatHistory.length > 0
+  const chatHistoryQuery = agentTask.trim().toLowerCase()
+  const filteredChatHistory = useMemo(() => {
+    if (!chatHistoryQuery) return chatHistory
+    const terms = chatHistoryQuery.split(/\s+/).filter(Boolean)
+    return chatHistory.filter((chat) => {
+      const haystack = `${chat.title} ${chat.preview}`.toLowerCase()
+      return terms.every((term) => haystack.includes(term))
+    })
+  }, [chatHistory, chatHistoryQuery])
+  const showChatHistory = isAiMode && filteredChatHistory.length > 0
 
   // Live calculator: we evaluate on every keystroke in the renderer so
   // there's no IPC latency. Only when the buffer is not a slash command —
   // `/providers` shouldn't trigger math.js.
   const mathCalc: CalcResult | null = useMemo(() => {
-    if (isSlashInput) return null
+    if (isCompletionInput) return null
     const t = value.trim()
     if (t && parseCurrencyQuery(t, getPreferredDefaultTarget())) {
       return null
     }
     return evaluateExpression(value)
-  }, [isSlashInput, value])
-  const currencyCalc = useCurrencyConversion(value, isSlashInput)
+  }, [isCompletionInput, value])
+  const currencyCalc = useCurrencyConversion(value, isCompletionInput)
   const calc = currencyCalc ?? mathCalc
 
   const calcResultRow: SearchResult | null = useMemo(() => {
@@ -501,9 +529,9 @@ export default function CommandBar({
   }, [calc, currencyCalc])
 
   const colorConversionRows = useMemo<SearchResult[]>(() => {
-    if (isSlashInput) return []
+    if (isCompletionInput) return []
     return buildColorConversionResults(value)
-  }, [isSlashInput, value])
+  }, [isCompletionInput, value])
 
   const shouldOfferKillPortCommand = useMemo(() => {
     const q = value.trim().toLowerCase()
@@ -560,7 +588,7 @@ export default function CommandBar({
   const canEnterKillPortMode =
     !killPortMode &&
     !pendingAction &&
-    !isSlashInput &&
+    !isCompletionInput &&
     !isAiMode &&
     topResult?.id === 'extcmd:raycast.kill-process:index'
   const pinnedMetaById = useMemo(() => {
@@ -572,12 +600,12 @@ export default function CommandBar({
   }, [pinnedCommands])
 
   const suggestions = useMemo(
-    () => (isSlashInput ? pathCompletions : []),
-    [isSlashInput, pathCompletions],
+    () => (isCompletionInput ? pathCompletions : []),
+    [isCompletionInput, pathCompletions],
   )
 
   useEffect(() => {
-    if (!isSlashInput) {
+    if (!isCompletionInput) {
       setPathCompletions([])
       return
     }
@@ -592,11 +620,15 @@ export default function CommandBar({
       cancelled = true
       clearTimeout(t)
     }
-  }, [isSlashInput, value])
+  }, [isCompletionInput, value])
 
   useEffect(() => {
     let cancelled = false
     const t = setTimeout(() => {
+      if (isAiMode || isCompletionInput) {
+        setSearchResults([])
+        return
+      }
       void window.raymes.searchAll(value).then((items) => {
         if (!cancelled) setSearchResults(items)
       })
@@ -605,10 +637,10 @@ export default function CommandBar({
       cancelled = true
       clearTimeout(t)
     }
-  }, [value])
+  }, [isAiMode, isCompletionInput, value])
 
   useEffect(() => {
-    if (isSlashInput || searchResults.length === 0 || recentExtensionCommands.length === 0) return
+    if (isCompletionInput || searchResults.length === 0 || recentExtensionCommands.length === 0) return
     // When the calc row is present it owns index 0 and should stay
     // selected — typing `2+2` should not jump to a recent app.
     if (calcResultRow) return
@@ -617,7 +649,7 @@ export default function CommandBar({
     if (idx >= 0 && idx < visibleSearchCount) {
       setSelectedSearch(idx)
     }
-  }, [isSlashInput, recentExtensionCommands, searchResults, visibleSearchResults, visibleSearchCount, calcResultRow])
+  }, [isCompletionInput, recentExtensionCommands, searchResults, visibleSearchResults, visibleSearchCount, calcResultRow])
 
   // Keep the selection inside the rendered range whenever the result set
   // changes (e.g. user starts typing a narrower query).
@@ -625,6 +657,11 @@ export default function CommandBar({
     if (visibleSearchCount === 0) return
     setSelectedSearch((i) => (i >= visibleSearchCount ? visibleSearchCount - 1 : i))
   }, [visibleSearchCount])
+
+  useEffect(() => {
+    if (!isAiMode || filteredChatHistory.length === 0) return
+    setSelectedSearch((i) => Math.min(Math.max(-1, i), filteredChatHistory.length - 1))
+  }, [filteredChatHistory.length, isAiMode])
 
   // Slash suggestion list can shrink while the highlight index stays high;
   // keep it in range so Enter always targets a real row.
@@ -878,7 +915,7 @@ export default function CommandBar({
       setValue('')
 
       if (result.action.commandId === 'open-providers') {
-        onOpenProviders()
+        onConfigureAi()
         return
       }
       if (result.action.commandId === 'open-settings') {
@@ -1135,9 +1172,15 @@ export default function CommandBar({
 
   pinPickerOpenRef.current = pinPickerTarget !== null
   pendingOpenRef.current = pendingAction !== null
+  modelMenuOpenRef.current = modelMenuOpen
 
   useEffect(() => {
     setCommandSurfaceEscapeConsumer(() => {
+      if (modelMenuOpenRef.current) {
+        setModelMenuOpen(false)
+        focusCommandInput()
+        return true
+      }
       if (pinPickerOpenRef.current) {
         setPinPickerTarget(null)
         showActionMsg(null)
@@ -1159,9 +1202,9 @@ export default function CommandBar({
         return true
       }
       if (valueRef.current.startsWith(' ')) {
-        // Space prefix = AI mode. Escape clears the typed prompt but keeps
-        // the command bar in AI mode.
-        setValue(' ')
+        // Space prefix = AI mode. Escape first clears a typed prompt, then
+        // a second Escape removes the prefix and returns to normal command search.
+        setValue(valueRef.current.trim() ? ' ' : '')
         focusCommandInput()
         return true
       }
@@ -1234,6 +1277,10 @@ export default function CommandBar({
       if (hasCommandMod) {
         if (event.key.toLowerCase() === 'p' && !event.shiftKey) {
           event.preventDefault()
+          if (isAiMode) {
+            showActionMsg('Pinned commands are hidden in AI mode')
+            return
+          }
           const selected = visibleSearchResults[selectedSearch] ?? visibleSearchResults[0] ?? null
           if (!selected) {
             showActionMsg('No command selected to pin or unpin')
@@ -1255,7 +1302,7 @@ export default function CommandBar({
 
       if (event.altKey) {
         const slot = parsePinnedSlotFromKeyEvent(event)
-        if (slot !== null) {
+        if (slot !== null && !isAiMode) {
           const pinIndex = pinnedCommands.findIndex((p) => p.slot === slot)
           if (pinIndex >= 0) {
             event.preventDefault()
@@ -1268,7 +1315,18 @@ export default function CommandBar({
 
     window.addEventListener('keydown', onGlobalKeyDown)
     return () => window.removeEventListener('keydown', onGlobalKeyDown)
-  }, [confirmPin, pinPickerIconIndex, pinPickerTarget, pinnedCommands, visibleSearchResults, selectedSearch])
+  }, [
+    confirmPin,
+    isAiMode,
+    openPinPicker,
+    pinPickerIconIndex,
+    pinPickerTarget,
+    pinnedCommands,
+    runPinnedCommand,
+    selectedSearch,
+    unpinCommandById,
+    visibleSearchResults,
+  ])
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault()
@@ -1296,7 +1354,7 @@ export default function CommandBar({
     // there (multi-turn chat, logs, history — see AgentChatView).
     if (isAiMode) {
       if (showChatHistory) {
-        const selectedChat = chatHistory[selectedSearch]
+        const selectedChat = filteredChatHistory[selectedSearch]
         if (selectedChat) {
           onOpenAiChat({ kind: 'resume', sessionId: selectedChat.id })
           setValue('  ')
@@ -1310,7 +1368,7 @@ export default function CommandBar({
       return
     }
 
-    if (!isSlashInput && visibleSearchResults.length > 0) {
+    if (!isCompletionInput && visibleSearchResults.length > 0) {
       const selected = visibleSearchResults[selectedSearch]
       if (selected) {
         await runSelectedSearchResult(selected, selectedSearch + 1)
@@ -1318,7 +1376,7 @@ export default function CommandBar({
       }
     }
 
-    if (isSlashInput && suggestions.length > 0) {
+    if (isCompletionInput && suggestions.length > 0) {
       const idx = Math.min(Math.max(0, selectedSuggestion), suggestions.length - 1)
       const item = suggestions[idx]
       if (item) {
@@ -1337,6 +1395,8 @@ export default function CommandBar({
       return
     }
 
+    if (isApplicationInput) return
+
     try {
       const intent = await window.raymes.query(value)
       if (intent.type === 'answer' || intent.type === 'ai') {
@@ -1344,7 +1404,7 @@ export default function CommandBar({
       }
       if (intent.type === 'extension' && intent.name === 'providers') {
         setValue('')
-        onOpenProviders()
+        onConfigureAi()
         return
       }
       if (intent.type === 'extension' && intent.name === 'extensions') {
@@ -1369,8 +1429,8 @@ export default function CommandBar({
   // chat opens on its own surface).
   const showAnswer =
     !isAiMode && (isStreaming || Boolean(streamText) || Boolean(streamError) || emptyAnswer)
-  const showSuggestions = isSlashInput && suggestions.length > 0
-  const showSearchResults = !isSlashInput && !isAiMode && visibleSearchCount > 0
+  const showSuggestions = isCompletionInput && suggestions.length > 0
+  const showSearchResults = !isCompletionInput && !isAiMode && visibleSearchCount > 0
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (pinPickerTarget) {
@@ -1392,7 +1452,7 @@ export default function CommandBar({
       return
     }
 
-    if (isSlashInput && suggestions.length) {
+    if (isCompletionInput && suggestions.length) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         setFollowSuggestionSelection(true)
@@ -1413,12 +1473,13 @@ export default function CommandBar({
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         setFollowSearchSelection(true)
-        setSelectedSearch((i) => Math.min(i + 1, chatHistory.length - 1))
+        setSelectedSearch((i) => Math.min(i + 1, filteredChatHistory.length - 1))
       }
       if (e.key === 'ArrowUp') {
+        if (selectedSearch < 0) return
         e.preventDefault()
         setFollowSearchSelection(true)
-        setSelectedSearch((i) => Math.max(i - 1, 0))
+        setSelectedSearch((i) => Math.max(i - 1, -1))
       }
     } else if (visibleSearchCount) {
       if (e.key === 'ArrowDown') {
@@ -1448,9 +1509,16 @@ export default function CommandBar({
         // Just let it stay there or switch logic. But globally we handle it.
         return
       }
-      if (isSlashInput) {
+      if (isCompletionInput) {
         const item = suggestions[selectedSuggestion]
         if (item) completePathInput(item)
+        return
+      }
+      if (showChatHistory) {
+        setFollowSearchSelection(true)
+        setSelectedSearch((i) =>
+          e.shiftKey ? Math.max(i - 1, -1) : Math.min(i + 1, filteredChatHistory.length - 1)
+        )
         return
       }
       if (canEnterKillPortMode) {
@@ -1465,14 +1533,41 @@ export default function CommandBar({
         }
       }
     }
-    // Enter with slash suggestions: let the form `onSubmit` run so one
-    // keypress executes the highlighted command (including partial input).
+    // Enter with completion suggestions: let the form `onSubmit` run so
+    // one keypress executes the highlighted file or application.
+  }
+
+  async function selectAiModel(nextProvider: ProviderId, nextModel: string): Promise<void> {
+    const providerModels = {
+      ...cfg.providerModels,
+      [nextProvider]: normalizeProviderModelList(
+        nextProvider,
+        cfg.providerModels?.[nextProvider] ?? DEFAULT_PROVIDER_MODELS[nextProvider]
+      ),
+    }
+    const providerSelectedModels = {
+      ...cfg.providerSelectedModels,
+      [nextProvider]: nextModel,
+    }
+    const patch: LlmConfigRecord = {
+      provider: nextProvider,
+      model: nextModel,
+      providerModels,
+      providerSelectedModels,
+      taskProviderOverrides: { ...cfg.taskProviderOverrides, chat: nextProvider },
+      taskModelOverrides: { ...cfg.taskModelOverrides, chat: nextModel },
+    }
+    setCfg((current) => ({ ...current, ...patch }))
+    setModelMenuOpen(false)
+    await window.raymes.setLlmConfig(patch)
+    const next = await window.raymes.getLlmConfig()
+    setCfg(next as LlmConfigRecord)
   }
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2">
       {/* Primary glass card: icon + input */}
-      <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-raymes-scale-in">
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
           <div className="flex items-center gap-3">
             <span className={cx(isAiMode ? 'text-violet-300' : 'text-ink-3')}>
@@ -1511,40 +1606,136 @@ export default function CommandBar({
                 </span>
               </>
             ) : null}
-            <input
-              id="command-input"
-              type="text"
-              value={killPortMode ? killPortValue : value}
-              onChange={(e) => {
-                if (killPortMode) {
-                  setKillPortValue(e.target.value.replace(/[^\d]/g, '').slice(0, 5))
-                } else {
-                  if (pendingAction) {
-                    clearPendingAction()
-                    showActionMsg(null)
+            <div className="relative min-w-0 flex-1">
+              {!killPortMode && !isAiMode && !value ? <RollingText items={COMMAND_HINTS} /> : null}
+              <input
+                id="command-input"
+                type="text"
+                value={killPortMode ? killPortValue : value}
+                onChange={(e) => {
+                  if (killPortMode) {
+                    setKillPortValue(e.target.value.replace(/[^\d]/g, '').slice(0, 5))
+                  } else {
+                    if (pendingAction) {
+                      clearPendingAction()
+                      showActionMsg(null)
+                    }
+                    setValue(e.target.value)
+                    setSelectedSuggestion(0)
+                    setSelectedSearch(
+                      e.target.value.startsWith(' ') || e.target.value.endsWith('  ') ? -1 : 0
+                    )
                   }
-                  setValue(e.target.value)
-                  setSelectedSuggestion(0)
-                  setSelectedSearch(0)
-                }
-              }}
-              onKeyDown={handleInputKeyDown}
-              placeholder={
-                killPortMode
-                  ? 'Port'
-                  : isAiMode
-                    ? 'Ask or command the agent…'
-                    : 'Ask anything or type / for commands'
-              }
-              autoComplete="off"
-              spellCheck={false}
-              className="min-w-0 flex-1 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0"
-            />
+                }}
+                onKeyDown={handleInputKeyDown}
+                aria-label="Search Raymes or use a shortcut"
+                placeholder={killPortMode ? 'Port' : isAiMode ? 'Ask or command the agent…' : ''}
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full min-w-0 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0"
+              />
+            </div>
+            {isAiMode ? (
+              <div className="relative flex h-6 shrink-0 items-center">
+                <button
+                  type="button"
+                  className="inline-flex h-6 items-center rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 font-mono text-[10px] leading-none tabular-nums text-ink-3 transition hover:border-accent/40 hover:text-ink-1"
+                  onClick={() => {
+                    setModelMenuProvider(provider)
+                    setModelMenuOpen((open) => !open)
+                  }}
+                >
+                  {model}
+                </button>
+                {modelMenuOpen ? (
+                  <div className="raymes-popover absolute right-0 top-7 z-50 grid h-[340px] w-[500px] grid-cols-[170px_minmax(0,1fr)] overflow-hidden p-1.5">
+                    <ul className="min-h-0 overflow-y-auto border-r border-white/[0.07] pr-1">
+                      {AI_PROVIDER_ROWS.map((row) => (
+                        <li key={row.id}>
+                          <button
+                            type="button"
+                            className={cx(
+                              'flex w-full items-center justify-between gap-2 rounded-raymes-row px-2 py-2 text-left text-[12px] font-semibold transition',
+                              previewProvider === row.id
+                                ? 'bg-white/[0.06] text-ink-1'
+                                : 'text-ink-3 hover:bg-white/[0.04] hover:text-ink-1'
+                            )}
+                            onMouseEnter={() => setModelMenuProvider(row.id)}
+                            onFocus={() => setModelMenuProvider(row.id)}
+                          >
+                            <span className="truncate">{providerTitle(row.id)}</span>
+                            {provider === row.id ? (
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
+                            ) : null}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="flex min-w-0 flex-col pl-1.5">
+                      <div className="flex shrink-0 items-center justify-between gap-2 px-2 pb-1.5 pt-1">
+                        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-4">
+                          {providerTitle(previewProvider)}
+                        </p>
+                        <button
+                          type="button"
+                          className="rounded-raymes-chip border border-accent/30 bg-accent/10 px-2 py-1 text-[10px] font-semibold text-accent-strong transition hover:border-accent/55 hover:bg-accent/18 hover:text-ink-1"
+                          onClick={() => {
+                            setModelMenuOpen(false)
+                            onConfigureAi()
+                          }}
+                        >
+                          Configure
+                        </button>
+                      </div>
+                      {!previewConfigured ? (
+                        <p className="mx-2 mb-1.5 rounded-raymes-row border border-white/[0.07] bg-white/[0.03] px-2 py-1.5 text-[10px] text-ink-4">
+                          Configure this provider to select a model.
+                        </p>
+                      ) : null}
+                      <ul className="min-h-0 flex-1 overflow-y-auto">
+                        {previewModels.map((item) => (
+                          <li key={item.id}>
+                            <button
+                              type="button"
+                              disabled={!previewConfigured}
+                              className={cx(
+                                'w-full rounded-raymes-row px-2 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-40',
+                                provider === previewProvider && model === item.id
+                                  ? 'bg-accent/12 text-ink-1'
+                                  : 'text-ink-2 hover:bg-white/[0.04] hover:text-ink-1'
+                              )}
+                              onClick={() => void selectAiModel(previewProvider, item.id)}
+                            >
+                              <span className="block truncate text-[12px] font-semibold">{item.id}</span>
+                              <span className="mt-1 flex flex-wrap gap-1">
+                                {item.capabilities.map((capability) => (
+                                  <span
+                                    key={capability}
+                                    className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-ink-3"
+                                  >
+                                    {capability}
+                                  </span>
+                                ))}
+                                {item.contextWindow ? (
+                                  <span className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-ink-3">
+                                    {item.contextWindow.toLocaleString()} ctx
+                                  </span>
+                                ) : null}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {dictationSupported ? (
               <button
                 type="button"
                 className={cx(
-                  'shrink-0 rounded-raymes-chip border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] transition',
+                  'inline-flex h-6 min-w-[116px] shrink-0 items-center justify-center rounded-raymes-chip border px-2 text-[10px] font-medium uppercase leading-none tracking-[0.12em] transition',
                   isDictating
                     ? 'border-rose-400/40 bg-rose-500/20 text-rose-200'
                     : isTranscribing
@@ -1573,11 +1764,6 @@ export default function CommandBar({
                 )}
               </button>
             ) : null}
-            {isAiMode ? (
-              <span className="shrink-0 font-mono text-[10px] tabular-nums text-ink-4">
-                {provider} · {model}
-              </span>
-            ) : null}
           </div>
         </form>
       </div>
@@ -1586,7 +1772,7 @@ export default function CommandBar({
           panels scroll (GlideList, answer, …) instead of this outer region. */}
       <div className="flex min-h-0 flex-1 flex-col gap-[var(--s-2)] overflow-hidden pr-0.5">
       {/* Pinned commands */}
-      {pinnedCommands.length > 0 && !isSlashInput ? (
+      {pinnedCommands.length > 0 && !isCompletionInput && !isAiMode ? (
         <div className="glass-card animate-raymes-scale-in px-2 py-2">
           <div className="flex items-center gap-1.5 overflow-x-auto">
             {pinnedCommands.map((pin, index) => (
@@ -1684,7 +1870,7 @@ export default function CommandBar({
         </div>
       ) : null}
 
-      {/* Slash suggestions */}
+      {/* File and application completion suggestions */}
       {showSuggestions ? (
         <div
           className="glass-card animate-raymes-scale-in flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2"
@@ -1885,10 +2071,10 @@ export default function CommandBar({
             </div>
             <GlideList
               selectedIndex={selectedSearch}
-              itemCount={chatHistory.length}
+              itemCount={filteredChatHistory.length}
               followSelected={followSearchSelection}
             >
-              {chatHistory.map((chat, i) => (
+              {filteredChatHistory.map((chat, i) => (
                 <li key={chat.id} className="relative z-[1]">
                   <button
                     type="button"
@@ -2164,7 +2350,9 @@ export default function CommandBar({
             </>
           ) : (
             <>
-              {isSlashInput ? (
+              {isApplicationInput ? (
+                <Hint label="Open" keys={<Kbd>↵</Kbd>} />
+              ) : isSlashInput ? (
                 <>
                   <Hint label="Complete" keys={<Kbd>↵</Kbd>} />
                   <Hint label="Open" keys={<><Kbd>⌘</Kbd><Kbd>↵</Kbd></>} />
@@ -2177,7 +2365,7 @@ export default function CommandBar({
                 </>
               )}
               <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
-              {!isSlashInput ? <Hint label="Run" keys={<Kbd>↵</Kbd>} /> : null}
+              {!isCompletionInput ? <Hint label="Run" keys={<Kbd>↵</Kbd>} /> : null}
               <Hint
                 label={pinPickerTarget ? 'Cancel picker' : 'Close'}
                 keys={

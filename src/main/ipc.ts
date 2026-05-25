@@ -60,15 +60,17 @@ import {
 } from './extensions/service'
 import {
   extensionRegistryEvents,
-  getExtensionPreferences,
+  getExtensionPreferences as getRegistryExtensionPreferences,
   installRegistryExtension,
   listInstalledRegistryExtensions,
   searchExtensionCatalog,
+  saveExtensionPreferences as saveRegistryExtensionPreferences,
   uninstallRegistryExtension,
 } from './extension-registry'
 import {
   clearAllExtensionSessions,
   invokeExtensionAction,
+  refreshExtensionSession,
   runExtensionCommand,
 } from './extension-runner'
 import {
@@ -159,27 +161,28 @@ async function confirmQuitRaymes(getWindow: () => BrowserWindow | null): Promise
       win.focus()
     }
     app.focus({ steal: true })
-    const result = win && !win.isDestroyed()
-      ? await dialog.showMessageBox(win, {
-          type: 'question',
-          buttons: ['Cancel', 'Quit'],
-          defaultId: 1,
-          cancelId: 0,
-          title: 'Quit Raymes',
-          message: 'Quit Raymes?',
-          detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
-          noLink: true,
-        })
-      : await dialog.showMessageBox({
-          type: 'question',
-          buttons: ['Cancel', 'Quit'],
-          defaultId: 1,
-          cancelId: 0,
-          title: 'Quit Raymes',
-          message: 'Quit Raymes?',
-          detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
-          noLink: true,
-        })
+    const result =
+      win && !win.isDestroyed()
+        ? await dialog.showMessageBox(win, {
+            type: 'question',
+            buttons: ['Cancel', 'Quit'],
+            defaultId: 1,
+            cancelId: 0,
+            title: 'Quit Raymes',
+            message: 'Quit Raymes?',
+            detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
+            noLink: true,
+          })
+        : await dialog.showMessageBox({
+            type: 'question',
+            buttons: ['Cancel', 'Quit'],
+            defaultId: 1,
+            cancelId: 0,
+            title: 'Quit Raymes',
+            message: 'Quit Raymes?',
+            detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
+            noLink: true,
+          })
 
     quitConfirmed = result.response === 1
     return quitConfirmed
@@ -207,7 +210,8 @@ function startAgentRun(sender: Electron.WebContents, task: string): string {
   agentAbort?.abort()
   agentAbort = new AbortController()
   const ac = agentAbort
-  const runId = (agentRunId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
+  const runId =
+    (agentRunId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
   const bridge = getSharedBridge()
   const piProvider = getSelectedPiProviderBridge()
 
@@ -279,7 +283,8 @@ function startChatRun(sender: Electron.WebContents, turns: ChatTurn[]): string {
   agentAbort?.abort()
   agentAbort = new AbortController()
   const ac = agentAbort
-  const runId = (agentRunId = `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
+  const runId =
+    (agentRunId = `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
   const contextTurns = turns.slice(-CHAT_CONTEXT_MAX_TURNS)
   const messages: Message[] = [
     { role: 'system', content: CHAT_SYSTEM_PROMPT },
@@ -329,7 +334,7 @@ export function shutdownIpcHandlers(): void {
 
 export function registerIpcHandlers(
   getWindow: () => BrowserWindow | null,
-  controls?: DragMonitorControls,
+  controls?: DragMonitorControls
 ): void {
   extensionRegistryEvents.on('progress', (payload) => {
     const win = getWindow()
@@ -351,10 +356,19 @@ export function registerIpcHandlers(
     invalidateProviderCache()
   })
 
-    ipcMain.handle('llm-provider-statuses', async () => {
-      const cfg = readLLMConfig()
-      const ids: ProviderId[] = ['openai', 'openai-compatible', 'anthropic', 'ollama', 'copilot', 'gemini', 'opencode', 'deepseek']
-      const entries = await Promise.all(
+  ipcMain.handle('llm-provider-statuses', async () => {
+    const cfg = readLLMConfig()
+    const ids: ProviderId[] = [
+      'openai',
+      'openai-compatible',
+      'anthropic',
+      'ollama',
+      'copilot',
+      'gemini',
+      'opencode',
+      'deepseek',
+    ]
+    const entries = await Promise.all(
       ids.map(async (id) => {
         try {
           const ok = await buildProviderForId(id, cfg).isAvailable()
@@ -362,24 +376,24 @@ export function registerIpcHandlers(
         } catch {
           return [id, false] as const
         }
-      }),
+      })
     )
     return Object.fromEntries(entries) as Record<ProviderId, boolean>
   })
 
-    ipcMain.handle('llm-list-models', async (_event, providerId: unknown) => {
-      const id = providerId as ProviderId
-      if (
-        id !== 'openai' &&
-        id !== 'openai-compatible' &&
-        id !== 'anthropic' &&
-        id !== 'ollama' &&
-        id !== 'copilot' &&
-        id !== 'gemini' &&
-        id !== 'opencode' &&
-        id !== 'deepseek'
-      )
-        return []
+  ipcMain.handle('llm-list-models', async (_event, providerId: unknown) => {
+    const id = providerId as ProviderId
+    if (
+      id !== 'openai' &&
+      id !== 'openai-compatible' &&
+      id !== 'anthropic' &&
+      id !== 'ollama' &&
+      id !== 'copilot' &&
+      id !== 'gemini' &&
+      id !== 'opencode' &&
+      id !== 'deepseek'
+    )
+      return []
     try {
       return await listModelsForProvider(id)
     } catch {
@@ -393,9 +407,15 @@ export function registerIpcHandlers(
   ipcMain.handle('window-set-content-height', async (_event, raw: unknown) => {
     const win = getWindow()
     if (!win || win.isDestroyed()) return
-    const value = typeof raw === 'number' ? raw : Number(raw)
-    if (!Number.isFinite(value)) return
-    setLauncherContentHeight(win, value)
+    const payload =
+      raw && typeof raw === 'object'
+        ? (raw as { height?: unknown; zoomFactor?: unknown })
+        : { height: raw, zoomFactor: 1 }
+    const height = typeof payload.height === 'number' ? payload.height : Number(payload.height)
+    const zoomFactor =
+      typeof payload.zoomFactor === 'number' ? payload.zoomFactor : Number(payload.zoomFactor)
+    if (!Number.isFinite(height)) return
+    setLauncherContentHeight(win, height, zoomFactor)
   })
 
   ipcMain.handle('permissions:snapshot', async () => snapshotPermissions())
@@ -815,7 +835,7 @@ export function registerIpcHandlers(
             Object.entries(body.argumentValues as Record<string, unknown>).map(([key, value]) => [
               key,
               typeof value === 'string' ? value : String(value ?? ''),
-            ]),
+            ])
           )
         : undefined
 
@@ -847,7 +867,7 @@ export function registerIpcHandlers(
             Object.entries(body.formValues as Record<string, unknown>).map(([key, value]) => [
               key,
               typeof value === 'string' ? value : String(value ?? ''),
-            ]),
+            ])
           )
         : undefined
 
@@ -879,6 +899,19 @@ export function registerIpcHandlers(
     })
   })
 
+  ipcMain.handle('extension:refresh-session', async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Invalid extension refresh payload')
+    }
+
+    const body = payload as { sessionId?: unknown }
+    if (typeof body.sessionId !== 'string') {
+      throw new Error('sessionId is required')
+    }
+
+    return refreshExtensionSession({ sessionId: body.sessionId })
+  })
+
   ipcMain.handle('clipboard:read', async () => {
     return clipboard.readText()
   })
@@ -903,7 +936,21 @@ export function registerIpcHandlers(
     if (typeof body.extensionId !== 'string' || !body.extensionId.trim()) return {}
 
     const commandName = typeof body.commandName === 'string' ? body.commandName : undefined
-    return getExtensionPreferences(body.extensionId, commandName)
+    return getRegistryExtensionPreferences(body.extensionId, commandName)
+  })
+
+  ipcMain.handle('preferences:set', async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') return {}
+    const body = payload as {
+      extensionId?: unknown
+      commandName?: unknown
+      values?: unknown
+    }
+    if (typeof body.extensionId !== 'string' || !body.extensionId.trim()) return {}
+    const values =
+      body.values && typeof body.values === 'object' ? (body.values as Record<string, unknown>) : {}
+    const commandName = typeof body.commandName === 'string' ? body.commandName : undefined
+    return saveRegistryExtensionPreferences(body.extensionId, values, commandName)
   })
 
   ipcMain.handle(IPC_CHANNELS.SEARCH_ALL, async (_event, query: unknown) => {
@@ -1035,6 +1082,11 @@ export function registerIpcHandlers(
   ipcMain.handle('window:hide', async () => {
     const win = getWindow()
     if (win) win.hide()
+  })
+
+  ipcMain.handle('window:close-current', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win && !win.isDestroyed()) win.close()
   })
 
   ipcMain.handle('window:snap-drag-start', async () => {

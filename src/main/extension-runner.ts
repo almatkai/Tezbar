@@ -1,7 +1,7 @@
 import { app, BrowserWindow, clipboard, shell } from 'electron'
 import * as esbuild from 'esbuild'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { execFile, execSync } from 'node:child_process'
+import { execFile, execSync, spawn as nodeSpawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { get as httpGet } from 'node:http'
 import { get as httpsGet } from 'node:https'
@@ -18,10 +18,16 @@ import type {
   ExtensionRunCommandResult,
   ExtensionRuntimeAction,
   ExtensionRuntimeNode,
+  ExtensionRefreshSessionRequest,
   ExtensionSearchTextChangedRequest,
   ExtensionSearchTextChangedResult,
 } from '../shared/extensionRuntime'
-import { getExtensionPreferences, resolveInstalledPackageJsonPath } from './extension-registry'
+import {
+  getExtensionPreferences,
+  getExtensionPreferenceSetup,
+  resolveInstalledPackageJsonPath,
+  shouldShowExtensionPreferenceSetup,
+} from './extension-registry'
 
 type PackageCommand = {
   name?: string
@@ -70,6 +76,8 @@ type RuntimeSession = {
   pendingPromises: Array<Promise<unknown>>
   promiseCache: Map<string, { data: unknown; error: unknown }>
   effectCleanups: Map<number, (() => void)>
+  effectDeps: Map<number, unknown[] | undefined>
+  hasStateUpdates: boolean
   hookStateSnapshot: string | null
   pickedColor: {
     red: number
@@ -292,6 +300,26 @@ function attachRuntimeRootMetadata(root: ExtensionRuntimeNode, session: RuntimeS
   }
 }
 
+function buildPreferenceSetupRoot(
+  extensionId: string,
+  commandName: string,
+): ExtensionRuntimeNode {
+  const setup = getExtensionPreferenceSetup(extensionId, commandName)
+  return {
+    type: 'Raymes.PreferenceSetup',
+    props: {
+      extensionId: setup.extensionId,
+      commandName,
+      title: setup.title,
+      iconPath: setup.iconPath,
+      preferences: setup.preferences,
+      values: setup.values,
+      includeApiKey: extensionId === 'raycast.google-translate',
+    },
+    children: [],
+  }
+}
+
 function parsePackageJson(path: string): ExtensionPackageJson {
   if (!existsSync(path)) {
     throw new Error(`Missing package.json at ${path}`)
@@ -398,6 +426,42 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
   const jsxRuntime = createJsxRuntimeShim()
   const jsx = jsxRuntime.jsx as (type: unknown, props?: Record<string, unknown>, key?: unknown) => JsxNode
 
+  const areHookDepsEqual = (prev: unknown[] | undefined, next: unknown[] | undefined): boolean => {
+    if (!prev || !next) return false
+    if (prev.length !== next.length) return false
+    return next.every((value, index) => Object.is(value, prev[index]))
+  }
+
+  const runEffect = (
+    idx: number,
+    sideEffect: () => void | (() => void),
+    deps?: unknown[],
+    label = 'useEffect',
+  ): void => {
+    const prevDeps = session.effectDeps.get(idx)
+    if (deps && areHookDepsEqual(prevDeps, deps)) return
+
+    const previousCleanup = session.effectCleanups.get(idx)
+    if (previousCleanup) {
+      try {
+        previousCleanup()
+      } catch (e) {
+        console.error(`[${label}] cleanup threw:`, e)
+      }
+      session.effectCleanups.delete(idx)
+    }
+
+    try {
+      const cleanup = sideEffect()
+      session.effectDeps.set(idx, deps)
+      if (typeof cleanup === 'function') {
+        session.effectCleanups.set(idx, cleanup)
+      }
+    } catch (e) {
+      console.error(`[${label}] side effect threw:`, e)
+    }
+  }
+
   const react = {
     Fragment: JSX_FRAGMENT,
     createElement: (type: unknown, props: Record<string, unknown> | null, ...children: unknown[]) => {
@@ -418,32 +482,19 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       const setState = (next: T | ((prev: T) => T)): void => {
         value = typeof next === 'function' ? (next as (prev: T) => T)(value) : next
         session.hookStates[idx] = [value, setState]
+        session.hasStateUpdates = true
       }
       const tuple: [T, (next: T | ((prev: T) => T)) => void] = [value, setState]
       session.hookStates[idx] = tuple
       return tuple
     },
-    useEffect: (sideEffect: () => void | (() => void)): void => {
+    useEffect: (sideEffect: () => void | (() => void), deps?: unknown[]): void => {
       const idx = session.hookIndex++
-      try {
-        const cleanup = sideEffect()
-        if (typeof cleanup === 'function') {
-          session.effectCleanups.set(idx, cleanup)
-        }
-      } catch (e) {
-        console.error('[useEffect] side effect threw:', e)
-      }
+      runEffect(idx, sideEffect, deps, 'useEffect')
     },
-    useLayoutEffect: (sideEffect: () => void | (() => void)): void => {
+    useLayoutEffect: (sideEffect: () => void | (() => void), deps?: unknown[]): void => {
       const idx = session.hookIndex++
-      try {
-        const cleanup = sideEffect()
-        if (typeof cleanup === 'function') {
-          session.effectCleanups.set(idx, cleanup)
-        }
-      } catch (e) {
-        console.error('[useLayoutEffect] side effect threw:', e)
-      }
+      runEffect(idx, sideEffect, deps, 'useLayoutEffect')
     },
     useMemo: <T,>(factory: () => T): T => {
       session.hookIndex++
@@ -690,8 +741,22 @@ function createCacheShim(packageRoot: string): new (
 }
 
 function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> {
+  const ListItemDetailMetadata = Object.assign(makeToken('List.Item.Detail.Metadata'), {
+    Label: makeToken('List.Item.Detail.Metadata.Label'),
+    TagList: Object.assign(makeToken('List.Item.Detail.Metadata.TagList'), {
+      Item: makeToken('List.Item.Detail.Metadata.TagList.Item'),
+    }),
+    Separator: makeToken('List.Item.Detail.Metadata.Separator'),
+    Link: makeToken('List.Item.Detail.Metadata.Link'),
+  })
+  const ListItemDetail = Object.assign(makeToken('List.Item.Detail'), {
+    Metadata: ListItemDetailMetadata,
+  })
+
   const List = Object.assign(makeToken('List'), {
-    Item: makeToken('List.Item'),
+    Item: Object.assign(makeToken('List.Item'), {
+      Detail: ListItemDetail,
+    }),
     Section: makeToken('List.Section'),
     EmptyView: makeToken('List.EmptyView'),
     Dropdown: Object.assign(makeToken('List.Dropdown'), {
@@ -1290,6 +1355,9 @@ function walkRuntimeNodes(
   const metadataNodes = props.metadata !== undefined
     ? walkRuntimeNodes(props.metadata, session, depth + 1, budget)
     : []
+  const detailNodes = props.detail !== undefined
+    ? walkRuntimeNodes(props.detail, session, depth + 1, budget)
+    : []
 
   budget.remaining -= 1
   const sanitizedProps = sanitizeValue(props) as Record<string, unknown> | undefined
@@ -1297,6 +1365,12 @@ function walkRuntimeNodes(
     if (sanitizedProps) {
       sanitizedProps.actionIds = actionIds
     }
+  }
+  if (detailNodes[0] && sanitizedProps) {
+    sanitizedProps.detail = detailNodes[0]
+  }
+  if (metadataNodes[0] && sanitizedProps) {
+    sanitizedProps.metadata = metadataNodes[0]
   }
   const node: ExtensionRuntimeNode = {
     type: typeName,
@@ -1354,6 +1428,55 @@ function renderCurrentView(session: RuntimeSession): ExtensionRunCommandResult |
   }
 }
 
+async function rerenderSessionCommand(
+  session: RuntimeSession,
+  label: string,
+): Promise<ExtensionRunCommandResult | ExtensionInvokeActionResult> {
+  if (!session.commandFn) {
+    return renderCurrentView(session)
+  }
+
+  let view: ExtensionRunCommandResult | ExtensionInvokeActionResult | undefined
+
+  for (let pass = 1; pass <= 4; pass += 1) {
+    console.log(`[Runner] ${label} pass ${pass}: rerendering ${session.extensionId}/${session.commandName}`)
+    session.hookIndex = 0
+    session.pendingPromises = []
+    session.actionHandlers.clear()
+    session.currentActions = []
+    session.feedback = []
+    session.hasStateUpdates = false
+
+    const result = await Promise.resolve(session.commandFn({ arguments: session.commandArgs }))
+    session.stack = isJsxNode(result) ? [result] : []
+    view = renderCurrentView(session)
+
+    console.log(
+      `[Runner] ${label} pass ${pass} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} hook states, stateUpdates=${session.hasStateUpdates}`,
+    )
+
+    if (!session.hasStateUpdates) break
+  }
+
+  return view ?? renderCurrentView(session)
+}
+
+export async function refreshExtensionSession(
+  request: ExtensionRefreshSessionRequest,
+): Promise<ExtensionRunCommandResult | ExtensionInvokeActionResult> {
+  const sessionId = String(request.sessionId || '').trim()
+  if (!sessionId) {
+    return { ok: false, message: 'sessionId is required.' }
+  }
+
+  const session = sessions.get(sessionId)
+  if (!session) {
+    return { ok: false, message: 'Extension session not found.' }
+  }
+
+  return rerenderSessionCommand(session, 'Refresh')
+}
+
 export async function updateSearchText(
   request: ExtensionSearchTextChangedRequest,
 ): Promise<ExtensionSearchTextChangedResult> {
@@ -1394,7 +1517,6 @@ export async function updateSearchText(
         console.log(`[Runner] ${label}: executing ${session.extensionId}/${session.commandName} search="${searchText}"`)
         session.hookIndex = 0
         session.pendingPromises = []
-        session.effectCleanups = new Map()
         session.actionHandlers.clear()
         session.currentActions = []
         session.feedback = []
@@ -1469,6 +1591,69 @@ function runBundle(
     if (specifier === 'react/jsx-runtime' || specifier === 'react/jsx-dev-runtime') {
       return jsxRuntimeShim
     }
+    if (specifier === 'child_process' || specifier === 'node:child_process') {
+      return {
+        ...fileRequire(specifier),
+        spawn: (...args: Parameters<typeof nodeSpawn>) => {
+          const child = nodeSpawn(...args)
+          const stdout = child.stdout as (typeof child.stdout & {
+            on: (event: string, listener: (...listenerArgs: unknown[]) => void) => typeof child.stdout
+          }) | null
+
+          if (stdout) {
+            const originalOn = stdout.on.bind(stdout)
+            const dataListeners = new Set<(chunk: Buffer) => void>()
+            const pendingChunks: Buffer[] = []
+            let buffer = ''
+
+            const flushLine = (line: string): void => {
+              const trimmed = line.trim()
+              if (!trimmed) return
+              const payload = Buffer.from(trimmed)
+              if (dataListeners.size === 0) {
+                pendingChunks.push(payload)
+                return
+              }
+              for (const listener of dataListeners) {
+                listener(payload)
+              }
+            }
+
+            const flushBuffer = (): void => {
+              if (!buffer.trim()) return
+              flushLine(buffer)
+              buffer = ''
+            }
+
+            originalOn('data', (chunk: Buffer | string) => {
+              buffer += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk)
+              let newlineIndex = buffer.indexOf('\n')
+              while (newlineIndex >= 0) {
+                flushLine(buffer.slice(0, newlineIndex))
+                buffer = buffer.slice(newlineIndex + 1)
+                newlineIndex = buffer.indexOf('\n')
+              }
+            })
+            child.once('exit', flushBuffer)
+
+            stdout.on = ((event: string, listener: (...listenerArgs: unknown[]) => void) => {
+              if (event === 'data') {
+                const dataListener = listener as (chunk: Buffer) => void
+                dataListeners.add(dataListener)
+                while (pendingChunks.length > 0) {
+                  const chunk = pendingChunks.shift()
+                  if (chunk) dataListener(chunk)
+                }
+                return stdout
+              }
+              return originalOn(event, listener)
+            }) as typeof stdout.on
+          }
+
+          return child
+        },
+      }
+    }
     if (specifier === 'raycast-cross-extension') {
       return {
         callbackLaunchCommand: async (): Promise<void> => {},
@@ -1486,9 +1671,22 @@ function runBundle(
       }
     }
     if (specifier === 'axios') {
-      const axiosShim: any = {
+      type AxiosShim = {
+        get: typeof axiosGetShim
+        post: (_url: string, _data?: unknown, _options?: unknown) => Promise<{ data: Record<string, never>; status: number; headers: Record<string, never> }>
+        defaults: { headers: { common: Record<string, string> } }
+        interceptors: {
+          request: { use: () => number; eject: () => void }
+          response: { use: () => number; eject: () => void }
+        }
+        create?: () => AxiosShim
+        request?: typeof axiosGetShim
+        default?: AxiosShim
+        __esModule: true
+      }
+      const axiosShim: AxiosShim = {
         get: axiosGetShim,
-        post: async (url: string, data?: unknown, options?: unknown) => {
+        post: async () => {
           // Some extensions might use POST for speedtest (though unlikely)
           return { data: {}, status: 200, headers: {} }
         },
@@ -1502,6 +1700,56 @@ function runBundle(
       axiosShim.create = () => axiosShim
       axiosShim.default = axiosShim
       return axiosShim
+    }
+    if (specifier === 'undici') {
+      class ProxyAgent {
+        readonly uri: string
+
+        constructor(uri: string) {
+          this.uri = uri
+        }
+      }
+
+      const request = async (
+        url: string | URL,
+        options?: {
+          method?: string
+          body?: BodyInit | null
+          headers?: HeadersInit
+        },
+      ): Promise<{
+        statusCode: number
+        headers: Record<string, string>
+        body: {
+          text: () => Promise<string>
+          json: () => Promise<unknown>
+          arrayBuffer: () => Promise<ArrayBuffer>
+        }
+      }> => {
+        const response = await fetch(url, {
+          method: options?.method,
+          body: options?.body,
+          headers: options?.headers,
+        })
+        const headers = Object.fromEntries(response.headers.entries())
+        return {
+          statusCode: response.status,
+          headers,
+          body: {
+            text: () => response.clone().text(),
+            json: () => response.clone().json() as Promise<unknown>,
+            arrayBuffer: () => response.clone().arrayBuffer(),
+          },
+        }
+      }
+
+      return {
+        request,
+        fetch,
+        ProxyAgent,
+        default: { request, fetch, ProxyAgent },
+        __esModule: true,
+      }
     }
     if (specifier === 'tar') {
       const extract = async (options: { file?: string; cwd?: string; filter?: (path: string | ((path: string) => boolean)) => boolean }): Promise<void> => {
@@ -1654,17 +1902,26 @@ async function runCommandFromPackagePath(
     stack: [],
     preferences: getExtensionPreferences(extensionId, commandName),
     searchTextChangeHandler: null,
-      commandFn: null,
-      commandArgs: argumentValues,
-      bundledCode: bundled,
-      searchText: '',
-      hookStates: [],
-      hookIndex: 0,
-      pendingPromises: [],
-      promiseCache: new Map(),
-      effectCleanups: new Map(),
-      hookStateSnapshot: null,
-      pickedColor: null,
+    commandFn: null,
+    commandArgs: argumentValues,
+    bundledCode: bundled,
+    searchText: '',
+    hookStates: [],
+    hookIndex: 0,
+    pendingPromises: [],
+    promiseCache: new Map(),
+    effectCleanups: new Map(),
+    effectDeps: new Map(),
+    hasStateUpdates: false,
+    hookStateSnapshot: null,
+    pickedColor: null,
+  }
+
+  if (shouldShowExtensionPreferenceSetup(extensionId, commandName)) {
+    session.stack = [buildPreferenceSetupRoot(extensionId, commandName)]
+    sessions.set(session.id, session)
+    pruneSessions()
+    return renderCurrentView(session)
   }
 
   const moduleExports = runBundle(bundled, packageRoot, session)
@@ -1687,10 +1944,10 @@ async function runCommandFromPackagePath(
     console.log(`[Runner] ${passLabel}: executing ${extensionId}/${commandName}`)
     session.hookIndex = 0
     session.pendingPromises = []
-    session.effectCleanups = new Map()
     session.actionHandlers.clear()
     session.currentActions = []
     session.feedback = []
+    session.hasStateUpdates = false
     result = await Promise.resolve(commandFn(execArgs))
     console.log(`[Runner] ${passLabel} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} hook states`)
   }

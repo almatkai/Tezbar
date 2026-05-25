@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { tryConsumeCommandSurfaceEscape } from './escapeGate'
 import CommandBar from './CommandBar'
 import AgentChatView from './AgentChatView'
-import ProvidersView from './ProvidersView'
 import SettingsView from './SettingsView'
 import ExtensionsView from './ExtensionsView'
 import ExtensionRuntimeView from './ExtensionRuntimeView'
@@ -20,7 +19,6 @@ import EmojiPickerView from './EmojiPickerView'
 type Surface =
   | 'command'
   | 'ai-chat'
-  | 'providers'
   | 'settings'
   | 'extensions'
   | 'extension-runtime'
@@ -33,7 +31,6 @@ type Surface =
 
 const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
   'ai-chat': '[aria-label="AI Chat"]',
-  providers: '[aria-label="Providers"]',
   settings: '[aria-label="Settings"]',
   extensions: '[aria-label="Extensions"]',
   'extension-runtime': '[aria-label="Extension Runtime"]',
@@ -50,17 +47,42 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
  *  main process (otherwise the window would be 16px too short). */
 const OUTER_PADDING_PX = 16
 
-export default function App(): JSX.Element {
+function isSettingsWindow(): boolean {
+  return new URLSearchParams(window.location.search).get('window') === 'settings'
+}
+
+function SettingsWindowApp(): JSX.Element {
+  const [surface, setSurface] = useState<'settings' | 'permissions'>('settings')
+
+  return (
+    <div className="flex h-screen w-full bg-[#1e1f2e]">
+      {surface === 'permissions' ? (
+        <PermissionsView nativeWindow onBack={() => setSurface('settings')} />
+      ) : (
+        <SettingsView
+          nativeWindow
+          onBack={() => {
+            void window.raymes.closeCurrentWindow()
+          }}
+          onOpenPermissions={() => setSurface('permissions')}
+        />
+      )}
+    </div>
+  )
+}
+
+function LauncherApp(): JSX.Element {
   const [snapGuides, setSnapGuides] = useState<{ visible: boolean; active: boolean }>({
     visible: false,
     active: false,
   })
   const [surface, setSurface] = useState<Surface>('command')
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'ai' | 'voice' | 'permissions' | 'advanced'>('general')
   const [openPortsInitialTab, setOpenPortsInitialTab] = useState<'listen' | 'named'>('listen')
   const [notesInitialSelectedId, setNotesInitialSelectedId] = useState<number | null>(null)
   const [commandInitialValue, setCommandInitialValue] = useState('')
   const [commandInitialSelectedChatId, setCommandInitialSelectedChatId] = useState<string | null>(
-    null,
+    null
   )
   const [aiChatBoot, setAiChatBoot] = useState<AiChatBoot>({ kind: 'panel' })
   const [aiChatKey, setAiChatKey] = useState(0)
@@ -113,6 +135,10 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     return window.raymes.onAppSurfaceOpen((nextSurface) => {
+      if (nextSurface === 'settings') {
+        void window.raymes.openSettingsWindow()
+        return
+      }
       setSurface(nextSurface)
       focusSurface(nextSurface)
     })
@@ -124,8 +150,8 @@ export default function App(): JSX.Element {
     const isNoDragTarget = (target: HTMLElement): boolean => {
       return Boolean(
         target.closest(
-          '.no-drag, input, textarea, select, button, a[href], [role="button"], [role="menuitem"], [role="option"], [contenteditable="true"]',
-        ),
+          '.no-drag, input, textarea, select, button, a[href], [role="button"], [role="menuitem"], [role="option"], [contenteditable="true"]'
+        )
       )
     }
 
@@ -218,32 +244,40 @@ export default function App(): JSX.Element {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ',') {
         e.preventDefault()
-        setSurface('providers')
+        void window.raymes.openSettingsWindow()
+        void window.raymes.hide()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [surface])
 
-  // Report measured content height so the launcher shrinks for sparse
-  // states (empty command bar) and grows up to its max otherwise. The
-  // main process clamps to [WINDOW_MIN_HEIGHT..WINDOW_MAX_HEIGHT] so
-  // runaway layouts cannot take the window past the launcher envelope.
+  // Report intrinsic content height rather than only the viewport height.
+  // At page zoom > 100%, CSS pixels require more native window pixels;
+  // scaling the report prevents footer chrome and wrapped hints from clipping.
   useLayoutEffect(() => {
     const el = contentRef.current
     if (!el) return
 
     const report = (): void => {
-      const measured = Math.ceil(el.getBoundingClientRect().height) + OUTER_PADDING_PX
+      const cssHeight = Math.max(el.getBoundingClientRect().height, el.scrollHeight) + OUTER_PADDING_PX
+      const zoomFactor = Math.max(1, window.raymes.getWindowZoomFactor())
+      const measured = Math.ceil(cssHeight * zoomFactor)
       if (measured === lastReportedHeightRef.current) return
       lastReportedHeightRef.current = measured
-      void window.raymes.setWindowContentHeight(measured)
+      void window.raymes.setWindowContentHeight(measured, zoomFactor)
     }
 
     report()
     const observer = new ResizeObserver(() => report())
     observer.observe(el)
-    return () => observer.disconnect()
+    window.addEventListener('resize', report)
+    window.visualViewport?.addEventListener('resize', report)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', report)
+      window.visualViewport?.removeEventListener('resize', report)
+    }
   }, [surface])
 
   return (
@@ -270,10 +304,9 @@ export default function App(): JSX.Element {
         key={surface}
         className="no-drag relative z-0 flex h-full w-full animate-raymes-fade-in flex-col"
       >
-        {surface === 'providers' ? (
-          <ProvidersView onBack={() => setSurface('command')} />
-        ) : surface === 'settings' ? (
+        {surface === 'settings' ? (
           <SettingsView
+            initialTab={settingsInitialTab}
             onBack={() => setSurface('command')}
             onOpenPermissions={() => setSurface('permissions')}
           />
@@ -312,7 +345,10 @@ export default function App(): JSX.Element {
             key={aiChatKey}
             boot={aiChatBoot}
             onBack={() => setSurface('command')}
-            onOpenProviders={() => setSurface('providers')}
+            onOpenSettings={() => {
+              setSettingsInitialTab('ai')
+              setSurface('settings')
+            }}
           />
         ) : (
           <CommandBar
@@ -322,13 +358,20 @@ export default function App(): JSX.Element {
               setAiChatBoot(nextBoot)
               setCommandInitialValue('')
               setCommandInitialSelectedChatId(
-                nextBoot.kind === 'resume' ? nextBoot.sessionId : null,
+                nextBoot.kind === 'resume' ? nextBoot.sessionId : null
               )
               setAiChatKey((k) => k + 1)
               setSurface('ai-chat')
             }}
-            onOpenProviders={() => setSurface('providers')}
-            onOpenSettings={() => setSurface('settings')}
+            onOpenSettings={() => {
+              setSettingsInitialTab('general')
+              void window.raymes.openSettingsWindow()
+              void window.raymes.hide()
+            }}
+            onConfigureAi={() => {
+              setSettingsInitialTab('ai')
+              setSurface('settings')
+            }}
             onOpenExtensions={() => setSurface('extensions')}
             onOpenExtensionRuntime={(initial) => {
               setExtensionRuntimeInitial(initial)
@@ -350,4 +393,8 @@ export default function App(): JSX.Element {
       </div>
     </div>
   )
+}
+
+export default function App(): JSX.Element {
+  return isSettingsWindow() ? <SettingsWindowApp /> : <LauncherApp />
 }

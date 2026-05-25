@@ -1,4 +1,9 @@
-import type { LlmTask, ProviderId } from '../../shared/llmConfig'
+import {
+  DEFAULT_PROVIDER_MODELS,
+  RECOMMENDED_AI_MODEL,
+  normalizeProviderModelList,
+} from '../../shared/aiProviders'
+import type { AiProviderConfig, AiProviderModel, LlmTask, ProviderId } from '../../shared/llmConfig'
 import { AnthropicProvider } from './anthropic'
 import { readRawConfig } from './configStore'
 import { CopilotProvider } from './copilot'
@@ -9,9 +14,12 @@ import type { LLMProvider } from './provider'
 
 export type OpenRayLLMConfig = {
   provider: ProviderId
+  providerConfigs?: Partial<Record<ProviderId, AiProviderConfig>>
   apiKey?: string
   baseURL?: string
   model?: string
+  providerModels?: Partial<Record<ProviderId, AiProviderModel[]>>
+  providerSelectedModels?: Partial<Record<ProviderId, string>>
   openaiCompatibleBaseURL?: string
   geminiApiKey?: string
   copilotGithubToken?: string
@@ -40,6 +48,49 @@ const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash'
 const DEFAULT_DEEPSEEK_BASE = 'https://api.deepseek.com'
 const DEFAULT_DEEPSEEK_MODEL = 'deepseek-v4-flash'
 
+function normalizeProviderModels(raw: unknown): Partial<Record<ProviderId, AiProviderModel[]>> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const result: Partial<Record<ProviderId, AiProviderModel[]>> = {}
+  for (const provider of Object.keys(DEFAULT_PROVIDER_MODELS) as ProviderId[]) {
+    const models = (raw as Partial<Record<ProviderId, unknown>>)[provider]
+    if (!Array.isArray(models)) continue
+    result[provider] = normalizeProviderModelList(provider, models as AiProviderModel[])
+  }
+  return result
+}
+
+function normalizeProviderSelectedModels(raw: unknown): Partial<Record<ProviderId, string>> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const result: Partial<Record<ProviderId, string>> = {}
+  for (const provider of Object.keys(DEFAULT_PROVIDER_MODELS) as ProviderId[]) {
+    const value = (raw as Partial<Record<ProviderId, unknown>>)[provider]
+    if (typeof value === 'string' && value.trim()) result[provider] = value.trim()
+  }
+  return result
+}
+
+function normalizeProviderConfigs(raw: unknown): Partial<Record<ProviderId, AiProviderConfig>> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const result: Partial<Record<ProviderId, AiProviderConfig>> = {}
+  for (const provider of Object.keys(DEFAULT_PROVIDER_MODELS) as ProviderId[]) {
+    const value = (raw as Partial<Record<ProviderId, unknown>>)[provider]
+    if (!value || typeof value !== 'object') continue
+    const config = value as Record<string, unknown>
+    result[provider] = {
+      apiKey: typeof config.apiKey === 'string' ? config.apiKey : undefined,
+      baseURL: typeof config.baseURL === 'string' ? config.baseURL : undefined,
+      openaiCompatibleBaseURL:
+        typeof config.openaiCompatibleBaseURL === 'string' ? config.openaiCompatibleBaseURL : undefined,
+      geminiApiKey: typeof config.geminiApiKey === 'string' ? config.geminiApiKey : undefined,
+      copilotGithubToken:
+        typeof config.copilotGithubToken === 'string' ? config.copilotGithubToken : undefined,
+      githubOAuthClientId:
+        typeof config.githubOAuthClientId === 'string' ? config.githubOAuthClientId : undefined,
+    }
+  }
+  return result
+}
+
 function normalizeFromRaw(raw: Record<string, unknown>): OpenRayLLMConfig {
   const p = raw.provider
   const hasCopilotToken = typeof raw.copilotGithubToken === 'string' && raw.copilotGithubToken.length > 0
@@ -56,18 +107,45 @@ function normalizeFromRaw(raw: Record<string, unknown>): OpenRayLLMConfig {
       : hasCopilotToken
         ? 'copilot'
         : 'ollama'
+  const providerModels = normalizeProviderModels(raw.providerModels)
+  const providerSelectedModels = normalizeProviderSelectedModels(raw.providerSelectedModels)
+  const providerConfigs = normalizeProviderConfigs(raw.providerConfigs)
+  const selectedModel = providerSelectedModels?.[provider]
+  const providerConfig = providerConfigs?.[provider] ?? {}
+  const allowLegacyProviderFields = !providerConfigs || Object.keys(providerConfigs).length === 0
+
   return {
     provider,
-    apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : undefined,
-    baseURL: typeof raw.baseURL === 'string' ? raw.baseURL : undefined,
+    providerConfigs,
+    apiKey:
+      providerConfig.apiKey ??
+      (allowLegacyProviderFields && typeof raw.apiKey === 'string' ? raw.apiKey : undefined),
+    baseURL:
+      providerConfig.baseURL ??
+      (allowLegacyProviderFields && typeof raw.baseURL === 'string' ? raw.baseURL : undefined),
     openaiCompatibleBaseURL:
-      typeof raw.openaiCompatibleBaseURL === 'string' ? raw.openaiCompatibleBaseURL : undefined,
-    geminiApiKey: typeof raw.geminiApiKey === 'string' ? raw.geminiApiKey : undefined,
-    model: typeof raw.model === 'string' ? raw.model : undefined,
-    copilotGithubToken: typeof raw.copilotGithubToken === 'string' ? raw.copilotGithubToken : undefined,
+      providerConfig.openaiCompatibleBaseURL ??
+      (allowLegacyProviderFields && typeof raw.openaiCompatibleBaseURL === 'string'
+        ? raw.openaiCompatibleBaseURL
+        : undefined),
+    geminiApiKey:
+      providerConfig.geminiApiKey ??
+      (allowLegacyProviderFields && typeof raw.geminiApiKey === 'string' ? raw.geminiApiKey : undefined),
+    model: selectedModel ?? (typeof raw.model === 'string' ? raw.model : undefined),
+    providerModels,
+    providerSelectedModels,
+    copilotGithubToken:
+      providerConfig.copilotGithubToken ??
+      (allowLegacyProviderFields && typeof raw.copilotGithubToken === 'string'
+        ? raw.copilotGithubToken
+        : undefined),
     copilotRefreshToken: typeof raw.copilotRefreshToken === 'string' ? raw.copilotRefreshToken : undefined,
     copilotExpiresAt: typeof raw.copilotExpiresAt === 'number' ? raw.copilotExpiresAt : undefined,
-    githubOAuthClientId: typeof raw.githubOAuthClientId === 'string' ? raw.githubOAuthClientId : undefined,
+    githubOAuthClientId:
+      providerConfig.githubOAuthClientId ??
+      (allowLegacyProviderFields && typeof raw.githubOAuthClientId === 'string'
+        ? raw.githubOAuthClientId
+        : undefined),
     taskProviderOverrides:
       typeof raw.taskProviderOverrides === 'object' && raw.taskProviderOverrides
         ? (raw.taskProviderOverrides as Partial<Record<LlmTask, ProviderId>>)
@@ -117,8 +195,47 @@ export function readLLMConfig(): OpenRayLLMConfig {
   return n
 }
 
+export function configForProvider(cfg: OpenRayLLMConfig, provider: ProviderId): OpenRayLLMConfig {
+  const providerConfig = cfg.providerConfigs?.[provider] ?? {}
+  const useCurrentProviderFields = cfg.provider === provider
+  const model =
+    cfg.providerSelectedModels?.[provider] ?? (useCurrentProviderFields ? cfg.model : undefined)
+  const next: OpenRayLLMConfig = {
+    ...cfg,
+    provider,
+    model,
+    apiKey: providerConfig.apiKey ?? (useCurrentProviderFields ? cfg.apiKey : undefined),
+    baseURL: providerConfig.baseURL ?? (useCurrentProviderFields ? cfg.baseURL : undefined),
+    openaiCompatibleBaseURL:
+      providerConfig.openaiCompatibleBaseURL ??
+      (useCurrentProviderFields ? cfg.openaiCompatibleBaseURL : undefined),
+    geminiApiKey:
+      providerConfig.geminiApiKey ?? (useCurrentProviderFields ? cfg.geminiApiKey : undefined),
+    copilotGithubToken:
+      providerConfig.copilotGithubToken ??
+      (useCurrentProviderFields ? cfg.copilotGithubToken : undefined),
+    githubOAuthClientId:
+      providerConfig.githubOAuthClientId ??
+      (useCurrentProviderFields ? cfg.githubOAuthClientId : undefined),
+  }
+
+  if (provider === 'ollama') {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_OLLAMA_BASE, model: next.model ?? DEFAULT_OLLAMA_MODEL }
+  }
+  if (provider === 'gemini') {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_GEMINI_BASE, model: next.model ?? DEFAULT_GEMINI_MODEL }
+  }
+  if (provider === 'deepseek') {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_DEEPSEEK_BASE, model: next.model ?? DEFAULT_DEEPSEEK_MODEL }
+  }
+  return {
+    ...next,
+    model: next.model ?? RECOMMENDED_AI_MODEL[provider],
+  }
+}
+
 export function buildProviderForId(id: ProviderId, cfg: OpenRayLLMConfig): LLMProvider {
-  return buildProvider({ ...cfg, provider: id })
+  return buildProvider(configForProvider(cfg, id))
 }
 
 function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
@@ -128,12 +245,14 @@ function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
         cfg.baseURL ?? 'https://api.openai.com/v1',
         cfg.apiKey ?? '',
         cfg.model ?? 'gpt-4o-mini',
+        'OpenAI',
       )
     case 'openai-compatible':
       return new OpenAIProvider(
         cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? 'https://api.openai.com/v1',
         cfg.apiKey ?? '',
         cfg.model ?? 'gpt-4o-mini',
+        'OpenAI-compatible provider',
       )
     case 'anthropic':
       return new AnthropicProvider(
@@ -150,6 +269,7 @@ function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
         cfg.baseURL ?? DEFAULT_GEMINI_BASE,
         cfg.geminiApiKey ?? cfg.apiKey ?? '',
         cfg.model ?? DEFAULT_GEMINI_MODEL,
+        'Gemini',
       )
     case 'opencode':
       return new OpenCodeProvider(cfg.model ?? 'opencode/big-pickle')
@@ -158,6 +278,7 @@ function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
         cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE,
         cfg.apiKey ?? '',
         cfg.model ?? DEFAULT_DEEPSEEK_MODEL,
+        'DeepSeek',
       )
     default:
       return new OllamaProvider(DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL)
@@ -186,10 +307,10 @@ export function getProviderForTask(task: LlmTask): LLMProvider {
   const providerOverride = cfg.taskProviderOverrides?.[task]
   const modelOverride = cfg.taskModelOverrides?.[task]
   const targetProvider = providerOverride ?? cfg.provider
+  const targetConfig = configForProvider(cfg, targetProvider)
   const merged: OpenRayLLMConfig = {
-    ...cfg,
-    provider: targetProvider,
-    model: modelOverride ?? cfg.model,
+    ...targetConfig,
+    model: modelOverride ?? targetConfig.model,
   }
   return buildProvider(merged)
 }

@@ -2,11 +2,31 @@ export type ProviderId = 'openai' | 'openai-compatible' | 'anthropic' | 'ollama'
 
 export type LlmTask = 'chat' | 'search' | 'action' | 'voice'
 
+export type AiModelCapability = 'vision' | 'thinking' | 'tools'
+
+export type AiProviderModel = {
+  id: string
+  capabilities: AiModelCapability[]
+  contextWindow?: number
+}
+
+export type AiProviderConfig = {
+  apiKey?: string
+  baseURL?: string
+  openaiCompatibleBaseURL?: string
+  geminiApiKey?: string
+  copilotGithubToken?: string
+  githubOAuthClientId?: string
+}
+
 export type LlmConfigRecord = {
   provider?: ProviderId
+  providerConfigs?: Partial<Record<ProviderId, AiProviderConfig>>
   apiKey?: string
   baseURL?: string
   model?: string
+  providerModels?: Partial<Record<ProviderId, AiProviderModel[]>>
+  providerSelectedModels?: Partial<Record<ProviderId, string>>
   openaiCompatibleBaseURL?: string
   geminiApiKey?: string
   copilotGithubToken?: string

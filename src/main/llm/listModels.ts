@@ -1,9 +1,17 @@
 import type { ProviderId } from '../../shared/llmConfig'
 import { CopilotProvider } from './copilot'
-import { readLLMConfig } from './registry'
+import { configForProvider, readLLMConfig } from './registry'
 
 function trimSlash(url: string): string {
   return url.replace(/\/+$/, '')
+}
+
+function modelsUrl(baseURL: string): string {
+  const base = trimSlash(baseURL)
+  if (base.endsWith('/chat/completions')) {
+    return `${base.slice(0, -'/chat/completions'.length)}/models`
+  }
+  return `${base}/models`
 }
 
 function uniqSorted(ids: string[]): string[] {
@@ -63,7 +71,7 @@ async function fetchCopilotModelIds(accessToken: string, signal?: AbortSignal): 
 }
 
 export async function listModelsForProvider(id: ProviderId, signal?: AbortSignal): Promise<string[]> {
-  const cfg = readLLMConfig()
+  const cfg = configForProvider(readLLMConfig(), id)
 
   switch (id) {
     case 'openai': {
@@ -71,7 +79,7 @@ export async function listModelsForProvider(id: ProviderId, signal?: AbortSignal
       const key = cfg.apiKey ?? ''
       if (!key.trim()) return []
       try {
-        const res = await fetch(`${trimSlash(base)}/models`, {
+        const res = await fetch(modelsUrl(base), {
           method: 'GET',
           headers: { Authorization: `Bearer ${key}` },
           signal: signal ?? AbortSignal.timeout(12_000),
@@ -87,7 +95,7 @@ export async function listModelsForProvider(id: ProviderId, signal?: AbortSignal
       const key = cfg.apiKey ?? ''
       if (!key.trim()) return []
       try {
-        const res = await fetch(`${trimSlash(base)}/models`, {
+        const res = await fetch(modelsUrl(base), {
           method: 'GET',
           headers: { Authorization: `Bearer ${key}` },
           signal: signal ?? AbortSignal.timeout(12_000),
@@ -135,7 +143,7 @@ export async function listModelsForProvider(id: ProviderId, signal?: AbortSignal
       const key = cfg.geminiApiKey ?? cfg.apiKey ?? ''
       if (!key.trim()) return []
       try {
-        const res = await fetch(`${trimSlash(base)}/models`, {
+        const res = await fetch(modelsUrl(base), {
           method: 'GET',
           headers: { Authorization: `Bearer ${key}` },
           signal: signal ?? AbortSignal.timeout(12_000),
@@ -168,6 +176,23 @@ export async function listModelsForProvider(id: ProviderId, signal?: AbortSignal
         return models.length > 0 ? models : ['opencode/big-pickle']
       } catch {
         return ['opencode/big-pickle']
+      }
+    }
+    case 'deepseek': {
+      const base = cfg.baseURL ?? 'https://api.deepseek.com'
+      const key = cfg.apiKey ?? ''
+      if (!key.trim()) return ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-reasoner']
+      try {
+        const res = await fetch(modelsUrl(base), {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${key}` },
+          signal: signal ?? AbortSignal.timeout(12_000),
+        })
+        if (!res.ok) return ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-reasoner']
+        const ids = extractModelIds(await res.json())
+        return ids.length > 0 ? ids : ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-reasoner']
+      } catch {
+        return ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-reasoner']
       }
     }
     default:

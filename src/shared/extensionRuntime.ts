@@ -110,6 +110,10 @@ export type ExtensionSearchTextChangedRequest = {
   searchText: string
 }
 
+export type ExtensionRefreshSessionRequest = {
+  sessionId: string
+}
+
 export type ExtensionSearchTextChangedResult =
   | {
       ok: true

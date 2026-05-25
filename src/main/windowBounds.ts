@@ -24,8 +24,19 @@ export function clampLauncherHeight(height: number): number {
 /** Programmatically set the launcher height from the renderer. Width is
  *  locked; only the height can change. Ignores no-op updates so we don't
  *  thrash the window on every ResizeObserver tick. */
-export function setLauncherContentHeight(win: BrowserWindow, rawHeight: number): void {
-  const height = clampLauncherHeight(rawHeight)
+export function setLauncherContentHeight(
+  win: BrowserWindow,
+  rawHeight: number,
+  rawZoomFactor = 1
+): void {
+  const zoomFactor =
+    Number.isFinite(rawZoomFactor) && rawZoomFactor > 0 ? Math.max(1, rawZoomFactor) : 1
+  const maxHeight = Math.round(WINDOW_MAX_HEIGHT * zoomFactor)
+  const height = Math.min(
+    Math.max(Math.round(rawHeight), WINDOW_MIN_HEIGHT),
+    maxHeight
+  )
+  win.setMaximumSize(WINDOW_WIDTH, maxHeight)
   const [curW, curH] = win.getContentSize()
   if (curW === WINDOW_WIDTH && curH === height) return
   win.setContentSize(WINDOW_WIDTH, height, false)

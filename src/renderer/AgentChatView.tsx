@@ -7,6 +7,14 @@ import {
 } from 'react'
 import type { AgentRunEvent, Stage } from '../shared/agent'
 import {
+  AI_PROVIDER_ROWS,
+  DEFAULT_PROVIDER_MODELS,
+  RECOMMENDED_AI_MODEL,
+  isAiProviderConfigured,
+  normalizeProviderModelList,
+  providerTitle,
+} from '../shared/aiProviders'
+import {
   CHAT_CONTINUATION_WINDOW_MS,
   type ChatSession,
   type ChatSessionSummary,
@@ -14,6 +22,8 @@ import {
 } from '../shared/chat'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_AI_NEW_CHAT_EVENT } from '../shared/aiChatSurface'
+import { formatLlmErrorMessage } from '../shared/llmErrors'
+import type { AiProviderModel, LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import { Hint, HintBar, Kbd, cx } from './ui/primitives'
 import { Markdown } from './ui/Markdown'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
@@ -45,14 +55,21 @@ function shouldRunAgent(message: string): boolean {
   return AGENT_TASK_RE.test(trimmed)
 }
 
+function modelsForProvider(cfg: LlmConfigRecord, provider: ProviderId): AiProviderModel[] {
+  return normalizeProviderModelList(
+    provider,
+    cfg.providerModels?.[provider] ?? DEFAULT_PROVIDER_MODELS[provider]
+  )
+}
+
 export default function AgentChatView({
   boot,
   onBack,
-  onOpenProviders,
+  onOpenSettings,
 }: {
   boot: AiChatBoot
   onBack: () => void
-  onOpenProviders: () => void
+  onOpenSettings: () => void
 }): JSX.Element {
   const [chatSession, setChatSession] = useState<ChatSession | null>(null)
   const [chatHistory, setChatHistory] = useState<ChatSessionSummary[]>([])
@@ -60,6 +77,10 @@ export default function AgentChatView({
   const [draft, setDraft] = useState('')
   const [runLogs, setRunLogs] = useState<string[]>([])
   const [logsOpen, setLogsOpen] = useState(true)
+  const [llmConfig, setLlmConfig] = useState<LlmConfigRecord>({})
+  const [modelPickerOpen, setModelPickerOpen] = useState(false)
+  const [hoveredProvider, setHoveredProvider] = useState<ProviderId | null>(null)
+  const [modelSearch, setModelSearch] = useState('')
 
   const chatThreadRef = useRef<HTMLDivElement>(null)
   const historyOpenRef = useRef(false)
@@ -73,6 +94,8 @@ export default function AgentChatView({
   const agentStatusRef = useRef<'idle' | 'running' | 'done' | 'error'>('idle')
   const agentErrorRef = useRef<string | null>(null)
   const currentAgentRunIdRef = useRef<string | null>(null)
+  const submittedBootRef = useRef<string | null>(null)
+  const completedRunIdsRef = useRef(new Set<string>())
 
   const [agentStages, setAgentStages] = useState<Stage[]>([])
   const [agentStreamText, setAgentStreamText] = useState('')
@@ -81,9 +104,30 @@ export default function AgentChatView({
   >('idle')
   const [agentError, setAgentError] = useState<string | null>(null)
 
+  const activeProvider = (llmConfig.provider ?? 'ollama') as ProviderId
+  const previewProvider = hoveredProvider ?? activeProvider
+  const activeModel =
+    llmConfig.providerSelectedModels?.[activeProvider] ??
+    llmConfig.model ??
+    RECOMMENDED_AI_MODEL[activeProvider]
+  const previewModels = modelsForProvider(llmConfig, previewProvider)
+  const previewConfigured = isAiProviderConfigured(llmConfig, previewProvider)
+  const filteredPreviewModels = previewModels.filter((model) => {
+    const query = modelSearch.trim().toLowerCase()
+    if (!query) return true
+    const haystack = `${model.id} ${providerTitle(previewProvider)} ${model.capabilities.join(' ')}`
+      .toLowerCase()
+    return haystack.includes(query)
+  })
+
   useEffect(() => {
     chatSessionRef.current = chatSession
   }, [chatSession])
+  useEffect(() => {
+    void window.raymes.getLlmConfig().then((config) => setLlmConfig(config)).catch(() => {
+      /* ignore */
+    })
+  }, [])
   useEffect(() => {
     agentStreamTextRef.current = agentStreamText
   }, [agentStreamText])
@@ -178,7 +222,8 @@ export default function AgentChatView({
   const commitUserTurnAndRun = useCallback(
     async (task: string): Promise<void> => {
       const trimmed = task.trim()
-      if (!trimmed) return
+      if (!trimmed || agentStatusRef.current === 'running') return
+      agentStatusRef.current = 'running'
       const now = Date.now()
       const existing = chatSessionRef.current
 
@@ -229,11 +274,19 @@ export default function AgentChatView({
           ? await window.raymes.agentRun(buildAgentPromptFromChat(nextSession, trimmed))
           : await window.raymes.chatRun(nextSession.turns)
         if (!result.ok) {
-          setAgentError(result.error || 'Run failed to start')
+          const error = formatLlmErrorMessage(result.error || 'Run failed to start')
+          agentErrorRef.current = error
+          agentStatusRef.current = 'error'
+          setAgentError(error)
           setAgentStatus('error')
         }
       } catch (err) {
-        setAgentError(err instanceof Error ? err.message : 'Run failed to start')
+        const error = formatLlmErrorMessage(
+          err instanceof Error ? err.message : 'Run failed to start'
+        )
+        agentErrorRef.current = error
+        agentStatusRef.current = 'error'
+        setAgentError(error)
         setAgentStatus('error')
       }
     },
@@ -300,6 +353,8 @@ export default function AgentChatView({
             chatSessionRef.current = session
             setChatSession(session)
           }
+          if (submittedBootRef.current === bootKey) return
+          submittedBootRef.current = bootKey
           await commitUserTurnAndRun(boot.prompt)
         }
       } catch {
@@ -367,12 +422,14 @@ export default function AgentChatView({
           setAgentStreamText(event.text)
           return
         case 'error':
-          agentErrorRef.current = event.message
+          agentErrorRef.current = formatLlmErrorMessage(event.message)
           agentStatusRef.current = 'error'
-          setAgentError(event.message)
+          setAgentError(agentErrorRef.current)
           setAgentStatus('error')
           return
         case 'done': {
+          if (completedRunIdsRef.current.has(event.runId)) return
+          completedRunIdsRef.current.add(event.runId)
           const finalText = agentStreamTextRef.current
           const finalStages = agentStagesRef.current.slice()
           const activeSession = chatSessionRef.current
@@ -417,8 +474,10 @@ export default function AgentChatView({
               .then(() => refreshChatHistory())
             agentStreamTextRef.current = ''
             agentStagesRef.current = []
+            agentErrorRef.current = null
             setAgentStreamText('')
             setAgentStages([])
+            setAgentError(null)
           }
           return
         }
@@ -467,6 +526,31 @@ export default function AgentChatView({
     await commitUserTurnAndRun(text)
   }
 
+  async function selectProviderModel(provider: ProviderId, modelId: string): Promise<void> {
+    const models = modelsForProvider(llmConfig, provider)
+    const providerModels = {
+      ...llmConfig.providerModels,
+      [provider]: models,
+    }
+    const providerSelectedModels = {
+      ...llmConfig.providerSelectedModels,
+      [provider]: modelId,
+    }
+    const patch: LlmConfigRecord = {
+      provider,
+      model: modelId,
+      providerModels,
+      providerSelectedModels,
+      taskProviderOverrides: { ...llmConfig.taskProviderOverrides, chat: provider },
+      taskModelOverrides: { ...llmConfig.taskModelOverrides, chat: modelId },
+    }
+    setLlmConfig((prev) => ({ ...prev, ...patch }))
+    setModelPickerOpen(false)
+    await window.raymes.setLlmConfig(patch)
+    const next = await window.raymes.getLlmConfig()
+    setLlmConfig(next)
+  }
+
   return (
     <div
       aria-label="AI Chat"
@@ -486,19 +570,191 @@ export default function AgentChatView({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              className="rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
-              onClick={() => {
-                void onOpenProviders()
+            <div
+              className="relative"
+              onMouseLeave={() => {
+                setHoveredProvider(null)
               }}
             >
-              Providers
-            </button>
+              <button
+                type="button"
+                className="inline-flex h-6 items-center rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
+                onClick={() => {
+                  setHistoryOpen(false)
+                  setModelPickerOpen((open) => !open)
+                  setHoveredProvider(activeProvider)
+                }}
+              >
+                {activeModel}
+              </button>
+              {modelPickerOpen ? (
+                <div className="raymes-popover absolute right-0 top-7 z-30 grid h-[390px] w-[560px] grid-cols-[190px_minmax(0,1fr)] overflow-hidden p-1.5">
+                  <div className="flex min-h-0 flex-col border-r border-white/[0.07] pr-1">
+                    <ul className="min-h-0 flex-1 overflow-y-auto">
+                      {AI_PROVIDER_ROWS.map((provider) => {
+                        const configured = isAiProviderConfigured(llmConfig, provider.id)
+                        const active = provider.id === activeProvider
+                        const hovered = provider.id === previewProvider
+                        const selectedModel =
+                          llmConfig.providerSelectedModels?.[provider.id] ??
+                          (provider.id === activeProvider ? activeModel : RECOMMENDED_AI_MODEL[provider.id])
+                        return (
+                          <li key={provider.id}>
+                            <button
+                              type="button"
+                              onMouseEnter={() => setHoveredProvider(provider.id)}
+                              onFocus={() => setHoveredProvider(provider.id)}
+                              className={cx(
+                                'flex w-full items-center gap-2 rounded-raymes-row px-2 py-2 text-left transition',
+                                hovered
+                                  ? 'bg-white/[0.06] text-ink-1'
+                                  : 'text-ink-3 hover:bg-white/[0.04] hover:text-ink-1'
+                              )}
+                            >
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-raymes-chip border border-white/10 bg-white/[0.04] text-[11px] font-bold uppercase text-ink-2">
+                                {provider.title.slice(0, 1)}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[12px] font-semibold">
+                                  {provider.title}
+                                </span>
+                                <span className="mt-0.5 block truncate text-[10px] text-ink-4">
+                                  {configured ? selectedModel : 'Not configured'}
+                                </span>
+                              </span>
+                              {active ? (
+                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
+                              ) : null}
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                    <button
+                      type="button"
+                      className="mt-1 flex w-full items-center gap-2 rounded-raymes-row border border-white/10 bg-white/[0.03] px-2 py-2 text-left text-[12px] font-semibold text-ink-2 transition hover:border-accent/40 hover:bg-accent/10 hover:text-ink-1"
+                      onClick={() => {
+                        setModelPickerOpen(false)
+                        onOpenSettings()
+                      }}
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-raymes-chip border border-white/10 bg-white/[0.05] text-[16px] leading-none">
+                        +
+                      </span>
+                      Add provider
+                    </button>
+                  </div>
+                  <div className="flex min-w-0 flex-col pl-1.5">
+                    <div className="flex shrink-0 items-center gap-2 px-2 pb-1 pt-1">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-semibold text-ink-1">
+                          {providerTitle(previewProvider)}
+                        </p>
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-4">
+                          Models
+                        </p>
+                      </div>
+                      <input
+                        type="search"
+                        value={modelSearch}
+                        onChange={(event) => setModelSearch(event.target.value)}
+                        placeholder="Search models..."
+                        className="h-8 w-[170px] rounded-raymes-field border border-white/10 bg-white/[0.04] px-2 text-[12px] text-ink-1 outline-none placeholder:text-ink-4 focus:border-accent/50"
+                      />
+                      <button
+                        type="button"
+                        className="h-8 rounded-raymes-chip border border-accent/30 bg-accent/10 px-2.5 text-[11px] font-semibold text-accent-strong transition hover:border-accent/55 hover:bg-accent/18 hover:text-ink-1"
+                        onClick={() => {
+                          setModelPickerOpen(false)
+                          onOpenSettings()
+                        }}
+                      >
+                        Configure
+                      </button>
+                    </div>
+                    {!previewConfigured ? (
+                      <p className="mx-2 mb-1.5 rounded-raymes-row border border-white/[0.07] bg-white/[0.03] px-2 py-1.5 text-[11px] text-ink-4">
+                        Configure this provider to select a model.
+                      </p>
+                    ) : null}
+                    <ul className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+                      {filteredPreviewModels.map((model, index) => {
+                        const selected = previewProvider === activeProvider && model.id === activeModel
+                        return (
+                          <li key={model.id}>
+                            <button
+                              type="button"
+                              disabled={!previewConfigured}
+                              className={cx(
+                                'w-full rounded-raymes-row px-2 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-40',
+                                selected
+                                  ? 'bg-accent/12 text-ink-1'
+                                  : 'text-ink-2 hover:bg-white/[0.04] hover:text-ink-1'
+                              )}
+                              onClick={() => {
+                                void selectProviderModel(previewProvider, model.id)
+                              }}
+                            >
+                              <span className="flex items-start justify-between gap-3">
+                                <span className="min-w-0">
+                                  <span className="block truncate text-[12px] font-semibold">
+                                    {model.id}
+                                  </span>
+                                  <span className="mt-0.5 block truncate text-[10.5px] text-ink-4">
+                                    {providerTitle(previewProvider)}
+                                  </span>
+                                </span>
+                                {index < 9 ? (
+                                  <span className="rounded-raymes-chip bg-white/[0.06] px-1.5 py-0.5 font-mono text-[9px] text-ink-4">
+                                    #{index + 1}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="mt-1 flex flex-wrap gap-1">
+                                {model.capabilities.map((capability) => (
+                                  <span
+                                    key={capability}
+                                    className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-ink-3"
+                                  >
+                                    {capability}
+                                  </span>
+                                ))}
+                                {model.contextWindow ? (
+                                  <span className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-ink-3">
+                                    {model.contextWindow.toLocaleString()} ctx
+                                  </span>
+                                ) : null}
+                              </span>
+                            </button>
+                          </li>
+                        )
+                      })}
+                      {filteredPreviewModels.length === 0 ? (
+                        <li className="px-2 py-6 text-center text-[12px] text-ink-4">
+                          No models match this search.
+                        </li>
+                      ) : null}
+                    </ul>
+                    <div className="mt-1 shrink-0 border-t border-white/[0.07] px-2 pt-1.5">
+                      <button
+                        type="button"
+                        className="text-[10.5px] font-medium text-accent-strong transition hover:text-accent"
+                        onClick={() => {
+                          setModelPickerOpen(false)
+                          onOpenSettings()
+                        }}
+                      >
+                        Configure in Settings
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
             {agentStatus === 'running' ? (
               <button
                 type="button"
-                className="rounded-raymes-chip border border-rose-400/35 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-200 transition hover:border-rose-300/60 hover:bg-rose-500/16 hover:text-rose-100"
+                className="inline-flex h-6 items-center rounded-raymes-chip border border-rose-400/35 bg-rose-500/10 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-200 transition hover:border-rose-300/60 hover:bg-rose-500/16 hover:text-rose-100"
                 onClick={() => {
                   stopRun()
                 }}
@@ -510,6 +766,7 @@ export default function AgentChatView({
               type="button"
               className="rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
               onClick={() => {
+                setModelPickerOpen(false)
                 setHistoryOpen((v) => !v)
                 if (!historyOpen) void refreshChatHistory()
               }}
@@ -632,7 +889,7 @@ export default function AgentChatView({
                     )}
                     {turn.error ? (
                       <p className="text-[11.5px] text-rose-300" role="alert">
-                        {turn.error}
+                        {formatLlmErrorMessage(turn.error)}
                       </p>
                     ) : null}
                   </div>

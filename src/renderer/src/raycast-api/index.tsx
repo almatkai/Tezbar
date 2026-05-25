@@ -52,6 +52,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
   }, [commandName, extensionId])
 
   const primaryAction = actions[0]
+  const kind = rootKind(root)
 
   const navApi = useMemo(
     () => ({
@@ -80,7 +81,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
         return
       }
 
-      if (event.key === 'Enter' && primaryAction) {
+      if (event.key === 'Enter' && primaryAction && kind !== 'list') {
         event.preventDefault()
         void onInvokeAction(primaryAction.id)
       }
@@ -88,7 +89,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
 
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [onInvokeAction, primaryAction])
+  }, [kind, onInvokeAction, primaryAction])
 
   const onRunPrimaryAction = (actionId?: string): void => {
     const id = actionId || primaryAction?.id
@@ -101,8 +102,6 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
     if (!submitAction) return
     void onInvokeAction(submitAction.id, values)
   }
-
-  const kind = rootKind(root)
 
   return (
     <NavigationContext.Provider value={navApi}>

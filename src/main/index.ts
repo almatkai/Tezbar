@@ -3,7 +3,9 @@ import {
   BrowserWindow,
   dialog,
   globalShortcut,
+  ipcMain,
   Menu,
+  type MenuItemConstructorOptions,
   nativeImage,
   screen,
   session,
@@ -27,12 +29,8 @@ process.on('uncaughtException', (error) => {
 })
 import { getUiStateRetentionMs, flushConfig } from './llm/configStore'
 import { registerIpcHandlers, shutdownIpcHandlers } from './ipc'
+import { startClipboardWatcher, stopClipboardWatcher } from './search/providers/clipboardProvider'
 import {
-  startClipboardWatcher,
-  stopClipboardWatcher,
-} from './search/providers/clipboardProvider'
-import {
-  clampLauncherHeight,
   WINDOW_MAX_HEIGHT,
   WINDOW_MIN_HEIGHT,
   WINDOW_TOP_FACTOR,
@@ -50,10 +48,11 @@ import {
 } from './center-overlay'
 
 let mainWindow: BrowserWindow | null = null
+let settingsWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let commandBarVisible = false
 let isAppQuitting = false
-type AppSurface = 'command' | 'settings' | 'providers' | 'clipboard'
+type AppSurface = 'command' | 'settings' | 'clipboard'
 /** Set when the palette is hidden; used to decide whether to reset renderer UI on reopen. */
 let lastPaletteHideAt: number | null = null
 
@@ -74,7 +73,7 @@ let lastSnapPayload: { visible: boolean; active: boolean } | null = null
 
 function sendWindowSnapGuides(
   win: BrowserWindow,
-  payload: { visible: boolean; active: boolean },
+  payload: { visible: boolean; active: boolean }
 ): void {
   if (win.isDestroyed() || win.webContents.isDestroyed()) return
 
@@ -118,7 +117,7 @@ function snapWindowToCenter(win: BrowserWindow): void {
       width: bounds.width,
       height: bounds.height,
     },
-    false,
+    false
   )
   setTimeout(() => {
     isProgrammaticMove = false
@@ -379,13 +378,13 @@ function isAltSpaceReleaseInput(input: Electron.Input): boolean {
   const key = input.key.toLowerCase()
   const code = input.code?.toLowerCase() ?? ''
   return (
-    key === 'space'
-    || key === ' '
-    || key === 'alt'
-    || key === 'option'
-    || code === 'space'
-    || code === 'altleft'
-    || code === 'altright'
+    key === 'space' ||
+    key === ' ' ||
+    key === 'alt' ||
+    key === 'option' ||
+    code === 'space' ||
+    code === 'altleft' ||
+    code === 'altright'
   )
 }
 
@@ -480,10 +479,12 @@ let isProgrammaticMove = false
 
 function placeWindow(win: BrowserWindow): void {
   isProgrammaticMove = true
+  const cursor = screen.getCursorScreenPoint()
+  const activeDisplay = screen.getDisplayNearestPoint(cursor)
   const persisted = getPersistedWindowPosition()
   if (persisted) {
     const displays = screen.getAllDisplays()
-    const isVisible = displays.some((display) => {
+    const persistedDisplay = displays.find((display) => {
       const bounds = display.bounds
       return (
         persisted.x >= bounds.x &&
@@ -492,21 +493,24 @@ function placeWindow(win: BrowserWindow): void {
         persisted.y < bounds.y + bounds.height
       )
     })
-    if (isVisible) {
+    if (persistedDisplay?.id === activeDisplay.id) {
       win.setPosition(persisted.x, persisted.y)
-      setTimeout(() => { isProgrammaticMove = false }, 100)
+      setTimeout(() => {
+        isProgrammaticMove = false
+      }, 100)
       return
     }
   }
 
-  const cursor = screen.getCursorScreenPoint()
-  const { width, height, x, y } = screen.getDisplayNearestPoint(cursor).workArea
+  const { width, height, x, y } = activeDisplay.workArea
   const [, curH] = win.getContentSize()
-  const contentH = clampLauncherHeight(curH || WINDOW_MAX_HEIGHT)
+  const contentH = Math.max(WINDOW_MIN_HEIGHT, curH || WINDOW_MAX_HEIGHT)
   const winX = x + Math.floor((width - WINDOW_WIDTH) / 2)
   const winY = y + Math.floor(height * WINDOW_TOP_FACTOR)
   win.setBounds({ x: winX, y: winY, width: WINDOW_WIDTH, height: contentH })
-  setTimeout(() => { isProgrammaticMove = false }, 100)
+  setTimeout(() => {
+    isProgrammaticMove = false
+  }, 100)
 }
 
 function showCommandBar(): void {
@@ -541,6 +545,10 @@ function showCommandBar(): void {
 
 function openAppSurface(surface: AppSurface): void {
   if (isAppQuitting) return
+  if (surface === 'settings') {
+    openSettingsWindow()
+    return
+  }
   showCommandBar()
   if (!mainWindow || mainWindow.isDestroyed()) return
   mainWindow.webContents.send('app:open-surface', surface)
@@ -598,7 +606,6 @@ function createWindow(): void {
     if (mainWindow) handleNativeWillMove(mainWindow)
   })
   mainWindow.on('move', () => {
-
     if (mainWindow && dragSessionActive) {
       scheduleWindowDragRelease(mainWindow)
     }
@@ -606,15 +613,12 @@ function createWindow(): void {
   })
 
   mainWindow.on('moved', () => {
-
     if (dragSessionActive && mainWindow) {
-
       scheduleWindowDragRelease(mainWindow)
     }
   })
 
   mainWindow.on('blur', () => {
-
     if (shouldSuppressBlurHide()) return
     stopWindowDragMonitoring(mainWindow!)
     hideCommandBar()
@@ -646,11 +650,62 @@ function createWindow(): void {
     }
   })
 
+  loadRenderer(mainWindow)
+}
+
+function loadRenderer(win: BrowserWindow, search = ''): void {
   if (process.env['ELECTRON_RENDERER_URL']) {
-    void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    const url = new URL(process.env['ELECTRON_RENDERER_URL'])
+    if (search) url.search = search
+    void win.loadURL(url.toString())
+    return
   }
+
+  void win.loadFile(join(__dirname, '../renderer/index.html'), search ? { search } : undefined)
+}
+
+function openSettingsWindow(): void {
+  if (isAppQuitting) return
+
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show()
+    settingsWindow.focus()
+    return
+  }
+
+  settingsWindow = new BrowserWindow({
+    width: 920,
+    height: 680,
+    minWidth: 760,
+    minHeight: 520,
+    title: 'Raymes Settings',
+    show: false,
+    frame: true,
+    resizable: true,
+    minimizable: true,
+    maximizable: true,
+    fullscreenable: true,
+    alwaysOnTop: false,
+    skipTaskbar: false,
+    backgroundColor: '#1e1f2e',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  })
+
+  settingsWindow.on('closed', () => {
+    settingsWindow = null
+  })
+  settingsWindow.once('ready-to-show', () => {
+    if (!settingsWindow || settingsWindow.isDestroyed()) return
+    settingsWindow.show()
+    settingsWindow.focus()
+  })
+
+  loadRenderer(settingsWindow, '?window=settings')
 }
 
 async function confirmAndQuitRaymes(): Promise<void> {
@@ -666,7 +721,7 @@ async function confirmAndQuitRaymes(): Promise<void> {
       message: 'Quit Raymes?',
       detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
       noLink: true,
-    },
+    }
   )
   if (result.response !== 1) return
 
@@ -702,10 +757,6 @@ function buildTrayMenu(): Electron.Menu {
       click: () => openAppSurface('settings'),
     },
     {
-      label: 'Providers',
-      click: () => openAppSurface('providers'),
-    },
-    {
       label: 'Clipboard History',
       click: () => openAppSurface('clipboard'),
     },
@@ -717,6 +768,87 @@ function buildTrayMenu(): Electron.Menu {
       },
     },
   ])
+}
+
+function buildApplicationMenu(): Electron.Menu {
+  const template: MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin'
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { label: `About ${app.name}`, role: 'about' as const },
+              { type: 'separator' as const },
+              {
+                label: 'Settings...',
+                accelerator: 'CommandOrControl+,',
+                click: () => openAppSurface('settings'),
+              },
+              { type: 'separator' as const },
+              { label: `Hide ${app.name}`, role: 'hide' as const },
+              { label: 'Hide Others', role: 'hideOthers' as const },
+              { label: 'Show All', role: 'unhide' as const },
+              { type: 'separator' as const },
+              {
+                label: `Quit ${app.name}`,
+                accelerator: 'CommandOrControl+Q',
+                click: () => {
+                  void confirmAndQuitRaymes()
+                },
+              },
+            ],
+          },
+        ]
+      : []),
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        {
+          label: 'Show Raymes',
+          accelerator: 'Alt+Space',
+          click: () => openAppSurface('command'),
+        },
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Raymes Settings',
+          click: () => openAppSurface('settings'),
+        },
+      ],
+    },
+  ]
+
+  return Menu.buildFromTemplate(template)
 }
 
 function registerHotkey(): void {
@@ -748,7 +880,7 @@ function registerHotkey(): void {
 
 app.whenReady().then(() => {
   app.setName('Raymes')
-  Menu.setApplicationMenu(null)
+  Menu.setApplicationMenu(buildApplicationMenu())
 
   // Chromium denies `getUserMedia` requests by default in Electron. The
   // launcher needs the mic for Hold-to-Speak; granting `media` here lets
@@ -775,6 +907,9 @@ app.whenReady().then(() => {
   registerIpcHandlers(() => mainWindow, {
     startWindowDragMonitoring,
     stopWindowDragMonitoring,
+  })
+  ipcMain.handle('settings:open-window', async () => {
+    openSettingsWindow()
   })
   createWindow()
   placeWindow(mainWindow!)

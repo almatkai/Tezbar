@@ -23,13 +23,6 @@ function buildRaymesSurfaceDocuments(): IndexedDocument[] {
   const now = Date.now()
   return [
     {
-      id: 'command:open-providers',
-      title: 'Open Providers',
-      subtitle: 'Raymes settings',
-      keywords: ['providers', 'provider', '/providers'],
-      commandId: 'open-providers',
-    },
-    {
       id: 'command:open-settings',
       title: 'Open Settings',
       subtitle: 'Raymes settings',
@@ -63,13 +56,6 @@ function buildRaymesSurfaceDocuments(): IndexedDocument[] {
       subtitle: 'Raymes emoji picker',
       keywords: ['emoji', 'symbols', '/emoji'],
       commandId: 'open-emoji-picker',
-    },
-    {
-      id: 'command:quit-raymes',
-      title: 'Quit Raymes',
-      subtitle: 'Close Raymes',
-      keywords: ['quit', 'exit', '/quit'],
-      commandId: 'quit-raymes',
     },
   ].map((item) => ({
     id: item.id,

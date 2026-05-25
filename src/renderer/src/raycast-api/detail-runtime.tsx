@@ -4,17 +4,81 @@ import type { ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
 import { buildColorFormatRows, type Rgba } from '../../colorConverter'
 import { cx } from '../../ui/primitives'
 
-function MetadataItem({ node }: { node: ExtensionRuntimeNode }): JSX.Element | null {
-  const type = node.type
+function normalizeMetadataType(type: string): string {
+  return type.replace(/^List\.Item\./, '')
+}
+
+function metadataText(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (value && typeof value === 'object') {
+    const candidate = value as { value?: unknown; text?: unknown; title?: unknown }
+    if (candidate.value !== undefined) return metadataText(candidate.value)
+    if (candidate.text !== undefined) return metadataText(candidate.text)
+    if (candidate.title !== undefined) return metadataText(candidate.title)
+  }
+  return ''
+}
+
+function MetadataIcon({ icon }: { icon: unknown }): JSX.Element | null {
+  const token = metadataText(icon && typeof icon === 'object' ? (icon as { source?: unknown }).source : icon)
+    .replace(/^Icon\./, '')
+    .toLowerCase()
+  if (!token) return null
+
+  return (
+    <span className="inline-grid h-4 w-4 place-items-center text-accent-1" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+        {token.includes('download') ? (
+          <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" />
+        ) : token.includes('upload') ? (
+          <path d="M12 21V9m0 0 4 4m-4-4-4 4M5 5h14" />
+        ) : token.includes('server') || token.includes('harddrive') ? (
+          <>
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="M7 15h.01M11 15h6" />
+          </>
+        ) : token.includes('globe') || token.includes('network') ? (
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18M12 3c2.5 2.7 3.7 5.7 3.7 9S14.5 18.3 12 21M12 3c-2.5 2.7-3.7 5.7-3.7 9S9.5 18.3 12 21" />
+          </>
+        ) : token.includes('link') ? (
+          <path d="M10 13a5 5 0 0 0 7.1 0l1.4-1.4a5 5 0 0 0-7.1-7.1L10.5 5M14 11a5 5 0 0 0-7.1 0l-1.4 1.4a5 5 0 0 0 7.1 7.1l.9-.9" />
+        ) : (
+          <>
+            <circle cx="12" cy="12" r="8" />
+            <path d="M12 8v8M8 12h8" />
+          </>
+        )}
+      </svg>
+    </span>
+  )
+}
+
+export function MetadataItem({ node }: { node: ExtensionRuntimeNode }): JSX.Element | null {
+  const type = normalizeMetadataType(node.type)
   const props = node.props ?? {}
 
   if (type === 'Detail.Metadata.Label') {
+    const title = metadataText(props.title)
+    const text = metadataText(props.text)
+
+    if (!text && props.icon) {
+      return (
+        <div className="flex items-center gap-2 px-3 pb-1 pt-3 text-[12px] font-semibold text-ink-2 first:pt-1">
+          <MetadataIcon icon={props.icon} />
+          <span>{title}</span>
+        </div>
+      )
+    }
+
     return (
       <div className="flex items-start justify-between gap-3 px-3 py-1.5 text-[11px]">
-        <span className="shrink-0 font-medium text-ink-3">{String(props.title || '')}</span>
+        <span className="shrink-0 font-medium text-ink-3">{title}</span>
         <span className="min-w-0 text-right font-semibold text-ink-1">
-          {props.icon ? <span className="mr-1.5 inline-block">{String(props.icon)}</span> : null}
-          {String(props.text ?? '')}
+          {props.icon ? <span className="mr-1.5 inline-block align-[-2px]"><MetadataIcon icon={props.icon} /></span> : null}
+          {text}
         </span>
       </div>
     )
@@ -27,7 +91,7 @@ function MetadataItem({ node }: { node: ExtensionRuntimeNode }): JSX.Element | n
   if (type === 'Detail.Metadata.Link') {
     return (
       <div className="flex items-start justify-between gap-3 px-3 py-1.5 text-[11px]">
-        <span className="shrink-0 font-medium text-ink-3">{String(props.title || '')}</span>
+        <span className="shrink-0 font-medium text-ink-3">{metadataText(props.title)}</span>
         <a
           href={String(props.target || '')}
           target="_blank"
@@ -36,10 +100,10 @@ function MetadataItem({ node }: { node: ExtensionRuntimeNode }): JSX.Element | n
           onClick={(e) => {
             e.preventDefault()
             const url = String(props.target || '')
-            if (url) window.raymes.openInBrowser(url)
+            if (url) window.raymes.openExternalUrl(url)
           }}
         >
-          {String(props.text || props.target || '')}
+          {metadataText(props.text) || metadataText(props.target)}
         </a>
       </div>
     )
@@ -48,7 +112,7 @@ function MetadataItem({ node }: { node: ExtensionRuntimeNode }): JSX.Element | n
   if (type === 'Detail.Metadata.TagList') {
     return (
       <div className="flex items-start justify-between gap-3 px-3 py-1.5 text-[11px]">
-        <span className="shrink-0 font-medium text-ink-3">{String(props.title || '')}</span>
+        <span className="shrink-0 font-medium text-ink-3">{metadataText(props.title)}</span>
         <div className="flex flex-wrap items-center justify-end gap-1.5">
           {(node.children ?? []).map((child, i) => (
             <span
@@ -61,8 +125,8 @@ function MetadataItem({ node }: { node: ExtensionRuntimeNode }): JSX.Element | n
                 "text-ink-2"
               )}
             >
-              {child.props?.icon ? <span className="mr-1 inline-block">{String(child.props.icon)}</span> : null}
-              {String(child.props?.text || '')}
+              {child.props?.icon ? <span className="mr-1 inline-block align-[-2px]"><MetadataIcon icon={child.props.icon} /></span> : null}
+              {metadataText(child.props?.text)}
             </span>
           ))}
         </div>
@@ -73,7 +137,7 @@ function MetadataItem({ node }: { node: ExtensionRuntimeNode }): JSX.Element | n
   return null
 }
 
-function MetadataSidebar({ root }: { root: ExtensionRuntimeNode }): JSX.Element | null {
+export function MetadataSidebar({ root }: { root: ExtensionRuntimeNode }): JSX.Element | null {
   const children = root.children ?? []
   if (children.length === 0) return null
 

@@ -1,8 +1,22 @@
 import type { ChatOptions, Delta, LLMProvider, Message, Tool } from './provider'
+import { formatLlmErrorMessage } from '../../shared/llmErrors'
 import { parseOpenAISSE } from './openaiSse'
 
 function trimSlash(url: string): string {
   return url.replace(/\/+$/, '')
+}
+
+function chatCompletionsUrl(baseURL: string): string {
+  const base = trimSlash(baseURL)
+  return base.endsWith('/chat/completions') ? base : `${base}/chat/completions`
+}
+
+function modelsUrl(baseURL: string): string {
+  const base = trimSlash(baseURL)
+  if (base.endsWith('/chat/completions')) {
+    return `${base.slice(0, -'/chat/completions'.length)}/models`
+  }
+  return `${base}/models`
 }
 
 function toOpenAIMessages(messages: Message[]): Array<Record<string, unknown>> {
@@ -27,10 +41,11 @@ export class OpenAIProvider implements LLMProvider {
     private readonly baseURL: string,
     private readonly apiKey: string,
     private readonly model: string,
+    private readonly providerLabel = 'OpenAI',
   ) {}
 
   async chat(messages: Message[], tools?: Tool[], options?: ChatOptions): Promise<AsyncIterable<Delta>> {
-    const url = `${trimSlash(this.baseURL)}/chat/completions`
+    const url = chatCompletionsUrl(this.baseURL)
     const body: Record<string, unknown> = {
       model: this.model,
       messages: toOpenAIMessages(messages),
@@ -50,7 +65,12 @@ export class OpenAIProvider implements LLMProvider {
     })
     if (!res.ok) {
       const errBody = await res.text().catch(() => '')
-      throw new Error(`OpenAI error ${res.status}: ${errBody.slice(0, 500)}`)
+      throw new Error(
+        formatLlmErrorMessage(
+          `${this.providerLabel} error ${res.status}: ${errBody.slice(0, 500)}`,
+          this.providerLabel
+        )
+      )
     }
     return parseOpenAISSE(res, options?.signal)
   }
@@ -58,7 +78,7 @@ export class OpenAIProvider implements LLMProvider {
   async isAvailable(): Promise<boolean> {
     if (!this.apiKey.trim()) return false
     try {
-      const url = `${trimSlash(this.baseURL)}/models`
+      const url = modelsUrl(this.baseURL)
       const res = await fetch(url, {
         method: 'GET',
         headers: { Authorization: `Bearer ${this.apiKey}` },
