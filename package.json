@@ -13,7 +13,29 @@
     "test": "vitest run",
     "build:native:input": "./native/input/build-universal.sh",
     "build:native:axhelper": "./native/axhelper/build.sh",
-    "build:native": "pnpm build:native:input && pnpm build:native:axhelper"
+    "build:native": "pnpm build:native:input && pnpm build:native:axhelper",
+    "dist": "pnpm build && pnpm build:native && electron-builder"
+  },
+  "build": {
+    "appId": "com.raymes.app",
+    "productName": "Raymes",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "native/input/index.node",
+      "native/axhelper/axhelper",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "native/input/index.node",
+      "native/axhelper/axhelper"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.utilities"
+    }
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
@@ -40,6 +62,7 @@
     "@vitejs/plugin-react": "^4.4.1",
     "autoprefixer": "^10.4.21",
     "electron": "^33.4.8",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^3.1.0",
     "eslint": "^9.25.0",
     "eslint-config-prettier": "^10.1.2",
