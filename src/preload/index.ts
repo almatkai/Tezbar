@@ -7,6 +7,12 @@ import type { PermissionId } from '../shared/permissions'
 import type { SearchAction, SearchExecuteContext } from '../shared/search'
 import type { FrankfurterLatestResponse } from './api'
 import type { VoiceModelId } from '../shared/voice'
+import {
+  TERMINAL_IPC,
+  type TerminalCreateRequest,
+  type TerminalDataEvent,
+  type TerminalExitEvent,
+} from '../shared/terminal'
 
 contextBridge.exposeInMainWorld('raymes', {
   hide: () => ipcRenderer.invoke('window:hide'),
@@ -194,6 +200,28 @@ contextBridge.exposeInMainWorld('raymes', {
   updateQuickNote: (createdAt: number, text: string) =>
     ipcRenderer.invoke('notes:update', { createdAt, text }),
   deleteQuickNote: (createdAt: number) => ipcRenderer.invoke('notes:delete', createdAt),
+  terminalCreate: (request: TerminalCreateRequest) =>
+    ipcRenderer.invoke(TERMINAL_IPC.CREATE, request),
+  terminalWrite: (sessionId: string, data: string) =>
+    ipcRenderer.invoke(TERMINAL_IPC.WRITE, { sessionId, data }),
+  terminalResize: (sessionId: string, cols: number, rows: number) =>
+    ipcRenderer.invoke(TERMINAL_IPC.RESIZE, { sessionId, cols, rows }),
+  terminalKill: (sessionId: string) => ipcRenderer.invoke(TERMINAL_IPC.KILL, { sessionId }),
+  getTerminalPromptInfo: () => ipcRenderer.invoke(TERMINAL_IPC.GET_PROMPT_INFO),
+  onTerminalData: (listener: (event: TerminalDataEvent) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: TerminalDataEvent): void => listener(payload)
+    ipcRenderer.on(TERMINAL_IPC.DATA, handler)
+    return (): void => {
+      ipcRenderer.removeListener(TERMINAL_IPC.DATA, handler)
+    }
+  },
+  onTerminalExit: (listener: (event: TerminalExitEvent) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: TerminalExitEvent): void => listener(payload)
+    ipcRenderer.on(TERMINAL_IPC.EXIT, handler)
+    return (): void => {
+      ipcRenderer.removeListener(TERMINAL_IPC.EXIT, handler)
+    }
+  },
   onQuickNoteSaveShortcut: (listener: () => void) => {
     const channel = 'notes:quick-save-shortcut'
     const handler = (): void => {

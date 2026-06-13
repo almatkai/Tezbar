@@ -34,6 +34,13 @@ import type {
   SearchResult,
 } from '../shared/search'
 import type { VoiceModel, VoiceModelId } from '../shared/voice'
+import type {
+  TerminalCreateRequest,
+  TerminalCreateResult,
+  TerminalDataEvent,
+  TerminalExitEvent,
+  TerminalPromptInfo,
+} from '../shared/terminal'
 
 export type ProviderConnectionStatuses = Record<ProviderId, boolean>
 
@@ -202,6 +209,13 @@ export type RaymesApi = {
   appendQuickNote: (text: string) => Promise<QuickNoteEntry | null>
   updateQuickNote: (createdAt: number, text: string) => Promise<boolean>
   deleteQuickNote: (createdAt: number) => Promise<boolean>
+  terminalCreate: (request: TerminalCreateRequest) => Promise<TerminalCreateResult>
+  terminalWrite: (sessionId: string, data: string) => Promise<boolean>
+  terminalResize: (sessionId: string, cols: number, rows: number) => Promise<boolean>
+  terminalKill: (sessionId: string) => Promise<boolean>
+  getTerminalPromptInfo: () => Promise<TerminalPromptInfo>
+  onTerminalData: (listener: (event: TerminalDataEvent) => void) => () => void
+  onTerminalExit: (listener: (event: TerminalExitEvent) => void) => () => void
   /** Fired when the user presses ⌘N / Ctrl+N (global) — save command-bar text to notes. */
   onQuickNoteSaveShortcut: (listener: () => void) => () => void
   /** Fired from the top-bar tray menu to open a built-in Raymes surface. */

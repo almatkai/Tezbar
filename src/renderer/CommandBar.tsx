@@ -19,6 +19,7 @@ import { parseCurrencyQuery } from './currency/parseCurrencyQuery'
 import type { ChatSessionSummary } from '../shared/chat'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
+import type { TerminalPromptInfo } from '../shared/terminal'
 import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 import { ModelPicker } from './ModelPicker'
@@ -31,6 +32,7 @@ const COMMAND_HINTS = [
   { shortcut: '/directory', label: 'Search files and folders' },
   { shortcut: '`', label: 'Browse applications' },
   { shortcut: 'SPACE', label: 'Enter AI Space' },
+  { shortcut: '>', label: 'Open terminal' },
 ] as const
 const PIN_ICON_CHOICES = [
   '📌',
@@ -256,6 +258,17 @@ function AiIcon(): JSX.Element {
   )
 }
 
+/* Terminal icon */
+function TerminalIcon(): JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M4 5.5L6.5 7L4 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 9.5H10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function pathCompletionSectionLabel(section: PathCompletionItem['section']): string | null {
   if (section === 'recommended') return 'Recommended'
   if (section === 'default') return 'Default'
@@ -276,6 +289,7 @@ export default function CommandBar({
   onOpenSnippetsPage,
   onOpenNotesPage,
   onOpenEmojiPicker,
+  onOpenTerminal,
 }: {
   initialValue?: string
   initialSelectedChatId?: string | null
@@ -289,6 +303,7 @@ export default function CommandBar({
   onOpenSnippetsPage: () => void
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
   onOpenEmojiPicker: () => void
+  onOpenTerminal: (initialCommand?: string) => void
 }): JSX.Element {
   const [value, setValue] = useState(initialValue)
   const [lastIntent, setLastIntent] = useState<Intent | null>(null)
@@ -348,6 +363,8 @@ export default function CommandBar({
   const [killPortMode, setKillPortMode] = useState(false)
   const [killPortQuery, setKillPortQuery] = useState('')
   const [killPortValue, setKillPortValue] = useState('')
+  const [terminalMode, setTerminalMode] = useState(false)
+  const [terminalPrompt, setTerminalPrompt] = useState('')
   const argInputRefs = useRef<Array<HTMLInputElement | HTMLSelectElement | null>>([])
   const gotAnyTokenRef = useRef(false)
   const pinPickerOpenRef = useRef(false)
@@ -355,6 +372,7 @@ export default function CommandBar({
   const modelMenuOpenRef = useRef(false)
   const valueRef = useRef(value)
   const killPortModeRef = useRef(killPortMode)
+  const terminalModeRef = useRef(terminalMode)
 
   useEffect(() => {
     valueRef.current = value
@@ -363,6 +381,30 @@ export default function CommandBar({
   useEffect(() => {
     killPortModeRef.current = killPortMode
   }, [killPortMode])
+
+  useEffect(() => {
+    terminalModeRef.current = terminalMode
+  }, [terminalMode])
+
+  useEffect(() => {
+    if (initialValue.startsWith('>')) {
+      setTerminalMode(true)
+      setValue(initialValue.slice(1))
+    }
+  }, [initialValue])
+
+  useEffect(() => {
+    if (!terminalMode) {
+      setTerminalPrompt('')
+      return
+    }
+    void window.raymes.getTerminalPromptInfo().then((info: TerminalPromptInfo) => {
+      if (info) {
+        const prompt = `${info.user}@${info.host} ${info.dir} %`
+        setTerminalPrompt(prompt)
+      }
+    })
+  }, [terminalMode])
 
   useEffect(() => {
     setRecentExtensionCommands(readRecentExtensionCommands())
@@ -583,6 +625,7 @@ export default function CommandBar({
     !pendingAction &&
     !isCompletionInput &&
     !isAiMode &&
+    !terminalMode &&
     topResult?.id === 'extcmd:raycast.kill-process:index'
   const pinnedMetaById = useMemo(() => {
     const out = new Map<string, { slot: number; icon: PinIcon }>()
@@ -618,7 +661,7 @@ export default function CommandBar({
   useEffect(() => {
     let cancelled = false
     const t = setTimeout(() => {
-      if (isAiMode || isCompletionInput) {
+      if (isAiMode || isCompletionInput || terminalMode) {
         setSearchResults([])
         return
       }
@@ -630,7 +673,7 @@ export default function CommandBar({
       cancelled = true
       clearTimeout(t)
     }
-  }, [isAiMode, isCompletionInput, value])
+  }, [isAiMode, isCompletionInput, terminalMode, value])
 
   useEffect(() => {
     if (isCompletionInput || searchResults.length === 0 || recentExtensionCommands.length === 0) return
@@ -1203,6 +1246,13 @@ export default function CommandBar({
         focusCommandInput()
         return true
       }
+      if (terminalModeRef.current) {
+        setValue('')
+        setTerminalMode(false)
+        setTerminalPrompt('')
+        focusCommandInput()
+        return true
+      }
       return false
     })
     return () => {
@@ -1363,6 +1413,15 @@ export default function CommandBar({
       return
     }
 
+    if (terminalMode) {
+      const initialCommand = value.trim() || undefined
+      onOpenTerminal(initialCommand)
+      setValue('')
+      setTerminalMode(false)
+      setTerminalPrompt('')
+      return
+    }
+
     if (!isCompletionInput && visibleSearchResults.length > 0) {
       const selected = visibleSearchResults[selectedSearch]
       if (selected) {
@@ -1425,7 +1484,8 @@ export default function CommandBar({
   const showAnswer =
     !isAiMode && (isStreaming || Boolean(streamText) || Boolean(streamError) || emptyAnswer)
   const showSuggestions = isCompletionInput && suggestions.length > 0
-  const showSearchResults = !isCompletionInput && !isAiMode && visibleSearchCount > 0
+  const showSearchResults =
+    !isCompletionInput && !isAiMode && !terminalMode && visibleSearchCount > 0
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (pinPickerTarget) {
@@ -1444,6 +1504,19 @@ export default function CommandBar({
         exitKillPortMode()
         return
       }
+      return
+    }
+
+    if (terminalMode && e.key === 'Backspace' && !value) {
+      e.preventDefault()
+      setTerminalMode(false)
+      setTerminalPrompt('')
+      return
+    }
+
+    if (e.key === '>' && !terminalMode && !value && !isAiMode && !killPortMode && !pendingAction && !pinPickerTarget) {
+      e.preventDefault()
+      setTerminalMode(true)
       return
     }
 
@@ -1565,8 +1638,8 @@ export default function CommandBar({
       <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-raymes-scale-in">
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
           <div className="flex items-center gap-3">
-            <span className={cx(isAiMode ? 'text-violet-300' : 'text-ink-3')}>
-              {isAiMode ? <AiIcon /> : <SearchIcon />}
+            <span className={cx(isAiMode ? 'text-violet-300' : terminalMode ? 'text-emerald-300' : 'text-ink-3')}>
+              {isAiMode ? <AiIcon /> : terminalMode ? <TerminalIcon /> : <SearchIcon />}
             </span>
             {isAiMode ? (
               <span
@@ -1575,6 +1648,15 @@ export default function CommandBar({
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
                 AI
+              </span>
+            ) : null}
+            {terminalMode ? (
+              <span
+                aria-label="Terminal mode"
+                className="inline-flex shrink-0 items-center gap-1 rounded-raymes-chip border border-emerald-400/35 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200"
+              >
+                <span className="font-mono text-[11px] leading-none">&gt;_</span>
+                Terminal
               </span>
             ) : null}
             {killPortMode ? (
@@ -1601,8 +1683,13 @@ export default function CommandBar({
                 </span>
               </>
             ) : null}
-            <div className="relative min-w-0 flex-1">
-              {!killPortMode && !isAiMode && !value ? <RollingText items={COMMAND_HINTS} /> : null}
+            <div className="relative min-w-0 flex-1 flex items-center">
+              {terminalMode ? (
+                <span className="shrink-0 font-mono text-[13px] text-emerald-300/80 mr-1 select-none pointer-events-none">
+                  {terminalPrompt}
+                </span>
+              ) : null}
+              {!killPortMode && !isAiMode && !terminalMode && !value ? <RollingText items={COMMAND_HINTS} /> : null}
               <input
                 id="command-input"
                 type="text"
@@ -1610,21 +1697,34 @@ export default function CommandBar({
                 onChange={(e) => {
                   if (killPortMode) {
                     setKillPortValue(e.target.value.replace(/[^\d]/g, '').slice(0, 5))
-                  } else {
-                    if (pendingAction) {
-                      clearPendingAction()
-                      showActionMsg(null)
-                    }
-                    setValue(e.target.value)
-                    setSelectedSuggestion(0)
-                    setSelectedSearch(
-                      e.target.value.startsWith(' ') || e.target.value.endsWith('  ') ? -1 : 0
-                    )
+                    return
                   }
+                  if (pendingAction) {
+                    clearPendingAction()
+                    showActionMsg(null)
+                  }
+                  let newValue = e.target.value
+                  if (!terminalMode && newValue.startsWith('>')) {
+                    setTerminalMode(true)
+                    newValue = newValue.slice(1)
+                  }
+                  setValue(newValue)
+                  setSelectedSuggestion(0)
+                  setSelectedSearch(
+                    newValue.startsWith(' ') || newValue.endsWith('  ') ? -1 : 0
+                  )
                 }}
                 onKeyDown={handleInputKeyDown}
                 aria-label="Search Raymes or use a shortcut"
-                placeholder={killPortMode ? 'Port' : isAiMode ? 'Ask or command the agent…' : ''}
+                placeholder={
+                  killPortMode
+                    ? 'Port'
+                    : isAiMode
+                      ? 'Ask or command the agent…'
+                      : terminalMode
+                        ? ''
+                        : ''
+                }
                 autoComplete="off"
                 spellCheck={false}
                 className="w-full min-w-0 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0"

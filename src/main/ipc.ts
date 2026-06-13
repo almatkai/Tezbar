@@ -127,6 +127,15 @@ import {
   listSnippetsForUi,
   updateUserSnippet,
 } from './search/providers/snippetsProvider'
+import {
+  createTerminalSession,
+  getTerminalPromptInfo,
+  killTerminalSession,
+  resizeTerminalSession,
+  shutdownTerminalSessions,
+  writeTerminalSession,
+} from './terminal/service'
+import { TERMINAL_IPC, type TerminalCreateRequest } from '../shared/terminal'
 
 const LLM_DEFAULTS = {
   uiStateRetentionMs: 60_000,
@@ -337,6 +346,7 @@ export function shutdownIpcHandlers(): void {
   agentAbort?.abort()
   clearAllExtensionSessions()
   disposeSharedBridge()
+  shutdownTerminalSessions()
 }
 
 export function registerIpcHandlers(
@@ -564,6 +574,55 @@ export function registerIpcHandlers(
     const ok = deleteQuickNote(createdAt)
     if (ok) await reindexQuickNotes()
     return ok
+  })
+
+  ipcMain.handle(TERMINAL_IPC.CREATE, async (event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') throw new Error('Invalid terminal request')
+    const body = raw as Partial<TerminalCreateRequest>
+    if (typeof body.cols !== 'number' || typeof body.rows !== 'number') {
+      throw new Error('Terminal dimensions are required')
+    }
+    if (body.cwd !== undefined && typeof body.cwd !== 'string') {
+      throw new Error('Invalid terminal working directory')
+    }
+    if (body.initialCommand !== undefined && typeof body.initialCommand !== 'string') {
+      throw new Error('Invalid initial terminal command')
+    }
+    if ((body.initialCommand?.length ?? 0) > 16 * 1024) {
+      throw new Error('Initial terminal command is too long')
+    }
+    return createTerminalSession(event.sender, body as TerminalCreateRequest)
+  })
+
+  ipcMain.handle(TERMINAL_IPC.WRITE, async (event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return false
+    const body = raw as { sessionId?: unknown; data?: unknown }
+    if (typeof body.sessionId !== 'string' || typeof body.data !== 'string') return false
+    return writeTerminalSession(event.sender.id, body.sessionId, body.data)
+  })
+
+  ipcMain.handle(TERMINAL_IPC.RESIZE, async (event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return false
+    const body = raw as { sessionId?: unknown; cols?: unknown; rows?: unknown }
+    if (
+      typeof body.sessionId !== 'string' ||
+      typeof body.cols !== 'number' ||
+      typeof body.rows !== 'number'
+    ) {
+      return false
+    }
+    return resizeTerminalSession(event.sender.id, body.sessionId, body.cols, body.rows)
+  })
+
+  ipcMain.handle(TERMINAL_IPC.KILL, async (event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return false
+    const body = raw as { sessionId?: unknown }
+    if (typeof body.sessionId !== 'string') return false
+    return killTerminalSession(event.sender.id, body.sessionId)
+  })
+
+  ipcMain.handle(TERMINAL_IPC.GET_PROMPT_INFO, async () => {
+    return getTerminalPromptInfo()
   })
 
   ipcMain.handle('open-external-url', async (_event, url: unknown) => {

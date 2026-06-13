@@ -15,6 +15,9 @@ import { RAYMES_AI_NEW_CHAT_EVENT, RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../s
 import SnippetsView from './SnippetsView'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
 import EmojiPickerView from './EmojiPickerView'
+import TerminalView from './TerminalView'
+import type { TerminalPromptInfo } from '../shared/terminal'
+import { Hint, HintBar, Kbd } from './ui/primitives'
 
 type Surface =
   | 'command'
@@ -28,6 +31,7 @@ type Surface =
   | 'snippets'
   | 'notes'
   | 'emoji-picker'
+  | 'terminal'
 
 type SettingsTab = 'general' | 'ai' | 'voice' | 'permissions' | 'advanced'
 
@@ -57,6 +61,7 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
   snippets: '[aria-label="Snippets"]',
   notes: '[aria-label="Quick Notes"]',
   'emoji-picker': '[aria-label="Emoji Picker"]',
+  terminal: '[aria-label="Terminal"]',
 }
 
 /** How much vertical padding the outer app container adds. Kept in sync
@@ -126,6 +131,8 @@ function LauncherApp(): JSX.Element {
   const [commandInitialSelectedChatId, setCommandInitialSelectedChatId] = useState<string | null>(
     null
   )
+  const [terminalInitialCommand, setTerminalInitialCommand] = useState<string | undefined>()
+  const [terminalPromptInfo, setTerminalPromptInfo] = useState<TerminalPromptInfo | null>(null)
   const [aiChatBoot, setAiChatBoot] = useState<AiChatBoot>({ kind: 'panel' })
   const [aiChatKey, setAiChatKey] = useState(0)
   const [extensionRuntimeInitial, setExtensionRuntimeInitial] = useState<Extract<
@@ -166,6 +173,12 @@ function LauncherApp(): JSX.Element {
 
   useEffect(() => {
     surfaceRef.current = surface
+  }, [surface])
+
+  useEffect(() => {
+    if (surface === 'terminal') {
+      void window.raymes.getTerminalPromptInfo().then(setTerminalPromptInfo)
+    }
   }, [surface])
 
   useEffect(() => {
@@ -390,6 +403,46 @@ function LauncherApp(): JSX.Element {
               void openNativeSettings('ai')
             }}
           />
+        ) : surface === 'terminal' ? (
+          <div className="flex h-full w-full flex-col gap-2">
+            <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-raymes-scale-in">
+              <div className="flex items-center gap-3">
+                <span className="text-emerald-300">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+                    <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
+                    <path d="M4 5.5L6.5 7L4 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M8 9.5H10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                  </svg>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-raymes-chip border border-emerald-400/35 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                  <span className="font-mono text-[11px] leading-none">&gt;_</span>
+                  Terminal
+                </span>
+                <span className="shrink-0 font-mono text-[13px] text-emerald-300/80">
+                  {terminalPromptInfo ? `${terminalPromptInfo.user}@${terminalPromptInfo.host} ${terminalPromptInfo.dir} %` : ''}
+                </span>
+                <span className="font-mono text-[15px] text-ink-1">
+                  {terminalInitialCommand}
+                </span>
+              </div>
+            </div>
+            <TerminalView
+              embedded
+              initialCommand={terminalInitialCommand}
+              onBack={() => {
+                setTerminalInitialCommand(undefined)
+                setTerminalPromptInfo(null)
+                setCommandInitialValue('')
+                setSurface('command')
+              }}
+            />
+            <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">
+              <HintBar>
+                <Hint label="Close" keys={<Kbd>Esc</Kbd>} />
+                <Hint label="Hide window" keys={<><Kbd>Esc</Kbd><Kbd>⌘</Kbd></>} />
+              </HintBar>
+            </div>
+          </div>
         ) : (
           <CommandBar
             initialValue={commandInitialValue}
@@ -430,6 +483,11 @@ function LauncherApp(): JSX.Element {
               setSurface('notes')
             }}
             onOpenEmojiPicker={() => setSurface('emoji-picker')}
+            onOpenTerminal={(initialCommand) => {
+              setTerminalInitialCommand(initialCommand)
+              setCommandInitialValue('')
+              setSurface('terminal')
+            }}
           />
         )}
       </div>
