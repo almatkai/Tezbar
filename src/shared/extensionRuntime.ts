@@ -114,6 +114,21 @@ export type ExtensionRefreshSessionRequest = {
   sessionId: string
 }
 
+export type ExtensionRefreshSessionResult =
+  | ExtensionRunCommandResult
+  | {
+      ok: true
+      mode: 'unchanged'
+    }
+
+export type ExtensionDisposeSessionRequest = {
+  sessionId: string
+}
+
+export type ExtensionLoadMoreSessionRequest = {
+  sessionId: string
+}
+
 export type ExtensionSearchTextChangedResult =
   | {
       ok: true

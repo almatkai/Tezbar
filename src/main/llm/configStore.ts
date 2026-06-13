@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 
 export const OPENRAY_CONFIG_DIR = join(homedir(), '.openray')
 export const OPENRAY_CONFIG_PATH = join(OPENRAY_CONFIG_DIR, 'config.json')
+export const DEFAULT_RAYMES_HOTKEY = 'Alt+Space'
 
 let configCache: Record<string, unknown> | null = null
 
@@ -81,4 +82,13 @@ export function getPersistedWindowPosition(): { x: number; y: number } | null {
 
 export function setPersistedWindowPosition(pos: { x: number; y: number }): void {
   writeConfigPatch({ windowPosition: pos })
+}
+
+export function getRaymesHotkey(): string {
+  const value = readRawConfig().raymesHotkey
+  return typeof value === 'string' && value.trim() ? value : DEFAULT_RAYMES_HOTKEY
+}
+
+export function setRaymesHotkey(accelerator: string): void {
+  writeConfigPatch({ raymesHotkey: accelerator })
 }

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, clipboard, nativeImage, shell } from 'electron'
 import * as esbuild from 'esbuild'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { open as openFile, rm as removePath, writeFile } from 'node:fs/promises'
 import { execFile, execSync, spawn as nodeSpawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { get as httpGet } from 'node:http'
@@ -8,17 +9,26 @@ import { get as httpsGet } from 'node:https'
 import { homedir } from 'node:os'
 import { createRequire, builtinModules } from 'node:module'
 import { basename, dirname, extname, join } from 'node:path'
+import {
+  ReadableStream as NodeReadableStream,
+  TransformStream as NodeTransformStream,
+  WritableStream as NodeWritableStream,
+} from 'node:stream/web'
 import { promisify } from 'node:util'
+import { deserialize, serialize } from 'node:v8'
+import { gunzipSync, gzip } from 'node:zlib'
 import vm from 'node:vm'
 import { setSuppressBlurHide } from './windowState'
 import type {
   ExtensionInvokeActionRequest,
   ExtensionInvokeActionResult,
+  ExtensionLoadMoreSessionRequest,
   ExtensionRunCommandRequest,
   ExtensionRunCommandResult,
   ExtensionRuntimeAction,
   ExtensionRuntimeNode,
   ExtensionRefreshSessionRequest,
+  ExtensionRefreshSessionResult,
   ExtensionSearchTextChangedRequest,
   ExtensionSearchTextChangedResult,
 } from '../shared/extensionRuntime'
@@ -74,10 +84,21 @@ type RuntimeSession = {
   hookStates: unknown[]
   hookIndex: number
   pendingPromises: Array<Promise<unknown>>
-  promiseCache: Map<string, { data: unknown; error: unknown }>
+  promiseCache: Map<string, {
+    promise?: Promise<unknown>
+    data?: unknown
+    error?: unknown
+    label?: string
+    startedAt?: number
+  }>
+  promiseKeysByHook: Map<number, string>
+  cacheRecoveryKeys: Set<string>
+  abortControllers: Set<AbortController>
   effectCleanups: Map<number, (() => void)>
   effectDeps: Map<number, unknown[] | undefined>
   hasStateUpdates: boolean
+  disposed: boolean
+  listItemLimit: number
   hookStateSnapshot: string | null
   pickedColor: {
     red: number
@@ -111,12 +132,31 @@ type RaycastComponentToken = {
 const RUNTIME_COMPONENT_LIMIT = 10_000
 const RUNTIME_RECURSION_LIMIT = 80
 const SESSIONS_SOFT_LIMIT = 30
+const INITIAL_RENDER_PASSES = 1
+const SEARCH_TEXT_RENDER_PASSES = 1
+const LIST_ITEM_PAGE_SIZE = 30
+const APPLICATIONS_CACHE_TTL_MS = 30_000
+const PROMISE_RESULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const BUILTIN_SET = new Set<string>(builtinModules)
 const JSX_FRAGMENT = Symbol.for('raymes.jsx.fragment')
 const REACT_CONTEXT = Symbol.for('react.context')
 const execFileAsync = promisify(execFile)
+const gzipAsync = promisify(gzip)
 
 const sessions = new Map<string, RuntimeSession>()
+const promiseResultMemoryCache = new Map<string, { data: unknown; cachedAt: number }>()
+let applicationsCache:
+  | {
+      expiresAt: number
+      promise: Promise<Array<{ name: string; path: string; bundleId?: string }>>
+    }
+  | null = null
+
+type WalkRuntimeOptions = {
+  listItemsSeen?: { count: number }
+  listItemLimit?: number
+  listItemsTruncated?: { value: boolean }
+}
 
 const iconProxy = new Proxy(
   {},
@@ -131,6 +171,207 @@ function makeId(prefix: string): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function elapsedMs(startedAt: number): string {
+  return `${Date.now() - startedAt}ms`
+}
+
+function promiseHookLabel(hookIdx: number, fn: unknown, args: unknown[]): string {
+  const source = typeof fn === 'function'
+    ? fn.toString().replace(/\s+/g, ' ').slice(0, 90)
+    : String(fn).slice(0, 90)
+  let serializedArgs = ''
+  try {
+    serializedArgs = JSON.stringify(args)
+  } catch {
+    serializedArgs = '[unserializable]'
+  }
+  return `hook=${hookIdx} fn="${source}" args=${serializedArgs.slice(0, 160)}`
+}
+
+function promiseResultCachePath(session: RuntimeSession, key: string): string {
+  const digest = createHash('sha256')
+    .update(session.bundledCode)
+    .update('\0')
+    .update(session.extensionId)
+    .update('\0')
+    .update(session.commandName)
+    .update('\0')
+    .update(key)
+    .digest('hex')
+  return join(session.packageRoot, '.raymes-runtime-cache', `${digest}.bin.gz`)
+}
+
+function readPromiseResultCache(
+  session: RuntimeSession,
+  key: string,
+): { data: unknown; cachedAt: number } | null {
+  const memoryKey = `${session.extensionId}/${session.commandName}:${key}`
+  const memoryEntry = promiseResultMemoryCache.get(memoryKey)
+  if (memoryEntry && Date.now() - memoryEntry.cachedAt <= PROMISE_RESULT_CACHE_TTL_MS) {
+    return memoryEntry
+  }
+
+  const cachePath = promiseResultCachePath(session, key)
+  try {
+    const stats = statSync(cachePath)
+    if (Date.now() - stats.mtimeMs > PROMISE_RESULT_CACHE_TTL_MS) return null
+    const compressed = readFileSync(cachePath)
+    const payload = deserialize(gunzipSync(compressed)) as {
+      data: unknown
+      cachedAt: number
+    }
+    promiseResultMemoryCache.set(memoryKey, payload)
+    console.log(
+      `[usePromise] Persistent cache hit ${session.extensionId}/${session.commandName}; bytes=${compressed.byteLength}`,
+    )
+    return payload
+  } catch {
+    return null
+  }
+}
+
+function writePromiseResultCache(
+  session: RuntimeSession,
+  key: string,
+  data: unknown,
+): void {
+  if (data === undefined || session.disposed) return
+
+  const cachedAt = Date.now()
+  const memoryKey = `${session.extensionId}/${session.commandName}:${key}`
+  promiseResultMemoryCache.set(memoryKey, { data, cachedAt })
+  const cachePath = promiseResultCachePath(session, key)
+
+  void (async () => {
+    const startedAt = Date.now()
+    try {
+      const encoded = serialize({ data, cachedAt })
+      const compressed = await gzipAsync(encoded)
+      mkdirSync(dirname(cachePath), { recursive: true })
+      await writeFile(cachePath, compressed)
+      console.log(
+        `[usePromise] Persistent cache write complete after ${elapsedMs(startedAt)}; raw=${encoded.byteLength}, compressed=${compressed.byteLength}`,
+      )
+    } catch (error) {
+      console.warn(
+        '[usePromise] Persistent cache write failed:',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  })()
+}
+
+function createLoggedFetch(session: RuntimeSession): typeof fetch {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const method = String(init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
+    const url = input instanceof Request ? input.url : String(input)
+    const startedAt = Date.now()
+    console.log(`[ExtensionFetch] start ${method} ${url}`)
+
+    try {
+      const response = await fetch(input, init)
+      const contentLength = response.headers.get('content-length') ?? 'unknown'
+      console.log(
+        `[ExtensionFetch] headers ${method} ${url} after ${elapsedMs(startedAt)}; status=${response.status}, length=${contentLength}`,
+      )
+
+      if (!response.body || method === 'HEAD') {
+        console.log(`[ExtensionFetch] complete ${method} ${url} after ${elapsedMs(startedAt)}`)
+        return response
+      }
+
+      let bytes = 0
+      let lastLoggedAt = Date.now()
+      let lastLoggedBytes = 0
+      const monitor = new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          bytes += chunk.byteLength
+          const now = Date.now()
+          if (now - lastLoggedAt >= 2_000 || bytes - lastLoggedBytes >= 5 * 1024 * 1024) {
+            console.log(
+              `[ExtensionFetch] progress ${method} ${url}; bytes=${bytes}, elapsed=${elapsedMs(startedAt)}`,
+            )
+            lastLoggedAt = now
+            lastLoggedBytes = bytes
+          }
+          controller.enqueue(chunk)
+        },
+        flush() {
+          console.log(
+            `[ExtensionFetch] body complete ${method} ${url}; bytes=${bytes}, elapsed=${elapsedMs(startedAt)}`,
+          )
+        },
+      })
+
+      return new Response(response.body.pipeThrough(monitor), {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      })
+    } catch (error) {
+      console.error(
+        `[ExtensionFetch] failed ${method} ${url} after ${elapsedMs(startedAt)}:`,
+        error instanceof Error ? error.message : String(error),
+      )
+      throw error
+    }
+  }
+}
+
+async function recoverIncompleteChunkedCache(
+  session: RuntimeSession,
+  error: unknown,
+  promiseKey: string,
+): Promise<boolean> {
+  if (!(error instanceof Error) || session.cacheRecoveryKeys.has(promiseKey)) return false
+
+  const missingIndex = error.message.match(
+    /ENOENT:.*open ['"]([^'"]+)[/\\]([^/\\]+)[/\\]index\.json['"]/,
+  )
+  if (!missingIndex) return false
+
+  const indexPath = missingIndex[1]
+  const cacheName = missingIndex[2]
+  if (!indexPath || !cacheName) return false
+
+  const supportRoot = join(session.packageRoot, '.raymes-support')
+  const chunkDirectory = join(indexPath, cacheName)
+  const sourcePath = join(indexPath, `${cacheName}.json`)
+  if (
+    dirname(sourcePath) !== supportRoot ||
+    dirname(chunkDirectory) !== supportRoot
+  ) {
+    return false
+  }
+
+  let handle: Awaited<ReturnType<typeof openFile>> | null = null
+  try {
+    handle = await openFile(sourcePath, 'r')
+    const stats = await handle.stat()
+    if (stats.size <= 0) return false
+
+    const tailSize = Math.min(stats.size, 4096)
+    const tail = Buffer.alloc(tailSize)
+    await handle.read(tail, 0, tailSize, stats.size - tailSize)
+    const finalCharacter = tail.toString('utf8').trimEnd().at(-1)
+    if (finalCharacter === ']' || finalCharacter === '}') return false
+  } catch {
+    return false
+  } finally {
+    await handle?.close().catch(() => {})
+  }
+
+  session.cacheRecoveryKeys.add(promiseKey)
+  await Promise.all([
+    removePath(sourcePath, { force: true }),
+    removePath(chunkDirectory, { recursive: true, force: true }),
+  ])
+  console.warn(
+    `[Runner] Removed incomplete extension cache "${cacheName}" and scheduled one rebuild.`,
+  )
+  return true
 }
 
 function axiosGetShim(url: string, options?: { responseType?: string }): Promise<{ data: unknown; status: number; headers: Record<string, string> }> {
@@ -496,7 +737,38 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
     }
   }
 
+  class Component<P = Record<string, unknown>, S = Record<string, unknown>> {
+    props: P
+    state: S
+
+    constructor(props: P) {
+      this.props = props
+      this.state = {} as S
+    }
+
+    setState(
+      next:
+        | Partial<S>
+        | S
+        | ((previous: S, props: P) => Partial<S> | S | null),
+    ): void {
+      const resolved = typeof next === 'function' ? next(this.state, this.props) : next
+      if (resolved == null) return
+      this.state = {
+        ...(this.state && typeof this.state === 'object' ? this.state : {}),
+        ...(resolved && typeof resolved === 'object' ? resolved : {}),
+      } as S
+      session.hasStateUpdates = true
+    }
+
+    forceUpdate(): void {
+      session.hasStateUpdates = true
+    }
+  }
+
   const react = {
+    Component,
+    PureComponent: Component,
     Fragment: JSX_FRAGMENT,
     createElement: (type: unknown, props: Record<string, unknown> | null, ...children: unknown[]) => {
       const nextProps = { ...(props ?? {}) }
@@ -548,17 +820,38 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       const idx = session.hookIndex++
       runEffect(idx, sideEffect, deps, 'useLayoutEffect')
     },
-    useMemo: <T,>(factory: () => T): T => {
-      session.hookIndex++
-      return factory()
+    useMemo: <T,>(factory: () => T, deps?: unknown[]): T => {
+      const idx = session.hookIndex++
+      const existing = session.hookStates[idx] as
+        | { kind: 'memo'; value: T; deps?: unknown[] }
+        | undefined
+      if (existing?.kind === 'memo' && deps && areHookDepsEqual(existing.deps, deps)) {
+        return existing.value
+      }
+      const value = factory()
+      session.hookStates[idx] = { kind: 'memo', value, deps }
+      return value
     },
-    useCallback: <T extends (...args: unknown[]) => unknown>(callback: T): T => {
-      session.hookIndex++
+    useCallback: <T extends (...args: never[]) => unknown>(callback: T, deps?: unknown[]): T => {
+      const idx = session.hookIndex++
+      const existing = session.hookStates[idx] as
+        | { kind: 'callback'; value: T; deps?: unknown[] }
+        | undefined
+      if (existing?.kind === 'callback' && deps && areHookDepsEqual(existing.deps, deps)) {
+        return existing.value
+      }
+      session.hookStates[idx] = { kind: 'callback', value: callback, deps }
       return callback
     },
     useRef: <T,>(value: T): { current: T } => {
-      session.hookIndex++
-      return { current: value }
+      const idx = session.hookIndex++
+      const existing = session.hookStates[idx] as { current: T } | undefined
+      if (existing && typeof existing === 'object' && 'current' in existing) {
+        return existing
+      }
+      const ref = { current: value }
+      session.hookStates[idx] = ref
+      return ref
     },
     useContext: <T,>(context?: ReactContextShim<T>): T | null => {
       session.hookIndex++
@@ -578,6 +871,7 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       const dispatch = (action: A): void => {
         current = reducer(current, action)
         session.hookStates[idx] = [current, dispatch]
+        session.hasStateUpdates = true
       }
       const tuple: [S, (action: A) => void] = [current, dispatch]
       session.hookStates[idx] = tuple
@@ -908,6 +1202,37 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     Section: makeToken('ActionPanel.Section'),
   })
 
+  class ToastShim {
+    static Style = {
+      Success: 'success',
+      Failure: 'failure',
+      Animated: 'animated',
+    }
+
+    style?: string
+    title: string
+    message?: string
+
+    constructor(options: { style?: string; title: string; message?: string }) {
+      this.style = options.style
+      this.title = options.title
+      this.message = options.message
+    }
+
+    async show(): Promise<void> {
+      pushFeedback(session, {
+        kind: 'toast',
+        style: this.style,
+        title: this.title,
+        message: this.message,
+      })
+    }
+
+    async hide(): Promise<void> {
+      // Toasts are represented by the latest runtime feedback in Raymes.
+    }
+  }
+
   return {
     List,
     Form,
@@ -928,13 +1253,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       },
       Key: iconProxy,
     },
-    Toast: {
-      Style: {
-        Success: 'success',
-        Failure: 'failure',
-        Animated: 'animated',
-      },
-    },
+    Toast: ToastShim,
     LaunchType: {
       UserInitiated: 'userInitiated',
       Background: 'background',
@@ -985,12 +1304,12 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       optionsOrStyle: unknown,
       title?: string,
       message?: string,
-    ): Promise<{ hide: () => Promise<void> }> => {
+    ): Promise<ToastShim> => {
+      let toast: ToastShim
       if (typeof optionsOrStyle === 'string') {
-        pushFeedback(session, {
-          kind: 'toast',
+        toast = new ToastShim({
           style: optionsOrStyle,
-          title: title ? String(title) : undefined,
+          title: title ? String(title) : '',
           message: message ? String(message) : undefined,
         })
       } else {
@@ -1001,18 +1320,14 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
           title?: unknown
           message?: unknown
         }
-        pushFeedback(session, {
-          kind: 'toast',
+        toast = new ToastShim({
           style: typeof opts.style === 'string' ? opts.style : undefined,
-          title: typeof opts.title === 'string' ? opts.title : undefined,
+          title: typeof opts.title === 'string' ? opts.title : '',
           message: typeof opts.message === 'string' ? opts.message : undefined,
         })
       }
-      return {
-        hide: async (): Promise<void> => {
-          // No-op for compatibility.
-        },
-      }
+      await toast.show()
+      return toast
     },
     showHUD: async (title: unknown): Promise<void> => {
       pushFeedback(session, { kind: 'hud', message: String(title || '') })
@@ -1028,37 +1343,53 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       shell.showItemInFolder(path)
     },
     getApplications: async (): Promise<Array<{ name: string; path: string; bundleId?: string }>> => {
-      console.log('[getApplications] Starting Spotlight query for installed apps...')
-      try {
-        const output = execSync('mdfind "kMDItemKind == \'Application\'" 2>/dev/null', {
-          encoding: 'utf8',
-          maxBuffer: 10 * 1024 * 1024,
-          timeout: 3000,
-        })
-        const apps = output.trim().split('\n')
-          .filter((p) => p.endsWith('.app'))
-          .map((appPath) => ({ name: basename(appPath, '.app'), path: appPath }))
-          .sort((a, b) => a.name.localeCompare(b.name))
-        console.log(`[getApplications] mdfind returned ${apps.length} applications`)
-        return apps
-      } catch (err) {
-        console.warn('[getApplications] mdfind failed, falling back to directory scan:', err)
-        const apps: Array<{ name: string; path: string }> = []
-        const dirs = ['/Applications', '/System/Applications', join(homedir(), 'Applications')]
-        for (const dir of dirs) {
-          try {
-            for (const entry of readdirSync(dir)) {
-              if (entry.endsWith('.app')) {
-                apps.push({ name: basename(entry, '.app'), path: join(dir, entry) })
-              }
-            }
-          } catch (dirErr) {
-            console.warn(`[getApplications] Could not scan directory ${dir}:`, dirErr)
-          }
-        }
-        console.log(`[getApplications] Directory scan found ${apps.length} applications`)
-        return apps.sort((a, b) => a.name.localeCompare(b.name))
+      const now = Date.now()
+      if (applicationsCache && applicationsCache.expiresAt > now) {
+        return applicationsCache.promise
       }
+
+      console.log('[getApplications] Starting Spotlight query for installed apps...')
+      const promise = (async (): Promise<Array<{ name: string; path: string; bundleId?: string }>> => {
+        try {
+          const { stdout } = await execFileAsync(
+            '/usr/bin/mdfind',
+            ['kMDItemKind == \'Application\''],
+            {
+              maxBuffer: 10 * 1024 * 1024,
+              timeout: 3000,
+            },
+          )
+          const apps = stdout.trim().split('\n')
+            .filter((p) => p.endsWith('.app'))
+            .map((appPath) => ({ name: basename(appPath, '.app'), path: appPath }))
+            .sort((a, b) => a.name.localeCompare(b.name))
+          console.log(`[getApplications] mdfind returned ${apps.length} applications`)
+          return apps
+        } catch (err) {
+          console.warn('[getApplications] mdfind failed, falling back to directory scan:', err)
+          const apps: Array<{ name: string; path: string }> = []
+          const dirs = ['/Applications', '/System/Applications', join(homedir(), 'Applications')]
+          for (const dir of dirs) {
+            try {
+              for (const entry of readdirSync(dir)) {
+                if (entry.endsWith('.app')) {
+                  apps.push({ name: basename(entry, '.app'), path: join(dir, entry) })
+                }
+              }
+            } catch (dirErr) {
+              console.warn(`[getApplications] Could not scan directory ${dir}:`, dirErr)
+            }
+          }
+          console.log(`[getApplications] Directory scan found ${apps.length} applications`)
+          return apps.sort((a, b) => a.name.localeCompare(b.name))
+        }
+      })()
+
+      applicationsCache = {
+        expiresAt: now + APPLICATIONS_CACHE_TTL_MS,
+        promise,
+      }
+      return promise
     },
     getFrontmostApplication: async (): Promise<{ name: string; path: string; bundleId?: string } | null> => {
       try {
@@ -1119,6 +1450,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       current = typeof next === 'function' ? (next as (prev: T) => T)(current) : next
       cache.set(String(key), JSON.stringify(current))
       session.hookStates[hookIdx] = [current, setValue]
+      session.hasStateUpdates = true
     }
     const tuple: [T, (next: T | ((prev: T) => T)) => void] = [current, setValue]
     session.hookStates[hookIdx] = tuple
@@ -1136,60 +1468,183 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
     return `${fnSig}:${argsKey}`
   }
 
-  const makePromiseHook = (): ((...args: unknown[]) => unknown) => {
+  const makePromiseHook = (persistent = false): ((...args: unknown[]) => unknown) => {
     return (fn: unknown, args?: unknown, options?: unknown) => {
       const hookIdx = session.hookIndex++
       const stableArgs = Array.isArray(args) ? args : []
-      const opts = (options && typeof options === 'object' ? options : {}) as { initialData?: unknown; execute?: boolean }
+      const opts = (options && typeof options === 'object' ? options : {}) as {
+        initialData?: unknown
+        execute?: boolean
+        keepPreviousData?: boolean
+        abortable?: { current?: AbortController | null }
+        onError?: (error: unknown) => unknown
+      }
       const key = `${hookIdx}:${cacheKey(fn, stableArgs)}`
-      const cached = session.promiseCache.get(key)
+      const label = promiseHookLabel(hookIdx, fn, stableArgs)
       const shouldExecute = opts?.execute !== false
+      const previousKey = session.promiseKeysByHook.get(hookIdx)
+      const previousEntry =
+        previousKey && previousKey !== key ? session.promiseCache.get(previousKey) : undefined
+      const previousData = opts.keepPreviousData ? previousEntry?.data : undefined
 
+      if (previousKey !== key) {
+        opts.abortable?.current?.abort()
+        if (previousKey) session.promiseCache.delete(previousKey)
+        session.promiseKeysByHook.set(hookIdx, key)
+      }
+
+      const schedule = (retainedData: unknown): Promise<unknown> | null => {
+        if (!shouldExecute || typeof fn !== 'function' || session.disposed) return null
+
+        const startedAt = Date.now()
+        console.log(`[usePromise] Scheduled ${label}`)
+        opts.abortable?.current?.abort()
+        const controller = new AbortController()
+        if (opts.abortable) opts.abortable.current = controller
+        session.abortControllers.add(controller)
+
+        let tracked: Promise<unknown>
+        tracked = delay(0)
+          .then(async () => {
+            if (session.disposed || controller.signal.aborted) {
+              const error = new Error('Aborted')
+              error.name = 'AbortError'
+              throw error
+            }
+            console.log(`[usePromise] Starting ${label}`)
+            return await Promise.resolve(
+              (fn as (...values: unknown[]) => unknown)(...stableArgs),
+            )
+          })
+          .then(async (data: unknown) => {
+            if (session.promiseCache.get(key)?.promise !== tracked) return data
+
+            console.log(
+              `[usePromise] Resolved ${label} after ${elapsedMs(startedAt)}; data=${
+                Array.isArray(data) ? `array(${data.length})` : typeof data
+              }`,
+            )
+            session.promiseCache.set(key, { data, error: undefined, label })
+            if (persistent) writePromiseResultCache(session, key, data)
+            if (!session.disposed) session.hasStateUpdates = true
+            return data
+          })
+          .catch(async (error: unknown) => {
+            if (session.promiseCache.get(key)?.promise !== tracked) return undefined
+
+            const isAbort =
+              controller.signal.aborted ||
+              (error instanceof Error && error.name === 'AbortError')
+            const recovered =
+              !isAbort && await recoverIncompleteChunkedCache(session, error, key)
+            if (recovered) {
+              console.warn(
+                `[usePromise] Recovered ${label} after ${elapsedMs(startedAt)}; retrying on refresh.`,
+              )
+              session.promiseCache.delete(key)
+              if (!session.disposed) session.hasStateUpdates = true
+              return undefined
+            }
+
+            session.promiseCache.set(key, {
+              data: retainedData,
+              error: isAbort ? undefined : error,
+            })
+
+            if (isAbort) return undefined
+
+            console.error(
+              `[usePromise] Rejected ${label} after ${elapsedMs(startedAt)}:`,
+              error instanceof Error ? error.message : String(error),
+            )
+            if (!session.disposed) session.hasStateUpdates = true
+            if (typeof opts.onError === 'function') {
+              try {
+                await Promise.resolve(opts.onError(error))
+              } catch (onErrorErr) {
+                console.error('[usePromise] onError callback threw:', onErrorErr)
+              }
+            }
+            return undefined
+          })
+          .finally(() => {
+            console.log(`[usePromise] Finished ${label} after ${elapsedMs(startedAt)}`)
+            session.abortControllers.delete(controller)
+            if (opts.abortable?.current === controller) {
+              opts.abortable.current = null
+            }
+          })
+
+        session.promiseCache.set(key, {
+          promise: tracked,
+          data: retainedData,
+          error: undefined,
+          label,
+          startedAt,
+        })
+        return tracked
+      }
+
+      let cached = session.promiseCache.get(key)
+      if (!cached && shouldExecute) {
+        const persistentEntry = persistent ? readPromiseResultCache(session, key) : null
+        const retainedData = previousData ?? persistentEntry?.data ?? opts.initialData
+        schedule(retainedData)
+        cached = session.promiseCache.get(key)
+      }
+
+      // If a result or in-flight promise already exists for this hook + args,
+      // reuse it instead of spawning duplicate work on every render.
       if (cached) {
-        console.log(`[usePromise] Pass 2: returning cached data (${Array.isArray(cached.data) ? (cached.data as unknown[]).length + ' items' : typeof cached.data})`)
+        if (cached.promise) {
+          session.pendingPromises.push(cached.promise)
+          return {
+            data: cached.data,
+            isLoading: true,
+            error: undefined,
+            revalidate: async (): Promise<void> => {
+              await schedule(cached?.data)
+            },
+            mutate: async (next?: unknown): Promise<unknown> => {
+              const value =
+                typeof next === 'function'
+                  ? (next as (current: unknown) => unknown)(cached?.data)
+                  : next
+              session.promiseCache.set(key, { data: value, error: undefined })
+              if (!session.disposed) session.hasStateUpdates = true
+              return value
+            },
+            pagination: undefined,
+          }
+        }
         return {
           data: cached.data,
           isLoading: false,
           error: cached.error,
-          revalidate: async (): Promise<void> => {},
-          mutate: async (): Promise<unknown> => undefined,
+          revalidate: async (): Promise<void> => {
+            await schedule(cached?.data)
+          },
+          mutate: async (next?: unknown): Promise<unknown> => {
+            const value =
+              typeof next === 'function'
+                ? (next as (current: unknown) => unknown)(cached?.data)
+                : next
+            session.promiseCache.set(key, { data: value, error: undefined })
+            if (!session.disposed) session.hasStateUpdates = true
+            return value
+          },
           pagination: undefined,
         }
       }
 
-      if (shouldExecute && typeof fn === 'function') {
-        try {
-          const result = fn(...stableArgs)
-          if (result != null && typeof (result as Promise<unknown>).then === 'function') {
-            console.log('[usePromise] Pass 1: fn returned a Promise, tracking for later resolution')
-            const promise = (result as Promise<unknown>)
-              .then((data: unknown) => {
-                const itemCount = Array.isArray(data) ? (data as unknown[]).length : 'non-array'
-                console.log(`[usePromise] Promise resolved with ${itemCount} items, caching for pass 2`)
-                session.promiseCache.set(key, { data, error: undefined })
-                return data
-              })
-              .catch((error: Error) => {
-                console.error('[usePromise] Promise rejected:', error.message)
-                session.promiseCache.set(key, { data: undefined, error })
-              })
-            session.pendingPromises.push(promise)
-          } else {
-            console.log(`[usePromise] Pass 1: fn returned sync data (${Array.isArray(result) ? (result as unknown[]).length + ' items' : typeof result})`)
-            session.promiseCache.set(key, { data: result, error: undefined })
-          }
-        } catch (error) {
-          console.error('[usePromise] fn threw synchronously:', error)
-          session.promiseCache.set(key, { data: undefined, error })
-        }
-      }
-
       return {
-        data: opts?.initialData,
-        isLoading: shouldExecute,
+        data: previousData ?? opts.initialData,
+        isLoading: false,
         error: undefined,
-        revalidate: async (): Promise<void> => {},
-        mutate: async (): Promise<unknown> => undefined,
+        revalidate: async (): Promise<void> => {
+          await schedule(previousData ?? opts.initialData)
+        },
+        mutate: async (next?: unknown): Promise<unknown> => next,
         pagination: undefined,
       }
     }
@@ -1199,7 +1654,26 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
     useCachedState,
     usePromise: makePromiseHook(),
     useFetch: makePromiseHook(),
-    useCachedPromise: makePromiseHook(),
+    useCachedPromise: makePromiseHook(true),
+    getProgressIcon: (
+      progress: number,
+      color = '#ff6363',
+      options?: { background?: string; backgroundOpacity?: number },
+    ): string => {
+      const value = Math.max(0, Math.min(1, Number(progress) || 0))
+      const radius = 10
+      const circumference = 2 * Math.PI * radius
+      const offset = circumference * (1 - value)
+      const background = options?.background || '#ffffff'
+      const opacity = options?.backgroundOpacity ?? 0.16
+      const svg = [
+        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">',
+        `<circle cx="16" cy="16" r="${radius}" fill="none" stroke="${background}" stroke-width="4" opacity="${opacity}"/>`,
+        `<circle cx="16" cy="16" r="${radius}" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" transform="rotate(-90 16 16)"/>`,
+        '</svg>',
+      ].join('')
+      return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+    },
     runAppleScript,
     showFailureToast: (error: unknown): void => {
       pushFeedback(session, {
@@ -1377,11 +1851,19 @@ function registerAction(
   session.actionHandlers.set(id, handler)
 }
 
+function hasDirectListSections(input: unknown): boolean {
+  if (Array.isArray(input)) return input.some((entry) => hasDirectListSections(entry))
+  if (!isJsxNode(input)) return false
+  if (input.type === JSX_FRAGMENT) return hasDirectListSections(input.props?.children)
+  return isToken(input.type) && input.type.name === 'List.Section'
+}
+
 function walkRuntimeNodes(
   input: unknown,
   session: RuntimeSession,
   depth: number,
   budget: { remaining: number },
+  options: WalkRuntimeOptions = {},
 ): ExtensionRuntimeNode[] {
   if (budget.remaining <= 0 || depth > RUNTIME_RECURSION_LIMIT) {
     return []
@@ -1392,7 +1874,19 @@ function walkRuntimeNodes(
   }
 
   if (Array.isArray(input)) {
-    return input.flatMap((entry) => walkRuntimeNodes(entry, session, depth, budget))
+    const nodes: ExtensionRuntimeNode[] = []
+    for (const entry of input) {
+      if (
+        options.listItemsSeen &&
+        options.listItemLimit &&
+        options.listItemsSeen.count >= options.listItemLimit
+      ) {
+        if (options.listItemsTruncated) options.listItemsTruncated.value = true
+        break
+      }
+      nodes.push(...walkRuntimeNodes(entry, session, depth, budget, options))
+    }
+    return nodes
   }
 
   if (!isJsxNode(input)) {
@@ -1403,18 +1897,46 @@ function walkRuntimeNodes(
   const props = input.props ?? {}
 
   if (type === JSX_FRAGMENT) {
-    return walkRuntimeNodes(props.children, session, depth + 1, budget)
+    return walkRuntimeNodes(props.children, session, depth + 1, budget, options)
   }
 
   if (typeof type === 'function') {
     let rendered: unknown
     try {
-      rendered = type(props)
+      const component = type as {
+        (componentProps: Record<string, unknown>): unknown
+        prototype?: {
+          render?: () => unknown
+        }
+        getDerivedStateFromProps?: (
+          props: Record<string, unknown>,
+          state: unknown,
+        ) => unknown
+      }
+      if (typeof component.prototype?.render === 'function') {
+        const instance = new (component as unknown as new (
+          componentProps: Record<string, unknown>,
+        ) => {
+          props: Record<string, unknown>
+          state: unknown
+          render: () => unknown
+        })(props)
+        const derived = component.getDerivedStateFromProps?.(props, instance.state)
+        if (derived && typeof derived === 'object') {
+          instance.state = {
+            ...(instance.state && typeof instance.state === 'object' ? instance.state : {}),
+            ...derived,
+          }
+        }
+        rendered = instance.render()
+      } else {
+        rendered = component(props)
+      }
     } catch (error) {
       console.error('[ExtensionRuntime] Component render failed:', error)
       return []
     }
-    return walkRuntimeNodes(rendered, session, depth + 1, budget)
+    return walkRuntimeNodes(rendered, session, depth + 1, budget, options)
   }
 
   const typeName = isToken(type)
@@ -1426,10 +1948,17 @@ function walkRuntimeNodes(
 
   if (typeName.startsWith('Action')) {
     if (typeName === 'ActionPanel' || typeName.startsWith('ActionPanel.')) {
-      return walkRuntimeNodes(props.children, session, depth + 1, budget)
+      return walkRuntimeNodes(props.children, session, depth + 1, budget, options)
     }
     registerAction(typeName, props, session)
     return []
+  }
+
+  if (typeName === 'List.Item' && options.listItemsSeen && options.listItemLimit) {
+    if (options.listItemsSeen.count >= options.listItemLimit) {
+      return []
+    }
+    options.listItemsSeen.count += 1
   }
 
   if (typeName === 'List' && typeof props.onSearchTextChange === 'function') {
@@ -1438,15 +1967,18 @@ function walkRuntimeNodes(
 
   const actionStart = session.currentActions.length
   if (props.actions !== undefined) {
-    walkRuntimeNodes(props.actions, session, depth + 1, budget)
+    walkRuntimeNodes(props.actions, session, depth + 1, budget, options)
   }
   const actionIds = session.currentActions.slice(actionStart).map((action) => action.id)
 
   const metadataNodes = props.metadata !== undefined
-    ? walkRuntimeNodes(props.metadata, session, depth + 1, budget)
+    ? walkRuntimeNodes(props.metadata, session, depth + 1, budget, options)
     : []
   const detailNodes = props.detail !== undefined
-    ? walkRuntimeNodes(props.detail, session, depth + 1, budget)
+    ? walkRuntimeNodes(props.detail, session, depth + 1, budget, options)
+    : []
+  const searchBarAccessoryNodes = props.searchBarAccessory !== undefined
+    ? walkRuntimeNodes(props.searchBarAccessory, session, depth + 1, budget, options)
     : []
 
   budget.remaining -= 1
@@ -1459,16 +1991,51 @@ function walkRuntimeNodes(
   if (detailNodes[0] && sanitizedProps) {
     sanitizedProps.detail = detailNodes[0]
   }
+  if (searchBarAccessoryNodes[0] && sanitizedProps) {
+    sanitizedProps.searchBarAccessory = searchBarAccessoryNodes[0]
+  }
   if (metadataNodes[0] && sanitizedProps) {
     sanitizedProps.metadata = metadataNodes[0]
+  }
+  if (typeName === 'List.Dropdown' && typeof props.onChange === 'function' && sanitizedProps) {
+    const actionId = makeId('list-dropdown')
+    sanitizedProps.actionId = actionId
+    session.actionHandlers.set(actionId, async (formValues) => {
+      await Promise.resolve(
+        (props.onChange as (value: string) => unknown)(String(formValues?.value ?? '')),
+      )
+    })
   }
   if (typeName === 'List' && session.searchTextChangeHandler && sanitizedProps) {
     sanitizedProps.__hasServerSearch = true
   }
+  const listItemsTruncated =
+    typeName === 'List' ? { value: false } : options.listItemsTruncated
+  const childOptions =
+    typeName === 'List'
+      ? {
+          ...options,
+          listItemsSeen: hasDirectListSections(props.children) ? undefined : { count: 0 },
+          listItemLimit: session.listItemLimit,
+          listItemsTruncated,
+        }
+      : typeName === 'List.Section'
+        ? {
+            ...options,
+            listItemsSeen: { count: 0 },
+            listItemLimit: session.listItemLimit,
+          }
+        : options
+  const children = walkRuntimeNodes(props.children, session, depth + 1, budget, childOptions)
+  if (typeName === 'List' && sanitizedProps && listItemsTruncated) {
+    sanitizedProps.__hasMore =
+      listItemsTruncated.value && session.listItemLimit < RUNTIME_COMPONENT_LIMIT
+    sanitizedProps.__pageSize = session.listItemLimit
+  }
   const node: ExtensionRuntimeNode = {
     type: typeName,
     props: sanitizedProps,
-    children: walkRuntimeNodes(props.children, session, depth + 1, budget),
+    children,
     metadata: metadataNodes[0],
   }
 
@@ -1487,6 +2054,10 @@ function formatFeedback(feedback: RuntimeFeedback | undefined): string | undefin
 }
 
 function renderCurrentView(session: RuntimeSession): ExtensionRunCommandResult | ExtensionInvokeActionResult {
+  const startedAt = Date.now()
+  console.log(
+    `[Runner] renderCurrentView start ${session.extensionId}/${session.commandName}; stack=${session.stack.length}, limit=${session.listItemLimit}`,
+  )
   const top = session.stack.at(-1)
   if (!top) {
     return {
@@ -1500,6 +2071,9 @@ function renderCurrentView(session: RuntimeSession): ExtensionRunCommandResult |
 
   const budget = { remaining: RUNTIME_COMPONENT_LIMIT }
   const nodes = walkRuntimeNodes(top, session, 0, budget)
+  console.log(
+    `[Runner] walkRuntimeNodes complete after ${elapsedMs(startedAt)}; nodes=${nodes.length}, budgetUsed=${RUNTIME_COMPONENT_LIMIT - budget.remaining}, actions=${session.currentActions.length}`,
+  )
 
   const root: ExtensionRuntimeNode = nodes[0] ?? {
     type: 'Detail',
@@ -1507,6 +2081,9 @@ function renderCurrentView(session: RuntimeSession): ExtensionRunCommandResult |
     children: [],
   }
   attachRuntimeRootMetadata(root, session)
+  console.log(
+    `[Runner] renderCurrentView complete after ${elapsedMs(startedAt)}; root=${root.type}, children=${root.children?.length ?? 0}`,
+  )
 
   return {
     ok: true,
@@ -1529,34 +2106,29 @@ async function rerenderSessionCommand(
     return renderCurrentView(session)
   }
 
-  let view: ExtensionRunCommandResult | ExtensionInvokeActionResult | undefined
+  console.log(`[Runner] ${label}: rerendering ${session.extensionId}/${session.commandName}`)
+  const startedAt = Date.now()
+  session.hookIndex = 0
+  session.pendingPromises = []
+  session.actionHandlers.clear()
+  session.currentActions = []
+  session.feedback = []
+  session.hasStateUpdates = false
 
-  for (let pass = 1; pass <= 4; pass += 1) {
-    console.log(`[Runner] ${label} pass ${pass}: rerendering ${session.extensionId}/${session.commandName}`)
-    session.hookIndex = 0
-    session.pendingPromises = []
-    session.actionHandlers.clear()
-    session.currentActions = []
-    session.feedback = []
-    session.hasStateUpdates = false
-
-    const result = await Promise.resolve(session.commandFn({ arguments: session.commandArgs }))
-    session.stack = isJsxNode(result) ? [result] : []
-    view = renderCurrentView(session)
-
-    console.log(
-      `[Runner] ${label} pass ${pass} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} hook states, stateUpdates=${session.hasStateUpdates}`,
-    )
-
-    if (!session.hasStateUpdates) break
-  }
-
-  return view ?? renderCurrentView(session)
+  console.log(`[Runner] ${label}: command function start`)
+  const result = await Promise.resolve(session.commandFn({ arguments: session.commandArgs }))
+  console.log(
+    `[Runner] ${label}: command function complete after ${elapsedMs(startedAt)}; jsx=${isJsxNode(result)}`,
+  )
+  session.stack = isJsxNode(result) ? [result] : []
+  const view = renderCurrentView(session)
+  console.log(`[Runner] ${label}: rerender complete after ${elapsedMs(startedAt)}`)
+  return view
 }
 
 export async function refreshExtensionSession(
   request: ExtensionRefreshSessionRequest,
-): Promise<ExtensionRunCommandResult | ExtensionInvokeActionResult> {
+): Promise<ExtensionRefreshSessionResult> {
   const sessionId = String(request.sessionId || '').trim()
   if (!sessionId) {
     return { ok: false, message: 'sessionId is required.' }
@@ -1567,7 +2139,34 @@ export async function refreshExtensionSession(
     return { ok: false, message: 'Extension session not found.' }
   }
 
+  const inFlight = [...session.promiseCache.values()]
+    .filter((entry) => entry.promise)
+    .map((entry) => `${entry.label ?? 'unknown'} age=${entry.startedAt ? elapsedMs(entry.startedAt) : '?'}`)
+  console.log(
+    `[Runner] Refresh request ${session.extensionId}/${session.commandName}; stateUpdates=${session.hasStateUpdates}, inFlight=${inFlight.length}${
+      inFlight.length ? `\n  ${inFlight.join('\n  ')}` : ''
+    }`,
+  )
+  if (!session.hasStateUpdates) return { ok: true, mode: 'unchanged' }
+
   return rerenderSessionCommand(session, 'Refresh')
+}
+
+export async function loadMoreExtensionSession(
+  request: ExtensionLoadMoreSessionRequest,
+): Promise<ExtensionRefreshSessionResult> {
+  const sessionId = String(request.sessionId || '').trim()
+  const session = sessions.get(sessionId)
+  if (!session) return { ok: false, message: 'Extension session not found.' }
+
+  const nextLimit = Math.min(
+    session.listItemLimit + LIST_ITEM_PAGE_SIZE,
+    RUNTIME_COMPONENT_LIMIT,
+  )
+  if (nextLimit === session.listItemLimit) return { ok: true, mode: 'unchanged' }
+
+  session.listItemLimit = nextLimit
+  return rerenderSessionCommand(session, 'Load more')
 }
 
 export async function updateSearchText(
@@ -1585,6 +2184,7 @@ export async function updateSearchText(
   }
 
   session.searchText = searchText
+  session.listItemLimit = LIST_ITEM_PAGE_SIZE
 
   if (session.searchTextChangeHandler) {
     try {
@@ -1598,13 +2198,9 @@ export async function updateSearchText(
   }
 
   if (session.commandFn) {
-    const snapshotStates = (): string => {
-      try { return JSON.stringify(session.hookStates) } catch { return String(session.hookStates.length) }
-    }
-
-    // Multi-pass search re-execution
     try {
       const execArgs = { arguments: session.commandArgs }
+      let result: unknown
 
       const searchPass = async (label: string): Promise<unknown> => {
         console.log(`[Runner] ${label}: executing ${session.extensionId}/${session.commandName} search="${searchText}"`)
@@ -1613,27 +2209,22 @@ export async function updateSearchText(
         session.actionHandlers.clear()
         session.currentActions = []
         session.feedback = []
+        session.hasStateUpdates = false
         const r = await Promise.resolve(session.commandFn!(execArgs))
-        console.log(`[Runner] ${label} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} states`)
+        console.log(
+          `[Runner] ${label} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} states, stateUpdates=${session.hasStateUpdates}`,
+        )
         return r
       }
 
-      let result = await searchPass('Search Pass 1')
-      let prevSnapshot = snapshotStates()
-
-      for (let p = 2; p <= 5; p += 1) {
-        const currSnapshot = snapshotStates()
-        const hasPromises = session.pendingPromises.length > 0
-        const stateChanged = currSnapshot !== prevSnapshot
-
-        if (!hasPromises && !stateChanged) break
-
-        if (hasPromises) {
-          await Promise.allSettled(session.pendingPromises)
-        }
-
+      for (let p = 1; p <= SEARCH_TEXT_RENDER_PASSES; p += 1) {
         result = await searchPass(`Search Pass ${p}`)
-        prevSnapshot = snapshotStates()
+        if (!session.hasStateUpdates) break
+      }
+
+      const searchInFlight = [...session.promiseCache.values()].filter((entry) => entry.promise).length
+      if (searchInFlight > 0) {
+        console.log(`[Runner] Search render returned with ${searchInFlight} in-flight promises; refresh will continue.`)
       }
 
       session.stack = isJsxNode(result) ? [result] : []
@@ -1656,13 +2247,43 @@ export async function updateSearchText(
   }
 }
 
+function cleanupRuntimeSession(session: RuntimeSession): void {
+  if (session.disposed) return
+  session.disposed = true
+
+  for (const controller of session.abortControllers) {
+    controller.abort()
+  }
+  session.abortControllers.clear()
+
+  for (const cleanup of session.effectCleanups.values()) {
+    try {
+      cleanup()
+    } catch (error) {
+      console.warn('[Runner] Extension effect cleanup failed:', error)
+    }
+  }
+  session.effectCleanups.clear()
+  session.effectDeps.clear()
+  session.promiseCache.clear()
+  session.promiseKeysByHook.clear()
+  session.cacheRecoveryKeys.clear()
+}
+
+function deleteRuntimeSession(sessionId: string): boolean {
+  const session = sessions.get(sessionId)
+  if (!session) return false
+  cleanupRuntimeSession(session)
+  return sessions.delete(sessionId)
+}
+
 function pruneSessions(): void {
   if (sessions.size <= SESSIONS_SOFT_LIMIT) return
   const ids = [...sessions.keys()]
   const overflow = sessions.size - SESSIONS_SOFT_LIMIT
   for (let i = 0; i < overflow; i += 1) {
     const id = ids[i]
-    if (id) sessions.delete(id)
+    if (id) deleteRuntimeSession(id)
   }
 }
 
@@ -1918,18 +2539,25 @@ function runBundle(
     Headers?: typeof Headers
     Request?: typeof Request
     Response?: typeof Response
+    ReadableStream?: typeof NodeReadableStream
+    TransformStream?: typeof NodeTransformStream
+    WritableStream?: typeof NodeWritableStream
   }
+  const loggedFetch = createLoggedFetch(session)
 
   const context = vm.createContext({
     console,
     Buffer,
     process,
-    fetch: webGlobals.fetch?.bind(globalThis),
+    fetch: loggedFetch,
     AbortController: webGlobals.AbortController,
     AbortSignal: webGlobals.AbortSignal,
     Headers: webGlobals.Headers,
     Request: webGlobals.Request,
     Response: webGlobals.Response,
+    ReadableStream: webGlobals.ReadableStream ?? NodeReadableStream,
+    TransformStream: webGlobals.TransformStream ?? NodeTransformStream,
+    WritableStream: webGlobals.WritableStream ?? NodeWritableStream,
     setTimeout,
     clearTimeout,
     setInterval,
@@ -2006,9 +2634,14 @@ async function runCommandFromPackagePath(
     hookIndex: 0,
     pendingPromises: [],
     promiseCache: new Map(),
+    promiseKeysByHook: new Map(),
+    cacheRecoveryKeys: new Set(),
+    abortControllers: new Set(),
     effectCleanups: new Map(),
     effectDeps: new Map(),
     hasStateUpdates: false,
+    disposed: false,
+    listItemLimit: LIST_ITEM_PAGE_SIZE,
     hookStateSnapshot: null,
     pickedColor: null,
   }
@@ -2028,13 +2661,10 @@ async function runCommandFromPackagePath(
 
   session.commandFn = commandFn as (...args: unknown[]) => unknown
 
-  // Multi-pass execution: effects change state → re-render → promises resolve → re-render
+  // Initial execution should show the extension view immediately. Async hooks
+  // hydrate through the session refresh loop instead of blocking the open.
   const execArgs = { arguments: argumentValues }
   let result: unknown
-
-  const snapshotHookStates = (): string => {
-    try { return JSON.stringify(session.hookStates) } catch { return String(session.hookStates.length) }
-  }
 
   const executePass = async (passLabel: string): Promise<void> => {
     console.log(`[Runner] ${passLabel}: executing ${extensionId}/${commandName}`)
@@ -2045,34 +2675,19 @@ async function runCommandFromPackagePath(
     session.feedback = []
     session.hasStateUpdates = false
     result = await Promise.resolve(commandFn(execArgs))
-    console.log(`[Runner] ${passLabel} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} hook states`)
+    console.log(
+      `[Runner] ${passLabel} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} hook states, stateUpdates=${session.hasStateUpdates}`,
+    )
   }
 
-  // Pass 1: effects fire, emitter callbacks may set state
-  await executePass('Pass 1')
-  let prevSnapshot = snapshotHookStates()
-
-  // Pass 2+: effects may have triggered setState → re-render to pick up new state.
-  // Some Raycast extensions fetch data inside plain useEffect callbacks instead
-  // of @raycast/utils hooks, so give those microtasks/subprocess callbacks a
-  // brief chance to commit state before deciding whether another render is needed.
-  for (let p = 2; p <= 5; p += 1) {
-    await delay(180)
-    const currSnapshot = snapshotHookStates()
-    const hasPromises = session.pendingPromises.length > 0
-    const stateChanged = currSnapshot !== prevSnapshot
-
-    if (!hasPromises && !stateChanged) break
-
-    if (hasPromises) {
-      console.log(`[Runner] Pass ${p}: waiting for ${session.pendingPromises.length} promises...`)
-      await Promise.allSettled(session.pendingPromises)
-    } else {
-      console.log(`[Runner] Pass ${p}: state changed by effects, re-rendering...`)
-    }
-
+  for (let p = 1; p <= INITIAL_RENDER_PASSES; p += 1) {
     await executePass(`Pass ${p}`)
-    prevSnapshot = snapshotHookStates()
+    if (!session.hasStateUpdates) break
+  }
+
+  const remainingInFlight = [...session.promiseCache.values()].filter((entry) => entry.promise).length
+  if (remainingInFlight > 0) {
+    console.log(`[Runner] Initial multi-pass exited with ${remainingInFlight} in-flight promises; polling refresh will pick them up.`)
   }
 
   if (commandName === 'pick-color' && session.pickedColor) {
@@ -2121,6 +2736,12 @@ export async function runExtensionCommand(
     return { ok: false, message: `Extension is not installed: ${extensionId}` }
   }
   console.log(`[Runner] Found package.json at ${packagePath}`)
+
+  for (const [sessionId, session] of sessions) {
+    if (session.extensionId === extensionId && session.commandName === commandName) {
+      deleteRuntimeSession(sessionId)
+    }
+  }
 
   try {
     return await runCommandFromPackagePath(
@@ -2192,6 +2813,9 @@ export async function invokeExtensionAction(
 
   try {
     await Promise.resolve(handler(request.formValues ?? {}))
+    if (session.commandFn && session.hasStateUpdates) {
+      return rerenderSessionCommand(session, 'Action')
+    }
     if (session.stack.length > 0) {
       return renderCurrentView(session)
     }
@@ -2210,9 +2834,12 @@ export async function invokeExtensionAction(
 }
 
 export function disposeExtensionSession(sessionId: string): boolean {
-  return sessions.delete(sessionId)
+  return deleteRuntimeSession(sessionId)
 }
 
 export function clearAllExtensionSessions(): void {
+  for (const session of sessions.values()) {
+    cleanupRuntimeSession(session)
+  }
   sessions.clear()
 }

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react'
 import {
   AI_CAPABILITIES,
   DEFAULT_PROVIDER_MODELS,
@@ -44,6 +51,88 @@ const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'permissions', label: 'Permissions', icon: 'lock' },
   { id: 'advanced', label: 'Advanced', icon: 'tool' },
 ]
+
+const DEFAULT_RAYMES_HOTKEY = 'Alt+Space'
+
+const KEY_ACCELERATORS: Record<string, string> = {
+  ' ': 'Space',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  ArrowUp: 'Up',
+}
+
+const CODE_ACCELERATORS: Record<string, string> = {
+  Space: 'Space',
+  Enter: 'Enter',
+  Tab: 'Tab',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  ArrowUp: 'Up',
+  Backquote: '`',
+  Minus: '-',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+}
+
+function acceleratorFromKeyEvent(event: ReactKeyboardEvent): string | null {
+  const key =
+    (event.code.startsWith('Key') ? event.code.slice(3) : null) ??
+    (event.code.startsWith('Digit') ? event.code.slice(5) : null) ??
+    (/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(event.code) ? event.code : null) ??
+    (event.code === 'Equal' && event.shiftKey ? 'Plus' : CODE_ACCELERATORS[event.code]) ??
+    KEY_ACCELERATORS[event.key] ??
+    event.key
+  if (['Alt', 'Control', 'Meta', 'Shift'].includes(key)) return null
+
+  const normalizedKey = key.length === 1 && /[a-z]/i.test(key) ? key.toUpperCase() : key
+
+  const modifiers = [
+    event.metaKey ? 'Command' : null,
+    event.ctrlKey ? 'Control' : null,
+    event.altKey ? 'Alt' : null,
+    event.shiftKey ? 'Shift' : null,
+  ].filter((value): value is string => value !== null)
+
+  if (modifiers.length === 0 && !/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(normalizedKey)) {
+    return null
+  }
+  return [...modifiers, normalizedKey].join('+')
+}
+
+function hotkeyDisplay(accelerator: string): string {
+  const labels: Record<string, string> = {
+    Alt: '⌥',
+    Command: '⌘',
+    CommandOrControl: navigator.platform.includes('Mac') ? '⌘' : 'Ctrl',
+    Control: '⌃',
+    Shift: '⇧',
+    Space: 'Space',
+    Up: '↑',
+    Down: '↓',
+    Left: '←',
+    Right: '→',
+  }
+  return accelerator
+    .split('+')
+    .map((part) => labels[part] ?? part)
+    .join(' ')
+}
+
+function isValidStoredAccelerator(accelerator: string): boolean {
+  return (
+    accelerator.length > 0 &&
+    /^[\x20-\x7E]+$/.test(accelerator) &&
+    accelerator.split('+').every((part) => part.trim().length > 0)
+  )
+}
 
 function SettingsIcon({ name, className }: { name: string; className?: string }): JSX.Element {
   const common = {
@@ -294,6 +383,12 @@ export default function SettingsView({
     useState<VoiceModelId>('moonshine-base-en')
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
   const [msg, setMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
+  const [raymesHotkey, setRaymesHotkeyState] = useState(DEFAULT_RAYMES_HOTKEY)
+  const [hotkeyRecording, setHotkeyRecording] = useState(false)
+  const [hotkeyMessage, setHotkeyMessage] = useState<{
+    tone: 'success' | 'error'
+    text: string
+  } | null>(null)
 
   const loadAiModels = useCallback(async (provider: ProviderId) => {
     setAiModelsLoading(true)
@@ -386,6 +481,13 @@ export default function SettingsView({
 
     setSafetyDryRunState(Boolean(dryRun))
     setVoiceModes(modes)
+    const savedHotkey = c.raymesHotkey ?? DEFAULT_RAYMES_HOTKEY
+    if (isValidStoredAccelerator(savedHotkey)) {
+      setRaymesHotkeyState(savedHotkey)
+    } else {
+      setRaymesHotkeyState(DEFAULT_RAYMES_HOTKEY)
+      void window.raymes.setLlmConfig({ raymesHotkey: DEFAULT_RAYMES_HOTKEY })
+    }
     void loadAiModels(provider)
   }, [loadAiModels, refreshVoiceModels])
 
@@ -408,13 +510,43 @@ export default function SettingsView({
   useEffect(() => {
     const onEsc = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
+      if (hotkeyRecording) {
+        setHotkeyRecording(false)
+        setHotkeyMessage(null)
+        return
+      }
       e.preventDefault()
       e.stopPropagation()
       onBack()
     }
     window.addEventListener('keydown', onEsc, true)
     return () => window.removeEventListener('keydown', onEsc, true)
-  }, [onBack])
+  }, [hotkeyRecording, onBack])
+
+  const saveHotkey = useCallback(async (accelerator: string) => {
+    try {
+      const result = await window.raymes.setLlmConfig({ raymesHotkey: accelerator })
+      if (!result || typeof result !== 'object' || !('ok' in result)) {
+        setRaymesHotkeyState(accelerator)
+        setHotkeyRecording(false)
+        setHotkeyMessage({
+          tone: 'success',
+          text: 'Saved. Restart Raymes once to activate this shortcut.',
+        })
+        return
+      }
+      setRaymesHotkeyState(result.accelerator)
+      setHotkeyRecording(false)
+      setHotkeyMessage(
+        result.ok
+          ? { tone: 'success', text: 'Shortcut updated.' }
+          : { tone: 'error', text: result.error ?? 'Could not save shortcut.' }
+      )
+    } catch {
+      setHotkeyRecording(false)
+      setHotkeyMessage({ tone: 'error', text: 'Could not save shortcut.' })
+    }
+  }, [])
 
   const selectAiProvider = (provider: ProviderId): void => {
     const currentProviderConfig: AiProviderConfig =
@@ -761,11 +893,57 @@ export default function SettingsView({
               <Divider />
               <SettingsRow
                 label="Raymes Hotkey"
-                detail="Global shortcut that opens the focused command palette."
+                detail={
+                  hotkeyRecording
+                    ? 'Press a modifier and another key. Escape cancels; Backspace restores the default.'
+                    : 'Global shortcut that opens the focused command palette. Click to change it.'
+                }
               >
-                <div className="flex max-w-[280px] items-center justify-center rounded-raymes-field bg-white/[0.10] px-3 py-2 text-[13px] font-semibold text-ink-1">
-                  Option Space
-                </div>
+                <button
+                  type="button"
+                  aria-label="Record Raymes hotkey"
+                  aria-pressed={hotkeyRecording}
+                  onClick={() => {
+                    setHotkeyRecording(true)
+                    setHotkeyMessage(null)
+                  }}
+                  onBlur={() => setHotkeyRecording(false)}
+                  onKeyDown={(event) => {
+                    if (!hotkeyRecording) return
+                    event.preventDefault()
+                    event.stopPropagation()
+                    if (event.key === 'Escape') {
+                      setHotkeyRecording(false)
+                      setHotkeyMessage(null)
+                      return
+                    }
+                    if (event.key === 'Backspace' || event.key === 'Delete') {
+                      void saveHotkey(DEFAULT_RAYMES_HOTKEY)
+                      return
+                    }
+                    const accelerator = acceleratorFromKeyEvent(event)
+                    if (!accelerator) return
+                    void saveHotkey(accelerator)
+                  }}
+                  className={cx(
+                    'flex min-h-9 w-full max-w-[280px] items-center justify-center rounded-raymes-field border px-3 py-2 text-[13px] font-semibold transition',
+                    hotkeyRecording
+                      ? 'border-accent/70 bg-accent/15 text-ink-1 shadow-[0_0_0_3px_rgba(124,119,255,0.12)]'
+                      : 'border-white/[0.08] bg-white/[0.10] text-ink-1 hover:bg-white/[0.14]'
+                  )}
+                >
+                  {hotkeyRecording ? 'Press shortcut…' : hotkeyDisplay(raymesHotkey)}
+                </button>
+                {hotkeyMessage ? (
+                  <p
+                    className={cx(
+                      'mt-1.5 text-[11px]',
+                      hotkeyMessage.tone === 'success' ? 'text-emerald-300' : 'text-rose-300'
+                    )}
+                  >
+                    {hotkeyMessage.text}
+                  </p>
+                ) : null}
               </SettingsRow>
               <Divider />
               <SettingsRow label="Last Screen">

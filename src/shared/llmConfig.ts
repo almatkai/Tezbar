@@ -50,6 +50,8 @@ export type LlmConfigRecord = {
   aiActionRequirePermission?: boolean
   aiActionRedactionEnabled?: boolean
   voiceSttModelId?: 'moonshine-base-en' | 'whisper-base' | 'whisper-small'
+  raymesHotkey?: string
   /** Milliseconds to remember palette UI (e.g. Providers) after hide. Default 60000. Use 0 to always reset. */
   uiStateRetentionMs?: number
+  settingsInitialTab?: 'general' | 'ai' | 'voice' | 'permissions' | 'advanced'
 }

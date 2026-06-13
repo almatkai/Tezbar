@@ -46,6 +46,10 @@ contextBridge.exposeInMainWorld('raymes', {
     ipcRenderer.invoke('extension:search-text-changed', payload),
   extensionRefreshSession: (payload: { sessionId: string }) =>
     ipcRenderer.invoke('extension:refresh-session', payload),
+  extensionDisposeSession: (payload: { sessionId: string }) =>
+    ipcRenderer.invoke('extension:dispose-session', payload),
+  extensionLoadMore: (payload: { sessionId: string }) =>
+    ipcRenderer.invoke('extension:load-more', payload),
   clipboardReadText: () => ipcRenderer.invoke('clipboard:read'),
   clipboardWriteText: (text: string) => ipcRenderer.invoke('clipboard:write', text),
   shellOpen: (target: string) => ipcRenderer.invoke('shell:open', target),

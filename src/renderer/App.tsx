@@ -29,6 +29,23 @@ type Surface =
   | 'notes'
   | 'emoji-picker'
 
+type SettingsTab = 'general' | 'ai' | 'voice' | 'permissions' | 'advanced'
+
+const SETTINGS_TAB_STORAGE_KEY = 'raymes:settings-tab'
+
+function normalizeSettingsTab(tab: unknown): SettingsTab {
+  return tab === 'ai' || tab === 'voice' || tab === 'permissions' || tab === 'advanced'
+    ? tab
+    : 'general'
+}
+
+async function openNativeSettings(tab: SettingsTab): Promise<void> {
+  window.localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, tab)
+  await window.raymes.setLlmConfig({ settingsInitialTab: tab })
+  await window.raymes.openSettingsWindow()
+  await window.raymes.hide()
+}
+
 const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
   'ai-chat': '[aria-label="AI Chat"]',
   settings: '[aria-label="Settings"]',
@@ -53,6 +70,29 @@ function isSettingsWindow(): boolean {
 
 function SettingsWindowApp(): JSX.Element {
   const [surface, setSurface] = useState<'settings' | 'permissions'>('settings')
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void window.raymes.getLlmConfig().then((config) => {
+      if (!cancelled) setSettingsTab(normalizeSettingsTab(config.settingsInitialTab))
+    })
+
+    const onStorage = (event: StorageEvent): void => {
+      if (event.key !== SETTINGS_TAB_STORAGE_KEY) return
+      setSettingsTab(normalizeSettingsTab(event.newValue))
+      setSurface('settings')
+    }
+    window.addEventListener('storage', onStorage)
+    return () => {
+      cancelled = true
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [])
+
+  if (settingsTab === null) {
+    return <div className="h-screen w-full bg-[#1e1f2e]" />
+  }
 
   return (
     <div className="flex h-screen w-full bg-[#1e1f2e]">
@@ -60,6 +100,8 @@ function SettingsWindowApp(): JSX.Element {
         <PermissionsView nativeWindow onBack={() => setSurface('settings')} />
       ) : (
         <SettingsView
+          key={settingsTab}
+          initialTab={settingsTab}
           nativeWindow
           onBack={() => {
             void window.raymes.closeCurrentWindow()
@@ -136,7 +178,7 @@ function LauncherApp(): JSX.Element {
   useEffect(() => {
     return window.raymes.onAppSurfaceOpen((nextSurface) => {
       if (nextSurface === 'settings') {
-        void window.raymes.openSettingsWindow()
+        void openNativeSettings('general')
         return
       }
       setSurface(nextSurface)
@@ -244,8 +286,7 @@ function LauncherApp(): JSX.Element {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ',') {
         e.preventDefault()
-        void window.raymes.openSettingsWindow()
-        void window.raymes.hide()
+        void openNativeSettings('ai')
       }
     }
     window.addEventListener('keydown', onKey)
@@ -346,8 +387,7 @@ function LauncherApp(): JSX.Element {
             boot={aiChatBoot}
             onBack={() => setSurface('command')}
             onOpenSettings={() => {
-              setSettingsInitialTab('ai')
-              setSurface('settings')
+              void openNativeSettings('ai')
             }}
           />
         ) : (
@@ -365,15 +405,17 @@ function LauncherApp(): JSX.Element {
             }}
             onOpenSettings={() => {
               setSettingsInitialTab('general')
-              void window.raymes.openSettingsWindow()
-              void window.raymes.hide()
+              void openNativeSettings('general')
             }}
             onConfigureAi={() => {
-              setSettingsInitialTab('ai')
-              setSurface('settings')
+              void openNativeSettings('ai')
             }}
-            onOpenExtensions={() => setSurface('extensions')}
+            onOpenExtensions={() => {
+              setCommandInitialValue('')
+              setSurface('extensions')
+            }}
             onOpenExtensionRuntime={(initial) => {
+              setCommandInitialValue('')
               setExtensionRuntimeInitial(initial)
               setSurface('extension-runtime')
             }}

@@ -69,7 +69,9 @@ import {
 } from './extension-registry'
 import {
   clearAllExtensionSessions,
+  disposeExtensionSession,
   invokeExtensionAction,
+  loadMoreExtensionSession,
   refreshExtensionSession,
   runExtensionCommand,
 } from './extension-runner'
@@ -197,9 +199,14 @@ async function confirmQuitRaymes(getWindow: () => BrowserWindow | null): Promise
 const CHAT_SYSTEM_PROMPT =
   'You are Raymes, a helpful assistant. Answer clearly and concisely unless the user asks for more detail.'
 
-type DragMonitorControls = {
+type IpcControls = {
   startWindowDragMonitoring: (win: BrowserWindow) => void
   stopWindowDragMonitoring: (win: BrowserWindow) => void
+  updateRaymesHotkey?: (accelerator: string) => {
+    ok: boolean
+    accelerator: string
+    error?: string
+  }
 }
 
 function sendAgentEvent(sender: Electron.WebContents, event: AgentRunEvent): void {
@@ -334,7 +341,7 @@ export function shutdownIpcHandlers(): void {
 
 export function registerIpcHandlers(
   getWindow: () => BrowserWindow | null,
-  controls?: DragMonitorControls
+  controls?: IpcControls
 ): void {
   extensionRegistryEvents.on('progress', (payload) => {
     const win = getWindow()
@@ -352,7 +359,19 @@ export function registerIpcHandlers(
 
   ipcMain.handle('llm-config-set', async (_event, patch: unknown) => {
     if (!patch || typeof patch !== 'object') return
-    writeConfigPatch(patch as Record<string, unknown>)
+    const configPatch = { ...(patch as Record<string, unknown>) }
+    const requestedHotkey = configPatch.raymesHotkey
+    delete configPatch.raymesHotkey
+
+    if (typeof requestedHotkey === 'string' && controls?.updateRaymesHotkey) {
+      const result = controls.updateRaymesHotkey(requestedHotkey)
+      if (!result.ok) return result
+      if (Object.keys(configPatch).length > 0) writeConfigPatch(configPatch)
+      invalidateProviderCache()
+      return result
+    }
+
+    writeConfigPatch(configPatch)
     invalidateProviderCache()
   })
 
@@ -913,6 +932,24 @@ export function registerIpcHandlers(
     }
 
     return refreshExtensionSession({ sessionId: body.sessionId })
+  })
+
+  ipcMain.handle('extension:dispose-session', async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') return false
+    const body = payload as { sessionId?: unknown }
+    if (typeof body.sessionId !== 'string') return false
+    return disposeExtensionSession(body.sessionId)
+  })
+
+  ipcMain.handle('extension:load-more', async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Invalid extension pagination payload')
+    }
+    const body = payload as { sessionId?: unknown }
+    if (typeof body.sessionId !== 'string') {
+      throw new Error('sessionId is required')
+    }
+    return loadMoreExtensionSession({ sessionId: body.sessionId })
   })
 
   ipcMain.handle('clipboard:read', async () => {

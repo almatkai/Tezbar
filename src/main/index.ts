@@ -27,7 +27,13 @@ process.on('uncaughtException', (error) => {
   if (isStdioWriteEio(error)) return
   throw error
 })
-import { getUiStateRetentionMs, flushConfig } from './llm/configStore'
+import {
+  DEFAULT_RAYMES_HOTKEY,
+  flushConfig,
+  getRaymesHotkey,
+  getUiStateRetentionMs,
+  setRaymesHotkey,
+} from './llm/configStore'
 import { registerIpcHandlers, shutdownIpcHandlers } from './ipc'
 import { startClipboardWatcher, stopClipboardWatcher } from './search/providers/clipboardProvider'
 import {
@@ -52,6 +58,7 @@ let settingsWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let commandBarVisible = false
 let isAppQuitting = false
+let raymesHotkey = getRaymesHotkey()
 type AppSurface = 'command' | 'settings' | 'clipboard'
 /** Set when the palette is hidden; used to decide whether to reset renderer UI on reopen. */
 let lastPaletteHideAt: number | null = null
@@ -404,6 +411,7 @@ function startAltSpaceHoldWatcher(): void {
   altSpaceHoldOpenedAt = Date.now()
   altSpaceHotkeyDictationArmed = false
   altSpaceHoldTriggered = false
+  showCommandBar()
 
   altSpaceHoldTimer = setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed()) {
@@ -444,8 +452,8 @@ function startAltSpaceHoldWatcher(): void {
       return
     }
 
-    // Not held at threshold => quick click/tap behavior (toggle UI).
-    toggleCommandBarImmediate()
+    // The launcher was already presented on key-down. A quick tap only
+    // finishes gesture detection; a sustained chord activates dictation.
     stopAltSpaceHoldWatcher()
   }, ALT_SPACE_POLL_MS)
 }
@@ -668,8 +676,14 @@ function openSettingsWindow(): void {
   if (isAppQuitting) return
 
   if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.show()
-    settingsWindow.focus()
+    const existingWindow = settingsWindow
+    existingWindow.hide()
+    existingWindow.webContents.once('did-finish-load', () => {
+      if (existingWindow.isDestroyed()) return
+      existingWindow.show()
+      existingWindow.focus()
+    })
+    loadRenderer(existingWindow, '?window=settings')
     return
   }
 
@@ -698,6 +712,10 @@ function openSettingsWindow(): void {
 
   settingsWindow.on('closed', () => {
     settingsWindow = null
+  })
+  settingsWindow.on('page-title-updated', (event) => {
+    event.preventDefault()
+    settingsWindow?.setTitle('Raymes Settings')
   })
   settingsWindow.once('ready-to-show', () => {
     if (!settingsWindow || settingsWindow.isDestroyed()) return
@@ -832,7 +850,7 @@ function buildApplicationMenu(): Electron.Menu {
         { type: 'separator' },
         {
           label: 'Show Raymes',
-          accelerator: 'Alt+Space',
+          accelerator: raymesHotkey,
           click: () => openAppSurface('command'),
         },
       ],
@@ -851,8 +869,64 @@ function buildApplicationMenu(): Electron.Menu {
   return Menu.buildFromTemplate(template)
 }
 
+function handleRaymesHotkey(): void {
+  if (raymesHotkey === DEFAULT_RAYMES_HOTKEY) {
+    handleAltSpaceHotkey()
+    return
+  }
+  toggleCommandBarImmediate()
+}
+
+function registerRaymesHotkey(accelerator: string): boolean {
+  try {
+    return globalShortcut.register(accelerator, handleRaymesHotkey)
+  } catch {
+    return false
+  }
+}
+
+function updateRaymesHotkey(accelerator: string): {
+  ok: boolean
+  accelerator: string
+  error?: string
+} {
+  const next = accelerator.trim()
+  if (!next) {
+    return { ok: false, accelerator: raymesHotkey, error: 'Press a valid shortcut.' }
+  }
+  if (next === raymesHotkey) {
+    return { ok: true, accelerator: raymesHotkey }
+  }
+
+  const previous = raymesHotkey
+  globalShortcut.unregister(previous)
+  raymesHotkey = next
+
+  if (!registerRaymesHotkey(next)) {
+    raymesHotkey = previous
+    registerRaymesHotkey(previous)
+    return {
+      ok: false,
+      accelerator: previous,
+      error: 'That shortcut is unavailable. It may already be used by another app.',
+    }
+  }
+
+  stopFocusedAltSpaceGesture()
+  stopAltSpaceHoldWatcher()
+  setRaymesHotkey(next)
+  Menu.setApplicationMenu(buildApplicationMenu())
+  return { ok: true, accelerator: next }
+}
+
 function registerHotkey(): void {
-  const okSpace = globalShortcut.register('Alt+Space', handleAltSpaceHotkey)
+  let okSpace = registerRaymesHotkey(raymesHotkey)
+  if (!okSpace && raymesHotkey !== DEFAULT_RAYMES_HOTKEY) {
+    console.warn(`Failed to register saved global shortcut ${raymesHotkey}; restoring default`)
+    raymesHotkey = DEFAULT_RAYMES_HOTKEY
+    okSpace = registerRaymesHotkey(raymesHotkey)
+    setRaymesHotkey(raymesHotkey)
+  }
   const okEnter = globalShortcut.register('Alt+Enter', toggleCommandBarImmediate)
   const okNote = globalShortcut.register('CommandOrControl+N', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return
@@ -865,7 +939,7 @@ function registerHotkey(): void {
   })
 
   if (!okSpace) {
-    console.warn('Failed to register global shortcut Alt+Space')
+    console.warn(`Failed to register global shortcut ${raymesHotkey}`)
   }
   if (!okEnter) {
     console.warn('Failed to register global shortcut Alt+Enter')
@@ -907,6 +981,7 @@ app.whenReady().then(() => {
   registerIpcHandlers(() => mainWindow, {
     startWindowDragMonitoring,
     stopWindowDragMonitoring,
+    updateRaymesHotkey,
   })
   ipcMain.handle('settings:open-window', async () => {
     openSettingsWindow()

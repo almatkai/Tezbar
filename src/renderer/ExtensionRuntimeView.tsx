@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ExtensionRunCommandResult,
   ExtensionRuntimeAction,
@@ -260,6 +260,8 @@ export default function ExtensionRuntimeView({
 }): JSX.Element {
   const [state, setState] = useState<RuntimeViewState>(() => fromRunResult(initial))
   const [error, setError] = useState<string | null>(null)
+  const searchRequestSeq = useRef(0)
+  const disposeTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     setState(fromRunResult(initial))
@@ -267,48 +269,74 @@ export default function ExtensionRuntimeView({
   }, [initial])
 
   useEffect(() => {
-    if (state.root.props?.isLoading !== true) return
-
     let cancelled = false
-    const timer = window.setInterval(() => {
-      void window.raymes.extensionRefreshSession({ sessionId: state.sessionId })
-        .then((result) => {
-          if (cancelled) return
-          if (!result.ok) {
-            setError(result.message)
-            return
-          }
-          if (result.mode === 'no-view') {
-            setState((prev) => ({ ...prev, message: result.message }))
-            return
-          }
-          setState({
-            sessionId: result.sessionId,
-            extensionId: result.extensionId,
-            commandName: result.commandName,
-            title: result.title,
-            root: result.root,
-            actions: result.actions,
-            message: result.message,
-          })
+    let timer: number | null = null
+    if (disposeTimerRef.current !== null) {
+      window.clearTimeout(disposeTimerRef.current)
+      disposeTimerRef.current = null
+    }
+
+    const poll = async (): Promise<void> => {
+      const startedAt = performance.now()
+      console.log(`[RuntimeView] Refresh start session=${state.sessionId}`)
+      try {
+        const result = await window.raymes.extensionRefreshSession({ sessionId: state.sessionId })
+        console.log(
+          `[RuntimeView] Refresh complete session=${state.sessionId} after ${Math.round(performance.now() - startedAt)}ms; mode=${
+            result.ok ? result.mode : 'error'
+          }`,
+        )
+        if (cancelled || (result.ok && result.mode === 'unchanged')) return
+        if (!result.ok) {
+          setError(result.message)
+          return
+        }
+        if (result.mode === 'no-view') {
+          setState((prev) => ({ ...prev, message: result.message }))
+          return
+        }
+        setState({
+          sessionId: result.sessionId,
+          extensionId: result.extensionId,
+          commandName: result.commandName,
+          title: result.title,
+          root: result.root,
+          actions: result.actions,
+          message: result.message,
         })
-        .catch((error: unknown) => {
-          if (!cancelled) setError(error instanceof Error ? error.message : String(error))
-        })
-    }, 750)
+      } catch (error) {
+        console.error(
+          `[RuntimeView] Refresh failed session=${state.sessionId} after ${Math.round(performance.now() - startedAt)}ms`,
+          error,
+        )
+        if (!cancelled) setError(error instanceof Error ? error.message : String(error))
+      } finally {
+        if (!cancelled) timer = window.setTimeout(() => void poll(), 500)
+      }
+    }
+
+    timer = window.setTimeout(() => void poll(), 100)
 
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      if (timer !== null) window.clearTimeout(timer)
+      const sessionId = state.sessionId
+      disposeTimerRef.current = window.setTimeout(() => {
+        disposeTimerRef.current = null
+        void window.raymes.extensionDisposeSession({ sessionId })
+      }, 0)
     }
-  }, [state.root.props?.isLoading, state.sessionId])
+  }, [state.sessionId])
 
   const handleSearchTextChanged = useCallback(async (searchText: string) => {
+    const requestSeq = searchRequestSeq.current + 1
+    searchRequestSeq.current = requestSeq
     console.log(`[RuntimeView] Search text changed, sending to sandbox: "${searchText}"`)
     const result = await window.raymes.extensionSearchTextChanged({
       sessionId: state.sessionId,
       searchText,
     })
+    if (requestSeq !== searchRequestSeq.current) return
 
     if (!result.ok) {
       console.error('[RuntimeView] Search failed:', result.message)
@@ -323,6 +351,28 @@ export default function ExtensionRuntimeView({
     }
 
     console.log(`[RuntimeView] Search returned view with root type="${result.root.type}", ${result.root.children?.length ?? 0} children`)
+    setState({
+      sessionId: result.sessionId,
+      extensionId: result.extensionId,
+      commandName: result.commandName,
+      title: result.title,
+      root: result.root,
+      actions: result.actions,
+      message: result.message,
+    })
+  }, [state.sessionId])
+
+  const handleLoadMore = useCallback(async () => {
+    const result = await window.raymes.extensionLoadMore({ sessionId: state.sessionId })
+    if (result.ok && result.mode === 'unchanged') return
+    if (!result.ok) {
+      setError(result.message)
+      return
+    }
+    if (result.mode === 'no-view') {
+      setState((prev) => ({ ...prev, message: result.message }))
+      return
+    }
     setState({
       sessionId: result.sessionId,
       extensionId: result.extensionId,
@@ -360,6 +410,7 @@ export default function ExtensionRuntimeView({
           actions={state.actions}
           onBack={onBack}
           onSearchTextChanged={handleSearchTextChanged}
+          onLoadMore={handleLoadMore}
           onInvokeAction={async (actionId, formValues) => {
             setError(null)
             const result = await window.raymes.extensionInvokeAction({

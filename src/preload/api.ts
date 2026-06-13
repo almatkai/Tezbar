@@ -8,8 +8,11 @@ import type {
   InstalledExtension,
 } from '../shared/extensions'
 import type {
+  ExtensionDisposeSessionRequest,
   ExtensionInvokeActionResult,
+  ExtensionLoadMoreSessionRequest,
   ExtensionRefreshSessionRequest,
+  ExtensionRefreshSessionResult,
   ExtensionRunCommandResult,
   ExtensionSearchTextChangedResult,
   InstalledRegistryExtension,
@@ -46,6 +49,12 @@ export type GithubPollResult =
   | { status: 'success'; access_token: string; refresh_token?: string; expires_in?: number }
   | { status: 'error'; error: string }
 
+export type HotkeyUpdateResult = {
+  ok: boolean
+  accelerator: string
+  error?: string
+}
+
 export type RaymesApi = {
   hide: () => Promise<void>
   show: () => Promise<void>
@@ -81,7 +90,13 @@ export type RaymesApi = {
   }) => Promise<ExtensionSearchTextChangedResult>
   extensionRefreshSession: (
     payload: ExtensionRefreshSessionRequest
-  ) => Promise<ExtensionRunCommandResult>
+  ) => Promise<ExtensionRefreshSessionResult>
+  extensionDisposeSession: (
+    payload: ExtensionDisposeSessionRequest
+  ) => Promise<boolean>
+  extensionLoadMore: (
+    payload: ExtensionLoadMoreSessionRequest
+  ) => Promise<ExtensionRefreshSessionResult>
   clipboardReadText: () => Promise<string>
   clipboardWriteText: (text: string) => Promise<{ ok: boolean }>
   shellOpen: (target: string) => Promise<{ ok: boolean }>
@@ -133,7 +148,7 @@ export type RaymesApi = {
   onStreamDone: (listener: () => void) => () => void
   onStreamError: (listener: (message: string) => void) => () => void
   getLlmConfig: () => Promise<LlmConfigRecord>
-  setLlmConfig: (patch: LlmConfigRecord) => Promise<void>
+  setLlmConfig: (patch: LlmConfigRecord) => Promise<void | HotkeyUpdateResult>
   getLlmProviderStatuses: () => Promise<ProviderConnectionStatuses>
   listLlmModels: (providerId: ProviderId) => Promise<string[]>
   getWindowZoomFactor: () => number

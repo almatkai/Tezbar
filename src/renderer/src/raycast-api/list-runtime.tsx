@@ -1,6 +1,9 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
-import type { ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
+import type {
+  ExtensionRuntimeAction,
+  ExtensionRuntimeNode,
+} from '../../../shared/extensionRuntime'
 import { Hint, HintBar, Kbd, ViewHeader } from '../../ui/primitives'
 import { MetadataItem, MetadataSidebar } from './detail-runtime'
 
@@ -16,6 +19,34 @@ type ListRow = {
   detail?: ExtensionRuntimeNode
   section?: string
   actionIds?: string[]
+}
+
+type ListAccessory = {
+  actionId?: string
+  options: Array<{ title: string; value: string }>
+}
+
+function parseListAccessory(value: unknown): ListAccessory | null {
+  if (!value || typeof value !== 'object' || !('type' in value)) return null
+  const node = value as ExtensionRuntimeNode
+  if (node.type !== 'List.Dropdown') return null
+
+  const options: ListAccessory['options'] = []
+  const walk = (entry: ExtensionRuntimeNode): void => {
+    if (entry.type === 'List.Dropdown.Item') {
+      const title = textValue(entry.props?.title)
+      const value = textValue(entry.props?.value) || title
+      if (title || value) options.push({ title: title || value, value })
+      return
+    }
+    for (const child of entry.children ?? []) walk(child)
+  }
+  walk(node)
+
+  return {
+    actionId: typeof node.props?.actionId === 'string' ? node.props.actionId : undefined,
+    options,
+  }
 }
 
 function cleanSubtitle(value: unknown): string {
@@ -140,7 +171,27 @@ function SymbolIcon({ icon, title }: { icon: unknown; title: string }): JSX.Elem
   return (
     <span className="grid h-5 w-5 shrink-0 place-items-center text-accent-1" aria-hidden="true">
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-        {label.includes('globe') || label.includes('network') || label.includes('wifi') ? (
+        {label.includes('check') ? (
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="m8 12 2.6 2.6L16.5 9" />
+          </>
+        ) : label.includes('xmark') || label.includes('close') ? (
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="m9 9 6 6m0-6-6 6" />
+          </>
+        ) : label.includes('minus') ? (
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M8 12h8" />
+          </>
+        ) : label.includes('exclamation') ? (
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v6m0 4h.01" />
+          </>
+        ) : label.includes('globe') || label.includes('network') || label.includes('wifi') ? (
           <>
             <circle cx="12" cy="12" r="9" />
             <path d="M3 12h18M12 3c2.5 2.7 3.7 5.7 3.7 9S14.5 18.3 12 21M12 3c-2.5 2.7-3.7 5.7-3.7 9S9.5 18.3 12 21" />
@@ -181,6 +232,9 @@ function SymbolIcon({ icon, title }: { icon: unknown; title: string }): JSX.Elem
 
 function RowIcon({ row }: { row: ListRow }): JSX.Element | null {
   if (row.icon?.fileIcon) return <FileIcon path={row.icon.fileIcon} title={row.title} />
+  if (typeof row.icon?.source === 'string' && /^(?:data:image|https?:|file:)/i.test(row.icon.source)) {
+    return <img src={row.icon.source} alt="" className="h-5 w-5 shrink-0" draggable={false} />
+  }
   if (row.icon?.source) return <SymbolIcon icon={row.icon.source} title={row.title} />
   return null
 }
@@ -195,6 +249,43 @@ function accessoryText(accessory: NonNullable<ListRow['accessories']>[number]): 
     if (!Number.isNaN(date.getTime())) return date.toLocaleDateString()
   }
   return ''
+}
+
+function Accessory({
+  accessory,
+}: {
+  accessory: NonNullable<ListRow['accessories']>[number]
+}): JSX.Element | null {
+  const value = accessoryText(accessory)
+  if (!value) return null
+  const isTag = Boolean(accessory.tag)
+  const tagColor = textValue(
+    accessory.tag && typeof accessory.tag === 'object'
+      ? (accessory.tag as { color?: unknown }).color
+      : '',
+  ).toLowerCase()
+  const colorClass =
+    tagColor.includes('blue')
+      ? 'bg-blue-500/20 text-blue-300'
+      : tagColor.includes('orange')
+        ? 'bg-orange-500/20 text-orange-300'
+        : tagColor.includes('red')
+          ? 'bg-red-500/20 text-red-300'
+          : tagColor.includes('green')
+            ? 'bg-emerald-500/20 text-emerald-300'
+            : 'bg-white/10 text-ink-2'
+
+  return (
+    <span
+      className={
+        isTag
+          ? `max-w-[190px] shrink-0 truncate rounded-[8px] px-2 py-1 text-[11px] font-medium ${colorClass}`
+          : 'max-w-[240px] shrink-0 truncate text-[12px] text-ink-3'
+      }
+    >
+      {value}
+    </span>
+  )
 }
 
 function markdownFromListDetail(detail: ExtensionRuntimeNode | undefined): string {
@@ -291,21 +382,24 @@ export function ListRuntime({
   title,
   onBack,
   onRunPrimaryAction,
+  actions,
   onSearchTextChanged,
+  onLoadMore,
 }: {
   root: ExtensionRuntimeNode
   title: string
   onBack: () => void
-  onRunPrimaryAction: (actionId?: string) => void
+  onRunPrimaryAction: (actionId?: string, formValues?: Record<string, string>) => void
+  actions: ExtensionRuntimeAction[]
   onOpenActions: () => void
   onSearchTextChanged: (searchText: string) => Promise<void> | void
+  onLoadMore: () => Promise<void> | void
 }): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   const rows = useMemo(() => {
     const parsed = parseListRows(root)
-    console.log(`[ListRuntime] Received root type="${root.type}", parsed ${parsed.length} rows`, root.children?.length ?? 0, 'children')
     return parsed
   }, [root])
   const searchBarPlaceholder = useMemo(() => {
@@ -313,18 +407,40 @@ export function ListRuntime({
       ? root.props.searchBarPlaceholder
       : 'Search applications'
   }, [root.props])
-
-  const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState(0)
-
+  const navigationTitle =
+    typeof root.props?.navigationTitle === 'string' && root.props.navigationTitle.trim()
+      ? root.props.navigationTitle
+      : title
+  const searchAccessory = useMemo(
+    () => parseListAccessory(root.props?.searchBarAccessory),
+    [root.props?.searchBarAccessory],
+  )
   const hasServerSearch = onSearchTextChanged !== undefined && root.props?.__hasServerSearch === true
+  const hasMore = root.props?.__hasMore === true
+  const shouldShowSearch = hasServerSearch || Boolean(searchAccessory) || !root.props?.navigationTitle
+
+  const [query, setQuery] = useState(
+    typeof root.props?.searchText === 'string' ? root.props.searchText : '',
+  )
+  const [selected, setSelected] = useState(0)
+  const [accessoryValue, setAccessoryValue] = useState(
+    searchAccessory?.options[0]?.value ?? '',
+  )
+  const [loadingMore, setLoadingMore] = useState(false)
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSentQuery = useRef('')
+  const loadingMoreRef = useRef(false)
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (typeof root.props?.searchText === 'string') {
+      setQuery(root.props.searchText)
+    }
+  }, [root.props?.searchText])
 
   useEffect(() => {
     if (!hasServerSearch) return
@@ -350,7 +466,20 @@ export function ListRuntime({
 
   const groupedSections = useMemo(() => groupBySection(filteredRows), [filteredRows])
   const selectedRow = filteredRows[selected]
+  const selectedAction = actions.find((action) => selectedRow?.actionIds?.[0] === action.id)
   const hasDetails = filteredRows.some((row) => row.detail)
+
+  const requestMore = async (): Promise<void> => {
+    if (!hasMore || loadingMoreRef.current) return
+    loadingMoreRef.current = true
+    setLoadingMore(true)
+    try {
+      await onLoadMore()
+    } finally {
+      loadingMoreRef.current = false
+      setLoadingMore(false)
+    }
+  }
 
   useEffect(() => {
     if (selected >= filteredRows.length) {
@@ -370,7 +499,9 @@ export function ListRuntime({
 
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setSelected((i) => Math.min(i + 1, filteredRows.length - 1))
+      const next = Math.min(selected + 1, filteredRows.length - 1)
+      setSelected(next)
+      if (hasMore && next >= filteredRows.length - 3) void requestMore()
       return
     }
 
@@ -399,6 +530,9 @@ export function ListRuntime({
   }, [root.children])
 
   const hasQuery = query.trim().length > 0
+  const isFirstTimePackageLoad =
+    filteredRows.length === 0 &&
+    emptyView?.title === 'Loading Packages'
 
   return (
     <div
@@ -406,28 +540,59 @@ export function ListRuntime({
       onKeyDown={onKeyDown}
     >
       <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
-        <ViewHeader title={title} onBack={onBack} />
+        <ViewHeader title={navigationTitle} onBack={onBack} />
 
-        <div className="mt-2">
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-              setSelected(0)
-            }}
-            placeholder={searchBarPlaceholder}
-            className="h-8 w-full rounded-raymes-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
-            aria-label={searchBarPlaceholder}
-          />
-        </div>
+        {shouldShowSearch ? (
+          <div className="mt-2 flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value)
+                  setSelected(0)
+                }}
+                placeholder={searchBarPlaceholder}
+                className="h-8 w-full rounded-raymes-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
+                aria-label={searchBarPlaceholder}
+              />
+            </div>
+            {searchAccessory && searchAccessory.options.length > 0 ? (
+              <div className="flex shrink-0 items-center gap-1">
+                {searchAccessory.options.map((option) => {
+                  const active = accessoryValue === option.value
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setAccessoryValue(option.value)
+                        setSelected(0)
+                        if (searchAccessory.actionId) {
+                          onRunPrimaryAction(searchAccessory.actionId, { value: option.value })
+                        }
+                      }}
+                      className={
+                        active
+                          ? 'rounded-raymes-chip bg-white/[0.12] px-2 py-1 text-[11px] font-medium text-ink-1 transition'
+                          : 'rounded-raymes-chip px-2 py-1 text-[11px] text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1'
+                      }
+                    >
+                      {option.title}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div
         ref={listRef}
-        className={`glass-card grid min-h-0 flex-1 overflow-hidden animate-raymes-scale-in ${
-          hasDetails ? 'grid-cols-[minmax(290px,34%)_minmax(0,1fr)]' : 'grid-cols-1 px-2 py-2'
+        className={`glass-card min-h-0 flex-1 overflow-hidden animate-raymes-scale-in ${
+          hasDetails ? 'grid grid-cols-[minmax(280px,40%)_minmax(0,1fr)] px-2 py-2' : 'flex flex-col px-4 py-3'
         }`}
       >
         {filteredRows.length === 0 ? (
@@ -441,15 +606,21 @@ export function ListRuntime({
               ) : emptyView?.description ? (
                 <p className="mt-1 text-[11px] text-ink-4">{emptyView.description}</p>
               ) : null}
+              {isFirstTimePackageLoad ? (
+                <p className="mx-auto mt-3 max-w-sm text-[11px] leading-5 text-ink-3">
+                  First-time setup may take a few minutes while the package catalog is downloaded and indexed.
+                  Future searches will open much faster from the local cache.
+                </p>
+              ) : null}
             </div>
           </div>
         ) : (
           <>
-          <div className="min-h-0 overflow-y-auto px-3 py-3">
+          <div className={hasDetails ? 'min-h-0 overflow-y-auto pr-2' : 'min-h-0 flex-1 overflow-y-auto pr-0.5'}>
             {groupedSections.map((group, groupIdx) => (
               <div key={groupIdx} className="mb-1">
                 {group.section ? (
-                  <div className="px-2 pb-1 pt-1 text-[11px] font-medium tracking-[0.08em] text-ink-4 select-none">
+                  <div className="px-3 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4 select-none">
                     {group.section}
                   </div>
                 ) : null}
@@ -468,8 +639,8 @@ export function ListRuntime({
                             setSelected(globalIdx)
                             if (row.actionIds?.[0]) onRunPrimaryAction(row.actionIds[0])
                           }}
-                          className={`w-full rounded-raymes-row px-3 py-2 text-left transition ${
-                            globalIdx === selected ? 'bg-white/15 text-ink-1' : 'text-ink-2 hover:bg-white/8'
+                          className={`w-full rounded-raymes-row px-3 py-2.5 text-left transition ${
+                            globalIdx === selected ? 'bg-white/[0.16] text-ink-1' : 'text-ink-2 hover:bg-white/[0.06]'
                           }`}
                         >
                           <span className="flex min-w-0 items-center gap-2.5">
@@ -479,13 +650,7 @@ export function ListRuntime({
                               {row.subtitle ? <p className="truncate text-[11px] text-ink-3">{row.subtitle}</p> : null}
                             </span>
                             {row.accessories?.map((accessory, index) => {
-                              const value = accessoryText(accessory)
-                              if (!value) return null
-                              return (
-                                <span key={index} className="max-w-[190px] shrink-0 truncate text-[12px] text-ink-3">
-                                  {value}
-                                </span>
-                              )
+                              return <Accessory key={index} accessory={accessory} />
                             })}
                           </span>
                         </button>
@@ -497,7 +662,7 @@ export function ListRuntime({
             ))}
           </div>
           {hasDetails ? (
-            <div className="min-h-0 border-l border-white/8 bg-black/5">
+            <div className="min-h-0 overflow-hidden rounded-raymes-row border border-white/[0.06] bg-white/[0.02]">
               <ListDetailPane row={selectedRow} />
             </div>
           ) : null}
@@ -506,13 +671,22 @@ export function ListRuntime({
       </div>
 
       <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-raymes-scale-in">
-        <span className="text-[10.5px] uppercase tracking-[0.14em] text-ink-4">
+        <span className="flex items-center gap-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-ink-4">
           {filteredRows.length} item{filteredRows.length === 1 ? '' : 's'}
-          {hasQuery ? ` · filtered` : ''}
+          {hasMore ? (
+            <button
+              type="button"
+              disabled={loadingMore}
+              onClick={() => void requestMore()}
+              className="ml-1 text-[10.5px] font-semibold normal-case tracking-normal text-ink-2 transition hover:text-ink-1 disabled:opacity-50"
+            >
+              {loadingMore ? 'Loading...' : 'Load more'}
+            </button>
+          ) : null}
         </span>
         <HintBar>
           <Hint label="Select" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
-          <Hint label="Run" keys={<Kbd>↵</Kbd>} />
+          <Hint label={selectedAction?.title || 'Run'} keys={<Kbd>↵</Kbd>} />
           <Hint label="Actions" keys={<><Kbd>⌘</Kbd><Kbd>K</Kbd></>} />
           <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
         </HintBar>

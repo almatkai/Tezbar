@@ -33,6 +33,7 @@ export type ExtensionRuntimeSurfaceProps = {
   actions: ExtensionRuntimeAction[]
   onBack: () => void
   onSearchTextChanged: (searchText: string) => Promise<void> | void
+  onLoadMore: () => Promise<void> | void
   onInvokeAction: (actionId: string, formValues?: Record<string, string>) => Promise<void> | void
 }
 
@@ -44,7 +45,7 @@ function rootKind(root: ExtensionRuntimeNode): 'list' | 'form' | 'grid' | 'detai
 }
 
 export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JSX.Element {
-  const { title, extensionId, commandName, root, actions, onBack, onSearchTextChanged, onInvokeAction } = props
+  const { title, extensionId, commandName, root, actions, onBack, onSearchTextChanged, onLoadMore, onInvokeAction } = props
   const [showActions, setShowActions] = useState(false)
   const [actionFilterIds, setActionFilterIds] = useState<string[] | null>(null)
 
@@ -92,10 +93,10 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
     return () => window.removeEventListener('keydown', onKey, true)
   }, [kind, onInvokeAction, primaryAction])
 
-  const onRunPrimaryAction = (actionId?: string): void => {
+  const onRunPrimaryAction = (actionId?: string, formValues?: Record<string, string>): void => {
     const id = actionId || primaryAction?.id
     if (!id) return
-    void onInvokeAction(id)
+    void onInvokeAction(id, formValues)
   }
 
   const openActions = (ids?: string[]): void => {
@@ -143,8 +144,10 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
               title={title}
               onBack={onBack}
               onRunPrimaryAction={onRunPrimaryAction}
+              actions={actions}
               onOpenActions={() => openActions()}
               onSearchTextChanged={onSearchTextChanged}
+              onLoadMore={onLoadMore}
             />
           )}
 

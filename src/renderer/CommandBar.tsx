@@ -2,11 +2,7 @@ import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } 
 import type { Intent } from '../shared/intent'
 import {
   defaultModels,
-  isAiProviderConfigured,
   normalizeProviderModelList,
-  providerRows,
-  providerTitle,
-  recommendedModel,
 } from '../shared/aiProviders'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { PathCompletionItem, SearchResult } from '../shared/search'
@@ -25,6 +21,7 @@ import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
+import { ModelPicker } from './ModelPicker'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'raymes:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
@@ -301,7 +298,6 @@ export default function CommandBar({
   const [isStreaming, setIsStreaming] = useState(false)
   const [cfg, setCfg] = useState<LlmConfigRecord>({})
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
-  const [modelMenuProvider, setModelMenuProvider] = useState<ProviderId | null>(null)
   const [emptyAnswer, setEmptyAnswer] = useState(false)
   const [pathCompletions, setPathCompletions] = useState<PathCompletionItem[]>([])
   const [recentExtensionCommands, setRecentExtensionCommands] = useState<string[]>([])
@@ -357,7 +353,6 @@ export default function CommandBar({
   const pinPickerOpenRef = useRef(false)
   const pendingOpenRef = useRef(false)
   const modelMenuOpenRef = useRef(false)
-  const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const valueRef = useRef(value)
   const killPortModeRef = useRef(killPortMode)
 
@@ -406,17 +401,6 @@ export default function CommandBar({
   useEffect(() => {
     void window.raymes.getLlmConfig().then((c) => setCfg(c as LlmConfigRecord))
   }, [])
-
-  useEffect(() => {
-    if (!modelMenuOpen) return
-    const closeIfOutside = (event: PointerEvent): void => {
-      if (!modelMenuRef.current?.contains(event.target as Node)) {
-        setModelMenuOpen(false)
-      }
-    }
-    document.addEventListener('pointerdown', closeIfOutside)
-    return () => document.removeEventListener('pointerdown', closeIfOutside)
-  }, [modelMenuOpen])
 
   useEffect(() => {
     const onQuickNoteShortcut = (): void => {
@@ -483,19 +467,6 @@ export default function CommandBar({
       })
     },
   })
-
-  const provider = (cfg.provider ?? 'ollama') as ProviderId
-  const model = useMemo(
-    () => cfg.providerSelectedModels?.[provider] ?? cfg.model ?? recommendedModel(provider),
-    [cfg.model, cfg.providerSelectedModels, provider]
-  )
-  const availableProviders = providerRows(cfg)
-  const previewProvider = modelMenuProvider ?? provider
-  const previewModels = normalizeProviderModelList(
-    previewProvider,
-    cfg.providerModels?.[previewProvider] ?? defaultModels(previewProvider)
-  )
-  const previewConfigured = isAiProviderConfigured(cfg, previewProvider)
 
   const slashQuery = value.trimStart()
   const isSlashInput = slashQuery.startsWith('/')
@@ -1108,7 +1079,9 @@ export default function CommandBar({
               ]
             : []
 
-      if (defs.length > 0) {
+      const requiredDefs = defs.filter((def) => def.required)
+
+      if (requiredDefs.length > 0) {
         const initialValues = defs.reduce(
           (acc, def) => {
             acc[def.name] = ''
@@ -1658,113 +1631,14 @@ export default function CommandBar({
               />
             </div>
             {isAiMode ? (
-              <div ref={modelMenuRef} className="relative flex h-6 shrink-0 items-center">
-                <button
-                  type="button"
-                  className="inline-flex h-6 items-center rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 font-mono text-[10px] leading-none tabular-nums text-ink-3 transition hover:border-accent/40 hover:text-ink-1"
-                  onClick={() => {
-                    setModelMenuProvider(provider)
-                    setModelMenuOpen((open) => !open)
-                  }}
-                >
-                  {model}
-                </button>
-                {modelMenuOpen ? (
-                  <div className="raymes-popover absolute right-0 top-7 z-50 grid h-[340px] w-[500px] grid-cols-[170px_minmax(0,1fr)] overflow-hidden p-1.5">
-                    <ul className="min-h-0 overflow-y-auto border-r border-white/[0.07] pr-1">
-                      {availableProviders.map((row) => (
-                        <li key={row.id}>
-                          <button
-                            type="button"
-                            className={cx(
-                              'flex w-full items-center justify-between gap-2 rounded-raymes-row px-2 py-2 text-left text-[12px] font-semibold transition',
-                              previewProvider === row.id
-                                ? 'bg-white/[0.06] text-ink-1'
-                                : 'text-ink-3 hover:bg-white/[0.04] hover:text-ink-1'
-                            )}
-                            onMouseEnter={() => setModelMenuProvider(row.id)}
-                            onFocus={() => setModelMenuProvider(row.id)}
-                          >
-                            <span className="truncate">{providerTitle(row.id, cfg)}</span>
-                            {provider === row.id ? (
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
-                            ) : null}
-                          </button>
-                        </li>
-                      ))}
-                      <li className="mt-1 border-t border-white/[0.07] pt-1">
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-2 rounded-raymes-row px-2 py-2 text-left text-[12px] font-semibold text-ink-2 transition hover:bg-accent/10 hover:text-ink-1"
-                          onClick={() => {
-                            setModelMenuOpen(false)
-                            onConfigureAi()
-                          }}
-                        >
-                          <span className="text-[15px] leading-none text-accent-strong">+</span>
-                          Add provider
-                        </button>
-                      </li>
-                    </ul>
-                    <div className="flex min-w-0 flex-col pl-1.5">
-                      <div className="flex shrink-0 items-center justify-between gap-2 px-2 pb-1.5 pt-1">
-                        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-4">
-                          {providerTitle(previewProvider, cfg)}
-                        </p>
-                        <button
-                          type="button"
-                          className="rounded-raymes-chip border border-accent/30 bg-accent/10 px-2 py-1 text-[10px] font-semibold text-accent-strong transition hover:border-accent/55 hover:bg-accent/18 hover:text-ink-1"
-                          onClick={() => {
-                            setModelMenuOpen(false)
-                            onConfigureAi()
-                          }}
-                        >
-                          Configure
-                        </button>
-                      </div>
-                      {!previewConfigured ? (
-                        <p className="mx-2 mb-1.5 rounded-raymes-row border border-white/[0.07] bg-white/[0.03] px-2 py-1.5 text-[10px] text-ink-4">
-                          Configure this provider to select a model.
-                        </p>
-                      ) : null}
-                      <ul className="min-h-0 flex-1 overflow-y-auto">
-                        {previewModels.map((item) => (
-                          <li key={item.id}>
-                            <button
-                              type="button"
-                              disabled={!previewConfigured}
-                              className={cx(
-                                'w-full rounded-raymes-row px-2 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-40',
-                                provider === previewProvider && model === item.id
-                                  ? 'bg-accent/12 text-ink-1'
-                                  : 'text-ink-2 hover:bg-white/[0.04] hover:text-ink-1'
-                              )}
-                              onClick={() => void selectAiModel(previewProvider, item.id)}
-                            >
-                              <span className="block truncate text-[12px] font-semibold">{item.id}</span>
-                              <span className="mt-1 flex flex-wrap gap-1">
-                                {item.capabilities.map((capability) => (
-                                  <span
-                                    key={capability}
-                                    className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-ink-3"
-                                  >
-                                    {capability}
-                                  </span>
-                                ))}
-                                {item.contextWindow ? (
-                                  <span className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-ink-3">
-                                    {item.contextWindow.toLocaleString()} ctx
-                                  </span>
-                                ) : null}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              <ModelPicker
+                config={cfg}
+                open={modelMenuOpen}
+                onOpenChange={setModelMenuOpen}
+                onSelect={selectAiModel}
+                onConfigure={onConfigureAi}
+                triggerClassName="font-mono leading-none tabular-nums tracking-normal"
+              />
             ) : null}
             {dictationSupported ? (
               <button
