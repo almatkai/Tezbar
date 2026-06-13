@@ -54,14 +54,19 @@ import { computeWeightedScore, shouldPreferRecent } from './ranker'
 const execFileAsync = promisify(execFile)
 const MAX_RESULTS = 80
 const PROVIDER_REFRESH_MS = 90_000
+const PROVIDER_REFRESH_MIN_AGE_MS = 10_000
+const FILE_INDEX_LIMIT = 4000
 
 // Use singleton database with session caching
 const indexDb = getInstance()
 
 let bootstrapPromise: Promise<void> | null = null
+let fileBootstrapPromise: Promise<void> | null = null
+let volatileRefreshPromise: Promise<void> | null = null
 let stopFileWatcher: (() => void) | null = null
 let providerRefreshTimer: NodeJS.Timeout | null = null
 let lastExtensionRefreshAt = 0
+let lastVolatileRefreshAt = 0
 const appIconCache = new Map<string, string | null>()
 
 type OpenWithUsageEntry = {
@@ -182,6 +187,14 @@ async function upsertProvider(provider: SearchProvider): Promise<void> {
   if (provider.providerId === 'commands') {
     indexDb.removeDocumentsByCategory('commands')
     indexDb.removeDocumentsByCategory('native-command')
+  } else if (provider.providerId === 'clipboard') {
+    indexDb.removeDocumentsByCategory('clipboard')
+  } else if (provider.providerId === 'notes') {
+    indexDb.removeDocumentsByCategory('quick-notes')
+  } else if (provider.providerId === 'snippets') {
+    indexDb.removeDocumentsByCategory('snippets')
+  } else if (provider.providerId === 'quick-links') {
+    indexDb.removeDocumentsByCategory('quick-links')
   } else if (provider.providerId === 'apps') {
     indexDb.removeDocumentsByCategory('applications')
   } else if (provider.providerId === 'extensions') {
@@ -190,7 +203,6 @@ async function upsertProvider(provider: SearchProvider): Promise<void> {
   if (docs.length > 0) {
     indexDb.upsertDocuments(docs)
   }
-  indexDb.clearSearchCache()
 }
 
 async function refreshAllProviders(): Promise<void> {
@@ -203,23 +215,63 @@ async function refreshAllProviders(): Promise<void> {
     upsertProvider(extensionsProvider),
     upsertProvider(appsProvider),
   ])
+  indexDb.clearSearchCache()
 }
 
 async function refreshVolatileProviders(): Promise<void> {
-  captureClipboardSnapshot()
-  await Promise.all([
-    upsertProvider(commandsProvider),
-    upsertProvider(clipboardProvider),
-    upsertProvider(notesProvider),
-    upsertProvider(snippetsProvider),
-    upsertProvider(quickLinksProvider),
-  ])
+  if (volatileRefreshPromise) return volatileRefreshPromise
 
-  const now = Date.now()
-  if (now - lastExtensionRefreshAt > 30_000) {
-    lastExtensionRefreshAt = now
-    await upsertProvider(extensionsProvider)
-  }
+  volatileRefreshPromise = (async () => {
+    captureClipboardSnapshot()
+    await Promise.all([
+      upsertProvider(commandsProvider),
+      upsertProvider(clipboardProvider),
+      upsertProvider(notesProvider),
+      upsertProvider(snippetsProvider),
+      upsertProvider(quickLinksProvider),
+    ])
+
+    const now = Date.now()
+    if (now - lastExtensionRefreshAt > 30_000) {
+      lastExtensionRefreshAt = now
+      await upsertProvider(extensionsProvider)
+    }
+    lastVolatileRefreshAt = Date.now()
+    indexDb.clearSearchCache()
+  })().finally(() => {
+    volatileRefreshPromise = null
+  })
+
+  return volatileRefreshPromise
+}
+
+function refreshVolatileProvidersIfStale(): void {
+  if (Date.now() - lastVolatileRefreshAt < PROVIDER_REFRESH_MIN_AGE_MS) return
+  void refreshVolatileProviders().catch((error: unknown) => {
+    console.warn('[Search] Failed to refresh providers:', error)
+  })
+}
+
+function startBackgroundFileIndexing(): void {
+  if (fileBootstrapPromise) return
+
+  fileBootstrapPromise = (async () => {
+    const fileDocs = await collectInitialFileDocuments(FILE_INDEX_LIMIT)
+    indexDb.replaceDocumentsByCategory('files', fileDocs)
+
+    stopFileWatcher = startFileWatcher(({ upserts, removeIds }) => {
+      if (upserts.length > 0) indexDb.upsertDocuments(upserts)
+      for (const removeId of removeIds) {
+        indexDb.removeDocumentById(removeId)
+      }
+      if (upserts.length > 0 || removeIds.length > 0) {
+        indexDb.clearSearchCache()
+      }
+    })
+  })().catch((error: unknown) => {
+    fileBootstrapPromise = null
+    console.warn('[Search] Failed to build file index:', error)
+  })
 }
 
 async function bootstrapSearchIndex(): Promise<void> {
@@ -233,19 +285,8 @@ async function bootstrapSearchIndex(): Promise<void> {
 
     captureClipboardSnapshot()
     await refreshAllProviders()
-
-    const fileDocs = await collectInitialFileDocuments()
-    if (fileDocs.length > 0) {
-      indexDb?.upsertDocuments(fileDocs)
-    }
-
-    stopFileWatcher = startFileWatcher((payload) => {
-      if (payload.upsert) {
-        indexDb?.upsertDocuments([payload.upsert])
-      } else if (payload.removeId) {
-        indexDb?.removeDocumentById(payload.removeId)
-      }
-    })
+    lastVolatileRefreshAt = Date.now()
+    startBackgroundFileIndexing()
 
     if (!providerRefreshTimer) {
       providerRefreshTimer = setInterval(() => {
@@ -270,16 +311,15 @@ async function bootstrapSearchIndex(): Promise<void> {
 /** Rebuild FTS rows for quick notes after CRUD (append/update/delete). */
 export async function reindexQuickNotes(): Promise<void> {
   await bootstrapSearchIndex()
-  indexDb?.removeDocumentsByCategory('quick-notes')
-  // Re-index would happen via providers
-  indexDb?.clearSearchCache()
+  await upsertProvider(notesProvider)
+  indexDb.clearSearchCache()
 }
 
 /** Rebuild FTS rows for snippets after user CRUD. */
 export async function reindexSnippets(): Promise<void> {
   await bootstrapSearchIndex()
-  indexDb?.removeDocumentsByCategory('snippets')
-  indexDb?.clearSearchCache()
+  await upsertProvider(snippetsProvider)
+  indexDb.clearSearchCache()
 }
 
 /** Rebuild extension command rows after extension install/uninstall. */
@@ -643,7 +683,7 @@ function parseOpenPortProcesses(stdout: string, processNames: Map<string, string
 
 export async function searchEverything(query: string): Promise<SearchResult[]> {
   await bootstrapSearchIndex()
-  await refreshVolatileProviders()
+  refreshVolatileProvidersIfStale()
 
   const trimmed = query.trim()
   if (!trimmed) {

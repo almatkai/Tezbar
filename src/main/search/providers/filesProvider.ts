@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync, readdirSync, statSync, watch } from 'node:fs'
 import { homedir } from 'node:os'
-import { extname, join } from 'node:path'
+import { extname, join, sep } from 'node:path'
 import { promisify } from 'node:util'
 import type { SearchResult } from '../../../shared/search'
 import type { IndexedDocument } from './types'
@@ -28,13 +28,33 @@ const ALLOWED_EXTENSIONS = new Set([
   '.jpg',
 ])
 
-const SKIP_NAMES = new Set(['node_modules', '.git', '.next', '.cache', 'Library'])
+const SKIP_NAMES = new Set([
+  'node_modules',
+  '.git',
+  '.next',
+  '.cache',
+  'Library',
+  'build',
+  'coverage',
+  'dist',
+  'out',
+  'target',
+])
 
-type FileChangeListener = (payload: { upsert?: IndexedDocument; removeId?: string }) => void
+type FileChangeBatch = {
+  upserts: IndexedDocument[]
+  removeIds: string[]
+}
+
+type FileChangeListener = (payload: FileChangeBatch) => void
 
 function isAllowedFile(path: string): boolean {
   const ext = extname(path).toLowerCase()
   return ALLOWED_EXTENSIONS.has(ext)
+}
+
+function containsSkippedDirectory(path: string): boolean {
+  return path.split(sep).some((part) => SKIP_NAMES.has(part))
 }
 
 function makeFileDocument(path: string): IndexedDocument | null {
@@ -71,6 +91,7 @@ export async function collectInitialFileDocuments(limit = 4000): Promise<Indexed
 
   const out: IndexedDocument[] = []
   const queue = [...roots]
+  let visitedEntries = 0
 
   while (queue.length > 0 && out.length < limit) {
     const current = queue.shift()
@@ -79,6 +100,10 @@ export async function collectInitialFileDocuments(limit = 4000): Promise<Indexed
       const entries = readdirSync(current, { withFileTypes: true })
       for (const entry of entries) {
         if (out.length >= limit) break
+        visitedEntries += 1
+        if (visitedEntries % 250 === 0) {
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
         const absolute = join(current, entry.name)
         if (entry.isDirectory()) {
           if (!SKIP_NAMES.has(entry.name)) queue.push(absolute)
@@ -98,19 +123,46 @@ export async function collectInitialFileDocuments(limit = 4000): Promise<Indexed
 export function startFileWatcher(listener: FileChangeListener): () => void {
   const roots = initialRoots()
   const unsubs: Array<() => void> = []
+  const pendingUpserts = new Map<string, IndexedDocument>()
+  const pendingRemovals = new Set<string>()
+  let flushTimer: NodeJS.Timeout | null = null
+
+  const flush = (): void => {
+    flushTimer = null
+    if (pendingUpserts.size === 0 && pendingRemovals.size === 0) return
+    listener({
+      upserts: Array.from(pendingUpserts.values()),
+      removeIds: Array.from(pendingRemovals),
+    })
+    pendingUpserts.clear()
+    pendingRemovals.clear()
+  }
+
+  const scheduleFlush = (): void => {
+    if (flushTimer) return
+    flushTimer = setTimeout(flush, 200)
+    flushTimer.unref()
+  }
 
   for (const root of roots) {
     try {
       const watcher = watch(root, { recursive: true }, (_event, filename) => {
         if (!filename) return
-        const absolute = join(root, filename.toString())
+        const relative = filename.toString()
+        if (containsSkippedDirectory(relative)) return
+        const absolute = join(root, relative)
         const doc = makeFileDocument(absolute)
         if (doc) {
-          listener({ upsert: doc })
+          pendingRemovals.delete(doc.id)
+          pendingUpserts.set(doc.id, doc)
+          scheduleFlush()
           return
         }
         if (!existsSync(absolute)) {
-          listener({ removeId: `file:${absolute}` })
+          const id = `file:${absolute}`
+          pendingUpserts.delete(id)
+          pendingRemovals.add(id)
+          scheduleFlush()
         }
       })
       unsubs.push(() => watcher.close())
@@ -120,6 +172,8 @@ export function startFileWatcher(listener: FileChangeListener): () => void {
   }
 
   return () => {
+    if (flushTimer) clearTimeout(flushTimer)
+    flush()
     for (const stop of unsubs) stop()
   }
 }

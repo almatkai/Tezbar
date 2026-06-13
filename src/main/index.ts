@@ -266,7 +266,7 @@ function handleNativeMove(win: BrowserWindow): void {
 
 /** After Alt+Space opens the launcher, poll HID key state so a sustained chord
  *  starts local dictation (push-to-talk) while `globalShortcut` only fires once. */
-const ALT_SPACE_HOLD_MS = 150
+const ALT_SPACE_HOLD_MS = 100
 const ALT_SPACE_POLL_MS = 12
 const ALT_SPACE_WATCH_MAX_MS = 120_000
 

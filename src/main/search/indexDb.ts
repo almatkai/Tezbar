@@ -235,6 +235,23 @@ export class SearchIndexDatabase {
     return ids.length
   }
 
+  replaceDocumentsByCategory(
+    category: SearchCategory,
+    documents: IndexedDocument[],
+  ): void {
+    const deleteFts = this.db.prepare(
+      'DELETE FROM documents_fts WHERE id IN (SELECT id FROM documents WHERE category = ?)',
+    )
+    const deleteDocuments = this.db.prepare('DELETE FROM documents WHERE category = ?')
+    const replaceTx = this.db.transaction(() => {
+      deleteFts.run(category)
+      deleteDocuments.run(category)
+      this.upsertDocuments(documents)
+    })
+    replaceTx()
+    this.clearSearchCache()
+  }
+
   search(query: string, limit: number): SearchIndexRow[] {
     const ftsQuery = buildFtsQuery(query)
     const trimmed = query.trim()

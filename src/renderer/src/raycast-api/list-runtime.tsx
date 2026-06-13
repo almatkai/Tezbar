@@ -317,7 +317,7 @@ export function ListRuntime({
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
 
-  const hasServerSearch = onSearchTextChanged !== undefined
+  const hasServerSearch = onSearchTextChanged !== undefined && root.props?.__hasServerSearch === true
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSentQuery = useRef('')

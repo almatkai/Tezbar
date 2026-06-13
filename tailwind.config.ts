@@ -69,7 +69,7 @@ export default {
       },
       animation: {
         'raymes-fade-up': 'raymes-fade-up 360ms cubic-bezier(0.22, 1, 0.36, 1) both',
-        'raymes-fade-in': 'raymes-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        'raymes-fade-in': 'raymes-fade-in 90ms cubic-bezier(0.22, 1, 0.36, 1) both',
         'raymes-scale-in': 'raymes-scale-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both',
         'raymes-shimmer': 'raymes-shimmer 2.2s linear infinite',
       },

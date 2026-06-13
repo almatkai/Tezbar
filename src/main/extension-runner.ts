@@ -1462,6 +1462,9 @@ function walkRuntimeNodes(
   if (metadataNodes[0] && sanitizedProps) {
     sanitizedProps.metadata = metadataNodes[0]
   }
+  if (typeName === 'List' && session.searchTextChangeHandler && sanitizedProps) {
+    sanitizedProps.__hasServerSearch = true
+  }
   const node: ExtensionRuntimeNode = {
     type: typeName,
     props: sanitizedProps,
