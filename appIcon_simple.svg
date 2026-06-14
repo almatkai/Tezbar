@@ -14,25 +14,13 @@
 
   <!-- App background -->
   <rect
-    x="64"
-    y="64"
-    width="896"
-    height="896"
+    x="0"
+    y="0"
+    width="1024"
+    height="1024"
     rx="150"
     fill="url(#bg)"
     filter="url(#appShadow)"
-  />
-
-  <!-- Subtle inner highlight -->
-  <rect
-    x="66"
-    y="66"
-    width="892"
-    height="892"
-    rx="148"
-    stroke="white"
-    stroke-opacity="0.04"
-    stroke-width="2"
   />
 
   <!-- Move this whole group -->
