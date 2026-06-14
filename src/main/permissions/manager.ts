@@ -7,7 +7,7 @@ import type {
   PermissionsSnapshot,
 } from '../../shared/permissions'
 
-/** Catalog of every native capability TezBar may need. The renderer shows
+/** Catalog of every native capability Tezbar may need. The renderer shows
  *  these in the Permissions view; the main process owns detection and the
  *  guided remediation links. */
 const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
@@ -19,7 +19,7 @@ const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
       'Needed to automate the active app: move windows, click through menus, send keystrokes to focused controls.',
     settingsUrl: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
     remediation:
-      'Open System Settings → Privacy & Security → Accessibility and enable TezBar.',
+      'Open System Settings → Privacy & Security → Accessibility and enable Tezbar.',
   },
   automation: {
     id: 'automation',
@@ -29,7 +29,7 @@ const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
       'Required for AppleScript-based commands (toggle dark mode, empty trash, control Music/Finder).',
     settingsUrl: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
     remediation:
-      'Open System Settings → Privacy & Security → Automation and allow TezBar to control the target app.',
+      'Open System Settings → Privacy & Security → Automation and allow Tezbar to control the target app.',
   },
   'input-monitoring': {
     id: 'input-monitoring',
@@ -40,7 +40,7 @@ const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
     settingsUrl:
       'x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent',
     remediation:
-      'Open System Settings → Privacy & Security → Input Monitoring and enable TezBar.',
+      'Open System Settings → Privacy & Security → Input Monitoring and enable Tezbar.',
   },
   microphone: {
     id: 'microphone',
@@ -49,7 +49,7 @@ const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
     rationale: 'Voice-activated commands and transcription features require microphone access.',
     settingsUrl: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
     remediation:
-      'Open System Settings → Privacy & Security → Microphone and enable TezBar.',
+      'Open System Settings → Privacy & Security → Microphone and enable Tezbar.',
   },
   calendar: {
     id: 'calendar',
@@ -59,7 +59,7 @@ const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
       'Calendar-related extensions and the built-in "next meeting" command need access to your Calendar database.',
     settingsUrl: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars',
     remediation:
-      'Open System Settings → Privacy & Security → Calendars and enable TezBar.',
+      'Open System Settings → Privacy & Security → Calendars and enable Tezbar.',
   },
   'screen-recording': {
     id: 'screen-recording',
@@ -69,7 +69,7 @@ const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
       'Needed for screenshot-based flows, window snapshots, and visual automation helpers.',
     settingsUrl: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
     remediation:
-      'Open System Settings → Privacy & Security → Screen Recording and enable TezBar.',
+      'Open System Settings → Privacy & Security → Screen Recording and enable Tezbar.',
   },
 }
 

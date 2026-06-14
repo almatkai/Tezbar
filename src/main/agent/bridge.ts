@@ -63,7 +63,7 @@ export interface BridgeRunOptions {
   cwd?: string
   /** Model pattern, forwarded as `--model`. */
   model?: string
-  /** TezBar-owned pi provider definition, passed through the child env. */
+  /** Tezbar-owned pi provider definition, passed through the child env. */
   raymesProviderJson?: string
   /** Additional pi CLI args (advanced). */
   extraArgs?: readonly string[]

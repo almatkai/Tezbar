@@ -1,15 +1,15 @@
 <div align="center">
   <br />
-  <img src="assets/logo.svg" width="128" height="128" alt="TezBar Logo" />
+  <img src="assets/logo.svg" width="128" height="128" alt="Tezbar Logo" />
   <br />
   <br />
 
-  <h1>TezBar</h1>
+  <h1>Tezbar</h1>
 
   <h3>Spotlight · AI Agent · Terminal — fused into one floating macOS command surface.</h3>
 
 <p>
-  <strong>TezBar</strong> is the app that should have shipped with macOS. One hotkey (<kbd>Alt</kbd>+<kbd>Space</kbd>) opens a single floating window that lets you search everything, command an AI coding agent, and drop into a real terminal — without ever leaving the bar.
+  <strong>Tezbar</strong> is the app that should have shipped with macOS. One hotkey (<kbd>Alt</kbd>+<kbd>Space</kbd>) opens a single floating window that lets you search everything, command an AI coding agent, and drop into a real terminal — without ever leaving the bar.
 </p>
 
 <p>
@@ -22,7 +22,7 @@
   <a href="#"><img src="https://img.shields.io/badge/License-Private-0A0A0A?style=flat-square" /></a>
 </p>
 
-<img src="assets/screenshot.png" width="800" alt="TezBar floating command bar" style="border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,0.4);" />
+<img src="assets/screenshot.png" width="800" alt="Tezbar floating command bar" style="border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,0.4);" />
 
 </div>
 
@@ -30,7 +30,7 @@
 
 ## 🔥 The Big Idea
 
-TezBar combines three tools you already use every day into one keyboard-first window:
+Tezbar combines three tools you already use every day into one keyboard-first window:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -90,7 +90,7 @@ A real coding agent lives inside the spotlight interface, powered by the **PI ag
 
 ## 🖥️ Built-in Terminal
 
-TezBar embeds a full terminal emulator inside the floating window. No context switching.
+Tezbar embeds a full terminal emulator inside the floating window. No context switching.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -113,7 +113,7 @@ TezBar embeds a full terminal emulator inside the floating window. No context sw
 
 ## 🎁 Everything Else
 
-TezBar is more than the trinity. It also ships with:
+Tezbar is more than the trinity. It also ships with:
 
 | Feature | What It Does |
 |---|---|
@@ -215,7 +215,7 @@ pnpm preview
 | `Alt+Enter` | Open command bar directly |
 | `⌘N` | New note / snippet / chat (context-aware) |
 | `⌘,` | Open settings |
-| `⌘Escape` | Hide TezBar |
+| `⌘Escape` | Hide Tezbar |
 | `Escape` | Back to command surface / dismiss |
 
 ---

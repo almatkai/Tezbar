@@ -2,7 +2,7 @@
   "name": "tezbar",
   "version": "0.0.3",
   "private": true,
-  "description": "TezBar",
+  "description": "Tezbar",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "bash -lc 'unset ELECTRON_RUN_AS_NODE; exec electron-vite dev'",
@@ -20,7 +20,7 @@
   },
   "build": {
     "appId": "com.tezbar.app",
-    "productName": "TezBar",
+    "productName": "Tezbar",
     "directories": {
       "output": "dist"
     },

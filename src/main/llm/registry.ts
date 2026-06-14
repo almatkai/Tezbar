@@ -415,7 +415,7 @@ export function getSelectedPiProviderBridge(): PiProviderBridge | undefined {
     models: [
       {
         id: modelId,
-        name: `TezBar ${cfg.provider} ${modelId}`,
+        name: `Tezbar ${cfg.provider} ${modelId}`,
         reasoning: /reason|think|r1|o\d|gpt-5|claude|deepseek/i.test(modelId),
         input: ['text'],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

@@ -22,12 +22,45 @@ function isStdioWriteEio(error: unknown): boolean {
   )
 }
 
-process.stdout?.on('error', () => {})
-process.stderr?.on('error', () => {})
+process.stdout?.on('error', () => { })
+process.stderr?.on('error', () => { })
 process.on('uncaughtException', (error) => {
   if (isStdioWriteEio(error)) return
   throw error
 })
+
+// Fix PATH on macOS/Linux by inheriting it from the user's login shell.
+// This is crucial because GUI applications launched on macOS do not inherit
+// the shell PATH by default, which causes spawned commands (like 'node', 'pi', etc.) to fail.
+function fixPathSync(): void {
+  if (process.platform === 'win32') return
+  try {
+    const { execSync } = require('node:child_process')
+    const stdout = execSync('bash -lc "echo -n \\$PATH"', {
+      encoding: 'utf8',
+      timeout: 2000,
+    })
+    const fromShell = stdout.trim()
+    if (fromShell) {
+      process.env.PATH = fromShell
+    }
+  } catch (err) {
+    console.warn('[tezbar] failed to get PATH from login shell:', err)
+  }
+
+  // Defensive fallback: ensure common paths are appended if not present
+  const extras = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']
+  const existing = new Set((process.env.PATH || '').split(':').filter(Boolean))
+  const currentPaths = (process.env.PATH || '').split(':')
+  for (const e of extras) {
+    if (!existing.has(e)) {
+      currentPaths.push(e)
+    }
+  }
+  process.env.PATH = currentPaths.filter(Boolean).join(':')
+}
+
+fixPathSync()
 import {
   DEFAULT_RAYMES_HOTKEY,
   flushConfig,
@@ -710,7 +743,7 @@ function openSettingsWindow(): void {
     height: 680,
     minWidth: 760,
     minHeight: 520,
-    title: 'TezBar Settings',
+    title: 'Tezbar Settings',
     show: false,
     frame: true,
     resizable: true,
@@ -733,7 +766,7 @@ function openSettingsWindow(): void {
   })
   settingsWindow.on('page-title-updated', (event) => {
     event.preventDefault()
-    settingsWindow?.setTitle('TezBar Settings')
+    settingsWindow?.setTitle('Tezbar Settings')
   })
   settingsWindow.once('ready-to-show', () => {
     if (!settingsWindow || settingsWindow.isDestroyed()) return
@@ -751,9 +784,9 @@ async function confirmAndQuitRaymes(): Promise<void> {
     buttons: ['Cancel', 'Quit'],
     defaultId: 1,
     cancelId: 0,
-    title: 'Quit TezBar',
-    message: 'Quit TezBar?',
-    detail: 'Are you sure you want to quit TezBar and terminate all background processes?',
+    title: 'Quit Tezbar',
+    message: 'Quit Tezbar?',
+    detail: 'Are you sure you want to quit Tezbar and terminate all background processes?',
     noLink: true,
   }
   const result =
@@ -777,7 +810,7 @@ async function confirmAndQuitRaymes(): Promise<void> {
 function buildTrayMenu(): Electron.Menu {
   return Menu.buildFromTemplate([
     {
-      label: `TezBar ${app.getVersion()}`,
+      label: `Tezbar ${app.getVersion()}`,
       enabled: false,
     },
     {
@@ -786,7 +819,7 @@ function buildTrayMenu(): Electron.Menu {
     },
     { type: 'separator' },
     {
-      label: 'Show TezBar',
+      label: 'Show Tezbar',
       click: () => openAppSurface('command'),
     },
     {
@@ -799,7 +832,7 @@ function buildTrayMenu(): Electron.Menu {
     },
     { type: 'separator' },
     {
-      label: 'Quit TezBar',
+      label: 'Quit Tezbar',
       click: () => {
         void confirmAndQuitRaymes()
       },
@@ -811,31 +844,31 @@ function buildApplicationMenu(): Electron.Menu {
   const template: MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin'
       ? [
-          {
-            label: app.name,
-            submenu: [
-              { label: `About ${app.name}`, role: 'about' as const },
-              { type: 'separator' as const },
-              {
-                label: 'Settings...',
-                accelerator: 'CommandOrControl+,',
-                click: () => openAppSurface('settings'),
+        {
+          label: app.name,
+          submenu: [
+            { label: `About ${app.name}`, role: 'about' as const },
+            { type: 'separator' as const },
+            {
+              label: 'Settings...',
+              accelerator: 'CommandOrControl+,',
+              click: () => openAppSurface('settings'),
+            },
+            { type: 'separator' as const },
+            { label: `Hide ${app.name}`, role: 'hide' as const },
+            { label: 'Hide Others', role: 'hideOthers' as const },
+            { label: 'Show All', role: 'unhide' as const },
+            { type: 'separator' as const },
+            {
+              label: `Quit ${app.name}`,
+              accelerator: 'CommandOrControl+Q',
+              click: () => {
+                void confirmAndQuitRaymes()
               },
-              { type: 'separator' as const },
-              { label: `Hide ${app.name}`, role: 'hide' as const },
-              { label: 'Hide Others', role: 'hideOthers' as const },
-              { label: 'Show All', role: 'unhide' as const },
-              { type: 'separator' as const },
-              {
-                label: `Quit ${app.name}`,
-                accelerator: 'CommandOrControl+Q',
-                click: () => {
-                  void confirmAndQuitRaymes()
-                },
-              },
-            ],
-          },
-        ]
+            },
+          ],
+        },
+      ]
       : []),
     {
       label: 'Edit',
@@ -868,7 +901,7 @@ function buildApplicationMenu(): Electron.Menu {
         { role: 'zoom' },
         { type: 'separator' },
         {
-          label: 'Show TezBar',
+          label: 'Show Tezbar',
           accelerator: raymesHotkey,
           click: () => openAppSurface('command'),
         },
@@ -878,7 +911,7 @@ function buildApplicationMenu(): Electron.Menu {
       label: 'Help',
       submenu: [
         {
-          label: 'TezBar Settings',
+          label: 'Tezbar Settings',
           click: () => openAppSurface('settings'),
         },
       ],
@@ -972,7 +1005,7 @@ function registerHotkey(): void {
 }
 
 app.whenReady().then(() => {
-  app.setName('TezBar')
+  app.setName('Tezbar')
   Menu.setApplicationMenu(buildApplicationMenu())
 
   // Chromium denies `getUserMedia` requests by default in Electron. The
@@ -1009,7 +1042,7 @@ app.whenReady().then(() => {
   placeWindow(mainWindow!)
 
   tray = new Tray(createTrayIcon())
-  tray.setToolTip('TezBar')
+  tray.setToolTip('Tezbar')
   tray.setContextMenu(buildTrayMenu())
   tray.on('click', () => {
     if (isAppQuitting) return

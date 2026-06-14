@@ -57,7 +57,7 @@ async function fetchCopilotModelIds(accessToken: string, signal?: AbortSignal): 
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        'Editor-Version': 'TezBar/0.1.0',
+        'Editor-Version': 'Tezbar/0.1.0',
         'Copilot-Integration-Id': 'vscode-chat',
         Accept: 'application/json',
       },

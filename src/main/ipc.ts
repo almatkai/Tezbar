@@ -188,9 +188,9 @@ async function confirmQuitRaymes(getWindow: () => BrowserWindow | null): Promise
           buttons: ['Cancel', 'Quit'],
           defaultId: 1,
           cancelId: 0,
-          title: 'Quit TezBar',
-          message: 'Quit TezBar?',
-          detail: 'Are you sure you want to quit TezBar and terminate all background processes?',
+          title: 'Quit Tezbar',
+          message: 'Quit Tezbar?',
+          detail: 'Are you sure you want to quit Tezbar and terminate all background processes?',
           noLink: true,
         })
         : await dialog.showMessageBox({
@@ -198,9 +198,9 @@ async function confirmQuitRaymes(getWindow: () => BrowserWindow | null): Promise
           buttons: ['Cancel', 'Quit'],
           defaultId: 1,
           cancelId: 0,
-          title: 'Quit TezBar',
-          message: 'Quit TezBar?',
-          detail: 'Are you sure you want to quit TezBar and terminate all background processes?',
+          title: 'Quit Tezbar',
+          message: 'Quit Tezbar?',
+          detail: 'Are you sure you want to quit Tezbar and terminate all background processes?',
           noLink: true,
         })
 
@@ -215,7 +215,7 @@ async function confirmQuitRaymes(getWindow: () => BrowserWindow | null): Promise
 }
 
 const CHAT_SYSTEM_PROMPT =
-  'You are TezBar, a helpful assistant. Answer clearly and concisely unless the user asks for more detail.'
+  'You are Tezbar, a helpful assistant. Answer clearly and concisely unless the user asks for more detail.'
 
 type IpcControls = {
   startWindowDragMonitoring: (win: BrowserWindow) => void

@@ -240,7 +240,7 @@ export type RaymesApi = {
   clearChromiumCache: () => Promise<{ ok: boolean }>
   /** Fired when the user presses ⌘N / Ctrl+N (global) — save command-bar text to notes. */
   onQuickNoteSaveShortcut: (listener: () => void) => () => void
-  /** Fired from the top-bar tray menu to open a built-in TezBar surface. */
+  /** Fired from the top-bar tray menu to open a built-in Tezbar surface. */
   onAppSurfaceOpen: (
     listener: (surface: 'command' | 'settings' | 'clipboard') => void
   ) => () => void

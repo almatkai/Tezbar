@@ -1719,7 +1719,7 @@ export default function CommandBar({
                   )
                 }}
                 onKeyDown={handleInputKeyDown}
-                aria-label="Search TezBar or use a shortcut"
+                aria-label="Search Tezbar or use a shortcut"
                 placeholder={
                   killPortMode
                     ? 'Port'
@@ -1767,7 +1767,7 @@ export default function CommandBar({
                   startDictation()
                 }}
                 onTouchEnd={stopDictation}
-                title="Hold to speak — or keep Option+Space held after opening TezBar (macOS)"
+                title="Hold to speak — or keep Option+Space held after opening Tezbar (macOS)"
               >
                 {isDictating ? 'Listening' : isTranscribing ? 'Transcribing…' : (
                   <span className="group">

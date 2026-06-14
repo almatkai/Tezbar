@@ -82,7 +82,7 @@ function shouldUseNetworkFallback(error: any): boolean {
 
 function githubApiHeaders(): Record<string, string> {
   return {
-    'User-Agent': 'TezBar',
+    'User-Agent': 'Tezbar',
     Accept: 'application/vnd.github+json',
   };
 }
@@ -200,16 +200,16 @@ function readCatalogEntriesFromExtensionsDir(extensionsDir: string): CatalogEntr
       const authorName = normalizePerson(pkg.author) || '';
       const screenshotUrlsFromPackage: string[] = Array.isArray(pkg.screenshots)
         ? pkg.screenshots
-            .map((entry: any) => {
-              if (typeof entry === 'string') return toAssetUrl(entry);
-              if (entry && typeof entry === 'object') {
-                if (typeof entry.path === 'string') return toAssetUrl(entry.path);
-                if (typeof entry.src === 'string') return toAssetUrl(entry.src);
-                if (typeof entry.url === 'string') return toAssetUrl(entry.url);
-              }
-              return '';
-            })
-            .filter(Boolean)
+          .map((entry: any) => {
+            if (typeof entry === 'string') return toAssetUrl(entry);
+            if (entry && typeof entry === 'object') {
+              if (typeof entry.path === 'string') return toAssetUrl(entry.path);
+              if (typeof entry.src === 'string') return toAssetUrl(entry.src);
+              if (typeof entry.url === 'string') return toAssetUrl(entry.url);
+            }
+            return '';
+          })
+          .filter(Boolean)
         : [];
 
       const screenshotUrls = screenshotUrlsFromPackage;
@@ -309,7 +309,7 @@ async function downloadExtensionFromTree(name: string, tmpDir: string): Promise<
         fileUrl,
         {
           headers: {
-            'User-Agent': 'TezBar',
+            'User-Agent': 'Tezbar',
             Accept: 'application/octet-stream',
           },
         },
@@ -368,12 +368,12 @@ function coerceCatalogEntry(raw: any): CatalogEntry | null {
 
   const commands = Array.isArray(raw.commands)
     ? raw.commands
-        .filter((cmd: any) => cmd && typeof cmd === 'object' && cmd.name)
-        .map((cmd: any) => ({
-          name: String(cmd.name || ''),
-          title: String(cmd.title || cmd.name || ''),
-          description: String(cmd.description || ''),
-        }))
+      .filter((cmd: any) => cmd && typeof cmd === 'object' && cmd.name)
+      .map((cmd: any) => ({
+        name: String(cmd.name || ''),
+        title: String(cmd.title || cmd.name || ''),
+        description: String(cmd.description || ''),
+      }))
     : [];
 
   return {
@@ -450,8 +450,8 @@ function loadCatalogFromDisk(): CatalogCache | null {
     const parsed = JSON.parse(data) as Partial<CatalogCache>;
     const entries = Array.isArray(parsed.entries)
       ? parsed.entries
-          .map((entry: any) => coerceCatalogEntry(entry))
-          .filter(Boolean) as CatalogEntry[]
+        .map((entry: any) => coerceCatalogEntry(entry))
+        .filter(Boolean) as CatalogEntry[]
       : [];
     if (entries.length === 0) return null;
     return {
@@ -461,7 +461,7 @@ function loadCatalogFromDisk(): CatalogCache | null {
       version:
         typeof parsed.version === 'number' ? parsed.version : CATALOG_VERSION,
     };
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -546,7 +546,7 @@ export async function getExtensionScreenshotUrls(name: string): Promise<string[]
     const url = `${GITHUB_API}/extensions/${encodeURIComponent(name)}/metadata`;
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'TezBar',
+        'User-Agent': 'Tezbar',
         Accept: 'application/vnd.github+json',
       },
     });
@@ -669,7 +669,7 @@ export function getInstalledExtensionNames(): string[] {
           names.add(stripRaycastPrefix ? slugFromRaymesExtensionId(d) : d);
         }
       }
-    } catch {}
+    } catch { }
   };
 
   scanRoot(getExtensionsDir(), false);
@@ -789,21 +789,21 @@ async function installExtensionFromBundle(name: string): Promise<boolean> {
     }
 
     // Report install (fire-and-forget)
-    reportInstall(name, getMachineId()).catch(() => {});
+    reportInstall(name, getMachineId()).catch(() => { });
 
     console.log(`Extension "${name}" installed from pre-built bundle in ${Date.now() - t0}ms`);
     return true;
   } catch (error) {
     // Rollback
-    try { fs.rmSync(installPath, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(installPath, { recursive: true, force: true }); } catch { }
     if (backupPath && fs.existsSync(backupPath)) {
-      try { fs.renameSync(backupPath, installPath); } catch {}
+      try { fs.renameSync(backupPath, installPath); } catch { }
     }
     throw error;
   } finally {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { }
     if (backupPath && fs.existsSync(backupPath)) {
-      try { fs.rmSync(backupPath, { recursive: true, force: true }); } catch {}
+      try { fs.rmSync(backupPath, { recursive: true, force: true }); } catch { }
     }
   }
 }
@@ -880,7 +880,7 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
     }
 
     // Report install to backend (fire-and-forget)
-    reportInstall(name, getMachineId()).catch(() => {});
+    reportInstall(name, getMachineId()).catch(() => { });
 
     return true;
   } catch (error) {
@@ -888,15 +888,15 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
     // Rollback
     try {
       fs.rmSync(installPath, { recursive: true, force: true });
-    } catch {}
+    } catch { }
     if (backupPath && fs.existsSync(backupPath)) {
-      try { fs.renameSync(backupPath, installPath); } catch {}
+      try { fs.renameSync(backupPath, installPath); } catch { }
     }
     throw error; // Re-throw so the caller knows to try git fallback
   } finally {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { }
     if (backupPath && fs.existsSync(backupPath)) {
-      try { fs.rmSync(backupPath, { recursive: true, force: true }); } catch {}
+      try { fs.rmSync(backupPath, { recursive: true, force: true }); } catch { }
     }
   }
 }
@@ -1015,13 +1015,13 @@ function getMachineId(): string {
       _machineId = existing;
       return existing;
     }
-  } catch {}
+  } catch { }
 
   // Generate a random UUID
   const id = `${randomHex(8)}-${randomHex(4)}-${randomHex(4)}-${randomHex(4)}-${randomHex(12)}`;
   try {
     fs.writeFileSync(idPath, id);
-  } catch {}
+  } catch { }
   _machineId = id;
   return id;
 }
@@ -1046,7 +1046,7 @@ export async function uninstallExtension(name: string): Promise<boolean> {
     console.log(`Extension "${name}" uninstalled.`);
 
     // Report uninstall to backend (fire-and-forget)
-    reportUninstall(name, getMachineId()).catch(() => {});
+    reportUninstall(name, getMachineId()).catch(() => { });
 
     return true;
   } catch (error) {
@@ -1055,7 +1055,7 @@ export async function uninstallExtension(name: string): Promise<boolean> {
   }
 }
 
-// ─── TezBar IPC Compatibility ───────────────────────────────────────
+// ─── Tezbar IPC Compatibility ───────────────────────────────────────
 
 function normalizeRaymesExtensionId(input: string): string {
   const slug = String(input || '').trim().replace(/^raycast\./, '');
@@ -1166,11 +1166,11 @@ function resolveAppPickerDefault(pref: any): Record<string, string> | string {
   const candidates =
     pref?.name === 'uninstaller_app' || pref?.key === 'uninstaller_app'
       ? [
-          appPickerValue('AppCleaner', '/Applications/AppCleaner.app'),
-          appPickerValue('Pearcleaner', '/Applications/PearCleaner.app'),
-          appPickerValue('TrashMe 3', '/Applications/TrashMe 3.app'),
-          appPickerValue('App Cleaner 8', '/Applications/App Cleaner 8.app'),
-        ]
+        appPickerValue('AppCleaner', '/Applications/AppCleaner.app'),
+        appPickerValue('Pearcleaner', '/Applications/PearCleaner.app'),
+        appPickerValue('TrashMe 3', '/Applications/TrashMe 3.app'),
+        appPickerValue('App Cleaner 8', '/Applications/App Cleaner 8.app'),
+      ]
       : [];
   return candidates.find((candidate): candidate is Record<string, string> => Boolean(candidate)) || '';
 }
@@ -1348,7 +1348,7 @@ export function getExtensionPreferences(extensionId: string, commandName?: strin
           Object.assign(values, saved.commands[commandName]);
         }
       }
-    } catch {}
+    } catch { }
   }
 
   return values;
@@ -1416,7 +1416,7 @@ export function saveExtensionPreferences(
     try {
       const parsed = JSON.parse(fs.readFileSync(preferencesPath, 'utf-8'));
       if (parsed && typeof parsed === 'object') existing = parsed;
-    } catch {}
+    } catch { }
   }
 
   if (commandName) {

@@ -572,7 +572,7 @@ export default function SettingsView({
         setHotkeyRecording(false)
         setHotkeyMessage({
           tone: 'success',
-          text: 'Saved. Restart TezBar once to activate this shortcut.',
+          text: 'Saved. Restart Tezbar once to activate this shortcut.',
         })
         return
       }
@@ -898,7 +898,7 @@ export default function SettingsView({
               <span className="h-3 w-3 rounded-full bg-[#28c840]" />
             </div>
           ) : null}
-          <h1 className="mb-2 text-center text-[13px] font-semibold text-ink-2">TezBar Settings</h1>
+          <h1 className="mb-2 text-center text-[13px] font-semibold text-ink-2">Tezbar Settings</h1>
           <nav className="no-drag flex items-end justify-center gap-2">
             {SETTINGS_TABS.map((tab) => (
               <button
@@ -928,12 +928,12 @@ export default function SettingsView({
               >
                 <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
                   <input type="checkbox" checked readOnly />
-                  Launch TezBar at login
+                  Launch Tezbar at login
                 </label>
               </SettingsRow>
               <Divider />
               <SettingsRow
-                label="TezBar Hotkey"
+                label="Tezbar Hotkey"
                 detail={
                   hotkeyRecording
                     ? 'Press a modifier and another key. Escape cancels; Backspace restores the default.'
@@ -942,7 +942,7 @@ export default function SettingsView({
               >
                 <button
                   type="button"
-                  aria-label="Record TezBar hotkey"
+                  aria-label="Record Tezbar hotkey"
                   aria-pressed={hotkeyRecording}
                   onClick={() => {
                     setHotkeyRecording(true)
@@ -1114,7 +1114,7 @@ export default function SettingsView({
                     detail={
                       aiProvider === 'copilot'
                         ? 'Use a GitHub token or OAuth access token with Copilot Chat access.'
-                        : 'Stored in the local TezBar config and used by the selected provider.'
+                        : 'Stored in the local Tezbar config and used by the selected provider.'
                     }
                   >
                     {aiProvider === 'copilot' ? (
@@ -1534,7 +1534,7 @@ export default function SettingsView({
                     void window.tezbar.appQuit()
                   }}
                 >
-                  Quit TezBar
+                  Quit Tezbar
                 </Button>
               </SettingsRow>
             </div>

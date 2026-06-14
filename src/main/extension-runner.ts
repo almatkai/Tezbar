@@ -602,7 +602,7 @@ function buildPreferenceSetupRoot(
 ): ExtensionRuntimeNode {
   const setup = getExtensionPreferenceSetup(extensionId, commandName)
   return {
-    type: 'TezBar.PreferenceSetup',
+    type: 'Tezbar.PreferenceSetup',
     props: {
       extensionId: setup.extensionId,
       commandName,
@@ -1259,7 +1259,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     }
 
     async hide(): Promise<void> {
-      // Toasts are represented by the latest runtime feedback in TezBar.
+      // Toasts are represented by the latest runtime feedback in Tezbar.
     }
   }
 
@@ -1318,7 +1318,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     },
     getPreferenceValues: (): Record<string, unknown> => session.preferences,
     launchCommand: async (): Promise<void> => {
-      // Background/menu-bar command relaunches are best-effort in TezBar.
+      // Background/menu-bar command relaunches are best-effort in Tezbar.
     },
     useNavigation: () => ({
       push: (next: unknown): void => {
@@ -1437,13 +1437,13 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     },
     confirmAlert: async (): Promise<boolean> => true,
     openExtensionPreferences: async (): Promise<void> => {
-      // Preferences editing is handled by TezBar settings.
+      // Preferences editing is handled by Tezbar settings.
     },
     openCommandPreferences: async (): Promise<void> => {
-      // Preferences editing is handled by TezBar settings.
+      // Preferences editing is handled by Tezbar settings.
     },
     updateCommandMetadata: async (): Promise<void> => {
-      // TezBar does not currently surface dynamic command subtitles, but
+      // Tezbar does not currently surface dynamic command subtitles, but
       // extensions call this after dependency checks and expect it to exist.
     },
     closeMainWindow: async (): Promise<void> => { },

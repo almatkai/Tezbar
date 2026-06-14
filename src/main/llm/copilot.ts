@@ -23,7 +23,7 @@ function toOpenAITools(tools: Tool[]): Array<Record<string, unknown>> {
 export class CopilotProvider implements LLMProvider {
   readonly name = 'copilot'
 
-  constructor(private readonly model: string) {}
+  constructor(private readonly model: string) { }
 
   private readTokens(): {
     access: string
@@ -85,7 +85,7 @@ export class CopilotProvider implements LLMProvider {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-        'Editor-Version': 'TezBar/0.1.0',
+        'Editor-Version': 'Tezbar/0.1.0',
         'Copilot-Integration-Id': 'vscode-chat',
       },
       body: JSON.stringify(body),

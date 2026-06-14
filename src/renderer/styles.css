@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* =========================================================================
-   TezBar Design System
+   Tezbar Design System
    -------------------------------------------------------------------------
    All visual tokens flow from here. Components compose these tokens via
    utility classes and the `@layer components` block below.

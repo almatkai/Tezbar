@@ -256,8 +256,8 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
   },
   'quit-tezbar': {
     id: 'quit-tezbar',
-    title: 'Quit TezBar',
-    subtitle: 'Quit TezBar and terminate all background processes.',
+    title: 'Quit Tezbar',
+    subtitle: 'Quit Tezbar and terminate all background processes.',
     category: 'system',
     strategy: 'native-helper',
     keywords: ['quit', 'tezbar', 'exit', 'close', 'shutdown', 'terminate', 'app'],

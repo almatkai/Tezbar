@@ -58,7 +58,7 @@ function requireInputAddon(): InputAddon {
   const mod = getInputAddon()
   if (!mod) {
     throw new Error(
-      `TezBar native input is not available (missing or failed to load: ${addonPath}). Run \`pnpm build:native:input\` from the repository root.`,
+      `Tezbar native input is not available (missing or failed to load: ${addonPath}). Run \`pnpm build:native:input\` from the repository root.`,
     )
   }
   return mod

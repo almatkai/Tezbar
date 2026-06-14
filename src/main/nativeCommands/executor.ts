@@ -275,7 +275,7 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
         return {
           ok: true,
           message:
-            'Use Port Manager → Open Ports in TezBar for a structured, filterable list. (Raw lsof output is intentionally not shown here.)',
+            'Use Port Manager → Open Ports in Tezbar for a structured, filterable list. (Raw lsof output is intentionally not shown here.)',
         }
       }
 
@@ -347,7 +347,7 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
       case 'quit-tezbar': {
         return {
           ok: false,
-          message: 'Quit TezBar is handled by the launcher so it can show the confirmation dialog.',
+          message: 'Quit Tezbar is handled by the launcher so it can show the confirmation dialog.',
         }
       }
 

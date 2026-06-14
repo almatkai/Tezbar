@@ -17,7 +17,7 @@
  *       (repeat turn_start/… until no more tool calls)
  *     agent_end                           ← pi stops emitting messages
  *
- * The TezBar HUD only needs "stage-level" granularity:
+ * The Tezbar HUD only needs "stage-level" granularity:
  *
  *   • each pi `tool_execution_start` becomes a new Stage{status:"running"}
  *   • the matching `tool_execution_end` flips it to "done" or "failed"

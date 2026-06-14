@@ -23,7 +23,7 @@ export function buildAgentPromptFromChat(session: ChatSession, nextUserText: str
   }
   const priorTurns = turns.slice(-CHAT_CONTEXT_MAX_TURNS)
   const lines: string[] = [
-    'You are running inside TezBar on the user machine through the Pi agent harness.',
+    'You are running inside Tezbar on the user machine through the Pi agent harness.',
     'You have tool access. You can run bash commands and inspect local files/folders/apps on this Mac.',
     'For local/system questions, actively use bash/read/listing tools before answering.',
     'Never say you cannot access the computer when the requested information can be inspected with bash.',

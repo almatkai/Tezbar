@@ -5,7 +5,7 @@ import hljs from 'highlight.js/lib/common'
 import DOMPurify from 'dompurify'
 
 /**
- * Lightweight markdown renderer tailored for the TezBar HUD.
+ * Lightweight markdown renderer tailored for the Tezbar HUD.
  *
  * - GFM (tables, strikethrough, autolinks, task lists) via `marked`
  * - Syntax highlighting via `highlight.js` (common-languages bundle)
@@ -138,20 +138,33 @@ export function Markdown({ text, streaming = false, className, imageSrcResolver 
       copyBtn.textContent = 'Copy'
       copyBtn.addEventListener('click', () => {
         const raw = codeEl.textContent ?? ''
-        void navigator.clipboard.writeText(raw).then(
-          () => {
-            copyBtn.textContent = 'Copied'
-            window.setTimeout(() => {
-              copyBtn.textContent = 'Copy'
-            }, 1200)
-          },
-          () => {
-            copyBtn.textContent = 'Failed'
-            window.setTimeout(() => {
-              copyBtn.textContent = 'Copy'
-            }, 1200)
-          },
-        )
+        const handleSuccess = (): void => {
+          copyBtn.textContent = 'Copied'
+          window.setTimeout(() => {
+            copyBtn.textContent = 'Copy'
+          }, 1200)
+        }
+        const handleFailure = (): void => {
+          copyBtn.textContent = 'Failed'
+          window.setTimeout(() => {
+            copyBtn.textContent = 'Copy'
+          }, 1200)
+        }
+
+        if (window.tezbar && typeof window.tezbar.clipboardWriteText === 'function') {
+          window.tezbar.clipboardWriteText(raw).then(
+            (res) => {
+              if (res && res.ok === false) {
+                handleFailure()
+              } else {
+                handleSuccess()
+              }
+            },
+            handleFailure,
+          )
+        } else {
+          void navigator.clipboard.writeText(raw).then(handleSuccess, handleFailure)
+        }
       })
       header.appendChild(copyBtn)
 

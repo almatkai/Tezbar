@@ -21,7 +21,7 @@ export async function runAiActionMode(
     {
       role: 'system',
       content:
-        'You are TezBar Action Mode. Produce concise, executable steps and concrete output. Never execute system actions unless explicitly allowed.',
+        'You are Tezbar Action Mode. Produce concise, executable steps and concrete output. Never execute system actions unless explicitly allowed.',
     },
     {
       role: 'user',

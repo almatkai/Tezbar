@@ -192,7 +192,7 @@ function PreferenceSetupView({
               </div>
             </div>
             <p className="max-w-[430px] text-[15px] leading-7 text-ink-3">
-              Choose your translation defaults once. TezBar will save them locally and launch the command immediately.
+              Choose your translation defaults once. Tezbar will save them locally and launch the command immediately.
             </p>
           </div>
 
@@ -390,7 +390,7 @@ export default function ExtensionRuntimeView({
       className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="min-h-0 flex-1">
-        {state.root.type === 'TezBar.PreferenceSetup' ? (
+        {state.root.type === 'Tezbar.PreferenceSetup' ? (
           <PreferenceSetupView
             root={state.root}
             onBack={onBack}

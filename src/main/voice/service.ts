@@ -1052,7 +1052,7 @@ export async function transcribeAudio(req: VoiceTranscribeRequest): Promise<Tran
       error: 'No local speech-to-text engine is available.',
       hint:
         'Open Settings → Voice models and click "Install & download" on a model. ' +
-        'TezBar will install the required runtime (whisper.cpp via Homebrew or Moonshine via pip) and the weights in one step.',
+        'Tezbar will install the required runtime (whisper.cpp via Homebrew or Moonshine via pip) and the weights in one step.',
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

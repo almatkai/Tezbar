@@ -40,13 +40,13 @@ function jsonRequest<T>(
       port: fullUrl.port || (isHttps ? 443 : 80),
       path: fullUrl.pathname + fullUrl.search,
       headers: {
-        'User-Agent': 'TezBar',
+        'User-Agent': 'Tezbar',
         Accept: 'application/json',
         ...(payload
           ? {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(payload),
-            }
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload),
+          }
           : {}),
       },
       timeout: REQUEST_TIMEOUT,

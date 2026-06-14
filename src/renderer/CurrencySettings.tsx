@@ -14,7 +14,7 @@ const AUTO_VALUE = '__auto__'
 /**
  * Deduplicated list of ISO codes known to the fuzzy synonym table —
  * used to populate the Settings dropdown so the user sees everything
- * TezBar can parse, not only what they've already used.
+ * Tezbar can parse, not only what they've already used.
  */
 function buildAllCodes(): string[] {
   const set = new Set<string>()

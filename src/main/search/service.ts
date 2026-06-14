@@ -1404,7 +1404,7 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
           return {
             ok: false,
             message:
-              'This extension command requires view runtime support. Use extension:run-command to render it in the TezBar extension surface.',
+              'This extension command requires view runtime support. Use extension:run-command to render it in the Tezbar extension surface.',
           }
         }
         throw error
