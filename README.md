@@ -1,15 +1,12 @@
 <div align="center">
+  <br />
+  <img src="assets/logo.svg" width="128" height="128" alt="TezBar Logo" />
+  <br />
+  <br />
 
-<pre style="line-height:1.2; font-family:'SF Mono',Monaco,monospace; font-size:12px;">
-██████╗  █████╗ ██╗   ██╗███╗   ███╗███████╗███████╗
-██╔══██╗██╔══██╗╚██╗ ██╔╝████╗ ████║██╔════╝██╔════╝
-██████╔╝███████║ ╚████╔╝ ██╔████╔██║█████╗  ███████╗
-██╔══██╗██╔══██║  ╚██╔╝  ██║╚██╔╝██║██╔══╝  ╚════██║
-██║  ██║██║  ██║   ██║   ██║ ╚═╝ ██║███████╗███████║
-╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝     ╚═╝╚══════╝╚══════╝
-</pre>
+  <h1>TezBar</h1>
 
-<h3>Spotlight · AI Agent · Terminal — fused into one floating macOS command surface.</h3>
+  <h3>Spotlight · AI Agent · Terminal — fused into one floating macOS command surface.</h3>
 
 <p>
   <strong>TezBar</strong> is the app that should have shipped with macOS. One hotkey (<kbd>Alt</kbd>+<kbd>Space</kbd>) opens a single floating window that lets you search everything, command an AI coding agent, and drop into a real terminal — without ever leaving the bar.
@@ -46,7 +43,7 @@ TezBar combines three tools you already use every day into one keyboard-first wi
 │            └───────────────────────┼───────────────────────┘               │
 │                                    ▼                                        │
 │                         ┌─────────────────┐                                 │
-│                         │     RAYMES      │  ←  Alt + Space                │
+│                         │     TEZBAR      │  ←  Alt + Space                │
 │                         │  one floating   │                                 │
 │                         │     window      │                                 │
 │                         └─────────────────┘                                 │

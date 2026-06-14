@@ -1,9 +1,5 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="128" y1="80" x2="896" y2="944" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#070b16ff"/>
-    </linearGradient>
-
     <linearGradient id="speedBlue" x1="110" y1="0" x2="430" y2="0" gradientUnits="userSpaceOnUse">
       <stop stop-color="#0047FF" stop-opacity="0"/>
       <stop offset="0.45" stop-color="#0A7BFF"/>
@@ -37,22 +33,7 @@
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
-
-    <filter id="appShadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.35"/>
-    </filter>
   </defs>
-
-  <!-- App background -->
-  <rect
-    x="0"
-    y="0"
-    width="1024"
-    height="1024"
-    rx="150"
-    fill="url(#bg)"
-    filter="url(#appShadow)"
-  />
 
   <!-- Move this whole group -->
   <g id="movable-icon-content" transform="translate(0 0)">

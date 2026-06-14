@@ -12,6 +12,7 @@ import {
   Tray,
 } from 'electron'
 import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 
 function isStdioWriteEio(error: unknown): boolean {
   return (
@@ -472,6 +473,23 @@ function handleAltSpaceHotkey(): void {
 }
 
 function createTrayIcon(): Electron.NativeImage {
+  const possiblePaths = [
+    join(process.resourcesPath, 'trayIconTemplate.png'),
+    join(app.getAppPath(), 'resources', 'trayIconTemplate.png'),
+  ]
+  for (const p of possiblePaths) {
+    if (existsSync(p)) {
+      try {
+        const img = nativeImage.createFromPath(p)
+        if (!img.isEmpty()) {
+          img.setTemplateImage(true)
+          return img
+        }
+      } catch (e) {
+        console.error(`Failed to load tray icon from ${p}:`, e)
+      }
+    }
+  }
   return nativeImage.createFromDataURL(
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAAAAAAf8+9hAAAADElEQVR42mNgwMAAABgABXlY2Z8AAAAASUVORK5CYII='
   )
@@ -992,9 +1010,6 @@ app.whenReady().then(() => {
 
   tray = new Tray(createTrayIcon())
   tray.setToolTip('TezBar')
-  if (process.platform === 'darwin') {
-    tray.setTitle('TezBar')
-  }
   tray.setContextMenu(buildTrayMenu())
   tray.on('click', () => {
     if (isAppQuitting) return
