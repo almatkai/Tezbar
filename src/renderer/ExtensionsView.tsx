@@ -15,7 +15,7 @@ import { GlideList } from './ui/GlideList'
 type StoreExtension = ExtensionManifest
 type ImageVariant = 'icon' | 'avatar' | 'screenshot'
 
-const EXTENSION_IMAGE_CACHE = 'raymes-extension-images-v1'
+const EXTENSION_IMAGE_CACHE = 'tezbar-extension-images-v1'
 
 const imageObjectUrls = new Map<string, string>()
 
@@ -54,7 +54,7 @@ function imageSrcFromPathOrUrl(value: string): string {
 }
 
 function imageCacheKey(src: string, variant: ImageVariant): string {
-  return `https://raymes.local/extension-image-cache/${variant}/${encodeURIComponent(src)}.webp`
+  return `https://tezbar.local/extension-image-cache/${variant}/${encodeURIComponent(src)}.webp`
 }
 
 async function toWebpBlob(source: Blob, variant: ImageVariant): Promise<Blob> {
@@ -204,7 +204,7 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const cleanup = window.raymes.onExtensionInstallProgress((payload) => {
+    const cleanup = window.tezbar.onExtensionInstallProgress((payload) => {
       setInstalling((prev) => ({ ...prev, [payload.id]: payload.progress }))
       if (payload.progress >= 100) {
         setInstalling((prev) => {
@@ -221,8 +221,8 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
     setLoading(true)
     try {
       const [installedList, storeList] = await Promise.all([
-        window.raymes.extensionList(),
-        window.raymes.extensionSearchStore(query),
+        window.tezbar.extensionList(),
+        window.tezbar.extensionSearchStore(query),
       ])
       setInstalled(
         installedList.map((entry) => ({
@@ -279,8 +279,8 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
         setInstalling((prev) => ({ ...prev, [ext.id]: 1 }))
       }
       const action = isInstalled
-        ? window.raymes.extensionUninstall(ext.id)
-        : window.raymes.extensionInstall(ext.id)
+        ? window.tezbar.extensionUninstall(ext.id)
+        : window.tezbar.extensionInstall(ext.id)
       void action
         .then(() => {
           setInstalling((prev) => {
@@ -351,9 +351,9 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
       tabIndex={-1}
       role="application"
       aria-label="Extensions"
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-raymes-scale-in"
+      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
           title="Extensions"
           onBack={onBack}
@@ -374,7 +374,7 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
         </div>
       </div>
 
-      <section className="grid min-h-0 flex-1 grid-cols-[224px_minmax(0,1fr)] gap-2 animate-raymes-scale-in">
+      <section className="grid min-h-0 flex-1 grid-cols-[224px_minmax(0,1fr)] gap-2 animate-tezbar-scale-in">
         <aside className="glass-card flex min-h-0 flex-col overflow-hidden px-1.5 py-2">
           <div className="flex items-center justify-between px-1.5 pb-2">
             <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">
@@ -395,38 +395,38 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
               listClassName="space-y-0.5"
               highlightClassName="bg-white/[0.075] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.20)]"
             >
-                {store.map((ext) => {
-                  const isSelected = selected?.id === ext.id
-                  const isInstalled = installedIds.has(ext.id)
-                  return (
-                    <li key={ext.id} className="relative z-[1]">
-                      <button
-                        type="button"
-                        onMouseEnter={() => {
-                          setFollowSelection(false)
-                          setSelectedId(ext.id)
-                        }}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => {
-                          setFollowSelection(true)
-                          setSelectedId(ext.id)
-                        }}
-                        className={cx(
-                          'relative flex w-full items-center gap-2 rounded-raymes-row px-1.5 py-1.5 text-left transition',
-                          isSelected ? 'text-ink-1' : 'text-ink-2 hover:text-ink-1',
-                        )}
-                      >
-                        <ExtensionIcon ext={ext} size="small" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[11.5px] font-medium">{ext.name}</span>
-                          <span className="mt-0.5 block truncate text-[9.5px] text-ink-4">
-                            {isInstalled ? 'Installed' : formatCount(ext.downloadCount)}
-                          </span>
+              {store.map((ext) => {
+                const isSelected = selected?.id === ext.id
+                const isInstalled = installedIds.has(ext.id)
+                return (
+                  <li key={ext.id} className="relative z-[1]">
+                    <button
+                      type="button"
+                      onMouseEnter={() => {
+                        setFollowSelection(false)
+                        setSelectedId(ext.id)
+                      }}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setFollowSelection(true)
+                        setSelectedId(ext.id)
+                      }}
+                      className={cx(
+                        'relative flex w-full items-center gap-2 rounded-tezbar-row px-1.5 py-1.5 text-left transition',
+                        isSelected ? 'text-ink-1' : 'text-ink-2 hover:text-ink-1',
+                      )}
+                    >
+                      <ExtensionIcon ext={ext} size="small" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[11.5px] font-medium">{ext.name}</span>
+                        <span className="mt-0.5 block truncate text-[9.5px] text-ink-4">
+                          {isInstalled ? 'Installed' : formatCount(ext.downloadCount)}
                         </span>
-                      </button>
-                    </li>
-                  )
-                })}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
             </GlideList>
           )}
         </aside>
@@ -444,7 +444,7 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
                           {selected.name}
                         </h2>
                         {selectedInstalled ? (
-                          <span className="rounded-raymes-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-300">
+                          <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-300">
                             Installed
                           </span>
                         ) : null}
@@ -461,7 +461,7 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
                           {categories.map((category) => (
                             <span
                               key={category}
-                              className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-2 py-1 text-[10.5px] uppercase tracking-[0.1em] text-ink-3"
+                              className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2 py-1 text-[10.5px] uppercase tracking-[0.1em] text-ink-3"
                             >
                               {category}
                             </span>
@@ -545,7 +545,7 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
                       onClick={(event) => {
                         event.preventDefault()
                         const url = repositoryUrl(selected)
-                        if (url) void window.raymes.openExternalUrl(url)
+                        if (url) void window.tezbar.openExternalUrl(url)
                       }}
                       className="mt-3 flex items-center justify-between rounded-[8px] border border-white/10 bg-white/[0.03] px-4 py-3 text-[14px] font-medium text-ink-1 transition hover:bg-white/[0.07]"
                     >
@@ -608,12 +608,12 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
       </section>
 
       {msg ? (
-        <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">
+        <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
           <Message tone={msg.tone}>{msg.text}</Message>
         </div>
       ) : null}
 
-      <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
         <HintBar>
           <Hint label="Search" keys={<Kbd>/</Kbd>} />
           <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />

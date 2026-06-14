@@ -47,7 +47,7 @@ function terminalEnvironment(): Record<string, string> {
   }
   env.TERM = 'xterm-256color'
   env.COLORTERM = 'truecolor'
-  env.TERM_PROGRAM = 'Raymes'
+  env.TERM_PROGRAM = 'TezBar'
   return env
 }
 

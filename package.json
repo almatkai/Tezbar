@@ -1,8 +1,8 @@
 {
-  "name": "raymes",
-  "version": "0.0.1",
+  "name": "tezbar",
+  "version": "0.0.2",
   "private": true,
-  "description": "Raymes",
+  "description": "TezBar",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "bash -lc 'unset ELECTRON_RUN_AS_NODE; exec electron-vite dev'",
@@ -19,8 +19,8 @@
     "dist": "pnpm build && pnpm build:native && electron-builder"
   },
   "build": {
-    "appId": "com.raymes.app",
-    "productName": "Raymes",
+    "appId": "com.tezbar.app",
+    "productName": "TezBar",
     "directories": {
       "output": "dist"
     },

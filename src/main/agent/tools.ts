@@ -10,7 +10,7 @@
  * the CLI can widen that via `--tools read,bash,edit,write,grep,find,ls`.
  *
  * We do NOT re-implement these — pi executes them inside its own process.
- * Raymes only needs to know the *shape* of each tool so the HUD can render
+ * TezBar only needs to know the *shape* of each tool so the HUD can render
  * meaningful stage labels from the `tool_execution_start` event's `args`
  * payload. Keep this file in sync with pi upstream when you bump the
  * pnpm-global version.

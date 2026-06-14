@@ -86,7 +86,7 @@ export default function TerminalView({
         try {
           fitAddon.fit()
           if (sessionId) {
-            void window.raymes.terminalResize(sessionId, terminal.cols, terminal.rows)
+            void window.tezbar.terminalResize(sessionId, terminal.cols, terminal.rows)
           }
         } catch {
           // The host can briefly have zero dimensions while the window hides.
@@ -102,7 +102,7 @@ export default function TerminalView({
         if (!disposed) onBackRef.current()
       }, 350)
     }
-    const offData = window.raymes.onTerminalData((event) => {
+    const offData = window.tezbar.onTerminalData((event) => {
       if (!sessionId) {
         pendingData.push(event)
         return
@@ -113,13 +113,13 @@ export default function TerminalView({
           initialCommandSent = true
           setTimeout(() => {
             if (sessionId) {
-              void window.raymes.terminalWrite(sessionId, `${initialCommand}\r`)
+              void window.tezbar.terminalWrite(sessionId, `${initialCommand}\r`)
             }
           }, 150)
         }
       }
     })
-    const offExit = window.raymes.onTerminalExit((event) => {
+    const offExit = window.tezbar.onTerminalExit((event) => {
       if (!sessionId) {
         pendingExits.push(event)
         return
@@ -127,7 +127,7 @@ export default function TerminalView({
       handleExit(event)
     })
     const inputDisposable = terminal.onData((data) => {
-      if (sessionId) void window.raymes.terminalWrite(sessionId, data)
+      if (sessionId) void window.tezbar.terminalWrite(sessionId, data)
     })
 
     const onWindowKeyDown = (e: KeyboardEvent): void => {
@@ -142,14 +142,14 @@ export default function TerminalView({
     resizeObserver.observe(host)
 
     fit()
-    void window.raymes
+    void window.tezbar
       .terminalCreate({
         cols: Math.max(terminal.cols, 80),
         rows: Math.max(terminal.rows, 24),
       })
       .then((result) => {
         if (disposed) {
-          void window.raymes.terminalKill(result.sessionId)
+          void window.tezbar.terminalKill(result.sessionId)
           return
         }
         sessionId = result.sessionId
@@ -177,7 +177,7 @@ export default function TerminalView({
       offData()
       offExit()
       terminal.dispose()
-      if (sessionId) void window.raymes.terminalKill(sessionId)
+      if (sessionId) void window.tezbar.terminalKill(sessionId)
     }
   }, [initialCommand])
 
@@ -193,12 +193,12 @@ export default function TerminalView({
         <header className="flex h-10 shrink-0 items-center gap-3 border-b border-white/[0.08] px-3">
           <button
             type="button"
-            className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold text-ink-2 transition hover:border-white/20 hover:text-ink-1"
+            className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold text-ink-2 transition hover:border-white/20 hover:text-ink-1"
             onClick={onBack}
           >
             Back
           </button>
-          <span className="inline-flex items-center gap-1.5 rounded-raymes-chip border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-200">
+          <span className="inline-flex items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-200">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
             Direct shell
           </span>

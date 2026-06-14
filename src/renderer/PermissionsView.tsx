@@ -40,7 +40,7 @@ export default function PermissionsView({
 
   const reload = useCallback(async () => {
     try {
-      const snap = await window.raymes.getPermissions()
+      const snap = await window.tezbar.getPermissions()
       setSnapshot(snap)
     } catch (error) {
       setBanner({
@@ -80,7 +80,7 @@ export default function PermissionsView({
     setPending(status.descriptor.id)
     setBanner(null)
     try {
-      const next = await window.raymes.requestPermission(status.descriptor.id)
+      const next = await window.tezbar.requestPermission(status.descriptor.id)
       await reload()
       if (next.state === 'granted') {
         setBanner({ tone: 'success', text: `${next.descriptor.title} is now granted.` })
@@ -103,7 +103,7 @@ export default function PermissionsView({
   const content = (
     <>
       {banner ? (
-        <div className="mb-3 rounded-raymes-row border border-white/10 bg-white/[0.035] px-3 py-2">
+        <div className="mb-3 rounded-tezbar-row border border-white/10 bg-white/[0.035] px-3 py-2">
           <Message tone={banner.tone}>{banner.text}</Message>
         </div>
       ) : null}
@@ -120,7 +120,7 @@ export default function PermissionsView({
               return (
                 <li
                   key={status.descriptor.id}
-                  className="rounded-raymes-row border border-white/[0.07] bg-white/[0.025] px-3.5 py-3 transition hover:border-white/[0.12] hover:bg-white/[0.04]"
+                  className="rounded-tezbar-row border border-white/[0.07] bg-white/[0.025] px-3.5 py-3 transition hover:border-white/[0.12] hover:bg-white/[0.04]"
                 >
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
                     <div className="min-w-0">
@@ -130,7 +130,7 @@ export default function PermissionsView({
                         </span>
                         <span
                           className={cx(
-                            'rounded-raymes-chip px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em] ring-1 ring-inset',
+                            'rounded-tezbar-chip px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em] ring-1 ring-inset',
                             stateTone(status.state)
                           )}
                         >
@@ -178,7 +178,7 @@ export default function PermissionsView({
         tabIndex={-1}
         role="application"
         aria-label="Permissions"
-        className="flex h-full min-h-0 w-full flex-col bg-[#1e1f2e] outline-none animate-raymes-scale-in"
+        className="flex h-full min-h-0 w-full flex-col bg-[#1e1f2e] outline-none animate-tezbar-scale-in"
       >
         <header className="shrink-0 border-b border-white/[0.07] px-5 py-3">
           <div className="flex items-center gap-3">
@@ -186,7 +186,7 @@ export default function PermissionsView({
               type="button"
               onClick={onBack}
               aria-label="Back"
-              className="flex h-7 w-7 items-center justify-center rounded-raymes-chip text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1"
+              className="flex h-7 w-7 items-center justify-center rounded-tezbar-chip text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1"
             >
               <svg
                 width="15"
@@ -232,9 +232,9 @@ export default function PermissionsView({
       tabIndex={-1}
       role="application"
       aria-label="Permissions"
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-raymes-scale-in"
+      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
           title="Permissions"
           onBack={onBack}
@@ -246,11 +246,11 @@ export default function PermissionsView({
         />
       </div>
 
-      <div className="glass-card min-h-0 flex-1 overflow-y-auto px-4 py-3 pr-[calc(0.5rem+2px)] animate-raymes-scale-in">
+      <div className="glass-card min-h-0 flex-1 overflow-y-auto px-4 py-3 pr-[calc(0.5rem+2px)] animate-tezbar-scale-in">
         {content}
       </div>
 
-      <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
         <HintBar>
           <Hint label="Refresh" keys={<Kbd>R</Kbd>} />
           <Hint label="Back" keys={<Kbd>Esc</Kbd>} />

@@ -85,10 +85,10 @@ function normalizeStoredRichText(text: string): string {
 function richTextToPlainText(text: string): string {
   const raw = isLikelyHtml(text)
     ? text
-        .replace(/<br\s*\/?\s*>/gi, '\n')
-        .replace(/<\/(div|p|li|h[1-6])>/gi, '\n')
-        .replace(/<li>/gi, '- ')
-        .replace(/<[^>]+>/g, '')
+      .replace(/<br\s*\/?\s*>/gi, '\n')
+      .replace(/<\/(div|p|li|h[1-6])>/gi, '\n')
+      .replace(/<li>/gi, '- ')
+      .replace(/<[^>]+>/g, '')
     : text
   const decoded = decodeHtmlEntities(raw)
   return stripMarkdownSyntax(decoded)
@@ -148,7 +148,7 @@ export default function NotesView({
   const [msg, setMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
   const reload = useCallback(async (): Promise<QuickNoteEntry[]> => {
-    const items = await window.raymes.listQuickNotes()
+    const items = await window.tezbar.listQuickNotes()
     setNotes(items)
     return items
   }, [])
@@ -250,7 +250,7 @@ export default function NotesView({
     setSaveState('saving')
 
     const timer = window.setTimeout(() => {
-      void window.raymes.updateQuickNote(noteId, nextText).then((ok) => {
+      void window.tezbar.updateQuickNote(noteId, nextText).then((ok) => {
         if (!ok) {
           setSaveState('error')
           return
@@ -261,10 +261,10 @@ export default function NotesView({
           prev.map((note) =>
             note.createdAt === noteId
               ? {
-                  ...note,
-                  text: nextText,
-                  updatedAt: now,
-                }
+                ...note,
+                text: nextText,
+                updatedAt: now,
+              }
               : note,
           ),
         )
@@ -283,7 +283,7 @@ export default function NotesView({
   }, [currentNote, draftHtml, saveState])
 
   const createNote = useCallback(async (): Promise<void> => {
-    const entry = await window.raymes.appendQuickNote('<div>Untitled note</div>')
+    const entry = await window.tezbar.appendQuickNote('<div>Untitled note</div>')
     if (!entry) {
       flash('error', 'Could not create note')
       return
@@ -306,7 +306,7 @@ export default function NotesView({
 
   const deleteSelectedNote = useCallback(async (): Promise<void> => {
     if (!currentNote) return
-    const ok = await window.raymes.deleteQuickNote(currentNote.createdAt)
+    const ok = await window.tezbar.deleteQuickNote(currentNote.createdAt)
     if (!ok) {
       flash('error', 'Could not delete note')
       return
@@ -328,7 +328,7 @@ export default function NotesView({
     }
 
     try {
-      const result = await window.raymes.executeSearchAction({ type: 'copy-text', text: plain })
+      const result = await window.tezbar.executeSearchAction({ type: 'copy-text', text: plain })
       if (!result.ok) {
         flash('error', result.message || 'Could not copy note')
         return
@@ -470,9 +470,9 @@ export default function NotesView({
       role="application"
       aria-label="Quick Notes"
       onKeyDown={onRootKeyDown}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-raymes-scale-in"
+      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
           title="Quick Notes"
           onBack={onBack}
@@ -498,12 +498,12 @@ export default function NotesView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search notes..."
-            className="h-8 w-full rounded-raymes-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
+            className="h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
           />
         </div>
       </div>
 
-      <div className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2 animate-raymes-scale-in">
+      <div className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2 animate-tezbar-scale-in">
         <section className="flex min-h-0 flex-1 gap-3">
           <div className="flex min-h-0 w-[44%] max-w-[340px] flex-col overflow-hidden">
             {filtered.length === 0 ? (
@@ -522,32 +522,32 @@ export default function NotesView({
                 className="min-h-0 flex-1 overflow-y-auto"
                 listClassName="flex flex-col gap-0.5 py-0.5"
               >
-                  {filtered.map((note) => {
-                    const selected = note.createdAt === currentNote?.createdAt
-                    return (
-                      <li key={note.createdAt} className="relative z-[1]">
-                        <button
-                          type="button"
-                          onMouseEnter={() => setSelectedId(note.createdAt)}
-                          onClick={() => setSelectedId(note.createdAt)}
-                          className="flex w-full items-center justify-between gap-3 rounded-raymes-row px-3 py-2 text-left transition"
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className={`block truncate text-[13px] font-medium ${selected ? 'text-ink-1' : 'text-ink-2'}`}>
-                              {noteTitle(note.text)}
-                            </span>
-                            <span className="mt-0.5 block truncate text-[11px] text-ink-3">{noteSummary(note.text)}</span>
+                {filtered.map((note) => {
+                  const selected = note.createdAt === currentNote?.createdAt
+                  return (
+                    <li key={note.createdAt} className="relative z-[1]">
+                      <button
+                        type="button"
+                        onMouseEnter={() => setSelectedId(note.createdAt)}
+                        onClick={() => setSelectedId(note.createdAt)}
+                        className="flex w-full items-center justify-between gap-3 rounded-tezbar-row px-3 py-2 text-left transition"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className={`block truncate text-[13px] font-medium ${selected ? 'text-ink-1' : 'text-ink-2'}`}>
+                            {noteTitle(note.text)}
                           </span>
-                          <span className="shrink-0 text-[10px] text-ink-4">{formatDate(note.updatedAt)}</span>
-                        </button>
-                      </li>
-                    )
-                  })}
+                          <span className="mt-0.5 block truncate text-[11px] text-ink-3">{noteSummary(note.text)}</span>
+                        </span>
+                        <span className="shrink-0 text-[10px] text-ink-4">{formatDate(note.updatedAt)}</span>
+                      </button>
+                    </li>
+                  )
+                })}
               </GlideList>
             )}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-hidden rounded-raymes-row border border-white/[0.06] bg-white/[0.02]">
+          <div className="min-h-0 flex-1 overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
             {currentNote ? (
               <div className="flex h-full min-h-0 flex-col">
                 <div className="flex items-center justify-end gap-3 border-b border-white/10 px-3 py-2 text-[10.5px] text-ink-4">
@@ -580,7 +580,7 @@ export default function NotesView({
                     onPaste={onEditorPaste}
                     onFocus={() => setIsEditorFocused(true)}
                     onBlur={() => setIsEditorFocused(false)}
-                    className="h-full min-h-[220px] w-full overflow-y-auto rounded-raymes-row border border-white/10 bg-black/25 p-3 text-[13px] leading-[1.6] text-ink-1 outline-none transition focus:border-white/20"
+                    className="h-full min-h-[220px] w-full overflow-y-auto rounded-tezbar-row border border-white/10 bg-black/25 p-3 text-[13px] leading-[1.6] text-ink-1 outline-none transition focus:border-white/20"
                   />
                 </div>
               </div>
@@ -599,7 +599,7 @@ export default function NotesView({
         ) : null}
       </div>
 
-      <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-raymes-scale-in">
+      <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
         <span className="text-[10.5px] uppercase tracking-[0.14em] text-ink-4">
           {filtered.length} note{filtered.length === 1 ? '' : 's'}
         </span>

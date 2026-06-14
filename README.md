@@ -12,7 +12,7 @@
 <h3>Spotlight · AI Agent · Terminal — fused into one floating macOS command surface.</h3>
 
 <p>
-  <strong>Raymes</strong> is the app that should have shipped with macOS. One hotkey (<kbd>Alt</kbd>+<kbd>Space</kbd>) opens a single floating window that lets you search everything, command an AI coding agent, and drop into a real terminal — without ever leaving the bar.
+  <strong>TezBar</strong> is the app that should have shipped with macOS. One hotkey (<kbd>Alt</kbd>+<kbd>Space</kbd>) opens a single floating window that lets you search everything, command an AI coding agent, and drop into a real terminal — without ever leaving the bar.
 </p>
 
 <p>
@@ -25,7 +25,7 @@
   <a href="#"><img src="https://img.shields.io/badge/License-Private-0A0A0A?style=flat-square" /></a>
 </p>
 
-<img src="assets/screenshot.png" width="800" alt="Raymes floating command bar" style="border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,0.4);" />
+<img src="assets/screenshot.png" width="800" alt="TezBar floating command bar" style="border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,0.4);" />
 
 </div>
 
@@ -33,7 +33,7 @@
 
 ## 🔥 The Big Idea
 
-Raymes combines three tools you already use every day into one keyboard-first window:
+TezBar combines three tools you already use every day into one keyboard-first window:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -93,11 +93,11 @@ A real coding agent lives inside the spotlight interface, powered by the **PI ag
 
 ## 🖥️ Built-in Terminal
 
-Raymes embeds a full terminal emulator inside the floating window. No context switching.
+TezBar embeds a full terminal emulator inside the floating window. No context switching.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  raymes ~                                                    │
+│  tezbar ~                                                    │
 │  $ git status                                                │
 │  On branch main                                              │
 │  Your branch is up to date with 'origin/main'.               │
@@ -116,7 +116,7 @@ Raymes embeds a full terminal emulator inside the floating window. No context sw
 
 ## 🎁 Everything Else
 
-Raymes is more than the trinity. It also ships with:
+TezBar is more than the trinity. It also ships with:
 
 | Feature | What It Does |
 |---|---|
@@ -137,7 +137,7 @@ Raymes is more than the trinity. It also ships with:
 ## 🛠️ Architecture
 
 ```text
-raymes/
+tezbar/
 ├── src/
 │   ├── main/              # Electron main process
 │   │   ├── agent/         # PI agent runtime (loop, bridge, tools)
@@ -188,7 +188,7 @@ raymes/
 ### Install & Run
 
 ```bash
-cd raymes
+cd tezbar
 pnpm install
 pnpm build:native   # Rust input addon + Swift axhelper
 pnpm dev
@@ -218,7 +218,7 @@ pnpm preview
 | `Alt+Enter` | Open command bar directly |
 | `⌘N` | New note / snippet / chat (context-aware) |
 | `⌘,` | Open settings |
-| `⌘Escape` | Hide Raymes |
+| `⌘Escape` | Hide TezBar |
 | `Escape` | Back to command surface / dismiss |
 
 ---

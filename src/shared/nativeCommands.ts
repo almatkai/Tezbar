@@ -54,7 +54,7 @@ export type NativeCommandId =
   | 'open-applications'
   | 'reveal-library'
   | 'copy-current-path'
-  | 'quit-raymes'
+  | 'quit-tezbar'
   // dev helpers
   | 'show-macos-version'
   | 'show-cpu-info'

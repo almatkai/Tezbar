@@ -121,14 +121,14 @@ function normalizeFromRaw(raw: Record<string, unknown>): OpenRayLLMConfig {
   const hasCopilotToken = typeof raw.copilotGithubToken === 'string' && raw.copilotGithubToken.length > 0
   const provider: ProviderId =
     (typeof p === 'string' && customProviders.some((provider) => provider.id === p)) ||
-    p === 'openai' ||
-    p === 'openai-compatible' ||
-    p === 'anthropic' ||
-    p === 'ollama' ||
-    p === 'copilot' ||
-    p === 'gemini' ||
-    p === 'opencode' ||
-    p === 'deepseek'
+      p === 'openai' ||
+      p === 'openai-compatible' ||
+      p === 'anthropic' ||
+      p === 'ollama' ||
+      p === 'copilot' ||
+      p === 'gemini' ||
+      p === 'opencode' ||
+      p === 'deepseek'
       ? (p as ProviderId)
       : hasCopilotToken
         ? 'copilot'
@@ -415,7 +415,7 @@ export function getSelectedPiProviderBridge(): PiProviderBridge | undefined {
     models: [
       {
         id: modelId,
-        name: `Raymes ${cfg.provider} ${modelId}`,
+        name: `TezBar ${cfg.provider} ${modelId}`,
         reasoning: /reason|think|r1|o\d|gpt-5|claude|deepseek/i.test(modelId),
         input: ['text'],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -426,7 +426,7 @@ export function getSelectedPiProviderBridge(): PiProviderBridge | undefined {
   })
 
   return {
-    modelPattern: `raymes/${modelId}`,
+    modelPattern: `tezbar/${modelId}`,
     providerJson,
   }
 }

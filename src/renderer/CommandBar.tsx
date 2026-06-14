@@ -24,9 +24,9 @@ import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 import { ModelPicker } from './ModelPicker'
 
-const RECENT_EXTENSION_COMMANDS_KEY = 'raymes:recent-extension-commands'
+const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
-const PINNED_COMMANDS_KEY = 'raymes:pinned-commands'
+const PINNED_COMMANDS_KEY = 'tezbar:pinned-commands'
 const MAX_PINNED_COMMANDS = 9
 const COMMAND_HINTS = [
   { shortcut: '/directory', label: 'Search files and folders' },
@@ -176,7 +176,7 @@ function parseDigitIndex(key: string): number | null {
   return Number(key) - 1
 }
 
-const PIN_DRAG_MIME = 'application/x-raymes-pin-id'
+const PIN_DRAG_MIME = 'application/x-tezbar-pin-id'
 
 function parsePinnedSlotFromKeyEvent(event: KeyboardEvent): number | null {
   const fromCode = /^Digit([1-9])$/.exec(event.code)?.[1]
@@ -352,11 +352,11 @@ export default function CommandBar({
 
   const [pendingAction, setPendingAction] = useState<
     | {
-        extensionId: string
-        commandName: string
-        title: string
-        commandArgumentDefinitions: PendingExtensionArgument[]
-      }
+      extensionId: string
+      commandName: string
+      title: string
+      commandArgumentDefinitions: PendingExtensionArgument[]
+    }
     | null
   >(null)
   const [argumentValues, setArgumentValues] = useState<Record<string, string>>({})
@@ -399,7 +399,7 @@ export default function CommandBar({
       setTerminalPrompt('')
       return
     }
-    void window.raymes.getTerminalPromptInfo().then((info: TerminalPromptInfo) => {
+    void window.tezbar.getTerminalPromptInfo().then((info: TerminalPromptInfo) => {
       if (info) {
         const prompt = `${info.user}@${info.host} ${info.dir} %`
         setTerminalPrompt(prompt)
@@ -410,7 +410,7 @@ export default function CommandBar({
   useEffect(() => {
     setRecentExtensionCommands(readRecentExtensionCommands())
     setPinnedCommands(readPinnedCommands())
-    void window.raymes.chatList(40).then(setChatHistory)
+    void window.tezbar.chatList(40).then(setChatHistory)
   }, [])
 
   useEffect(() => {
@@ -420,16 +420,16 @@ export default function CommandBar({
   }, [chatHistory, initialSelectedChatId, isAiMode])
 
   useEffect(() => {
-    const offToken = window.raymes.onStreamToken((t) => {
+    const offToken = window.tezbar.onStreamToken((t) => {
       gotAnyTokenRef.current = true
       setStreamText((s) => s + t)
     })
-    const offDone = window.raymes.onStreamDone(() => {
+    const offDone = window.tezbar.onStreamDone(() => {
       setIsStreaming(false)
       setStreamError(null)
       setEmptyAnswer(!gotAnyTokenRef.current)
     })
-    const offErr = window.raymes.onStreamError((m) => {
+    const offErr = window.tezbar.onStreamError((m) => {
       setIsStreaming(false)
       setEmptyAnswer(false)
       setStreamError(m)
@@ -442,7 +442,7 @@ export default function CommandBar({
   }, [])
 
   useEffect(() => {
-    void window.raymes.getLlmConfig().then((c) => setCfg(c as LlmConfigRecord))
+    void window.tezbar.getLlmConfig().then((c) => setCfg(c as LlmConfigRecord))
   }, [])
 
   useEffect(() => {
@@ -459,14 +459,14 @@ export default function CommandBar({
         showActionMsg('Type text in the command bar, then press Cmd+N to save a note')
         return
       }
-      void window.raymes
+      void window.tezbar
         .appendQuickNote(text)
         .then((entry) => {
           if (!entry) {
             showActionMsg('Nothing to save')
             return
           }
-          void window.raymes.searchAll(valueRef.current).then((items) => {
+          void window.tezbar.searchAll(valueRef.current).then((items) => {
             setSearchResults(items)
             setSelectedSearch(0)
             setFollowSearchSelection(true)
@@ -649,7 +649,7 @@ export default function CommandBar({
 
     let cancelled = false
     const t = setTimeout(() => {
-      void window.raymes.completePath(value).then((items) => {
+      void window.tezbar.completePath(value).then((items) => {
         if (!cancelled) setPathCompletions(items)
       })
     }, 45)
@@ -667,7 +667,7 @@ export default function CommandBar({
         setSearchResults([])
         return
       }
-      void window.raymes.searchAll(value).then((items) => {
+      void window.tezbar.searchAll(value).then((items) => {
         if (!cancelled && requestId === lastSearchRequestId.current) {
           setSearchResults(items)
         }
@@ -821,7 +821,7 @@ export default function CommandBar({
 
   useEffect(() => {
     if (!dictationSupported) return undefined
-    return window.raymes.onVoiceHotkeyHold(({ phase }) => {
+    return window.tezbar.onVoiceHotkeyHold(({ phase }) => {
       if (phase === 'press') startDictation()
       else stopDictation()
     })
@@ -830,7 +830,7 @@ export default function CommandBar({
   const speakAnswerText = async (): Promise<void> => {
     if (!streamText.trim()) return
     try {
-      const result = await window.raymes.voiceSpeak(streamText)
+      const result = await window.tezbar.voiceSpeak(streamText)
       if (!result.ok) {
         showActionMsg('Could not start read-aloud')
       }
@@ -860,10 +860,10 @@ export default function CommandBar({
   }
 
   const ensureExtensionInstalled = async (extensionId: string): Promise<void> => {
-    const installed = await window.raymes.extensionList()
+    const installed = await window.tezbar.extensionList()
     if (installed.some((extension) => extension.id === extensionId)) return
     showActionMsg(`Installing ${extensionId.replace(/^raycast\./, '')}…`)
-    await window.raymes.extensionInstall(extensionId)
+    await window.tezbar.extensionInstall(extensionId)
   }
 
   const runKillPortCommand = async (): Promise<void> => {
@@ -901,7 +901,7 @@ export default function CommandBar({
       if (payload.extensionId === 'raycast.port-manager') {
         await ensureExtensionInstalled('raycast.port-manager')
       }
-      const result = await window.raymes.extensionRunCommand(payload)
+      const result = await window.tezbar.extensionRunCommand(payload)
       if (!result.ok) {
         showActionMsg(result.message)
         return false
@@ -978,8 +978,8 @@ export default function CommandBar({
         onOpenEmojiPicker()
         return
       }
-      if (result.action.commandId === 'quit-raymes') {
-        await window.raymes.appQuit()
+      if (result.action.commandId === 'quit-tezbar') {
+        await window.tezbar.appQuit()
         return
       }
     }
@@ -1080,11 +1080,11 @@ export default function CommandBar({
 
     if (
       result.action.type === 'run-native-command' &&
-      result.action.commandId === 'quit-raymes'
+      result.action.commandId === 'quit-tezbar'
     ) {
       clearPendingAction()
       showActionMsg(null)
-      await window.raymes.appQuit()
+      await window.tezbar.appQuit()
       return
     }
 
@@ -1116,14 +1116,14 @@ export default function CommandBar({
           ? result.action.commandArgumentDefinitions
           : result.action.argumentName
             ? [
-                {
-                  name: 'argument',
-                  title: result.action.argumentName,
-                  placeholder: result.action.argumentName,
-                  required: true,
-                  type: 'text',
-                } satisfies PendingExtensionArgument,
-              ]
+              {
+                name: 'argument',
+                title: result.action.argumentName,
+                placeholder: result.action.argumentName,
+                required: true,
+                type: 'text',
+              } satisfies PendingExtensionArgument,
+            ]
             : []
 
       const requiredDefs = defs.filter((def) => def.required)
@@ -1157,7 +1157,7 @@ export default function CommandBar({
     }
 
     try {
-      const r = await window.raymes.executeSearchAction(result.action, {
+      const r = await window.tezbar.executeSearchAction(result.action, {
         query: value.trim(),
         rank,
         resultId: result.id,
@@ -1166,7 +1166,7 @@ export default function CommandBar({
       if (r.ok) setValue('')
       if (r.ok) clearPendingAction()
       if (r.ok && result.category === 'snippets' && result.action.type === 'copy-text') {
-        void window.raymes.hide()
+        void window.tezbar.hide()
       }
     } catch (err) {
       showActionMsg(err instanceof Error ? err.message : 'Action failed')
@@ -1191,7 +1191,7 @@ export default function CommandBar({
           : { type: 'open-with-app' as const, path: item.path, appName: item.appName }
         : { type: 'open-file' as const, path: item.path }
 
-    const result = await window.raymes.executeSearchAction(action, {
+    const result = await window.tezbar.executeSearchAction(action, {
       query: value.trim(),
       resultId: item.id,
     })
@@ -1444,7 +1444,7 @@ export default function CommandBar({
     }
 
     if (isSlashInput && value.trim()) {
-      await window.raymes.executeSearchAction(
+      await window.tezbar.executeSearchAction(
         { type: 'open-file', path: value.trim() },
         { query: value.trim(), resultId: `path-direct:${value.trim()}` },
       )
@@ -1456,7 +1456,7 @@ export default function CommandBar({
     if (isApplicationInput) return
 
     try {
-      const intent = await window.raymes.query(value)
+      const intent = await window.tezbar.query(value)
       if (intent.type === 'answer' || intent.type === 'ai') {
         setIsStreaming(true)
       }
@@ -1631,15 +1631,15 @@ export default function CommandBar({
     }
     setCfg((current) => ({ ...current, ...patch }))
     setModelMenuOpen(false)
-    await window.raymes.setLlmConfig(patch)
-    const next = await window.raymes.getLlmConfig()
+    await window.tezbar.setLlmConfig(patch)
+    const next = await window.tezbar.getLlmConfig()
     setCfg(next as LlmConfigRecord)
   }
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2">
       {/* Primary glass card: icon + input */}
-      <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
           <div className="flex items-center gap-3">
             <span className={cx(isAiMode ? 'text-violet-300' : terminalMode ? 'text-emerald-300' : 'text-ink-3')}>
@@ -1648,7 +1648,7 @@ export default function CommandBar({
             {isAiMode ? (
               <span
                 aria-label="AI mode"
-                className="inline-flex shrink-0 items-center gap-1 rounded-raymes-chip border border-violet-400/40 bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200"
+                className="inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-violet-400/40 bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
                 AI
@@ -1657,7 +1657,7 @@ export default function CommandBar({
             {terminalMode ? (
               <span
                 aria-label="Terminal mode"
-                className="inline-flex shrink-0 items-center gap-1 rounded-raymes-chip border border-emerald-400/35 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200"
+                className="inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200"
               >
                 <span className="font-mono text-[11px] leading-none">&gt;_</span>
                 Terminal
@@ -1670,7 +1670,7 @@ export default function CommandBar({
                 </span>
                 <span
                   aria-label="Port mode"
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-raymes-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
                 >
                   <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-emerald-400/25 text-emerald-100">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
@@ -1719,7 +1719,7 @@ export default function CommandBar({
                   )
                 }}
                 onKeyDown={handleInputKeyDown}
-                aria-label="Search Raymes or use a shortcut"
+                aria-label="Search TezBar or use a shortcut"
                 placeholder={
                   killPortMode
                     ? 'Port'
@@ -1748,7 +1748,7 @@ export default function CommandBar({
               <button
                 type="button"
                 className={cx(
-                  'inline-flex h-6 min-w-[116px] shrink-0 items-center justify-center rounded-raymes-chip border px-2 text-[10px] font-medium uppercase leading-none tracking-[0.12em] transition',
+                  'inline-flex h-6 min-w-[116px] shrink-0 items-center justify-center rounded-tezbar-chip border px-2 text-[10px] font-medium uppercase leading-none tracking-[0.12em] transition',
                   isDictating
                     ? 'border-rose-400/40 bg-rose-500/20 text-rose-200'
                     : isTranscribing
@@ -1767,7 +1767,7 @@ export default function CommandBar({
                   startDictation()
                 }}
                 onTouchEnd={stopDictation}
-                title="Hold to speak — or keep Option+Space held after opening Raymes (macOS)"
+                title="Hold to speak — or keep Option+Space held after opening TezBar (macOS)"
               >
                 {isDictating ? 'Listening' : isTranscribing ? 'Transcribing…' : (
                   <span className="group">
@@ -1784,571 +1784,571 @@ export default function CommandBar({
       {/* Middle column: flex-1 so the search list can grow to the footer; inner
           panels scroll (GlideList, answer, …) instead of this outer region. */}
       <div className="flex min-h-0 flex-1 flex-col gap-[var(--s-2)] overflow-hidden pr-0.5">
-      {/* Pinned commands */}
-      {pinnedCommands.length > 0 && !isCompletionInput && !isAiMode ? (
-        <div className="glass-card animate-raymes-scale-in px-2 py-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            {pinnedCommands.map((pin, index) => (
-              <div
-                key={`pin:${pin.id}`}
-                draggable
-                title="Drag to reorder · Click icon to run · Click number to change shortcut · Right-click to unpin"
-                onDragStart={(e: DragEvent) => {
-                  e.dataTransfer.setData(PIN_DRAG_MIME, pin.id)
-                  e.dataTransfer.effectAllowed = 'move'
-                  setDraggingPinId(pin.id)
-                }}
-                onDragEnd={() => {
-                  setDraggingPinId(null)
-                }}
-                onDragOver={(e: DragEvent) => {
-                  e.preventDefault()
-                  e.dataTransfer.dropEffect = 'move'
-                }}
-                onDrop={(e: DragEvent) => {
-                  e.preventDefault()
-                  const fromId = e.dataTransfer.getData(PIN_DRAG_MIME)
-                  if (!fromId || fromId === pin.id) return
-                  persistPinnedCommands(reorderPinnedByDrop(pinnedCommands, fromId, pin.id))
-                }}
-                onContextMenu={(event) => {
-                  event.preventDefault()
-                  unpinCommandById(pin.id)
-                }}
-                className={cx(
-                  'relative flex shrink-0 cursor-grab flex-col items-center gap-1 rounded-raymes-row border border-white/10 bg-white/[0.03] px-1.5 py-1.5 transition active:cursor-grabbing',
-                  draggingPinId === pin.id ? 'opacity-45' : 'hover:border-white/20 hover:bg-white/[0.07]',
-                )}
-              >
-                <button
-                  type="button"
-                  draggable={false}
-                  title={pin.title}
-                  className="group grid h-7 w-7 shrink-0 place-items-center rounded-raymes-chip border border-white/12 bg-white/[0.05] text-[14px] text-ink-1 transition hover:border-white/20 hover:bg-white/[0.08]"
-                  onClick={() => {
-                    void runPinnedCommand(pin, index)
-                  }}
-                >
-                  {pin.icon}
-                </button>
-                <button
-                  type="button"
-                  draggable={false}
-                  title="Change ⌥ shortcut"
-                  className="font-mono text-[9px] text-ink-4 transition hover:text-ink-2"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    cyclePinShortcutSlot(pin.id)
-                  }}
-                >
-                  <Kbd>⌥</Kbd>
-                  <Kbd>{pin.slot}</Kbd>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Pin icon picker */}
-      {pinPickerTarget ? (
-        <div className="glass-card animate-raymes-scale-in px-3 py-2.5">
-          <p className="text-[11px] font-semibold tracking-tight text-ink-2">
-            Pin icon for <span className="text-ink-1">{pinPickerTarget.title}</span>
-          </p>
-            <div className="mt-2 grid grid-cols-8 gap-1">
-            {PIN_ICON_CHOICES.map((icon, index) => (
-              <button
-                key={`pin-icon:${icon}`}
-                type="button"
-                className={cx(
-                  'grid h-8 w-full place-items-center rounded-raymes-chip border text-[14px] transition',
-                  PIN_ICON_CHOICES[pinPickerIconIndex] === icon
-                    ? 'border-accent/60 bg-accent/15 text-ink-1'
-                    : 'border-white/10 bg-white/[0.03] text-ink-2 hover:border-white/20 hover:text-ink-1',
-                )}
-                title={`Icon ${index + 1}`}
-                onClick={() => {
-                  setPinPickerIconIndex(index)
-                  confirmPin(icon)
-                }}
-              >
-                {icon}
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 text-[10.5px] text-ink-4">
-            Pick an emoji, then press Enter to confirm. Esc or Tab to cancel.
-          </p>
-        </div>
-      ) : null}
-
-      {/* File and application completion suggestions */}
-      {showSuggestions ? (
-        <div
-          className="glass-card animate-raymes-scale-in flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2"
-          onWheelCapture={() => setFollowSuggestionSelection(false)}
-          onMouseLeave={() => {
-            setFollowSuggestionSelection(false)
-            setSelectedSuggestion(-1)
-          }}
-        >
-          <GlideList
-            selectedIndex={selectedSuggestion}
-            itemCount={suggestions.length}
-            followSelected={followSuggestionSelection}
-            className="min-h-0 flex-1 overflow-y-auto"
-          >
-            {suggestions.map((item, i) => {
-              const sectionLabel =
-                i === 0 || suggestions[i - 1]?.section !== item.section
-                  ? pathCompletionSectionLabel(item.section)
-                  : null
-              return (
-                <li key={item.id} className="relative z-[1]">
-                  {sectionLabel ? (
-                    <div className="px-3 pb-1 pt-2 text-[9.5px] font-bold uppercase tracking-[0.16em] text-ink-4">
-                      {sectionLabel}
-                    </div>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="relative flex w-full items-center justify-between gap-3 rounded-raymes-row px-3 py-2 text-left text-[13px] text-ink-2 transition hover:text-ink-1"
-                    onMouseEnter={() => {
-                      setFollowSuggestionSelection(false)
-                      setSelectedSuggestion(i)
-                    }}
-                    onMouseDown={(ev) => ev.preventDefault()}
-                    onClick={() => completePathInput(item)}
-                  >
-                    <span className="flex min-w-0 flex-1 items-center gap-3">
-                      {item.iconDataUrl ? (
-                        <img
-                          src={item.iconDataUrl}
-                          alt=""
-                          className="h-7 w-7 shrink-0 rounded-[7px]"
-                          draggable={false}
-                        />
-                      ) : item.kind === 'application' ? (
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] border border-white/10 bg-white/[0.04] text-[11px] font-semibold text-ink-3">
-                          {item.title.slice(0, 1).toUpperCase()}
-                        </span>
-                      ) : null}
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-mono text-[12.5px] tracking-tight text-ink-1">
-                          {item.title}
-                        </span>
-                        <span className="mt-0.5 block truncate text-[10.5px] text-ink-4">
-                          {item.subtitle}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="ml-3 shrink-0 text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-4">
-                      {item.badge ??
-                        (item.kind === 'directory'
-                          ? 'Folder'
-                          : item.kind === 'application'
-                            ? 'Open With'
-                            : 'File')}
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </GlideList>
-        </div>
-      ) : null}
-
-      {/* Pending extension action form */}
-      {pendingAction ? (
-        <form
-          onSubmit={(ev) => {
-            ev.preventDefault()
-            void submitPendingAction()
-          }}
-          className="glass-card animate-raymes-scale-in px-3 py-2.5"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(52, 211, 153, 0.12), inset 0 0 0 1px rgba(52, 211, 153, 0.25)',
-          }}
-        >
-          <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-tight text-emerald-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            {pendingAction.title}
-            <span className="text-ink-4">·</span>
-            <span className="font-normal text-ink-3">
-              {pendingAction.commandArgumentDefinitions.length} field
-              {pendingAction.commandArgumentDefinitions.length === 1 ? '' : 's'}
-            </span>
-          </p>
-          <div className="space-y-2">
-            {pendingAction.commandArgumentDefinitions.map((arg, index) => {
-              const fieldType = arg.type === 'dropdown' ? 'dropdown' : 'text'
-              const label = arg.title || arg.name
-              const placeholder = arg.placeholder || arg.title || arg.name
-              const currentValue = argumentValues[arg.name] ?? ''
-
-              const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>): void => {
-                if (e.key === 'Escape') {
-                  e.preventDefault()
-                  cancelPendingAction()
-                  return
-                }
-                if (e.key === 'Tab') {
-                  e.preventDefault()
-                  const nextIndex = e.shiftKey ? index - 1 : index + 1
-                  if (nextIndex >= 0 && nextIndex < pendingAction.commandArgumentDefinitions.length) {
-                    argInputRefs.current[nextIndex]?.focus()
-                  } else {
-                    focusCommandInput()
-                  }
-                  return
-                }
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  void submitPendingAction()
-                }
-              }
-
-              return (
+        {/* Pinned commands */}
+        {pinnedCommands.length > 0 && !isCompletionInput && !isAiMode ? (
+          <div className="glass-card animate-tezbar-scale-in px-2 py-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {pinnedCommands.map((pin, index) => (
                 <div
-                  key={`${pendingAction.commandName}:${arg.name}`}
-                  className="flex items-center gap-3"
-                >
-                  <span className="w-[88px] shrink-0 text-[11px] font-medium text-ink-3">
-                    {label}
-                    {arg.required ? <span className="text-emerald-400/80"> *</span> : null}
-                  </span>
-                  {fieldType === 'dropdown' ? (
-                    <SelectField
-                      ref={(el) => {
-                        argInputRefs.current[index] = el
-                      }}
-                      value={currentValue}
-                      onChange={(e) => {
-                        const next = e.target.value
-                        setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
-                      }}
-                      onKeyDown={onKeyDown}
-                      className="min-w-0 flex-1"
-                    >
-                      <option value="">Select…</option>
-                      {(arg.data || []).map((option) => {
-                        const optionValue = String(option?.value ?? '')
-                        const optionTitle = option?.title || optionValue
-                        return (
-                          <option key={`${arg.name}:${optionValue}`} value={optionValue}>
-                            {optionTitle}
-                          </option>
-                        )
-                      })}
-                    </SelectField>
-                  ) : (
-                    <TextField
-                      ref={(el) => {
-                        argInputRefs.current[index] = el
-                      }}
-                      type={fieldType}
-                      value={currentValue}
-                      onChange={(e) => {
-                        const next = e.target.value
-                        setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
-                      }}
-                      onKeyDown={onKeyDown}
-                      placeholder={placeholder}
-                      autoComplete="off"
-                      spellCheck={false}
-                      className="min-w-0 flex-1"
-                    />
+                  key={`pin:${pin.id}`}
+                  draggable
+                  title="Drag to reorder · Click icon to run · Click number to change shortcut · Right-click to unpin"
+                  onDragStart={(e: DragEvent) => {
+                    e.dataTransfer.setData(PIN_DRAG_MIME, pin.id)
+                    e.dataTransfer.effectAllowed = 'move'
+                    setDraggingPinId(pin.id)
+                  }}
+                  onDragEnd={() => {
+                    setDraggingPinId(null)
+                  }}
+                  onDragOver={(e: DragEvent) => {
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                  }}
+                  onDrop={(e: DragEvent) => {
+                    e.preventDefault()
+                    const fromId = e.dataTransfer.getData(PIN_DRAG_MIME)
+                    if (!fromId || fromId === pin.id) return
+                    persistPinnedCommands(reorderPinnedByDrop(pinnedCommands, fromId, pin.id))
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    unpinCommandById(pin.id)
+                  }}
+                  className={cx(
+                    'relative flex shrink-0 cursor-grab flex-col items-center gap-1 rounded-tezbar-row border border-white/10 bg-white/[0.03] px-1.5 py-1.5 transition active:cursor-grabbing',
+                    draggingPinId === pin.id ? 'opacity-45' : 'hover:border-white/20 hover:bg-white/[0.07]',
                   )}
-                </div>
-              )
-            })}
-          </div>
-        </form>
-      ) : null}
-
-      {/* AI mode chat history */}
-      {showChatHistory ? (
-        <div
-          className="flex min-h-0 flex-1 flex-col"
-          onWheelCapture={() => setFollowSearchSelection(false)}
-          onMouseLeave={() => {
-            setFollowSearchSelection(false)
-            setSelectedSearch(-1)
-          }}
-        >
-          <div className="glass-card animate-raymes-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
-            <div className="mb-2 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-300">
-              Recent Chats
-            </div>
-            <GlideList
-              selectedIndex={selectedSearch}
-              itemCount={filteredChatHistory.length}
-              followSelected={followSearchSelection}
-            >
-              {filteredChatHistory.map((chat, i) => (
-                <li key={chat.id} className="relative z-[1]">
+                >
                   <button
                     type="button"
-                    className="group relative flex w-full items-center gap-3 rounded-raymes-row px-3 py-2 text-left transition"
-                    onMouseEnter={() => {
-                      setFollowSearchSelection(false)
-                      setSelectedSearch(i)
-                    }}
-                    onMouseDown={(ev) => ev.preventDefault()}
+                    draggable={false}
+                    title={pin.title}
+                    className="group grid h-7 w-7 shrink-0 place-items-center rounded-tezbar-chip border border-white/12 bg-white/[0.05] text-[14px] text-ink-1 transition hover:border-white/20 hover:bg-white/[0.08]"
                     onClick={() => {
-                      onOpenAiChat({ kind: 'resume', sessionId: chat.id })
-                      setValue('  ')
+                      void runPinnedCommand(pin, index)
                     }}
                   >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-300 group-hover:bg-violet-500/20">
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path
-                          d="M7 11.5c2.485 0 4.5-2.015 4.5-4.5S9.485 2.5 7 2.5 2.5 4.515 2.5 7c0 1.05.36 2.015.964 2.783L3 11l1.217-.464c.768.604 1.733.964 2.783.964z"
-                          stroke="currentColor"
-                          strokeWidth="1.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-[13px] font-medium text-ink-1">
-                        {chat.title || 'Untitled Chat'}
-                      </span>
-                      <span className="truncate text-[11px] text-ink-3">
-                        {chat.preview || 'No preview available'}
-                      </span>
-                    </div>
-                    <div className="shrink-0 text-[10px] font-medium text-ink-4">
-                      {new Date(chat.updatedAt).toLocaleDateString([], {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </div>
+                    {pin.icon}
                   </button>
-                </li>
+                  <button
+                    type="button"
+                    draggable={false}
+                    title="Change ⌥ shortcut"
+                    className="font-mono text-[9px] text-ink-4 transition hover:text-ink-2"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      cyclePinShortcutSlot(pin.id)
+                    }}
+                  >
+                    <Kbd>⌥</Kbd>
+                    <Kbd>{pin.slot}</Kbd>
+                  </button>
+                </div>
               ))}
-            </GlideList>
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {/* Search results — grows to fill space below pinned / other chrome */}
-      {showSearchResults ? (
-        <div
-          className="flex min-h-0 flex-1 flex-col"
-          onWheelCapture={() => setFollowSearchSelection(false)}
-          onMouseLeave={() => {
-            setFollowSearchSelection(false)
-            setSelectedSearch(-1)
-          }}
-        >
-          <div className="glass-card animate-raymes-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+        {/* Pin icon picker */}
+        {pinPickerTarget ? (
+          <div className="glass-card animate-tezbar-scale-in px-3 py-2.5">
+            <p className="text-[11px] font-semibold tracking-tight text-ink-2">
+              Pin icon for <span className="text-ink-1">{pinPickerTarget.title}</span>
+            </p>
+            <div className="mt-2 grid grid-cols-8 gap-1">
+              {PIN_ICON_CHOICES.map((icon, index) => (
+                <button
+                  key={`pin-icon:${icon}`}
+                  type="button"
+                  className={cx(
+                    'grid h-8 w-full place-items-center rounded-tezbar-chip border text-[14px] transition',
+                    PIN_ICON_CHOICES[pinPickerIconIndex] === icon
+                      ? 'border-accent/60 bg-accent/15 text-ink-1'
+                      : 'border-white/10 bg-white/[0.03] text-ink-2 hover:border-white/20 hover:text-ink-1',
+                  )}
+                  title={`Icon ${index + 1}`}
+                  onClick={() => {
+                    setPinPickerIconIndex(index)
+                    confirmPin(icon)
+                  }}
+                >
+                  {icon}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[10.5px] text-ink-4">
+              Pick an emoji, then press Enter to confirm. Esc or Tab to cancel.
+            </p>
+          </div>
+        ) : null}
+
+        {/* File and application completion suggestions */}
+        {showSuggestions ? (
+          <div
+            className="glass-card animate-tezbar-scale-in flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2"
+            onWheelCapture={() => setFollowSuggestionSelection(false)}
+            onMouseLeave={() => {
+              setFollowSuggestionSelection(false)
+              setSelectedSuggestion(-1)
+            }}
+          >
             <GlideList
-              selectedIndex={selectedSearch}
-              itemCount={visibleSearchCount}
-              followSelected={followSearchSelection}
+              selectedIndex={selectedSuggestion}
+              itemCount={suggestions.length}
+              followSelected={followSuggestionSelection}
               className="min-h-0 flex-1 overflow-y-auto"
             >
-            {visibleSearchResults.map((item, i) => {
-              const pinnedMeta = pinnedMetaById.get(item.id)
-              const isCalc = item.category === 'calculator'
-              const isColorConversion = item.category === 'color-converter'
-              const isCurrencyRow = isCalc && item.id.startsWith('currency:')
-              const colorSwatch =
-                isColorConversion && item.action.type === 'copy-text' ? item.action.text : item.title
-              return (
-                <li key={item.id} className="relative z-[1]">
-                  <button
-                    type="button"
-                    className={cx(
-                      'relative flex w-full items-center justify-between gap-3 rounded-raymes-row text-left transition',
-                      isCalc || isColorConversion ? 'px-3 py-2.5' : 'px-3 py-2',
-                    )}
-                    onMouseEnter={() => {
-                      setFollowSearchSelection(false)
-                      setSelectedSearch(i)
-                    }}
-                    onMouseDown={(ev) => ev.preventDefault()}
-                    onClick={() => {
-                      setSelectedSearch(i)
-                      void runSelectedSearchResult(item, i + 1)
-                    }}
-                  >
-                    {isCalc || isColorConversion ? (
-                      <>
-                        <span className="flex min-w-0 flex-1 items-center gap-2.5">
-                          <span
-                            aria-hidden
-                            className="grid h-7 w-7 shrink-0 place-items-center rounded-raymes-chip border border-white/10 bg-white/[0.04] text-ink-3"
-                          >
-                            {isColorConversion ? (
-                              <span
-                                className="h-[18px] w-[18px] rounded-full border border-white/30 shadow-[0_0_14px_rgba(255,255,255,0.18)]"
-                                style={{ background: colorSwatch }}
-                              />
-                            ) : isCurrencyRow ? (
-                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                <circle
-                                  cx="7"
-                                  cy="7"
-                                  r="5.25"
-                                  stroke="currentColor"
-                                  strokeWidth="1.1"
-                                />
-                                <path
-                                  d="M9 5.25c-.4-.55-1.1-.95-2-.95-1.1 0-2 .55-2 1.4 0 2 4 1 4 3 0 .85-.9 1.4-2 1.4-.9 0-1.6-.4-2-.95"
-                                  stroke="currentColor"
-                                  strokeWidth="1.1"
-                                  strokeLinecap="round"
-                                />
-                                <path
-                                  d="M7 3.25v7.5"
-                                  stroke="currentColor"
-                                  strokeWidth="1.1"
-                                  strokeLinecap="round"
-                                />
-                              </svg>
-                            ) : (
-                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                <rect
-                                  x="2.5"
-                                  y="1.5"
-                                  width="9"
-                                  height="11"
-                                  rx="1.5"
-                                  stroke="currentColor"
-                                  strokeWidth="1.1"
-                                />
-                                <rect x="4.25" y="3.25" width="5.5" height="2" rx="0.4" fill="currentColor" />
-                                <circle cx="5" cy="7.5" r="0.6" fill="currentColor" />
-                                <circle cx="7" cy="7.5" r="0.6" fill="currentColor" />
-                                <circle cx="9" cy="7.5" r="0.6" fill="currentColor" />
-                                <circle cx="5" cy="9.75" r="0.6" fill="currentColor" />
-                                <circle cx="7" cy="9.75" r="0.6" fill="currentColor" />
-                                <circle cx="9" cy="9.75" r="0.6" fill="currentColor" />
-                              </svg>
-                            )}
+              {suggestions.map((item, i) => {
+                const sectionLabel =
+                  i === 0 || suggestions[i - 1]?.section !== item.section
+                    ? pathCompletionSectionLabel(item.section)
+                    : null
+                return (
+                  <li key={item.id} className="relative z-[1]">
+                    {sectionLabel ? (
+                      <div className="px-3 pb-1 pt-2 text-[9.5px] font-bold uppercase tracking-[0.16em] text-ink-4">
+                        {sectionLabel}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="relative flex w-full items-center justify-between gap-3 rounded-tezbar-row px-3 py-2 text-left text-[13px] text-ink-2 transition hover:text-ink-1"
+                      onMouseEnter={() => {
+                        setFollowSuggestionSelection(false)
+                        setSelectedSuggestion(i)
+                      }}
+                      onMouseDown={(ev) => ev.preventDefault()}
+                      onClick={() => completePathInput(item)}
+                    >
+                      <span className="flex min-w-0 flex-1 items-center gap-3">
+                        {item.iconDataUrl ? (
+                          <img
+                            src={item.iconDataUrl}
+                            alt=""
+                            className="h-7 w-7 shrink-0 rounded-[7px]"
+                            draggable={false}
+                          />
+                        ) : item.kind === 'application' ? (
+                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] border border-white/10 bg-white/[0.04] text-[11px] font-semibold text-ink-3">
+                            {item.title.slice(0, 1).toUpperCase()}
                           </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-mono text-[15px] font-semibold tabular-nums text-ink-1">
-                              {item.title}
-                            </span>
-                            <span className="mt-0.5 block truncate text-[11px] text-ink-3">
-                              <span className="text-ink-4">
-                                {isColorConversion ? 'Color' : isCurrencyRow ? 'Currency' : 'Calculator'}
-                              </span>
-                              <span className="mx-1.5 text-ink-4">·</span>
-                              <span className="font-mono">{item.subtitle}</span>
-                            </span>
-                          </span>
-                        </span>
-                        <span className="shrink-0 flex items-center gap-1.5 text-[10px] font-mono text-ink-3">
-                          <Kbd>↵</Kbd>
-                          <span>copy</span>
-                        </span>
-                      </>
-                    ) : (
-                      <>
+                        ) : null}
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] font-medium text-ink-1">{item.title}</span>
-                          <span className="mt-0.5 block truncate text-[11px] text-ink-3">
-                            <span className="text-ink-4">{item.category}</span>
-                            {item.subtitle ? <span className="mx-1.5 text-ink-4">·</span> : null}
+                          <span className="block truncate font-mono text-[12.5px] tracking-tight text-ink-1">
+                            {item.title}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[10.5px] text-ink-4">
                             {item.subtitle}
                           </span>
                         </span>
-                        <span className="shrink-0 flex items-center gap-1.5">
-                          {pinnedMeta ? (
-                            <span className="inline-flex items-center gap-1 rounded-raymes-chip border border-amber-300/30 bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-100/95">
-                              <span className="text-[11px] leading-none">{pinnedMeta.icon}</span>
-                              <Kbd>⌥</Kbd>
-                              <Kbd>{pinnedMeta.slot}</Kbd>
-                            </span>
-                          ) : null}
-                          {i === selectedSearch ? (
-                            <span className="text-[10px] font-mono text-ink-3">
-                              <Kbd>↵</Kbd>
-                            </span>
-                          ) : null}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                </li>
-              )
-            })}
+                      </span>
+                      <span className="ml-3 shrink-0 text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-4">
+                        {item.badge ??
+                          (item.kind === 'directory'
+                            ? 'Folder'
+                            : item.kind === 'application'
+                              ? 'Open With'
+                              : 'File')}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
             </GlideList>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {/* Answer stream */}
-      {showAnswer ? (
-        <div className="glass-card animate-raymes-scale-in px-4 py-3">
-          {!isStreaming && streamText ? (
-            <div className="mb-2 flex justify-end">
-              <button
-                type="button"
-                className="rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-2"
-                onClick={() => {
-                  void speakAnswerText()
-                }}
-              >
-                Read aloud
-              </button>
-            </div>
-          ) : null}
-          {isStreaming && !streamText ? (
-            <p className="raymes-thinking flex items-center gap-2 text-[12px] text-ink-3">
-              <span className="inline-flex gap-1">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:120ms]" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:240ms]" />
+        {/* Pending extension action form */}
+        {pendingAction ? (
+          <form
+            onSubmit={(ev) => {
+              ev.preventDefault()
+              void submitPendingAction()
+            }}
+            className="glass-card animate-tezbar-scale-in px-3 py-2.5"
+            style={{
+              boxShadow:
+                'inset 0 1px 0 rgba(52, 211, 153, 0.12), inset 0 0 0 1px rgba(52, 211, 153, 0.25)',
+            }}
+          >
+            <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-tight text-emerald-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              {pendingAction.title}
+              <span className="text-ink-4">·</span>
+              <span className="font-normal text-ink-3">
+                {pendingAction.commandArgumentDefinitions.length} field
+                {pendingAction.commandArgumentDefinitions.length === 1 ? '' : 's'}
               </span>
-              Thinking
             </p>
-          ) : (
-            <div className="max-h-48 overflow-y-auto">
-              {streamText ? (
-                <Markdown text={streamText} streaming={isStreaming} />
-              ) : emptyAnswer ? (
-                <p className="text-[13.5px] leading-[1.55] text-ink-1">
-                  No response from the selected provider. Check your provider settings and try
-                  again.
-                </p>
-              ) : null}
-            </div>
-          )}
-          {streamError ? (
-            <p className="mt-2 text-[11.5px] text-rose-300" role="alert">
-              {streamError}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+            <div className="space-y-2">
+              {pendingAction.commandArgumentDefinitions.map((arg, index) => {
+                const fieldType = arg.type === 'dropdown' ? 'dropdown' : 'text'
+                const label = arg.title || arg.name
+                const placeholder = arg.placeholder || arg.title || arg.name
+                const currentValue = argumentValues[arg.name] ?? ''
 
-      {/* Inline status line (errors, intent, action msg) */}
-      {error || lastIntent || actionMsg ? (
-        <div className="px-1">
-          {error ? <Message tone="error">{error}</Message> : null}
-          {lastIntent && !error ? (
-            <Message tone="info">
-              {lastIntent.type}
-              {lastIntent.type === 'extension' && 'name' in lastIntent ? ` · ${lastIntent.name}` : ''}
-            </Message>
-          ) : null}
-          {actionMsg ? <Message>{actionMsg}</Message> : null}
-        </div>
-      ) : null}
+                const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>): void => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    cancelPendingAction()
+                    return
+                  }
+                  if (e.key === 'Tab') {
+                    e.preventDefault()
+                    const nextIndex = e.shiftKey ? index - 1 : index + 1
+                    if (nextIndex >= 0 && nextIndex < pendingAction.commandArgumentDefinitions.length) {
+                      argInputRefs.current[nextIndex]?.focus()
+                    } else {
+                      focusCommandInput()
+                    }
+                    return
+                  }
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void submitPendingAction()
+                  }
+                }
+
+                return (
+                  <div
+                    key={`${pendingAction.commandName}:${arg.name}`}
+                    className="flex items-center gap-3"
+                  >
+                    <span className="w-[88px] shrink-0 text-[11px] font-medium text-ink-3">
+                      {label}
+                      {arg.required ? <span className="text-emerald-400/80"> *</span> : null}
+                    </span>
+                    {fieldType === 'dropdown' ? (
+                      <SelectField
+                        ref={(el) => {
+                          argInputRefs.current[index] = el
+                        }}
+                        value={currentValue}
+                        onChange={(e) => {
+                          const next = e.target.value
+                          setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
+                        }}
+                        onKeyDown={onKeyDown}
+                        className="min-w-0 flex-1"
+                      >
+                        <option value="">Select…</option>
+                        {(arg.data || []).map((option) => {
+                          const optionValue = String(option?.value ?? '')
+                          const optionTitle = option?.title || optionValue
+                          return (
+                            <option key={`${arg.name}:${optionValue}`} value={optionValue}>
+                              {optionTitle}
+                            </option>
+                          )
+                        })}
+                      </SelectField>
+                    ) : (
+                      <TextField
+                        ref={(el) => {
+                          argInputRefs.current[index] = el
+                        }}
+                        type={fieldType}
+                        value={currentValue}
+                        onChange={(e) => {
+                          const next = e.target.value
+                          setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
+                        }}
+                        onKeyDown={onKeyDown}
+                        placeholder={placeholder}
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="min-w-0 flex-1"
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </form>
+        ) : null}
+
+        {/* AI mode chat history */}
+        {showChatHistory ? (
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            onWheelCapture={() => setFollowSearchSelection(false)}
+            onMouseLeave={() => {
+              setFollowSearchSelection(false)
+              setSelectedSearch(-1)
+            }}
+          >
+            <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+              <div className="mb-2 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-300">
+                Recent Chats
+              </div>
+              <GlideList
+                selectedIndex={selectedSearch}
+                itemCount={filteredChatHistory.length}
+                followSelected={followSearchSelection}
+              >
+                {filteredChatHistory.map((chat, i) => (
+                  <li key={chat.id} className="relative z-[1]">
+                    <button
+                      type="button"
+                      className="group relative flex w-full items-center gap-3 rounded-tezbar-row px-3 py-2 text-left transition"
+                      onMouseEnter={() => {
+                        setFollowSearchSelection(false)
+                        setSelectedSearch(i)
+                      }}
+                      onMouseDown={(ev) => ev.preventDefault()}
+                      onClick={() => {
+                        onOpenAiChat({ kind: 'resume', sessionId: chat.id })
+                        setValue('  ')
+                      }}
+                    >
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-300 group-hover:bg-violet-500/20">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                          <path
+                            d="M7 11.5c2.485 0 4.5-2.015 4.5-4.5S9.485 2.5 7 2.5 2.5 4.515 2.5 7c0 1.05.36 2.015.964 2.783L3 11l1.217-.464c.768.604 1.733.964 2.783.964z"
+                            stroke="currentColor"
+                            strokeWidth="1.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate text-[13px] font-medium text-ink-1">
+                          {chat.title || 'Untitled Chat'}
+                        </span>
+                        <span className="truncate text-[11px] text-ink-3">
+                          {chat.preview || 'No preview available'}
+                        </span>
+                      </div>
+                      <div className="shrink-0 text-[10px] font-medium text-ink-4">
+                        {new Date(chat.updatedAt).toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </GlideList>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Search results — grows to fill space below pinned / other chrome */}
+        {showSearchResults ? (
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            onWheelCapture={() => setFollowSearchSelection(false)}
+            onMouseLeave={() => {
+              setFollowSearchSelection(false)
+              setSelectedSearch(-1)
+            }}
+          >
+            <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+              <GlideList
+                selectedIndex={selectedSearch}
+                itemCount={visibleSearchCount}
+                followSelected={followSearchSelection}
+                className="min-h-0 flex-1 overflow-y-auto"
+              >
+                {visibleSearchResults.map((item, i) => {
+                  const pinnedMeta = pinnedMetaById.get(item.id)
+                  const isCalc = item.category === 'calculator'
+                  const isColorConversion = item.category === 'color-converter'
+                  const isCurrencyRow = isCalc && item.id.startsWith('currency:')
+                  const colorSwatch =
+                    isColorConversion && item.action.type === 'copy-text' ? item.action.text : item.title
+                  return (
+                    <li key={item.id} className="relative z-[1]">
+                      <button
+                        type="button"
+                        className={cx(
+                          'relative flex w-full items-center justify-between gap-3 rounded-tezbar-row text-left transition',
+                          isCalc || isColorConversion ? 'px-3 py-2.5' : 'px-3 py-2',
+                        )}
+                        onMouseEnter={() => {
+                          setFollowSearchSelection(false)
+                          setSelectedSearch(i)
+                        }}
+                        onMouseDown={(ev) => ev.preventDefault()}
+                        onClick={() => {
+                          setSelectedSearch(i)
+                          void runSelectedSearchResult(item, i + 1)
+                        }}
+                      >
+                        {isCalc || isColorConversion ? (
+                          <>
+                            <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                              <span
+                                aria-hidden
+                                className="grid h-7 w-7 shrink-0 place-items-center rounded-tezbar-chip border border-white/10 bg-white/[0.04] text-ink-3"
+                              >
+                                {isColorConversion ? (
+                                  <span
+                                    className="h-[18px] w-[18px] rounded-full border border-white/30 shadow-[0_0_14px_rgba(255,255,255,0.18)]"
+                                    style={{ background: colorSwatch }}
+                                  />
+                                ) : isCurrencyRow ? (
+                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                    <circle
+                                      cx="7"
+                                      cy="7"
+                                      r="5.25"
+                                      stroke="currentColor"
+                                      strokeWidth="1.1"
+                                    />
+                                    <path
+                                      d="M9 5.25c-.4-.55-1.1-.95-2-.95-1.1 0-2 .55-2 1.4 0 2 4 1 4 3 0 .85-.9 1.4-2 1.4-.9 0-1.6-.4-2-.95"
+                                      stroke="currentColor"
+                                      strokeWidth="1.1"
+                                      strokeLinecap="round"
+                                    />
+                                    <path
+                                      d="M7 3.25v7.5"
+                                      stroke="currentColor"
+                                      strokeWidth="1.1"
+                                      strokeLinecap="round"
+                                    />
+                                  </svg>
+                                ) : (
+                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                    <rect
+                                      x="2.5"
+                                      y="1.5"
+                                      width="9"
+                                      height="11"
+                                      rx="1.5"
+                                      stroke="currentColor"
+                                      strokeWidth="1.1"
+                                    />
+                                    <rect x="4.25" y="3.25" width="5.5" height="2" rx="0.4" fill="currentColor" />
+                                    <circle cx="5" cy="7.5" r="0.6" fill="currentColor" />
+                                    <circle cx="7" cy="7.5" r="0.6" fill="currentColor" />
+                                    <circle cx="9" cy="7.5" r="0.6" fill="currentColor" />
+                                    <circle cx="5" cy="9.75" r="0.6" fill="currentColor" />
+                                    <circle cx="7" cy="9.75" r="0.6" fill="currentColor" />
+                                    <circle cx="9" cy="9.75" r="0.6" fill="currentColor" />
+                                  </svg>
+                                )}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-mono text-[15px] font-semibold tabular-nums text-ink-1">
+                                  {item.title}
+                                </span>
+                                <span className="mt-0.5 block truncate text-[11px] text-ink-3">
+                                  <span className="text-ink-4">
+                                    {isColorConversion ? 'Color' : isCurrencyRow ? 'Currency' : 'Calculator'}
+                                  </span>
+                                  <span className="mx-1.5 text-ink-4">·</span>
+                                  <span className="font-mono">{item.subtitle}</span>
+                                </span>
+                              </span>
+                            </span>
+                            <span className="shrink-0 flex items-center gap-1.5 text-[10px] font-mono text-ink-3">
+                              <Kbd>↵</Kbd>
+                              <span>copy</span>
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] font-medium text-ink-1">{item.title}</span>
+                              <span className="mt-0.5 block truncate text-[11px] text-ink-3">
+                                <span className="text-ink-4">{item.category}</span>
+                                {item.subtitle ? <span className="mx-1.5 text-ink-4">·</span> : null}
+                                {item.subtitle}
+                              </span>
+                            </span>
+                            <span className="shrink-0 flex items-center gap-1.5">
+                              {pinnedMeta ? (
+                                <span className="inline-flex items-center gap-1 rounded-tezbar-chip border border-amber-300/30 bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-100/95">
+                                  <span className="text-[11px] leading-none">{pinnedMeta.icon}</span>
+                                  <Kbd>⌥</Kbd>
+                                  <Kbd>{pinnedMeta.slot}</Kbd>
+                                </span>
+                              ) : null}
+                              {i === selectedSearch ? (
+                                <span className="text-[10px] font-mono text-ink-3">
+                                  <Kbd>↵</Kbd>
+                                </span>
+                              ) : null}
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
+              </GlideList>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Answer stream */}
+        {showAnswer ? (
+          <div className="glass-card animate-tezbar-scale-in px-4 py-3">
+            {!isStreaming && streamText ? (
+              <div className="mb-2 flex justify-end">
+                <button
+                  type="button"
+                  className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-2"
+                  onClick={() => {
+                    void speakAnswerText()
+                  }}
+                >
+                  Read aloud
+                </button>
+              </div>
+            ) : null}
+            {isStreaming && !streamText ? (
+              <p className="tezbar-thinking flex items-center gap-2 text-[12px] text-ink-3">
+                <span className="inline-flex gap-1">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:120ms]" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:240ms]" />
+                </span>
+                Thinking
+              </p>
+            ) : (
+              <div className="max-h-48 overflow-y-auto">
+                {streamText ? (
+                  <Markdown text={streamText} streaming={isStreaming} />
+                ) : emptyAnswer ? (
+                  <p className="text-[13.5px] leading-[1.55] text-ink-1">
+                    No response from the selected provider. Check your provider settings and try
+                    again.
+                  </p>
+                ) : null}
+              </div>
+            )}
+            {streamError ? (
+              <p className="mt-2 text-[11.5px] text-rose-300" role="alert">
+                {streamError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Inline status line (errors, intent, action msg) */}
+        {error || lastIntent || actionMsg ? (
+          <div className="px-1">
+            {error ? <Message tone="error">{error}</Message> : null}
+            {lastIntent && !error ? (
+              <Message tone="info">
+                {lastIntent.type}
+                {lastIntent.type === 'extension' && 'name' in lastIntent ? ` · ${lastIntent.name}` : ''}
+              </Message>
+            ) : null}
+            {actionMsg ? <Message>{actionMsg}</Message> : null}
+          </div>
+        ) : null}
       </div>
 
       {/* Footer hint bar — same glass-card shell as Clipboard / other views */}
       <div
         className={cx(
-          'glass-card shrink-0 px-4 py-2 animate-raymes-scale-in',
+          'glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in',
           showSearchResults || showSuggestions || showAnswer ? 'opacity-60' : '',
         )}
       >

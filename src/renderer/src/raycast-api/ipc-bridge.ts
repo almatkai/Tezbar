@@ -8,7 +8,7 @@ export async function runExtensionCommand(payload: {
   commandName: string
   argumentValues?: Record<string, string>
 }): Promise<ExtensionRunCommandResult> {
-  return window.raymes.extensionRunCommand(payload)
+  return window.tezbar.extensionRunCommand(payload)
 }
 
 export async function invokeExtensionAction(payload: {
@@ -16,24 +16,24 @@ export async function invokeExtensionAction(payload: {
   actionId: string
   formValues?: Record<string, string>
 }): Promise<ExtensionInvokeActionResult> {
-  return window.raymes.extensionInvokeAction(payload)
+  return window.tezbar.extensionInvokeAction(payload)
 }
 
 export async function clipboardRead(): Promise<string> {
-  return window.raymes.clipboardReadText()
+  return window.tezbar.clipboardReadText()
 }
 
 export async function clipboardWrite(text: string): Promise<void> {
-  await window.raymes.clipboardWriteText(text)
+  await window.tezbar.clipboardWriteText(text)
 }
 
 export async function openShellTarget(target: string): Promise<void> {
-  await window.raymes.shellOpen(target)
+  await window.tezbar.shellOpen(target)
 }
 
 export async function getPreferences(payload: {
   extensionId: string
   commandName?: string
 }): Promise<Record<string, unknown>> {
-  return window.raymes.getExtensionPreferences(payload)
+  return window.tezbar.getExtensionPreferences(payload)
 }

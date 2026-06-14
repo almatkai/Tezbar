@@ -139,7 +139,7 @@ function FileIcon({ path, title }: { path: string; title: string }): JSX.Element
   useEffect(() => {
     let cancelled = false
     setSrc(null)
-    void window.raymes.getAppIconDataUrl(path)
+    void window.tezbar.getAppIconDataUrl(path)
       .then((value) => {
         if (!cancelled) setSrc(value)
       })
@@ -337,13 +337,13 @@ function ListDetailPane({ row }: { row?: ListRow }): JSX.Element {
         <InlineMetadata root={metadata} />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {markdown ? (
-          <article className="prose prose-invert max-w-none text-[13px] leading-relaxed">
-            <Markdown text={markdown} className="text-[13px] leading-relaxed" />
-          </article>
-        ) : metadata ? null : (
-          <div className="text-[12px] text-ink-4">No detail content</div>
-        )}
+          {markdown ? (
+            <article className="prose prose-invert max-w-none text-[13px] leading-relaxed">
+              <Markdown text={markdown} className="text-[13px] leading-relaxed" />
+            </article>
+          ) : metadata ? null : (
+            <div className="text-[12px] text-ink-4">No detail content</div>
+          )}
         </div>
       )}
       {metadata && markdown ? <MetadataSidebar root={metadata} /> : null}
@@ -536,10 +536,10 @@ export function ListRuntime({
 
   return (
     <div
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-raymes-scale-in"
+      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
       onKeyDown={onKeyDown}
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader title={navigationTitle} onBack={onBack} />
 
         {shouldShowSearch ? (
@@ -554,7 +554,7 @@ export function ListRuntime({
                   setSelected(0)
                 }}
                 placeholder={searchBarPlaceholder}
-                className="h-8 w-full rounded-raymes-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
+                className="h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
                 aria-label={searchBarPlaceholder}
               />
             </div>
@@ -575,8 +575,8 @@ export function ListRuntime({
                       }}
                       className={
                         active
-                          ? 'rounded-raymes-chip bg-white/[0.12] px-2 py-1 text-[11px] font-medium text-ink-1 transition'
-                          : 'rounded-raymes-chip px-2 py-1 text-[11px] text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1'
+                          ? 'rounded-tezbar-chip bg-white/[0.12] px-2 py-1 text-[11px] font-medium text-ink-1 transition'
+                          : 'rounded-tezbar-chip px-2 py-1 text-[11px] text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1'
                       }
                     >
                       {option.title}
@@ -591,9 +591,8 @@ export function ListRuntime({
 
       <div
         ref={listRef}
-        className={`glass-card min-h-0 flex-1 overflow-hidden animate-raymes-scale-in ${
-          hasDetails ? 'grid grid-cols-[minmax(280px,40%)_minmax(0,1fr)] px-2 py-2' : 'flex flex-col px-4 py-3'
-        }`}
+        className={`glass-card min-h-0 flex-1 overflow-hidden animate-tezbar-scale-in ${hasDetails ? 'grid grid-cols-[minmax(280px,40%)_minmax(0,1fr)] px-2 py-2' : 'flex flex-col px-4 py-3'
+          }`}
       >
         {filteredRows.length === 0 ? (
           <div className="flex h-full items-center justify-center text-center">
@@ -616,61 +615,60 @@ export function ListRuntime({
           </div>
         ) : (
           <>
-          <div className={hasDetails ? 'min-h-0 overflow-y-auto pr-2' : 'min-h-0 flex-1 overflow-y-auto pr-0.5'}>
-            {groupedSections.map((group, groupIdx) => (
-              <div key={groupIdx} className="mb-1">
-                {group.section ? (
-                  <div className="px-3 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4 select-none">
-                    {group.section}
-                  </div>
-                ) : null}
-                <ul className="flex flex-col gap-0.5">
-                  {group.items.map((row, localIdx) => {
-                    const globalIdx = groupedSections
-                      .slice(0, groupIdx)
-                      .reduce((sum, g) => sum + g.items.length, 0) + localIdx
-                    return (
-                      <li key={row.id}>
-                        <button
-                          type="button"
-                          data-idx={globalIdx}
-                          onMouseEnter={() => setSelected(globalIdx)}
-                          onClick={() => {
-                            setSelected(globalIdx)
-                            if (row.actionIds?.[0]) onRunPrimaryAction(row.actionIds[0])
-                          }}
-                          className={`w-full rounded-raymes-row px-3 py-2.5 text-left transition ${
-                            globalIdx === selected ? 'bg-white/[0.16] text-ink-1' : 'text-ink-2 hover:bg-white/[0.06]'
-                          }`}
-                        >
-                          <span className="flex min-w-0 items-center gap-2.5">
-                            <RowIcon row={row} />
-                            <span className="min-w-0 flex-1">
-                              <p className="truncate text-[13px] font-medium">{row.title}</p>
-                              {row.subtitle ? <p className="truncate text-[11px] text-ink-3">{row.subtitle}</p> : null}
+            <div className={hasDetails ? 'min-h-0 overflow-y-auto pr-2' : 'min-h-0 flex-1 overflow-y-auto pr-0.5'}>
+              {groupedSections.map((group, groupIdx) => (
+                <div key={groupIdx} className="mb-1">
+                  {group.section ? (
+                    <div className="px-3 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4 select-none">
+                      {group.section}
+                    </div>
+                  ) : null}
+                  <ul className="flex flex-col gap-0.5">
+                    {group.items.map((row, localIdx) => {
+                      const globalIdx = groupedSections
+                        .slice(0, groupIdx)
+                        .reduce((sum, g) => sum + g.items.length, 0) + localIdx
+                      return (
+                        <li key={row.id}>
+                          <button
+                            type="button"
+                            data-idx={globalIdx}
+                            onMouseEnter={() => setSelected(globalIdx)}
+                            onClick={() => {
+                              setSelected(globalIdx)
+                              if (row.actionIds?.[0]) onRunPrimaryAction(row.actionIds[0])
+                            }}
+                            className={`w-full rounded-tezbar-row px-3 py-2.5 text-left transition ${globalIdx === selected ? 'bg-white/[0.16] text-ink-1' : 'text-ink-2 hover:bg-white/[0.06]'
+                              }`}
+                          >
+                            <span className="flex min-w-0 items-center gap-2.5">
+                              <RowIcon row={row} />
+                              <span className="min-w-0 flex-1">
+                                <p className="truncate text-[13px] font-medium">{row.title}</p>
+                                {row.subtitle ? <p className="truncate text-[11px] text-ink-3">{row.subtitle}</p> : null}
+                              </span>
+                              {row.accessories?.map((accessory, index) => {
+                                return <Accessory key={index} accessory={accessory} />
+                              })}
                             </span>
-                            {row.accessories?.map((accessory, index) => {
-                              return <Accessory key={index} accessory={accessory} />
-                            })}
-                          </span>
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            ))}
-          </div>
-          {hasDetails ? (
-            <div className="min-h-0 overflow-hidden rounded-raymes-row border border-white/[0.06] bg-white/[0.02]">
-              <ListDetailPane row={selectedRow} />
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ))}
             </div>
-          ) : null}
+            {hasDetails ? (
+              <div className="min-h-0 overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
+                <ListDetailPane row={selectedRow} />
+              </div>
+            ) : null}
           </>
         )}
       </div>
 
-      <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-raymes-scale-in">
+      <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
         <span className="flex items-center gap-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-ink-4">
           {filteredRows.length} item{filteredRows.length === 1 ? '' : 's'}
           {hasMore ? (

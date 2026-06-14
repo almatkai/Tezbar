@@ -100,7 +100,7 @@ export function MetadataItem({ node }: { node: ExtensionRuntimeNode }): JSX.Elem
           onClick={(e) => {
             e.preventDefault()
             const url = String(props.target || '')
-            if (url) window.raymes.openExternalUrl(url)
+            if (url) window.tezbar.openExternalUrl(url)
           }}
         >
           {metadataText(props.text) || metadataText(props.target)}
@@ -118,11 +118,11 @@ export function MetadataItem({ node }: { node: ExtensionRuntimeNode }): JSX.Elem
             <span
               key={i}
               className={cx(
-                "inline-flex items-center rounded-raymes-chip border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+                "inline-flex items-center rounded-tezbar-chip border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium transition-colors",
                 child.props?.color === 'success' ? "text-green-400 border-green-400/20 bg-green-400/10" :
-                child.props?.color === 'warning' ? "text-amber-400 border-amber-400/20 bg-amber-400/10" :
-                child.props?.color === 'error' ? "text-red-400 border-red-400/20 bg-red-400/10" :
-                "text-ink-2"
+                  child.props?.color === 'warning' ? "text-amber-400 border-amber-400/20 bg-amber-400/10" :
+                    child.props?.color === 'error' ? "text-red-400 border-red-400/20 bg-red-400/10" :
+                      "text-ink-2"
               )}
             >
               {child.props?.icon ? <span className="mr-1 inline-block align-[-2px]"><MetadataIcon icon={child.props.icon} /></span> : null}
@@ -301,14 +301,14 @@ function ColorWheelDetail({
   }
 
   const copyFormat = async (key: string, value: string): Promise<void> => {
-    await window.raymes.clipboardWriteText(value)
+    await window.tezbar.clipboardWriteText(value)
     setCopiedKey(key)
     window.setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 900)
   }
 
   return (
     <div className="grid h-full min-h-[520px] grid-cols-[minmax(0,1fr)_320px] gap-4">
-      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-raymes-row border border-white/8 bg-black/10 p-5">
+      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10 p-5">
         <button
           type="button"
           className="relative aspect-square max-h-full w-full max-w-[720px] cursor-crosshair rounded-full bg-center bg-contain bg-no-repeat outline-none"
@@ -329,10 +329,10 @@ function ColorWheelDetail({
         </button>
       </div>
 
-      <aside className="flex min-h-0 flex-col overflow-hidden rounded-raymes-row border border-white/8 bg-black/10">
+      <aside className="flex min-h-0 flex-col overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10">
         <div className="flex items-center gap-3 border-b border-white/8 px-4 py-3">
           <span
-            className="h-8 w-8 shrink-0 rounded-raymes-chip border border-white/15"
+            className="h-8 w-8 shrink-0 rounded-tezbar-chip border border-white/15"
             style={{ background: formats[0]?.value ?? '#fff' }}
           />
           <div className="min-w-0">
@@ -346,7 +346,7 @@ function ColorWheelDetail({
               key={format.key}
               type="button"
               onClick={() => void copyFormat(format.key, format.value)}
-              className="group flex w-full items-start justify-between gap-3 rounded-raymes-row px-3 py-2.5 text-left transition hover:bg-white/10"
+              className="group flex w-full items-start justify-between gap-3 rounded-tezbar-row px-3 py-2.5 text-left transition hover:bg-white/10"
             >
               <span className="min-w-0">
                 <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-4">
@@ -412,7 +412,7 @@ export function DetailRuntime({
               <img
                 src={imageOnly.src}
                 alt={imageOnly.alt}
-                className="w-auto max-w-full rounded-raymes-row object-contain"
+                className="w-auto max-w-full rounded-tezbar-row object-contain"
                 style={{ maxHeight: imageOnly.height ? `${imageOnly.height}px` : '70vh' }}
               />
             </div>

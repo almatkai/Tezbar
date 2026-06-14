@@ -139,7 +139,7 @@ const APPLICATIONS_CACHE_TTL_MS = 30_000
 const PROMISE_RESULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const PROMISE_RESULT_MEMORY_CACHE_LIMIT = 200
 const BUILTIN_SET = new Set<string>(builtinModules)
-const JSX_FRAGMENT = Symbol.for('raymes.jsx.fragment')
+const JSX_FRAGMENT = Symbol.for('tezbar.jsx.fragment')
 const REACT_CONTEXT = Symbol.for('react.context')
 const execFileAsync = promisify(execFile)
 const gzipAsync = promisify(gzip)
@@ -168,9 +168,9 @@ function setPromiseResultMemoryCache(
 
 let applicationsCache:
   | {
-      expiresAt: number
-      promise: Promise<Array<{ name: string; path: string; bundleId?: string }>>
-    }
+    expiresAt: number
+    promise: Promise<Array<{ name: string; path: string; bundleId?: string }>>
+  }
   | null = null
 
 type WalkRuntimeOptions = {
@@ -221,7 +221,7 @@ function promiseResultCachePath(session: RuntimeSession, key: string): string {
     .update('\0')
     .update(key)
     .digest('hex')
-  return join(session.packageRoot, '.raymes-runtime-cache', `${digest}.bin.gz`)
+  return join(session.packageRoot, '.tezbar-runtime-cache', `${digest}.bin.gz`)
 }
 
 function readPromiseResultCache(
@@ -357,7 +357,7 @@ async function recoverIncompleteChunkedCache(
   const cacheName = missingIndex[2]
   if (!indexPath || !cacheName) return false
 
-  const supportRoot = join(session.packageRoot, '.raymes-support')
+  const supportRoot = join(session.packageRoot, '.tezbar-support')
   const chunkDirectory = join(indexPath, cacheName)
   const sourcePath = join(indexPath, `${cacheName}.json`)
   if (
@@ -381,7 +381,7 @@ async function recoverIncompleteChunkedCache(
   } catch {
     return false
   } finally {
-    await handle?.close().catch(() => {})
+    await handle?.close().catch(() => { })
   }
 
   session.cacheRecoveryKeys.add(promiseKey)
@@ -602,7 +602,7 @@ function buildPreferenceSetupRoot(
 ): ExtensionRuntimeNode {
   const setup = getExtensionPreferenceSetup(extensionId, commandName)
   return {
-    type: 'Raymes.PreferenceSetup',
+    type: 'TezBar.PreferenceSetup',
     props: {
       extensionId: setup.extensionId,
       commandName,
@@ -926,9 +926,9 @@ function makeToken(name: string): RaycastComponentToken {
 function isToken(value: unknown): value is RaycastComponentToken {
   return Boolean(
     value &&
-      typeof value === 'object' &&
-      (value as { __raycastComponent?: unknown }).__raycastComponent === true &&
-      typeof (value as { name?: unknown }).name === 'string',
+    typeof value === 'object' &&
+    (value as { __raycastComponent?: unknown }).__raycastComponent === true &&
+    typeof (value as { name?: unknown }).name === 'string',
   )
 }
 
@@ -984,7 +984,7 @@ function pushFeedback(session: RuntimeSession, feedback: RuntimeFeedback): void 
 }
 
 function createLocalStorageShim(packageRoot: string): Record<string, unknown> {
-  const storagePath = join(packageRoot, '.raymes-local-storage.json')
+  const storagePath = join(packageRoot, '.tezbar-local-storage.json')
 
   const readAll = (): Record<string, string> => {
     if (!existsSync(storagePath)) return {}
@@ -1042,7 +1042,7 @@ function createCacheShim(packageRoot: string): new (
           ? options.namespace.trim()
           : 'shared'
       const safeNamespace = rawNamespace.replace(/[^a-z0-9._-]+/gi, '_')
-      this.storagePath = join(packageRoot, '.raymes-support', 'cache', `${safeNamespace}.json`)
+      this.storagePath = join(packageRoot, '.tezbar-support', 'cache', `${safeNamespace}.json`)
     }
 
     private readAll(): Record<string, string> {
@@ -1259,7 +1259,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     }
 
     async hide(): Promise<void> {
-      // Toasts are represented by the latest runtime feedback in Raymes.
+      // Toasts are represented by the latest runtime feedback in TezBar.
     }
   }
 
@@ -1295,7 +1295,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       isDevelopment: false,
       commandMode: 'view',
       assetsPath: join(session.packageRoot, 'assets'),
-      supportPath: join(session.packageRoot, '.raymes-support'),
+      supportPath: join(session.packageRoot, '.tezbar-support'),
       get searchText(): string {
         return session.searchText
       },
@@ -1318,7 +1318,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     },
     getPreferenceValues: (): Record<string, unknown> => session.preferences,
     launchCommand: async (): Promise<void> => {
-      // Background/menu-bar command relaunches are best-effort in Raymes.
+      // Background/menu-bar command relaunches are best-effort in TezBar.
     },
     useNavigation: () => ({
       push: (next: unknown): void => {
@@ -1346,10 +1346,10 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
         const opts = (optionsOrStyle && typeof optionsOrStyle === 'object'
           ? optionsOrStyle
           : {}) as {
-          style?: unknown
-          title?: unknown
-          message?: unknown
-        }
+            style?: unknown
+            title?: unknown
+            message?: unknown
+          }
         toast = new ToastShim({
           style: typeof opts.style === 'string' ? opts.style : undefined,
           title: typeof opts.title === 'string' ? opts.title : '',
@@ -1437,18 +1437,18 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     },
     confirmAlert: async (): Promise<boolean> => true,
     openExtensionPreferences: async (): Promise<void> => {
-      // Preferences editing is handled by Raymes settings.
+      // Preferences editing is handled by TezBar settings.
     },
     openCommandPreferences: async (): Promise<void> => {
-      // Preferences editing is handled by Raymes settings.
+      // Preferences editing is handled by TezBar settings.
     },
     updateCommandMetadata: async (): Promise<void> => {
-      // Raymes does not currently surface dynamic command subtitles, but
+      // TezBar does not currently surface dynamic command subtitles, but
       // extensions call this after dependency checks and expect it to exist.
     },
-    closeMainWindow: async (): Promise<void> => {},
-    popToRoot: async (): Promise<void> => {},
-    clearSearchBar: async (): Promise<void> => {},
+    closeMainWindow: async (): Promise<void> => { },
+    popToRoot: async (): Promise<void> => { },
+    clearSearchBar: async (): Promise<void> => { },
   }
 }
 
@@ -1551,8 +1551,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
             if (session.promiseCache.get(key)?.promise !== tracked) return data
 
             console.log(
-              `[usePromise] Resolved ${label} after ${elapsedMs(startedAt)}; data=${
-                Array.isArray(data) ? `array(${data.length})` : typeof data
+              `[usePromise] Resolved ${label} after ${elapsedMs(startedAt)}; data=${Array.isArray(data) ? `array(${data.length})` : typeof data
               }`,
             )
             session.promiseCache.set(key, { data, error: undefined, label })
@@ -1719,10 +1718,10 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
 function isJsxNode(value: unknown): value is JsxNode {
   return Boolean(
     value &&
-      typeof value === 'object' &&
-      (value as { __jsx?: unknown }).__jsx === true &&
-      'type' in (value as Record<string, unknown>) &&
-      'props' in (value as Record<string, unknown>),
+    typeof value === 'object' &&
+    (value as { __jsx?: unknown }).__jsx === true &&
+    'type' in (value as Record<string, unknown>) &&
+    'props' in (value as Record<string, unknown>),
   )
 }
 
@@ -2045,17 +2044,17 @@ function walkRuntimeNodes(
   const childOptions =
     typeName === 'List'
       ? {
-          ...options,
-          listItemsSeen: hasDirectListSections(props.children) ? undefined : { count: 0 },
-          listItemLimit: session.listItemLimit,
-          listItemsTruncated,
-        }
+        ...options,
+        listItemsSeen: hasDirectListSections(props.children) ? undefined : { count: 0 },
+        listItemLimit: session.listItemLimit,
+        listItemsTruncated,
+      }
       : typeName === 'List.Section'
         ? {
-            ...options,
-            listItemsSeen: { count: 0 },
-            listItemLimit: session.listItemLimit,
-          }
+          ...options,
+          listItemsSeen: { count: 0 },
+          listItemLimit: session.listItemLimit,
+        }
         : options
   const children = walkRuntimeNodes(props.children, session, depth + 1, budget, childOptions)
   if (typeName === 'List' && sanitizedProps && listItemsTruncated) {
@@ -2174,8 +2173,7 @@ export async function refreshExtensionSession(
     .filter((entry) => entry.promise)
     .map((entry) => `${entry.label ?? 'unknown'} age=${entry.startedAt ? elapsedMs(entry.startedAt) : '?'}`)
   console.log(
-    `[Runner] Refresh request ${session.extensionId}/${session.commandName}; stateUpdates=${session.hasStateUpdates}, inFlight=${inFlight.length}${
-      inFlight.length ? `\n  ${inFlight.join('\n  ')}` : ''
+    `[Runner] Refresh request ${session.extensionId}/${session.commandName}; stateUpdates=${session.hasStateUpdates}, inFlight=${inFlight.length}${inFlight.length ? `\n  ${inFlight.join('\n  ')}` : ''
     }`,
   )
   if (!session.hasStateUpdates) return { ok: true, mode: 'unchanged' }
@@ -2401,8 +2399,8 @@ function runBundle(
     }
     if (specifier === 'raycast-cross-extension') {
       return {
-        callbackLaunchCommand: async (): Promise<void> => {},
-        launchCommand: async (): Promise<void> => {},
+        callbackLaunchCommand: async (): Promise<void> => { },
+        launchCommand: async (): Promise<void> => { },
       }
     }
     if (specifier === 'sha256-file') {
@@ -2437,8 +2435,8 @@ function runBundle(
         },
         defaults: { headers: { common: {} } },
         interceptors: {
-          request: { use: () => 0, eject: () => {} },
-          response: { use: () => 0, eject: () => {} },
+          request: { use: () => 0, eject: () => { } },
+          response: { use: () => 0, eject: () => { } },
         },
         __esModule: true,
       }
@@ -2505,19 +2503,19 @@ function runBundle(
         mkdirSync(options.cwd, { recursive: true })
         // Use -x (extract), -z (gzip), -f (file). -k (keep old files) can be risky, so we use -o (overwrite) which is default.
         const args = ['-xzf', options.file, '-C', options.cwd]
-        
+
         // Raycast speedtest-net shim usually passes a filter function.
         // If it asks for 'speedtest', we extract specifically that.
         try {
           if (typeof options.filter === 'function') {
-             if (options.filter('speedtest')) args.push('speedtest')
+            if (options.filter('speedtest')) args.push('speedtest')
           } else if (options.filter === 'speedtest') {
-             args.push('speedtest')
+            args.push('speedtest')
           }
         } catch {
           // ignore filter errors
         }
-        
+
         await execFileAsync('/usr/bin/tar', args)
       }
       return {
@@ -2604,12 +2602,12 @@ function runBundle(
   )
   const wrapped = `(function(exports, require, module, __filename, __dirname) {\n${runtimeCode}\n})`
   const script = new vm.Script(wrapped, {
-    filename: join(packageRoot, '.raymes-runtime-bundle.cjs'),
+    filename: join(packageRoot, '.tezbar-runtime-bundle.cjs'),
   })
 
   const fn = script.runInContext(context)
   const mod: { exports: unknown } = { exports: {} }
-  fn(mod.exports, customRequire, mod, join(packageRoot, '.raymes-runtime-bundle.cjs'), packageRoot)
+  fn(mod.exports, customRequire, mod, join(packageRoot, '.tezbar-runtime-bundle.cjs'), packageRoot)
   return mod.exports
 }
 

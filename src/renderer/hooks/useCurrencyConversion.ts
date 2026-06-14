@@ -36,8 +36,8 @@ export function useCurrencyConversion(
       return
     }
 
-    if (typeof window === 'undefined' || !window.raymes?.fetchFrankfurterLatest) {
-      console.warn(TAG, 'preload missing: window.raymes.fetchFrankfurterLatest is undefined — rebuild preload')
+    if (typeof window === 'undefined' || !window.tezbar?.fetchFrankfurterLatest) {
+      console.warn(TAG, 'preload missing: window.tezbar.fetchFrankfurterLatest is undefined — rebuild preload')
       setResult(null)
       return
     }

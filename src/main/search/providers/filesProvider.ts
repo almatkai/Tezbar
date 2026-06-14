@@ -188,7 +188,7 @@ export async function spotlightFallback(query: string, limit = 8): Promise<Searc
     '/extension-registry/',
     '/extensions/packages/',
     '/HTTPStorages/',
-    '/Application Support/raymes/',
+    '/Application Support/tezbar/',
   ]
 
   try {

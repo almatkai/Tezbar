@@ -4,8 +4,8 @@ import type { RaymesApi } from '../preload/api'
 
 declare global {
   interface Window {
-    raymes: RaymesApi
+    tezbar: RaymesApi
   }
 }
 
-export {}
+export { }

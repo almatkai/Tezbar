@@ -226,12 +226,12 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
       case 'copy-current-path': {
         const path = await runAppleScript(
           'tell application "Finder" to try\n' +
-            'set thePath to POSIX path of (target of front Finder window as alias)\n' +
-            'set the clipboard to thePath\n' +
-            'return thePath\n' +
-            'on error\n' +
-            'return ""\n' +
-            'end try',
+          'set thePath to POSIX path of (target of front Finder window as alias)\n' +
+          'set the clipboard to thePath\n' +
+          'return thePath\n' +
+          'on error\n' +
+          'return ""\n' +
+          'end try',
         )
         if (!path) {
           return { ok: false, message: 'No Finder window is open.' }
@@ -275,18 +275,18 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
         return {
           ok: true,
           message:
-            'Use Port Manager → Open Ports in Raymes for a structured, filterable list. (Raw lsof output is intentionally not shown here.)',
+            'Use Port Manager → Open Ports in TezBar for a structured, filterable list. (Raw lsof output is intentionally not shown here.)',
         }
       }
 
       case 'git-root': {
         const path = await runAppleScript(
           'tell application "Finder" to try\n' +
-            'set thePath to POSIX path of (target of front Finder window as alias)\n' +
-            'return thePath\n' +
-            'on error\n' +
-            'return ""\n' +
-            'end try',
+          'set thePath to POSIX path of (target of front Finder window as alias)\n' +
+          'return thePath\n' +
+          'on error\n' +
+          'return ""\n' +
+          'end try',
         )
         if (!path) {
           return { ok: false, message: 'No Finder window is open.' }
@@ -344,10 +344,10 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
         }
       }
 
-      case 'quit-raymes': {
+      case 'quit-tezbar': {
         return {
           ok: false,
-          message: 'Quit Raymes is handled by the launcher so it can show the confirmation dialog.',
+          message: 'Quit TezBar is handled by the launcher so it can show the confirmation dialog.',
         }
       }
 

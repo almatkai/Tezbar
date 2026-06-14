@@ -10,18 +10,18 @@ export default {
         mono: ['"Geist Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       borderRadius: {
-        'raymes-chip': 'var(--r-chip)',
-        'raymes-field': 'var(--r-field)',
-        'raymes-row': 'var(--r-row)',
-        'raymes-card': 'var(--r-card)',
-        'raymes-panel': 'var(--r-panel)',
-        'raymes-window': 'var(--r-window)',
+        'tezbar-chip': 'var(--r-chip)',
+        'tezbar-field': 'var(--r-field)',
+        'tezbar-row': 'var(--r-row)',
+        'tezbar-card': 'var(--r-card)',
+        'tezbar-panel': 'var(--r-panel)',
+        'tezbar-window': 'var(--r-window)',
       },
       boxShadow: {
-        'raymes-sm': 'none',
-        'raymes-md': 'none',
-        'raymes-lg': 'none',
-        'raymes-glow': 'none',
+        'tezbar-sm': 'none',
+        'tezbar-md': 'none',
+        'tezbar-lg': 'none',
+        'tezbar-glow': 'none',
       },
       colors: {
         glass: {
@@ -50,28 +50,28 @@ export default {
         slow: '360ms',
       },
       keyframes: {
-        'raymes-fade-up': {
+        'tezbar-fade-up': {
           '0%': { opacity: '0', transform: 'translateY(4px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
-        'raymes-fade-in': {
+        'tezbar-fade-in': {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
-        'raymes-scale-in': {
+        'tezbar-scale-in': {
           '0%': { opacity: '0', transform: 'scale(0.96)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
         },
-        'raymes-shimmer': {
+        'tezbar-shimmer': {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
         },
       },
       animation: {
-        'raymes-fade-up': 'raymes-fade-up 360ms cubic-bezier(0.22, 1, 0.36, 1) both',
-        'raymes-fade-in': 'raymes-fade-in 90ms cubic-bezier(0.22, 1, 0.36, 1) both',
-        'raymes-scale-in': 'raymes-scale-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both',
-        'raymes-shimmer': 'raymes-shimmer 2.2s linear infinite',
+        'tezbar-fade-up': 'tezbar-fade-up 360ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        'tezbar-fade-in': 'tezbar-fade-in 90ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        'tezbar-scale-in': 'tezbar-scale-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        'tezbar-shimmer': 'tezbar-shimmer 2.2s linear infinite',
       },
     },
   },

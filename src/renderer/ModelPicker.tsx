@@ -82,7 +82,7 @@ export function ModelPicker({
       <button
         type="button"
         className={cx(
-          'inline-flex h-6 items-center rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:border-accent/40 hover:text-ink-1',
+          'inline-flex h-6 items-center rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:border-accent/40 hover:text-ink-1',
           triggerClassName
         )}
         onClick={() => {
@@ -98,7 +98,7 @@ export function ModelPicker({
         {activeModel}
       </button>
       {open ? (
-        <div className="raymes-popover absolute right-0 top-7 z-50 grid h-[390px] w-[560px] grid-cols-[190px_minmax(0,1fr)] overflow-hidden p-1.5">
+        <div className="tezbar-popover absolute right-0 top-7 z-50 grid h-[390px] w-[560px] grid-cols-[190px_minmax(0,1fr)] overflow-hidden p-1.5">
           <div className="flex min-h-0 flex-col border-r border-white/[0.07] pr-1">
             <ul className="min-h-0 flex-1 overflow-y-auto">
               {availableProviders.map((provider) => {
@@ -115,13 +115,13 @@ export function ModelPicker({
                       onMouseEnter={() => setPreviewProvider(provider.id)}
                       onFocus={() => setPreviewProvider(provider.id)}
                       className={cx(
-                        'flex w-full items-center gap-2 rounded-raymes-row px-2 py-2 text-left transition',
+                        'flex w-full items-center gap-2 rounded-tezbar-row px-2 py-2 text-left transition',
                         previewed
                           ? 'bg-white/[0.06] text-ink-1'
                           : 'text-ink-3 hover:bg-white/[0.04] hover:text-ink-1'
                       )}
                     >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-raymes-chip border border-white/10 bg-white/[0.04] text-[11px] font-bold uppercase text-ink-2">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-tezbar-chip border border-white/10 bg-white/[0.04] text-[11px] font-bold uppercase text-ink-2">
                         {provider.title.slice(0, 1)}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -142,10 +142,10 @@ export function ModelPicker({
             </ul>
             <button
               type="button"
-              className="mt-1 flex w-full items-center gap-2 rounded-raymes-row border border-white/10 bg-white/[0.03] px-2 py-2 text-left text-[12px] font-semibold text-ink-2 transition hover:border-accent/40 hover:bg-accent/10 hover:text-ink-1"
+              className="mt-1 flex w-full items-center gap-2 rounded-tezbar-row border border-white/10 bg-white/[0.03] px-2 py-2 text-left text-[12px] font-semibold text-ink-2 transition hover:border-accent/40 hover:bg-accent/10 hover:text-ink-1"
               onClick={configure}
             >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-raymes-chip border border-white/10 bg-white/[0.05] text-[16px] leading-none">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-tezbar-chip border border-white/10 bg-white/[0.05] text-[16px] leading-none">
                 +
               </span>
               Add provider
@@ -164,18 +164,18 @@ export function ModelPicker({
                 value={modelSearch}
                 onChange={(event) => setModelSearch(event.target.value)}
                 placeholder="Search models..."
-                className="h-8 w-[170px] rounded-raymes-field border border-white/10 bg-white/[0.04] px-2 text-[12px] text-ink-1 outline-none placeholder:text-ink-4 focus:border-accent/50"
+                className="h-8 w-[170px] rounded-tezbar-field border border-white/10 bg-white/[0.04] px-2 text-[12px] text-ink-1 outline-none placeholder:text-ink-4 focus:border-accent/50"
               />
               <button
                 type="button"
-                className="h-8 rounded-raymes-chip border border-accent/30 bg-accent/10 px-2.5 text-[11px] font-semibold text-accent-strong transition hover:border-accent/55 hover:bg-accent/18 hover:text-ink-1"
+                className="h-8 rounded-tezbar-chip border border-accent/30 bg-accent/10 px-2.5 text-[11px] font-semibold text-accent-strong transition hover:border-accent/55 hover:bg-accent/18 hover:text-ink-1"
                 onClick={configure}
               >
                 Configure
               </button>
             </div>
             {!previewConfigured ? (
-              <p className="mx-2 mb-1.5 rounded-raymes-row border border-white/[0.07] bg-white/[0.03] px-2 py-1.5 text-[11px] text-ink-4">
+              <p className="mx-2 mb-1.5 rounded-tezbar-row border border-white/[0.07] bg-white/[0.03] px-2 py-1.5 text-[11px] text-ink-4">
                 Configure this provider to select a model.
               </p>
             ) : null}
@@ -188,7 +188,7 @@ export function ModelPicker({
                       type="button"
                       disabled={!previewConfigured}
                       className={cx(
-                        'w-full rounded-raymes-row px-2 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-40',
+                        'w-full rounded-tezbar-row px-2 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-40',
                         selected
                           ? 'bg-accent/12 text-ink-1'
                           : 'text-ink-2 hover:bg-white/[0.04] hover:text-ink-1'
@@ -208,7 +208,7 @@ export function ModelPicker({
                           </span>
                         </span>
                         {index < 9 ? (
-                          <span className="rounded-raymes-chip bg-white/[0.06] px-1.5 py-0.5 font-mono text-[9px] text-ink-4">
+                          <span className="rounded-tezbar-chip bg-white/[0.06] px-1.5 py-0.5 font-mono text-[9px] text-ink-4">
                             #{index + 1}
                           </span>
                         ) : null}
@@ -217,13 +217,13 @@ export function ModelPicker({
                         {model.capabilities.map((capability) => (
                           <span
                             key={capability}
-                            className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-ink-3"
+                            className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-ink-3"
                           >
                             {capability}
                           </span>
                         ))}
                         {model.contextWindow ? (
-                          <span className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-ink-3">
+                          <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-ink-3">
                             {model.contextWindow.toLocaleString()} ctx
                           </span>
                         ) : null}

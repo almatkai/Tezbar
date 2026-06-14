@@ -36,7 +36,7 @@ export default function OpenPortsView({
   const reloadPorts = useCallback(async () => {
     setLoading(true)
     try {
-      const items = await window.raymes.listOpenPorts()
+      const items = await window.tezbar.listOpenPorts()
       setRows(items)
     } finally {
       setLoading(false)
@@ -44,7 +44,7 @@ export default function OpenPortsView({
   }, [])
 
   const reloadNamed = useCallback(async () => {
-    const items = await window.raymes.listNamedPorts()
+    const items = await window.tezbar.listNamedPorts()
     setNamed(items)
   }, [])
 
@@ -106,7 +106,7 @@ export default function OpenPortsView({
 
   const killPort = useCallback(
     async (port: number) => {
-      const result = await window.raymes.executeSearchAction({
+      const result = await window.tezbar.executeSearchAction({
         type: 'run-extension-command',
         extensionId: 'raycast.port-manager',
         commandName: 'kill-listening-process',
@@ -128,7 +128,7 @@ export default function OpenPortsView({
       setMsg({ tone: 'error', text: 'Enter a label and a valid port (1–65535).' })
       return
     }
-    const created = await window.raymes.addNamedPort({ name: newName.trim(), port: Math.floor(portNum) })
+    const created = await window.tezbar.addNamedPort({ name: newName.trim(), port: Math.floor(portNum) })
     if (!created) {
       setMsg({ tone: 'error', text: 'Could not save named port.' })
       return
@@ -141,7 +141,7 @@ export default function OpenPortsView({
 
   const removeNamed = useCallback(
     async (id: string): Promise<void> => {
-      const ok = await window.raymes.removeNamedPort(id)
+      const ok = await window.tezbar.removeNamedPort(id)
       if (!ok) {
         setMsg({ tone: 'error', text: 'Could not remove entry.' })
         return
@@ -185,9 +185,9 @@ export default function OpenPortsView({
       role="application"
       aria-label="Open Ports"
       onKeyDown={onKeyDown}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-raymes-scale-in"
+      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
           title={headerTitle}
           onBack={onBack}
@@ -206,8 +206,8 @@ export default function OpenPortsView({
             onClick={() => setPanel('listen')}
             className={
               panel === 'listen'
-                ? 'rounded-raymes-chip bg-white/[0.12] px-2.5 py-1 text-[11px] font-medium text-ink-1'
-                : 'rounded-raymes-chip px-2.5 py-1 text-[11px] text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1'
+                ? 'rounded-tezbar-chip bg-white/[0.12] px-2.5 py-1 text-[11px] font-medium text-ink-1'
+                : 'rounded-tezbar-chip px-2.5 py-1 text-[11px] text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1'
             }
           >
             Listening
@@ -217,8 +217,8 @@ export default function OpenPortsView({
             onClick={() => setPanel('named')}
             className={
               panel === 'named'
-                ? 'rounded-raymes-chip bg-white/[0.12] px-2.5 py-1 text-[11px] font-medium text-ink-1'
-                : 'rounded-raymes-chip px-2.5 py-1 text-[11px] text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1'
+                ? 'rounded-tezbar-chip bg-white/[0.12] px-2.5 py-1 text-[11px] font-medium text-ink-1'
+                : 'rounded-tezbar-chip px-2.5 py-1 text-[11px] text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1'
             }
           >
             Named
@@ -227,7 +227,7 @@ export default function OpenPortsView({
       </div>
 
       {panel === 'listen' ? (
-        <div className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 animate-raymes-scale-in">
+        <div className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 animate-tezbar-scale-in">
           <TextField
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -249,7 +249,7 @@ export default function OpenPortsView({
                 {filtered.map((row, i) => (
                   <li key={`${row.process}:${row.pid}:${row.user}`} className="relative z-[1]">
                     <div
-                      className="flex items-center justify-between gap-3 rounded-raymes-row px-3 py-2.5 transition"
+                      className="flex items-center justify-between gap-3 rounded-tezbar-row px-3 py-2.5 transition"
                       onMouseEnter={() => setSelected(i)}
                     >
                       <div className="min-w-0">
@@ -269,7 +269,7 @@ export default function OpenPortsView({
                               type="button"
                               onClick={() => void killPort(port)}
                               title={label ? `${label} · kill listener on ${port}` : `Kill listener on port ${port}`}
-                              className="group inline-flex items-center gap-1 rounded-raymes-chip border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] text-ink-1 transition hover:border-rose-400/40 hover:bg-rose-500/15 hover:text-rose-200"
+                              className="group inline-flex items-center gap-1 rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] text-ink-1 transition hover:border-rose-400/40 hover:bg-rose-500/15 hover:text-rose-200"
                             >
                               {label ? (
                                 <span className="max-w-[72px] truncate text-[10px] font-sans font-medium text-amber-200/90">
@@ -290,7 +290,7 @@ export default function OpenPortsView({
         </div>
       ) : (
         <>
-          <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+          <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
             <div className="flex flex-wrap items-end gap-2">
               <div className="min-w-[120px] flex-1">
                 <label className="mb-1 block text-[10px] font-medium uppercase tracking-[0.14em] text-ink-4">
@@ -315,7 +315,7 @@ export default function OpenPortsView({
             </div>
           </div>
 
-          <section className="glass-card min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-3 pr-[calc(0.5rem+2px)] animate-raymes-scale-in">
+          <section className="glass-card min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-3 pr-[calc(0.5rem+2px)] animate-tezbar-scale-in">
             {named.length === 0 ? (
               <div className="flex min-h-[100px] items-center justify-center">
                 <p className="text-center text-[12px] text-ink-3">
@@ -326,7 +326,7 @@ export default function OpenPortsView({
               named.map((entry) => (
                 <div
                   key={entry.id}
-                  className="flex items-center justify-between gap-2 rounded-raymes-row border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-tezbar-row border border-white/[0.06] bg-white/[0.02] px-3 py-2"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-[13px] font-medium text-ink-1">{entry.name}</p>
@@ -343,12 +343,12 @@ export default function OpenPortsView({
       )}
 
       {msg ? (
-        <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">
+        <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
           <Message tone={msg.tone}>{msg.text}</Message>
         </div>
       ) : null}
 
-      <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
         <HintBar>
           {panel === 'listen' ? (
             <>

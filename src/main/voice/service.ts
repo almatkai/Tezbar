@@ -269,8 +269,8 @@ async function installRuntime(kind: RuntimeKind): Promise<void> {
     if (!(await hasBinary('brew'))) {
       throw new Error(
         'Homebrew is required to install whisper.cpp automatically.\n' +
-          'Install Homebrew from https://brew.sh and try again, or install whisper.cpp manually:\n' +
-          '  brew install whisper-cpp',
+        'Install Homebrew from https://brew.sh and try again, or install whisper.cpp manually:\n' +
+        '  brew install whisper-cpp',
       )
     }
     console.info('[stt][main] installing whisper-cpp via Homebrew — this can take a few minutes')
@@ -481,7 +481,7 @@ async function runModelDownload(modelId: VoiceModelId): Promise<void> {
       if (!reProbe.ready) {
         throw new Error(
           `Installed the runtime but could not detect it afterwards (${reProbe.label}). ` +
-            `Try running manually: ${reProbe.installCommand}`,
+          `Try running manually: ${reProbe.installCommand}`,
         )
       }
 
@@ -954,7 +954,7 @@ async function probeEngineBinaries(): Promise<EngineProbe> {
 }
 
 export async function transcribeAudio(req: VoiceTranscribeRequest): Promise<TranscribeOutcome> {
-  const tempRoot = join(app.getPath('temp'), 'raymes-voice')
+  const tempRoot = join(app.getPath('temp'), 'tezbar-voice')
   await fs.mkdir(tempRoot, { recursive: true })
 
   const token = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -1052,7 +1052,7 @@ export async function transcribeAudio(req: VoiceTranscribeRequest): Promise<Tran
       error: 'No local speech-to-text engine is available.',
       hint:
         'Open Settings → Voice models and click "Install & download" on a model. ' +
-        'Raymes will install the required runtime (whisper.cpp via Homebrew or Moonshine via pip) and the weights in one step.',
+        'TezBar will install the required runtime (whisper.cpp via Homebrew or Moonshine via pip) and the weights in one step.',
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

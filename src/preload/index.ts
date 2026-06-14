@@ -14,7 +14,7 @@ import {
   type TerminalExitEvent,
 } from '../shared/terminal'
 
-contextBridge.exposeInMainWorld('raymes', {
+contextBridge.exposeInMainWorld('tezbar', {
   hide: () => ipcRenderer.invoke('window:hide'),
   show: () => ipcRenderer.invoke('window:show'),
   openSettingsWindow: () => ipcRenderer.invoke('settings:open-window'),

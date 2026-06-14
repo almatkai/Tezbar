@@ -82,7 +82,7 @@ function safetyForAction(
     if (action.commandId === 'sleep-system') {
       return { id: 'system.sleep', context: { commandId: action.commandId } }
     }
-    if (action.commandId === 'quit-raymes') {
+    if (action.commandId === 'quit-tezbar') {
       return { id: 'app.quit', context: { commandId: action.commandId } }
     }
     return { id: 'native.command', context: { commandId: action.commandId } }
@@ -763,15 +763,15 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
 
   const noteAdd = trimmed
     ? [
-        {
-          id: `note-add:${trimmed}`,
-          title: `Add quick note: ${trimmed.slice(0, 64)}`,
-          subtitle: 'Quick notes',
-          category: 'quick-notes' as const,
-          score: quickNoteAddScore(trimmed),
-          action: { type: 'add-note', text: trimmed },
-        } satisfies SearchResult,
-      ]
+      {
+        id: `note-add:${trimmed}`,
+        title: `Add quick note: ${trimmed.slice(0, 64)}`,
+        subtitle: 'Quick notes',
+        category: 'quick-notes' as const,
+        score: quickNoteAddScore(trimmed),
+        action: { type: 'add-note', text: trimmed },
+      } satisfies SearchResult,
+    ]
     : []
 
   return uniqById([
@@ -1404,7 +1404,7 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
           return {
             ok: false,
             message:
-              'This extension command requires view runtime support. Use extension:run-command to render it in the Raymes extension surface.',
+              'This extension command requires view runtime support. Use extension:run-command to render it in the TezBar extension surface.',
           }
         }
         throw error

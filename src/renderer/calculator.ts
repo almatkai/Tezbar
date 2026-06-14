@@ -2,7 +2,7 @@
  * Lightweight, safe expression evaluator for the command-bar calculator.
  *
  * Replaces the full mathjs dependency with a tiny whitelist-based evaluator
- * that covers the arithmetic, functions, and unit conversions Raymes actually
+ * that covers the arithmetic, functions, and unit conversions TezBar actually
  * uses. No external math library required.
  */
 

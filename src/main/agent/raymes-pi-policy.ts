@@ -52,7 +52,7 @@ function registerRaymesProvider(pi: ExtensionAPI): void {
   try {
     const parsed = JSON.parse(raw) as RaymesPiProviderConfig
     if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return
-    pi.registerProvider('raymes', parsed)
+    pi.registerProvider('tezbar', parsed)
   } catch {
     /* Ignore malformed bridge env so pi can still start with its own config. */
   }

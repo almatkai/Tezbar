@@ -184,25 +184,25 @@ async function confirmQuitRaymes(getWindow: () => BrowserWindow | null): Promise
     const result =
       win && !win.isDestroyed()
         ? await dialog.showMessageBox(win, {
-            type: 'question',
-            buttons: ['Cancel', 'Quit'],
-            defaultId: 1,
-            cancelId: 0,
-            title: 'Quit Raymes',
-            message: 'Quit Raymes?',
-            detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
-            noLink: true,
-          })
+          type: 'question',
+          buttons: ['Cancel', 'Quit'],
+          defaultId: 1,
+          cancelId: 0,
+          title: 'Quit TezBar',
+          message: 'Quit TezBar?',
+          detail: 'Are you sure you want to quit TezBar and terminate all background processes?',
+          noLink: true,
+        })
         : await dialog.showMessageBox({
-            type: 'question',
-            buttons: ['Cancel', 'Quit'],
-            defaultId: 1,
-            cancelId: 0,
-            title: 'Quit Raymes',
-            message: 'Quit Raymes?',
-            detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
-            noLink: true,
-          })
+          type: 'question',
+          buttons: ['Cancel', 'Quit'],
+          defaultId: 1,
+          cancelId: 0,
+          title: 'Quit TezBar',
+          message: 'Quit TezBar?',
+          detail: 'Are you sure you want to quit TezBar and terminate all background processes?',
+          noLink: true,
+        })
 
     quitConfirmed = result.response === 1
     return quitConfirmed
@@ -215,7 +215,7 @@ async function confirmQuitRaymes(getWindow: () => BrowserWindow | null): Promise
 }
 
 const CHAT_SYSTEM_PROMPT =
-  'You are Raymes, a helpful assistant. Answer clearly and concisely unless the user asks for more detail.'
+  'You are TezBar, a helpful assistant. Answer clearly and concisely unless the user asks for more detail.'
 
 type IpcControls = {
   startWindowDragMonitoring: (win: BrowserWindow) => void
@@ -251,7 +251,7 @@ function startAgentRun(sender: Electron.WebContents, task: string): string {
     sendAgentEvent(sender, { type: 'log', runId, source: 'stderr', line })
   }
 
-  console.log('[raymes:agent] run', { runId, taskPreview: task.slice(0, 120) })
+  console.log('[tezbar:agent] run', { runId, taskPreview: task.slice(0, 120) })
 
   void bridge
     .run(task, {
@@ -922,11 +922,11 @@ export function registerIpcHandlers(
     const argumentValues =
       body.argumentValues && typeof body.argumentValues === 'object'
         ? Object.fromEntries(
-            Object.entries(body.argumentValues as Record<string, unknown>).map(([key, value]) => [
-              key,
-              typeof value === 'string' ? value : String(value ?? ''),
-            ])
-          )
+          Object.entries(body.argumentValues as Record<string, unknown>).map(([key, value]) => [
+            key,
+            typeof value === 'string' ? value : String(value ?? ''),
+          ])
+        )
         : undefined
 
     return runExtensionCommand({
@@ -954,11 +954,11 @@ export function registerIpcHandlers(
     const formValues =
       body.formValues && typeof body.formValues === 'object'
         ? Object.fromEntries(
-            Object.entries(body.formValues as Record<string, unknown>).map(([key, value]) => [
-              key,
-              typeof value === 'string' ? value : String(value ?? ''),
-            ])
-          )
+          Object.entries(body.formValues as Record<string, unknown>).map(([key, value]) => [
+            key,
+            typeof value === 'string' ? value : String(value ?? ''),
+          ])
+        )
         : undefined
 
     return invokeExtensionAction({

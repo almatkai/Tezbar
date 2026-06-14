@@ -17,7 +17,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
   const [form, setForm] = useState({ label: '', trigger: '', body: '' })
 
   const reload = useCallback(async (): Promise<SnippetListRow[]> => {
-    const items = await window.raymes.listSnippets()
+    const items = await window.tezbar.listSnippets()
     setRows(items)
     return items
   }, [])
@@ -64,13 +64,13 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
     const next = !q
       ? [...rows]
       : rows.filter(
-          (r) =>
-            r.title.toLowerCase().includes(q) ||
-            r.subtitle.toLowerCase().includes(q) ||
-            r.trigger.toLowerCase().includes(q) ||
-            r.bodyTemplate.toLowerCase().includes(q) ||
-            r.resolvedPreview.toLowerCase().includes(q),
-        )
+        (r) =>
+          r.title.toLowerCase().includes(q) ||
+          r.subtitle.toLowerCase().includes(q) ||
+          r.trigger.toLowerCase().includes(q) ||
+          r.bodyTemplate.toLowerCase().includes(q) ||
+          r.resolvedPreview.toLowerCase().includes(q),
+      )
     next.sort((a, b) => {
       if (a.readonly !== b.readonly) return a.readonly ? 1 : -1
       return a.title.localeCompare(b.title)
@@ -90,9 +90,9 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
 
   const copyRow = useCallback(async (row: SnippetListRow): Promise<void> => {
     if (editor) return
-    const r = await window.raymes.copySnippet(row.id)
+    const r = await window.tezbar.copySnippet(row.id)
     setMsg({ tone: r.ok ? 'success' : 'error', text: r.message })
-    if (r.ok) void window.raymes.hide()
+    if (r.ok) void window.tezbar.hide()
   }, [editor])
 
   const openCreate = (): void => {
@@ -111,7 +111,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
   const saveSnippet = async (): Promise<void> => {
     const payload = { label: form.label, trigger: form.trigger, body: form.body }
     if (editor === 'create') {
-      const r = await window.raymes.addSnippet(payload)
+      const r = await window.tezbar.addSnippet(payload)
       setMsg({ tone: r.ok ? 'success' : 'error', text: r.message })
       if (r.ok) {
         await reload()
@@ -120,7 +120,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
       return
     }
     if (editor && typeof editor === 'object' && editor.mode === 'edit') {
-      const r = await window.raymes.updateSnippet(editor.id, payload)
+      const r = await window.tezbar.updateSnippet(editor.id, payload)
       setMsg({ tone: r.ok ? 'success' : 'error', text: r.message })
       if (r.ok) {
         await reload()
@@ -132,7 +132,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
   const deleteSelected = useCallback(async (): Promise<void> => {
     if (!current || current.readonly || editor) return
     if (!window.confirm(`Delete snippet “${current.title}”? This cannot be undone.`)) return
-    const r = await window.raymes.deleteSnippet(current.id)
+    const r = await window.tezbar.deleteSnippet(current.id)
     setMsg({ tone: r.ok ? 'success' : 'error', text: r.message })
     if (r.ok) {
       await reload()
@@ -212,9 +212,9 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
       tabIndex={-1}
       role="application"
       aria-label="Snippets"
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-raymes-scale-in"
+      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
           title="Snippets"
           onBack={onBack}
@@ -233,13 +233,13 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search snippets…"
-              className="h-8 w-full rounded-raymes-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
+              className="h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
             />
           </div>
         ) : null}
       </div>
 
-      <div className="glass-card flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-2 py-2 animate-raymes-scale-in">
+      <div className="glass-card flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-2 py-2 animate-tezbar-scale-in">
         {editor ? (
           <form
             className="flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2 pt-1"
@@ -273,7 +273,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
               <FieldLabel htmlFor="snippet-body" className="shrink-0">
                 Body
               </FieldLabel>
-              <div className="box-border flex min-h-0 flex-1 flex-col rounded-raymes-chip border border-white/12 bg-white/[0.02] p-px">
+              <div className="box-border flex min-h-0 flex-1 flex-col rounded-tezbar-chip border border-white/12 bg-white/[0.02] p-px">
                 <TextArea
                   id="snippet-body"
                   value={form.body}
@@ -322,7 +322,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
                             setSelected(i)
                             void copyRow(row)
                           }}
-                          className="flex w-full flex-col gap-0.5 rounded-raymes-row px-2 py-1.5 text-left transition hover:bg-white/[0.04]"
+                          className="flex w-full flex-col gap-0.5 rounded-tezbar-row px-2 py-1.5 text-left transition hover:bg-white/[0.04]"
                         >
                           <span className="flex items-center gap-1.5">
                             <span
@@ -347,7 +347,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
               )}
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-raymes-row border border-white/[0.06] bg-white/[0.02]">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
               {current ? (
                 <div className="flex h-full min-h-0 flex-col p-3">
                   <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
@@ -363,7 +363,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
                       </div>
                     ) : null}
                   </div>
-                  <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-raymes-chip border border-white/[0.06] bg-black/20 p-2.5 font-mono text-[11.5px] leading-relaxed text-ink-2">
+                  <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-tezbar-chip border border-white/[0.06] bg-black/20 p-2.5 font-mono text-[11.5px] leading-relaxed text-ink-2">
                     {current.resolvedPreview}
                   </pre>
                   {current.bodyTemplate !== current.resolvedPreview ? (
@@ -388,7 +388,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
         ) : null}
       </div>
 
-      <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-raymes-scale-in">
+      <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
         <span className="text-[10.5px] uppercase tracking-[0.14em] text-ink-4">
           {editor ? (editor === 'create' ? 'New snippet' : 'Editing') : `${filtered.length} snippet${filtered.length === 1 ? '' : 's'}`}
         </span>

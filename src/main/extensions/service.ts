@@ -270,15 +270,15 @@ function normalizeExtensionCommandsFromPackage(pkg: RaycastPackageJson): Extensi
     .map((cmd) => {
       const args = Array.isArray(cmd.arguments)
         ? cmd.arguments
-            .filter((arg) => arg && typeof arg.name === 'string' && arg.name.trim().length > 0)
-            .map((arg) => ({
-              name: String(arg.name),
-              required: Boolean(arg.required),
-              type: typeof arg.type === 'string' ? arg.type : undefined,
-              placeholder: typeof arg.placeholder === 'string' ? arg.placeholder : undefined,
-              title: typeof arg.title === 'string' ? arg.title : undefined,
-              data: Array.isArray(arg.data) ? arg.data : undefined,
-            }))
+          .filter((arg) => arg && typeof arg.name === 'string' && arg.name.trim().length > 0)
+          .map((arg) => ({
+            name: String(arg.name),
+            required: Boolean(arg.required),
+            type: typeof arg.type === 'string' ? arg.type : undefined,
+            placeholder: typeof arg.placeholder === 'string' ? arg.placeholder : undefined,
+            title: typeof arg.title === 'string' ? arg.title : undefined,
+            data: Array.isArray(arg.data) ? arg.data : undefined,
+          }))
         : []
 
       const firstArg = args[0]
@@ -329,7 +329,7 @@ async function fetchGithubJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github+json',
-      'User-Agent': 'raymes-extension-indexer',
+      'User-Agent': 'tezbar-extension-indexer',
     },
   })
 
@@ -344,7 +344,7 @@ async function fetchText(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: {
       Accept: 'application/vnd.github+json',
-      'User-Agent': 'raymes-extension-indexer',
+      'User-Agent': 'tezbar-extension-indexer',
     },
   })
   if (!response.ok) {
@@ -437,7 +437,7 @@ async function stageAndInstallExtension(
 ): Promise<RaycastPackageJson> {
   const pkg = await fetchRaycastPackage(slug)
 
-  const staging = mkdtempSync(join(tmpdir(), `raymes-ext-${extensionId}-`))
+  const staging = mkdtempSync(join(tmpdir(), `tezbar-ext-${extensionId}-`))
   const stagingBuild = join(staging, '.sc-build')
   mkdirSync(stagingBuild, { recursive: true })
   writeFileSync(join(staging, 'package.json'), JSON.stringify(pkg, null, 2), 'utf8')

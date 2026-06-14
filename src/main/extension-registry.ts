@@ -82,7 +82,7 @@ function shouldUseNetworkFallback(error: any): boolean {
 
 function githubApiHeaders(): Record<string, string> {
   return {
-    'User-Agent': 'Raymes',
+    'User-Agent': 'TezBar',
     Accept: 'application/vnd.github+json',
   };
 }
@@ -309,7 +309,7 @@ async function downloadExtensionFromTree(name: string, tmpDir: string): Promise<
         fileUrl,
         {
           headers: {
-            'User-Agent': 'Raymes',
+            'User-Agent': 'TezBar',
             Accept: 'application/octet-stream',
           },
         },
@@ -546,7 +546,7 @@ export async function getExtensionScreenshotUrls(name: string): Promise<string[]
     const url = `${GITHUB_API}/extensions/${encodeURIComponent(name)}/metadata`;
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Raymes',
+        'User-Agent': 'TezBar',
         Accept: 'application/vnd.github+json',
       },
     });
@@ -1055,7 +1055,7 @@ export async function uninstallExtension(name: string): Promise<boolean> {
   }
 }
 
-// ─── Raymes IPC Compatibility ───────────────────────────────────────
+// ─── TezBar IPC Compatibility ───────────────────────────────────────
 
 function normalizeRaymesExtensionId(input: string): string {
   const slug = String(input || '').trim().replace(/^raycast\./, '');

@@ -411,7 +411,7 @@ export default function SettingsView({
   const loadAiModels = useCallback(async (provider: ProviderId) => {
     setAiModelsLoading(true)
     try {
-      const models = await window.raymes.listLlmModels(provider)
+      const models = await window.tezbar.listLlmModels(provider)
       if (models.length > 0) {
         setAiProviderModels((prev) => {
           const existing = prev[provider] ?? defaultModels(provider)
@@ -431,8 +431,8 @@ export default function SettingsView({
 
   const refreshVoiceModels = useCallback(async () => {
     const [models, selected] = await Promise.all([
-      window.raymes.listVoiceModels().catch(() => []),
-      window.raymes
+      window.tezbar.listVoiceModels().catch(() => []),
+      window.tezbar
         .getSelectedVoiceModel()
         .catch(() => ({ modelId: 'moonshine-base-en' as VoiceModelId })),
     ])
@@ -451,8 +451,8 @@ export default function SettingsView({
     setStorageLoading(true)
     try {
       const [breakdown, clipboardCfg] = await Promise.all([
-        window.raymes.getStorageBreakdown(),
-        window.raymes.getClipboardStorageConfig(),
+        window.tezbar.getStorageBreakdown(),
+        window.tezbar.getClipboardStorageConfig(),
       ])
       setStorageBreakdown(breakdown)
       setClipboardWatchEnabled(clipboardCfg.watchEnabled)
@@ -466,7 +466,7 @@ export default function SettingsView({
   }, [])
 
   const reload = useCallback(async () => {
-    const c = (await window.raymes.getLlmConfig()) as LlmConfigRecord
+    const c = (await window.tezbar.getLlmConfig()) as LlmConfigRecord
     const provider = c.provider ?? 'ollama'
     const configuredProviders = c.customProviders ?? []
     const ms = typeof c.uiStateRetentionMs === 'number' ? c.uiStateRetentionMs : 60_000
@@ -510,8 +510,8 @@ export default function SettingsView({
     setAiModel(selectedModel)
 
     const [dryRun, modes] = await Promise.all([
-      window.raymes.getSafetyDryRun().catch(() => false),
-      window.raymes.listVoiceSttModes().catch(() => []),
+      window.tezbar.getSafetyDryRun().catch(() => false),
+      window.tezbar.listVoiceSttModes().catch(() => []),
       refreshVoiceModels(),
     ])
 
@@ -522,7 +522,7 @@ export default function SettingsView({
       setRaymesHotkeyState(savedHotkey)
     } else {
       setRaymesHotkeyState(DEFAULT_RAYMES_HOTKEY)
-      void window.raymes.setLlmConfig({ raymesHotkey: DEFAULT_RAYMES_HOTKEY })
+      void window.tezbar.setLlmConfig({ raymesHotkey: DEFAULT_RAYMES_HOTKEY })
     }
     void loadAiModels(provider)
   }, [loadAiModels, refreshVoiceModels])
@@ -566,13 +566,13 @@ export default function SettingsView({
 
   const saveHotkey = useCallback(async (accelerator: string) => {
     try {
-      const result = await window.raymes.setLlmConfig({ raymesHotkey: accelerator })
+      const result = await window.tezbar.setLlmConfig({ raymesHotkey: accelerator })
       if (!result || typeof result !== 'object' || !('ok' in result)) {
         setRaymesHotkeyState(accelerator)
         setHotkeyRecording(false)
         setHotkeyMessage({
           tone: 'success',
-          text: 'Saved. Restart Raymes once to activate this shortcut.',
+          text: 'Saved. Restart TezBar once to activate this shortcut.',
         })
         return
       }
@@ -636,10 +636,10 @@ export default function SettingsView({
           ? { ...aiProviderConfigs[provider], copilotGithubToken: aiApiKey }
           : provider === 'openai-compatible' || isCustomProvider(provider)
             ? {
-                ...aiProviderConfigs[provider],
-                apiKey,
-                openaiCompatibleBaseURL: baseURL || defaultBaseUrl(provider),
-              }
+              ...aiProviderConfigs[provider],
+              apiKey,
+              openaiCompatibleBaseURL: baseURL || defaultBaseUrl(provider),
+            }
             : { ...aiProviderConfigs[provider], apiKey, baseURL: baseURL || defaultBaseUrl(provider) }
     const providerConfigs = { ...aiProviderConfigs, [provider]: providerConfig }
     const patch: LlmConfigRecord = {
@@ -773,7 +773,7 @@ export default function SettingsView({
       setMsg({ tone: 'error', text: 'Memory items must be 0 or more' })
       return
     }
-    void window.raymes
+    void window.tezbar
       .setLlmConfig({
         ...buildAiProviderPatch(),
         uiStateRetentionMs: Math.round(n * 1000),
@@ -816,7 +816,7 @@ export default function SettingsView({
               <div className="flex shrink-0 items-center gap-2">
                 {inProgress ? <ProgressRing progress={model.progress} /> : null}
                 {downloaded ? (
-                  <span className="rounded-raymes-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-300">
+                  <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-300">
                     Ready
                   </span>
                 ) : null}
@@ -824,7 +824,7 @@ export default function SettingsView({
                   <Button
                     variant="primary"
                     onClick={() => {
-                      void window.raymes
+                      void window.tezbar
                         .downloadVoiceModel(model.id)
                         .then(() => refreshVoiceModels())
                         .catch((error: unknown) => {
@@ -846,8 +846,8 @@ export default function SettingsView({
                 <span
                   className={
                     model.runtime.ready
-                      ? 'rounded-raymes-chip border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-300'
-                      : 'rounded-raymes-chip border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-amber-200'
+                      ? 'rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-300'
+                      : 'rounded-tezbar-chip border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-amber-200'
                   }
                 >
                   {model.runtime.ready
@@ -862,7 +862,7 @@ export default function SettingsView({
               </div>
             ) : null}
             {model.status === 'error' && model.errorMessage ? (
-              <pre className="mt-1.5 max-h-24 overflow-y-auto whitespace-pre-wrap rounded-raymes-chip border border-rose-400/30 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-200">
+              <pre className="mt-1.5 max-h-24 overflow-y-auto whitespace-pre-wrap rounded-tezbar-chip border border-rose-400/30 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-200">
                 {model.errorMessage}
               </pre>
             ) : null}
@@ -882,12 +882,12 @@ export default function SettingsView({
       tabIndex={-1}
       role="application"
       aria-label="Settings"
-      className="flex h-full min-h-0 w-full flex-col outline-none animate-raymes-scale-in"
+      className="flex h-full min-h-0 w-full flex-col outline-none animate-tezbar-scale-in"
     >
       <div
         className={cx(
-          'raymes-settings-window flex min-h-0 flex-1 flex-col overflow-hidden',
-          nativeWindow && 'raymes-settings-window--native'
+          'tezbar-settings-window flex min-h-0 flex-1 flex-col overflow-hidden',
+          nativeWindow && 'tezbar-settings-window--native'
         )}
       >
         <header className="drag-region relative shrink-0 border-b border-white/[0.07] px-4 pb-2 pt-2">
@@ -898,7 +898,7 @@ export default function SettingsView({
               <span className="h-3 w-3 rounded-full bg-[#28c840]" />
             </div>
           ) : null}
-          <h1 className="mb-2 text-center text-[13px] font-semibold text-ink-2">Raymes Settings</h1>
+          <h1 className="mb-2 text-center text-[13px] font-semibold text-ink-2">TezBar Settings</h1>
           <nav className="no-drag flex items-end justify-center gap-2">
             {SETTINGS_TABS.map((tab) => (
               <button
@@ -906,7 +906,7 @@ export default function SettingsView({
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={cx(
-                  'flex h-[54px] min-w-[86px] flex-col items-center justify-center gap-1 rounded-raymes-row border text-[12px] font-semibold transition',
+                  'flex h-[54px] min-w-[86px] flex-col items-center justify-center gap-1 rounded-tezbar-row border text-[12px] font-semibold transition',
                   activeTab === tab.id
                     ? 'border-white/12 bg-white/[0.075] text-ink-1'
                     : 'border-transparent text-ink-3 hover:bg-white/[0.045] hover:text-ink-1'
@@ -928,12 +928,12 @@ export default function SettingsView({
               >
                 <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
                   <input type="checkbox" checked readOnly />
-                  Launch Raymes at login
+                  Launch TezBar at login
                 </label>
               </SettingsRow>
               <Divider />
               <SettingsRow
-                label="Raymes Hotkey"
+                label="TezBar Hotkey"
                 detail={
                   hotkeyRecording
                     ? 'Press a modifier and another key. Escape cancels; Backspace restores the default.'
@@ -942,7 +942,7 @@ export default function SettingsView({
               >
                 <button
                   type="button"
-                  aria-label="Record Raymes hotkey"
+                  aria-label="Record TezBar hotkey"
                   aria-pressed={hotkeyRecording}
                   onClick={() => {
                     setHotkeyRecording(true)
@@ -967,7 +967,7 @@ export default function SettingsView({
                     void saveHotkey(accelerator)
                   }}
                   className={cx(
-                    'flex min-h-9 w-full max-w-[280px] items-center justify-center rounded-raymes-field border px-3 py-2 text-[13px] font-semibold transition',
+                    'flex min-h-9 w-full max-w-[280px] items-center justify-center rounded-tezbar-field border px-3 py-2 text-[13px] font-semibold transition',
                     hotkeyRecording
                       ? 'border-accent/70 bg-accent/15 text-ink-1 shadow-[0_0_0_3px_rgba(124,119,255,0.12)]'
                       : 'border-white/[0.08] bg-white/[0.10] text-ink-1 hover:bg-white/[0.14]'
@@ -1026,7 +1026,7 @@ export default function SettingsView({
                       key={mode}
                       type="button"
                       className={cx(
-                        'flex h-[58px] w-[72px] flex-col items-center justify-center gap-1 rounded-raymes-row border text-[12px] font-semibold transition',
+                        'flex h-[58px] w-[72px] flex-col items-center justify-center gap-1 rounded-tezbar-row border text-[12px] font-semibold transition',
                         mode === 'System'
                           ? 'border-accent/70 bg-white/[0.08] text-ink-1'
                           : 'border-white/10 bg-white/[0.035] text-ink-3 hover:text-ink-1'
@@ -1066,7 +1066,7 @@ export default function SettingsView({
                     </SelectField>
                     <span
                       className={cx(
-                        'rounded-raymes-chip border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em]',
+                        'rounded-tezbar-chip border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em]',
                         configured
                           ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
                           : 'border-amber-400/30 bg-amber-500/10 text-amber-200'
@@ -1079,7 +1079,7 @@ export default function SettingsView({
                     </Button>
                   </div>
                   {addProviderOpen ? (
-                    <div className="space-y-2 rounded-raymes-row border border-white/10 bg-white/[0.025] p-3">
+                    <div className="space-y-2 rounded-tezbar-row border border-white/10 bg-white/[0.025] p-3">
                       <TextField
                         value={newProviderName}
                         onChange={(event) => setNewProviderName(event.target.value)}
@@ -1114,7 +1114,7 @@ export default function SettingsView({
                     detail={
                       aiProvider === 'copilot'
                         ? 'Use a GitHub token or OAuth access token with Copilot Chat access.'
-                        : 'Stored in the local Raymes config and used by the selected provider.'
+                        : 'Stored in the local TezBar config and used by the selected provider.'
                     }
                   >
                     {aiProvider === 'copilot' ? (
@@ -1196,7 +1196,7 @@ export default function SettingsView({
                       <li
                         key={model.id}
                         className={cx(
-                          'rounded-raymes-row border px-3 py-2 transition',
+                          'rounded-tezbar-row border px-3 py-2 transition',
                           aiModel === model.id
                             ? 'border-accent/45 bg-accent/10'
                             : 'border-white/10 bg-white/[0.025]'
@@ -1218,13 +1218,13 @@ export default function SettingsView({
                               {model.capabilities.map((capability) => (
                                 <span
                                   key={capability}
-                                  className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3"
+                                  className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3"
                                 >
                                   {capabilityLabel(capability)}
                                 </span>
                               ))}
                               {model.contextWindow ? (
-                                <span className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3">
+                                <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3">
                                   {model.contextWindow.toLocaleString()} ctx
                                 </span>
                               ) : null}
@@ -1325,7 +1325,7 @@ export default function SettingsView({
                   onChange={(event) => {
                     const modelId = event.target.value as VoiceModelId
                     setSelectedVoiceModelId(modelId)
-                    void window.raymes
+                    void window.tezbar
                       .setSelectedVoiceModel(modelId)
                       .then(() => refreshVoiceModels())
                       .catch(() => {
@@ -1384,7 +1384,7 @@ export default function SettingsView({
                       checked={clipboardWatchEnabled}
                       onChange={(e) => {
                         setClipboardWatchEnabled(e.target.checked)
-                        void window.raymes
+                        void window.tezbar
                           .setClipboardStorageConfig({ watchEnabled: e.target.checked })
                           .then((cfg) => setClipboardWatchEnabled(cfg.watchEnabled))
                       }}
@@ -1397,7 +1397,7 @@ export default function SettingsView({
                       checked={clipboardCaptureImages}
                       onChange={(e) => {
                         setClipboardCaptureImages(e.target.checked)
-                        void window.raymes
+                        void window.tezbar
                           .setClipboardStorageConfig({ captureImages: e.target.checked })
                           .then((cfg) => setClipboardCaptureImages(cfg.captureImages))
                       }}
@@ -1417,7 +1417,7 @@ export default function SettingsView({
                           e.preventDefault()
                           const value = Number(clipboardMaxImageMegapixels)
                           if (Number.isFinite(value) && value > 0) {
-                            void window.raymes
+                            void window.tezbar
                               .setClipboardStorageConfig({ maxImageMegapixels: value })
                               .then((cfg) => setClipboardMaxImageMegapixels(String(cfg.maxImageMegapixels)))
                           }
@@ -1431,7 +1431,7 @@ export default function SettingsView({
                       onClick={() => {
                         const value = Number(clipboardMaxImageMegapixels)
                         if (Number.isFinite(value) && value > 0) {
-                          void window.raymes
+                          void window.tezbar
                             .setClipboardStorageConfig({ maxImageMegapixels: value })
                             .then((cfg) => setClipboardMaxImageMegapixels(String(cfg.maxImageMegapixels)))
                         }
@@ -1453,7 +1453,7 @@ export default function SettingsView({
                       {storageBreakdown.items.map((item) => (
                         <li
                           key={item.id}
-                          className="flex items-center justify-between gap-3 rounded-raymes-row border border-white/10 bg-white/[0.025] px-3 py-2"
+                          className="flex items-center justify-between gap-3 rounded-tezbar-row border border-white/10 bg-white/[0.025] px-3 py-2"
                         >
                           <span className="text-[12.5px] text-ink-2">{item.label}</span>
                           <span className="font-mono text-[12px] text-ink-3">{formatBytes(item.bytes)}</span>
@@ -1469,7 +1469,7 @@ export default function SettingsView({
                   <Button
                     variant="ghost"
                     onClick={() => {
-                      void window.raymes.clearClipboardImages().then(() => void loadStorage())
+                      void window.tezbar.clearClipboardImages().then(() => void loadStorage())
                     }}
                   >
                     Clear clipboard images
@@ -1477,7 +1477,7 @@ export default function SettingsView({
                   <Button
                     variant="ghost"
                     onClick={() => {
-                      void window.raymes.vacuumSearchDatabase().then(() => void loadStorage())
+                      void window.tezbar.vacuumSearchDatabase().then(() => void loadStorage())
                     }}
                   >
                     Vacuum search DB
@@ -1485,7 +1485,7 @@ export default function SettingsView({
                   <Button
                     variant="ghost"
                     onClick={() => {
-                      void window.raymes.clearChromiumCache().then(() => void loadStorage())
+                      void window.tezbar.clearChromiumCache().then(() => void loadStorage())
                     }}
                   >
                     Clear Chromium cache
@@ -1507,7 +1507,7 @@ export default function SettingsView({
                     onClick={async () => {
                       const next = !safetyDryRun
                       setSafetyDryRunState(next)
-                      await window.raymes.setSafetyDryRun(next)
+                      await window.tezbar.setSafetyDryRun(next)
                       setMsg({
                         tone: 'success',
                         text: next ? 'Dry-run mode enabled' : 'Dry-run mode disabled',
@@ -1531,10 +1531,10 @@ export default function SettingsView({
                 <Button
                   variant="danger"
                   onClick={() => {
-                    void window.raymes.appQuit()
+                    void window.tezbar.appQuit()
                   }}
                 >
-                  Quit Raymes
+                  Quit TezBar
                 </Button>
               </SettingsRow>
             </div>

@@ -40,7 +40,7 @@ function jsonRequest<T>(
       port: fullUrl.port || (isHttps ? 443 : 80),
       path: fullUrl.pathname + fullUrl.search,
       headers: {
-        'User-Agent': 'Raymes',
+        'User-Agent': 'TezBar',
         Accept: 'application/json',
         ...(payload
           ? {

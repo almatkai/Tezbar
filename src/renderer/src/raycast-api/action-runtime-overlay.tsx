@@ -51,7 +51,7 @@ export function ActionPanelOverlay({
   return (
     <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose}>
       <div
-        className="absolute bottom-12 right-3 w-80 max-h-[65vh] overflow-hidden rounded-raymes-card border border-white/10 bg-black/75 backdrop-blur-xl"
+        className="absolute bottom-12 right-3 w-80 max-h-[65vh] overflow-hidden rounded-tezbar-card border border-white/10 bg-black/75 backdrop-blur-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="border-b border-white/10 px-3 py-2">
@@ -70,9 +70,8 @@ export function ActionPanelOverlay({
                 type="button"
                 onClick={() => onExecute(action)}
                 onMouseEnter={() => setSelected(index)}
-                className={`w-full rounded-raymes-row px-3 py-2 text-left text-[12px] transition ${
-                  index === selected ? 'bg-white/15 text-ink-1' : 'text-ink-2 hover:bg-white/8'
-                }`}
+                className={`w-full rounded-tezbar-row px-3 py-2 text-left text-[12px] transition ${index === selected ? 'bg-white/15 text-ink-1' : 'text-ink-2 hover:bg-white/8'
+                  }`}
               >
                 {action.title}
               </button>

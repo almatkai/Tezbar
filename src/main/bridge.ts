@@ -39,7 +39,7 @@ function getInputAddon(): InputAddon | null {
   if (inputAddon !== undefined) return inputAddon
   if (!existsSync(addonPath)) {
     console.warn(
-      `[raymes] Native input addon not found (${addonPath}). Screen/control helpers and Alt+Space hold-to-speak key polling are disabled. Build with: pnpm build:native:input`,
+      `[tezbar] Native input addon not found (${addonPath}). Screen/control helpers and Alt+Space hold-to-speak key polling are disabled. Build with: pnpm build:native:input`,
     )
     inputAddon = null
     return null
@@ -48,7 +48,7 @@ function getInputAddon(): InputAddon | null {
     inputAddon = requireNative(addonPath) as InputAddon
     return inputAddon
   } catch (err) {
-    console.warn('[raymes] Failed to load native input addon:', err)
+    console.warn('[tezbar] Failed to load native input addon:', err)
     inputAddon = null
     return null
   }
@@ -58,7 +58,7 @@ function requireInputAddon(): InputAddon {
   const mod = getInputAddon()
   if (!mod) {
     throw new Error(
-      `Raymes native input is not available (missing or failed to load: ${addonPath}). Run \`pnpm build:native:input\` from the repository root.`,
+      `TezBar native input is not available (missing or failed to load: ${addonPath}). Run \`pnpm build:native:input\` from the repository root.`,
     )
   }
   return mod

@@ -4,7 +4,7 @@ import type { FrankfurterLatestResponse } from '../../preload/api'
  * Reads ECB-backed rates from the main process (Node fetch, no CORS).
  */
 export async function fetchFrankfurterLatest(from: string): Promise<FrankfurterLatestResponse> {
-  return window.raymes.fetchFrankfurterLatest(from.trim().toUpperCase())
+  return window.tezbar.fetchFrankfurterLatest(from.trim().toUpperCase())
 }
 
 export async function getConversionRate(from: string, to: string): Promise<number> {

@@ -40,7 +40,7 @@ type Surface =
 
 type SettingsTab = 'general' | 'ai' | 'voice' | 'permissions' | 'storage' | 'advanced'
 
-const SETTINGS_TAB_STORAGE_KEY = 'raymes:settings-tab'
+const SETTINGS_TAB_STORAGE_KEY = 'tezbar:settings-tab'
 
 function normalizeSettingsTab(tab: unknown): SettingsTab {
   return tab === 'ai' || tab === 'voice' || tab === 'permissions' || tab === 'storage' || tab === 'advanced'
@@ -50,9 +50,9 @@ function normalizeSettingsTab(tab: unknown): SettingsTab {
 
 async function openNativeSettings(tab: SettingsTab): Promise<void> {
   window.localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, tab)
-  await window.raymes.setLlmConfig({ settingsInitialTab: tab })
-  await window.raymes.openSettingsWindow()
-  await window.raymes.hide()
+  await window.tezbar.setLlmConfig({ settingsInitialTab: tab })
+  await window.tezbar.openSettingsWindow()
+  await window.tezbar.hide()
 }
 
 const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
@@ -84,7 +84,7 @@ function SettingsWindowApp(): JSX.Element {
 
   useEffect(() => {
     let cancelled = false
-    void window.raymes.getLlmConfig().then((config) => {
+    void window.tezbar.getLlmConfig().then((config) => {
       if (!cancelled) setSettingsTab(normalizeSettingsTab(config.settingsInitialTab))
     })
 
@@ -107,19 +107,19 @@ function SettingsWindowApp(): JSX.Element {
   return (
     <div className="flex h-screen w-full bg-[#1e1f2e]">
       <Suspense fallback={<SurfaceFallback />}>
-      {surface === 'permissions' ? (
-        <PermissionsView nativeWindow onBack={() => setSurface('settings')} />
-      ) : (
-        <SettingsView
-          key={settingsTab}
-          initialTab={settingsTab}
-          nativeWindow
-          onBack={() => {
-            void window.raymes.closeCurrentWindow()
-          }}
-          onOpenPermissions={() => setSurface('permissions')}
-        />
-      )}
+        {surface === 'permissions' ? (
+          <PermissionsView nativeWindow onBack={() => setSurface('settings')} />
+        ) : (
+          <SettingsView
+            key={settingsTab}
+            initialTab={settingsTab}
+            nativeWindow
+            onBack={() => {
+              void window.tezbar.closeCurrentWindow()
+            }}
+            onOpenPermissions={() => setSurface('permissions')}
+          />
+        )}
       </Suspense>
     </div>
   )
@@ -164,7 +164,7 @@ function LauncherApp(): JSX.Element {
   }
 
   useEffect(() => {
-    const off = window.raymes.onWindowShown(({ resetUi }) => {
+    const off = window.tezbar.onWindowShown(({ resetUi }) => {
       if (resetUi) {
         setSurface('command')
         setExtensionRuntimeInitial(null)
@@ -184,19 +184,19 @@ function LauncherApp(): JSX.Element {
 
   useEffect(() => {
     if (surface === 'terminal') {
-      void window.raymes.getTerminalPromptInfo().then(setTerminalPromptInfo)
+      void window.tezbar.getTerminalPromptInfo().then(setTerminalPromptInfo)
     }
   }, [surface])
 
   useEffect(() => {
-    const off = window.raymes.onWindowSnapGuides((payload) => {
+    const off = window.tezbar.onWindowSnapGuides((payload) => {
       setSnapGuides(payload)
     })
     return off
   }, [])
 
   useEffect(() => {
-    return window.raymes.onAppSurfaceOpen((nextSurface) => {
+    return window.tezbar.onAppSurfaceOpen((nextSurface) => {
       if (nextSurface === 'settings') {
         void openNativeSettings('general')
         return
@@ -224,13 +224,13 @@ function LauncherApp(): JSX.Element {
       if (!target.closest('.drag-region')) return
       if (isNoDragTarget(target)) return
       dragActive = true
-      void window.raymes.startWindowSnapDrag()
+      void window.tezbar.startWindowSnapDrag()
     }
 
     const endDrag = (): void => {
       if (!dragActive) return
       dragActive = false
-      void window.raymes.endWindowSnapDrag()
+      void window.tezbar.endWindowSnapDrag()
     }
 
     const onVisibilityChange = (): void => {
@@ -252,7 +252,7 @@ function LauncherApp(): JSX.Element {
   // Global ⌘N — route by surface (snippets → new snippet; AI chat → new chat;
   // command bar → quick-note shortcut event for CommandBar).
   useEffect(() => {
-    return window.raymes.onQuickNoteSaveShortcut(() => {
+    return window.tezbar.onQuickNoteSaveShortcut(() => {
       const s = surfaceRef.current
       if (s === 'ai-chat') {
         window.dispatchEvent(new Event(RAYMES_AI_NEW_CHAT_EVENT))
@@ -301,7 +301,7 @@ function LauncherApp(): JSX.Element {
         if (tryConsumeCommandSurfaceEscape()) {
           return
         }
-        void window.raymes.hide()
+        void window.tezbar.hide()
         return
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ',') {
@@ -322,11 +322,11 @@ function LauncherApp(): JSX.Element {
 
     const report = (): void => {
       const cssHeight = Math.max(el.getBoundingClientRect().height, el.scrollHeight) + OUTER_PADDING_PX
-      const zoomFactor = Math.max(1, window.raymes.getWindowZoomFactor())
+      const zoomFactor = Math.max(1, window.tezbar.getWindowZoomFactor())
       const measured = Math.ceil(cssHeight * zoomFactor)
       if (measured === lastReportedHeightRef.current) return
       lastReportedHeightRef.current = measured
-      void window.raymes.setWindowContentHeight(measured, zoomFactor)
+      void window.tezbar.setWindowContentHeight(measured, zoomFactor)
     }
 
     report()
@@ -363,141 +363,141 @@ function LauncherApp(): JSX.Element {
       <div
         ref={contentRef}
         key={surface}
-        className="no-drag relative z-0 flex h-full w-full animate-raymes-fade-in flex-col"
+        className="no-drag relative z-0 flex h-full w-full animate-tezbar-fade-in flex-col"
       >
         <Suspense fallback={<SurfaceFallback />}>
-        {surface === 'settings' ? (
-          <SettingsView
-            initialTab={settingsInitialTab}
-            onBack={() => setSurface('command')}
-            onOpenPermissions={() => setSurface('permissions')}
-          />
-        ) : surface === 'extensions' ? (
-          <ExtensionsView onBack={() => setSurface('command')} />
-        ) : surface === 'extension-runtime' && extensionRuntimeInitial ? (
-          <ExtensionRuntimeView
-            initial={extensionRuntimeInitial}
-            onBack={() => {
-              setSurface('command')
-            }}
-          />
-        ) : surface === 'open-ports' ? (
-          <OpenPortsView
-            initialTab={openPortsInitialTab}
-            onBack={() => {
-              setOpenPortsInitialTab('listen')
-              setSurface('command')
-            }}
-          />
-        ) : surface === 'permissions' ? (
-          <PermissionsView onBack={() => setSurface('settings')} />
-        ) : surface === 'clipboard' ? (
-          <ClipboardView onBack={() => setSurface('command')} />
-        ) : surface === 'snippets' ? (
-          <SnippetsView onBack={() => setSurface('command')} />
-        ) : surface === 'notes' ? (
-          <NotesView
-            onBack={() => setSurface('command')}
-            initialSelectedNoteId={notesInitialSelectedId}
-          />
-        ) : surface === 'emoji-picker' ? (
-          <EmojiPickerView onBack={() => setSurface('command')} />
-        ) : surface === 'ai-chat' ? (
-          <AgentChatView
-            key={aiChatKey}
-            boot={aiChatBoot}
-            onBack={() => setSurface('command')}
-            onOpenSettings={() => {
-              void openNativeSettings('ai')
-            }}
-          />
-        ) : surface === 'terminal' ? (
-          <div className="flex h-full w-full flex-col gap-2">
-            <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-raymes-scale-in">
-              <div className="flex items-center gap-3">
-                <span className="text-emerald-300">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-                    <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
-                    <path d="M4 5.5L6.5 7L4 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M8 9.5H10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-                  </svg>
-                </span>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-raymes-chip border border-emerald-400/35 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
-                  <span className="font-mono text-[11px] leading-none">&gt;_</span>
-                  Terminal
-                </span>
-                <span className="shrink-0 font-mono text-[13px] text-emerald-300/80">
-                  {terminalPromptInfo ? `${terminalPromptInfo.user}@${terminalPromptInfo.host} ${terminalPromptInfo.dir} %` : ''}
-                </span>
-                <span className="font-mono text-[15px] text-ink-1">
-                  {terminalInitialCommand}
-                </span>
-              </div>
-            </div>
-            <TerminalView
-              embedded
-              initialCommand={terminalInitialCommand}
+          {surface === 'settings' ? (
+            <SettingsView
+              initialTab={settingsInitialTab}
+              onBack={() => setSurface('command')}
+              onOpenPermissions={() => setSurface('permissions')}
+            />
+          ) : surface === 'extensions' ? (
+            <ExtensionsView onBack={() => setSurface('command')} />
+          ) : surface === 'extension-runtime' && extensionRuntimeInitial ? (
+            <ExtensionRuntimeView
+              initial={extensionRuntimeInitial}
               onBack={() => {
-                setTerminalInitialCommand(undefined)
-                setTerminalPromptInfo(null)
-                setCommandInitialValue('')
                 setSurface('command')
               }}
             />
-            <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">
-              <HintBar>
-                <Hint label="Close" keys={<Kbd>Esc</Kbd>} />
-                <Hint label="Hide window" keys={<><Kbd>Esc</Kbd><Kbd>⌘</Kbd></>} />
-              </HintBar>
+          ) : surface === 'open-ports' ? (
+            <OpenPortsView
+              initialTab={openPortsInitialTab}
+              onBack={() => {
+                setOpenPortsInitialTab('listen')
+                setSurface('command')
+              }}
+            />
+          ) : surface === 'permissions' ? (
+            <PermissionsView onBack={() => setSurface('settings')} />
+          ) : surface === 'clipboard' ? (
+            <ClipboardView onBack={() => setSurface('command')} />
+          ) : surface === 'snippets' ? (
+            <SnippetsView onBack={() => setSurface('command')} />
+          ) : surface === 'notes' ? (
+            <NotesView
+              onBack={() => setSurface('command')}
+              initialSelectedNoteId={notesInitialSelectedId}
+            />
+          ) : surface === 'emoji-picker' ? (
+            <EmojiPickerView onBack={() => setSurface('command')} />
+          ) : surface === 'ai-chat' ? (
+            <AgentChatView
+              key={aiChatKey}
+              boot={aiChatBoot}
+              onBack={() => setSurface('command')}
+              onOpenSettings={() => {
+                void openNativeSettings('ai')
+              }}
+            />
+          ) : surface === 'terminal' ? (
+            <div className="flex h-full w-full flex-col gap-2">
+              <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-tezbar-scale-in">
+                <div className="flex items-center gap-3">
+                  <span className="text-emerald-300">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+                      <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
+                      <path d="M4 5.5L6.5 7L4 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M8 9.5H10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                    <span className="font-mono text-[11px] leading-none">&gt;_</span>
+                    Terminal
+                  </span>
+                  <span className="shrink-0 font-mono text-[13px] text-emerald-300/80">
+                    {terminalPromptInfo ? `${terminalPromptInfo.user}@${terminalPromptInfo.host} ${terminalPromptInfo.dir} %` : ''}
+                  </span>
+                  <span className="font-mono text-[15px] text-ink-1">
+                    {terminalInitialCommand}
+                  </span>
+                </div>
+              </div>
+              <TerminalView
+                embedded
+                initialCommand={terminalInitialCommand}
+                onBack={() => {
+                  setTerminalInitialCommand(undefined)
+                  setTerminalPromptInfo(null)
+                  setCommandInitialValue('')
+                  setSurface('command')
+                }}
+              />
+              <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
+                <HintBar>
+                  <Hint label="Close" keys={<Kbd>Esc</Kbd>} />
+                  <Hint label="Hide window" keys={<><Kbd>Esc</Kbd><Kbd>⌘</Kbd></>} />
+                </HintBar>
+              </div>
             </div>
-          </div>
           ) : (
-          <CommandBar
-            initialValue={commandInitialValue}
-            initialSelectedChatId={commandInitialSelectedChatId}
-            onOpenAiChat={(nextBoot) => {
-              setAiChatBoot(nextBoot)
-              setCommandInitialValue('')
-              setCommandInitialSelectedChatId(
-                nextBoot.kind === 'resume' ? nextBoot.sessionId : null
-              )
-              setAiChatKey((k) => k + 1)
-              setSurface('ai-chat')
-            }}
-            onOpenSettings={() => {
-              setSettingsInitialTab('general')
-              void openNativeSettings('general')
-            }}
-            onConfigureAi={() => {
-              void openNativeSettings('ai')
-            }}
-            onOpenExtensions={() => {
-              setCommandInitialValue('')
-              setSurface('extensions')
-            }}
-            onOpenExtensionRuntime={(initial) => {
-              setCommandInitialValue('')
-              setExtensionRuntimeInitial(initial)
-              setSurface('extension-runtime')
-            }}
-            onOpenPortsPage={(opts) => {
-              setOpenPortsInitialTab(opts?.tab ?? 'listen')
-              setSurface('open-ports')
-            }}
-            onOpenClipboardPage={() => setSurface('clipboard')}
-            onOpenSnippetsPage={() => setSurface('snippets')}
-            onOpenNotesPage={(opts) => {
-              setNotesInitialSelectedId(typeof opts?.createdAt === 'number' ? opts.createdAt : null)
-              setSurface('notes')
-            }}
-            onOpenEmojiPicker={() => setSurface('emoji-picker')}
-            onOpenTerminal={(initialCommand) => {
-              setTerminalInitialCommand(initialCommand)
-              setCommandInitialValue('')
-              setSurface('terminal')
-            }}
-          />
-        )}
+            <CommandBar
+              initialValue={commandInitialValue}
+              initialSelectedChatId={commandInitialSelectedChatId}
+              onOpenAiChat={(nextBoot) => {
+                setAiChatBoot(nextBoot)
+                setCommandInitialValue('')
+                setCommandInitialSelectedChatId(
+                  nextBoot.kind === 'resume' ? nextBoot.sessionId : null
+                )
+                setAiChatKey((k) => k + 1)
+                setSurface('ai-chat')
+              }}
+              onOpenSettings={() => {
+                setSettingsInitialTab('general')
+                void openNativeSettings('general')
+              }}
+              onConfigureAi={() => {
+                void openNativeSettings('ai')
+              }}
+              onOpenExtensions={() => {
+                setCommandInitialValue('')
+                setSurface('extensions')
+              }}
+              onOpenExtensionRuntime={(initial) => {
+                setCommandInitialValue('')
+                setExtensionRuntimeInitial(initial)
+                setSurface('extension-runtime')
+              }}
+              onOpenPortsPage={(opts) => {
+                setOpenPortsInitialTab(opts?.tab ?? 'listen')
+                setSurface('open-ports')
+              }}
+              onOpenClipboardPage={() => setSurface('clipboard')}
+              onOpenSnippetsPage={() => setSurface('snippets')}
+              onOpenNotesPage={(opts) => {
+                setNotesInitialSelectedId(typeof opts?.createdAt === 'number' ? opts.createdAt : null)
+                setSurface('notes')
+              }}
+              onOpenEmojiPicker={() => setSurface('emoji-picker')}
+              onOpenTerminal={(initialCommand) => {
+                setTerminalInitialCommand(initialCommand)
+                setCommandInitialValue('')
+                setSurface('terminal')
+              }}
+            />
+          )}
         </Suspense>
       </div>
     </div>

@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* =========================================================================
-   Raymes Design System
+   TezBar Design System
    -------------------------------------------------------------------------
    All visual tokens flow from here. Components compose these tokens via
    utility classes and the `@layer components` block below.
@@ -82,9 +82,11 @@
     width: 8px;
     height: 8px;
   }
+
   *::-webkit-scrollbar-track {
     background: transparent;
   }
+
   *::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.08);
     border-radius: 999px;
@@ -92,6 +94,7 @@
     background-clip: padding-box;
     transition: background 220ms ease;
   }
+
   *::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.18);
     background-clip: padding-box;
@@ -114,6 +117,7 @@
    Component classes
    ========================================================================= */
 @layer components {
+
   /* ---- Window chrome ----
      The launcher is frameless, so the OS only lets the user move the
      window through regions that opt in via -webkit-app-region. The
@@ -123,6 +127,7 @@
   .drag-region {
     -webkit-app-region: drag;
   }
+
   .no-drag,
   input,
   textarea,
@@ -199,7 +204,7 @@
     min-width: 0;
     align-items: center;
     gap: 10px;
-    animation: raymes-rolling-hint 3200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: tezbar-rolling-hint 3200ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .rolling-command-hint__shortcut {
@@ -225,12 +230,12 @@
     white-space: nowrap;
   }
 
-  .glass-card > *,
-  .glass-panel > * {
+  .glass-card>*,
+  .glass-panel>* {
     -webkit-app-region: no-drag;
   }
 
-  .raymes-popover {
+  .tezbar-popover {
     -webkit-app-region: no-drag;
     border-radius: var(--r-card);
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -240,7 +245,7 @@
       0 22px 52px rgba(0, 0, 0, 0.72);
   }
 
-  .raymes-settings-window {
+  .tezbar-settings-window {
     -webkit-app-region: drag;
     position: relative;
     border-radius: 14px;
@@ -253,11 +258,11 @@
       0 22px 60px rgba(0, 0, 0, 0.26);
   }
 
-  .raymes-settings-window > * {
+  .tezbar-settings-window>* {
     -webkit-app-region: no-drag;
   }
 
-  .raymes-settings-window--native {
+  .tezbar-settings-window--native {
     border-radius: 0;
     border: 0;
     box-shadow: none;
@@ -546,72 +551,76 @@
     gap: 3px;
   }
 
-  .status-dots > span {
+  .status-dots>span {
     width: 5px;
     height: 5px;
     border-radius: 9999px;
     background: rgb(var(--c-success));
-    animation: raymes-conn-pulse 1.2s ease-in-out infinite;
+    animation: tezbar-conn-pulse 1.2s ease-in-out infinite;
   }
 
-  .status-dots > span:nth-child(2) {
+  .status-dots>span:nth-child(2) {
     animation-delay: 0.2s;
   }
 
-  .status-dots > span:nth-child(3) {
+  .status-dots>span:nth-child(3) {
     animation-delay: 0.4s;
   }
 
   /* ---- Divider ---- */
   .hairline {
     height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.08) 12%,
-      rgba(255, 255, 255, 0.08) 88%,
-      transparent
-    );
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 255, 255, 0.08) 12%,
+        rgba(255, 255, 255, 0.08) 88%,
+        transparent);
   }
 }
 
 /* =========================================================================
    Animations
    ========================================================================= */
-@keyframes raymes-conn-pulse {
+@keyframes tezbar-conn-pulse {
+
   0%,
   100% {
     opacity: 0.35;
     transform: scale(0.85);
   }
+
   50% {
     opacity: 1;
     transform: scale(1);
   }
 }
 
-@keyframes raymes-thinking {
+@keyframes tezbar-thinking {
+
   0%,
   100% {
     opacity: 0.4;
   }
+
   50% {
     opacity: 1;
   }
 }
 
-@keyframes raymes-rolling-hint {
+@keyframes tezbar-rolling-hint {
   0% {
     opacity: 0;
     transform: translateY(8px);
     filter: blur(2px);
   }
+
   12%,
   82% {
     opacity: 1;
     transform: translateY(0);
     filter: blur(0);
   }
+
   100% {
     opacity: 0;
     transform: translateY(-8px);
@@ -619,8 +628,8 @@
   }
 }
 
-.raymes-thinking {
-  animation: raymes-thinking 1.4s ease-in-out infinite;
+.tezbar-thinking {
+  animation: tezbar-thinking 1.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -630,43 +639,53 @@
 }
 
 /* Stagger helpers — applied to list items for on-mount cascade */
-.stagger > * {
+.stagger>* {
   opacity: 0;
-  animation: raymes-fade-up 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: tezbar-fade-up 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.stagger > *:nth-child(1) {
+
+.stagger>*:nth-child(1) {
   animation-delay: 20ms;
 }
-.stagger > *:nth-child(2) {
+
+.stagger>*:nth-child(2) {
   animation-delay: 40ms;
 }
-.stagger > *:nth-child(3) {
+
+.stagger>*:nth-child(3) {
   animation-delay: 60ms;
 }
-.stagger > *:nth-child(4) {
+
+.stagger>*:nth-child(4) {
   animation-delay: 80ms;
 }
-.stagger > *:nth-child(5) {
+
+.stagger>*:nth-child(5) {
   animation-delay: 100ms;
 }
-.stagger > *:nth-child(6) {
+
+.stagger>*:nth-child(6) {
   animation-delay: 120ms;
 }
-.stagger > *:nth-child(7) {
+
+.stagger>*:nth-child(7) {
   animation-delay: 140ms;
 }
-.stagger > *:nth-child(8) {
+
+.stagger>*:nth-child(8) {
   animation-delay: 160ms;
 }
-.stagger > *:nth-child(n + 9) {
+
+.stagger>*:nth-child(n + 9) {
   animation-delay: 180ms;
 }
 
-@keyframes raymes-fade-up {
+@keyframes tezbar-fade-up {
   0% {
     opacity: 0;
     transform: translateY(4px);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0);
@@ -674,95 +693,115 @@
 }
 
 /* =========================================================================
-   Markdown — `.raymes-md` is the wrapper produced by <Markdown /> and holds
+   Markdown — `.tezbar-md` is the wrapper produced by <Markdown /> and holds
    every rich-text rule used by agent / answer streams. Kept tight (no big
    vertical margins) to fit the HUD, but supports code, tables, lists,
    blockquotes and task checkboxes.
    ========================================================================= */
-.raymes-md {
+.tezbar-md {
   font-size: 13.5px;
   line-height: 1.55;
   color: var(--ink-1, #f3efff);
   word-break: break-word;
 }
-.raymes-md > *:first-child {
+
+.tezbar-md>*:first-child {
   margin-top: 0;
 }
-.raymes-md > *:last-child {
+
+.tezbar-md>*:last-child {
   margin-bottom: 0;
 }
-.raymes-md p {
+
+.tezbar-md p {
   margin: 0.4em 0;
 }
-.raymes-md h1,
-.raymes-md h2,
-.raymes-md h3,
-.raymes-md h4,
-.raymes-md h5,
-.raymes-md h6 {
+
+.tezbar-md h1,
+.tezbar-md h2,
+.tezbar-md h3,
+.tezbar-md h4,
+.tezbar-md h5,
+.tezbar-md h6 {
   font-weight: 600;
   margin: 0.9em 0 0.4em;
   line-height: 1.25;
   letter-spacing: -0.01em;
   color: var(--ink-0, #ffffff);
 }
-.raymes-md h1 {
+
+.tezbar-md h1 {
   font-size: 1.35em;
 }
-.raymes-md h2 {
+
+.tezbar-md h2 {
   font-size: 1.2em;
 }
-.raymes-md h3 {
+
+.tezbar-md h3 {
   font-size: 1.08em;
 }
-.raymes-md h4,
-.raymes-md h5,
-.raymes-md h6 {
+
+.tezbar-md h4,
+.tezbar-md h5,
+.tezbar-md h6 {
   font-size: 1em;
   color: var(--ink-2, #d9d3ee);
 }
-.raymes-md a {
+
+.tezbar-md a {
   color: #b8a8ff;
   text-decoration: underline;
   text-decoration-color: rgba(184, 168, 255, 0.45);
   text-underline-offset: 2px;
   transition: color 0.12s ease;
 }
-.raymes-md a:hover {
+
+.tezbar-md a:hover {
   color: #d7ccff;
 }
-.raymes-md strong {
+
+.tezbar-md strong {
   font-weight: 600;
   color: var(--ink-0, #ffffff);
 }
-.raymes-md em {
+
+.tezbar-md em {
   font-style: italic;
 }
-.raymes-md del {
+
+.tezbar-md del {
   text-decoration: line-through;
   opacity: 0.7;
 }
-.raymes-md ul,
-.raymes-md ol {
+
+.tezbar-md ul,
+.tezbar-md ol {
   margin: 0.35em 0 0.5em;
   padding-left: 1.35em;
 }
-.raymes-md ul {
+
+.tezbar-md ul {
   list-style: disc;
 }
-.raymes-md ol {
+
+.tezbar-md ol {
   list-style: decimal;
 }
-.raymes-md li {
+
+.tezbar-md li {
   margin: 0.2em 0;
 }
-.raymes-md li > p {
+
+.tezbar-md li>p {
   margin: 0.15em 0;
 }
-.raymes-md li::marker {
+
+.tezbar-md li::marker {
   color: rgba(216, 205, 255, 0.55);
 }
-.raymes-md input[type='checkbox'] {
+
+.tezbar-md input[type='checkbox'] {
   appearance: none;
   width: 13px;
   height: 13px;
@@ -773,11 +812,13 @@
   position: relative;
   vertical-align: -1px;
 }
-.raymes-md input[type='checkbox']:checked {
+
+.tezbar-md input[type='checkbox']:checked {
   background: #8a74ff;
   border-color: #8a74ff;
 }
-.raymes-md input[type='checkbox']:checked::after {
+
+.tezbar-md input[type='checkbox']:checked::after {
   content: '';
   position: absolute;
   top: 1px;
@@ -788,7 +829,8 @@
   border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
 }
-.raymes-md blockquote {
+
+.tezbar-md blockquote {
   margin: 0.6em 0;
   padding: 0.25em 0.8em;
   border-left: 2px solid rgba(184, 168, 255, 0.45);
@@ -796,18 +838,22 @@
   border-radius: 0 6px 6px 0;
   color: var(--ink-2, #d9d3ee);
 }
-.raymes-md blockquote > *:first-child {
+
+.tezbar-md blockquote>*:first-child {
   margin-top: 0;
 }
-.raymes-md blockquote > *:last-child {
+
+.tezbar-md blockquote>*:last-child {
   margin-bottom: 0;
 }
-.raymes-md hr {
+
+.tezbar-md hr {
   border: 0;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   margin: 0.9em 0;
 }
-.raymes-md table {
+
+.tezbar-md table {
   width: 100%;
   border-collapse: collapse;
   margin: 0.6em 0;
@@ -816,32 +862,37 @@
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.raymes-md thead {
+
+.tezbar-md thead {
   background: rgba(255, 255, 255, 0.04);
 }
-.raymes-md th,
-.raymes-md td {
+
+.tezbar-md th,
+.tezbar-md td {
   padding: 6px 10px;
   text-align: left;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   vertical-align: top;
 }
-.raymes-md tr:last-child td {
+
+.tezbar-md tr:last-child td {
   border-bottom: 0;
 }
-.raymes-md th {
+
+.tezbar-md th {
   font-weight: 600;
   color: var(--ink-1, #f3efff);
   letter-spacing: 0.01em;
 }
-.raymes-md img {
+
+.tezbar-md img {
   max-width: 100%;
   border-radius: 8px;
   margin: 0.4em 0;
 }
 
 /* Inline code */
-.raymes-md code:not(pre code) {
+.tezbar-md code:not(pre code) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
   font-size: 0.9em;
   padding: 1px 5px;
@@ -853,7 +904,7 @@
 }
 
 /* Code block shell (highlight.js theme paints the <code> interior) */
-.raymes-md pre {
+.tezbar-md pre {
   position: relative;
   margin: 0.6em 0;
   padding: 0;
@@ -864,8 +915,9 @@
   font-size: 12.5px;
   line-height: 1.5;
 }
-.raymes-md pre code,
-.raymes-md pre code.hljs {
+
+.tezbar-md pre code,
+.tezbar-md pre code.hljs {
   display: block;
   padding: 0.75em 0.9em;
   background: transparent;
@@ -876,7 +928,8 @@
   white-space: pre;
   border-radius: 0;
 }
-.raymes-md-code-header {
+
+.tezbar-md-code-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -886,12 +939,14 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
   font-size: 10.5px;
 }
-.raymes-md-code-lang {
+
+.tezbar-md-code-lang {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: rgba(233, 226, 255, 0.55);
 }
-.raymes-md-code-copy {
+
+.tezbar-md-code-copy {
   appearance: none;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -907,7 +962,8 @@
     border-color 0.12s ease,
     background 0.12s ease;
 }
-.raymes-md-code-copy:hover {
+
+.tezbar-md-code-copy:hover {
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.05);

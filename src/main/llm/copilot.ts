@@ -85,7 +85,7 @@ export class CopilotProvider implements LLMProvider {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-        'Editor-Version': 'Raymes/0.1.0',
+        'Editor-Version': 'TezBar/0.1.0',
         'Copilot-Integration-Id': 'vscode-chat',
       },
       body: JSON.stringify(body),

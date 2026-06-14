@@ -43,7 +43,7 @@ const PI_BIN_CANDIDATES = [
   path.join(homedir(), '.local', 'share', 'pnpm', 'pi'),
 ]
 
-const RAYMES_PI_EXTENSION = path.join(process.cwd(), 'src', 'main', 'agent', 'raymes-pi-policy.ts')
+const RAYMES_PI_EXTENSION = path.join(process.cwd(), 'src', 'main', 'agent', 'tezbar-pi-policy.ts')
 const OPENCODE_PI_EXTENSION = path.join(homedir(), '.pi', 'agent', 'extensions', 'opencode', 'index.ts')
 
 function resolvePiBinary(override?: string): string {
@@ -63,7 +63,7 @@ export interface BridgeRunOptions {
   cwd?: string
   /** Model pattern, forwarded as `--model`. */
   model?: string
-  /** Raymes-owned pi provider definition, passed through the child env. */
+  /** TezBar-owned pi provider definition, passed through the child env. */
   raymesProviderJson?: string
   /** Additional pi CLI args (advanced). */
   extraArgs?: readonly string[]
@@ -93,7 +93,7 @@ export interface Bridge {
   run(task: string, options?: BridgeRunOptions): Promise<BridgeRunResult>
   /** Low-level helper — mostly for observer.ts and tests. */
   query<T = unknown>(
-    command: { type: string; [k: string]: unknown },
+    command: { type: string;[k: string]: unknown },
     options?: { signal?: AbortSignal; piBin?: string; cwd?: string; timeoutMs?: number },
   ): Promise<T>
   observe(options?: { cwd?: string; piBin?: string }): Promise<Observation>
@@ -284,7 +284,7 @@ function attachHandlers(handle: RpcSessionHandle, onStderrLine?: (line: string) 
 
 async function sendAndAwait<T>(
   handle: RpcSessionHandle,
-  command: { type: string; [k: string]: unknown },
+  command: { type: string;[k: string]: unknown },
   timeoutMs: number,
 ): Promise<T> {
   if (handle.closed) throw new Error('pi rpc session already closed')
@@ -363,7 +363,7 @@ export function createBridge(): Bridge {
         extraArgs: options.extraArgs ?? [],
       })
       trackChild(child)
-      console.log('[raymes:agent] spawn', {
+      console.log('[tezbar:agent] spawn', {
         runId,
         piBin,
         cwd,

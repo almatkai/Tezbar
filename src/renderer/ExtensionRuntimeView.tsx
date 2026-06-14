@@ -155,8 +155,8 @@ function PreferenceSetupView({
     setSaving(true)
     setLocalError(null)
     try {
-      await window.raymes.saveExtensionPreferences({ extensionId, values: formValues })
-      const result = await window.raymes.extensionRunCommand({ extensionId, commandName })
+      await window.tezbar.saveExtensionPreferences({ extensionId, values: formValues })
+      const result = await window.tezbar.extensionRunCommand({ extensionId, commandName })
       if (!result.ok) {
         setLocalError(result.message)
         return
@@ -192,7 +192,7 @@ function PreferenceSetupView({
               </div>
             </div>
             <p className="max-w-[430px] text-[15px] leading-7 text-ink-3">
-              Choose your translation defaults once. Raymes will save them locally and launch the command immediately.
+              Choose your translation defaults once. TezBar will save them locally and launch the command immediately.
             </p>
           </div>
 
@@ -280,10 +280,9 @@ export default function ExtensionRuntimeView({
       const startedAt = performance.now()
       console.log(`[RuntimeView] Refresh start session=${state.sessionId}`)
       try {
-        const result = await window.raymes.extensionRefreshSession({ sessionId: state.sessionId })
+        const result = await window.tezbar.extensionRefreshSession({ sessionId: state.sessionId })
         console.log(
-          `[RuntimeView] Refresh complete session=${state.sessionId} after ${Math.round(performance.now() - startedAt)}ms; mode=${
-            result.ok ? result.mode : 'error'
+          `[RuntimeView] Refresh complete session=${state.sessionId} after ${Math.round(performance.now() - startedAt)}ms; mode=${result.ok ? result.mode : 'error'
           }`,
         )
         if (cancelled || (result.ok && result.mode === 'unchanged')) return
@@ -323,7 +322,7 @@ export default function ExtensionRuntimeView({
       const sessionId = state.sessionId
       disposeTimerRef.current = window.setTimeout(() => {
         disposeTimerRef.current = null
-        void window.raymes.extensionDisposeSession({ sessionId })
+        void window.tezbar.extensionDisposeSession({ sessionId })
       }, 0)
     }
   }, [state.sessionId])
@@ -332,7 +331,7 @@ export default function ExtensionRuntimeView({
     const requestSeq = searchRequestSeq.current + 1
     searchRequestSeq.current = requestSeq
     console.log(`[RuntimeView] Search text changed, sending to sandbox: "${searchText}"`)
-    const result = await window.raymes.extensionSearchTextChanged({
+    const result = await window.tezbar.extensionSearchTextChanged({
       sessionId: state.sessionId,
       searchText,
     })
@@ -363,7 +362,7 @@ export default function ExtensionRuntimeView({
   }, [state.sessionId])
 
   const handleLoadMore = useCallback(async () => {
-    const result = await window.raymes.extensionLoadMore({ sessionId: state.sessionId })
+    const result = await window.tezbar.extensionLoadMore({ sessionId: state.sessionId })
     if (result.ok && result.mode === 'unchanged') return
     if (!result.ok) {
       setError(result.message)
@@ -388,10 +387,10 @@ export default function ExtensionRuntimeView({
     <div
       role="application"
       aria-label="Extension Runtime"
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-raymes-scale-in"
+      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="min-h-0 flex-1">
-        {state.root.type === 'Raymes.PreferenceSetup' ? (
+        {state.root.type === 'TezBar.PreferenceSetup' ? (
           <PreferenceSetupView
             root={state.root}
             onBack={onBack}
@@ -402,43 +401,43 @@ export default function ExtensionRuntimeView({
           />
         ) : (
           <ExtensionRuntimeSurface
-          sessionId={state.sessionId}
-          title={state.title}
-          extensionId={state.extensionId}
-          commandName={state.commandName}
-          root={state.root}
-          actions={state.actions}
-          onBack={onBack}
-          onSearchTextChanged={handleSearchTextChanged}
-          onLoadMore={handleLoadMore}
-          onInvokeAction={async (actionId, formValues) => {
-            setError(null)
-            const result = await window.raymes.extensionInvokeAction({
-              sessionId: state.sessionId,
-              actionId,
-              formValues,
-            })
+            sessionId={state.sessionId}
+            title={state.title}
+            extensionId={state.extensionId}
+            commandName={state.commandName}
+            root={state.root}
+            actions={state.actions}
+            onBack={onBack}
+            onSearchTextChanged={handleSearchTextChanged}
+            onLoadMore={handleLoadMore}
+            onInvokeAction={async (actionId, formValues) => {
+              setError(null)
+              const result = await window.tezbar.extensionInvokeAction({
+                sessionId: state.sessionId,
+                actionId,
+                formValues,
+              })
 
-            if (!result.ok) {
-              setError(result.message)
-              return
-            }
+              if (!result.ok) {
+                setError(result.message)
+                return
+              }
 
-            if (result.mode === 'no-view') {
-              setState((prev) => ({ ...prev, message: result.message }))
-              return
-            }
+              if (result.mode === 'no-view') {
+                setState((prev) => ({ ...prev, message: result.message }))
+                return
+              }
 
-            setState({
-              sessionId: result.sessionId,
-              extensionId: result.extensionId,
-              commandName: result.commandName,
-              title: result.title,
-              root: result.root,
-              actions: result.actions,
-              message: result.message,
-            })
-          }}
+              setState({
+                sessionId: result.sessionId,
+                extensionId: result.extensionId,
+                commandName: result.commandName,
+                title: result.title,
+                root: result.root,
+                actions: result.actions,
+                message: result.message,
+              })
+            }}
           />
         )}
       </div>

@@ -215,7 +215,7 @@ export function useHoldToSpeak(options: HoldToSpeakOptions): HoldToSpeakApi {
           payloadMime = mime
         }
 
-        const result = await window.raymes.voiceTranscribe({
+        const result = await window.tezbar.voiceTranscribe({
           audioBytes: bytes.buffer as ArrayBuffer,
           mimeType: payloadMime,
           language,
@@ -262,7 +262,7 @@ export function useHoldToSpeak(options: HoldToSpeakOptions): HoldToSpeakApi {
       // microphone sheet steals focus the first time a user grants
       // access, and without this the launcher disappears mid-record.
       try {
-        await window.raymes.setSuppressBlurHide(true)
+        await window.tezbar.setSuppressBlurHide(true)
       } catch {
         // non-fatal
       }
@@ -305,7 +305,7 @@ export function useHoldToSpeak(options: HoldToSpeakOptions): HoldToSpeakApi {
           chunksRef.current = []
           recorderRef.current = null
           const duration = performance.now() - startedAtRef.current
-          void window.raymes.setSuppressBlurHide(false).catch(() => undefined)
+          void window.tezbar.setSuppressBlurHide(false).catch(() => undefined)
           console.info('[stt][renderer] stopped after', Math.round(duration), 'ms')
 
           // Stop all tracks immediately so the macOS mic indicator turns off
@@ -336,7 +336,7 @@ export function useHoldToSpeak(options: HoldToSpeakOptions): HoldToSpeakApi {
         const msg = err instanceof Error ? err.message : String(err)
         setError('Failed to start the audio recorder.', `Details: ${msg}`)
         pressedRef.current = false
-        void window.raymes.setSuppressBlurHide(false).catch(() => undefined)
+        void window.tezbar.setSuppressBlurHide(false).catch(() => undefined)
         if (stream) {
           for (const track of stream.getTracks()) {
             try {
@@ -356,7 +356,7 @@ export function useHoldToSpeak(options: HoldToSpeakOptions): HoldToSpeakApi {
     pressedRef.current = false
     const recorder = recorderRef.current
     if (!recorder) {
-      void window.raymes.setSuppressBlurHide(false).catch(() => undefined)
+      void window.tezbar.setSuppressBlurHide(false).catch(() => undefined)
       return
     }
     if (recorder.state === 'recording') {
@@ -393,7 +393,7 @@ export function useHoldToSpeak(options: HoldToSpeakOptions): HoldToSpeakApi {
         }
         streamRef.current = null
       }
-      void window.raymes.setSuppressBlurHide(false).catch(() => undefined)
+      void window.tezbar.setSuppressBlurHide(false).catch(() => undefined)
     }
   }, [])
 

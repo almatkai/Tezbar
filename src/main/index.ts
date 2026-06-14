@@ -692,7 +692,7 @@ function openSettingsWindow(): void {
     height: 680,
     minWidth: 760,
     minHeight: 520,
-    title: 'Raymes Settings',
+    title: 'TezBar Settings',
     show: false,
     frame: true,
     resizable: true,
@@ -715,7 +715,7 @@ function openSettingsWindow(): void {
   })
   settingsWindow.on('page-title-updated', (event) => {
     event.preventDefault()
-    settingsWindow?.setTitle('Raymes Settings')
+    settingsWindow?.setTitle('TezBar Settings')
   })
   settingsWindow.once('ready-to-show', () => {
     if (!settingsWindow || settingsWindow.isDestroyed()) return
@@ -733,9 +733,9 @@ async function confirmAndQuitRaymes(): Promise<void> {
     buttons: ['Cancel', 'Quit'],
     defaultId: 1,
     cancelId: 0,
-    title: 'Quit Raymes',
-    message: 'Quit Raymes?',
-    detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
+    title: 'Quit TezBar',
+    message: 'Quit TezBar?',
+    detail: 'Are you sure you want to quit TezBar and terminate all background processes?',
     noLink: true,
   }
   const result =
@@ -759,7 +759,7 @@ async function confirmAndQuitRaymes(): Promise<void> {
 function buildTrayMenu(): Electron.Menu {
   return Menu.buildFromTemplate([
     {
-      label: `Raymes ${app.getVersion()}`,
+      label: `TezBar ${app.getVersion()}`,
       enabled: false,
     },
     {
@@ -768,7 +768,7 @@ function buildTrayMenu(): Electron.Menu {
     },
     { type: 'separator' },
     {
-      label: 'Show Raymes',
+      label: 'Show TezBar',
       click: () => openAppSurface('command'),
     },
     {
@@ -781,7 +781,7 @@ function buildTrayMenu(): Electron.Menu {
     },
     { type: 'separator' },
     {
-      label: 'Quit Raymes',
+      label: 'Quit TezBar',
       click: () => {
         void confirmAndQuitRaymes()
       },
@@ -850,7 +850,7 @@ function buildApplicationMenu(): Electron.Menu {
         { role: 'zoom' },
         { type: 'separator' },
         {
-          label: 'Show Raymes',
+          label: 'Show TezBar',
           accelerator: raymesHotkey,
           click: () => openAppSurface('command'),
         },
@@ -860,7 +860,7 @@ function buildApplicationMenu(): Electron.Menu {
       label: 'Help',
       submenu: [
         {
-          label: 'Raymes Settings',
+          label: 'TezBar Settings',
           click: () => openAppSurface('settings'),
         },
       ],
@@ -954,7 +954,7 @@ function registerHotkey(): void {
 }
 
 app.whenReady().then(() => {
-  app.setName('Raymes')
+  app.setName('TezBar')
   Menu.setApplicationMenu(buildApplicationMenu())
 
   // Chromium denies `getUserMedia` requests by default in Electron. The
@@ -991,9 +991,9 @@ app.whenReady().then(() => {
   placeWindow(mainWindow!)
 
   tray = new Tray(createTrayIcon())
-  tray.setToolTip('Raymes')
+  tray.setToolTip('TezBar')
   if (process.platform === 'darwin') {
-    tray.setTitle('Raymes')
+    tray.setTitle('TezBar')
   }
   tray.setContextMenu(buildTrayMenu())
   tray.on('click', () => {

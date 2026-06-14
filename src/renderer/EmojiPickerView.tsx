@@ -3,7 +3,7 @@ import { EMOJI_CATEGORIES, EMOJI_DATA, type EmojiCategory } from './emoji/emojiD
 import { searchEmojis } from './emoji/emojiSearch'
 import { Hint, HintBar, Kbd, ViewHeader, cx } from './ui/primitives'
 
-const RECENT_EMOJI_KEY = 'raymes:recent-emojis'
+const RECENT_EMOJI_KEY = 'tezbar:recent-emojis'
 const RECENT_LIMIT = 24
 const GRID_COLS = 8
 
@@ -127,8 +127,8 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
     setRecent(upsertRecentEmoji(emoji))
     // Hide the window first so the previous app regains focus before
     // the main process fires the ⌘V paste keystroke via AppleScript.
-    await window.raymes.hide()
-    await window.raymes.executeSearchAction({ type: 'copy-and-paste-text', text: emoji })
+    await window.tezbar.hide()
+    await window.tezbar.executeSearchAction({ type: 'copy-and-paste-text', text: emoji })
   }
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLElement>): void => {
@@ -203,9 +203,9 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
       role="application"
       aria-label="Emoji Picker"
       onKeyDown={onKeyDown}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-raymes-scale-in"
+      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader title="Emoji Picker" onBack={onBack} />
         <input
           ref={inputRef}
@@ -215,7 +215,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
             setSelected(0)
           }}
           placeholder="Search emojis by name, mood, or slang..."
-          className="mt-2 h-8 w-full rounded-raymes-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
+          className="mt-2 h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
         />
         <div className="mt-2 flex flex-wrap items-center gap-1">
           {(['All', ...EMOJI_CATEGORIES] as CategoryFilter[]).map((chip) => {
@@ -229,7 +229,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
                   setSelected(0)
                 }}
                 className={cx(
-                  'rounded-raymes-chip px-2 py-1 text-[11px] transition',
+                  'rounded-tezbar-chip px-2 py-1 text-[11px] transition',
                   active
                     ? 'bg-white/[0.12] font-medium text-ink-1'
                     : 'text-ink-3 hover:bg-white/[0.06] hover:text-ink-1',
@@ -242,7 +242,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
         </div>
       </div>
 
-      <div ref={gridRef} className="glass-card min-h-0 flex-1 overflow-hidden px-3 py-3 animate-raymes-scale-in">
+      <div ref={gridRef} className="glass-card min-h-0 flex-1 overflow-hidden px-3 py-3 animate-tezbar-scale-in">
         {query.trim().length > 0 ? (
           searchResults.length > 0 ? (
             <div className="grid min-h-0 grid-cols-8 gap-1 overflow-y-auto">
@@ -257,7 +257,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
                     void copyEmoji(entry.char)
                   }}
                   className={cx(
-                    'grid h-9 place-items-center rounded-raymes-chip border text-[20px] transition',
+                    'grid h-9 place-items-center rounded-tezbar-chip border text-[20px] transition',
                     index === selected
                       ? 'border-accent/60 bg-accent/15'
                       : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.07]',
@@ -288,7 +288,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
                         void copyEmoji(emoji)
                       }}
                       className={cx(
-                        'grid h-9 w-9 place-items-center rounded-raymes-chip border text-[20px] transition',
+                        'grid h-9 w-9 place-items-center rounded-tezbar-chip border text-[20px] transition',
                         index === selected
                           ? 'border-accent/60 bg-accent/15'
                           : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.07]',
@@ -324,7 +324,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
                             void copyEmoji(emoji)
                           }}
                           className={cx(
-                            'grid h-9 place-items-center rounded-raymes-chip border text-[20px] transition',
+                            'grid h-9 place-items-center rounded-tezbar-chip border text-[20px] transition',
                             index === selected
                               ? 'border-accent/60 bg-accent/15'
                               : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.07]',
@@ -354,7 +354,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
                       void copyEmoji(emoji)
                     }}
                     className={cx(
-                      'grid h-9 place-items-center rounded-raymes-chip border text-[20px] transition',
+                      'grid h-9 place-items-center rounded-tezbar-chip border text-[20px] transition',
                       index === selected
                         ? 'border-accent/60 bg-accent/15'
                         : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.07]',
@@ -369,7 +369,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
         )}
       </div>
 
-      <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
         <HintBar>
           <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd><Kbd>←</Kbd><Kbd>→</Kbd></>} />
           <Hint label="Copy" keys={<Kbd>↵</Kbd>} />

@@ -21,7 +21,7 @@
  *
  * The observer here is a thin adapter: `snapshot()` asks the bridge for
  * `get_state` + `get_session_stats`, merges the useful fields, and returns
- * an `Observation` that the Raymes HUD (or a future planner) can read
+ * an `Observation` that the TezBar HUD (or a future planner) can read
  * without caring about the wire format.
  *
  * Callers pass in a `query(command)` function instead of depending on the

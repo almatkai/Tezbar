@@ -67,7 +67,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
   const loadModels = useCallback(async () => {
     setModelsLoading(true)
     try {
-      const list = await window.raymes.listLlmModels(id)
+      const list = await window.tezbar.listLlmModels(id)
       setModelOptions(list)
     } catch {
       setModelOptions([])
@@ -124,14 +124,14 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
     if (id === 'opencode') {
       patch.model = model.trim() || defaultModelForProvider(id)
     }
-    await window.raymes.setLlmConfig(patch)
+    await window.tezbar.setLlmConfig(patch)
     await onReload()
     void loadModels()
     setMsg({ tone: 'success', text: 'Saved' })
   }
 
   async function activate(): Promise<void> {
-    await window.raymes.setLlmConfig({ provider: id })
+    await window.tezbar.setLlmConfig({ provider: id })
     await onReload()
     setMsg({ tone: 'success', text: 'Active provider updated' })
   }
@@ -145,17 +145,17 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
     }
     setDeviceBusy(true)
     try {
-      await window.raymes.setLlmConfig({ githubOAuthClientId: cid })
-      const start = await window.raymes.githubDeviceStart(cid)
+      await window.tezbar.setLlmConfig({ githubOAuthClientId: cid })
+      const start = await window.tezbar.githubDeviceStart(cid)
       setMsg({ tone: 'neutral', text: `Open GitHub and enter code ${start.user_code}` })
-      await window.raymes.openExternalUrl(start.verification_uri)
+      await window.tezbar.openExternalUrl(start.verification_uri)
       const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
       await wait(Math.max(1000, start.interval * 1000))
       let finished = false
       let polls = 0
       while (!finished && polls < 120) {
         polls += 1
-        const r = await window.raymes.githubDevicePoll()
+        const r = await window.tezbar.githubDevicePoll()
         if (r.status === 'success') {
           setMsg({ tone: 'success', text: 'GitHub sign-in complete' })
           await onReload()
@@ -183,7 +183,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
 
   useEffect(() => {
     return () => {
-      void window.raymes.githubDeviceCancel()
+      void window.tezbar.githubDeviceCancel()
     }
   }, [])
 
@@ -191,7 +191,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2">
-      <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
           title={title}
           onBack={onBack}
@@ -206,7 +206,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
           }
         />
       </div>
-      <div className="glass-card min-h-0 flex-1 overflow-y-auto px-4 py-3 pr-[calc(0.5rem+2px)] animate-raymes-scale-in">
+      <div className="glass-card min-h-0 flex-1 overflow-y-auto px-4 py-3 pr-[calc(0.5rem+2px)] animate-tezbar-scale-in">
         {id === 'openai' || id === 'anthropic' || id === 'openai-compatible' || id === 'gemini' || id === 'deepseek' ? (
           <div className="space-y-3">
             <div>
@@ -304,7 +304,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
                 type="button"
                 className="text-accent-strong underline-offset-2 transition hover:underline"
                 onClick={() =>
-                  void window.raymes.openExternalUrl('https://github.com/settings/developers#oauth-apps')
+                  void window.tezbar.openExternalUrl('https://github.com/settings/developers#oauth-apps')
                 }
               >
                 public OAuth App
@@ -356,7 +356,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
         ) : null}
       </div>
 
-      <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <div className="flex gap-2">
           <Button variant="primary" fullWidth onClick={() => void saveCredentials()}>
             Save
@@ -428,13 +428,13 @@ function ModelPicker({
         </button>
       </div>
       <TextField
-        list={`raymes-models-${id}`}
+        list={`tezbar-models-${id}`}
         value={model}
         onChange={(e) => setModel(e.target.value)}
         placeholder={modelsLoading ? 'Loading models…' : 'Pick or type a model id'}
         spellCheck={false}
       />
-      <datalist id={`raymes-models-${id}`}>
+      <datalist id={`tezbar-models-${id}`}>
         {modelOptions.map((m) => (
           <option key={m} value={m} />
         ))}
@@ -460,9 +460,9 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
   const rootRef = useRef<HTMLDivElement>(null)
 
   const reload = useCallback(async () => {
-    const c = (await window.raymes.getLlmConfig()) as LlmConfigRecord
+    const c = (await window.tezbar.getLlmConfig()) as LlmConfigRecord
     setCfg(c)
-    const st = await window.raymes.getLlmProviderStatuses()
+    const st = await window.tezbar.getLlmProviderStatuses()
     setStatuses(st)
   }, [])
 
@@ -513,22 +513,22 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
       role="application"
       aria-label="Providers"
       onKeyDown={onKeyDown}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-raymes-scale-in"
+      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       {panel === 'list' ? (
         <>
-          <div className="glass-card shrink-0 px-4 py-3 animate-raymes-scale-in">
+          <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
             <ViewHeader
               title="Providers"
               onBack={onBack}
               trailing={
-                <span className="rounded-raymes-chip border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+                <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
                   {cfg.provider ?? 'ollama'}
                 </span>
               }
             />
           </div>
-          <div className="glass-card min-h-0 flex-1 flex flex-col overflow-hidden px-2 py-2 animate-raymes-scale-in">
+          <div className="glass-card min-h-0 flex-1 flex flex-col overflow-hidden px-2 py-2 animate-tezbar-scale-in">
             <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
               <GlideList
                 selectedIndex={selected}
@@ -542,7 +542,7 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
                       onClick={() => setSelected(idx)}
                       onDoubleClick={() => setPanel({ type: 'detail', id: row.id })}
                       onMouseEnter={() => setSelected(idx)}
-                      className="flex w-full items-center justify-between gap-3 rounded-raymes-row px-3 py-2.5 text-left transition"
+                      className="flex w-full items-center justify-between gap-3 rounded-tezbar-row px-3 py-2.5 text-left transition"
                     >
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13.5px] font-medium leading-tight text-ink-1">
@@ -554,7 +554,7 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
                       </span>
                       <span className="flex shrink-0 items-center gap-2">
                         {cfg.provider === row.id ? (
-                          <span className="rounded-raymes-chip border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-accent-strong">
+                          <span className="rounded-tezbar-chip border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-accent-strong">
                             Active
                           </span>
                         ) : null}
@@ -566,7 +566,7 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
               </GlideList>
             </div>
           </div>
-          <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">
+          <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
             <HintBar>
               <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
               <Hint label="Open" keys={<Kbd>↵</Kbd>} />

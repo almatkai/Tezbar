@@ -103,7 +103,7 @@ export default function AgentChatView({
     chatSessionRef.current = chatSession
   }, [chatSession])
   useEffect(() => {
-    void window.raymes.getLlmConfig().then((config) => setLlmConfig(config)).catch(() => {
+    void window.tezbar.getLlmConfig().then((config) => setLlmConfig(config)).catch(() => {
       /* ignore */
     })
   }, [])
@@ -122,7 +122,7 @@ export default function AgentChatView({
 
   const refreshChatHistory = useCallback(async (): Promise<void> => {
     try {
-      const rows = await window.raymes.chatList(40)
+      const rows = await window.tezbar.chatList(40)
       setChatHistory(rows)
     } catch {
       /* ignore */
@@ -131,7 +131,7 @@ export default function AgentChatView({
 
   const stopRun = useCallback((): void => {
     if (!currentAgentRunIdRef.current) return
-    void window.raymes.agentCancel()
+    void window.tezbar.agentCancel()
     currentAgentRunIdRef.current = null
     agentStatusRef.current = 'idle'
     agentErrorRef.current = null
@@ -161,7 +161,7 @@ export default function AgentChatView({
 
   const loadChatSession = useCallback(async (id: string): Promise<void> => {
     try {
-      const full = await window.raymes.chatGet(id)
+      const full = await window.tezbar.chatGet(id)
       if (!full) return
       stopRun()
       setChatSession(full)
@@ -181,7 +181,7 @@ export default function AgentChatView({
   const deleteChatFromHistory = useCallback(
     async (id: string): Promise<void> => {
       try {
-        await window.raymes.chatDelete(id)
+        await window.tezbar.chatDelete(id)
         if (chatSessionRef.current?.id === id) {
           setChatSession(null)
           chatSessionRef.current = null
@@ -209,12 +209,12 @@ export default function AgentChatView({
       const session: ChatSession = existing
         ? existing
         : {
-            id: makeChatId(),
-            title: summarizeChatTitle(trimmed),
-            createdAt: now,
-            updatedAt: now,
-            turns: [],
-          }
+          id: makeChatId(),
+          title: summarizeChatTitle(trimmed),
+          createdAt: now,
+          updatedAt: now,
+          turns: [],
+        }
 
       const userTurn: ChatTurn = {
         id: makeChatId(),
@@ -230,7 +230,7 @@ export default function AgentChatView({
       setChatSession(nextSession)
       chatSessionRef.current = nextSession
 
-      void window.raymes
+      void window.tezbar
         .chatAppend({
           session: {
             id: nextSession.id,
@@ -250,8 +250,8 @@ export default function AgentChatView({
 
       try {
         const result = shouldRunAgent(trimmed)
-          ? await window.raymes.agentRun(buildAgentPromptFromChat(nextSession, trimmed))
-          : await window.raymes.chatRun(nextSession.turns)
+          ? await window.tezbar.agentRun(buildAgentPromptFromChat(nextSession, trimmed))
+          : await window.tezbar.chatRun(nextSession.turns)
         if (!result.ok) {
           const error = formatLlmErrorMessage(result.error || 'Run failed to start')
           agentErrorRef.current = error
@@ -299,7 +299,7 @@ export default function AgentChatView({
           return
         }
 
-        const rows = await window.raymes.chatList(40)
+        const rows = await window.tezbar.chatList(40)
         if (cancelled) return
         setChatHistory(rows)
 
@@ -309,7 +309,7 @@ export default function AgentChatView({
             mostRecent &&
             Date.now() - mostRecent.updatedAt < CHAT_CONTINUATION_WINDOW_MS
           ) {
-            const full = await window.raymes.chatGet(mostRecent.id)
+            const full = await window.tezbar.chatGet(mostRecent.id)
             if (!cancelled && full) {
               setChatSession(full)
               chatSessionRef.current = full
@@ -325,7 +325,7 @@ export default function AgentChatView({
             mostRecent &&
             Date.now() - mostRecent.updatedAt < CHAT_CONTINUATION_WINDOW_MS
           ) {
-            session = await window.raymes.chatGet(mostRecent.id)
+            session = await window.tezbar.chatGet(mostRecent.id)
           }
           if (cancelled) return
           if (session) {
@@ -354,7 +354,7 @@ export default function AgentChatView({
   }, [chatSession, agentStreamText, agentStages.length, runLogs.length])
 
   useEffect(() => {
-    return window.raymes.onAgentEvent((event: AgentRunEvent) => {
+    return window.tezbar.onAgentEvent((event: AgentRunEvent) => {
       if (
         event.type !== 'start' &&
         currentAgentRunIdRef.current !== null &&
@@ -440,7 +440,7 @@ export default function AgentChatView({
             }
             chatSessionRef.current = nextSession
             setChatSession(nextSession)
-            void window.raymes
+            void window.tezbar
               .chatAppend({
                 session: {
                   id: nextSession.id,
@@ -525,8 +525,8 @@ export default function AgentChatView({
     }
     setLlmConfig((prev) => ({ ...prev, ...patch }))
     setModelPickerOpen(false)
-    await window.raymes.setLlmConfig(patch)
-    const next = await window.raymes.getLlmConfig()
+    await window.tezbar.setLlmConfig(patch)
+    const next = await window.tezbar.getLlmConfig()
     setLlmConfig(next)
   }
 
@@ -536,7 +536,7 @@ export default function AgentChatView({
       tabIndex={-1}
       className="flex h-full min-h-0 w-full flex-col gap-2 outline-none"
     >
-      <div className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 animate-raymes-scale-in">
+      <div className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 animate-tezbar-scale-in">
         <div className="relative mb-3 flex shrink-0 items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-200">
@@ -560,7 +560,7 @@ export default function AgentChatView({
             {agentStatus === 'running' ? (
               <button
                 type="button"
-                className="inline-flex h-6 items-center rounded-raymes-chip border border-rose-400/35 bg-rose-500/10 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-200 transition hover:border-rose-300/60 hover:bg-rose-500/16 hover:text-rose-100"
+                className="inline-flex h-6 items-center rounded-tezbar-chip border border-rose-400/35 bg-rose-500/10 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-200 transition hover:border-rose-300/60 hover:bg-rose-500/16 hover:text-rose-100"
                 onClick={() => {
                   stopRun()
                 }}
@@ -570,7 +570,7 @@ export default function AgentChatView({
             ) : null}
             <button
               type="button"
-              className="rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
+              className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
               onClick={() => {
                 setModelPickerOpen(false)
                 setHistoryOpen((v) => !v)
@@ -582,7 +582,7 @@ export default function AgentChatView({
             </button>
             <button
               type="button"
-              className="rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
+              className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
               onClick={() => {
                 startNewChat()
               }}
@@ -591,7 +591,7 @@ export default function AgentChatView({
             </button>
             <button
               type="button"
-              className="rounded-raymes-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
+              className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
               onClick={() => {
                 void onBack()
               }}
@@ -609,7 +609,7 @@ export default function AgentChatView({
                     type="button"
                     className="text-[10px] text-ink-4 transition hover:text-rose-300"
                     onClick={() => {
-                      void window.raymes.chatClear().then(() => {
+                      void window.tezbar.chatClear().then(() => {
                         setChatHistory([])
                         setHistoryOpen(false)
                       })
@@ -653,7 +653,7 @@ export default function AgentChatView({
                             role="button"
                             tabIndex={-1}
                             aria-label="Delete chat"
-                            className="mt-0.5 shrink-0 rounded-raymes-chip border border-transparent px-1.5 py-0.5 text-[10px] text-ink-4 opacity-0 transition hover:border-rose-400/40 hover:text-rose-300 group-hover:opacity-100"
+                            className="mt-0.5 shrink-0 rounded-tezbar-chip border border-transparent px-1.5 py-0.5 text-[10px] text-ink-4 opacity-0 transition hover:border-rose-400/40 hover:text-rose-300 group-hover:opacity-100"
                             onClick={(ev) => {
                               ev.stopPropagation()
                               void deleteChatFromHistory(row.id)
@@ -677,30 +677,30 @@ export default function AgentChatView({
         >
           {chatSession && chatSession.turns.length > 0
             ? chatSession.turns.map((turn) =>
-                turn.role === 'user' ? (
-                  <div key={turn.id} className="flex justify-end">
-                    <div className="max-w-[88%] rounded-raymes-row border border-violet-400/30 bg-violet-500/12 px-3 py-2 text-[13.5px] leading-[1.5] text-ink-1">
-                      {turn.text}
-                    </div>
+              turn.role === 'user' ? (
+                <div key={turn.id} className="flex justify-end">
+                  <div className="max-w-[88%] rounded-tezbar-row border border-violet-400/30 bg-violet-500/12 px-3 py-2 text-[13.5px] leading-[1.5] text-ink-1">
+                    {turn.text}
                   </div>
-                ) : (
-                  <div key={turn.id} className="flex flex-col gap-1.5">
-                    {turn.stages && turn.stages.length > 0 ? (
-                      <AgentStageList stages={turn.stages} compact />
-                    ) : null}
-                    {turn.text ? (
-                      <Markdown text={turn.text} />
-                    ) : turn.error ? null : (
-                      <p className="text-[12.5px] italic text-ink-4">(no text response)</p>
-                    )}
-                    {turn.error ? (
-                      <p className="text-[11.5px] text-rose-300" role="alert">
-                        {formatLlmErrorMessage(turn.error)}
-                      </p>
-                    ) : null}
-                  </div>
-                ),
-              )
+                </div>
+              ) : (
+                <div key={turn.id} className="flex flex-col gap-1.5">
+                  {turn.stages && turn.stages.length > 0 ? (
+                    <AgentStageList stages={turn.stages} compact />
+                  ) : null}
+                  {turn.text ? (
+                    <Markdown text={turn.text} />
+                  ) : turn.error ? null : (
+                    <p className="text-[12.5px] italic text-ink-4">(no text response)</p>
+                  )}
+                  {turn.error ? (
+                    <p className="text-[11.5px] text-rose-300" role="alert">
+                      {formatLlmErrorMessage(turn.error)}
+                    </p>
+                  ) : null}
+                </div>
+              ),
+            )
             : null}
 
           {agentStatus === 'running' || agentStages.length > 0 || agentStreamText ? (
@@ -709,7 +709,7 @@ export default function AgentChatView({
               {agentStreamText ? (
                 <Markdown text={agentStreamText} streaming={agentStatus === 'running'} />
               ) : agentStatus === 'running' ? (
-                <p className="raymes-thinking flex items-center gap-2 text-[12px] text-ink-3">
+                <p className="tezbar-thinking flex items-center gap-2 text-[12px] text-ink-3">
                   <span className="inline-flex gap-1">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3" />
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:120ms]" />
@@ -728,7 +728,7 @@ export default function AgentChatView({
           ) : null}
 
           {runLogs.length > 0 ? (
-            <div className="rounded-raymes-row border border-amber-400/20 bg-amber-500/5">
+            <div className="rounded-tezbar-row border border-amber-400/20 bg-amber-500/5">
               <button
                 type="button"
                 className="flex w-full items-center justify-between px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200/90"
@@ -772,12 +772,12 @@ export default function AgentChatView({
             placeholder="Message the agent…"
             autoComplete="off"
             spellCheck={false}
-            className="w-full rounded-raymes-row border border-white/10 bg-white/[0.04] px-3 py-2 font-display text-[14px] text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:border-violet-400/40"
+            className="w-full rounded-tezbar-row border border-white/10 bg-white/[0.04] px-3 py-2 font-display text-[14px] text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:border-violet-400/40"
           />
         </form>
       </div>
 
-      <div className="glass-card shrink-0 px-4 py-2 animate-raymes-scale-in">
+      <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
         <HintBar>
           <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
           <Hint label="New chat" keys={<><Kbd>⌘</Kbd><Kbd>N</Kbd></>} />

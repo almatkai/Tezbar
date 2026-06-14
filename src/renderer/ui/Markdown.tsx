@@ -5,7 +5,7 @@ import hljs from 'highlight.js/lib/common'
 import DOMPurify from 'dompurify'
 
 /**
- * Lightweight markdown renderer tailored for the Raymes HUD.
+ * Lightweight markdown renderer tailored for the TezBar HUD.
  *
  * - GFM (tables, strikethrough, autolinks, task lists) via `marked`
  * - Syntax highlighting via `highlight.js` (common-languages bundle)
@@ -125,16 +125,16 @@ export function Markdown({ text, streaming = false, className, imageSrcResolver 
       const lang = langClass ? langClass.replace('language-', '').replace('hljs', '').trim() : ''
 
       const header = document.createElement('div')
-      header.className = 'raymes-md-code-header'
+      header.className = 'tezbar-md-code-header'
 
       const langLabel = document.createElement('span')
-      langLabel.className = 'raymes-md-code-lang'
+      langLabel.className = 'tezbar-md-code-lang'
       langLabel.textContent = lang || 'code'
       header.appendChild(langLabel)
 
       const copyBtn = document.createElement('button')
       copyBtn.type = 'button'
-      copyBtn.className = 'raymes-md-code-copy'
+      copyBtn.className = 'tezbar-md-code-copy'
       copyBtn.textContent = 'Copy'
       copyBtn.addEventListener('click', () => {
         const raw = codeEl.textContent ?? ''
@@ -169,7 +169,7 @@ export function Markdown({ text, streaming = false, className, imageSrcResolver 
   return (
     <div
       ref={containerRef}
-      className={className ? `raymes-md ${className}` : 'raymes-md'}
+      className={className ? `tezbar-md ${className}` : 'tezbar-md'}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )

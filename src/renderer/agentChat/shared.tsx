@@ -11,7 +11,7 @@ export function AgentStageList({
   return (
     <ol
       className={cx(
-        'space-y-1 rounded-raymes-row border border-white/[0.06] bg-white/[0.02] px-2 py-1.5',
+        'space-y-1 rounded-tezbar-row border border-white/[0.06] bg-white/[0.02] px-2 py-1.5',
         compact ? 'max-h-28 overflow-y-auto' : '',
       )}
     >

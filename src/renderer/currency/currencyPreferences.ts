@@ -12,7 +12,7 @@
  *   }
  */
 
-const STORAGE_KEY = 'raymes:currency:prefs:v1'
+const STORAGE_KEY = 'tezbar:currency:prefs:v1'
 /** Initial fallback until the user has any usage/override. */
 export const INITIAL_DEFAULT_TARGET = 'EUR'
 

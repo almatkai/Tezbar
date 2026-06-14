@@ -31,17 +31,17 @@ function collectFormFields(root: ExtensionRuntimeNode): FormField[] {
       const placeholder = typeof node.props?.placeholder === 'string' ? node.props.placeholder : undefined
       const options = Array.isArray(node.props?.data)
         ? node.props.data
-            .map((entry) => {
-              const title = typeof (entry as { title?: unknown }).title === 'string'
-                ? String((entry as { title?: unknown }).title)
-                : ''
-              const value = typeof (entry as { value?: unknown }).value === 'string'
-                ? String((entry as { value?: unknown }).value)
-                : title
-              if (!title && !value) return null
-              return { title: title || value, value }
-            })
-            .filter((entry): entry is { title: string; value: string } => entry !== null)
+          .map((entry) => {
+            const title = typeof (entry as { title?: unknown }).title === 'string'
+              ? String((entry as { title?: unknown }).title)
+              : ''
+            const value = typeof (entry as { value?: unknown }).value === 'string'
+              ? String((entry as { value?: unknown }).value)
+              : title
+            if (!title && !value) return null
+            return { title: title || value, value }
+          })
+          .filter((entry): entry is { title: string; value: string } => entry !== null)
         : undefined
 
       out.push({
@@ -127,7 +127,7 @@ export function FormRuntime({
             if (field.type === 'Form.Checkbox') {
               const checked = current === 'true'
               return (
-                <label key={field.key} className="flex items-center gap-2 rounded-raymes-row bg-white/[0.03] px-3 py-2">
+                <label key={field.key} className="flex items-center gap-2 rounded-tezbar-row bg-white/[0.03] px-3 py-2">
                   <input
                     type="checkbox"
                     checked={checked}
@@ -188,7 +188,7 @@ export function FormRuntime({
           })}
 
           {fields.length === 0 ? (
-            <div className="rounded-raymes-row bg-white/[0.03] px-3 py-4 text-[12px] text-ink-3">
+            <div className="rounded-tezbar-row bg-white/[0.03] px-3 py-4 text-[12px] text-ink-3">
               This form did not expose any editable fields.
             </div>
           ) : null}
