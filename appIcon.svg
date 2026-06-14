@@ -1,0 +1,89 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="128" y1="80" x2="896" y2="944" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111522"/>
+      <stop offset="1" stop-color="#050812"/>
+    </linearGradient>
+
+    <linearGradient id="speedBlue" x1="110" y1="0" x2="430" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0047FF" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#0A7BFF"/>
+      <stop offset="1" stop-color="#0B44FF" stop-opacity="0.15"/>
+    </linearGradient>
+
+    <filter id="whiteGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="blur1"/>
+      <feColorMatrix in="blur1" type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0.24
+                0 0 0 0 1
+                0 0 0 1 0" result="blueGlow"/>
+      <feGaussianBlur stdDeviation="4" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blueGlow"/>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="blueGlow" x="-40%" y="-200%" width="180%" height="500%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0.35
+                0 0 0 0 1
+                0 0 0 1 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="appShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- App background -->
+  <rect
+    x="64"
+    y="64"
+    width="896"
+    height="896"
+    rx="150"
+    fill="url(#bg)"
+    filter="url(#appShadow)"
+  />
+
+  <!-- Subtle inner highlight -->
+  <rect
+    x="66"
+    y="66"
+    width="892"
+    height="892"
+    rx="148"
+    stroke="white"
+    stroke-opacity="0.04"
+    stroke-width="2"
+  />
+
+  <!-- Move this whole group -->
+  <g id="movable-icon-content" transform="translate(0 0)">
+    <!-- Speed lines -->
+    <g transform="translate(-20 -30)" filter="url(#blueGlow)" stroke="url(#speedBlue)" stroke-width="16" stroke-linecap="round">
+      <path d="M130 410 H350" opacity="0.55"/>
+      <path d="M105 455 H290" opacity="0.75"/>
+      <path d="M190 500 H395" opacity="0.9"/>
+      <path d="M125 540 H300" opacity="1"/>
+      <path d="M185 590 H370" opacity="0.45"/>
+      <path d="M115 630 H290" opacity="0.35"/>
+    </g>
+
+    <!-- Main Option-like smiling mark -->
+    <g filter="url(#whiteGlow)" stroke="#FFFFFF" stroke-width="56" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M285 265 H435 C460 265 475 280 484 305 L590 605 C600 635 622 655 655 655 H715"/>
+      <path d="M595 265 H765"/>
+      <path d="M305 695 C425 810 645 825 770 695"/>
+    </g>
+  </g>
+</svg>
