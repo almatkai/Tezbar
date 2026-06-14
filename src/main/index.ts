@@ -96,6 +96,8 @@ let raymesHotkey = getRaymesHotkey()
 type AppSurface = 'command' | 'settings' | 'clipboard'
 /** Set when the palette is hidden; used to decide whether to reset renderer UI on reopen. */
 let lastPaletteHideAt: number | null = null
+/** Grace period after showing — ignore transient blur events (macOS process-type transforms). */
+let showGraceUntil = 0
 
 /* ---------------------------------------------------------------------------
    Snap-to-center constants
@@ -591,12 +593,14 @@ function showCommandBar(): void {
   mainWindow.show()
   mainWindow.focus()
   commandBarVisible = true
+  showGraceUntil = Date.now() + 300
 
   if (process.platform === 'darwin') {
     setTimeout(() => {
       if (!mainWindow || mainWindow.isDestroyed()) return
       mainWindow.setVisibleOnAllWorkspaces(false, {
         visibleOnFullScreen: true,
+        skipTransformProcessType: true,
       })
     }, 0)
   }
@@ -679,6 +683,7 @@ function createWindow(): void {
 
   mainWindow.on('blur', () => {
     if (shouldSuppressBlurHide()) return
+    if (Date.now() < showGraceUntil) return
     stopWindowDragMonitoring(mainWindow!)
     hideCommandBar()
   })
