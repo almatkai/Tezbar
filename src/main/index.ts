@@ -980,11 +980,6 @@ function registerHotkey(): void {
     setRaymesHotkey(raymesHotkey)
   }
   const okEnter = globalShortcut.register('Alt+Enter', toggleCommandBarImmediate)
-  const okNote = globalShortcut.register('CommandOrControl+N', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    showCommandBar()
-    mainWindow.webContents.send('notes:quick-save-shortcut')
-  })
   const okEscape = globalShortcut.register('CommandOrControl+Escape', () => {
     if (!mainWindow || mainWindow.isDestroyed() || !commandBarVisible) return
     hideCommandBar()
@@ -995,9 +990,6 @@ function registerHotkey(): void {
   }
   if (!okEnter) {
     console.warn('Failed to register global shortcut Alt+Enter')
-  }
-  if (!okNote) {
-    console.warn('Failed to register global shortcut CommandOrControl+N (quick note)')
   }
   if (!okEscape) {
     console.warn('Failed to register global shortcut CommandOrControl+Escape (close window)')

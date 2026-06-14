@@ -249,21 +249,27 @@ function LauncherApp(): JSX.Element {
     }
   }, [])
 
-  // Global ⌘N — route by surface (snippets → new snippet; AI chat → new chat;
-  // command bar → quick-note shortcut event for CommandBar).
+  // Local ⌘N / Ctrl+N — route by surface when the app is focused
   useEffect(() => {
-    return window.tezbar.onQuickNoteSaveShortcut(() => {
-      const s = surfaceRef.current
-      if (s === 'ai-chat') {
-        window.dispatchEvent(new Event(RAYMES_AI_NEW_CHAT_EVENT))
-        return
+    const onKey = (e: KeyboardEvent): void => {
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey
+      if (isCmdOrCtrl && e.key.toLowerCase() === 'n') {
+        e.preventDefault()
+        e.stopPropagation()
+        const s = surfaceRef.current
+        if (s === 'ai-chat') {
+          window.dispatchEvent(new Event(RAYMES_AI_NEW_CHAT_EVENT))
+          return
+        }
+        if (s === 'snippets') {
+          window.dispatchEvent(new Event(RAYMES_NEW_SNIPPET_EVENT))
+          return
+        }
+        window.dispatchEvent(new Event(RAYMES_QUICK_NOTE_SHORTCUT_EVENT))
       }
-      if (s === 'snippets') {
-        window.dispatchEvent(new Event(RAYMES_NEW_SNIPPET_EVENT))
-        return
-      }
-      window.dispatchEvent(new Event(RAYMES_QUICK_NOTE_SHORTCUT_EVENT))
-    })
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
   // Global key routing fallback.
