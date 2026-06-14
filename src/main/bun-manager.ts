@@ -12,7 +12,7 @@
  */
 
 import { app, BrowserWindow } from 'electron';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -21,6 +21,7 @@ import * as http from 'http';
 import * as zlib from 'zlib';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const BUN_VERSION = '1.2.5';
 
@@ -221,6 +222,46 @@ export async function installDepsWithBun(
       const originalContent = JSON.stringify(pkg, null, 2);
       fs.writeFileSync(pkgPath, originalContent);
     } catch {}
+    return false;
+  }
+}
+
+/**
+ * Install a specific list of packages into an extension directory without
+ * touching its package.json. Uses Bun's `add` command with --no-save.
+ */
+export async function installSpecificPackagesWithBun(
+  extPath: string,
+  packageNames: string[]
+): Promise<boolean> {
+  const bunPath = await ensureBun();
+  if (!bunPath) return false;
+
+  const unique = Array.from(
+    new Set(packageNames.map((name) => String(name || '').trim()).filter(Boolean))
+  );
+  if (unique.length === 0) return true;
+  const validPackageName = /^(?:@[A-Za-z0-9][A-Za-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/;
+  const invalid = unique.find((name) => !validPackageName.test(name));
+  if (invalid) {
+    console.warn(`Refusing invalid package name from extension build: ${invalid}`);
+    return false;
+  }
+
+  console.log(`Installing specific packages via Bun for ${path.basename(extPath)}: ${unique.join(', ')}`);
+
+  try {
+    await execFileAsync(bunPath, ['add', '--no-save', ...unique], {
+      cwd: extPath,
+      timeout: 300_000,
+      env: {
+        ...process.env,
+        PATH: `${path.dirname(bunPath)}:${process.env.PATH || ''}`,
+      },
+    });
+    return fs.existsSync(path.join(extPath, 'node_modules'));
+  } catch (error: any) {
+    console.warn(`Bun add failed for ${path.basename(extPath)}:`, error?.message);
     return false;
   }
 }

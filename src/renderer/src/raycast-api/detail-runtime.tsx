@@ -1,7 +1,7 @@
 import { useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import ReactMarkdown from 'react-markdown'
 import type { ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
 import { buildColorFormatRows, type Rgba } from '../../colorConverter'
+import { Markdown } from '../../ui/Markdown'
 import { cx } from '../../ui/primitives'
 
 function normalizeMetadataType(type: string): string {
@@ -418,20 +418,11 @@ export function DetailRuntime({
             </div>
           ) : markdown ? (
             <article className="prose prose-invert max-w-none text-[13px] leading-relaxed">
-              <ReactMarkdown
-                urlTransform={(url) => url}
-                components={{
-                  img: ({ src, alt }) => (
-                    <img
-                      src={resolveMarkdownImageSrc(src, assetsPath)}
-                      alt={alt ?? ''}
-                      className="max-h-[360px] w-auto max-w-full rounded-raymes-row object-contain"
-                    />
-                  ),
-                }}
-              >
-                {markdown}
-              </ReactMarkdown>
+              <Markdown
+                text={markdown}
+                className="text-[13px] leading-relaxed"
+                imageSrcResolver={(src) => resolveMarkdownImageSrc(src, assetsPath)}
+              />
             </article>
           ) : (
             <div className="text-[12px] text-ink-3">No detail content</div>

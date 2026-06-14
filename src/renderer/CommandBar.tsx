@@ -373,6 +373,7 @@ export default function CommandBar({
   const valueRef = useRef(value)
   const killPortModeRef = useRef(killPortMode)
   const terminalModeRef = useRef(terminalMode)
+  const lastSearchRequestId = useRef(0)
 
   useEffect(() => {
     valueRef.current = value
@@ -660,15 +661,18 @@ export default function CommandBar({
 
   useEffect(() => {
     let cancelled = false
+    const requestId = ++lastSearchRequestId.current
     const t = setTimeout(() => {
       if (isAiMode || isCompletionInput || terminalMode) {
         setSearchResults([])
         return
       }
       void window.raymes.searchAll(value).then((items) => {
-        if (!cancelled) setSearchResults(items)
+        if (!cancelled && requestId === lastSearchRequestId.current) {
+          setSearchResults(items)
+        }
       })
-    }, 70)
+    }, 120)
     return () => {
       cancelled = true
       clearTimeout(t)

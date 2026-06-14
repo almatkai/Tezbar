@@ -553,6 +553,8 @@ export function setSelectedVoiceModelId(modelId: VoiceModelId): VoiceModelId {
 }
 
 export async function listVoiceModels(): Promise<VoiceModel[]> {
+  await cleanupStaleVoiceModelAssets()
+
   try {
     const selected = readSelectedModelId()
     return Promise.all(MODEL_CATALOG.map((model) => toVoiceModelView(model, selected)))
@@ -574,6 +576,43 @@ export async function listVoiceModels(): Promise<VoiceModel[]> {
       runtime: buildEmptyRuntimeView(model.runtime),
     }))
   }
+}
+
+const LEGACY_WHISPER_ASSET_NAMES = [
+  'model.safetensors',
+  'config.json',
+  'generation_config.json',
+  'merges.txt',
+  'preprocessor_config.json',
+  'tokenizer.json',
+  'tokenizer_config.json',
+  'vocab.json',
+]
+
+let staleVoiceCleanupPromise: Promise<void> | null = null
+
+async function cleanupStaleVoiceModelAssets(): Promise<void> {
+  if (staleVoiceCleanupPromise) return staleVoiceCleanupPromise
+
+  staleVoiceCleanupPromise = (async () => {
+    const whisperModels = MODEL_CATALOG.filter((model) => model.family === 'whisper')
+    for (const model of whisperModels) {
+      const currentAssets = new Set(model.assets.map((asset) => asset.fileName))
+      for (const fileName of LEGACY_WHISPER_ASSET_NAMES) {
+        if (currentAssets.has(fileName)) continue
+        const fullPath = modelAssetPath(model.id, fileName)
+        try {
+          await fs.stat(fullPath)
+          await fs.rm(fullPath, { force: true })
+          console.log('[stt][main] removed stale voice model asset:', fullPath)
+        } catch {
+          // non-fatal
+        }
+      }
+    }
+  })()
+
+  return staleVoiceCleanupPromise
 }
 
 export async function downloadVoiceModel(modelId: VoiceModelId): Promise<VoiceModel> {
@@ -880,6 +919,40 @@ type TranscribeOutcome = {
  *   4. Return a structured error with an install hint if nothing works —
  *      the renderer surfaces this verbatim so the user knows what's wrong
  *      instead of silently cycling the mic forever. */
+type EngineProbe = {
+  python3: string
+  whisper: string
+  moonshine: string
+  cachedAt: number
+}
+
+let cachedEngineProbe: EngineProbe | null = null
+const ENGINE_PROBE_TTL_MS = 5 * 60 * 1000
+
+async function probeEngineBinaries(): Promise<EngineProbe> {
+  if (cachedEngineProbe && Date.now() - cachedEngineProbe.cachedAt < ENGINE_PROBE_TTL_MS) {
+    return cachedEngineProbe
+  }
+  const [whichPython, whichWhisper, moonshinePath] = await Promise.all([
+    execWithUserPath('bash', ['-lc', 'command -v python3 || true'])
+      .then((r) => r.stdout.trim())
+      .catch(() => ''),
+    execWithUserPath('bash', ['-lc', 'command -v whisper-cli || command -v whisper-cpp || true'])
+      .then((r) => r.stdout.trim())
+      .catch(() => ''),
+    execWithUserPath('python3', ['-c', 'import moonshine_voice, sys; sys.stdout.write(moonshine_voice.__file__)'])
+      .then((r) => r.stdout.trim())
+      .catch(() => ''),
+  ])
+  cachedEngineProbe = {
+    python3: whichPython,
+    whisper: whichWhisper,
+    moonshine: moonshinePath,
+    cachedAt: Date.now(),
+  }
+  return cachedEngineProbe
+}
+
 export async function transcribeAudio(req: VoiceTranscribeRequest): Promise<TranscribeOutcome> {
   const tempRoot = join(app.getPath('temp'), 'raymes-voice')
   await fs.mkdir(tempRoot, { recursive: true })
@@ -900,23 +973,11 @@ export async function transcribeAudio(req: VoiceTranscribeRequest): Promise<Tran
       }),
     )
 
-    // One-shot diagnostic — prints the resolved binaries so if anything
-    // goes wrong the user can copy the log and see *which* python or
-    // whisper is being used.
+    // Diagnostic probe — cached for 5 minutes so repeated dictation
+    // requests don't shell out every time.
     try {
-      const [whichPython, whichWhisper, moonshinePath] = await Promise.all([
-        execWithUserPath('bash', ['-lc', 'command -v python3 || true']).then((r) => r.stdout.trim()).catch(() => ''),
-        execWithUserPath('bash', ['-lc', 'command -v whisper-cli || command -v whisper-cpp || true'])
-          .then((r) => r.stdout.trim())
-          .catch(() => ''),
-        execWithUserPath('python3', ['-c', 'import moonshine_voice, sys; sys.stdout.write(moonshine_voice.__file__)'])
-          .then((r) => r.stdout.trim())
-          .catch(() => ''),
-      ])
-      console.info(
-        '[stt][main] engine probe',
-        JSON.stringify({ python3: whichPython, whisper: whichWhisper, moonshine: moonshinePath }),
-      )
+      const probe = await probeEngineBinaries()
+      console.info('[stt][main] engine probe', JSON.stringify(probe))
     } catch (err) {
       console.info('[stt][main] engine probe skipped:', err instanceof Error ? err.message : err)
     }

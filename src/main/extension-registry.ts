@@ -4,30 +4,27 @@
  *
  * Fetches, caches, installs, and uninstalls community extensions.
  *
- * Primary strategy: API-based (supercmd-backend)
- *   - No git or npm required on user's machine
- *   - Fast search/discovery via backend API
- *   - Pre-built bundles downloaded from S3
- *
- * Fallback strategy: git sparse-checkout + npm (only when API returns non-2xx)
- *   - Requires git and npm installed on user's machine
- *   - Used as fallback when backend API is unavailable
+ * Strategy: API-based (supercmd-backend) + prebuilt bundles only.
+ *   - No git or npm required on the user's machine.
+ *   - Fast search/discovery via backend API.
+ *   - Pre-built bundles downloaded from S3.
+ *   - Source-based installs use Bun for dependency installation.
+ *   - npm and git fallbacks have been removed to keep installs reproducible
+ *     and avoid shipping a package manager inside a launcher.
  */
 
-import { app, dialog } from 'electron';
-import { exec, execFileSync } from 'child_process';
+import { app } from 'electron';
+import { execFileSync } from 'child_process';
 import { EventEmitter } from 'events';
-import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import * as zlib from 'zlib';
 import {
   getCurrentRaycastPlatform,
   getManifestPlatforms,
   isManifestPlatformCompatible,
 } from './extension-platform';
-import { discoverInstalledExtensionCommands } from './extension-builder';
+import { discoverInstalledExtensionCommands, type ExtensionCommandInfo } from './extension-builder';
 import {
   fetchCatalogFromAPI,
   getExtensionBundleUrl,
@@ -35,288 +32,14 @@ import {
   reportInstall,
   reportUninstall,
 } from './extension-api';
-import { installDepsWithBun } from './bun-manager';
+import { installDepsWithBun, installSpecificPackagesWithBun } from './bun-manager';
 import type { ExtensionManifest } from '../shared/extensions';
 import type {
   ExtensionRegistryCommand,
   InstalledRegistryExtension,
 } from '../shared/extensionRuntime';
 
-const execAsync = promisify(exec);
 export const extensionRegistryEvents = new EventEmitter();
-
-function shellQuoteSingle(value: string): string {
-  return `'${String(value || '').replace(/'/g, `'\\''`)}'`;
-}
-
-function buildExecutablePath(primaryDir?: string): string {
-  const parts = [
-    primaryDir || '',
-    String(process.env.PATH || ''),
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    '/usr/bin',
-    '/bin',
-    '/usr/sbin',
-    '/sbin',
-  ].filter(Boolean);
-
-  const deduped: string[] = [];
-  for (const part of parts) {
-    if (!deduped.includes(part)) deduped.push(part);
-  }
-  return deduped.join(':');
-}
-
-function formatExecError(error: any): string {
-  const message = String(error?.message || '');
-  const stderr = String(error?.stderr || '').trim();
-  if (!stderr) return message || 'Unknown error';
-  return `${message}\n${stderr}`.trim();
-}
-
-function resolveNpmExecutable(): string | null {
-  const home = os.homedir();
-  const nvmNodesDir = path.join(home, '.nvm', 'versions', 'node');
-  const nvmCandidates: string[] = [];
-  try {
-    const versions = fs
-      .readdirSync(nvmNodesDir)
-      .map((v) => path.join(nvmNodesDir, v, 'bin', 'npm'))
-      .filter((p) => fs.existsSync(p))
-      .sort()
-      .reverse();
-    nvmCandidates.push(...versions);
-  } catch {}
-
-  const candidates = [
-    String(process.env.npm_execpath || '').trim(),
-    String(process.env.NPM || '').trim(),
-    path.join(home, '.volta', 'bin', 'npm'),
-    path.join(home, '.fnm', 'current', 'bin', 'npm'),
-    ...nvmCandidates,
-    '/opt/homebrew/bin/npm',
-    '/usr/local/bin/npm',
-    '/usr/bin/npm',
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch {}
-  }
-
-  return null;
-}
-
-function resolveGitExecutable(): string | null {
-  const home = os.homedir();
-  const candidates = [
-    String(process.env.GIT || '').trim(),
-    '/opt/homebrew/bin/git',
-    '/usr/local/bin/git',
-    path.join(home, '.volta', 'bin', 'git'),
-    '/usr/bin/git',
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch {}
-  }
-  return null;
-}
-
-function resolveBrewExecutable(): string | null {
-  const home = os.homedir();
-  const candidates = [
-    String(process.env.HOMEBREW_BIN || '').trim(),
-    '/opt/homebrew/bin/brew',
-    '/usr/local/bin/brew',
-    path.join(home, '.linuxbrew', 'bin', 'brew'),
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch {}
-  }
-  return null;
-}
-
-function isDeveloperToolsGitError(error: any): boolean {
-  const text = `${String(error?.message || '')}\n${String(error?.stderr || '')}`.toLowerCase();
-  return (
-    text.includes('xcode-select') ||
-    text.includes('no developer tools were found') ||
-    text.includes('xcrun: error') ||
-    text.includes('unable to find utility "git"')
-  );
-}
-
-let brewGitInstallPromise: Promise<void> | null = null;
-let brewGitInstalled = false;
-let gitSetupDialogPromise: Promise<void> | null = null;
-
-async function showGitSetupDialog(
-  message: string,
-  detail: string
-): Promise<void> {
-  if (gitSetupDialogPromise) {
-    await gitSetupDialogPromise;
-    return;
-  }
-  gitSetupDialogPromise = (async () => {
-    try {
-      const result = await dialog.showMessageBox({
-        type: 'warning',
-        buttons: ['Quit Raymes', 'Later'],
-        defaultId: 0,
-        cancelId: 1,
-        noLink: true,
-        title: 'Git Setup Required',
-        message,
-        detail,
-      });
-      if (result.response === 0) {
-        app.quit();
-      }
-    } catch (error) {
-      console.error('Failed to show Git setup dialog:', error);
-    }
-  })();
-  try {
-    await gitSetupDialogPromise;
-  } finally {
-    gitSetupDialogPromise = null;
-  }
-}
-
-async function ensureGitInstalledWithBrew(): Promise<void> {
-  if (brewGitInstalled) return;
-  if (brewGitInstallPromise) {
-    await brewGitInstallPromise;
-    return;
-  }
-
-  brewGitInstallPromise = (async () => {
-    const brewExecutable = resolveBrewExecutable();
-    if (!brewExecutable) {
-      await showGitSetupDialog(
-        'Git is required to install extensions.',
-        'Homebrew was not found on this Mac.\n\nInstall Homebrew first:\n/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"\n\nThen reopen Raymes and try again.'
-      );
-      throw new Error('Git setup required: Homebrew is not installed.');
-    }
-    const brewBinDir = path.dirname(brewExecutable);
-    try {
-      await execAsync(
-        `"${brewExecutable}" list --versions git >/dev/null 2>&1 || "${brewExecutable}" install git`,
-        {
-          timeout: 15 * 60_000,
-          maxBuffer: 10 * 1024 * 1024,
-          env: {
-            ...process.env,
-            PATH: buildExecutablePath(brewBinDir),
-          },
-        }
-      );
-    } catch (error) {
-      await showGitSetupDialog(
-        'Git is required to install extensions.',
-        `Automatic Git install failed.\n\nRun this command in Terminal:\n"${brewExecutable}" install git\n\nThen quit and reopen Raymes and try again.`
-      );
-      throw new Error('Git setup required: automatic brew install failed.');
-    }
-    brewGitInstalled = true;
-    await showGitSetupDialog(
-      'Git has been installed.',
-      'Please quit and reopen Raymes, then try installing extensions again.'
-    );
-    throw new Error('Git was installed. Restart Raymes and retry.');
-  })();
-
-  try {
-    await brewGitInstallPromise;
-  } finally {
-    brewGitInstallPromise = null;
-  }
-}
-
-async function runNpmCommand(extPath: string, args: string, timeoutMs: number): Promise<void> {
-  const npmExecutable = resolveNpmExecutable();
-  let directError: any = null;
-  if (npmExecutable) {
-    const npmBinDir = path.dirname(npmExecutable);
-    try {
-      await execAsync(`"${npmExecutable}" ${args}`, {
-        cwd: extPath,
-        timeout: timeoutMs,
-        maxBuffer: 10 * 1024 * 1024,
-        env: {
-          ...process.env,
-          PATH: buildExecutablePath(npmBinDir),
-        },
-      });
-      return;
-    } catch (error: any) {
-      directError = error;
-      console.warn(`Direct npm invocation failed, trying shell fallback: ${formatExecError(error)}`);
-    }
-  }
-
-  // Fallback for GUI-launched app sessions where PATH/env differs from terminal.
-  const script = `cd ${shellQuoteSingle(extPath)} && npm ${args}`;
-  try {
-    await execAsync(`/bin/zsh -ilc ${shellQuoteSingle(script)}`, {
-      timeout: timeoutMs,
-      maxBuffer: 10 * 1024 * 1024,
-      env: {
-        ...process.env,
-        PATH: buildExecutablePath(),
-      },
-    });
-  } catch (shellError: any) {
-    if (directError) {
-      throw new Error(
-        `npm failed (direct and shell fallback).\nDirect: ${formatExecError(directError)}\nShell fallback: ${formatExecError(shellError)}`
-      );
-    }
-    throw shellError;
-  }
-}
-
-async function runGitCommand(cwd: string, args: string, timeoutMs: number): Promise<void> {
-  const runWithResolvedGit = async (): Promise<void> => {
-    const gitExecutable = resolveGitExecutable();
-    if (!gitExecutable) {
-      throw new Error('git executable was not found');
-    }
-    await execAsync(`"${gitExecutable}" ${args}`, {
-      cwd,
-      timeout: timeoutMs,
-      maxBuffer: 10 * 1024 * 1024,
-      env: {
-        ...process.env,
-        PATH: buildExecutablePath(path.dirname(gitExecutable)),
-      },
-    });
-  };
-
-  try {
-    await runWithResolvedGit();
-    return;
-  } catch (error: any) {
-    const message = String(error?.message || '');
-    const missingGit = /not found|enoent/i.test(message);
-    if (!missingGit && !isDeveloperToolsGitError(error)) {
-      throw error;
-    }
-  }
-
-  await ensureGitInstalledWithBrew();
-  throw new Error('Git setup required. Quit and reopen Raymes, then try again.');
-}
 
 function hasNodeModules(extPath: string): boolean {
   try {
@@ -326,7 +49,6 @@ function hasNodeModules(extPath: string): boolean {
   }
 }
 
-const REPO_URL = 'https://github.com/raycast/extensions.git';
 const GITHUB_RAW =
   'https://raw.githubusercontent.com/raycast/extensions/main';
 const GITHUB_API =
@@ -751,53 +473,6 @@ function saveCatalogToDisk(catalog: CatalogCache): void {
   }
 }
 
-// ─── Catalog: Fetch from GitHub ─────────────────────────────────────
-
-/**
- * Fetch the full extension catalog.
- * Uses git sparse-checkout to efficiently get only package.json files.
- */
-async function fetchCatalogFromGitHub(): Promise<CatalogEntry[]> {
-  const tmpDir = path.join(
-    app.getPath('temp'),
-    `supercmd-catalog-${Date.now()}`
-  );
-  const diskCache = loadCatalogFromDisk();
-
-  try {
-    console.log('Cloning extension catalog (sparse)…');
-
-    // Sparse clone: only tree structure, no blobs
-    await runGitCommand(
-      app.getPath('temp'),
-      `clone --depth 1 --filter=blob:none --sparse "${REPO_URL}" "${tmpDir}"`,
-      60_000
-    );
-
-    // Checkout only package manifests (fast); screenshots are fetched lazily.
-    await runGitCommand(
-      tmpDir,
-      'sparse-checkout set --no-cone "extensions/*/package.json"',
-      120_000
-    );
-
-    const extensionsDir = path.join(tmpDir, 'extensions');
-    if (!fs.existsSync(extensionsDir)) return [];
-    return readCatalogEntriesFromExtensionsDir(extensionsDir);
-  } catch (error: any) {
-    console.error('Failed to fetch catalog from GitHub:', error);
-
-    // Fall back to disk cache even if expired
-    if (diskCache) return diskCache.entries;
-    return [];
-  } finally {
-    // Cleanup temp clone
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {}
-  }
-}
-
 // ─── Catalog: Public API ────────────────────────────────────────────
 
 export async function getCatalog(
@@ -837,28 +512,10 @@ export async function getCatalog(
     console.log(`Extension catalog (API): ${entries.length} extensions cached.`);
     return entries;
   } catch (apiError: any) {
-    console.warn('API catalog fetch failed, trying git fallback:', apiError?.message || apiError);
+    console.warn('API catalog fetch failed:', apiError?.message || apiError);
   }
 
-  // FALLBACK: git sparse-checkout (requires git on user's machine)
-  try {
-    const entries = await fetchCatalogFromGitHub();
-
-    const cache: CatalogCache = {
-      entries,
-      fetchedAt: Date.now(),
-      version: CATALOG_VERSION,
-    };
-    catalogCache = cache;
-    saveCatalogToDisk(cache);
-
-    console.log(`Extension catalog (git fallback): ${entries.length} extensions cached.`);
-    return entries;
-  } catch (gitError: any) {
-    console.warn('Git catalog fallback failed:', gitError?.message || gitError);
-  }
-
-  // LAST RESORT: disk cache (even if expired)
+  // FALLBACK: disk cache (even if expired)
   const diskCache = loadCatalogFromDisk();
   if (diskCache) {
     catalogCache = diskCache;
@@ -920,8 +577,7 @@ export async function getExtensionScreenshotUrls(name: string): Promise<string[]
  * Strategy:
  *   1. Read the extension's package.json
  *   2. Collect non-Raycast, non-dev dependencies
- *   3. Install them explicitly (avoids issues with @raycast/api peer deps)
- *   4. If that fails, fall back to `npm install --production --legacy-peer-deps`
+ *   3. Install them with Bun (no npm fallback).
  */
 /**
  * Install a specific set of packages into an extension's node_modules without
@@ -942,19 +598,14 @@ export async function installSpecificPackages(
   );
   if (unique.length === 0) return;
 
-  const quoted = unique
-    .map((name) => `"${name.replace(/"/g, '\\"')}"`)
-    .join(' ');
-
   console.log(
     `Installing missing packages for ${path.basename(extPath)}: ${unique.join(', ')}`
   );
 
-  await runNpmCommand(
-    extPath,
-    `install --no-save --legacy-peer-deps ${quoted}`,
-    300_000
-  );
+  const ok = await installSpecificPackagesWithBun(extPath, unique);
+  if (!ok) {
+    throw new Error(`Bun failed to install packages for ${path.basename(extPath)}`);
+  }
 }
 
 export async function installExtensionDeps(
@@ -974,14 +625,10 @@ export async function installExtensionDeps(
     ...(pkg.dependencies || {}),
     ...(pkg.optionalDependencies || {}),
   };
-  // Filter out @raycast/* packages (we provide shims) and any already-external modules
   const thirdPartyDeps = Object.entries(deps)
     .filter(([name]) => !name.startsWith('@raycast/'))
     .map(([name, version]) => `${name}@${version}`)
     .filter(Boolean);
-  const quotedThirdPartyDeps = thirdPartyDeps
-    .map((dep) => `"${String(dep).replace(/"/g, '\\"')}"`)
-    .join(' ');
 
   if (thirdPartyDeps.length === 0) {
     console.log(`No third-party dependencies for ${path.basename(extPath)}`);
@@ -992,41 +639,14 @@ export async function installExtensionDeps(
     `Installing ${thirdPartyDeps.length} dependencies for ${path.basename(extPath)}: ${thirdPartyDeps.join(', ')}`
   );
 
-  try {
-    // Install only third-party deps explicitly — avoids @raycast/api issues
-    // REMOVED --ignore-scripts to allow postinstall scripts for binaries
-    await runNpmCommand(
-      extPath,
-      `install --no-save --legacy-peer-deps ${quotedThirdPartyDeps}`,
-      300_000
-    );
-    if (!hasNodeModules(extPath)) {
-      throw new Error('npm completed but node_modules is still missing');
-    }
-    console.log(`Dependencies installed for ${path.basename(extPath)}`);
-  } catch (e1: any) {
-    console.warn(
-      `Explicit install failed for ${path.basename(extPath)}: ${e1.message || e1}`
-    );
-    // Fall back to full npm install (also allow scripts)
-    try {
-      await runNpmCommand(
-        extPath,
-        'install --production --legacy-peer-deps',
-        300_000
-      );
-      if (!hasNodeModules(extPath)) {
-        throw new Error('npm completed but node_modules is still missing');
-      }
-      console.log(
-        `Fallback npm install succeeded for ${path.basename(extPath)}`
-      );
-    } catch (e2: any) {
-      const reason = String(e2?.message || e2 || 'Unknown npm error');
-      console.error(`npm install failed for ${path.basename(extPath)}: ${reason}`);
-      throw new Error(`Dependency installation failed for ${path.basename(extPath)}: ${reason}`);
-    }
+  const ok = await installDepsWithBun(extPath);
+  if (!ok) {
+    throw new Error(`Bun dependency installation failed for ${path.basename(extPath)}`);
   }
+  if (!hasNodeModules(extPath)) {
+    throw new Error('Bun completed but node_modules is still missing');
+  }
+  console.log(`Dependencies installed for ${path.basename(extPath)}`);
 }
 
 // ─── Install / Uninstall ────────────────────────────────────────────
@@ -1076,8 +696,9 @@ function getDirectInstalledExtensionNames(): string[] {
  * Install a community extension by name.
  *
  * Strategy:
- *   1. PRIMARY: Download pre-built bundle from API (no git/npm needed)
- *   2. FALLBACK: git sparse-checkout + npm install (if API returns non-2xx)
+ *   1. PRIMARY: Download pre-built bundle from API (no package manager needed).
+ *   2. FALLBACK: Download source from GitHub raw + Bun + esbuild.
+ *   No npm or git is used anywhere in the install path.
  */
 export async function installExtension(name: string): Promise<boolean> {
   if (!/^[A-Za-z0-9._-]+$/.test(String(name || ''))) {
@@ -1093,20 +714,12 @@ export async function installExtension(name: string): Promise<boolean> {
     console.warn(`Bundle install failed for "${name}":`, bundleError?.message || bundleError);
   }
 
-  // 2. FALLBACK: Download source + bun/npm + esbuild
+  // 2. FALLBACK: Download source + Bun + esbuild
   try {
     const success = await installExtensionViaAPI(name);
     if (success) return true;
   } catch (apiError: any) {
     console.warn(`API install failed for "${name}":`, apiError?.message || apiError);
-  }
-
-  // 3. LAST RESORT: git sparse-checkout
-  try {
-    const success = await installExtensionViaGit(name);
-    if (success) return true;
-  } catch (gitError: any) {
-    console.warn(`Git install also failed for "${name}":`, gitError?.message || gitError);
   }
 
   return false;
@@ -1247,25 +860,8 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
       if (thirdPartyDeps.length === 0) {
         console.log(`No third-party dependencies for "${name}" — skipping install`);
       } else {
-        // Try Bun first (faster), fall back to npm
-        let depsInstalled = false;
-
-        try {
-          depsInstalled = await installDepsWithBun(installPath);
-        } catch (bunError: any) {
-          console.warn(`Bun install failed for "${name}":`, bunError?.message);
-        }
-
-        if (!depsInstalled) {
-          console.log(`Bun unavailable or failed, trying npm for "${name}"...`);
-          try {
-            await installExtensionDeps(installPath);
-            depsInstalled = true;
-          } catch (npmError: any) {
-            console.warn(`npm install also failed for "${name}":`, npmError?.message);
-          }
-        }
-
+        // Bun only — npm fallback removed.
+        const depsInstalled = await installDepsWithBun(installPath);
         if (!depsInstalled) {
           console.warn(`Could not install deps for "${name}" — extension may not work fully.`);
         }
@@ -1301,115 +897,6 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
     if (backupPath && fs.existsSync(backupPath)) {
       try { fs.rmSync(backupPath, { recursive: true, force: true }); } catch {}
-    }
-  }
-}
-
-// ─── Git-based Install (Fallback) ───────────────────────────────────
-
-/**
- * Install a community extension via git sparse-checkout + npm install.
- * This is the legacy fallback when the API is unavailable.
- */
-async function installExtensionViaGit(name: string): Promise<boolean> {
-  const installPath = getInstalledPath(name);
-  const hadExistingInstall = fs.existsSync(installPath);
-  const backupPath = hadExistingInstall
-    ? path.join(getExtensionsDir(), `${name}.backup-${Date.now()}`)
-    : '';
-
-  const tmpDir = path.join(
-    app.getPath('temp'),
-    `supercmd-install-${Date.now()}`
-  );
-
-  try {
-    console.log(`Installing extension: ${name}…`);
-    let srcDir: string | null = null;
-
-    try {
-      // Sparse clone
-      await runGitCommand(
-        app.getPath('temp'),
-        `clone --depth 1 --filter=blob:none --sparse "${REPO_URL}" "${tmpDir}"`,
-        60_000
-      );
-
-      // Checkout only this extension
-      await runGitCommand(
-        tmpDir,
-        `sparse-checkout set "extensions/${name}"`,
-        60_000
-      );
-
-      srcDir = path.join(tmpDir, 'extensions', name);
-    } catch (acquireError: any) {
-      throw acquireError;
-    }
-
-    if (!srcDir || !fs.existsSync(srcDir)) {
-      console.error(`Extension "${name}" not found in repository.`);
-      return false;
-    }
-    const srcPkgPath = path.join(srcDir, 'package.json');
-    if (!fs.existsSync(srcPkgPath)) {
-      console.error(`Extension "${name}" has no manifest.`);
-      return false;
-    }
-    const srcPkg = JSON.parse(fs.readFileSync(srcPkgPath, 'utf-8'));
-    if (!isManifestPlatformCompatible(srcPkg)) {
-      const supported = getManifestPlatforms(srcPkg);
-      const supportedText = supported.length > 0 ? supported.join(', ') : 'unknown';
-      console.error(
-        `Extension "${name}" is not compatible with ${getCurrentRaycastPlatform()} (supports: ${supportedText}).`
-      );
-      return false;
-    }
-
-    if (hadExistingInstall) {
-      fs.renameSync(installPath, backupPath);
-    }
-
-    // Copy to local extensions directory
-    fs.cpSync(srcDir, installPath, { recursive: true });
-
-    // Step 1: Install dependencies (Bun first, npm fallback)
-    let depsInstalled = false;
-    try {
-      depsInstalled = await installDepsWithBun(installPath);
-    } catch {}
-    if (!depsInstalled) {
-      await installExtensionDeps(installPath);
-    }
-
-    // Step 2: Pre-build all commands with esbuild
-    console.log(`Pre-building commands for "${name}"…`);
-    const { buildAllCommands } = require('./extension-builder');
-    const builtCount = await buildAllCommands(name);
-    console.log(`Extension "${name}" installed (${builtCount} commands) at ${installPath}`);
-    if (backupPath && fs.existsSync(backupPath)) {
-      fs.rmSync(backupPath, { recursive: true, force: true });
-    }
-    return true;
-  } catch (error) {
-    console.error(`Failed to install extension "${name}" via git:`, error);
-    try {
-      fs.rmSync(installPath, { recursive: true, force: true });
-    } catch {}
-    if (backupPath && fs.existsSync(backupPath)) {
-      try {
-        fs.renameSync(backupPath, installPath);
-      } catch {}
-    }
-    return false;
-  } finally {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {}
-    if (backupPath && fs.existsSync(backupPath)) {
-      try {
-        fs.rmSync(backupPath, { recursive: true, force: true });
-      } catch {}
     }
   }
 }

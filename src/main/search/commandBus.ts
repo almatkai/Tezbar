@@ -25,9 +25,11 @@ type CommandDefinition = {
   handler: (payload?: Record<string, unknown>) => Promise<CommandResult>
 }
 
-function shellCommandHandler(command: string, successMessage: string): CommandDefinition['handler'] {
+function osascriptCommandHandler(script: string, successMessage: string): CommandDefinition['handler'] {
   return async () => {
-    await execFileAsync('bash', ['-lc', command])
+    // Pass the script as an argument rather than through bash -lc to avoid
+    // shell interpretation entirely.
+    await execFileAsync('/usr/bin/osascript', ['-e', script])
     return { ok: true, message: successMessage }
   }
 }
@@ -50,8 +52,8 @@ export class CommandBus {
       permission: 'system-control',
       confirmation: 'recommended',
       analyticsKey: 'system.dark_mode_on',
-      handler: shellCommandHandler(
-        "osascript -e 'tell application \"System Events\" to tell appearance preferences to set dark mode to true'",
+      handler: osascriptCommandHandler(
+        'tell application "System Events" to tell appearance preferences to set dark mode to true',
         'Dark mode enabled',
       ),
     })
@@ -62,8 +64,8 @@ export class CommandBus {
       permission: 'system-control',
       confirmation: 'recommended',
       analyticsKey: 'system.dark_mode_off',
-      handler: shellCommandHandler(
-        "osascript -e 'tell application \"System Events\" to tell appearance preferences to set dark mode to false'",
+      handler: osascriptCommandHandler(
+        'tell application "System Events" to tell appearance preferences to set dark mode to false',
         'Dark mode disabled',
       ),
     })

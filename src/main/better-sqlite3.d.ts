@@ -1,13 +1,13 @@
 declare module 'better-sqlite3' {
   type BindValue = string | number | bigint | Buffer | null | undefined
 
-  type Statement = {
+  export type Statement = {
     run: (...params: BindValue[]) => { changes: number; lastInsertRowid: number | bigint }
     get: (...params: BindValue[]) => unknown
     all: (...params: BindValue[]) => unknown[]
   }
 
-  type Database = {
+  export type Database = {
     pragma: (value: string) => void
     exec: (sql: string) => void
     prepare: (sql: string) => Statement

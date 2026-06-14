@@ -216,6 +216,28 @@ export type RaymesApi = {
   getTerminalPromptInfo: () => Promise<TerminalPromptInfo>
   onTerminalData: (listener: (event: TerminalDataEvent) => void) => () => void
   onTerminalExit: (listener: (event: TerminalExitEvent) => void) => () => void
+  getStorageBreakdown: () => Promise<{
+    totalBytes: number
+    items: Array<{ id: string; label: string; bytes: number; paths: string[] }>
+  }>
+  getClipboardStorageConfig: () => Promise<{
+    watchEnabled: boolean
+    captureImages: boolean
+    maxImageMegapixels: number
+  }>
+  setClipboardStorageConfig: (patch: {
+    watchEnabled?: boolean
+    captureImages?: boolean
+    maxImageMegapixels?: number
+  }) => Promise<{
+    watchEnabled: boolean
+    captureImages: boolean
+    maxImageMegapixels: number
+  }>
+  clearClipboardImages: () => Promise<{ removed: number; freedBytes: number }>
+
+  vacuumSearchDatabase: () => Promise<{ beforeBytes: number; afterBytes: number }>
+  clearChromiumCache: () => Promise<{ ok: boolean }>
   /** Fired when the user presses ⌘N / Ctrl+N (global) — save command-bar text to notes. */
   onQuickNoteSaveShortcut: (listener: () => void) => () => void
   /** Fired from the top-bar tray menu to open a built-in Raymes surface. */

@@ -728,19 +728,20 @@ function openSettingsWindow(): void {
 
 async function confirmAndQuitRaymes(): Promise<void> {
   if (isAppQuitting) return
-  const result = await dialog.showMessageBox(
-    mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
-    {
-      type: 'question',
-      buttons: ['Cancel', 'Quit'],
-      defaultId: 1,
-      cancelId: 0,
-      title: 'Quit Raymes',
-      message: 'Quit Raymes?',
-      detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
-      noLink: true,
-    }
-  )
+  const options = {
+    type: 'question' as const,
+    buttons: ['Cancel', 'Quit'],
+    defaultId: 1,
+    cancelId: 0,
+    title: 'Quit Raymes',
+    message: 'Quit Raymes?',
+    detail: 'Are you sure you want to quit Raymes and terminate all background processes?',
+    noLink: true,
+  }
+  const result =
+    mainWindow && !mainWindow.isDestroyed()
+      ? await dialog.showMessageBox(mainWindow, options)
+      : await dialog.showMessageBox(options)
   if (result.response !== 1) return
 
   isAppQuitting = true

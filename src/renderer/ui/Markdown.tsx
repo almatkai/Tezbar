@@ -73,18 +73,39 @@ export type MarkdownProps = {
    */
   streaming?: boolean
   className?: string
+  /**
+   * Optional resolver for image `src` values. Receives the raw src from the
+   * markdown and should return the resolved URL, or undefined to leave it
+   * unchanged.
+   */
+  imageSrcResolver?: (src: string) => string | undefined
 }
 
-export function Markdown({ text, streaming = false, className }: MarkdownProps): JSX.Element {
+function rewriteImageSrcs(html: string, resolver: (src: string) => string | undefined): string {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  for (const img of doc.querySelectorAll('img')) {
+    const raw = img.getAttribute('src')
+    if (!raw) continue
+    const resolved = resolver(raw)
+    if (resolved) img.setAttribute('src', resolved)
+  }
+  return doc.body.innerHTML
+}
+
+export function Markdown({ text, streaming = false, className, imageSrcResolver }: MarkdownProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const html = useMemo(() => {
     const source = streaming ? balanceStreamingFences(text) : text
-    const raw = marked.parse(source, { async: false }) as string
+    let raw = marked.parse(source, { async: false }) as string
+    if (imageSrcResolver) {
+      raw = rewriteImageSrcs(raw, imageSrcResolver)
+    }
     return DOMPurify.sanitize(raw, {
       ADD_ATTR: ['target', 'rel'],
     })
-  }, [text, streaming])
+  }, [text, streaming, imageSrcResolver])
 
   // After each render, upgrade <pre><code> blocks with a language chip +
   // "Copy" button. We attach event listeners via delegation on the container.

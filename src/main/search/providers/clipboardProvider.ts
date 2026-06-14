@@ -1,7 +1,8 @@
 import { app, clipboard, nativeImage, shell } from 'electron'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
+import { readRawConfig, writeConfigPatch } from '../../llm/configStore'
 import type {
   ClipboardEntry,
   ClipboardFileEntry,
@@ -16,6 +17,42 @@ type ClipboardDb = {
 }
 
 const CLIPBOARD_LIMIT = 200
+
+const CLIPBOARD_WATCH_ENABLED_KEY = 'clipboardWatchEnabled'
+const CLIPBOARD_CAPTURE_IMAGES_KEY = 'clipboardCaptureImages'
+const CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY = 'clipboardMaxImageMegapixels'
+
+const DEFAULT_CLIPBOARD_WATCH_ENABLED = true
+const DEFAULT_CLIPBOARD_CAPTURE_IMAGES = false
+const DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS = 2
+
+export type ClipboardConfig = {
+  watchEnabled: boolean
+  captureImages: boolean
+  maxImageMegapixels: number
+}
+
+export function getClipboardConfig(): ClipboardConfig {
+  const raw = readRawConfig()
+  const watchEnabled = raw[CLIPBOARD_WATCH_ENABLED_KEY] ?? DEFAULT_CLIPBOARD_WATCH_ENABLED
+  const captureImages = raw[CLIPBOARD_CAPTURE_IMAGES_KEY] ?? DEFAULT_CLIPBOARD_CAPTURE_IMAGES
+  const maxImageMegapixels = Number(raw[CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY] ?? DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS)
+  return {
+    watchEnabled: watchEnabled !== false,
+    captureImages: captureImages === true,
+    maxImageMegapixels: Number.isFinite(maxImageMegapixels) && maxImageMegapixels > 0 ? maxImageMegapixels : DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS,
+  }
+}
+
+export function setClipboardConfig(patch: Partial<ClipboardConfig>): void {
+  const next: Record<string, unknown> = {}
+  if (typeof patch.watchEnabled === 'boolean') next[CLIPBOARD_WATCH_ENABLED_KEY] = patch.watchEnabled
+  if (typeof patch.captureImages === 'boolean') next[CLIPBOARD_CAPTURE_IMAGES_KEY] = patch.captureImages
+  if (typeof patch.maxImageMegapixels === 'number' && Number.isFinite(patch.maxImageMegapixels) && patch.maxImageMegapixels > 0) {
+    next[CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY] = patch.maxImageMegapixels
+  }
+  writeConfigPatch(next)
+}
 
 function storeDir(): string {
   const dir = join(app.getPath('userData'), 'search')
@@ -203,11 +240,26 @@ function captureFileEntry(paths: string[], now: number): ClipboardEntry | null {
   }
 }
 
+function resizeToMegapixels(image: Electron.NativeImage, maxMegapixels: number): Electron.NativeImage {
+  if (maxMegapixels <= 0) return image
+  const { width, height } = image.getSize()
+  const megapixels = (width * height) / 1_000_000
+  if (megapixels <= maxMegapixels) return image
+  const scale = Math.sqrt(maxMegapixels / megapixels)
+  const newWidth = Math.max(1, Math.round(width * scale))
+  const newHeight = Math.max(1, Math.round(height * scale))
+  return image.resize({ width: newWidth, height: newHeight, quality: 'good' })
+}
+
 function captureImageEntry(now: number): ClipboardEntry | null {
+  const config = getClipboardConfig()
+  if (!config.captureImages) return null
+
   const image = clipboard.readImage()
   if (image.isEmpty()) return null
 
-  const buffer = image.toPNG()
+  const resized = resizeToMegapixels(image, config.maxImageMegapixels)
+  const buffer = resized.toPNG()
   if (buffer.length === 0) return null
 
   const hash = createHash('sha1').update(buffer).digest('hex')
@@ -225,8 +277,8 @@ function captureImageEntry(now: number): ClipboardEntry | null {
     pinned: false,
     isSecret: false,
     imagePath: file,
-    width: image.getSize().width,
-    height: image.getSize().height,
+    width: resized.getSize().width,
+    height: resized.getSize().height,
     byteSize: buffer.length,
   }
 }
@@ -304,7 +356,7 @@ export function deleteClipboardEntry(id: string): boolean {
     const stillReferenced = next.some(
       (item) => item.kind === 'image' && item.imagePath === entry.imagePath,
     )
-    if (stillReferenced && existsSync(entry.imagePath)) {
+    if (!stillReferenced && existsSync(entry.imagePath)) {
       try {
         rmSync(entry.imagePath, { force: true })
       } catch {
@@ -340,6 +392,61 @@ export function clearClipboardHistory(): void {
     }
   }
   writeDb({ items: [] })
+}
+
+/** Remove image files that are no longer referenced by any history entry.
+ *  This repairs the leak from the old inverted-delete bug and keeps the
+ *  directory bounded even if callers forget to clean up. */
+export async function cleanupOrphanClipboardImages(): Promise<{ removed: number; freedBytes: number }> {
+  await ensureDbLoaded()
+  const dir = imagesDir()
+  const db = normalizeDb(_readClipboardDb || { items: [] })
+  const referenced = new Set(
+    db.items.filter((item): item is ClipboardImageEntry => item.kind === 'image').map((item) => item.imagePath)
+  )
+
+  let removed = 0
+  let freedBytes = 0
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue
+    const ext = extname(entry.name).toLowerCase()
+    if (ext !== '.png') continue
+    const fullPath = join(dir, entry.name)
+    if (referenced.has(fullPath)) continue
+    try {
+      const stats = statSync(fullPath)
+      rmSync(fullPath, { force: true })
+      removed += 1
+      freedBytes += stats.size
+    } catch {
+      // non-fatal
+    }
+  }
+  return { removed, freedBytes }
+}
+
+/** Remove all image entries from clipboard history and delete their stored
+ * PNG files, including any older orphan files left behind by previous builds. */
+export async function clearClipboardImageHistory(): Promise<{ removed: number; freedBytes: number }> {
+  await ensureDbLoaded()
+  const db = normalizeDb(_readClipboardDb || { items: [] })
+  const imageEntries = db.items.filter((item): item is ClipboardImageEntry => item.kind === 'image')
+  const remaining = db.items.filter((item) => item.kind !== 'image')
+
+  writeDb({ items: remaining })
+  const cleanup = await cleanupOrphanClipboardImages()
+  return {
+    removed: imageEntries.length,
+    freedBytes: cleanup.freedBytes,
+  }
+}
+
+export function getClipboardImagesDir(): string {
+  return imagesDir()
+}
+
+export function getClipboardStoreDir(): string {
+  return storeDir()
 }
 
 /** Put a history entry back on the system clipboard. Images round-trip
@@ -410,15 +517,42 @@ export function readClipboardImagePayload(id: string): ClipboardImagePayload | n
 // --- Background watcher ---------------------------------------------------
 
 let watcherHandle: ReturnType<typeof setInterval> | null = null
+let watcherInactiveTicks = 0
+const WATCHER_DEFAULT_INTERVAL_MS = 750
+const WATCHER_IDLE_INTERVAL_MS = 2000
+const WATCHER_IDLE_THRESHOLD_TICKS = 60
 
-/** Start polling the pasteboard. macOS doesn't expose a clipboard-change
- *  event, so polling is the pragmatic choice — and at 750ms it's both
- *  responsive and cheap. Calling this more than once is a no-op. */
-export function startClipboardWatcher(intervalMs = 750): void {
+/** Start polling the pasteboard when the user has enabled clipboard history.
+ *  macOS doesn't expose a clipboard-change event, so polling is pragmatic.
+ *  The interval backs off when the clipboard hasn't changed for a while to
+ *  reduce idle churn. Image capture is opt-in and size-capped. */
+export function startClipboardWatcher(intervalMs = WATCHER_DEFAULT_INTERVAL_MS): void {
   if (watcherHandle) return
+  const config = getClipboardConfig()
+  if (!config.watchEnabled) return
+
+  // Repair any leaked image files from the old inverted-delete bug on startup.
+  void cleanupOrphanClipboardImages().catch(() => {
+    // non-fatal
+  })
+
+  let lastTopId = ''
   watcherHandle = setInterval(() => {
     try {
       captureClipboardSnapshot()
+      const db = _readClipboardDb
+      const topId = db?.items[0]?.id ?? ''
+      if (topId === lastTopId) {
+        watcherInactiveTicks += 1
+      } else {
+        watcherInactiveTicks = 0
+        lastTopId = topId
+      }
+      if (watcherInactiveTicks > WATCHER_IDLE_THRESHOLD_TICKS && watcherHandle && intervalMs < WATCHER_IDLE_INTERVAL_MS) {
+        clearInterval(watcherHandle)
+        watcherHandle = null
+        startClipboardWatcher(WATCHER_IDLE_INTERVAL_MS)
+      }
     } catch {
       // Swallow — a one-off clipboard read error should not take down the
       // interval timer.
@@ -434,6 +568,13 @@ export function stopClipboardWatcher(): void {
   if (!watcherHandle) return
   clearInterval(watcherHandle)
   watcherHandle = null
+  watcherInactiveTicks = 0
+}
+
+/** Re-read config and restart the watcher when settings change. */
+export function restartClipboardWatcher(): void {
+  stopClipboardWatcher()
+  startClipboardWatcher()
 }
 
 // --- Legacy compat: item listing for the search index --------------------

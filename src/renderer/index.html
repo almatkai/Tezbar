@@ -4,12 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Raymes</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Geist:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Fonts: Raymes intentionally does not load web fonts from a CDN. If the
+         Geist/Geist Mono families are installed locally, they are used; otherwise
+         the CSS falls back to the system font stack. This keeps startup fast,
+         works offline, and avoids leaking the user's IP to a third party. -->
   </head>
   <body class="m-0 h-screen overflow-hidden bg-transparent font-sans text-white antialiased">
     <div id="root" class="h-full w-full"></div>

@@ -1,162 +1,178 @@
-# Raymes
+<div align="center">
 
-![Raymes Screenshot](assets/screenshot.png)
+<pre style="line-height:1.2; font-family:'SF Mono',Monaco,monospace; font-size:12px;">
+██████╗  █████╗ ██╗   ██╗███╗   ███╗███████╗███████╗
+██╔══██╗██╔══██╗╚██╗ ██╔╝████╗ ████║██╔════╝██╔════╝
+██████╔╝███████║ ╚████╔╝ ██╔████╔██║█████╗  ███████╗
+██╔══██╗██╔══██║  ╚██╔╝  ██║╚██╔╝██║██╔══╝  ╚════██║
+██║  ██║██║  ██║   ██║   ██║ ╚═╝ ██║███████╗███████║
+╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝     ╚═╝╚══════╝╚══════╝
+</pre>
 
-**Raymes** is a high-performance, lightweight **Spotlight alternative** for macOS that blends the best of **Raycast** with the power of an **integrated AI coding agent**. It lives in a single floating window summoned by `Alt+Space` — ready to search files, run commands, convert currencies, chat with an AI, and even modify code on your machine.
+<h3>Spotlight · AI Agent · Terminal — fused into one floating macOS command surface.</h3>
 
-Built with **Electron + Vite + React** and a stack of native Rust/Swift helpers, Raymes stays fast, minimal, and privacy-conscious. No cloud dependency for voice transcription; no telemetry.
+<p>
+  <strong>Raymes</strong> is the app that should have shipped with macOS. One hotkey (<kbd>Alt</kbd>+<kbd>Space</kbd>) opens a single floating window that lets you search everything, command an AI coding agent, and drop into a real terminal — without ever leaving the bar.
+</p>
+
+<p>
+  <a href="#"><img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white&style=flat-square" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/Electron-47848F?logo=electron&logoColor=white&style=flat-square" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/React-0A0A0A?logo=react&logoColor=61DAFB&style=flat-square" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/Rust-0A0A0A?logo=rust&logoColor=white&style=flat-square" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/Swift-0A0A0A?logo=swift&logoColor=F05138&style=flat-square" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/TypeScript-0A0A0A?logo=typescript&logoColor=3178C6&style=flat-square" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/License-Private-0A0A0A?style=flat-square" /></a>
+</p>
+
+<img src="assets/screenshot.png" width="800" alt="Raymes floating command bar" style="border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,0.4);" />
+
+</div>
 
 ---
 
-## ✨ Features
+## 🔥 The Big Idea
 
-### 🔍 Universal Search Bar
+Raymes combines three tools you already use every day into one keyboard-first window:
 
-The heart of Raymes is its command bar. Start typing and Raymes instantly searches across:
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│     ┌──────────────┐        ┌──────────────┐        ┌──────────────┐       │
+│     │   🔦 SPOT    │   +    │   🤖 AGENT   │   +    │   🖥️  TERMINAL│       │
+│     │   LIGHT      │        │   (PI)       │        │              │       │
+│     └──────┬───────┘        └──────┬───────┘        └──────┬───────┘       │
+│            │                       │                       │               │
+│            └───────────────────────┼───────────────────────┘               │
+│                                    ▼                                        │
+│                         ┌─────────────────┐                                 │
+│                         │     RAYMES      │  ←  Alt + Space                │
+│                         │  one floating   │                                 │
+│                         │     window      │                                 │
+│                         └─────────────────┘                                 │
+│                                    │                                        │
+│            ┌───────────────────────┼───────────────────────┐                │
+│            ▼                       ▼                       ▼                │
+│     📋 Clipboard            🎤 Voice            🧩 Extensions             │
+│     💱 Converter            🔒 Safety           📝 Notes / Snippets       │
+│     🌐 Ports / Processes    🎨 Color Picker     ⚙️  System Commands        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-| Category | Description |
-|---|---|
-| **Commands** | Built-in actions (open clipboard, manage ports, open emoji picker, settings, etc.) |
-| **Files & Folders** | Indexed via FTS + Spotlight fallback; type `/` or `~/` for file path completion |
-| **Applications** | Type `` ` `` to browse and launch macOS apps |
-| **Extensions** | Installed Raycast-compatible extensions and their commands |
-| **Clipboard** | Historical clipboard entries with text, images, URLs |
-| **Quick Notes** | Full-text search over saved notes |
-| **Snippets** | Searchable text templates and boilerplate |
-| **Quick Links** | Frequently accessed URLs |
-| **Open Ports** | Active TCP listeners — type "port" to see and kill them |
+**No tab switching. No separate apps. One shortcut, every workflow.**
 
-The search engine uses BM25+FTS with per-category ranking boosts, recency weighting, frequency tracking, and fuzzy matching via Fuse.js. It learns from your usage — frequently used actions rank higher over time.
+---
 
-### 🤖 AI Agent (The Best Part)
+## 🤖 AI Coding Agent
 
-Raymes ships with a **full coding agent** built directly into the spotlight interface, powered by the **PI agent** runtime. It can:
+A real coding agent lives inside the spotlight interface, powered by the **PI agent** runtime.
 
 - **Read** files on your machine
-- **Run bash commands** and shell scripts
-- **Edit and write code** across your projects
-- **Search** files with ripgrep (`grep`), glob patterns (`find`), and directory listings (`ls`)
-- **Understand context** — ask questions about your system, installed apps, or codebase
-
-The agent supports **vision** (send screenshots), **thinking** (extended reasoning), and **tool use** (plan-and-execute). Every tool call is visualized live in the HUD with progress stages so you see exactly what the agent is doing.
+- **Run** bash commands and shell scripts
+- **Edit & write** code across projects
+- **Search** with ripgrep (`grep`), glob patterns (`find`), and directory listings (`ls`)
+- **See** screenshots via vision models
+- **Reason** with extended-thinking models
+- **Watch** every tool call unfold live in the HUD
 
 **Supported LLM providers:**
 
-| Provider | Type |
+| Provider | Integration |
 |---|---|
-| **OpenAI** | GPT-4o, GPT-4o-mini, o3-mini via Chat Completions API |
-| **DeepSeek** | DeepSeek V4 Flash/Pro, R1 via official API |
-| **Anthropic** | Claude 3.5 Haiku/Sonnet via official API |
-| **Gemini** | Google Gemini 2.0 Flash / 1.5 Pro via OpenAI-compatible endpoint |
-| **Ollama** | Local models (Llama 3.2, LLaVA, and any other OLLAMA-served model) |
-| **GitHub Copilot** | Copilot Chat via access token |
-| **OpenCode** | opencode.ai via CLI |
-| **OpenAI Compatible** | Any OpenAI-style endpoint (vLLM, groq, Together, etc.) |
+| **OpenAI** | Chat Completions API |
+| **DeepSeek** | Official API |
+| **Anthropic** | Messages API |
+| **Gemini** | OpenAI-compatible / Google endpoint |
+| **Ollama** | Local Ollama server |
+| **GitHub Copilot** | Copilot Chat access token |
+| **OpenCode** | opencode.ai CLI |
+| **OpenAI Compatible** | Any OpenAI-style endpoint (vLLM, Groq, Together, etc.) |
 
-### 🔊 Voice & Speech
+---
 
-- **Hold-to-Speak** — Press and hold `Alt+Space` to dictate using local models. Release to transcribe and submit.
-- **Local transcription** — Supports **Whisper (via whisper.cpp)** and **Moonshine/Parakeet** for ultra-low latency, fully offline voice-to-text.
-- **Text-to-Speech** — Built-in TTS support with selectable voices.
-- **No cloud dependency** — All audio processing stays on your machine.
+## 🖥️ Built-in Terminal
 
-### 💱 Smart Tools (Inline in the Search Bar)
+Raymes embeds a full terminal emulator inside the floating window. No context switching.
 
-| Tool | Example Queries |
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  raymes ~                                                    │
+│  $ git status                                                │
+│  On branch main                                              │
+│  Your branch is up to date with 'origin/main'.               │
+│                                                              │
+│  nothing to commit, working tree clean                       │
+│  $ _                                                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Summon** with `> terminal` from the command bar or a dedicated shortcut.
+- **Focused sessions** — the shell stays alive while the terminal surface is open and closes when you leave it.
+- **Agent-aware** — the AI agent can run commands in the terminal and read its output.
+- **Native shell** — your default shell (`zsh`, `fish`, `bash`) with `$PATH`, colors, and cursor support.
+
+---
+
+## 🎁 Everything Else
+
+Raymes is more than the trinity. It also ships with:
+
+| Feature | What It Does |
 |---|---|
-| **Calculator** | `42 * 3.14`, `sqrt(144)`, `sin(45°)` |
-| **Currency Conversion** | `100 USD to EUR`, `5000 yen in pounds`, `₸15000 в тенге` |
-| **Color Converter** | `#ff5500`, `rgb(100,200,50)`, `hsl(220,50%,40%)` |
-
-Currency data is fetched from the **Frankfurter API** (European Central Bank rates). Supports 40+ currencies with fuzzy name matching in multiple languages.
-
-### 🖥️ Native macOS Control
-
-Raymes provides a comprehensive set of native system commands accessible from the search bar:
-
-- **System**: Lock Screen, Sleep Display, Sleep Mac, Start Screen Saver, Restart, Shut Down, Log Out, Empty Trash, Toggle Dark Mode
-- **Connectivity**: Toggle Bluetooth, Toggle Wi-Fi, Show Network Info
-- **Navigation**: Open Applications folder, Open Downloads, Open Documents, Reveal Library folder
-- **Hardware**: Eject all disks, Volume Up/Down, Toggle Mute
-- **Developer**: List Listening Ports, Kill process on port, Git root path, Homebrew update/upgrade, Disk/Memory/CPU usage info
-- **Finder**: Show/Hide hidden files
-
-All destructive actions (shell commands, process kills, system shutdown) go through a **safety confirmation dialog** with structured logging.
-
-### 🧩 Raycast Extension Support
-
-Raymes implements a substantial subset of the **Raycast extension API**, allowing you to install and run thousands of community extensions directly:
-
-- **Extension Store** — Browse, search, and install extensions from the Raycast store via an API/backend
-- **Command runtime** — Run extension commands with form inputs, list views, detail views, and grid views
-- **Action panels** — Full support for Raycast actions (Copy, Open, Run, etc.)
-- **Screenshot previews** — View extension screenshots before installing
-- **Install tracking** — Anonymous install/uninstall reporting (opt-out via settings)
-- **Fallback install** — Git sparse-checkout + npm install when the API is unavailable
-
-### 📋 Productivity Suite
-
-| Feature | Description |
-|---|---|
-| **Clipboard History** | Automatically tracks everything you copy. Browse, search, filter by text/image/URL/file, and paste directly. Stores up to 1000 entries. |
-| **Snippets** | Create text templates with an optional trigger keyword. Type the trigger in the search bar to auto-expand. |
-| **Quick Notes** | A lightweight local notepad. Save notes inline with `⌘N`, search through them instantly, edit or delete as needed. |
-| **Emoji Picker** | Search emojis by name, mood, or category. Recently used emojis float to the top. Paste directly into any app. |
-| **Port Manager** | See all active TCP listeners, identify which process owns each port, and kill listeners with one click (safety-confirmed). |
-
-### 🔒 Privacy & Safety
-
-- **Self-hosted voice models** — No data leaves your machine
-- **Permission viewer** — See exactly which macOS permissions Raymes has (Accessibility, Screen Recording, Microphone, Full Disk Access, Input Monitoring, Automation) with system links to grant/revoke each
-- **Safety confirmation dialog** — Every destructive action (shell command, process kill, system shutdown, file deletion) requires explicit user confirmation
-- **Audit log** — All safety-relevant actions are logged with timestamps, context, and outcome
-- **Dry run mode** — Test what would happen without actually executing
+| **Voice Interface** | Hold `Alt+Space` to dictate with local Whisper or Moonshine models. |
+| **Text-to-Speech** | Built-in TTS with selectable voices. |
+| **Smart Tools** | Calculator, currency converter (Frankfurter ECB rates), and color converter inline. |
+| **Clipboard History** | Up to 200 entries, searchable and filterable by text/image/file. Image capture is opt-in. |
+| **Snippets** | Trigger-keyword text expansion. |
+| **Quick Notes** | Save, search, edit, and delete notes inline. |
+| **Emoji Picker** | Search by name/mood/category; recently used floats to top. |
+| **Raycast Extensions** | Browse, install, and run Raycast extensions from the built-in store — port managers, process killers, and thousands more. |
+| **Native macOS Control** | Lock, sleep, toggle Wi-Fi/Bluetooth, volume, dark mode, empty trash, etc. |
+| **Safety Controls** | Dry-run previews, required confirmations, and audit logging for safety-aware shell, extension-install, and native system actions. |
+| **Privacy First** | Local voice transcription and a permission viewer. Extension install/uninstall counts use a persistent anonymous machine ID. |
 
 ---
 
 ## 🛠️ Architecture
 
-```
+```text
 raymes/
 ├── src/
-│   ├── main/           # Electron main process
-│   │   ├── agent/      # PI agent integration (loop, bridge, observer, tools)
-│   │   ├── chat/       # Chat session persistence (SQLite)
-│   │   ├── llm/        # LLM providers (OpenAI, Anthropic, Ollama, Copilot, etc.)
-│   │   ├── search/     # Search index (SQLite FTS5), providers, ranking
-│   │   ├── extensions/ # Raycast API shim, extension runtime
-│   │   ├── voice/      # Speech-to-text / text-to-speech (Whisper, Moonshine)
-│   │   ├── safety/     # Confirmation dialogs, audit logging
-│   │   ├── nativeCommands/ # macOS system commands executor
-│   │   └── permissions/    # macOS permission management
-│   ├── renderer/       # React UI (Electron renderer)
-│   │   ├── ui/         # Reusable components (GlideList, Markdown, primitives)
-│   │   ├── currency/   # Currency conversion parsing & preferences
-│   │   ├── emoji/      # Emoji data & search
-│   │   └── hooks/      # React hooks (hold-to-speak, currency)
-│   ├── preload/        # Electron preload (IPC bridge)
-│   └── shared/         # Shared types & constants
+│   ├── main/              # Electron main process
+│   │   ├── agent/         # PI agent runtime (loop, bridge, tools)
+│   │   ├── chat/          # Chat persistence (SQLite)
+│   │   ├── llm/           # LLM provider adapters
+│   │   ├── search/        # SQLite FTS5 index + ranking
+│   │   ├── extensions/    # Raycast API shim
+│   │   ├── voice/         # STT / TTS
+│   │   ├── terminal/      # Built-in terminal backend
+│   │   ├── safety/        # Confirmation dialogs + audit log
+│   │   ├── nativeCommands/# macOS system commands
+│   │   └── permissions/   # macOS permission management
+│   ├── renderer/          # React UI
+│   ├── preload/           # Electron IPC bridge
+│   └── shared/            # Shared types & constants
 ├── native/
-│   ├── input/          # Rust native addon (mouse, keyboard, screenshot, HID polling)
-│   ├── axhelper/       # Swift accessibility tree helper
-│   └── color-picker/   # Swift macOS color picker
-├── assets/             # Screenshots
-└── SuperCmd-main/      # Raycast extension ecosystem (vendor)
+│   ├── input/             # Rust: mouse, keyboard, screenshot, HID
+│   ├── axhelper/          # Swift: accessibility tree
+│   └── color-picker/      # Swift: macOS color picker
+└── SuperCmd-main/         # Raycast extension ecosystem (vendor)
 ```
 
-### Key Technologies
+### Stack
 
 | Layer | Technology |
 |---|---|
-| **Desktop Shell** | Electron + Vite |
-| **UI** | React 18 + Tailwind CSS 3 |
-| **Agent Runtime** | PI coding agent (JSONL RPC) |
-| **Native Input** | Rust (core-graphics, napi-rs) |
-| **Accessibility** | Swift (AppKit, AXUIElement) |
-| **Search Index** | SQLite FTS5 (via better-sqlite3) |
-| **LLM Providers** | Anthropic SDK, OpenAI SDK, Ollama, custom adapters |
-| **Speech** | whisper.cpp CLI, moonshine_voice Python package |
-| **Extension API** | Custom Raycast API shim |
+| Desktop shell | Electron + Vite |
+| UI | React 18 + Tailwind CSS 3 |
+| Agent runtime | PI coding agent (JSONL RPC) |
+| Terminal | Embedded terminal emulator |
+| Native input | Rust (core-graphics, napi-rs) |
+| Accessibility | Swift (AppKit, AXUIElement) |
+| Search index | SQLite FTS5 (better-sqlite3) |
+| LLM providers | Anthropic, OpenAI, Ollama, custom adapters |
+| Speech | whisper.cpp, moonshine_voice |
 
 ---
 
@@ -164,34 +180,24 @@ raymes/
 
 ### Prerequisites
 
-- **macOS** (Sonoma+ recommended)
-- [pnpm](https://pnpm.io/) (`npm install -g pnpm`)
-- [Homebrew](https://brew.sh/) (for optional voice model support)
-- Rust toolchain (for native builds): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- macOS (Sonoma+ recommended)
+- [pnpm](https://pnpm.io/) — `npm install -g pnpm`
+- [Homebrew](https://brew.sh/)
+- Rust toolchain — `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 
-### Installation
+### Install & Run
 
 ```bash
-# Clone and enter the project
 cd raymes
-
-# Install dependencies
 pnpm install
-
-# Build native modules (Rust input addon + Swift axhelper)
-pnpm build:native
-
-# Start development
+pnpm build:native   # Rust input addon + Swift axhelper
 pnpm dev
 ```
 
-### Optional: Voice Model Setup
+### Optional Voice Models
 
 ```bash
-# For Whisper support
 brew install whisper-cpp
-
-# For Moonshine/Parakeet support (ultra-low latency)
 pip3 install --user moonshine_voice
 ```
 
@@ -210,7 +216,7 @@ pnpm preview
 |---|---|
 | `Alt+Space` | Toggle command bar (hold to dictate) |
 | `Alt+Enter` | Open command bar directly |
-| `⌘N` | Quick note / new snippet / new chat (context-dependent) |
+| `⌘N` | New note / snippet / chat (context-aware) |
 | `⌘,` | Open settings |
 | `⌘Escape` | Hide Raymes |
 | `Escape` | Back to command surface / dismiss |
@@ -220,57 +226,38 @@ pnpm preview
 ## 🧪 Testing
 
 ```bash
-pnpm test                   # Run all tests (Vitest)
-pnpm test -- --run          # Single run (no watch)
+pnpm test           # Vitest watch mode
+pnpm test -- --run  # Single run
 ```
 
-Raymes includes unit tests for:
-- Currency query parsing
-- AI provider model normalization
-- Search text matching & ranking
-- LLM error formatting
-- Extension registry logic
-- Router, safety registry, and native command registry
+Tests cover currency parsing, LLM model normalization, search ranking, extension registry, safety registry, native commands, and routing.
 
 ---
 
-## 🧰 Extensions
+## 💬 Agent Examples
 
-Raymes can run **Raycast extensions**. To browse and install:
-
-1. Open Raymes (`Alt+Space`)
-2. Search for an extension name (e.g., "kill process", "port manager")
-3. Press Enter to install from the Raymes extension store
-4. Installed extension commands appear in your search results
-
-**Currently supported Raycast API surfaces:** List, Detail, Form, Grid, Action Panel, menus, and hooks.
-
----
-
-## 💬 Agent Usage Examples
-
-| Query | What Happens |
+| Query | Result |
 |---|---|
-| `what files are in my desktop?` | Agent runs `ls ~/Desktop` and summarizes |
-| `show me my node version` | Agent runs `node --version` |
-| `edit README.md and add a features section` | Agent reads the file, applies edits |
-| `find all png files in ~/Downloads` | Agent uses `find` tool |
-| `make a new directory called test-project` | Agent runs `mkdir` |
-| `what apps are installed on my mac?` | Agent lists `/Applications` contents |
+| `what files are on my desktop?` | `ls ~/Desktop` |
+| `show my node version` | `node --version` |
+| `edit README.md and add a features section` | Reads, edits, saves |
+| `find all png files in ~/Downloads` | `find` tool |
+| `make a directory called test-project` | `mkdir` |
+| `what apps are installed?` | Lists `/Applications` |
 
-The agent automatically detects whether your query is a question (answer inline) or a task (execute tools and show results). You can also prefix queries with code-like patterns (`$`, `>`) to force agent mode.
+Prefix queries with `$` or `>` to force agent mode.
 
 ---
 
 ## ⚖️ Credits
 
-- **[PI Agent](https://pi.ai)** — Lightweight agentic core and tool runtime.
-- **[Raycast](https://raycast.com)** — UI inspiration, extension API design, and the Raycast extension ecosystem.
-- **[SuperCmd](https://github.com/SuperCmdLabs/SuperCmd)** — Patterns and reference implementation for Raycast API shims.
+- **[PI Agent](https://pi.ai)** — Agentic core and tool runtime.
+- **[Raycast](https://raycast.com)** — UI inspiration and extension ecosystem.
+- **[SuperCmd](https://github.com/SuperCmdLabs/SuperCmd)** — Raycast API shim reference.
 - **[mac-cli](https://github.com/guarinogabriel/mac-cli)** — Native macOS command inspiration.
-- **[Frankfurter API](https://www.frankfurter.app)** — Exchange rate data (European Central Bank).
+- **[Frankfurter API](https://www.frankfurter.app)** — Exchange rates.
 - **[whisper.cpp](https://github.com/ggerganov/whisper.cpp)** — Local speech-to-text.
-- **[moonshine_voice](https://github.com/usefulsensors/moonshine)** — Ultra-low-latency on-device voice model.
+- **[moonshine_voice](https://github.com/usefulsensors/moonshine)** — On-device voice model.
 
 ---
 

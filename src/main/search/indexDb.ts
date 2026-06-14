@@ -1,5 +1,5 @@
-import { app, BrowserWindow } from 'electron'
-import Database from 'better-sqlite3'
+import { app } from 'electron'
+import DatabaseCtor, { type Database as DatabaseType } from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SearchAction, SearchCategory } from '../../shared/search'
@@ -53,11 +53,19 @@ function safeJsonParse<T>(value: string, fallback: T): T {
   }
 }
 
+const CLICK_EVENTS_RETAIN = 1000
+const BENCHMARK_SNAPSHOTS_RETAIN = 50
+
 export async function readBenchmarkHistory() {
   return [];
 }
 
-export async function runOfflineBenchmarks(searchFn: (q: string) => Promise<any[]>, db: any) {
+export async function runOfflineBenchmarks(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _searchFn: (q: string) => Promise<unknown[]>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _db: unknown,
+) {
   // Benchmark implementation omitted for brevity
 }
 
@@ -72,10 +80,10 @@ export function getInstance(): SearchIndexDatabase {
 }
 
 export class SearchIndexDatabase {
-  private _db: Database | null = null
+  private _db: DatabaseType | null = null
   private _initPromise: Promise<void> | null = null
 
-  private get db(): Database {
+  private get db(): DatabaseType {
     if (!this._db) {
       throw new Error('Database not initialized - call ensureInitialized() first')
     }
@@ -88,7 +96,7 @@ export class SearchIndexDatabase {
     this._initPromise = new Promise((resolve) => {
       // Defer database initialization to avoid blocking app startup
       setImmediate(() => {
-        this._db = new Database(dbPath())
+        this._db = new DatabaseCtor(dbPath())
         this._db.pragma('journal_mode = WAL')
         this._db.pragma('synchronous = NORMAL')
         this.bootstrap()
@@ -150,6 +158,36 @@ export class SearchIndexDatabase {
     `)
 
     this.ensureDocumentsSchema()
+    this.pruneTelemetry()
+  }
+
+  /** Remove old click-events and benchmark snapshots so the DB doesn't grow
+   *  without bound. Retention limits are conservative — enough for ranking
+   *  learning and debugging without unbounded disk use. */
+  private pruneTelemetry(): void {
+    try {
+      this.db
+        .prepare(
+          `DELETE FROM click_events WHERE id NOT IN (
+            SELECT id FROM click_events ORDER BY id DESC LIMIT ?
+          )`,
+        )
+        .run(CLICK_EVENTS_RETAIN)
+      this.db
+        .prepare(
+          `DELETE FROM benchmark_snapshots WHERE id NOT IN (
+            SELECT id FROM benchmark_snapshots ORDER BY id DESC LIMIT ?
+          )`,
+        )
+        .run(BENCHMARK_SNAPSHOTS_RETAIN)
+    } catch (error) {
+      console.warn('[SearchIndex] Telemetry pruning failed:', error)
+    }
+  }
+
+  /** Run WAL checkpoint and VACUUM to reclaim disk space. */
+  vacuum(): void {
+    this.db.exec('PRAGMA wal_checkpoint(TRUNCATE); VACUUM;')
   }
 
   /** Forward-compatible schema patching for users with older local DBs. */

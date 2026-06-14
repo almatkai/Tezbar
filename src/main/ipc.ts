@@ -119,6 +119,7 @@ import {
   restoreClipboardEntry,
   revealClipboardEntryInFinder,
   togglePinClipboardEntry,
+  type ClipboardConfig,
 } from './search/providers/clipboardProvider'
 import {
   addUserSnippet,
@@ -136,6 +137,14 @@ import {
   writeTerminalSession,
 } from './terminal/service'
 import { TERMINAL_IPC, type TerminalCreateRequest } from '../shared/terminal'
+import {
+  clearChromiumCache,
+  clearClipboardImages,
+  getClipboardStorageConfig,
+  getStorageBreakdown,
+  setClipboardStorageConfig,
+  vacuumSearchDatabase,
+} from './storage/service'
 
 const LLM_DEFAULTS = {
   uiStateRetentionMs: 60_000,
@@ -1198,5 +1207,32 @@ export function registerIpcHandlers(
     const win = getWindow()
     if (!win || win.isDestroyed()) return
     controls?.stopWindowDragMonitoring(win)
+  })
+
+  ipcMain.handle('storage:breakdown', async () => {
+    return getStorageBreakdown()
+  })
+
+  ipcMain.handle('storage:clipboard-config:get', async () => {
+    return getClipboardStorageConfig()
+  })
+
+  ipcMain.handle('storage:clipboard-config:set', async (_event, payload: unknown) => {
+    const patch = typeof payload === 'object' && payload !== null ? (payload as Partial<ClipboardConfig>) : {}
+    setClipboardStorageConfig(patch)
+    return getClipboardStorageConfig()
+  })
+
+  ipcMain.handle('storage:clear-clipboard-images', async () => {
+    return clearClipboardImages()
+  })
+
+  ipcMain.handle('storage:vacuum-search-db', async () => {
+    return vacuumSearchDatabase()
+  })
+
+  ipcMain.handle('storage:clear-chromium-cache', async () => {
+    await clearChromiumCache()
+    return { ok: true }
   })
 }

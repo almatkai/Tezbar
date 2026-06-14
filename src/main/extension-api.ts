@@ -4,7 +4,7 @@
  *
  * Talks to the supercmd-backend for extension discovery, search,
  * and download. Replaces direct git/GitHub interactions as the
- * primary path; git sparse-checkout is kept as a fallback only.
+ * primary path; no git or npm is used by the install flow.
  */
 
 import * as https from 'https';

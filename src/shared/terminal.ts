@@ -10,6 +10,7 @@ export const TERMINAL_IPC = {
 
 export type TerminalCreateRequest = {
   cwd?: string
+  initialCommand?: string
   cols: number
   rows: number
 }

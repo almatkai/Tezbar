@@ -42,13 +42,14 @@ import {
 } from './ui/primitives'
 import { CurrencySettings } from './CurrencySettings'
 
-type SettingsTab = 'general' | 'ai' | 'voice' | 'permissions' | 'advanced'
+type SettingsTab = 'general' | 'ai' | 'voice' | 'permissions' | 'storage' | 'advanced'
 
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'general', label: 'General', icon: 'gear' },
   { id: 'ai', label: 'AI', icon: 'spark' },
   { id: 'voice', label: 'Voice', icon: 'mic' },
   { id: 'permissions', label: 'Permissions', icon: 'lock' },
+  { id: 'storage', label: 'Storage', icon: 'database' },
   { id: 'advanced', label: 'Advanced', icon: 'tool' },
 ]
 
@@ -177,6 +178,15 @@ function SettingsIcon({ name, className }: { name: string; className?: string })
     return (
       <svg {...common}>
         <path d="M14.7 6.3a4 4 0 0 0-5 5L4 17v3h3l5.7-5.7a4 4 0 0 0 5-5l-2.4 2.4-3-3 2.4-2.4Z" />
+      </svg>
+    )
+  }
+  if (name === 'database') {
+    return (
+      <svg {...common}>
+        <ellipse cx="12" cy="6" rx="9" ry="3" />
+        <path d="M3 6v12c0 1.7 4 3 9 3s9-1.3 9-3V6" />
+        <path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3" />
       </svg>
     )
   }
@@ -389,6 +399,14 @@ export default function SettingsView({
     tone: 'success' | 'error'
     text: string
   } | null>(null)
+  const [storageBreakdown, setStorageBreakdown] = useState<{
+    totalBytes: number
+    items: Array<{ id: string; label: string; bytes: number; paths: string[] }>
+  } | null>(null)
+  const [storageLoading, setStorageLoading] = useState(false)
+  const [clipboardWatchEnabled, setClipboardWatchEnabled] = useState(true)
+  const [clipboardCaptureImages, setClipboardCaptureImages] = useState(false)
+  const [clipboardMaxImageMegapixels, setClipboardMaxImageMegapixels] = useState('2')
 
   const loadAiModels = useCallback(async (provider: ProviderId) => {
     setAiModelsLoading(true)
@@ -427,6 +445,24 @@ export default function SettingsView({
 
     setVoiceModels(normalized)
     setSelectedVoiceModelId(selectedModelId)
+  }, [])
+
+  const loadStorage = useCallback(async () => {
+    setStorageLoading(true)
+    try {
+      const [breakdown, clipboardCfg] = await Promise.all([
+        window.raymes.getStorageBreakdown(),
+        window.raymes.getClipboardStorageConfig(),
+      ])
+      setStorageBreakdown(breakdown)
+      setClipboardWatchEnabled(clipboardCfg.watchEnabled)
+      setClipboardCaptureImages(clipboardCfg.captureImages)
+      setClipboardMaxImageMegapixels(String(clipboardCfg.maxImageMegapixels))
+    } catch (err) {
+      console.warn('[Settings] Failed to load storage breakdown:', err)
+    } finally {
+      setStorageLoading(false)
+    }
   }, [])
 
   const reload = useCallback(async () => {
@@ -506,6 +542,11 @@ export default function SettingsView({
     }, 700)
     return () => window.clearInterval(timer)
   }, [refreshVoiceModels, voiceModels])
+
+  useEffect(() => {
+    if (activeTab !== 'storage') return
+    void loadStorage()
+  }, [activeTab, loadStorage])
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent): void => {
@@ -1325,11 +1366,140 @@ export default function SettingsView({
             </div>
           ) : null}
 
+          {activeTab === 'storage' ? (
+            <div className="mx-auto max-w-[610px]">
+              <div className="mb-3 flex justify-end">
+                <Button variant="quiet" disabled={storageLoading} onClick={() => void loadStorage()}>
+                  {storageLoading ? 'Calculating…' : 'Refresh usage'}
+                </Button>
+              </div>
+              <SettingsRow
+                label="Clipboard"
+                detail="Clipboard history is text-only by default. Image capture is opt-in and size-capped."
+              >
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
+                    <input
+                      type="checkbox"
+                      checked={clipboardWatchEnabled}
+                      onChange={(e) => {
+                        setClipboardWatchEnabled(e.target.checked)
+                        void window.raymes
+                          .setClipboardStorageConfig({ watchEnabled: e.target.checked })
+                          .then((cfg) => setClipboardWatchEnabled(cfg.watchEnabled))
+                      }}
+                    />
+                    Watch clipboard history
+                  </label>
+                  <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
+                    <input
+                      type="checkbox"
+                      checked={clipboardCaptureImages}
+                      onChange={(e) => {
+                        setClipboardCaptureImages(e.target.checked)
+                        void window.raymes
+                          .setClipboardStorageConfig({ captureImages: e.target.checked })
+                          .then((cfg) => setClipboardCaptureImages(cfg.captureImages))
+                      }}
+                    />
+                    Capture copied images
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[12px] text-ink-3">Max image size</span>
+                    <TextField
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      value={clipboardMaxImageMegapixels}
+                      onChange={(e) => setClipboardMaxImageMegapixels(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const value = Number(clipboardMaxImageMegapixels)
+                          if (Number.isFinite(value) && value > 0) {
+                            void window.raymes
+                              .setClipboardStorageConfig({ maxImageMegapixels: value })
+                              .then((cfg) => setClipboardMaxImageMegapixels(String(cfg.maxImageMegapixels)))
+                          }
+                        }
+                      }}
+                      className="w-20 text-center font-mono tabular-nums"
+                    />
+                    <span className="text-[12px] text-ink-3">megapixels</span>
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        const value = Number(clipboardMaxImageMegapixels)
+                        if (Number.isFinite(value) && value > 0) {
+                          void window.raymes
+                            .setClipboardStorageConfig({ maxImageMegapixels: value })
+                            .then((cfg) => setClipboardMaxImageMegapixels(String(cfg.maxImageMegapixels)))
+                        }
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              </SettingsRow>
+              <Divider />
+              {storageBreakdown ? (
+                <>
+                  <SettingsRow
+                    label="Breakdown"
+                    detail={`Tracked storage: ${formatBytes(storageBreakdown.totalBytes)}`}
+                  >
+                    <ul className="space-y-2">
+                      {storageBreakdown.items.map((item) => (
+                        <li
+                          key={item.id}
+                          className="flex items-center justify-between gap-3 rounded-raymes-row border border-white/10 bg-white/[0.025] px-3 py-2"
+                        >
+                          <span className="text-[12.5px] text-ink-2">{item.label}</span>
+                          <span className="font-mono text-[12px] text-ink-3">{formatBytes(item.bytes)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </SettingsRow>
+                  <Divider />
+                </>
+              ) : null}
+              <SettingsRow label="Cleanup">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      void window.raymes.clearClipboardImages().then(() => void loadStorage())
+                    }}
+                  >
+                    Clear clipboard images
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      void window.raymes.vacuumSearchDatabase().then(() => void loadStorage())
+                    }}
+                  >
+                    Vacuum search DB
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      void window.raymes.clearChromiumCache().then(() => void loadStorage())
+                    }}
+                  >
+                    Clear Chromium cache
+                  </Button>
+                </div>
+              </SettingsRow>
+            </div>
+          ) : null}
+
           {activeTab === 'advanced' ? (
             <div className="mx-auto max-w-[610px]">
               <SettingsRow
                 label="Safety Dry-Run"
-                detail="Destructive actions show confirmation and are logged, but never execute."
+                detail="Preview safety-aware shell, extension-install, and native system actions without executing them."
               >
                 <div className="flex items-center gap-2.5">
                   <Button
@@ -1348,8 +1518,8 @@ export default function SettingsView({
                   </Button>
                   <span className="text-[12px] text-ink-3">
                     {safetyDryRun
-                      ? 'No destructive action will be executed.'
-                      : 'Destructive actions execute normally.'}
+                      ? 'Safety-aware actions are previewed and logged.'
+                      : 'Safety-aware actions execute after any required confirmation.'}
                   </span>
                 </div>
               </SettingsRow>

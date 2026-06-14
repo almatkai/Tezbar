@@ -10,3 +10,18 @@ dist
 .cache_ggshield
 
 SuperCmd-main
+
+# Native build artifacts
+native/**/target/
+native/**/*.node
+native/**/axhelper
+native/**/Cargo.lock
+
+# TypeScript build info
+*.tsbuildinfo
+
+# OS / editor
+*.swp
+*.swo
+.idea/
+.vscode/

@@ -1,23 +1,28 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { tryConsumeCommandSurfaceEscape } from './escapeGate'
 import CommandBar from './CommandBar'
-import AgentChatView from './AgentChatView'
-import SettingsView from './SettingsView'
-import ExtensionsView from './ExtensionsView'
-import ExtensionRuntimeView from './ExtensionRuntimeView'
-import OpenPortsView from './OpenPortsView'
-import PermissionsView from './PermissionsView'
-import ClipboardView from './ClipboardView'
-import NotesView from './NotesView'
 import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_AI_NEW_CHAT_EVENT, RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
-import SnippetsView from './SnippetsView'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
-import EmojiPickerView from './EmojiPickerView'
-import TerminalView from './TerminalView'
 import type { TerminalPromptInfo } from '../shared/terminal'
 import { Hint, HintBar, Kbd } from './ui/primitives'
+
+const AgentChatView = React.lazy(() => import('./AgentChatView'))
+const SettingsView = React.lazy(() => import('./SettingsView'))
+const ExtensionsView = React.lazy(() => import('./ExtensionsView'))
+const ExtensionRuntimeView = React.lazy(() => import('./ExtensionRuntimeView'))
+const OpenPortsView = React.lazy(() => import('./OpenPortsView'))
+const PermissionsView = React.lazy(() => import('./PermissionsView'))
+const ClipboardView = React.lazy(() => import('./ClipboardView'))
+const NotesView = React.lazy(() => import('./NotesView'))
+const SnippetsView = React.lazy(() => import('./SnippetsView'))
+const EmojiPickerView = React.lazy(() => import('./EmojiPickerView'))
+const TerminalView = React.lazy(() => import('./TerminalView'))
+
+const SurfaceFallback = (): JSX.Element => (
+  <div className="flex h-full w-full items-center justify-center text-[12px] text-ink-3">Loading…</div>
+)
 
 type Surface =
   | 'command'
@@ -33,12 +38,12 @@ type Surface =
   | 'emoji-picker'
   | 'terminal'
 
-type SettingsTab = 'general' | 'ai' | 'voice' | 'permissions' | 'advanced'
+type SettingsTab = 'general' | 'ai' | 'voice' | 'permissions' | 'storage' | 'advanced'
 
 const SETTINGS_TAB_STORAGE_KEY = 'raymes:settings-tab'
 
 function normalizeSettingsTab(tab: unknown): SettingsTab {
-  return tab === 'ai' || tab === 'voice' || tab === 'permissions' || tab === 'advanced'
+  return tab === 'ai' || tab === 'voice' || tab === 'permissions' || tab === 'storage' || tab === 'advanced'
     ? tab
     : 'general'
 }
@@ -101,6 +106,7 @@ function SettingsWindowApp(): JSX.Element {
 
   return (
     <div className="flex h-screen w-full bg-[#1e1f2e]">
+      <Suspense fallback={<SurfaceFallback />}>
       {surface === 'permissions' ? (
         <PermissionsView nativeWindow onBack={() => setSurface('settings')} />
       ) : (
@@ -114,6 +120,7 @@ function SettingsWindowApp(): JSX.Element {
           onOpenPermissions={() => setSurface('permissions')}
         />
       )}
+      </Suspense>
     </div>
   )
 }
@@ -358,6 +365,7 @@ function LauncherApp(): JSX.Element {
         key={surface}
         className="no-drag relative z-0 flex h-full w-full animate-raymes-fade-in flex-col"
       >
+        <Suspense fallback={<SurfaceFallback />}>
         {surface === 'settings' ? (
           <SettingsView
             initialTab={settingsInitialTab}
@@ -443,7 +451,7 @@ function LauncherApp(): JSX.Element {
               </HintBar>
             </div>
           </div>
-        ) : (
+          ) : (
           <CommandBar
             initialValue={commandInitialValue}
             initialSelectedChatId={commandInitialSelectedChatId}
@@ -490,6 +498,7 @@ function LauncherApp(): JSX.Element {
             }}
           />
         )}
+        </Suspense>
       </div>
     </div>
   )

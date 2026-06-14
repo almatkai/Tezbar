@@ -1,10 +1,10 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react'
-import ReactMarkdown from 'react-markdown'
 import type {
   ExtensionRuntimeAction,
   ExtensionRuntimeNode,
 } from '../../../shared/extensionRuntime'
 import { Hint, HintBar, Kbd, ViewHeader } from '../../ui/primitives'
+import { Markdown } from '../../ui/Markdown'
 import { MetadataItem, MetadataSidebar } from './detail-runtime'
 
 type ListRow = {
@@ -339,7 +339,7 @@ function ListDetailPane({ row }: { row?: ListRow }): JSX.Element {
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {markdown ? (
           <article className="prose prose-invert max-w-none text-[13px] leading-relaxed">
-            <ReactMarkdown urlTransform={(url) => url}>{markdown}</ReactMarkdown>
+            <Markdown text={markdown} className="text-[13px] leading-relaxed" />
           </article>
         ) : metadata ? null : (
           <div className="text-[12px] text-ink-4">No detail content</div>

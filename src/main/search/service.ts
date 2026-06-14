@@ -1,12 +1,10 @@
 import { app, BrowserWindow, clipboard, shell } from 'electron'
 import { execFile } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type {
-  ExtensionCommandArgument,
   OpenPortProcess,
   PathCompletionItem,
   SearchAction,
@@ -26,15 +24,14 @@ import {
   listInstalledExtensions,
 } from '../extensions/service'
 import { executeNativeCommand } from '../nativeCommands/executor'
-import { getNativeCommand } from '../nativeCommands/registry'
 import { getSafetyDryRun } from '../llm/configStore'
 import { confirmSafetyAction } from '../safety/confirm'
 import { recordSafetyEntry } from '../safety/log'
 import { getSafetyDescriptor } from '../safety/registry'
 import { commandBus } from './commandBus'
+import { appIconDataUrl } from '../appIcon'
 // Fix imports from indexDb
-import { getInstance, readBenchmarkHistory, runOfflineBenchmarks, type SearchIndexRow } from './indexDb'
-import { SearchIndexDatabase } from './indexDb'
+import { getInstance, readBenchmarkHistory, runOfflineBenchmarks } from './indexDb'
 import { appsProvider, listApplications } from './providers/appsProvider'
 import { captureClipboardSnapshot, clipboardProvider } from './providers/clipboardProvider'
 import { commandsProvider } from './providers/commandsProvider'
@@ -48,14 +45,100 @@ import { addQuickNote, notesProvider } from './providers/notesProvider'
 import { quickLinksProvider } from './providers/quickLinksProvider'
 import { snippetsProvider } from './providers/snippetsProvider'
 import type { IndexedDocument, SearchProvider } from './providers/types'
-import { parseSearchIntent } from './queryIntent'
 import { computeWeightedScore, shouldPreferRecent } from './ranker'
 
 const execFileAsync = promisify(execFile)
 const MAX_RESULTS = 80
-const PROVIDER_REFRESH_MS = 90_000
 const PROVIDER_REFRESH_MIN_AGE_MS = 10_000
 const FILE_INDEX_LIMIT = 4000
+
+const SHELL_METACHAR_RE = /[;|&`$(){}[\]\n\r<>\\]/
+
+function validateShellCommand(command: string): { ok: true } | { ok: false; message: string } {
+  const trimmed = command.trim()
+  if (!trimmed) return { ok: false, message: 'Empty shell command' }
+  if (SHELL_METACHAR_RE.test(trimmed)) {
+    return {
+      ok: false,
+      message: 'Shell metacharacters are not allowed in run-shell commands.',
+    }
+  }
+  return { ok: true }
+}
+
+function safetyForAction(
+  action: SearchAction,
+): { id: SafetyActionId; context: Record<string, unknown> } | null {
+  if (action.type === 'run-shell') {
+    return { id: 'shell.run', context: { command: action.command } }
+  }
+  if (action.type === 'install-extension') {
+    return { id: 'extension.install', context: { extensionId: action.extensionId } }
+  }
+  if (action.type === 'run-native-command') {
+    if (action.commandId === 'empty-trash') {
+      return { id: 'trash.empty', context: { commandId: action.commandId } }
+    }
+    if (action.commandId === 'sleep-system') {
+      return { id: 'system.sleep', context: { commandId: action.commandId } }
+    }
+    if (action.commandId === 'quit-raymes') {
+      return { id: 'app.quit', context: { commandId: action.commandId } }
+    }
+    return { id: 'native.command', context: { commandId: action.commandId } }
+  }
+  return null
+}
+
+async function runWithSafety(
+  safetyId: SafetyActionId,
+  context: Record<string, unknown>,
+  run: () => Promise<SearchExecuteResult>,
+): Promise<SearchExecuteResult> {
+  const descriptor = getSafetyDescriptor(safetyId)
+  if (!descriptor) {
+    return { ok: false, message: `Safety descriptor missing: ${safetyId}` }
+  }
+
+  const dryRun = getSafetyDryRun()
+  const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null
+  const { accepted } = await confirmSafetyAction(window, descriptor, context, { dryRun })
+  if (!accepted) {
+    recordSafetyEntry({
+      action: safetyId,
+      title: descriptor.title,
+      risk: descriptor.risk,
+      ok: false,
+      message: 'Cancelled by user',
+      context: { ...context, dryRun },
+    })
+    return { ok: false, message: 'Cancelled' }
+  }
+
+  if (dryRun) {
+    const message = `Dry run: would have ${descriptor.title.toLowerCase()}.`
+    recordSafetyEntry({
+      action: safetyId,
+      title: descriptor.title,
+      risk: descriptor.risk,
+      ok: true,
+      message,
+      context: { ...context, dryRun: true },
+    })
+    return { ok: true, message }
+  }
+
+  const result = await run()
+  recordSafetyEntry({
+    action: safetyId,
+    title: descriptor.title,
+    risk: descriptor.risk,
+    ok: result.ok,
+    message: result.message,
+    context,
+  })
+  return result
+}
 
 // Use singleton database with session caching
 const indexDb = getInstance()
@@ -67,7 +150,6 @@ let stopFileWatcher: (() => void) | null = null
 let providerRefreshTimer: NodeJS.Timeout | null = null
 let lastExtensionRefreshAt = 0
 let lastVolatileRefreshAt = 0
-const appIconCache = new Map<string, string | null>()
 
 type OpenWithUsageEntry = {
   count: number
@@ -126,60 +208,6 @@ function actionIdFromResult(action: SearchAction, resultId?: string): string {
     default:
       return 'unknown-action'
   }
-}
-
-/** Run a destructive action through the safety layer: confirmation dialog +
- *  structured log entry. Returns early (without executing) if the user
- *  rejects. `run` is only invoked once confirmation passes. */
-async function runWithSafety<T extends SearchExecuteResult>(
-  safetyId: SafetyActionId,
-  context: Record<string, unknown>,
-  run: () => Promise<T>,
-  options?: { detailsOverride?: string; titleOverride?: string },
-): Promise<SearchExecuteResult> {
-  const descriptor = getSafetyDescriptor(safetyId)
-  if (!descriptor) {
-    return { ok: false, message: `Safety descriptor missing: ${safetyId}` }
-  }
-
-  const dryRun = getSafetyDryRun()
-  const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null
-  const { accepted } = await confirmSafetyAction(window, descriptor, context, { dryRun })
-  if (!accepted) {
-    recordSafetyEntry({
-      action: safetyId,
-      title: descriptor.title,
-      risk: descriptor.risk,
-      ok: false,
-      message: 'Cancelled by user',
-      context: { ...context, dryRun },
-    })
-    return { ok: false, message: 'Cancelled' }
-  }
-
-  if (dryRun) {
-    const message = `Dry run: would have ${descriptor.title.toLowerCase()}.`
-    recordSafetyEntry({
-      action: safetyId,
-      title: descriptor.title,
-      risk: descriptor.risk,
-      ok: true,
-      message,
-      context: { ...context, dryRun: true },
-    })
-    return { ok: true, message }
-  }
-
-  const result = await run()
-  recordSafetyEntry({
-    action: safetyId,
-    title: descriptor.title,
-    risk: descriptor.risk,
-    ok: result.ok,
-    message: result.message,
-    context,
-  })
-  return result
 }
 
 async function upsertProvider(provider: SearchProvider): Promise<void> {
@@ -288,12 +316,10 @@ async function bootstrapSearchIndex(): Promise<void> {
     lastVolatileRefreshAt = Date.now()
     startBackgroundFileIndexing()
 
-    if (!providerRefreshTimer) {
-      providerRefreshTimer = setInterval(() => {
-        void refreshVolatileProviders()
-      }, PROVIDER_REFRESH_MS)
-      providerRefreshTimer.unref()
-    }
+    // The index is now refreshed on demand via refreshVolatileProvidersIfStale
+    // and by explicit invalidation after extension/snippets/notes changes.
+    // The previous 90-second background loop has been removed to eliminate
+    // idle churn.
 
     app.once('before-quit', () => {
       stopFileWatcher?.()
@@ -429,8 +455,6 @@ function exactRecentQuickNoteBoost(
 function rankRows(query: string, docs: Array<{ doc: IndexedDocument; lexical: number; fuzzyDistance?: number }>): Array<SearchResult & { updatedAt: number }> {
   const now = Date.now()
   const stats = indexDb?.getActionStats(docs.map((entry) => entry.doc.id)) ?? new Map()
-
-  const intent = parseSearchIntent(query)
 
   const ranked = docs.map((entry) => {
     const actionStat = stats.get(entry.doc.id)
@@ -1004,35 +1028,6 @@ function recommendedOpenWithApps(targetPath: string): Array<{ appName: string; s
     .sort((a, b) => b.score - a.score || a.appName.localeCompare(b.appName))
 }
 
-async function appIconDataUrl(appPath: string): Promise<string | undefined> {
-  if (appIconCache.has(appPath)) return appIconCache.get(appPath) ?? undefined
-  try {
-    const resourceDir = join(appPath, 'Contents', 'Resources')
-    const iconName = readdirSync(resourceDir).find((entry) => entry.toLowerCase().endsWith('.icns'))
-    if (!iconName) {
-      appIconCache.set(appPath, null)
-      return undefined
-    }
-
-    const iconPath = join(resourceDir, iconName)
-    const cacheDir = join(app.getPath('userData'), 'icon-cache')
-    mkdirSync(cacheDir, { recursive: true })
-    const cacheName = `${createHash('sha1').update(iconPath).digest('hex')}.png`
-    const pngPath = join(cacheDir, cacheName)
-
-    if (!existsSync(pngPath)) {
-      await execFileAsync('/usr/bin/sips', ['-s', 'format', 'png', iconPath, '--out', pngPath])
-    }
-
-    const dataUrl = `data:image/png;base64,${readFileSync(pngPath).toString('base64')}`
-    appIconCache.set(appPath, dataUrl)
-    return dataUrl
-  } catch {
-    appIconCache.set(appPath, null)
-    return undefined
-  }
-}
-
 function isApplicationsDirectory(path: string): boolean {
   const normalized = path.replace(/\/+$/, '')
   return (
@@ -1424,7 +1419,12 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
     }
 
     case 'run-shell': {
-      const { stdout } = await execFileAsync('bash', ['-lc', action.command])
+      const command = String(action.command ?? '').trim()
+      const validation = validateShellCommand(command)
+      if (!validation.ok) {
+        return { ok: false, message: validation.message }
+      }
+      const { stdout } = await execFileAsync('bash', ['-lc', command])
       const message = stdout.trim()
       return { ok: true, message: message || 'Command completed' }
     }
@@ -1465,7 +1465,10 @@ export async function executeSearchAction(
   let result: SearchExecuteResult
 
   try {
-    result = await executeActionInner(action)
+    const safety = safetyForAction(action)
+    result = safety
+      ? await runWithSafety(safety.id, safety.context, () => executeActionInner(action))
+      : await executeActionInner(action)
   } catch (error) {
     result = {
       ok: false,

@@ -222,6 +222,13 @@ contextBridge.exposeInMainWorld('raymes', {
       ipcRenderer.removeListener(TERMINAL_IPC.EXIT, handler)
     }
   },
+  getStorageBreakdown: () => ipcRenderer.invoke('storage:breakdown'),
+  getClipboardStorageConfig: () => ipcRenderer.invoke('storage:clipboard-config:get'),
+  setClipboardStorageConfig: (patch: { watchEnabled?: boolean; captureImages?: boolean; maxImageMegapixels?: number }) =>
+    ipcRenderer.invoke('storage:clipboard-config:set', patch),
+  clearClipboardImages: () => ipcRenderer.invoke('storage:clear-clipboard-images'),
+  vacuumSearchDatabase: () => ipcRenderer.invoke('storage:vacuum-search-db'),
+  clearChromiumCache: () => ipcRenderer.invoke('storage:clear-chromium-cache'),
   onQuickNoteSaveShortcut: (listener: () => void) => {
     const channel = 'notes:quick-save-shortcut'
     const handler = (): void => {

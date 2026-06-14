@@ -22,6 +22,7 @@ import {
   isCommandPlatformCompatible,
   isManifestPlatformCompatible,
 } from './extension-platform';
+import { configurePackagedEsbuildBinary } from './esbuild-runtime';
 
 /**
  * Require esbuild, handling the asar-packed Electron case.
@@ -29,20 +30,8 @@ import {
  * but requireEsbuild() resolves to the asar path where spawn fails with ENOTDIR.
  */
 function requireEsbuild(): any {
-  try {
-    // Try the unpacked path first (works in packaged app)
-    const mainPath = require.resolve('esbuild');
-    if (mainPath.includes('app.asar')) {
-      const unpackedPath = mainPath.replace('app.asar', 'app.asar.unpacked');
-      if (fs.existsSync(unpackedPath)) {
-        return require(unpackedPath);
-      }
-    }
-    return require('esbuild');
-  } catch {
-    // Fallback for environments where require.resolve behaves differently.
-    return require('esbuild');
-  }
+  configurePackagedEsbuildBinary();
+  return require('esbuild');
 }
 
 export interface ExtensionPreferenceSchema {

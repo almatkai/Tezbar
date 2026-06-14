@@ -1,8 +1,7 @@
 import { app, BrowserWindow, clipboard, nativeImage, shell } from 'electron'
-import * as esbuild from 'esbuild'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { open as openFile, rm as removePath, writeFile } from 'node:fs/promises'
-import { execFile, execSync, spawn as nodeSpawn } from 'node:child_process'
+import { execFile, spawn as nodeSpawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { get as httpGet } from 'node:http'
 import { get as httpsGet } from 'node:https'
@@ -18,6 +17,7 @@ import { promisify } from 'node:util'
 import { deserialize, serialize } from 'node:v8'
 import { gunzipSync, gzip } from 'node:zlib'
 import vm from 'node:vm'
+import { configurePackagedEsbuildBinary } from './esbuild-runtime'
 import { setSuppressBlurHide } from './windowState'
 import type {
   ExtensionInvokeActionRequest,
@@ -137,6 +137,7 @@ const SEARCH_TEXT_RENDER_PASSES = 1
 const LIST_ITEM_PAGE_SIZE = 30
 const APPLICATIONS_CACHE_TTL_MS = 30_000
 const PROMISE_RESULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const PROMISE_RESULT_MEMORY_CACHE_LIMIT = 200
 const BUILTIN_SET = new Set<string>(builtinModules)
 const JSX_FRAGMENT = Symbol.for('raymes.jsx.fragment')
 const REACT_CONTEXT = Symbol.for('react.context')
@@ -145,6 +146,26 @@ const gzipAsync = promisify(gzip)
 
 const sessions = new Map<string, RuntimeSession>()
 const promiseResultMemoryCache = new Map<string, { data: unknown; cachedAt: number }>()
+
+function setPromiseResultMemoryCache(
+  key: string,
+  value: { data: unknown; cachedAt: number },
+): void {
+  // Evict oldest entries when the in-memory promise cache grows too large.
+  if (
+    promiseResultMemoryCache.size >= PROMISE_RESULT_MEMORY_CACHE_LIMIT &&
+    !promiseResultMemoryCache.has(key)
+  ) {
+    const firstKey = promiseResultMemoryCache.keys().next().value
+    if (firstKey !== undefined) {
+      promiseResultMemoryCache.delete(firstKey)
+    }
+  }
+  // Move to (or insert at) the end to maintain LRU order.
+  promiseResultMemoryCache.delete(key)
+  promiseResultMemoryCache.set(key, value)
+}
+
 let applicationsCache:
   | {
       expiresAt: number
@@ -222,7 +243,7 @@ function readPromiseResultCache(
       data: unknown
       cachedAt: number
     }
-    promiseResultMemoryCache.set(memoryKey, payload)
+    setPromiseResultMemoryCache(memoryKey, payload)
     console.log(
       `[usePromise] Persistent cache hit ${session.extensionId}/${session.commandName}; bytes=${compressed.byteLength}`,
     )
@@ -241,7 +262,7 @@ function writePromiseResultCache(
 
   const cachedAt = Date.now()
   const memoryKey = `${session.extensionId}/${session.commandName}:${key}`
-  promiseResultMemoryCache.set(memoryKey, { data, cachedAt })
+  setPromiseResultMemoryCache(memoryKey, { data, cachedAt })
   const cachePath = promiseResultCachePath(session, key)
 
   void (async () => {
@@ -655,6 +676,12 @@ async function bundleCommand(entryPath: string, packageRoot: string): Promise<st
     return prebuilt
   }
 
+  // Lazy-load esbuild so the main process doesn't pay the cost unless an
+  // extension is installed without a pre-built bundle. Ideally all extensions
+  // are pre-built at install time and this fallback is never hit.
+  configurePackagedEsbuildBinary()
+  const esbuild = await import('esbuild')
+
   const result = await esbuild.build({
     entryPoints: [entryPath],
     absWorkingDir: packageRoot,
@@ -752,7 +779,10 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
         | S
         | ((previous: S, props: P) => Partial<S> | S | null),
     ): void {
-      const resolved = typeof next === 'function' ? next(this.state, this.props) : next
+      const resolved =
+        typeof next === 'function'
+          ? (next as (previous: S, props: P) => S | Partial<S> | null)(this.state, this.props)
+          : next
       if (resolved == null) return
       this.state = {
         ...(this.state && typeof this.state === 'object' ? this.state : {}),
@@ -1394,7 +1424,8 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     getFrontmostApplication: async (): Promise<{ name: string; path: string; bundleId?: string } | null> => {
       try {
         const script = 'tell application "System Events" to get name of first application process whose frontmost is true'
-        const name = execSync(`osascript -e '${script}' 2>/dev/null`, { encoding: 'utf8', timeout: 3000 }).trim()
+        const { stdout } = await execFileAsync('/usr/bin/osascript', ['-e', script], { timeout: 3000 })
+        const name = stdout.trim()
         if (name) return { name, path: `/Applications/${name}.app` }
         return null
       } catch {
