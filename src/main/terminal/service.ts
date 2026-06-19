@@ -3,8 +3,9 @@ import { existsSync, statSync } from 'node:fs'
 import { homedir, hostname, userInfo } from 'node:os'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { spawn as spawnChild } from 'node:child_process'
+import { createRequire } from 'node:module'
 import type { IPty } from 'node-pty'
-import { spawn } from 'node-pty'
 import {
   TERMINAL_IPC,
   type TerminalCreateRequest,
@@ -12,9 +13,51 @@ import {
   type TerminalPromptInfo,
 } from '../../shared/terminal'
 
+const requireNative = createRequire(__filename)
+
 type TerminalSession = {
   ownerId: number
   process: IPty
+}
+
+function spawnPipeTerminal(
+  shell: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string>,
+  cols: number,
+  rows: number,
+): IPty {
+  const child = spawnChild(shell, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
+  return {
+    pid: child.pid ?? -1,
+    process: shell,
+    cols,
+    rows,
+    handleFlowControl: false,
+    onData: (listener: (data: string) => void) => {
+      const onData = (chunk: Buffer): void => listener(chunk.toString('utf8'))
+      child.stdout.on('data', onData)
+      child.stderr.on('data', onData)
+      return { dispose: () => {
+        child.stdout.off('data', onData)
+        child.stderr.off('data', onData)
+      } }
+    },
+    onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => {
+      const onExit = (exitCode: number | null, signal: NodeJS.Signals | null): void => {
+        listener({ exitCode: exitCode ?? 1, signal: signal ? 1 : 0 })
+      }
+      child.once('exit', onExit)
+      return { dispose: () => child.off('exit', onExit) }
+    },
+    write: (data: string) => { child.stdin.write(data) },
+    resize: () => undefined,
+    clear: () => undefined,
+    pause: () => child.stdout.pause(),
+    resume: () => child.stdout.resume(),
+    kill: () => { child.kill() },
+  } as IPty
 }
 
 const sessions = new Map<string, TerminalSession>()
@@ -78,13 +121,16 @@ export function createTerminalSession(
   const cols = clampDimension(request.cols, 2, 500)
   const rows = clampDimension(request.rows, 2, 300)
   const args = process.platform === 'win32' ? [] : ['-l']
-  const ptyProcess = spawn(shell, args, {
-    name: 'xterm-256color',
-    cols,
-    rows,
-    cwd,
-    env: terminalEnvironment(),
-  })
+  const env = terminalEnvironment()
+  const ptyProcess = process.versions.bun
+    ? spawnPipeTerminal(shell, args, cwd, env, cols, rows)
+    : (requireNative('node-pty') as typeof import('node-pty')).spawn(shell, args, {
+      name: 'xterm-256color',
+      cols,
+      rows,
+      cwd,
+      env,
+    })
 
   sessions.set(sessionId, { ownerId: sender.id, process: ptyProcess })
 
@@ -108,6 +154,10 @@ export function createTerminalSession(
       sender.send(TERMINAL_IPC.EXIT, { sessionId, exitCode, signal })
     }
   })
+
+  if (request.initialCommand) {
+    ptyProcess.write(`${request.initialCommand}\n`)
+  }
 
   return { sessionId, shell, cwd }
 }

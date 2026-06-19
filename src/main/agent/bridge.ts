@@ -29,7 +29,7 @@ import { once } from 'node:events'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { dialog } from 'electron'
+import { app, dialog } from 'electron'
 
 import { createLoopDriver, type PiEvent } from './loop'
 import type { Stage } from '../../shared/agent'
@@ -43,8 +43,18 @@ const PI_BIN_CANDIDATES = [
   path.join(homedir(), '.local', 'share', 'pnpm', 'pi'),
 ]
 
-const RAYMES_PI_EXTENSION = path.join(process.cwd(), 'src', 'main', 'agent', 'tezbar-pi-policy.ts')
 const OPENCODE_PI_EXTENSION = path.join(homedir(), '.pi', 'agent', 'extensions', 'opencode', 'index.ts')
+
+function resolveRaymesPiExtension(): string | undefined {
+  const candidates = [
+    process.env['RAYMES_PI_EXTENSION'],
+    path.join(process.cwd(), 'src', 'main', 'agent', 'raymes-pi-policy.ts'),
+    ...(app.isPackaged
+      ? [path.join(process.resourcesPath, 'agent', 'raymes-pi-policy.ts')]
+      : []),
+  ]
+  return candidates.find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)))
+}
 
 function resolvePiBinary(override?: string): string {
   if (override && override.trim()) return override.trim()
@@ -134,8 +144,8 @@ function spawnRpc(options: {
   if (options.ephemeral) args.push('--no-session')
   args.push('--no-extensions')
   if (options.model) args.push('--model', options.model)
-  if (options.model) args.push('--models', options.model)
-  if (existsSync(RAYMES_PI_EXTENSION)) args.push('--extension', RAYMES_PI_EXTENSION)
+  const raymesPiExtension = resolveRaymesPiExtension()
+  if (raymesPiExtension) args.push('--extension', raymesPiExtension)
   if (options.model?.startsWith('opencode/') && existsSync(OPENCODE_PI_EXTENSION)) {
     args.push('--extension', OPENCODE_PI_EXTENSION)
   }

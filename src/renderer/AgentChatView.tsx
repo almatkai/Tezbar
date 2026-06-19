@@ -73,7 +73,7 @@ export default function AgentChatView({
   const [historyOpen, setHistoryOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [runLogs, setRunLogs] = useState<string[]>([])
-  const [logsOpen, setLogsOpen] = useState(true)
+  const [logsOpen, setLogsOpen] = useState(false)
   const [llmConfig, setLlmConfig] = useState<LlmConfigRecord>({})
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
 
@@ -156,6 +156,7 @@ export default function AgentChatView({
     setAgentStatus('idle')
     setHistoryOpen(false)
     setRunLogs([])
+    setLogsOpen(false)
     focusChatInput()
   }, [stopRun])
 
@@ -172,6 +173,7 @@ export default function AgentChatView({
       setAgentStatus('idle')
       setHistoryOpen(false)
       setRunLogs([])
+      setLogsOpen(false)
       focusChatInput()
     } catch {
       /* ignore */
@@ -247,6 +249,7 @@ export default function AgentChatView({
       setAgentStreamText('')
       setAgentStatus('running')
       setRunLogs([])
+      setLogsOpen(false)
 
       try {
         const result = shouldRunAgent(trimmed)
@@ -371,6 +374,7 @@ export default function AgentChatView({
           agentErrorRef.current = null
           agentStatusRef.current = 'running'
           setRunLogs([])
+          setLogsOpen(false)
           setAgentStages([])
           setAgentStreamText('')
           setAgentError(null)

@@ -28,7 +28,7 @@ export type AXElement = {
 };
 
 const addonPath = path.resolve(__dirname, '../../native/input/index.node')
-const axHelperPath = path.resolve(__dirname, '../../native/axhelper/axhelper')
+const axHelperPath = process.env.AXHELPER_PATH || path.resolve(__dirname, '../../native/axhelper/axhelper')
 
 const requireNative = createRequire(__filename)
 

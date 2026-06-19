@@ -24,6 +24,15 @@ export function formatLlmErrorMessage(raw: string, providerLabel = 'AI provider'
     return `Model "${unsupportedModel[2]}" is not supported by this provider. Choose ${unsupportedModel[1]} and try again.`
   }
 
+  const missingModel = message.match(/Model\s+["']([^"']+)["']\s+not found/i)
+  if (missingModel) {
+    return `The selected model "${missingModel[1]}" is unavailable. Choose another model in AI settings and try again.`
+  }
+
+  if (/pi exited before finishing/i.test(message)) {
+    return 'The agent stopped before it could finish. Check the selected model in AI settings and try again.'
+  }
+
   if (!detail) return trimmed
   const status = trimmed.match(/\berror\s+(\d{3})\b/i)?.[1]
   return `${providerLabel} request failed${status ? ` (${status})` : ''}: ${detail}`
