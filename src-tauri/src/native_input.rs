@@ -10,6 +10,7 @@ use core_graphics::event::{
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use core_graphics::geometry::CGPoint;
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
+use tauri::WebviewWindow;
 
 const KCG_EVENT_SOURCE_STATE_HID_SYSTEM_STATE: u32 = 1;
 
@@ -255,7 +256,25 @@ pub fn scroll(x: f64, y: f64, dx: i32, dy: i32) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn screenshot() -> Result<Vec<u8>, String> {
+pub async fn screenshot(window: WebviewWindow) -> Result<Vec<u8>, String> {
+    window
+        .set_content_protected(true)
+        .map_err(|e| format!("failed to protect Raymes window: {e}"))?;
+    tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+
+    let result = capture_display();
+    let restore_result = window
+        .set_content_protected(false)
+        .map_err(|e| format!("failed to restore Raymes window capture setting: {e}"));
+
+    match (result, restore_result) {
+        (Ok(bytes), Ok(())) => Ok(bytes),
+        (Err(error), _) => Err(error),
+        (Ok(_), Err(error)) => Err(error),
+    }
+}
+
+fn capture_display() -> Result<Vec<u8>, String> {
     let image = CGDisplay::main()
         .image()
         .ok_or_else(|| "failed to capture display image".to_string())?;

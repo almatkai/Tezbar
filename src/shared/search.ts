@@ -22,6 +22,8 @@ export type ExtensionCommandArgument = {
   data?: Array<{ title?: string; value?: string }>
 }
 
+export type IconAssetKind = 'application' | 'extension' | 'file'
+
 export type SearchAction =
   | { type: 'open-app'; appName: string }
   | { type: 'open-file'; path: string }
@@ -36,6 +38,7 @@ export type SearchAction =
       extensionId: string
       commandName: string
       title: string
+      iconPath?: string
       argumentName?: string
       argumentValue?: string
       commandArgumentDefinitions?: ExtensionCommandArgument[]
@@ -56,6 +59,7 @@ export type SearchResult = {
   category: SearchCategory
   score: number
   action: SearchAction
+  iconDataUrl?: string
 }
 
 export type PathCompletionItem = {
@@ -67,6 +71,7 @@ export type PathCompletionItem = {
   badge?: string
   value: string
   path?: string
+  appPath?: string
   appName?: string
   iconDataUrl?: string
   applicationAction?: 'open' | 'open-with'

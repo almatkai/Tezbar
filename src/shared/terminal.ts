@@ -8,6 +8,10 @@ export const TERMINAL_IPC = {
   GET_PROMPT_INFO: 'terminal:get-prompt-info',
 } as const
 
+export function compactTerminalPath(value: string): string {
+  return value.replace(/^\/Users\/[^/]+(?=\/|$)/, '...')
+}
+
 export type TerminalCreateRequest = {
   cwd?: string
   initialCommand?: string

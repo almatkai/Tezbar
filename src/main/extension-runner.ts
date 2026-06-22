@@ -2,12 +2,12 @@ import { app, BrowserWindow, clipboard, nativeImage, shell } from 'electron'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { open as openFile, rm as removePath, writeFile } from 'node:fs/promises'
 import { execFile, spawn as nodeSpawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { get as httpGet } from 'node:http'
-import { get as httpsGet } from 'node:https'
+import { createHash, randomBytes } from 'node:crypto'
+import { createServer } from 'node:http'
 import { homedir } from 'node:os'
 import { createRequire, builtinModules } from 'node:module'
 import { basename, dirname, extname, join } from 'node:path'
+import { Readable } from 'node:stream'
 import {
   ReadableStream as NodeReadableStream,
   TransformStream as NodeTransformStream,
@@ -18,6 +18,7 @@ import { deserialize, serialize } from 'node:v8'
 import { gunzipSync, gzip } from 'node:zlib'
 import vm from 'node:vm'
 import { configurePackagedEsbuildBinary } from './esbuild-runtime'
+import { askExtensionAI } from './llm/extensionAI'
 import { setSuppressBlurHide } from './windowState'
 import type {
   ExtensionInvokeActionRequest,
@@ -26,6 +27,7 @@ import type {
   ExtensionRunCommandRequest,
   ExtensionRunCommandResult,
   ExtensionRuntimeAction,
+  ExtensionRuntimeEffect,
   ExtensionRuntimeNode,
   ExtensionRefreshSessionRequest,
   ExtensionRefreshSessionResult,
@@ -63,17 +65,20 @@ type RuntimeFeedback = {
   message?: string
 }
 
-type RuntimeActionHandler = (formValues?: Record<string, string>) => Promise<void> | void
+type RuntimeActionHandler = (formValues?: Record<string, unknown>) => Promise<void> | void
 
 type RuntimeSession = {
   id: string
   extensionId: string
   commandName: string
+  commandMode: string
   title: string
   packageRoot: string
   actionHandlers: Map<string, RuntimeActionHandler>
   currentActions: ExtensionRuntimeAction[]
   feedback: RuntimeFeedback[]
+  effects: ExtensionRuntimeEffect[]
+  effectMode: 'system' | 'record'
   stack: unknown[]
   preferences: Record<string, unknown>
   searchTextChangeHandler: ((text: string) => void) | null
@@ -84,18 +89,40 @@ type RuntimeSession = {
   hookStates: unknown[]
   hookIndex: number
   pendingPromises: Array<Promise<unknown>>
-  promiseCache: Map<string, {
-    promise?: Promise<unknown>
-    data?: unknown
-    error?: unknown
-    label?: string
-    startedAt?: number
-  }>
+  promiseCache: Map<
+    string,
+    {
+      promise?: Promise<unknown>
+      data?: unknown
+      error?: unknown
+      label?: string
+      startedAt?: number
+    }
+  >
   promiseKeysByHook: Map<number, string>
+  promisePaginationByHook: Map<
+    number,
+    {
+      key: string
+      page: number
+      hasMore: boolean
+      loader: (options: { page: number }) => Promise<unknown> | unknown
+      loadingPromise: Promise<void> | null
+    }
+  >
+  serverLoadMoreHandler: (() => Promise<void>) | null
+  serverHasMore: boolean
+  serverLoadMoreRequest: Promise<ExtensionRefreshSessionResult> | null
   cacheRecoveryKeys: Set<string>
   abortControllers: Set<AbortController>
-  effectCleanups: Map<number, (() => void)>
+  effectCleanups: Map<number, () => void>
   effectDeps: Map<number, unknown[] | undefined>
+  pendingEffects: Array<{
+    idx: number
+    sideEffect: () => void | (() => void)
+    deps?: unknown[]
+    label: string
+  }>
   hasStateUpdates: boolean
   disposed: boolean
   listItemLimit: number
@@ -107,6 +134,7 @@ type RuntimeSession = {
     alpha: number
     colorSpace: string
   } | null
+  renderErrors: string[]
 }
 
 type JsxNode = {
@@ -149,7 +177,7 @@ const promiseResultMemoryCache = new Map<string, { data: unknown; cachedAt: numb
 
 function setPromiseResultMemoryCache(
   key: string,
-  value: { data: unknown; cachedAt: number },
+  value: { data: unknown; cachedAt: number }
 ): void {
   // Evict oldest entries when the in-memory promise cache grows too large.
   if (
@@ -166,12 +194,10 @@ function setPromiseResultMemoryCache(
   promiseResultMemoryCache.set(key, value)
 }
 
-let applicationsCache:
-  | {
-    expiresAt: number
-    promise: Promise<Array<{ name: string; path: string; bundleId?: string }>>
-  }
-  | null = null
+let applicationsCache: {
+  expiresAt: number
+  promise: Promise<Array<{ name: string; path: string; bundleId?: string }>>
+} | null = null
 
 type WalkRuntimeOptions = {
   listItemsSeen?: { count: number }
@@ -183,7 +209,7 @@ const iconProxy = new Proxy(
   {},
   {
     get: (_target, prop) => String(prop),
-  },
+  }
 )
 
 function makeId(prefix: string): string {
@@ -198,10 +224,39 @@ function elapsedMs(startedAt: number): string {
   return `${Date.now() - startedAt}ms`
 }
 
+function hookDepsEqual(previous: unknown[] | undefined, next: unknown[] | undefined): boolean {
+  if (!previous || !next || previous.length !== next.length) return false
+  return next.every((value, index) => Object.is(value, previous[index]))
+}
+
+function flushPendingEffects(session: RuntimeSession): void {
+  const effects = session.pendingEffects.splice(0)
+  for (const { idx, sideEffect, deps, label } of effects) {
+    const previousCleanup = session.effectCleanups.get(idx)
+    if (previousCleanup) {
+      try {
+        previousCleanup()
+      } catch (error) {
+        console.error(`[${label}] cleanup threw:`, error)
+      }
+      session.effectCleanups.delete(idx)
+    }
+
+    try {
+      const cleanup = sideEffect()
+      session.effectDeps.set(idx, deps)
+      if (typeof cleanup === 'function') session.effectCleanups.set(idx, cleanup)
+    } catch (error) {
+      console.error(`[${label}] side effect threw:`, error)
+    }
+  }
+}
+
 function promiseHookLabel(hookIdx: number, fn: unknown, args: unknown[]): string {
-  const source = typeof fn === 'function'
-    ? fn.toString().replace(/\s+/g, ' ').slice(0, 90)
-    : String(fn).slice(0, 90)
+  const source =
+    typeof fn === 'function'
+      ? fn.toString().replace(/\s+/g, ' ').slice(0, 90)
+      : String(fn).slice(0, 90)
   let serializedArgs = ''
   try {
     serializedArgs = JSON.stringify(args)
@@ -226,7 +281,7 @@ function promiseResultCachePath(session: RuntimeSession, key: string): string {
 
 function readPromiseResultCache(
   session: RuntimeSession,
-  key: string,
+  key: string
 ): { data: unknown; cachedAt: number } | null {
   const memoryKey = `${session.extensionId}/${session.commandName}:${key}`
   const memoryEntry = promiseResultMemoryCache.get(memoryKey)
@@ -245,7 +300,7 @@ function readPromiseResultCache(
     }
     setPromiseResultMemoryCache(memoryKey, payload)
     console.log(
-      `[usePromise] Persistent cache hit ${session.extensionId}/${session.commandName}; bytes=${compressed.byteLength}`,
+      `[usePromise] Persistent cache hit ${session.extensionId}/${session.commandName}; bytes=${compressed.byteLength}`
     )
     return payload
   } catch {
@@ -253,11 +308,7 @@ function readPromiseResultCache(
   }
 }
 
-function writePromiseResultCache(
-  session: RuntimeSession,
-  key: string,
-  data: unknown,
-): void {
+function writePromiseResultCache(session: RuntimeSession, key: string, data: unknown): void {
   if (data === undefined || session.disposed) return
 
   const cachedAt = Date.now()
@@ -273,20 +324,22 @@ function writePromiseResultCache(
       mkdirSync(dirname(cachePath), { recursive: true })
       await writeFile(cachePath, compressed)
       console.log(
-        `[usePromise] Persistent cache write complete after ${elapsedMs(startedAt)}; raw=${encoded.byteLength}, compressed=${compressed.byteLength}`,
+        `[usePromise] Persistent cache write complete after ${elapsedMs(startedAt)}; raw=${encoded.byteLength}, compressed=${compressed.byteLength}`
       )
     } catch (error) {
       console.warn(
         '[usePromise] Persistent cache write failed:',
-        error instanceof Error ? error.message : String(error),
+        error instanceof Error ? error.message : String(error)
       )
     }
   })()
 }
 
-function createLoggedFetch(session: RuntimeSession): typeof fetch {
+function createLoggedFetch(): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const method = String(init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
+    const method = String(
+      init?.method ?? (input instanceof Request ? input.method : 'GET')
+    ).toUpperCase()
     const url = input instanceof Request ? input.url : String(input)
     const startedAt = Date.now()
     console.log(`[ExtensionFetch] start ${method} ${url}`)
@@ -295,7 +348,7 @@ function createLoggedFetch(session: RuntimeSession): typeof fetch {
       const response = await fetch(input, init)
       const contentLength = response.headers.get('content-length') ?? 'unknown'
       console.log(
-        `[ExtensionFetch] headers ${method} ${url} after ${elapsedMs(startedAt)}; status=${response.status}, length=${contentLength}`,
+        `[ExtensionFetch] headers ${method} ${url} after ${elapsedMs(startedAt)}; status=${response.status}, length=${contentLength}`
       )
 
       if (!response.body || method === 'HEAD') {
@@ -312,7 +365,7 @@ function createLoggedFetch(session: RuntimeSession): typeof fetch {
           const now = Date.now()
           if (now - lastLoggedAt >= 2_000 || bytes - lastLoggedBytes >= 5 * 1024 * 1024) {
             console.log(
-              `[ExtensionFetch] progress ${method} ${url}; bytes=${bytes}, elapsed=${elapsedMs(startedAt)}`,
+              `[ExtensionFetch] progress ${method} ${url}; bytes=${bytes}, elapsed=${elapsedMs(startedAt)}`
             )
             lastLoggedAt = now
             lastLoggedBytes = bytes
@@ -321,7 +374,7 @@ function createLoggedFetch(session: RuntimeSession): typeof fetch {
         },
         flush() {
           console.log(
-            `[ExtensionFetch] body complete ${method} ${url}; bytes=${bytes}, elapsed=${elapsedMs(startedAt)}`,
+            `[ExtensionFetch] body complete ${method} ${url}; bytes=${bytes}, elapsed=${elapsedMs(startedAt)}`
           )
         },
       })
@@ -334,7 +387,7 @@ function createLoggedFetch(session: RuntimeSession): typeof fetch {
     } catch (error) {
       console.error(
         `[ExtensionFetch] failed ${method} ${url} after ${elapsedMs(startedAt)}:`,
-        error instanceof Error ? error.message : String(error),
+        error instanceof Error ? error.message : String(error)
       )
       throw error
     }
@@ -344,12 +397,12 @@ function createLoggedFetch(session: RuntimeSession): typeof fetch {
 async function recoverIncompleteChunkedCache(
   session: RuntimeSession,
   error: unknown,
-  promiseKey: string,
+  promiseKey: string
 ): Promise<boolean> {
   if (!(error instanceof Error) || session.cacheRecoveryKeys.has(promiseKey)) return false
 
   const missingIndex = error.message.match(
-    /ENOENT:.*open ['"]([^'"]+)[/\\]([^/\\]+)[/\\]index\.json['"]/,
+    /ENOENT:.*open ['"]([^'"]+)[/\\]([^/\\]+)[/\\]index\.json['"]/
   )
   if (!missingIndex) return false
 
@@ -360,10 +413,7 @@ async function recoverIncompleteChunkedCache(
   const supportRoot = join(session.packageRoot, '.tezbar-support')
   const chunkDirectory = join(indexPath, cacheName)
   const sourcePath = join(indexPath, `${cacheName}.json`)
-  if (
-    dirname(sourcePath) !== supportRoot ||
-    dirname(chunkDirectory) !== supportRoot
-  ) {
+  if (dirname(sourcePath) !== supportRoot || dirname(chunkDirectory) !== supportRoot) {
     return false
   }
 
@@ -381,7 +431,7 @@ async function recoverIncompleteChunkedCache(
   } catch {
     return false
   } finally {
-    await handle?.close().catch(() => { })
+    await handle?.close().catch(() => {})
   }
 
   session.cacheRecoveryKeys.add(promiseKey)
@@ -390,53 +440,9 @@ async function recoverIncompleteChunkedCache(
     removePath(chunkDirectory, { recursive: true, force: true }),
   ])
   console.warn(
-    `[Runner] Removed incomplete extension cache "${cacheName}" and scheduled one rebuild.`,
+    `[Runner] Removed incomplete extension cache "${cacheName}" and scheduled one rebuild.`
   )
   return true
-}
-
-function axiosGetShim(url: string, options?: { responseType?: string }): Promise<{ data: unknown; status: number; headers: Record<string, string> }> {
-  if (options?.responseType !== 'stream') {
-    return fetch(url).then(async (response) => {
-      const text = await response.text()
-      let data: unknown = text
-      try {
-        if (response.headers.get('content-type')?.includes('application/json')) {
-          data = JSON.parse(text)
-        }
-      } catch {
-        // Fallback to text
-      }
-      const headers: Record<string, string> = {}
-      response.headers.forEach((v, k) => {
-        headers[k] = v
-      })
-      return { data, status: response.status, headers }
-    })
-  }
-
-  return new Promise((resolve, reject) => {
-    const client = url.startsWith('https:') ? httpsGet : httpGet
-    const request = client(url, (response) => {
-      const status = response.statusCode ?? 0
-      if (status >= 300 && status < 400 && response.headers.location) {
-        void axiosGetShim(new URL(response.headers.location, url).toString(), options).then(resolve, reject)
-        response.resume()
-        return
-      }
-      if (status < 200 || status >= 300) {
-        response.resume()
-        reject(new Error(`Request failed with status ${status}`))
-        return
-      }
-      const headers: Record<string, string> = {}
-      for (const [k, v] of Object.entries(response.headers)) {
-        if (v !== undefined) headers[k] = Array.isArray(v) ? v.join(', ') : v
-      }
-      resolve({ data: response, status, headers })
-    })
-    request.on('error', reject)
-  })
 }
 
 function createFetchModuleShim(): typeof fetch & {
@@ -477,6 +483,12 @@ async function runAppleScript(source: string): Promise<string> {
     maxBuffer: 10 * 1024 * 1024,
   })
   return String(stdout).replace(/\r?\n$/, '')
+}
+
+async function runAppleScriptForSession(session: RuntimeSession, source: string): Promise<string> {
+  pushEffect(session, { kind: 'apple-script', value: String(source ?? '').slice(0, 2_000) })
+  if (session.effectMode === 'record') return ''
+  return runAppleScript(source)
 }
 
 function nativeColorPickerBinaryPath(): string {
@@ -564,9 +576,10 @@ async function pickColorWithNativeSampler(): Promise<{
       green,
       blue,
       alpha,
-      colorSpace: typeof parsed.colorSpace === 'string' && parsed.colorSpace.trim()
-        ? parsed.colorSpace
-        : 'srgb',
+      colorSpace:
+        typeof parsed.colorSpace === 'string' && parsed.colorSpace.trim()
+          ? parsed.colorSpace
+          : 'srgb',
     }
   } catch {
     return null
@@ -577,6 +590,61 @@ async function pickColorWithNativeSampler(): Promise<{
       if (!window.isDestroyed()) {
         window.show()
         window.focus()
+      }
+    }
+  }
+}
+
+type ScreenOcrHelperResponse = {
+  ok?: boolean
+  value?: string
+  error?: string
+}
+
+function screenOcrHelperPath(): string {
+  if (process.env.SCREENOCR_HELPER_PATH) return process.env.SCREENOCR_HELPER_PATH
+  if (app?.isPackaged) {
+    const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
+    if (resourcesPath) {
+      return join(resourcesPath, 'app.asar.unpacked', 'native', 'screenocr', 'screenocr-helper')
+    }
+  }
+  return join(process.cwd(), 'native', 'screenocr', 'screenocr-helper')
+}
+
+async function runScreenOcrHelper(
+  command: 'recognize-text' | 'detect-barcode',
+  values: Record<string, unknown>,
+): Promise<string> {
+  const helperPath = screenOcrHelperPath()
+  if (!existsSync(helperPath)) {
+    throw new Error(`ScreenOCR native helper is missing at ${helperPath}`)
+  }
+
+  const visibleWindows = BrowserWindow?.getAllWindows
+    ? BrowserWindow.getAllWindows().filter((window) => window.isVisible())
+    : []
+  const shouldHideApp = command === 'recognize-text' && values.fullscreen === true
+  try {
+    if (shouldHideApp) {
+      setSuppressBlurHide(true)
+      for (const window of visibleWindows) window.hide()
+      app?.hide?.()
+      await delay(120)
+    }
+    const { stdout } = await execFileAsync(helperPath, [command, JSON.stringify(values)], {
+      timeout: 180_000,
+      maxBuffer: 10 * 1024 * 1024,
+    })
+    const response = JSON.parse(stdout.trim()) as ScreenOcrHelperResponse
+    if (!response.ok) throw new Error(response.error || 'ScreenOCR native helper failed')
+    return response.value ?? ''
+  } finally {
+    if (shouldHideApp) {
+      setSuppressBlurHide(false)
+      app?.show?.()
+      for (const window of visibleWindows) {
+        if (!window.isDestroyed()) window.show()
       }
     }
   }
@@ -596,10 +664,7 @@ function attachRuntimeRootMetadata(root: ExtensionRuntimeNode, session: RuntimeS
   }
 }
 
-function buildPreferenceSetupRoot(
-  extensionId: string,
-  commandName: string,
-): ExtensionRuntimeNode {
+function buildPreferenceSetupRoot(extensionId: string, commandName: string): ExtensionRuntimeNode {
   const setup = getExtensionPreferenceSetup(extensionId, commandName)
   return {
     type: 'Tezbar.PreferenceSetup',
@@ -637,7 +702,7 @@ function findCommandInManifest(pkg: ExtensionPackageJson, commandName: string): 
 function resolveCommandEntry(
   packageRoot: string,
   commandName: string,
-  command: PackageCommand,
+  command: PackageCommand
 ): string {
   const prebuilt = join(packageRoot, '.sc-build', `${commandName}.js`)
   if (existsSync(prebuilt)) return prebuilt
@@ -681,6 +746,26 @@ async function bundleCommand(entryPath: string, packageRoot: string): Promise<st
   // are pre-built at install time and this fallback is never hit.
   configurePackagedEsbuildBinary()
   const esbuild = await import('esbuild')
+  const legacyCheerioInterop: import('esbuild').Plugin = {
+    name: 'legacy-cheerio-default-interop',
+    setup(build) {
+      build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, (args) => {
+        const source = readFileSync(args.path, 'utf8')
+        if (!/import\s+[A-Za-z_$][\w$]*\s+from\s+['"]cheerio['"]/.test(source)) return null
+        const extension = extname(args.path).toLowerCase()
+        const loader = (
+          extension.endsWith('x') ? extension.slice(1) : extension.slice(1) || 'js'
+        ) as import('esbuild').Loader
+        return {
+          contents: source.replace(
+            /import\s+([A-Za-z_$][\w$]*)\s+from\s+(['"])cheerio\2/g,
+            'import * as $1 from $2cheerio$2'
+          ),
+          loader,
+        }
+      })
+    },
+  }
 
   const result = await esbuild.build({
     entryPoints: [entryPath],
@@ -688,6 +773,8 @@ async function bundleCommand(entryPath: string, packageRoot: string): Promise<st
     bundle: true,
     format: 'cjs',
     platform: 'node',
+    conditions: ['require', 'node'],
+    plugins: [legacyCheerioInterop],
     write: false,
     target: 'node20',
     external: [
@@ -726,42 +813,21 @@ function createJsxRuntimeShim(): Record<string, unknown> {
 
 function createReactShim(session: RuntimeSession): Record<string, unknown> {
   const jsxRuntime = createJsxRuntimeShim()
-  const jsx = jsxRuntime.jsx as (type: unknown, props?: Record<string, unknown>, key?: unknown) => JsxNode
+  const jsx = jsxRuntime.jsx as (
+    type: unknown,
+    props?: Record<string, unknown>,
+    key?: unknown
+  ) => JsxNode
 
-  const areHookDepsEqual = (prev: unknown[] | undefined, next: unknown[] | undefined): boolean => {
-    if (!prev || !next) return false
-    if (prev.length !== next.length) return false
-    return next.every((value, index) => Object.is(value, prev[index]))
-  }
-
-  const runEffect = (
+  const queueEffect = (
     idx: number,
     sideEffect: () => void | (() => void),
     deps?: unknown[],
-    label = 'useEffect',
+    label = 'useEffect'
   ): void => {
     const prevDeps = session.effectDeps.get(idx)
-    if (deps && areHookDepsEqual(prevDeps, deps)) return
-
-    const previousCleanup = session.effectCleanups.get(idx)
-    if (previousCleanup) {
-      try {
-        previousCleanup()
-      } catch (e) {
-        console.error(`[${label}] cleanup threw:`, e)
-      }
-      session.effectCleanups.delete(idx)
-    }
-
-    try {
-      const cleanup = sideEffect()
-      session.effectDeps.set(idx, deps)
-      if (typeof cleanup === 'function') {
-        session.effectCleanups.set(idx, cleanup)
-      }
-    } catch (e) {
-      console.error(`[${label}] side effect threw:`, e)
-    }
+    if (deps && hookDepsEqual(prevDeps, deps)) return
+    session.pendingEffects.push({ idx, sideEffect, deps, label })
   }
 
   class Component<P = Record<string, unknown>, S = Record<string, unknown>> {
@@ -773,12 +839,7 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       this.state = {} as S
     }
 
-    setState(
-      next:
-        | Partial<S>
-        | S
-        | ((previous: S, props: P) => Partial<S> | S | null),
-    ): void {
+    setState(next: Partial<S> | S | ((previous: S, props: P) => Partial<S> | S | null)): void {
       const resolved =
         typeof next === 'function'
           ? (next as (previous: S, props: P) => S | Partial<S> | null)(this.state, this.props)
@@ -800,7 +861,11 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
     Component,
     PureComponent: Component,
     Fragment: JSX_FRAGMENT,
-    createElement: (type: unknown, props: Record<string, unknown> | null, ...children: unknown[]) => {
+    createElement: (
+      type: unknown,
+      props: Record<string, unknown> | null,
+      ...children: unknown[]
+    ) => {
       const nextProps = { ...(props ?? {}) }
       if (children.length === 1) {
         nextProps.children = children[0]
@@ -809,7 +874,7 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       }
       return jsx(type, nextProps)
     },
-    createContext: <T,>(defaultValue: T): ReactContextShim<T> => {
+    createContext: <T>(defaultValue: T): ReactContextShim<T> => {
       const context = {
         $$typeof: REACT_CONTEXT,
         _currentValue: defaultValue,
@@ -827,7 +892,7 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       }
       return context
     },
-    useState: <T,>(initial: T | (() => T)): [T, (next: T | ((prev: T) => T)) => void] => {
+    useState: <T>(initial: T | (() => T)): [T, (next: T | ((prev: T) => T)) => void] => {
       const idx = session.hookIndex++
       if (session.hookStates.length > idx) {
         return session.hookStates[idx] as [T, (next: T | ((prev: T) => T)) => void]
@@ -844,18 +909,18 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
     },
     useEffect: (sideEffect: () => void | (() => void), deps?: unknown[]): void => {
       const idx = session.hookIndex++
-      runEffect(idx, sideEffect, deps, 'useEffect')
+      queueEffect(idx, sideEffect, deps, 'useEffect')
     },
     useLayoutEffect: (sideEffect: () => void | (() => void), deps?: unknown[]): void => {
       const idx = session.hookIndex++
-      runEffect(idx, sideEffect, deps, 'useLayoutEffect')
+      queueEffect(idx, sideEffect, deps, 'useLayoutEffect')
     },
-    useMemo: <T,>(factory: () => T, deps?: unknown[]): T => {
+    useMemo: <T>(factory: () => T, deps?: unknown[]): T => {
       const idx = session.hookIndex++
       const existing = session.hookStates[idx] as
         | { kind: 'memo'; value: T; deps?: unknown[] }
         | undefined
-      if (existing?.kind === 'memo' && deps && areHookDepsEqual(existing.deps, deps)) {
+      if (existing?.kind === 'memo' && deps && hookDepsEqual(existing.deps, deps)) {
         return existing.value
       }
       const value = factory()
@@ -867,13 +932,13 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       const existing = session.hookStates[idx] as
         | { kind: 'callback'; value: T; deps?: unknown[] }
         | undefined
-      if (existing?.kind === 'callback' && deps && areHookDepsEqual(existing.deps, deps)) {
+      if (existing?.kind === 'callback' && deps && hookDepsEqual(existing.deps, deps)) {
         return existing.value
       }
       session.hookStates[idx] = { kind: 'callback', value: callback, deps }
       return callback
     },
-    useRef: <T,>(value: T): { current: T } => {
+    useRef: <T>(value: T): { current: T } => {
       const idx = session.hookIndex++
       const existing = session.hookStates[idx] as { current: T } | undefined
       if (existing && typeof existing === 'object' && 'current' in existing) {
@@ -883,15 +948,47 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       session.hookStates[idx] = ref
       return ref
     },
-    useContext: <T,>(context?: ReactContextShim<T>): T | null => {
+    useContext: <T>(context?: ReactContextShim<T>): T | null => {
       session.hookIndex++
-      return context && context.$$typeof === REACT_CONTEXT
-        ? context._currentValue
-        : null
+      return context && context.$$typeof === REACT_CONTEXT ? context._currentValue : null
+    },
+    useDebugValue: (): void => {
+      session.hookIndex++
+    },
+    useSyncExternalStore: <T>(
+      subscribe: (onStoreChange: () => void) => (() => void) | void,
+      getSnapshot: () => T,
+      getServerSnapshot?: () => T
+    ): T => {
+      void getServerSnapshot
+      const idx = session.hookIndex++
+      const snapshot = getSnapshot()
+      const existing = session.hookStates[idx] as
+        | { kind: 'external-store'; snapshot: T }
+        | undefined
+      const state =
+        existing?.kind === 'external-store'
+          ? existing
+          : { kind: 'external-store' as const, snapshot }
+      state.snapshot = snapshot
+      session.hookStates[idx] = state
+      queueEffect(
+        idx,
+        () =>
+          subscribe(() => {
+            const nextSnapshot = getSnapshot()
+            if (Object.is(state.snapshot, nextSnapshot)) return
+            state.snapshot = nextSnapshot
+            session.hasStateUpdates = true
+          }),
+        [subscribe, getSnapshot],
+        'useSyncExternalStore'
+      )
+      return snapshot
     },
     useReducer: <S, A>(
       reducer: (state: S, action: A) => S,
-      initialArg: S,
+      initialArg: S
     ): [S, (action: A) => void] => {
       const idx = session.hookIndex++
       if (session.hookStates.length > idx) {
@@ -907,8 +1004,8 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       session.hookStates[idx] = tuple
       return tuple
     },
-    memo: <T,>(component: T): T => component,
-    forwardRef: <T,>(renderer: T): T => renderer,
+    memo: <T>(component: T): T => component,
+    forwardRef: <T>(renderer: T): T => renderer,
     isValidElement: (value: unknown): boolean => isJsxNode(value),
   }
 
@@ -928,7 +1025,7 @@ function isToken(value: unknown): value is RaycastComponentToken {
     value &&
     typeof value === 'object' &&
     (value as { __raycastComponent?: unknown }).__raycastComponent === true &&
-    typeof (value as { name?: unknown }).name === 'string',
+    typeof (value as { name?: unknown }).name === 'string'
   )
 }
 
@@ -958,10 +1055,7 @@ function normalizeActionTitle(typeName: string, props: Record<string, unknown>):
 }
 
 function stableActionId(index: number, typeName: string, title: string): string {
-  const hash = createHash('sha1')
-    .update(`${index}:${typeName}:${title}`)
-    .digest('hex')
-    .slice(0, 12)
+  const hash = createHash('sha1').update(`${index}:${typeName}:${title}`).digest('hex').slice(0, 12)
   return `ext-action-${index}-${hash}`
 }
 
@@ -980,6 +1074,13 @@ function pushFeedback(session: RuntimeSession, feedback: RuntimeFeedback): void 
   session.feedback.push(feedback)
   if (session.feedback.length > 20) {
     session.feedback.splice(0, session.feedback.length - 20)
+  }
+}
+
+function pushEffect(session: RuntimeSession, effect: ExtensionRuntimeEffect): void {
+  session.effects.push(effect)
+  if (session.effects.length > 50) {
+    session.effects.splice(0, session.effects.length - 50)
   }
 }
 
@@ -1018,15 +1119,15 @@ function createLocalStorageShim(packageRoot: string): Record<string, unknown> {
   }
 }
 
-function createCacheShim(packageRoot: string): new (
-  options?: { namespace?: string },
-) => {
+function createCacheShim(packageRoot: string): new (options?: { namespace?: string }) => {
   get: (key: string) => string | undefined
   set: (key: string, value: string) => void
   has: (key: string) => boolean
   remove: (key: string) => boolean
   clear: (_options?: { notifySubscribers?: boolean }) => void
-  subscribe: (subscriber: (key: string | undefined, value: string | undefined) => void) => () => void
+  subscribe: (
+    subscriber: (key: string | undefined, value: string | undefined) => void
+  ) => () => void
   readonly isEmpty: boolean
 } {
   return class CacheShim {
@@ -1108,7 +1209,7 @@ function createCacheShim(packageRoot: string): new (
     }
 
     subscribe(
-      subscriber: (key: string | undefined, value: string | undefined) => void,
+      subscriber: (key: string | undefined, value: string | undefined) => void
     ): () => void {
       this.subscribers.add(subscriber)
       return () => {
@@ -1118,7 +1219,20 @@ function createCacheShim(packageRoot: string): new (
   }
 }
 
-function copyToSystemClipboard(value: unknown): void {
+function copyToSystemClipboard(session: RuntimeSession, value: unknown): void {
+  const effectValue =
+    typeof value === 'string'
+      ? value
+      : value && typeof value === 'object'
+        ? String(
+            (value as { text?: unknown; file?: unknown }).text ??
+              (value as { file?: unknown }).file ??
+              ''
+          )
+        : String(value ?? '')
+  pushEffect(session, { kind: 'clipboard', value: effectValue.slice(0, 2_000) })
+  if (session.effectMode === 'record') return
+
   if (value && typeof value === 'object') {
     const payload = value as { text?: unknown; file?: unknown; html?: unknown }
     if (typeof payload.file === 'string' && payload.file.trim()) {
@@ -1148,7 +1262,98 @@ function copyToSystemClipboard(value: unknown): void {
   clipboard.writeText(String(value ?? ''))
 }
 
+function avatarIcon(value: unknown): { source: string } {
+  const text = String(value ?? '?').trim() || '?'
+  const initials =
+    text
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join('')
+      .replace(/[<>&"']/g, '') || '?'
+  let hash = 0
+  for (const char of text) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  const hue = hash % 360
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="hsl(${hue} 58% 42%)"/><text x="32" y="39" text-anchor="middle" fill="white" font-family="-apple-system, sans-serif" font-size="22" font-weight="600">${initials}</text></svg>`
+  return { source: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}` }
+}
+
 function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> {
+  class PKCEClientShim {
+    private readonly tokenPath: string
+
+    constructor(options: { providerId?: unknown; providerName?: unknown } = {}) {
+      const providerId = String(options.providerId ?? options.providerName ?? 'oauth')
+        .replace(/[^a-z0-9._-]+/gi, '_')
+        .toLowerCase()
+      this.tokenPath = join(session.packageRoot, '.tezbar-support', 'oauth', `${providerId}.json`)
+    }
+
+    async getTokens(): Promise<
+      | {
+          accessToken?: string
+          refreshToken?: string
+          idToken?: string
+          scope?: string
+          expiresIn?: number
+          isExpired: () => boolean
+        }
+      | undefined
+    > {
+      if (!existsSync(this.tokenPath)) return undefined
+      try {
+        const stored = JSON.parse(readFileSync(this.tokenPath, 'utf8')) as {
+          accessToken?: string
+          refreshToken?: string
+          idToken?: string
+          scope?: string
+          expiresIn?: number
+        }
+        return {
+          ...stored,
+          isExpired: () => typeof stored.expiresIn === 'number' && stored.expiresIn <= Date.now(),
+        }
+      } catch {
+        return undefined
+      }
+    }
+
+    async setTokens(response: Record<string, unknown>): Promise<void> {
+      const expiresInSeconds = Number(response.expires_in)
+      const tokens = {
+        accessToken: String(response.access_token ?? response.accessToken ?? ''),
+        refreshToken: String(response.refresh_token ?? response.refreshToken ?? ''),
+        idToken: String(response.id_token ?? response.idToken ?? ''),
+        scope: String(response.scope ?? ''),
+        expiresIn: Number.isFinite(expiresInSeconds)
+          ? Date.now() + expiresInSeconds * 1_000
+          : Number(response.expiresIn) || undefined,
+      }
+      mkdirSync(dirname(this.tokenPath), { recursive: true })
+      writeFileSync(this.tokenPath, JSON.stringify(tokens), 'utf8')
+    }
+
+    async removeTokens(): Promise<void> {
+      await removePath(this.tokenPath, { force: true })
+    }
+
+    async authorizationRequest(options: {
+      endpoint: string
+      clientId: string
+      scope: string
+    }): Promise<Record<string, string>> {
+      return {
+        ...options,
+        codeVerifier: makeId('pkce').replace(/[^a-z0-9]/gi, ''),
+        redirectURI: `raycast://oauth?extension=${encodeURIComponent(session.extensionId)}`,
+      }
+    }
+
+    async authorize(): Promise<never> {
+      throw new Error('Interactive OAuth authorization is not yet available in Raymes')
+    }
+  }
+
   const ListItemDetailMetadata = Object.assign(makeToken('List.Item.Detail.Metadata'), {
     Label: makeToken('List.Item.Detail.Metadata.Label'),
     TagList: Object.assign(makeToken('List.Item.Detail.Metadata.TagList'), {
@@ -1173,11 +1378,20 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     }),
   })
 
+  const FormDropdown = Object.assign(makeToken('Form.Dropdown'), {
+    Item: makeToken('Form.Dropdown.Item'),
+    Section: makeToken('Form.Dropdown.Section'),
+  })
+  const FormTagPicker = Object.assign(makeToken('Form.TagPicker'), {
+    Item: makeToken('Form.TagPicker.Item'),
+  })
   const Form = Object.assign(makeToken('Form'), {
     TextField: makeToken('Form.TextField'),
     TextArea: makeToken('Form.TextArea'),
     Checkbox: makeToken('Form.Checkbox'),
-    Dropdown: makeToken('Form.Dropdown'),
+    Dropdown: FormDropdown,
+    TagPicker: FormTagPicker,
+    FilePicker: makeToken('Form.FilePicker'),
     DatePicker: makeToken('Form.DatePicker'),
     PasswordField: makeToken('Form.PasswordField'),
     Separator: makeToken('Form.Separator'),
@@ -1193,6 +1407,10 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       Small: 'small',
       Medium: 'medium',
       Large: 'large',
+    },
+    Fit: {
+      Fill: 'fill',
+      Contain: 'contain',
     },
   })
 
@@ -1239,23 +1457,63 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       Animated: 'animated',
     }
 
-    style?: string
-    title: string
-    message?: string
+    private currentStyle?: string
+    private currentTitle: string
+    private currentMessage?: string
+    private shownFeedback?: RuntimeFeedback
+    private shownEffect?: ExtensionRuntimeEffect
 
     constructor(options: { style?: string; title: string; message?: string }) {
-      this.style = options.style
-      this.title = options.title
-      this.message = options.message
+      this.currentStyle = options.style
+      this.currentTitle = options.title
+      this.currentMessage = options.message
+    }
+
+    get style(): string | undefined {
+      return this.currentStyle
+    }
+
+    set style(value: string | undefined) {
+      this.currentStyle = value
+      if (this.shownFeedback) this.shownFeedback.style = value
+      if (this.shownEffect) this.shownEffect.style = value
+    }
+
+    get title(): string {
+      return this.currentTitle
+    }
+
+    set title(value: string) {
+      this.currentTitle = value
+      if (this.shownFeedback) this.shownFeedback.title = value
+      if (this.shownEffect) this.shownEffect.title = value
+    }
+
+    get message(): string | undefined {
+      return this.currentMessage
+    }
+
+    set message(value: string | undefined) {
+      this.currentMessage = value
+      if (this.shownFeedback) this.shownFeedback.message = value
+      if (this.shownEffect) this.shownEffect.message = value
     }
 
     async show(): Promise<void> {
-      pushFeedback(session, {
+      this.shownFeedback = {
         kind: 'toast',
-        style: this.style,
-        title: this.title,
-        message: this.message,
-      })
+        style: this.currentStyle,
+        title: this.currentTitle,
+        message: this.currentMessage,
+      }
+      this.shownEffect = {
+        kind: 'toast',
+        style: this.currentStyle,
+        title: this.currentTitle,
+        message: this.currentMessage,
+      }
+      pushFeedback(session, this.shownFeedback)
+      pushEffect(session, this.shownEffect)
     }
 
     async hide(): Promise<void> {
@@ -1267,8 +1525,25 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     List,
     Form,
     Grid,
+    AI: {
+      ask: async (prompt: unknown): Promise<string> => askExtensionAI(String(prompt ?? '')),
+      Creativity: {
+        None: 'none',
+        Low: 'low',
+        Medium: 'medium',
+        High: 'high',
+        Maximum: 'maximum',
+      },
+    },
     Detail,
     MenuBarExtra,
+    OAuth: {
+      PKCEClient: PKCEClientShim,
+      RedirectMethod: {
+        AppURI: 'appURI',
+        Web: 'web',
+      },
+    },
     Action,
     ActionPanel,
     Icon: iconProxy,
@@ -1293,22 +1568,23 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       extensionName: session.extensionId,
       commandName: session.commandName,
       isDevelopment: false,
-      commandMode: 'view',
+      commandMode: session.commandMode,
       assetsPath: join(session.packageRoot, 'assets'),
       supportPath: join(session.packageRoot, '.tezbar-support'),
+      canAccess: (): boolean => false,
       get searchText(): string {
         return session.searchText
       },
     },
     LocalStorage: createLocalStorageShim(session.packageRoot),
     Cache: createCacheShim(session.packageRoot),
-    runAppleScript,
+    runAppleScript: (source: string): Promise<string> => runAppleScriptForSession(session, source),
     Clipboard: {
       copy: async (value: unknown): Promise<void> => {
-        copyToSystemClipboard(value)
+        copyToSystemClipboard(session, value)
       },
       paste: async (value: unknown): Promise<void> => {
-        copyToSystemClipboard(value)
+        copyToSystemClipboard(session, value)
       },
       read: async (): Promise<{ text?: string }> => {
         const text = clipboard.readText()
@@ -1317,6 +1593,29 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       readText: async (): Promise<string> => clipboard.readText(),
     },
     getPreferenceValues: (): Record<string, unknown> => session.preferences,
+    getSelectedFinderItems: async (): Promise<Array<{ path: string }>> => {
+      if (process.platform !== 'darwin') return []
+      try {
+        const output = await runAppleScript(`
+          tell application "Finder"
+            set selectedItems to selection as alias list
+            set selectedPaths to {}
+            repeat with selectedItem in selectedItems
+              set end of selectedPaths to POSIX path of selectedItem
+            end repeat
+            set AppleScript's text item delimiters to linefeed
+            return selectedPaths as text
+          end tell
+        `)
+        return output
+          .split(/\r?\n/)
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .map((path) => ({ path }))
+      } catch {
+        return []
+      }
+    },
     launchCommand: async (): Promise<void> => {
       // Background/menu-bar command relaunches are best-effort in Tezbar.
     },
@@ -1333,7 +1632,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     showToast: async (
       optionsOrStyle: unknown,
       title?: string,
-      message?: string,
+      message?: string
     ): Promise<ToastShim> => {
       let toast: ToastShim
       if (typeof optionsOrStyle === 'string') {
@@ -1343,13 +1642,13 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
           message: message ? String(message) : undefined,
         })
       } else {
-        const opts = (optionsOrStyle && typeof optionsOrStyle === 'object'
-          ? optionsOrStyle
-          : {}) as {
-            style?: unknown
-            title?: unknown
-            message?: unknown
-          }
+        const opts = (
+          optionsOrStyle && typeof optionsOrStyle === 'object' ? optionsOrStyle : {}
+        ) as {
+          style?: unknown
+          title?: unknown
+          message?: unknown
+        }
         toast = new ToastShim({
           style: typeof opts.style === 'string' ? opts.style : undefined,
           title: typeof opts.title === 'string' ? opts.title : '',
@@ -1360,36 +1659,48 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       return toast
     },
     showHUD: async (title: unknown): Promise<void> => {
-      pushFeedback(session, { kind: 'hud', message: String(title || '') })
+      const message = String(title || '')
+      pushFeedback(session, { kind: 'hud', message })
+      pushEffect(session, { kind: 'hud', message })
     },
     open: async (target: unknown): Promise<void> => {
       if (typeof target !== 'string') return
       if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target) || target.startsWith('mailto:')) {
+        pushEffect(session, { kind: 'open', value: target })
+        if (session.effectMode === 'record') return
         await shell.openExternal(target)
       }
     },
     showInFinder: async (path: unknown): Promise<void> => {
       if (typeof path !== 'string') return
+      pushEffect(session, { kind: 'show-in-finder', value: path })
+      if (session.effectMode === 'record') return
       shell.showItemInFolder(path)
     },
-    getApplications: async (): Promise<Array<{ name: string; path: string; bundleId?: string }>> => {
+    getApplications: async (): Promise<
+      Array<{ name: string; path: string; bundleId?: string }>
+    > => {
       const now = Date.now()
       if (applicationsCache && applicationsCache.expiresAt > now) {
         return applicationsCache.promise
       }
 
       console.log('[getApplications] Starting Spotlight query for installed apps...')
-      const promise = (async (): Promise<Array<{ name: string; path: string; bundleId?: string }>> => {
+      const promise = (async (): Promise<
+        Array<{ name: string; path: string; bundleId?: string }>
+      > => {
         try {
           const { stdout } = await execFileAsync(
             '/usr/bin/mdfind',
-            ['kMDItemKind == \'Application\''],
+            ["kMDItemKind == 'Application'"],
             {
               maxBuffer: 10 * 1024 * 1024,
               timeout: 3000,
-            },
+            }
           )
-          const apps = stdout.trim().split('\n')
+          const apps = stdout
+            .trim()
+            .split('\n')
             .filter((p) => p.endsWith('.app'))
             .map((appPath) => ({ name: basename(appPath, '.app'), path: appPath }))
             .sort((a, b) => a.name.localeCompare(b.name))
@@ -1421,15 +1732,22 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       }
       return promise
     },
-    getFrontmostApplication: async (): Promise<{ name: string; path: string; bundleId?: string } | null> => {
+    getFrontmostApplication: async (): Promise<{
+      name: string
+      path: string
+      bundleId?: string
+    }> => {
       try {
-        const script = 'tell application "System Events" to get name of first application process whose frontmost is true'
-        const { stdout } = await execFileAsync('/usr/bin/osascript', ['-e', script], { timeout: 3000 })
+        const script =
+          'tell application "System Events" to get name of first application process whose frontmost is true'
+        const { stdout } = await execFileAsync('/usr/bin/osascript', ['-e', script], {
+          timeout: 3000,
+        })
         const name = stdout.trim()
         if (name) return { name, path: `/Applications/${name}.app` }
-        return null
+        return { name: 'Raymes', path: process.execPath }
       } catch {
-        return null
+        return { name: 'Raymes', path: process.execPath }
       }
     },
     getDefaultApplication: async (): Promise<{ name: string; path: string } | null> => {
@@ -1446,22 +1764,25 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       // Tezbar does not currently surface dynamic command subtitles, but
       // extensions call this after dependency checks and expect it to exist.
     },
-    closeMainWindow: async (): Promise<void> => { },
-    popToRoot: async (): Promise<void> => { },
-    clearSearchBar: async (): Promise<void> => { },
+    closeMainWindow: async (): Promise<void> => {},
+    popToRoot: async (): Promise<void> => {},
+    clearSearchBar: async (): Promise<void> => {},
   }
 }
 
 function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown> {
   const CacheShim = createCacheShim(session.packageRoot)
   const cache = new CacheShim()
+  const functionCache = new Map<string, { expiresAt: number; value: unknown }>()
 
-  const useCachedState = <T,>(
+  const useCachedState = <T>(
     key: string,
-    initialValue: T | (() => T),
+    initialValue: T | (() => T)
   ): [T, (next: T | ((prev: T) => T)) => void] => {
     const hookIdx = session.hookIndex++
-    const existing = session.hookStates[hookIdx] as [T, (next: T | ((prev: T) => T)) => void] | undefined
+    const existing = session.hookStates[hookIdx] as
+      | [T, (next: T | ((prev: T) => T)) => void]
+      | undefined
     if (existing) return existing
 
     const getInitialValue = (): T => {
@@ -1509,6 +1830,8 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
         keepPreviousData?: boolean
         abortable?: { current?: AbortController | null }
         onError?: (error: unknown) => unknown
+        onData?: (data: unknown) => unknown
+        onWillExecute?: (args: unknown[]) => unknown
       }
       const key = `${hookIdx}:${cacheKey(fn, stableArgs)}`
       const label = promiseHookLabel(hookIdx, fn, stableArgs)
@@ -1521,6 +1844,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       if (previousKey !== key) {
         opts.abortable?.current?.abort()
         if (previousKey) session.promiseCache.delete(previousKey)
+        session.promisePaginationByHook.delete(hookIdx)
         session.promiseKeysByHook.set(hookIdx, key)
       }
 
@@ -1534,8 +1858,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
         if (opts.abortable) opts.abortable.current = controller
         session.abortControllers.add(controller)
 
-        let tracked: Promise<unknown>
-        tracked = delay(0)
+        const tracked = delay(0)
           .then(async () => {
             if (session.disposed || controller.signal.aborted) {
               const error = new Error('Aborted')
@@ -1543,19 +1866,40 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
               throw error
             }
             console.log(`[usePromise] Starting ${label}`)
-            return await Promise.resolve(
-              (fn as (...values: unknown[]) => unknown)(...stableArgs),
-            )
+            await Promise.resolve(opts.onWillExecute?.(stableArgs))
+            return await Promise.resolve((fn as (...values: unknown[]) => unknown)(...stableArgs))
           })
           .then(async (data: unknown) => {
             if (session.promiseCache.get(key)?.promise !== tracked) return data
 
+            if (typeof data === 'function') {
+              const loader = data as (options: { page: number }) => Promise<unknown> | unknown
+              const paginationState = {
+                key,
+                page: -1,
+                hasMore: true,
+                loader,
+                loadingPromise: null,
+              }
+              session.promisePaginationByHook.set(hookIdx, paginationState)
+              const firstPage = await Promise.resolve(loader({ page: 0 }))
+              const pageResult =
+                firstPage && typeof firstPage === 'object'
+                  ? (firstPage as { data?: unknown; hasMore?: unknown })
+                  : { data: firstPage, hasMore: false }
+              paginationState.page = 0
+              paginationState.hasMore = pageResult.hasMore === true
+              data = pageResult.data
+            }
+
             console.log(
-              `[usePromise] Resolved ${label} after ${elapsedMs(startedAt)}; data=${Array.isArray(data) ? `array(${data.length})` : typeof data
-              }`,
+              `[usePromise] Resolved ${label} after ${elapsedMs(startedAt)}; data=${
+                Array.isArray(data) ? `array(${data.length})` : typeof data
+              }`
             )
             session.promiseCache.set(key, { data, error: undefined, label })
             if (persistent) writePromiseResultCache(session, key, data)
+            await Promise.resolve(opts.onData?.(data))
             if (!session.disposed) session.hasStateUpdates = true
             return data
           })
@@ -1563,13 +1907,11 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
             if (session.promiseCache.get(key)?.promise !== tracked) return undefined
 
             const isAbort =
-              controller.signal.aborted ||
-              (error instanceof Error && error.name === 'AbortError')
-            const recovered =
-              !isAbort && await recoverIncompleteChunkedCache(session, error, key)
+              controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')
+            const recovered = !isAbort && (await recoverIncompleteChunkedCache(session, error, key))
             if (recovered) {
               console.warn(
-                `[usePromise] Recovered ${label} after ${elapsedMs(startedAt)}; retrying on refresh.`,
+                `[usePromise] Recovered ${label} after ${elapsedMs(startedAt)}; retrying on refresh.`
               )
               session.promiseCache.delete(key)
               if (!session.disposed) session.hasStateUpdates = true
@@ -1580,12 +1922,16 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
               data: retainedData,
               error: isAbort ? undefined : error,
             })
+            const paginationState = session.promisePaginationByHook.get(hookIdx)
+            if (paginationState?.key === key && paginationState.page < 0) {
+              session.promisePaginationByHook.delete(hookIdx)
+            }
 
             if (isAbort) return undefined
 
             console.error(
               `[usePromise] Rejected ${label} after ${elapsedMs(startedAt)}:`,
-              error instanceof Error ? error.message : String(error),
+              error instanceof Error ? error.message : String(error)
             )
             if (!session.disposed) session.hasStateUpdates = true
             if (typeof opts.onError === 'function') {
@@ -1625,6 +1971,55 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
 
       // If a result or in-flight promise already exists for this hook + args,
       // reuse it instead of spawning duplicate work on every render.
+      const pagination = (): Record<string, unknown> | undefined => {
+        const paginationState = session.promisePaginationByHook.get(hookIdx)
+        if (!paginationState || paginationState.key !== key) return undefined
+        return {
+          hasMore: paginationState.hasMore,
+          onLoadMore: async (): Promise<void> => {
+            if (!paginationState.hasMore || session.disposed) return
+            if (paginationState.loadingPromise) return paginationState.loadingPromise
+
+            const nextPage = paginationState.page + 1
+            const loadingPromise = Promise.resolve(paginationState.loader({ page: nextPage }))
+              .then(async (rawResult) => {
+                const pageResult =
+                  rawResult && typeof rawResult === 'object'
+                    ? (rawResult as { data?: unknown; hasMore?: unknown })
+                    : { data: rawResult, hasMore: false }
+                const currentData = session.promiseCache.get(key)?.data
+                const mergedData =
+                  Array.isArray(currentData) && Array.isArray(pageResult.data)
+                    ? [...currentData, ...pageResult.data]
+                    : pageResult.data
+                paginationState.page = nextPage
+                paginationState.hasMore = pageResult.hasMore === true
+                session.promiseCache.set(key, { data: mergedData, error: undefined, label })
+                await Promise.resolve(opts.onData?.(mergedData))
+                if (!session.disposed) session.hasStateUpdates = true
+              })
+              .catch(async (error: unknown) => {
+                session.promiseCache.set(key, {
+                  data: session.promiseCache.get(key)?.data,
+                  error,
+                  label,
+                })
+                paginationState.hasMore = false
+                if (typeof opts.onError === 'function') {
+                  await Promise.resolve(opts.onError(error))
+                }
+                if (!session.disposed) session.hasStateUpdates = true
+                throw error
+              })
+              .finally(() => {
+                paginationState.loadingPromise = null
+              })
+            paginationState.loadingPromise = loadingPromise
+            return loadingPromise
+          },
+        }
+      }
+
       if (cached) {
         if (cached.promise) {
           session.pendingPromises.push(cached.promise)
@@ -1644,7 +2039,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
               if (!session.disposed) session.hasStateUpdates = true
               return value
             },
-            pagination: undefined,
+            pagination: pagination(),
           }
         }
         return {
@@ -1663,7 +2058,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
             if (!session.disposed) session.hasStateUpdates = true
             return value
           },
-          pagination: undefined,
+          pagination: pagination(),
         }
       }
 
@@ -1675,20 +2070,522 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
           await schedule(previousData ?? opts.initialData)
         },
         mutate: async (next?: unknown): Promise<unknown> => next,
-        pagination: undefined,
+        pagination: pagination(),
       }
+    }
+  }
+
+  const useExecPromise = makePromiseHook()
+  const useFetchPromise = makePromiseHook()
+  const useAIPromise = makePromiseHook()
+  const useSQLPromise = makePromiseHook()
+  const useExec = (
+    command: string,
+    args: string[] = [],
+    options?: {
+      execute?: boolean
+      keepPreviousData?: boolean
+      parseOutput?: (result: { stdout: string; stderr: string; exitCode: number }) => unknown
+      onError?: (error: unknown) => unknown
+    }
+  ): unknown => {
+    const exec = async (): Promise<unknown> => {
+      const { stdout, stderr } = await execFileAsync(command, args, {
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024,
+      })
+      const result = { stdout, stderr, exitCode: 0 }
+      return options?.parseOutput ? options.parseOutput(result) : stdout
+    }
+    return useExecPromise(exec, [command, ...args], options)
+  }
+
+  const useFetch = (
+    input: string | URL,
+    options?: RequestInit & {
+      execute?: boolean
+      keepPreviousData?: boolean
+      initialData?: unknown
+      parseResponse?: (response: Response) => unknown
+      mapResult?: (result: unknown) => { data?: unknown } | unknown
+      onError?: (error: unknown) => unknown
+    }
+  ): unknown => {
+    const requestInit: RequestInit = {
+      method: options?.method,
+      headers: options?.headers,
+      body: options?.body,
+    }
+    const load = async (): Promise<unknown> => {
+      const response = await fetch(input, requestInit)
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+      if (options?.parseResponse) return options.parseResponse(response)
+      const contentType = response.headers.get('content-type') ?? ''
+      const parsed = contentType.includes('json') ? await response.json() : await response.text()
+      const mapped = options?.mapResult ? options.mapResult(parsed) : parsed
+      return mapped && typeof mapped === 'object' && 'data' in mapped
+        ? (mapped as { data?: unknown }).data
+        : mapped
+    }
+    return useFetchPromise(load, [String(input), requestInit], options)
+  }
+
+  const useSQL = (
+    databasePath: string,
+    query: string,
+    options?: {
+      execute?: boolean
+      onData?: (data: unknown[]) => unknown
+      onError?: (error: unknown) => unknown
+      onWillExecute?: (args: unknown[]) => unknown
+    }
+  ): unknown => {
+    const load = async (dbPath: string, sql: string): Promise<unknown[]> => {
+      const sqlite = process.platform === 'win32' ? 'sqlite3.exe' : '/usr/bin/sqlite3'
+      const { stdout } = await execFileAsync(sqlite, ['-readonly', '-json', dbPath, sql], {
+        encoding: 'utf8',
+        maxBuffer: 20 * 1024 * 1024,
+      })
+      const trimmed = stdout.trim()
+      return trimmed ? JSON.parse(trimmed) as unknown[] : []
+    }
+    const result = useSQLPromise(load, [databasePath, query], options) as Record<string, unknown>
+    return { ...result, permissionView: undefined }
+  }
+
+  const FormValidation = { Required: 'required' } as const
+  const useForm = (options: {
+    onSubmit?: (values: Record<string, unknown>) => unknown
+    initialValues?: Record<string, unknown>
+    validation?: Record<string, unknown>
+  } = {}): Record<string, unknown> => {
+    const [values, setValues] = useCachedState<Record<string, unknown>>(
+      `form-values:${session.commandName}`,
+      options.initialValues ?? {}
+    )
+    const [errors, setErrors] = useCachedState<Record<string, string>>(
+      `form-errors:${session.commandName}`,
+      {}
+    )
+    const validate = (candidate: Record<string, unknown>): boolean => {
+      const nextErrors: Record<string, string> = {}
+      for (const [key, rule] of Object.entries(options.validation ?? {})) {
+        const value = candidate[key]
+        const empty = value === undefined || value === null || value === '' ||
+          (Array.isArray(value) && value.length === 0)
+        const error = rule === FormValidation.Required
+          ? empty ? 'This field is required' : undefined
+          : typeof rule === 'function'
+            ? (rule as (input: unknown) => string | null | undefined)(value)
+            : undefined
+        if (error) nextErrors[key] = String(error)
+      }
+      setErrors(nextErrors)
+      return Object.keys(nextErrors).length === 0
+    }
+    const setValue = (key: string, value: unknown): void => {
+      setValues((current) => ({ ...current, [key]: value }))
+      setErrors((current) => {
+        const next = { ...current }
+        delete next[key]
+        return next
+      })
+    }
+    const keys = new Set([
+      ...Object.keys(options.initialValues ?? {}),
+      ...Object.keys(options.validation ?? {}),
+      ...Object.keys(values),
+    ])
+    const itemProps = Object.fromEntries([...keys].map((key) => [key, {
+      id: key,
+      value: values[key],
+      error: errors[key],
+      onChange: (value: unknown) => setValue(key, value),
+    }]))
+    return {
+      values,
+      itemProps,
+      setValue,
+      setValidationError: (key: string, error: string) =>
+        setErrors((current) => ({ ...current, [key]: error })),
+      reset: (next?: Record<string, unknown>) => {
+        setValues(next ?? options.initialValues ?? {})
+        setErrors({})
+      },
+      focus: () => undefined,
+      handleSubmit: async (submitted?: Record<string, unknown>): Promise<boolean> => {
+        const candidate = submitted ?? values
+        if (!validate(candidate)) return false
+        return (await Promise.resolve(options.onSubmit?.(candidate))) !== false
+      },
+    }
+  }
+
+  const useFrecencySorting = <T>(
+    input: T[] | { data?: T[] } | undefined,
+    options?: {
+      key?: (item: T) => string
+      namespace?: string
+      sortUnvisited?: (a: T, b: T) => number
+    }
+  ): { data: T[]; visitItem: (item: T) => Promise<void>; resetRanking: (item: T) => Promise<void> } => {
+    type Entry = { count: number; lastVisited: number }
+    const namespace = options?.namespace || 'default'
+    const [ranking, setRanking] = useCachedState<Record<string, Entry>>(
+      `frecency:${namespace}`,
+      {}
+    )
+    const keyFor = options?.key ?? ((item: T) => {
+      const candidate = item as { id?: unknown }
+      return candidate?.id === undefined ? String(item) : String(candidate.id)
+    })
+    const source = Array.isArray(input)
+      ? input
+      : input && Array.isArray(input.data)
+        ? input.data
+        : []
+    const score = (entry: Entry): number => {
+      const ageHours = (Date.now() - entry.lastVisited) / 3_600_000
+      return entry.count * Math.pow(0.5, ageHours / 72)
+    }
+    const data = [...source].sort((a, b) => {
+      const aEntry = ranking[keyFor(a)]
+      const bEntry = ranking[keyFor(b)]
+      if (aEntry && bEntry) return score(bEntry) - score(aEntry)
+      if (aEntry) return -1
+      if (bEntry) return 1
+      return options?.sortUnvisited?.(a, b) ?? 0
+    })
+    return {
+      data,
+      visitItem: async (item: T) => {
+        const key = keyFor(item)
+        setRanking((current) => ({
+          ...current,
+          [key]: {
+            count: (current[key]?.count ?? 0) + 1,
+            lastVisited: Date.now(),
+          },
+        }))
+      },
+      resetRanking: async (item: T) => {
+        const key = keyFor(item)
+        setRanking((current) => {
+          const next = { ...current }
+          delete next[key]
+          return next
+        })
+      },
+    }
+  }
+
+  let activeAccessToken: string | undefined
+
+  type OAuthServiceOptions = {
+    personalAccessToken?: unknown
+    clientId?: unknown
+    scope?: unknown
+    onAuthorize?: (authorization: { token: string; type: string }) => unknown
+    authorizationEndpoint?: unknown
+    tokenEndpoint?: unknown
+    openAuthorizationUrl?: (url: string) => Promise<void> | void
+    timeoutMs?: unknown
+  }
+
+  type StoredOAuthServiceTokens = {
+    accessToken: string
+    refreshToken?: string
+    expiresAt?: number
+    scope?: string
+  }
+
+  class OAuthServiceShim {
+    static github(options: OAuthServiceOptions): OAuthServiceShim {
+      return new OAuthServiceShim('github', options)
+    }
+
+    static slack(options: OAuthServiceOptions): OAuthServiceShim {
+      return new OAuthServiceShim('slack', options)
+    }
+
+    static google(options: OAuthServiceOptions): OAuthServiceShim {
+      return new OAuthServiceShim('google', options)
+    }
+
+    readonly client = {
+      removeTokens: async (): Promise<void> => {
+        activeAccessToken = undefined
+        await removePath(this.tokenPath, { force: true })
+      },
+    }
+
+    private readonly provider: 'github' | 'slack' | 'google'
+    private readonly options: OAuthServiceOptions
+    private readonly token: string | undefined
+    private readonly onAuthorize: OAuthServiceOptions['onAuthorize']
+    private readonly tokenPath: string
+
+    constructor(provider: 'github' | 'slack' | 'google', options: OAuthServiceOptions = {}) {
+      this.provider = provider
+      this.options = options
+      this.token =
+        typeof options.personalAccessToken === 'string' && options.personalAccessToken.trim()
+          ? options.personalAccessToken.trim()
+          : undefined
+      this.onAuthorize = options.onAuthorize
+      this.tokenPath = join(
+        session.packageRoot,
+        '.tezbar-support',
+        'oauth-service',
+        `${provider}.json`
+      )
+      if (!this.applyPersonalToken()) this.applyStoredToken()
+    }
+
+    private applyPersonalToken(): boolean {
+      if (!this.token) return false
+      activeAccessToken = this.token
+      this.onAuthorize?.({ token: this.token, type: 'personal' })
+      return true
+    }
+
+    private readStoredTokens(): StoredOAuthServiceTokens | undefined {
+      if (!existsSync(this.tokenPath)) return undefined
+      try {
+        const value = JSON.parse(readFileSync(this.tokenPath, 'utf8')) as StoredOAuthServiceTokens
+        return typeof value.accessToken === 'string' && value.accessToken ? value : undefined
+      } catch {
+        return undefined
+      }
+    }
+
+    private applyStoredToken(): boolean {
+      const stored = this.readStoredTokens()
+      if (!stored || (stored.expiresAt && stored.expiresAt <= Date.now())) return false
+      activeAccessToken = stored.accessToken
+      this.onAuthorize?.({ token: stored.accessToken, type: 'oauth' })
+      return true
+    }
+
+    private async persistTokenResponse(
+      response: Record<string, unknown>,
+      existingRefreshToken?: string
+    ): Promise<void> {
+      const accessToken = String(response.access_token ?? '')
+      if (!accessToken) throw new Error(`${this.provider} OAuth response did not include an access token`)
+      const expiresIn = Number(response.expires_in)
+      const stored: StoredOAuthServiceTokens = {
+        accessToken,
+        refreshToken: String(response.refresh_token ?? existingRefreshToken ?? '') || undefined,
+        expiresAt: Number.isFinite(expiresIn) ? Date.now() + expiresIn * 1_000 : undefined,
+        scope: String(response.scope ?? '') || undefined,
+      }
+      mkdirSync(dirname(this.tokenPath), { recursive: true })
+      writeFileSync(this.tokenPath, JSON.stringify(stored), 'utf8')
+      activeAccessToken = accessToken
+      await Promise.resolve(this.onAuthorize?.({ token: accessToken, type: 'oauth' }))
+    }
+
+    private async exchangeGoogleToken(parameters: URLSearchParams): Promise<Record<string, unknown>> {
+      const endpoint =
+        typeof this.options.tokenEndpoint === 'string' && this.options.tokenEndpoint
+          ? this.options.tokenEndpoint
+          : 'https://oauth2.googleapis.com/token'
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: parameters,
+      })
+      const text = await response.text()
+      let payload: Record<string, unknown> = {}
+      try {
+        payload = text ? (JSON.parse(text) as Record<string, unknown>) : {}
+      } catch {
+        payload = { error_description: text }
+      }
+      if (!response.ok) {
+        throw new Error(
+          String(payload.error_description ?? payload.error ?? `OAuth token exchange failed (${response.status})`)
+        )
+      }
+      return payload
+    }
+
+    private async refreshGoogleToken(stored: StoredOAuthServiceTokens): Promise<boolean> {
+      const clientId = String(this.options.clientId ?? '')
+      if (!clientId || !stored.refreshToken) return false
+      const response = await this.exchangeGoogleToken(
+        new URLSearchParams({
+          client_id: clientId,
+          refresh_token: stored.refreshToken,
+          grant_type: 'refresh_token',
+        })
+      )
+      await this.persistTokenResponse(response, stored.refreshToken)
+      return true
+    }
+
+    private async authorizeGoogle(): Promise<void> {
+      const clientId = String(this.options.clientId ?? '')
+      const scope = String(this.options.scope ?? '')
+      if (!clientId || !scope) throw new Error('Google OAuth requires clientId and scope')
+
+      const stored = this.readStoredTokens()
+      if (stored?.refreshToken && (await this.refreshGoogleToken(stored))) return
+
+      const state = randomBytes(24).toString('base64url')
+      const codeVerifier = randomBytes(48).toString('base64url')
+      const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url')
+      let settleCallback: ((value: { code: string; redirectUri: string }) => void) | null = null
+      let rejectCallback: ((error: Error) => void) | null = null
+      const callbackPromise = new Promise<{ code: string; redirectUri: string }>((resolve, reject) => {
+        settleCallback = resolve
+        rejectCallback = reject
+      })
+      const server = createServer((request, response) => {
+        const address = server.address()
+        const port = address && typeof address === 'object' ? address.port : 0
+        const redirectUri = `http://127.0.0.1:${port}/oauth/callback`
+        const callbackUrl = new URL(request.url ?? '/', redirectUri)
+        if (callbackUrl.pathname !== '/oauth/callback') {
+          response.writeHead(404).end('Not found')
+          return
+        }
+        if (callbackUrl.searchParams.get('state') !== state) {
+          response.writeHead(400).end('Invalid OAuth state')
+          rejectCallback?.(new Error('OAuth callback state did not match'))
+          return
+        }
+        const providerError = callbackUrl.searchParams.get('error')
+        const code = callbackUrl.searchParams.get('code')
+        if (providerError || !code) {
+          response.writeHead(400).end('Authorization failed')
+          rejectCallback?.(new Error(providerError || 'OAuth callback did not include a code'))
+          return
+        }
+        response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+        response.end('<!doctype html><title>Tezbar authorized</title><p>You can close this window.</p>')
+        settleCallback?.({ code, redirectUri })
+      })
+
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(0, '127.0.0.1', resolve)
+      })
+      const address = server.address()
+      const port = address && typeof address === 'object' ? address.port : 0
+      const redirectUri = `http://127.0.0.1:${port}/oauth/callback`
+      const authorizationEndpoint =
+        typeof this.options.authorizationEndpoint === 'string' && this.options.authorizationEndpoint
+          ? this.options.authorizationEndpoint
+          : 'https://accounts.google.com/o/oauth2/v2/auth'
+      const authorizationUrl = new URL(authorizationEndpoint)
+      authorizationUrl.search = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope,
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256',
+        access_type: 'offline',
+        prompt: 'consent',
+      }).toString()
+      pushEffect(session, { kind: 'open', value: authorizationUrl.toString() })
+
+      const timeoutMs = Math.max(1_000, Number(this.options.timeoutMs) || 120_000)
+      const timeout = setTimeout(
+        () => rejectCallback?.(new Error('OAuth authorization timed out')),
+        timeoutMs
+      )
+      try {
+        if (this.options.openAuthorizationUrl) {
+          await Promise.resolve(this.options.openAuthorizationUrl(authorizationUrl.toString()))
+        } else if (session.effectMode === 'record') {
+          throw new Error('Interactive OAuth requires system effect mode')
+        } else {
+          await shell.openExternal(authorizationUrl.toString())
+        }
+        const callback = await callbackPromise
+        const tokenResponse = await this.exchangeGoogleToken(
+          new URLSearchParams({
+            client_id: clientId,
+            code: callback.code,
+            code_verifier: codeVerifier,
+            redirect_uri: callback.redirectUri,
+            grant_type: 'authorization_code',
+          })
+        )
+        await this.persistTokenResponse(tokenResponse)
+      } finally {
+        clearTimeout(timeout)
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    }
+
+    async authorize(): Promise<void> {
+      if (this.applyPersonalToken() || this.applyStoredToken()) return
+      if (this.provider === 'google') return this.authorizeGoogle()
+      throw new Error("Add a personal access token in this extension's preferences")
+    }
+
+    hasAccessToken(): boolean {
+      return Boolean(this.token || this.applyStoredToken())
+    }
+
+    requiresInteractiveAuthorization(): boolean {
+      return this.provider === 'google'
     }
   }
 
   return {
     useCachedState,
+    FormValidation,
+    useForm,
+    useFrecencySorting,
     usePromise: makePromiseHook(),
-    useFetch: makePromiseHook(),
+    useFetch,
+    useAI: (
+      prompt: unknown,
+      options?: { execute?: boolean; onError?: (error: unknown) => unknown }
+    ): unknown =>
+      useAIPromise(() => askExtensionAI(String(prompt ?? '')), [String(prompt ?? '')], options),
     useCachedPromise: makePromiseHook(true),
+    useExec,
+    useSQL,
+    useLocalStorage: <T>(key: string, initialValue: T) => {
+      const [value, setValue] = useCachedState(key, initialValue)
+      return {
+        value,
+        setValue: async (next: T): Promise<void> => setValue(next),
+        removeValue: async (): Promise<void> => {
+          cache.remove(String(key))
+          setValue(initialValue)
+        },
+        isLoading: false,
+      }
+    },
+    getAvatarIcon: avatarIcon,
+    withCache: (
+      fn: (...args: unknown[]) => unknown,
+      options?: { maxAge?: number }
+    ): ((...args: unknown[]) => Promise<unknown>) => {
+      return async (...args: unknown[]): Promise<unknown> => {
+        const key = cacheKey(fn, args)
+        const cached = functionCache.get(key)
+        if (cached && cached.expiresAt > Date.now()) return cached.value
+        const value = await Promise.resolve(fn(...args))
+        functionCache.set(key, {
+          expiresAt: Date.now() + Math.max(0, options?.maxAge ?? 5 * 60_000),
+          value,
+        })
+        return value
+      }
+    },
     getProgressIcon: (
       progress: number,
       color = '#ff6363',
-      options?: { background?: string; backgroundOpacity?: number },
+      options?: { background?: string; backgroundOpacity?: number }
     ): string => {
       const value = Math.max(0, Math.min(1, Number(progress) || 0))
       const radius = 10
@@ -1704,13 +2601,40 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       ].join('')
       return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
     },
-    runAppleScript,
+    runAppleScript: (source: string): Promise<string> => runAppleScriptForSession(session, source),
+    OAuthService: OAuthServiceShim,
+    getAccessToken: (): { token: string } => {
+      if (!activeAccessToken) throw new Error('No extension access token is configured')
+      return { token: activeAccessToken }
+    },
+    withAccessToken:
+      (service: OAuthServiceShim) =>
+      (Component: (props: unknown) => unknown) =>
+      async (props: unknown): Promise<unknown> => {
+        if (!service?.hasAccessToken()) {
+          if (service?.requiresInteractiveAuthorization()) {
+            await service.authorize()
+            return Component(props)
+          }
+          return {
+            __jsx: true,
+            type: makeToken('Detail'),
+            props: {
+              markdown:
+                "# Authentication Required\n\nAdd a personal access token in this extension's preferences.",
+            },
+          }
+        }
+        return Component(props)
+      },
     showFailureToast: (error: unknown): void => {
-      pushFeedback(session, {
+      const feedback: RuntimeFeedback = {
         kind: 'toast',
         style: 'failure',
         title: error instanceof Error ? error.message : String(error),
-      })
+      }
+      pushFeedback(session, feedback)
+      pushEffect(session, feedback)
     },
   }
 }
@@ -1721,7 +2645,7 @@ function isJsxNode(value: unknown): value is JsxNode {
     typeof value === 'object' &&
     (value as { __jsx?: unknown }).__jsx === true &&
     'type' in (value as Record<string, unknown>) &&
-    'props' in (value as Record<string, unknown>),
+    'props' in (value as Record<string, unknown>)
   )
 }
 
@@ -1732,9 +2656,7 @@ function sanitizeValue(value: unknown): unknown {
   }
 
   if (Array.isArray(value)) {
-    return value
-      .map((entry) => sanitizeValue(entry))
-      .filter((entry) => entry !== undefined)
+    return value.map((entry) => sanitizeValue(entry)).filter((entry) => entry !== undefined)
   }
 
   if (typeof value === 'object') {
@@ -1774,33 +2696,36 @@ function mimeTypeForAsset(path: string): string {
 }
 
 function resolveExtensionMarkdownAssets(markdown: string, packageRoot: string): string {
-  return markdown.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (match, alt: string, rawSrc: string) => {
-    const src = String(rawSrc || '').trim()
-    if (!src || /^(?:https?:|data:|file:)/i.test(src)) return match
+  return markdown.replace(
+    /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+    (match, alt: string, rawSrc: string) => {
+      const src = String(rawSrc || '').trim()
+      if (!src || /^(?:https?:|data:|file:)/i.test(src)) return match
 
-    const cleanSrc = src.split(/[?#]/)[0]?.replace(/^\.?\//, '') ?? ''
-    if (!cleanSrc || cleanSrc.startsWith('/') || cleanSrc.includes('..')) return match
+      const cleanSrc = src.split(/[?#]/)[0]?.replace(/^\.?\//, '') ?? ''
+      if (!cleanSrc || cleanSrc.startsWith('/') || cleanSrc.includes('..')) return match
 
-    const assetPath = join(packageRoot, 'assets', cleanSrc)
-    if (!existsSync(assetPath)) {
-      console.warn(`[ExtensionAssets] Missing markdown asset: ${assetPath}`)
-      return match
+      const assetPath = join(packageRoot, 'assets', cleanSrc)
+      if (!existsSync(assetPath)) {
+        console.warn(`[ExtensionAssets] Missing markdown asset: ${assetPath}`)
+        return match
+      }
+
+      try {
+        const encoded = readFileSync(assetPath).toString('base64')
+        console.log(`[ExtensionAssets] Inlined markdown asset: ${assetPath}`)
+        return `![${alt}](data:${mimeTypeForAsset(assetPath)};base64,${encoded})`
+      } catch {
+        return match
+      }
     }
-
-    try {
-      const encoded = readFileSync(assetPath).toString('base64')
-      console.log(`[ExtensionAssets] Inlined markdown asset: ${assetPath}`)
-      return `![${alt}](data:${mimeTypeForAsset(assetPath)};base64,${encoded})`
-    } catch {
-      return match
-    }
-  })
+  )
 }
 
 function registerAction(
   typeName: string,
   props: Record<string, unknown>,
-  session: RuntimeSession,
+  session: RuntimeSession
 ): void {
   const index = session.currentActions.length
   const title = normalizeActionTitle(typeName, props)
@@ -1821,9 +2746,10 @@ function registerAction(
                 ? 'show-in-finder'
                 : 'action'
 
-  const style = typeof props.style === 'string' && props.style.toLowerCase() === 'destructive'
-    ? 'destructive'
-    : 'default'
+  const style =
+    typeof props.style === 'string' && props.style.toLowerCase() === 'destructive'
+      ? 'destructive'
+      : 'default'
 
   const action: ExtensionRuntimeAction = {
     id,
@@ -1838,7 +2764,7 @@ function registerAction(
   const handler: RuntimeActionHandler = async (formValues) => {
     if (kind === 'copy') {
       const content = props.content ?? props.title ?? ''
-      copyToSystemClipboard(content)
+      copyToSystemClipboard(session, content)
       if (typeof props.onPaste === 'function') {
         await Promise.resolve((props.onPaste as () => unknown)())
       }
@@ -1847,14 +2773,16 @@ function registerAction(
     if (kind === 'open') {
       const url = typeof props.url === 'string' ? props.url : ''
       if (url) {
-        await shell.openExternal(url)
+        pushEffect(session, { kind: 'open', value: url })
+        if (session.effectMode !== 'record') await shell.openExternal(url)
       }
     }
 
     if (kind === 'show-in-finder') {
       const path = typeof props.path === 'string' ? props.path : ''
       if (path) {
-        shell.showItemInFolder(path)
+        pushEffect(session, { kind: 'show-in-finder', value: path })
+        if (session.effectMode !== 'record') shell.showItemInFolder(path)
       }
     }
 
@@ -1869,7 +2797,9 @@ function registerAction(
     }
 
     if (kind === 'submit-form' && typeof props.onSubmit === 'function') {
-      await Promise.resolve((props.onSubmit as (values?: Record<string, string>) => unknown)(formValues ?? {}))
+      await Promise.resolve(
+        (props.onSubmit as (values?: Record<string, unknown>) => unknown)(formValues ?? {})
+      )
       return
     }
 
@@ -1881,19 +2811,12 @@ function registerAction(
   session.actionHandlers.set(id, handler)
 }
 
-function hasDirectListSections(input: unknown): boolean {
-  if (Array.isArray(input)) return input.some((entry) => hasDirectListSections(entry))
-  if (!isJsxNode(input)) return false
-  if (input.type === JSX_FRAGMENT) return hasDirectListSections(input.props?.children)
-  return isToken(input.type) && input.type.name === 'List.Section'
-}
-
 function walkRuntimeNodes(
   input: unknown,
   session: RuntimeSession,
   depth: number,
   budget: { remaining: number },
-  options: WalkRuntimeOptions = {},
+  options: WalkRuntimeOptions = {}
 ): ExtensionRuntimeNode[] {
   if (budget.remaining <= 0 || depth > RUNTIME_RECURSION_LIMIT) {
     return []
@@ -1938,14 +2861,11 @@ function walkRuntimeNodes(
         prototype?: {
           render?: () => unknown
         }
-        getDerivedStateFromProps?: (
-          props: Record<string, unknown>,
-          state: unknown,
-        ) => unknown
+        getDerivedStateFromProps?: (props: Record<string, unknown>, state: unknown) => unknown
       }
       if (typeof component.prototype?.render === 'function') {
         const instance = new (component as unknown as new (
-          componentProps: Record<string, unknown>,
+          componentProps: Record<string, unknown>
         ) => {
           props: Record<string, unknown>
           state: unknown
@@ -1964,16 +2884,19 @@ function walkRuntimeNodes(
       }
     } catch (error) {
       console.error('[ExtensionRuntime] Component render failed:', error)
+      const message =
+        error &&
+        typeof error === 'object' &&
+        typeof (error as { message?: unknown }).message === 'string'
+          ? String((error as { message: string }).message)
+          : String(error)
+      session.renderErrors.push(message)
       return []
     }
     return walkRuntimeNodes(rendered, session, depth + 1, budget, options)
   }
 
-  const typeName = isToken(type)
-    ? type.name
-    : typeof type === 'string'
-      ? type
-      : ''
+  const typeName = isToken(type) ? type.name : typeof type === 'string' ? type : ''
   if (!typeName) return []
 
   if (typeName.startsWith('Action')) {
@@ -1996,20 +2919,29 @@ function walkRuntimeNodes(
   }
 
   const actionStart = session.currentActions.length
+  const nestedOptions: WalkRuntimeOptions = {
+    ...options,
+    listItemsSeen: undefined,
+    listItemLimit: undefined,
+    listItemsTruncated: undefined,
+  }
   if (props.actions !== undefined) {
-    walkRuntimeNodes(props.actions, session, depth + 1, budget, options)
+    walkRuntimeNodes(props.actions, session, depth + 1, budget, nestedOptions)
   }
   const actionIds = session.currentActions.slice(actionStart).map((action) => action.id)
 
-  const metadataNodes = props.metadata !== undefined
-    ? walkRuntimeNodes(props.metadata, session, depth + 1, budget, options)
-    : []
-  const detailNodes = props.detail !== undefined
-    ? walkRuntimeNodes(props.detail, session, depth + 1, budget, options)
-    : []
-  const searchBarAccessoryNodes = props.searchBarAccessory !== undefined
-    ? walkRuntimeNodes(props.searchBarAccessory, session, depth + 1, budget, options)
-    : []
+  const metadataNodes =
+    props.metadata !== undefined
+      ? walkRuntimeNodes(props.metadata, session, depth + 1, budget, nestedOptions)
+      : []
+  const detailNodes =
+    props.detail !== undefined
+      ? walkRuntimeNodes(props.detail, session, depth + 1, budget, nestedOptions)
+      : []
+  const searchBarAccessoryNodes =
+    props.searchBarAccessory !== undefined
+      ? walkRuntimeNodes(props.searchBarAccessory, session, depth + 1, budget, nestedOptions)
+      : []
 
   budget.remaining -= 1
   const sanitizedProps = sanitizeValue(props) as Record<string, unknown> | undefined
@@ -2032,34 +2964,44 @@ function walkRuntimeNodes(
     sanitizedProps.actionId = actionId
     session.actionHandlers.set(actionId, async (formValues) => {
       await Promise.resolve(
-        (props.onChange as (value: string) => unknown)(String(formValues?.value ?? '')),
+        (props.onChange as (value: string) => unknown)(String(formValues?.value ?? ''))
       )
     })
   }
   if (typeName === 'List' && session.searchTextChangeHandler && sanitizedProps) {
     sanitizedProps.__hasServerSearch = true
   }
-  const listItemsTruncated =
-    typeName === 'List' ? { value: false } : options.listItemsTruncated
+  if (typeName === 'List' && props.pagination && typeof props.pagination === 'object') {
+    const pagination = props.pagination as {
+      hasMore?: unknown
+      onLoadMore?: unknown
+    }
+    if (typeof pagination.onLoadMore === 'function') {
+      session.serverLoadMoreHandler = pagination.onLoadMore as () => Promise<void>
+      session.serverHasMore = pagination.hasMore === true
+    }
+  }
+  const listItemsTruncated = typeName === 'List' ? { value: false } : options.listItemsTruncated
   const childOptions =
     typeName === 'List'
       ? {
-        ...options,
-        listItemsSeen: hasDirectListSections(props.children) ? undefined : { count: 0 },
-        listItemLimit: session.listItemLimit,
-        listItemsTruncated,
-      }
-      : typeName === 'List.Section'
-        ? {
           ...options,
           listItemsSeen: { count: 0 },
           listItemLimit: session.listItemLimit,
+          listItemsTruncated,
         }
+      : typeName === 'List.Section'
+        ? {
+            ...options,
+            listItemsSeen: options.listItemsSeen ?? { count: 0 },
+            listItemLimit: session.listItemLimit,
+          }
         : options
   const children = walkRuntimeNodes(props.children, session, depth + 1, budget, childOptions)
   if (typeName === 'List' && sanitizedProps && listItemsTruncated) {
     sanitizedProps.__hasMore =
-      listItemsTruncated.value && session.listItemLimit < RUNTIME_COMPONENT_LIMIT
+      session.serverHasMore ||
+      (listItemsTruncated.value && session.listItemLimit < RUNTIME_COMPONENT_LIMIT)
     sanitizedProps.__pageSize = session.listItemLimit
   }
   const node: ExtensionRuntimeNode = {
@@ -2083,10 +3025,12 @@ function formatFeedback(feedback: RuntimeFeedback | undefined): string | undefin
   return title || message || undefined
 }
 
-function renderCurrentView(session: RuntimeSession): ExtensionRunCommandResult | ExtensionInvokeActionResult {
+function renderCurrentView(
+  session: RuntimeSession
+): ExtensionRunCommandResult | ExtensionInvokeActionResult {
   const startedAt = Date.now()
   console.log(
-    `[Runner] renderCurrentView start ${session.extensionId}/${session.commandName}; stack=${session.stack.length}, limit=${session.listItemLimit}`,
+    `[Runner] renderCurrentView start ${session.extensionId}/${session.commandName}; stack=${session.stack.length}, limit=${session.listItemLimit}`
   )
   const top = session.stack.at(-1)
   if (!top) {
@@ -2098,12 +3042,28 @@ function renderCurrentView(session: RuntimeSession): ExtensionRunCommandResult |
 
   session.actionHandlers.clear()
   session.currentActions = []
+  session.renderErrors = []
+  session.serverLoadMoreHandler = null
+  session.serverHasMore = false
 
   const budget = { remaining: RUNTIME_COMPONENT_LIMIT }
-  const nodes = walkRuntimeNodes(top, session, 0, budget)
+  const internalTop = top as Partial<ExtensionRuntimeNode>
+  const nodes = typeof internalTop.type === 'string' && internalTop.type.startsWith('Tezbar.')
+    ? [top as ExtensionRuntimeNode]
+    : walkRuntimeNodes(top, session, 0, budget)
   console.log(
-    `[Runner] walkRuntimeNodes complete after ${elapsedMs(startedAt)}; nodes=${nodes.length}, budgetUsed=${RUNTIME_COMPONENT_LIMIT - budget.remaining}, actions=${session.currentActions.length}`,
+    `[Runner] walkRuntimeNodes complete after ${elapsedMs(startedAt)}; nodes=${nodes.length}, budgetUsed=${RUNTIME_COMPONENT_LIMIT - budget.remaining}, actions=${session.currentActions.length}`
   )
+
+  if (session.renderErrors.length > 0) {
+    session.pendingEffects = []
+    return {
+      ok: false,
+      message: `Extension render failed: ${session.renderErrors.join('; ')}`,
+    }
+  }
+
+  flushPendingEffects(session)
 
   const root: ExtensionRuntimeNode = nodes[0] ?? {
     type: 'Detail',
@@ -2112,7 +3072,7 @@ function renderCurrentView(session: RuntimeSession): ExtensionRunCommandResult |
   }
   attachRuntimeRootMetadata(root, session)
   console.log(
-    `[Runner] renderCurrentView complete after ${elapsedMs(startedAt)}; root=${root.type}, children=${root.children?.length ?? 0}`,
+    `[Runner] renderCurrentView complete after ${elapsedMs(startedAt)}; root=${root.type}, children=${root.children?.length ?? 0}`
   )
 
   return {
@@ -2125,12 +3085,13 @@ function renderCurrentView(session: RuntimeSession): ExtensionRunCommandResult |
     title: session.title,
     root,
     actions: [...session.currentActions],
+    effects: [...session.effects],
   }
 }
 
 async function rerenderSessionCommand(
   session: RuntimeSession,
-  label: string,
+  label: string
 ): Promise<ExtensionRunCommandResult | ExtensionInvokeActionResult> {
   if (!session.commandFn) {
     return renderCurrentView(session)
@@ -2148,7 +3109,7 @@ async function rerenderSessionCommand(
   console.log(`[Runner] ${label}: command function start`)
   const result = await Promise.resolve(session.commandFn({ arguments: session.commandArgs }))
   console.log(
-    `[Runner] ${label}: command function complete after ${elapsedMs(startedAt)}; jsx=${isJsxNode(result)}`,
+    `[Runner] ${label}: command function complete after ${elapsedMs(startedAt)}; jsx=${isJsxNode(result)}`
   )
   session.stack = isJsxNode(result) ? [result] : []
   const view = renderCurrentView(session)
@@ -2157,7 +3118,7 @@ async function rerenderSessionCommand(
 }
 
 export async function refreshExtensionSession(
-  request: ExtensionRefreshSessionRequest,
+  request: ExtensionRefreshSessionRequest
 ): Promise<ExtensionRefreshSessionResult> {
   const sessionId = String(request.sessionId || '').trim()
   if (!sessionId) {
@@ -2171,10 +3132,14 @@ export async function refreshExtensionSession(
 
   const inFlight = [...session.promiseCache.values()]
     .filter((entry) => entry.promise)
-    .map((entry) => `${entry.label ?? 'unknown'} age=${entry.startedAt ? elapsedMs(entry.startedAt) : '?'}`)
+    .map(
+      (entry) =>
+        `${entry.label ?? 'unknown'} age=${entry.startedAt ? elapsedMs(entry.startedAt) : '?'}`
+    )
   console.log(
-    `[Runner] Refresh request ${session.extensionId}/${session.commandName}; stateUpdates=${session.hasStateUpdates}, inFlight=${inFlight.length}${inFlight.length ? `\n  ${inFlight.join('\n  ')}` : ''
-    }`,
+    `[Runner] Refresh request ${session.extensionId}/${session.commandName}; stateUpdates=${session.hasStateUpdates}, inFlight=${inFlight.length}${
+      inFlight.length ? `\n  ${inFlight.join('\n  ')}` : ''
+    }`
   )
   if (!session.hasStateUpdates) return { ok: true, mode: 'unchanged' }
 
@@ -2182,16 +3147,33 @@ export async function refreshExtensionSession(
 }
 
 export async function loadMoreExtensionSession(
-  request: ExtensionLoadMoreSessionRequest,
+  request: ExtensionLoadMoreSessionRequest
 ): Promise<ExtensionRefreshSessionResult> {
   const sessionId = String(request.sessionId || '').trim()
   const session = sessions.get(sessionId)
   if (!session) return { ok: false, message: 'Extension session not found.' }
 
-  const nextLimit = Math.min(
-    session.listItemLimit + LIST_ITEM_PAGE_SIZE,
-    RUNTIME_COMPONENT_LIMIT,
-  )
+  if (session.serverLoadMoreHandler) {
+    if (!session.serverHasMore) return { ok: true, mode: 'unchanged' }
+    if (session.serverLoadMoreRequest) return session.serverLoadMoreRequest
+    const request = (async (): Promise<ExtensionRefreshSessionResult> => {
+      try {
+        await session.serverLoadMoreHandler?.()
+        return await rerenderSessionCommand(session, 'Load more')
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        }
+      } finally {
+        session.serverLoadMoreRequest = null
+      }
+    })()
+    session.serverLoadMoreRequest = request
+    return request
+  }
+
+  const nextLimit = Math.min(session.listItemLimit + LIST_ITEM_PAGE_SIZE, RUNTIME_COMPONENT_LIMIT)
   if (nextLimit === session.listItemLimit) return { ok: true, mode: 'unchanged' }
 
   session.listItemLimit = nextLimit
@@ -2199,7 +3181,7 @@ export async function loadMoreExtensionSession(
 }
 
 export async function updateSearchText(
-  request: ExtensionSearchTextChangedRequest,
+  request: ExtensionSearchTextChangedRequest
 ): Promise<ExtensionSearchTextChangedResult> {
   const sessionId = String(request.sessionId || '').trim()
   const searchText = String(request.searchText ?? '')
@@ -2213,7 +3195,13 @@ export async function updateSearchText(
   }
 
   session.searchText = searchText
-  session.listItemLimit = LIST_ITEM_PAGE_SIZE
+  // Lists without an onSearchTextChange handler are filtered by the renderer.
+  // Expose their complete dataset while searching so matches beyond the first
+  // page are included without requiring the user to paginate manually.
+  session.listItemLimit =
+    searchText.trim() && !session.searchTextChangeHandler
+      ? RUNTIME_COMPONENT_LIMIT
+      : LIST_ITEM_PAGE_SIZE
 
   if (session.searchTextChangeHandler) {
     try {
@@ -2232,7 +3220,9 @@ export async function updateSearchText(
       let result: unknown
 
       const searchPass = async (label: string): Promise<unknown> => {
-        console.log(`[Runner] ${label}: executing ${session.extensionId}/${session.commandName} search="${searchText}"`)
+        console.log(
+          `[Runner] ${label}: executing ${session.extensionId}/${session.commandName} search="${searchText}"`
+        )
         session.hookIndex = 0
         session.pendingPromises = []
         session.actionHandlers.clear()
@@ -2241,7 +3231,7 @@ export async function updateSearchText(
         session.hasStateUpdates = false
         const r = await Promise.resolve(session.commandFn!(execArgs))
         console.log(
-          `[Runner] ${label} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} states, stateUpdates=${session.hasStateUpdates}`,
+          `[Runner] ${label} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} states, stateUpdates=${session.hasStateUpdates}`
         )
         return r
       }
@@ -2251,9 +3241,13 @@ export async function updateSearchText(
         if (!session.hasStateUpdates) break
       }
 
-      const searchInFlight = [...session.promiseCache.values()].filter((entry) => entry.promise).length
+      const searchInFlight = [...session.promiseCache.values()].filter(
+        (entry) => entry.promise
+      ).length
       if (searchInFlight > 0) {
-        console.log(`[Runner] Search render returned with ${searchInFlight} in-flight promises; refresh will continue.`)
+        console.log(
+          `[Runner] Search render returned with ${searchInFlight} in-flight promises; refresh will continue.`
+        )
       }
 
       session.stack = isJsxNode(result) ? [result] : []
@@ -2296,6 +3290,7 @@ function cleanupRuntimeSession(session: RuntimeSession): void {
   session.effectDeps.clear()
   session.promiseCache.clear()
   session.promiseKeysByHook.clear()
+  session.promisePaginationByHook.clear()
   session.cacheRecoveryKeys.clear()
 }
 
@@ -2316,11 +3311,7 @@ function pruneSessions(): void {
   }
 }
 
-function runBundle(
-  code: string,
-  packageRoot: string,
-  session: RuntimeSession,
-): unknown {
+function runBundle(code: string, packageRoot: string, session: RuntimeSession): unknown {
   const fileRequire = createRequire(join(packageRoot, 'package.json'))
   const jsxRuntimeShim = createJsxRuntimeShim()
   const reactShim = createReactShim(session)
@@ -2339,9 +3330,14 @@ function runBundle(
         ...fileRequire(specifier),
         spawn: (...args: Parameters<typeof nodeSpawn>) => {
           const child = nodeSpawn(...args)
-          const stdout = child.stdout as (typeof child.stdout & {
-            on: (event: string, listener: (...listenerArgs: unknown[]) => void) => typeof child.stdout
-          }) | null
+          const stdout = child.stdout as
+            | (typeof child.stdout & {
+                on: (
+                  event: string,
+                  listener: (...listenerArgs: unknown[]) => void
+                ) => typeof child.stdout
+              })
+            | null
 
           if (stdout) {
             const originalOn = stdout.on.bind(stdout)
@@ -2399,8 +3395,8 @@ function runBundle(
     }
     if (specifier === 'raycast-cross-extension') {
       return {
-        callbackLaunchCommand: async (): Promise<void> => { },
-        launchCommand: async (): Promise<void> => { },
+        callbackLaunchCommand: async (): Promise<void> => {},
+        launchCommand: async (): Promise<void> => {},
       }
     }
     if (specifier === 'sha256-file') {
@@ -2414,35 +3410,140 @@ function runBundle(
       }
     }
     if (specifier === 'axios') {
-      type AxiosShim = {
-        get: typeof axiosGetShim
-        post: (_url: string, _data?: unknown, _options?: unknown) => Promise<{ data: Record<string, never>; status: number; headers: Record<string, never> }>
-        defaults: { headers: { common: Record<string, string> } }
+      type AxiosConfig = {
+        baseURL?: string
+        headers?: Record<string, string>
+        params?: Record<string, unknown>
+        responseType?: string
+        method?: string
+        url?: string
+        data?: unknown
+      }
+      type AxiosResponse = {
+        data: unknown
+        status: number
+        statusText: string
+        headers: Record<string, string>
+        config: AxiosConfig
+      }
+      type AxiosShim = ((config: AxiosConfig) => Promise<AxiosResponse>) & {
+        get: (url: string, config?: AxiosConfig) => Promise<AxiosResponse>
+        delete: (url: string, config?: AxiosConfig) => Promise<AxiosResponse>
+        post: (url: string, data?: unknown, config?: AxiosConfig) => Promise<AxiosResponse>
+        put: (url: string, data?: unknown, config?: AxiosConfig) => Promise<AxiosResponse>
+        patch: (url: string, data?: unknown, config?: AxiosConfig) => Promise<AxiosResponse>
+        defaults: AxiosConfig & { headers: Record<string, string> & { common: Record<string, string> } }
         interceptors: {
           request: { use: () => number; eject: () => void }
           response: { use: () => number; eject: () => void }
         }
-        create?: () => AxiosShim
-        request?: typeof axiosGetShim
+        create: (config?: AxiosConfig) => AxiosShim
+        request: (config: AxiosConfig) => Promise<AxiosResponse>
         default?: AxiosShim
         __esModule: true
       }
-      const axiosShim: AxiosShim = {
-        get: axiosGetShim,
-        post: async () => {
-          // Some extensions might use POST for speedtest (though unlikely)
-          return { data: {}, status: 200, headers: {} }
-        },
-        defaults: { headers: { common: {} } },
-        interceptors: {
-          request: { use: () => 0, eject: () => { } },
-          response: { use: () => 0, eject: () => { } },
-        },
-        __esModule: true,
+
+      const createAxiosShim = (instanceConfig: AxiosConfig = {}): AxiosShim => {
+        const commonHeaders: Record<string, string> = {}
+        const defaults = {
+          ...instanceConfig,
+          headers: {
+            common: commonHeaders,
+            ...(instanceConfig.headers ?? {}),
+          },
+        }
+        const execute = async (requestConfig: AxiosConfig): Promise<AxiosResponse> => {
+          const merged = { ...instanceConfig, ...requestConfig }
+          const rawUrl = String(merged.url ?? '')
+          const url = new URL(rawUrl, merged.baseURL || instanceConfig.baseURL)
+          for (const [key, value] of Object.entries(merged.params ?? {})) {
+            if (value !== undefined && value !== null) url.searchParams.set(key, String(value))
+          }
+          const headers = new Headers({
+            ...(instanceConfig.headers ?? {}),
+            ...commonHeaders,
+            ...(requestConfig.headers ?? {}),
+          })
+          const method = String(merged.method ?? 'GET').toUpperCase()
+          let body: BodyInit | undefined
+          if (merged.data !== undefined && method !== 'GET' && method !== 'HEAD') {
+            if (
+              typeof merged.data === 'string' ||
+              merged.data instanceof ArrayBuffer ||
+              ArrayBuffer.isView(merged.data) ||
+              (typeof FormData !== 'undefined' && merged.data instanceof FormData)
+            ) {
+              body = merged.data as BodyInit
+            } else {
+              body = JSON.stringify(merged.data)
+              if (!headers.has('content-type')) headers.set('content-type', 'application/json')
+            }
+          }
+          const response = await fetch(url, {
+            method,
+            headers,
+            body,
+          })
+          const responseHeaders: Record<string, string> = {}
+          response.headers.forEach((value, key) => {
+            responseHeaders[key] = value
+          })
+          let data: unknown
+          if (merged.responseType === 'stream') {
+            data = response.body
+              ? Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0])
+              : Readable.from([])
+          } else {
+            const text = await response.text()
+            data = text
+            try {
+              data = text ? JSON.parse(text) : null
+            } catch {
+              // Axios returns plain text when the response is not JSON.
+            }
+          }
+          const result: AxiosResponse = {
+            data,
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders,
+            config: merged,
+          }
+          if (!response.ok) {
+            const error = new Error(`Request failed with status code ${response.status}`) as Error & {
+              response?: AxiosResponse
+              config?: AxiosConfig
+            }
+            error.response = result
+            error.config = merged
+            throw error
+          }
+          return result
+        }
+        const instance = ((config: AxiosConfig) => execute(config)) as AxiosShim
+        Object.assign(instance, {
+          get: (url: string, config?: AxiosConfig) => execute({ ...config, url, method: 'GET' }),
+          delete: (url: string, config?: AxiosConfig) =>
+            execute({ ...config, url, method: 'DELETE' }),
+          post: (url: string, data?: unknown, config?: AxiosConfig) =>
+            execute({ ...config, url, data, method: 'POST' }),
+          put: (url: string, data?: unknown, config?: AxiosConfig) =>
+            execute({ ...config, url, data, method: 'PUT' }),
+          patch: (url: string, data?: unknown, config?: AxiosConfig) =>
+            execute({ ...config, url, data, method: 'PATCH' }),
+          request: execute,
+          defaults,
+          interceptors: {
+            request: { use: () => 0, eject: () => {} },
+            response: { use: () => 0, eject: () => {} },
+          },
+          create: createAxiosShim,
+          __esModule: true as const,
+        })
+        instance.default = instance
+        return instance
       }
-      axiosShim.create = () => axiosShim
-      axiosShim.default = axiosShim
-      return axiosShim
+      return createAxiosShim()
     }
     if (specifier === 'node-fetch' || specifier === 'cross-fetch') {
       return createFetchModuleShim()
@@ -2462,7 +3563,7 @@ function runBundle(
           method?: string
           body?: BodyInit | null
           headers?: HeadersInit
-        },
+        }
       ): Promise<{
         statusCode: number
         headers: Record<string, string>
@@ -2498,7 +3599,11 @@ function runBundle(
       }
     }
     if (specifier === 'tar') {
-      const extract = async (options: { file?: string; cwd?: string; filter?: (path: string | ((path: string) => boolean)) => boolean }): Promise<void> => {
+      const extract = async (options: {
+        file?: string
+        cwd?: string
+        filter?: (path: string | ((path: string) => boolean)) => boolean
+      }): Promise<void> => {
         if (!options?.file || !options.cwd) throw new Error('tar.extract requires file and cwd')
         mkdirSync(options.cwd, { recursive: true })
         // Use -x (extract), -z (gzip), -f (file). -k (keep old files) can be risky, so we use -o (overwrite) which is default.
@@ -2538,15 +3643,43 @@ function runBundle(
       }
     }
     if (specifier.startsWith('swift:') || specifier.startsWith('rust:')) {
-      const pickColor = async (): Promise<Awaited<ReturnType<typeof pickColorWithNativeSampler>>> => {
+      const pickColor = async (): Promise<
+        Awaited<ReturnType<typeof pickColorWithNativeSampler>>
+      > => {
         if (session.commandName === 'color-wheel') return null
         const picked = await pickColorWithNativeSampler()
         session.pickedColor = picked
         return picked
       }
+      const recognizeText = async (
+        fullscreen = false,
+        keepImage = false,
+        fast = false,
+        languageCorrection = false,
+        ignoreLineBreaks = false,
+        customWordsList: string[] = [],
+        languages: string[] = [],
+        playSound = false,
+      ): Promise<string> =>
+        runScreenOcrHelper('recognize-text', {
+          fullscreen,
+          keepImage,
+          fast,
+          languageCorrection,
+          ignoreLineBreaks,
+          customWordsList,
+          languages,
+          playSound,
+        })
+      const detectBarcode = async (keepImage = false, playSound = false): Promise<string> =>
+        runScreenOcrHelper('detect-barcode', { keepImage, playSound })
       return {
         pickColor,
         pick_color: pickColor,
+        recognizeText,
+        recognize_text: recognizeText,
+        detectBarcode,
+        detect_barcode: detectBarcode,
       }
     }
 
@@ -2572,7 +3705,7 @@ function runBundle(
     TransformStream?: typeof NodeTransformStream
     WritableStream?: typeof NodeWritableStream
   }
-  const loggedFetch = createLoggedFetch(session)
+  const loggedFetch = createLoggedFetch()
 
   const context = vm.createContext({
     console,
@@ -2591,14 +3724,35 @@ function runBundle(
     clearTimeout,
     setInterval,
     clearInterval,
+    setImmediate,
+    clearImmediate,
     TextEncoder,
     TextDecoder,
+    Blob,
+    File,
+    FormData,
+    Event,
+    EventTarget,
+    DOMException,
+    MessageChannel,
+    MessagePort,
+    BroadcastChannel,
+    crypto: globalThis.crypto,
+    performance: globalThis.performance,
+    structuredClone,
+    atob,
+    btoa,
     URL,
+    URLSearchParams,
   })
+  context.global = context
+  context.globalThis = context
+  context.window = context
 
   const runtimeCode = code.replace(
     /\bimport\(\s*(["'])(swift:[^"']+|rust:[^"']+)\1\s*\)/g,
-    (_match, quote: string, specifier: string) => `Promise.resolve(require(${quote}${specifier}${quote}))`,
+    (_match, quote: string, specifier: string) =>
+      `Promise.resolve(require(${quote}${specifier}${quote}))`
   )
   const wrapped = `(function(exports, require, module, __filename, __dirname) {\n${runtimeCode}\n})`
   const script = new vm.Script(wrapped, {
@@ -2611,7 +3765,9 @@ function runBundle(
   return mod.exports
 }
 
-function getCommandExport(moduleExports: unknown): ((props: { arguments: Record<string, string> }) => unknown) | null {
+function getCommandExport(
+  moduleExports: unknown
+): ((props: { arguments: Record<string, string> }) => unknown) | null {
   if (typeof moduleExports === 'function') {
     return moduleExports as (props: { arguments: Record<string, string> }) => unknown
   }
@@ -2631,6 +3787,8 @@ async function runCommandFromPackagePath(
   extensionId: string,
   commandName: string,
   argumentValues: Record<string, string>,
+  preferenceValues?: Record<string, unknown>,
+  options?: { effectMode?: 'system' | 'record' }
 ): Promise<ExtensionRunCommandResult> {
   const packageRoot = dirname(packageJsonPath)
   const pkg = parsePackageJson(packageJsonPath)
@@ -2647,13 +3805,16 @@ async function runCommandFromPackagePath(
     id: makeId('ext-session'),
     extensionId,
     commandName,
+    commandMode: mode || 'view',
     title,
     packageRoot,
     actionHandlers: new Map(),
     currentActions: [],
     feedback: [],
+    effects: [],
+    effectMode: options?.effectMode ?? 'system',
     stack: [],
-    preferences: getExtensionPreferences(extensionId, commandName),
+    preferences: preferenceValues ?? getExtensionPreferences(extensionId, commandName),
     searchTextChangeHandler: null,
     commandFn: null,
     commandArgs: argumentValues,
@@ -2664,18 +3825,27 @@ async function runCommandFromPackagePath(
     pendingPromises: [],
     promiseCache: new Map(),
     promiseKeysByHook: new Map(),
+    promisePaginationByHook: new Map(),
+    serverLoadMoreHandler: null,
+    serverHasMore: false,
+    serverLoadMoreRequest: null,
     cacheRecoveryKeys: new Set(),
     abortControllers: new Set(),
     effectCleanups: new Map(),
     effectDeps: new Map(),
+    pendingEffects: [],
     hasStateUpdates: false,
     disposed: false,
     listItemLimit: LIST_ITEM_PAGE_SIZE,
     hookStateSnapshot: null,
     pickedColor: null,
+    renderErrors: [],
   }
 
-  if (shouldShowExtensionPreferenceSetup(extensionId, commandName)) {
+  if (
+    preferenceValues === undefined &&
+    shouldShowExtensionPreferenceSetup(extensionId, commandName)
+  ) {
     session.stack = [buildPreferenceSetupRoot(extensionId, commandName)]
     sessions.set(session.id, session)
     pruneSessions()
@@ -2705,7 +3875,7 @@ async function runCommandFromPackagePath(
     session.hasStateUpdates = false
     result = await Promise.resolve(commandFn(execArgs))
     console.log(
-      `[Runner] ${passLabel} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} hook states, stateUpdates=${session.hasStateUpdates}`,
+      `[Runner] ${passLabel} complete: ${session.pendingPromises.length} promises, ${session.hookStates.length} hook states, stateUpdates=${session.hasStateUpdates}`
     )
   }
 
@@ -2714,32 +3884,40 @@ async function runCommandFromPackagePath(
     if (!session.hasStateUpdates) break
   }
 
-  const remainingInFlight = [...session.promiseCache.values()].filter((entry) => entry.promise).length
+  const remainingInFlight = [...session.promiseCache.values()].filter(
+    (entry) => entry.promise
+  ).length
   if (remainingInFlight > 0) {
-    console.log(`[Runner] Initial multi-pass exited with ${remainingInFlight} in-flight promises; polling refresh will pick them up.`)
+    console.log(
+      `[Runner] Initial multi-pass exited with ${remainingInFlight} in-flight promises; polling refresh will pick them up.`
+    )
   }
 
   if (commandName === 'pick-color' && session.pickedColor) {
     session.title = 'Color Wheel'
-    session.stack = [{
-      __jsx: true,
-      type: makeToken('Detail'),
-      props: {
-        markdown: colorWheelMarkdown(),
-        initialColor: session.pickedColor,
+    session.stack = [
+      {
+        __jsx: true,
+        type: makeToken('Detail'),
+        props: {
+          markdown: colorWheelMarkdown(),
+          initialColor: session.pickedColor,
+        },
       },
-    }]
+    ]
     sessions.set(session.id, session)
     pruneSessions()
     return renderCurrentView(session)
   }
 
   if (mode === 'no-view' || !isJsxNode(result)) {
+    flushPendingEffects(session)
     const message = formatFeedback(session.feedback.at(-1)) || ''
     return {
       ok: true,
       mode: 'no-view',
       message,
+      effects: [...session.effects],
     }
   }
 
@@ -2750,7 +3928,7 @@ async function runCommandFromPackagePath(
 }
 
 export async function runExtensionCommand(
-  request: ExtensionRunCommandRequest,
+  request: ExtensionRunCommandRequest
 ): Promise<ExtensionRunCommandResult> {
   const extensionId = String(request.extensionId || '').trim()
   const commandName = String(request.commandName || '').trim()
@@ -2777,7 +3955,7 @@ export async function runExtensionCommand(
       packagePath,
       extensionId,
       commandName,
-      request.argumentValues ?? {},
+      request.argumentValues ?? {}
     )
   } catch (error) {
     return {
@@ -2791,6 +3969,8 @@ export async function runExtensionCommandFromPackageJson(
   packageJsonPath: string,
   commandName: string,
   argumentValues?: Record<string, string>,
+  preferenceValues?: Record<string, unknown>,
+  options?: { effectMode?: 'system' | 'record' }
 ): Promise<ExtensionRunCommandResult> {
   const normalizedPath = String(packageJsonPath || '').trim()
   const normalizedCommandName = String(commandName || '').trim()
@@ -2805,6 +3985,8 @@ export async function runExtensionCommandFromPackageJson(
       extensionId,
       normalizedCommandName,
       argumentValues ?? {},
+      preferenceValues,
+      options
     )
   } catch (error) {
     return {
@@ -2815,7 +3997,7 @@ export async function runExtensionCommandFromPackageJson(
 }
 
 export async function invokeExtensionAction(
-  request: ExtensionInvokeActionRequest,
+  request: ExtensionInvokeActionRequest
 ): Promise<ExtensionInvokeActionResult> {
   const sessionId = String(request.sessionId || '').trim()
   const actionId = String(request.actionId || '').trim()
@@ -2841,7 +4023,11 @@ export async function invokeExtensionAction(
   }
 
   try {
+    const stackDepthBefore = session.stack.length
     await Promise.resolve(handler(request.formValues ?? {}))
+    if (session.stack.length !== stackDepthBefore) {
+      return renderCurrentView(session)
+    }
     if (session.commandFn && session.hasStateUpdates) {
       return rerenderSessionCommand(session, 'Action')
     }
@@ -2853,6 +4039,7 @@ export async function invokeExtensionAction(
       ok: true,
       mode: 'no-view',
       message: formatFeedback(session.feedback.at(-1)) || '',
+      effects: [...session.effects],
     }
   } catch (error) {
     return {

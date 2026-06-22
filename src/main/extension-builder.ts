@@ -34,6 +34,27 @@ function requireEsbuild(): any {
   return require('esbuild');
 }
 
+function legacyCheerioInteropPlugin(): any {
+  return {
+    name: 'legacy-cheerio-default-interop',
+    setup(build: any) {
+      build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, (args: { path: string }) => {
+        const source = fs.readFileSync(args.path, 'utf8');
+        if (!/import\s+[A-Za-z_$][\w$]*\s+from\s+['"]cheerio['"]/.test(source)) return null;
+        const extension = path.extname(args.path).toLowerCase();
+        const loader = extension.endsWith('x') ? extension.slice(1) : extension.slice(1) || 'js';
+        return {
+          contents: source.replace(
+            /import\s+([A-Za-z_$][\w$]*)\s+from\s+(['"])cheerio\2/g,
+            'import * as $1 from $2cheerio$2'
+          ),
+          loader,
+        };
+      });
+    },
+  };
+}
+
 export interface ExtensionPreferenceSchema {
   scope: 'extension' | 'command';
   name: string;
@@ -693,8 +714,10 @@ export async function buildAllCommands(extName: string, extPathOverride?: string
           bundle: true,
           format: 'cjs',
           platform: 'node',
+          conditions: ['require', 'node'],
           outfile: outFile,
           plugins: [
+            legacyCheerioInteropPlugin(),
             // Mark swift: imports as external so fakeRequire can handle them at runtime
             {
               name: 'swift-external',
@@ -985,8 +1008,10 @@ export async function buildSingleCommand(extName: string, cmdName: string): Prom
         bundle: true,
         format: 'cjs',
         platform: 'node',
+        conditions: ['require', 'node'],
         outfile: outFile,
         plugins: [
+          legacyCheerioInteropPlugin(),
           {
             name: 'swift-external',
             setup(build: any) {

@@ -8,9 +8,6 @@ var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
-var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
-};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -45,7 +42,7 @@ function makeNativeImage(sourcePath) {
   };
   return image;
 }
-var import_node_path, import_node_os, import_node_child_process, import_node_fs, import_node_util, execFileAsync, backendWebContents, IpcMain, ipcMain, app, shell, clipboard, dialog, session, nativeImage, globalShortcut, BrowserWindow, systemPreferences;
+var import_node_path, import_node_os, import_node_child_process, import_node_fs, import_node_util, execFileAsync, backendWebContents, IpcMain, ipcMain, app, shell, clipboard, dialog, session, screen, desktopCapturer, nativeImage, globalShortcut, BrowserWindow, systemPreferences;
 var init_electron_shim = __esm({
   "src/main/electron-shim.ts"() {
     "use strict";
@@ -113,8 +110,16 @@ var init_electron_shim = __esm({
       focus() {
       },
       hide() {
+        if (process.env.IS_TAURI === "true") {
+          process.stdout.write(`${JSON.stringify({ type: "app_visibility", visible: false })}
+`);
+        }
       },
       show() {
+        if (process.env.IS_TAURI === "true") {
+          process.stdout.write(`${JSON.stringify({ type: "app_visibility", visible: true })}
+`);
+        }
       },
       once() {
       },
@@ -174,7 +179,10 @@ var init_electron_shim = __esm({
       writeImage(image) {
         if (!image.sourcePath || process.platform !== "darwin") return;
         const escaped = image.sourcePath.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-        void execFileAsync("osascript", ["-e", `set the clipboard to (read POSIX file "${escaped}" as PNG picture)`]);
+        void execFileAsync("osascript", [
+          "-e",
+          `set the clipboard to (read POSIX file "${escaped}" as PNG picture)`
+        ]);
       },
       write(payload) {
         if (payload.text) this.writeText(payload.text);
@@ -220,9 +228,30 @@ var init_electron_shim = __esm({
         }
       }
     };
+    screen = {
+      getDisplayNearestPoint() {
+        return {
+          id: 1,
+          size: { width: 1920, height: 1080 },
+          bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+          workArea: { x: 0, y: 0, width: 1920, height: 1080 }
+        };
+      },
+      getCursorScreenPoint() {
+        return { x: 0, y: 0 };
+      },
+      getAllDisplays() {
+        return [this.getDisplayNearestPoint()];
+      }
+    };
+    desktopCapturer = {
+      async getSources() {
+        return [];
+      }
+    };
     nativeImage = {
-      createFromPath(path6) {
-        return makeNativeImage(path6);
+      createFromPath(path7) {
+        return makeNativeImage(path7);
       },
       createFromDataURL() {
         return makeNativeImage();
@@ -250,6 +279,7 @@ var init_electron_shim = __esm({
       }
       webContents = backendWebContents;
       visible = true;
+      opacity = 1;
       contentSize = [760, 640];
       constructor() {
         _BrowserWindow.windows.push(this);
@@ -280,6 +310,15 @@ var init_electron_shim = __esm({
       setContentSize(width, height) {
         this.contentSize = [width, height];
       }
+      getOpacity() {
+        return this.opacity;
+      }
+      setOpacity(value) {
+        this.opacity = value;
+      }
+      setContentProtection(enabled) {
+        void enabled;
+      }
       setMaximumSize() {
       }
     };
@@ -306,6 +345,7675 @@ var init_windowState = __esm({
   "src/main/windowState.ts"() {
     "use strict";
     suppressBlurHide = false;
+  }
+});
+
+// src/shared/aiProviders.ts
+function isCustomProvider(id) {
+  return id.startsWith("custom:");
+}
+function recommendedModel(provider) {
+  return isCustomProvider(provider) ? "" : RECOMMENDED_AI_MODEL[provider];
+}
+function defaultModels(provider) {
+  return isCustomProvider(provider) ? [] : DEFAULT_PROVIDER_MODELS[provider];
+}
+function inferCapabilities(modelId) {
+  const lower = modelId.toLowerCase();
+  const caps = [];
+  if (/vision|vl|llava|gpt-4o|gemini|claude/.test(lower)) caps.unshift("vision");
+  if (/reason|think|r1|o\d|sonnet|pro|v4-pro|claude|deepseek/.test(lower)) caps.push("thinking");
+  if (!/embed|whisper|tts/.test(lower)) caps.push("tools");
+  return Array.from(new Set(caps));
+}
+function normalizeModelList(models, fallbackId) {
+  const seen = /* @__PURE__ */ new Set();
+  const normalized = models.map((model) => {
+    const next = {
+      id: String(model.id || "").trim(),
+      capabilities: Array.isArray(model.capabilities) ? model.capabilities.filter(
+        (capability) => capability === "vision" || capability === "thinking" || capability === "tools"
+      ) : inferCapabilities(model.id)
+    };
+    if (typeof model.contextWindow === "number" && Number.isFinite(model.contextWindow)) {
+      next.contextWindow = Math.max(0, Math.round(model.contextWindow));
+    }
+    return next;
+  }).filter((model) => {
+    if (!model.id || seen.has(model.id)) return false;
+    seen.add(model.id);
+    return true;
+  });
+  if (fallbackId && !seen.has(fallbackId)) {
+    normalized.unshift({ id: fallbackId, capabilities: inferCapabilities(fallbackId) });
+  }
+  return normalized;
+}
+function normalizeProviderModelList(provider, models) {
+  if (isCustomProvider(provider)) {
+    return normalizeModelList(models, models[0]?.id ?? "");
+  }
+  if (provider === "openai-compatible") {
+    return normalizeModelList(models, RECOMMENDED_AI_MODEL[provider]);
+  }
+  const ownDefaults = new Set(DEFAULT_PROVIDER_MODELS[provider].map((model) => model.id));
+  const otherDefaults = /* @__PURE__ */ new Set();
+  for (const [otherProvider, otherModels] of Object.entries(DEFAULT_PROVIDER_MODELS)) {
+    if (otherProvider === provider) continue;
+    for (const model of otherModels) {
+      otherDefaults.add(model.id);
+    }
+  }
+  return normalizeModelList(
+    models.filter((model) => ownDefaults.has(model.id) || !otherDefaults.has(model.id)),
+    RECOMMENDED_AI_MODEL[provider]
+  );
+}
+var RECOMMENDED_AI_MODEL, DEFAULT_PROVIDER_MODELS;
+var init_aiProviders = __esm({
+  "src/shared/aiProviders.ts"() {
+    "use strict";
+    RECOMMENDED_AI_MODEL = {
+      openai: "gpt-4o-mini",
+      deepseek: "deepseek-v4-flash",
+      "openai-compatible": "gpt-4o-mini",
+      gemini: "gemini-2.0-flash",
+      anthropic: "claude-3-5-haiku-20241022",
+      ollama: "llama3.2",
+      copilot: "gpt-4o",
+      opencode: "opencode/big-pickle"
+    };
+    DEFAULT_PROVIDER_MODELS = {
+      openai: [
+        { id: "gpt-4o-mini", capabilities: ["vision", "tools"], contextWindow: 128e3 },
+        { id: "gpt-4o", capabilities: ["vision", "tools"], contextWindow: 128e3 },
+        { id: "o3-mini", capabilities: ["thinking", "tools"], contextWindow: 2e5 }
+      ],
+      deepseek: [
+        { id: "deepseek-v4-flash", capabilities: ["tools"], contextWindow: 128e3 },
+        { id: "deepseek-v4-pro", capabilities: ["thinking", "tools"], contextWindow: 128e3 },
+        { id: "deepseek-reasoner", capabilities: ["thinking"], contextWindow: 64e3 }
+      ],
+      "openai-compatible": [
+        { id: "gpt-4o-mini", capabilities: ["vision", "tools"], contextWindow: 128e3 }
+      ],
+      gemini: [
+        { id: "gemini-2.0-flash", capabilities: ["vision", "tools"], contextWindow: 1e6 },
+        { id: "gemini-1.5-pro", capabilities: ["vision", "thinking", "tools"], contextWindow: 2e6 }
+      ],
+      anthropic: [
+        { id: "claude-3-5-haiku-20241022", capabilities: ["vision", "tools"], contextWindow: 2e5 },
+        { id: "claude-3-5-sonnet-20241022", capabilities: ["vision", "thinking", "tools"], contextWindow: 2e5 }
+      ],
+      ollama: [
+        { id: "llama3.2", capabilities: ["tools"], contextWindow: 128e3 },
+        { id: "llava", capabilities: ["vision"], contextWindow: 32e3 }
+      ],
+      copilot: [
+        { id: "gpt-4o", capabilities: ["vision", "tools"], contextWindow: 128e3 },
+        { id: "claude-3.5-sonnet", capabilities: ["thinking", "tools"], contextWindow: 2e5 }
+      ],
+      opencode: [
+        { id: "opencode/big-pickle", capabilities: ["thinking", "tools"], contextWindow: 128e3 }
+      ]
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/tslib.mjs
+function __classPrivateFieldSet(receiver, state, value, kind, f) {
+  if (kind === "m")
+    throw new TypeError("Private method is not writable");
+  if (kind === "a" && !f)
+    throw new TypeError("Private accessor was defined without a setter");
+  if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
+    throw new TypeError("Cannot write private member to an object whose class did not declare it");
+  return kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value), value;
+}
+function __classPrivateFieldGet(receiver, state, kind, f) {
+  if (kind === "a" && !f)
+    throw new TypeError("Private accessor was defined without a getter");
+  if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
+    throw new TypeError("Cannot read private member from an object whose class did not declare it");
+  return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+}
+var init_tslib = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/tslib.mjs"() {
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs
+var uuid4;
+var init_uuid = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs"() {
+    uuid4 = function() {
+      const { crypto } = globalThis;
+      if (crypto?.randomUUID) {
+        uuid4 = crypto.randomUUID.bind(crypto);
+        return crypto.randomUUID();
+      }
+      const u8 = new Uint8Array(1);
+      const randomByte = crypto ? () => crypto.getRandomValues(u8)[0] : () => Math.random() * 255 & 255;
+      return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (+c ^ randomByte() & 15 >> +c / 4).toString(16));
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/errors.mjs
+function isAbortError(err) {
+  return typeof err === "object" && err !== null && // Spec-compliant fetch implementations
+  ("name" in err && err.name === "AbortError" || // Expo fetch
+  "message" in err && String(err.message).includes("FetchRequestCanceledException"));
+}
+var castToError;
+var init_errors = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/errors.mjs"() {
+    castToError = (err) => {
+      if (err instanceof Error)
+        return err;
+      if (typeof err === "object" && err !== null) {
+        try {
+          if (Object.prototype.toString.call(err) === "[object Error]") {
+            const error = new Error(err.message, err.cause ? { cause: err.cause } : {});
+            if (err.stack)
+              error.stack = err.stack;
+            if (err.cause && !error.cause)
+              error.cause = err.cause;
+            if (err.name)
+              error.name = err.name;
+            return error;
+          }
+        } catch {
+        }
+        try {
+          return new Error(JSON.stringify(err));
+        } catch {
+        }
+      }
+      return new Error(err);
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/error.mjs
+var AnthropicError, APIError, APIUserAbortError, APIConnectionError, APIConnectionTimeoutError, BadRequestError, AuthenticationError, PermissionDeniedError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError;
+var init_error = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/error.mjs"() {
+    init_errors();
+    AnthropicError = class extends Error {
+    };
+    APIError = class _APIError extends AnthropicError {
+      constructor(status, error, message, headers, type) {
+        super(`${_APIError.makeMessage(status, error, message)}`);
+        this.status = status;
+        this.headers = headers;
+        this.requestID = headers?.get("request-id");
+        this.error = error;
+        this.type = type ?? null;
+      }
+      static makeMessage(status, error, message) {
+        const msg = error?.message ? typeof error.message === "string" ? error.message : JSON.stringify(error.message) : error ? JSON.stringify(error) : message;
+        if (status && msg) {
+          return `${status} ${msg}`;
+        }
+        if (status) {
+          return `${status} status code (no body)`;
+        }
+        if (msg) {
+          return msg;
+        }
+        return "(no status code or body)";
+      }
+      static generate(status, errorResponse, message, headers) {
+        if (!status || !headers) {
+          return new APIConnectionError({ message, cause: castToError(errorResponse) });
+        }
+        const error = errorResponse;
+        const type = error?.["error"]?.["type"];
+        if (status === 400) {
+          return new BadRequestError(status, error, message, headers, type);
+        }
+        if (status === 401) {
+          return new AuthenticationError(status, error, message, headers, type);
+        }
+        if (status === 403) {
+          return new PermissionDeniedError(status, error, message, headers, type);
+        }
+        if (status === 404) {
+          return new NotFoundError(status, error, message, headers, type);
+        }
+        if (status === 409) {
+          return new ConflictError(status, error, message, headers, type);
+        }
+        if (status === 422) {
+          return new UnprocessableEntityError(status, error, message, headers, type);
+        }
+        if (status === 429) {
+          return new RateLimitError(status, error, message, headers, type);
+        }
+        if (status >= 500) {
+          return new InternalServerError(status, error, message, headers, type);
+        }
+        return new _APIError(status, error, message, headers, type);
+      }
+    };
+    APIUserAbortError = class extends APIError {
+      constructor({ message } = {}) {
+        super(void 0, void 0, message || "Request was aborted.", void 0);
+      }
+    };
+    APIConnectionError = class extends APIError {
+      constructor({ message, cause }) {
+        super(void 0, void 0, message || "Connection error.", void 0);
+        if (cause)
+          this.cause = cause;
+      }
+    };
+    APIConnectionTimeoutError = class extends APIConnectionError {
+      constructor({ message } = {}) {
+        super({ message: message ?? "Request timed out." });
+      }
+    };
+    BadRequestError = class extends APIError {
+    };
+    AuthenticationError = class extends APIError {
+    };
+    PermissionDeniedError = class extends APIError {
+    };
+    NotFoundError = class extends APIError {
+    };
+    ConflictError = class extends APIError {
+    };
+    UnprocessableEntityError = class extends APIError {
+    };
+    RateLimitError = class extends APIError {
+    };
+    InternalServerError = class extends APIError {
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs
+function maybeObj(x) {
+  if (typeof x !== "object") {
+    return {};
+  }
+  return x ?? {};
+}
+function isEmptyObj(obj) {
+  if (!obj)
+    return true;
+  for (const _k in obj)
+    return false;
+  return true;
+}
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+var startsWithSchemeRegexp, isAbsoluteURL, isArray, isReadonlyArray, validatePositiveInteger, safeJSON;
+var init_values = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs"() {
+    init_error();
+    startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
+    isAbsoluteURL = (url) => {
+      return startsWithSchemeRegexp.test(url);
+    };
+    isArray = (val) => (isArray = Array.isArray, isArray(val));
+    isReadonlyArray = isArray;
+    validatePositiveInteger = (name, n) => {
+      if (typeof n !== "number" || !Number.isInteger(n)) {
+        throw new AnthropicError(`${name} must be an integer`);
+      }
+      if (n < 0) {
+        throw new AnthropicError(`${name} must be a positive integer`);
+      }
+      return n;
+    };
+    safeJSON = (text) => {
+      try {
+        return JSON.parse(text);
+      } catch (err) {
+        return void 0;
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs
+var sleep;
+var init_sleep = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs"() {
+    sleep = (ms) => new Promise((resolve4) => setTimeout(resolve4, ms));
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/version.mjs
+var VERSION;
+var init_version = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/version.mjs"() {
+    VERSION = "0.90.0";
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
+function getDetectedPlatform() {
+  if (typeof Deno !== "undefined" && Deno.build != null) {
+    return "deno";
+  }
+  if (typeof EdgeRuntime !== "undefined") {
+    return "edge";
+  }
+  if (Object.prototype.toString.call(typeof globalThis.process !== "undefined" ? globalThis.process : 0) === "[object process]") {
+    return "node";
+  }
+  return "unknown";
+}
+function getBrowserInfo() {
+  if (typeof navigator === "undefined" || !navigator) {
+    return null;
+  }
+  const browserPatterns = [
+    { key: "edge", pattern: /Edge(?:\W+(\d+)\.(\d+)(?:\.(\d+))?)?/ },
+    { key: "ie", pattern: /MSIE(?:\W+(\d+)\.(\d+)(?:\.(\d+))?)?/ },
+    { key: "ie", pattern: /Trident(?:.*rv\:(\d+)\.(\d+)(?:\.(\d+))?)?/ },
+    { key: "chrome", pattern: /Chrome(?:\W+(\d+)\.(\d+)(?:\.(\d+))?)?/ },
+    { key: "firefox", pattern: /Firefox(?:\W+(\d+)\.(\d+)(?:\.(\d+))?)?/ },
+    { key: "safari", pattern: /(?:Version\W+(\d+)\.(\d+)(?:\.(\d+))?)?(?:\W+Mobile\S*)?\W+Safari/ }
+  ];
+  for (const { key, pattern } of browserPatterns) {
+    const match = pattern.exec(navigator.userAgent);
+    if (match) {
+      const major = match[1] || 0;
+      const minor = match[2] || 0;
+      const patch = match[3] || 0;
+      return { browser: key, version: `${major}.${minor}.${patch}` };
+    }
+  }
+  return null;
+}
+var isRunningInBrowser, getPlatformProperties, normalizeArch, normalizePlatform, _platformHeaders, getPlatformHeaders;
+var init_detect_platform = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs"() {
+    init_version();
+    isRunningInBrowser = () => {
+      return (
+        // @ts-ignore
+        typeof window !== "undefined" && // @ts-ignore
+        typeof window.document !== "undefined" && // @ts-ignore
+        typeof navigator !== "undefined"
+      );
+    };
+    getPlatformProperties = () => {
+      const detectedPlatform = getDetectedPlatform();
+      if (detectedPlatform === "deno") {
+        return {
+          "X-Stainless-Lang": "js",
+          "X-Stainless-Package-Version": VERSION,
+          "X-Stainless-OS": normalizePlatform(Deno.build.os),
+          "X-Stainless-Arch": normalizeArch(Deno.build.arch),
+          "X-Stainless-Runtime": "deno",
+          "X-Stainless-Runtime-Version": typeof Deno.version === "string" ? Deno.version : Deno.version?.deno ?? "unknown"
+        };
+      }
+      if (typeof EdgeRuntime !== "undefined") {
+        return {
+          "X-Stainless-Lang": "js",
+          "X-Stainless-Package-Version": VERSION,
+          "X-Stainless-OS": "Unknown",
+          "X-Stainless-Arch": `other:${EdgeRuntime}`,
+          "X-Stainless-Runtime": "edge",
+          "X-Stainless-Runtime-Version": globalThis.process.version
+        };
+      }
+      if (detectedPlatform === "node") {
+        return {
+          "X-Stainless-Lang": "js",
+          "X-Stainless-Package-Version": VERSION,
+          "X-Stainless-OS": normalizePlatform(globalThis.process.platform ?? "unknown"),
+          "X-Stainless-Arch": normalizeArch(globalThis.process.arch ?? "unknown"),
+          "X-Stainless-Runtime": "node",
+          "X-Stainless-Runtime-Version": globalThis.process.version ?? "unknown"
+        };
+      }
+      const browserInfo = getBrowserInfo();
+      if (browserInfo) {
+        return {
+          "X-Stainless-Lang": "js",
+          "X-Stainless-Package-Version": VERSION,
+          "X-Stainless-OS": "Unknown",
+          "X-Stainless-Arch": "unknown",
+          "X-Stainless-Runtime": `browser:${browserInfo.browser}`,
+          "X-Stainless-Runtime-Version": browserInfo.version
+        };
+      }
+      return {
+        "X-Stainless-Lang": "js",
+        "X-Stainless-Package-Version": VERSION,
+        "X-Stainless-OS": "Unknown",
+        "X-Stainless-Arch": "unknown",
+        "X-Stainless-Runtime": "unknown",
+        "X-Stainless-Runtime-Version": "unknown"
+      };
+    };
+    normalizeArch = (arch) => {
+      if (arch === "x32")
+        return "x32";
+      if (arch === "x86_64" || arch === "x64")
+        return "x64";
+      if (arch === "arm")
+        return "arm";
+      if (arch === "aarch64" || arch === "arm64")
+        return "arm64";
+      if (arch)
+        return `other:${arch}`;
+      return "unknown";
+    };
+    normalizePlatform = (platform) => {
+      platform = platform.toLowerCase();
+      if (platform.includes("ios"))
+        return "iOS";
+      if (platform === "android")
+        return "Android";
+      if (platform === "darwin")
+        return "MacOS";
+      if (platform === "win32")
+        return "Windows";
+      if (platform === "freebsd")
+        return "FreeBSD";
+      if (platform === "openbsd")
+        return "OpenBSD";
+      if (platform === "linux")
+        return "Linux";
+      if (platform)
+        return `Other:${platform}`;
+      return "Unknown";
+    };
+    getPlatformHeaders = () => {
+      return _platformHeaders ?? (_platformHeaders = getPlatformProperties());
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/shims.mjs
+function getDefaultFetch() {
+  if (typeof fetch !== "undefined") {
+    return fetch;
+  }
+  throw new Error("`fetch` is not defined as a global; Either pass `fetch` to the client, `new Anthropic({ fetch })` or polyfill the global, `globalThis.fetch = fetch`");
+}
+function makeReadableStream(...args) {
+  const ReadableStream = globalThis.ReadableStream;
+  if (typeof ReadableStream === "undefined") {
+    throw new Error("`ReadableStream` is not defined as a global; You will need to polyfill it, `globalThis.ReadableStream = ReadableStream`");
+  }
+  return new ReadableStream(...args);
+}
+function ReadableStreamFrom(iterable) {
+  let iter = Symbol.asyncIterator in iterable ? iterable[Symbol.asyncIterator]() : iterable[Symbol.iterator]();
+  return makeReadableStream({
+    start() {
+    },
+    async pull(controller) {
+      const { done, value } = await iter.next();
+      if (done) {
+        controller.close();
+      } else {
+        controller.enqueue(value);
+      }
+    },
+    async cancel() {
+      await iter.return?.();
+    }
+  });
+}
+function ReadableStreamToAsyncIterable(stream) {
+  if (stream[Symbol.asyncIterator])
+    return stream;
+  const reader = stream.getReader();
+  return {
+    async next() {
+      try {
+        const result = await reader.read();
+        if (result?.done)
+          reader.releaseLock();
+        return result;
+      } catch (e) {
+        reader.releaseLock();
+        throw e;
+      }
+    },
+    async return() {
+      const cancelPromise = reader.cancel();
+      reader.releaseLock();
+      await cancelPromise;
+      return { done: true, value: void 0 };
+    },
+    [Symbol.asyncIterator]() {
+      return this;
+    }
+  };
+}
+async function CancelReadableStream(stream) {
+  if (stream === null || typeof stream !== "object")
+    return;
+  if (stream[Symbol.asyncIterator]) {
+    await stream[Symbol.asyncIterator]().return?.();
+    return;
+  }
+  const reader = stream.getReader();
+  const cancelPromise = reader.cancel();
+  reader.releaseLock();
+  await cancelPromise;
+}
+var init_shims = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/shims.mjs"() {
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/request-options.mjs
+var FallbackEncoder;
+var init_request_options = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/request-options.mjs"() {
+    FallbackEncoder = ({ headers, body }) => {
+      return {
+        bodyHeaders: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(body)
+      };
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs
+function stringifyQuery(query) {
+  return Object.entries(query).filter(([_, value]) => typeof value !== "undefined").map(([key, value]) => {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+    }
+    if (value === null) {
+      return `${encodeURIComponent(key)}=`;
+    }
+    throw new AnthropicError(`Cannot stringify type ${typeof value}; Expected string, number, boolean, or null. If you need to pass nested query parameters, you can manually encode them, e.g. { query: { 'foo[key1]': value1, 'foo[key2]': value2 } }, and please open a GitHub issue requesting better support for your use case.`);
+  }).join("&");
+}
+var init_query = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs"() {
+    init_error();
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs
+function concatBytes(buffers) {
+  let length = 0;
+  for (const buffer of buffers) {
+    length += buffer.length;
+  }
+  const output = new Uint8Array(length);
+  let index = 0;
+  for (const buffer of buffers) {
+    output.set(buffer, index);
+    index += buffer.length;
+  }
+  return output;
+}
+function encodeUTF8(str2) {
+  let encoder;
+  return (encodeUTF8_ ?? (encoder = new globalThis.TextEncoder(), encodeUTF8_ = encoder.encode.bind(encoder)))(str2);
+}
+function decodeUTF8(bytes) {
+  let decoder;
+  return (decodeUTF8_ ?? (decoder = new globalThis.TextDecoder(), decodeUTF8_ = decoder.decode.bind(decoder)))(bytes);
+}
+var encodeUTF8_, decodeUTF8_;
+var init_bytes = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs"() {
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs
+function findNewlineIndex(buffer, startIndex) {
+  const newline = 10;
+  const carriage = 13;
+  for (let i = startIndex ?? 0; i < buffer.length; i++) {
+    if (buffer[i] === newline) {
+      return { preceding: i, index: i + 1, carriage: false };
+    }
+    if (buffer[i] === carriage) {
+      return { preceding: i, index: i + 1, carriage: true };
+    }
+  }
+  return null;
+}
+function findDoubleNewlineIndex(buffer) {
+  const newline = 10;
+  const carriage = 13;
+  for (let i = 0; i < buffer.length - 1; i++) {
+    if (buffer[i] === newline && buffer[i + 1] === newline) {
+      return i + 2;
+    }
+    if (buffer[i] === carriage && buffer[i + 1] === carriage) {
+      return i + 2;
+    }
+    if (buffer[i] === carriage && buffer[i + 1] === newline && i + 3 < buffer.length && buffer[i + 2] === carriage && buffer[i + 3] === newline) {
+      return i + 4;
+    }
+  }
+  return -1;
+}
+var _LineDecoder_buffer, _LineDecoder_carriageReturnIndex, LineDecoder;
+var init_line = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs"() {
+    init_tslib();
+    init_bytes();
+    LineDecoder = class {
+      constructor() {
+        _LineDecoder_buffer.set(this, void 0);
+        _LineDecoder_carriageReturnIndex.set(this, void 0);
+        __classPrivateFieldSet(this, _LineDecoder_buffer, new Uint8Array(), "f");
+        __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, null, "f");
+      }
+      decode(chunk) {
+        if (chunk == null) {
+          return [];
+        }
+        const binaryChunk = chunk instanceof ArrayBuffer ? new Uint8Array(chunk) : typeof chunk === "string" ? encodeUTF8(chunk) : chunk;
+        __classPrivateFieldSet(this, _LineDecoder_buffer, concatBytes([__classPrivateFieldGet(this, _LineDecoder_buffer, "f"), binaryChunk]), "f");
+        const lines = [];
+        let patternIndex;
+        while ((patternIndex = findNewlineIndex(__classPrivateFieldGet(this, _LineDecoder_buffer, "f"), __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f"))) != null) {
+          if (patternIndex.carriage && __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") == null) {
+            __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, patternIndex.index, "f");
+            continue;
+          }
+          if (__classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") != null && (patternIndex.index !== __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") + 1 || patternIndex.carriage)) {
+            lines.push(decodeUTF8(__classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(0, __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") - 1)));
+            __classPrivateFieldSet(this, _LineDecoder_buffer, __classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(__classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f")), "f");
+            __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, null, "f");
+            continue;
+          }
+          const endIndex = __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") !== null ? patternIndex.preceding - 1 : patternIndex.preceding;
+          const line = decodeUTF8(__classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(0, endIndex));
+          lines.push(line);
+          __classPrivateFieldSet(this, _LineDecoder_buffer, __classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(patternIndex.index), "f");
+          __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, null, "f");
+        }
+        return lines;
+      }
+      flush() {
+        if (!__classPrivateFieldGet(this, _LineDecoder_buffer, "f").length) {
+          return [];
+        }
+        return this.decode("\n");
+      }
+    };
+    _LineDecoder_buffer = /* @__PURE__ */ new WeakMap(), _LineDecoder_carriageReturnIndex = /* @__PURE__ */ new WeakMap();
+    LineDecoder.NEWLINE_CHARS = /* @__PURE__ */ new Set(["\n", "\r"]);
+    LineDecoder.NEWLINE_REGEXP = /\r\n|[\n\r]/g;
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs
+function noop() {
+}
+function makeLogFn(fnLevel, logger, logLevel) {
+  if (!logger || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+    return noop;
+  } else {
+    return logger[fnLevel].bind(logger);
+  }
+}
+function loggerFor(client) {
+  const logger = client.logger;
+  const logLevel = client.logLevel ?? "off";
+  if (!logger) {
+    return noopLogger;
+  }
+  const cachedLogger = cachedLoggers.get(logger);
+  if (cachedLogger && cachedLogger[0] === logLevel) {
+    return cachedLogger[1];
+  }
+  const levelLogger = {
+    error: makeLogFn("error", logger, logLevel),
+    warn: makeLogFn("warn", logger, logLevel),
+    info: makeLogFn("info", logger, logLevel),
+    debug: makeLogFn("debug", logger, logLevel)
+  };
+  cachedLoggers.set(logger, [logLevel, levelLogger]);
+  return levelLogger;
+}
+var levelNumbers, parseLogLevel, noopLogger, cachedLoggers, formatRequestDetails;
+var init_log = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs"() {
+    init_values();
+    levelNumbers = {
+      off: 0,
+      error: 200,
+      warn: 300,
+      info: 400,
+      debug: 500
+    };
+    parseLogLevel = (maybeLevel, sourceName, client) => {
+      if (!maybeLevel) {
+        return void 0;
+      }
+      if (hasOwn(levelNumbers, maybeLevel)) {
+        return maybeLevel;
+      }
+      loggerFor(client).warn(`${sourceName} was set to ${JSON.stringify(maybeLevel)}, expected one of ${JSON.stringify(Object.keys(levelNumbers))}`);
+      return void 0;
+    };
+    noopLogger = {
+      error: noop,
+      warn: noop,
+      info: noop,
+      debug: noop
+    };
+    cachedLoggers = /* @__PURE__ */ new WeakMap();
+    formatRequestDetails = (details) => {
+      if (details.options) {
+        details.options = { ...details.options };
+        delete details.options["headers"];
+      }
+      if (details.headers) {
+        details.headers = Object.fromEntries((details.headers instanceof Headers ? [...details.headers] : Object.entries(details.headers)).map(([name, value]) => [
+          name,
+          name.toLowerCase() === "x-api-key" || name.toLowerCase() === "authorization" || name.toLowerCase() === "cookie" || name.toLowerCase() === "set-cookie" ? "***" : value
+        ]));
+      }
+      if ("retryOfRequestLogID" in details) {
+        if (details.retryOfRequestLogID) {
+          details.retryOf = details.retryOfRequestLogID;
+        }
+        delete details.retryOfRequestLogID;
+      }
+      return details;
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/streaming.mjs
+async function* _iterSSEMessages(response, controller) {
+  if (!response.body) {
+    controller.abort();
+    if (typeof globalThis.navigator !== "undefined" && globalThis.navigator.product === "ReactNative") {
+      throw new AnthropicError(`The default react-native fetch implementation does not support streaming. Please use expo/fetch: https://docs.expo.dev/versions/latest/sdk/expo/#expofetch-api`);
+    }
+    throw new AnthropicError(`Attempted to iterate over a response with no body`);
+  }
+  const sseDecoder = new SSEDecoder();
+  const lineDecoder = new LineDecoder();
+  const iter = ReadableStreamToAsyncIterable(response.body);
+  for await (const sseChunk of iterSSEChunks(iter)) {
+    for (const line of lineDecoder.decode(sseChunk)) {
+      const sse = sseDecoder.decode(line);
+      if (sse)
+        yield sse;
+    }
+  }
+  for (const line of lineDecoder.flush()) {
+    const sse = sseDecoder.decode(line);
+    if (sse)
+      yield sse;
+  }
+}
+async function* iterSSEChunks(iterator) {
+  let data = new Uint8Array();
+  for await (const chunk of iterator) {
+    if (chunk == null) {
+      continue;
+    }
+    const binaryChunk = chunk instanceof ArrayBuffer ? new Uint8Array(chunk) : typeof chunk === "string" ? encodeUTF8(chunk) : chunk;
+    let newData = new Uint8Array(data.length + binaryChunk.length);
+    newData.set(data);
+    newData.set(binaryChunk, data.length);
+    data = newData;
+    let patternIndex;
+    while ((patternIndex = findDoubleNewlineIndex(data)) !== -1) {
+      yield data.slice(0, patternIndex);
+      data = data.slice(patternIndex);
+    }
+  }
+  if (data.length > 0) {
+    yield data;
+  }
+}
+function partition(str2, delimiter2) {
+  const index = str2.indexOf(delimiter2);
+  if (index !== -1) {
+    return [str2.substring(0, index), delimiter2, str2.substring(index + delimiter2.length)];
+  }
+  return [str2, "", ""];
+}
+var _Stream_client, Stream, SSEDecoder;
+var init_streaming = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/streaming.mjs"() {
+    init_tslib();
+    init_error();
+    init_shims();
+    init_line();
+    init_shims();
+    init_errors();
+    init_values();
+    init_bytes();
+    init_log();
+    init_error();
+    Stream = class _Stream {
+      constructor(iterator, controller, client) {
+        this.iterator = iterator;
+        _Stream_client.set(this, void 0);
+        this.controller = controller;
+        __classPrivateFieldSet(this, _Stream_client, client, "f");
+      }
+      static fromSSEResponse(response, controller, client) {
+        let consumed = false;
+        const logger = client ? loggerFor(client) : console;
+        async function* iterator() {
+          if (consumed) {
+            throw new AnthropicError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
+          }
+          consumed = true;
+          let done = false;
+          try {
+            for await (const sse of _iterSSEMessages(response, controller)) {
+              if (sse.event === "completion") {
+                try {
+                  yield JSON.parse(sse.data);
+                } catch (e) {
+                  logger.error(`Could not parse message into JSON:`, sse.data);
+                  logger.error(`From chunk:`, sse.raw);
+                  throw e;
+                }
+              }
+              if (sse.event === "message_start" || sse.event === "message_delta" || sse.event === "message_stop" || sse.event === "content_block_start" || sse.event === "content_block_delta" || sse.event === "content_block_stop" || sse.event === "message" || sse.event === "user.message" || sse.event === "user.interrupt" || sse.event === "user.tool_confirmation" || sse.event === "user.custom_tool_result" || sse.event === "agent.message" || sse.event === "agent.thinking" || sse.event === "agent.tool_use" || sse.event === "agent.tool_result" || sse.event === "agent.mcp_tool_use" || sse.event === "agent.mcp_tool_result" || sse.event === "agent.custom_tool_use" || sse.event === "agent.thread_context_compacted" || sse.event === "session.status_running" || sse.event === "session.status_idle" || sse.event === "session.status_rescheduled" || sse.event === "session.status_terminated" || sse.event === "session.error" || sse.event === "session.deleted" || sse.event === "span.model_request_start" || sse.event === "span.model_request_end") {
+                try {
+                  yield JSON.parse(sse.data);
+                } catch (e) {
+                  logger.error(`Could not parse message into JSON:`, sse.data);
+                  logger.error(`From chunk:`, sse.raw);
+                  throw e;
+                }
+              }
+              if (sse.event === "ping") {
+                continue;
+              }
+              if (sse.event === "error") {
+                const body = safeJSON(sse.data) ?? sse.data;
+                const type = body?.error?.type;
+                throw new APIError(void 0, body, void 0, response.headers, type);
+              }
+            }
+            done = true;
+          } catch (e) {
+            if (isAbortError(e))
+              return;
+            throw e;
+          } finally {
+            if (!done)
+              controller.abort();
+          }
+        }
+        return new _Stream(iterator, controller, client);
+      }
+      /**
+       * Generates a Stream from a newline-separated ReadableStream
+       * where each item is a JSON value.
+       */
+      static fromReadableStream(readableStream, controller, client) {
+        let consumed = false;
+        async function* iterLines() {
+          const lineDecoder = new LineDecoder();
+          const iter = ReadableStreamToAsyncIterable(readableStream);
+          for await (const chunk of iter) {
+            for (const line of lineDecoder.decode(chunk)) {
+              yield line;
+            }
+          }
+          for (const line of lineDecoder.flush()) {
+            yield line;
+          }
+        }
+        async function* iterator() {
+          if (consumed) {
+            throw new AnthropicError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
+          }
+          consumed = true;
+          let done = false;
+          try {
+            for await (const line of iterLines()) {
+              if (done)
+                continue;
+              if (line)
+                yield JSON.parse(line);
+            }
+            done = true;
+          } catch (e) {
+            if (isAbortError(e))
+              return;
+            throw e;
+          } finally {
+            if (!done)
+              controller.abort();
+          }
+        }
+        return new _Stream(iterator, controller, client);
+      }
+      [(_Stream_client = /* @__PURE__ */ new WeakMap(), Symbol.asyncIterator)]() {
+        return this.iterator();
+      }
+      /**
+       * Splits the stream into two streams which can be
+       * independently read from at different speeds.
+       */
+      tee() {
+        const left = [];
+        const right = [];
+        const iterator = this.iterator();
+        const teeIterator = (queue) => {
+          return {
+            next: () => {
+              if (queue.length === 0) {
+                const result = iterator.next();
+                left.push(result);
+                right.push(result);
+              }
+              return queue.shift();
+            }
+          };
+        };
+        return [
+          new _Stream(() => teeIterator(left), this.controller, __classPrivateFieldGet(this, _Stream_client, "f")),
+          new _Stream(() => teeIterator(right), this.controller, __classPrivateFieldGet(this, _Stream_client, "f"))
+        ];
+      }
+      /**
+       * Converts this stream to a newline-separated ReadableStream of
+       * JSON stringified values in the stream
+       * which can be turned back into a Stream with `Stream.fromReadableStream()`.
+       */
+      toReadableStream() {
+        const self = this;
+        let iter;
+        return makeReadableStream({
+          async start() {
+            iter = self[Symbol.asyncIterator]();
+          },
+          async pull(ctrl) {
+            try {
+              const { value, done } = await iter.next();
+              if (done)
+                return ctrl.close();
+              const bytes = encodeUTF8(JSON.stringify(value) + "\n");
+              ctrl.enqueue(bytes);
+            } catch (err) {
+              ctrl.error(err);
+            }
+          },
+          async cancel() {
+            await iter.return?.();
+          }
+        });
+      }
+    };
+    SSEDecoder = class {
+      constructor() {
+        this.event = null;
+        this.data = [];
+        this.chunks = [];
+      }
+      decode(line) {
+        if (line.endsWith("\r")) {
+          line = line.substring(0, line.length - 1);
+        }
+        if (!line) {
+          if (!this.event && !this.data.length)
+            return null;
+          const sse = {
+            event: this.event,
+            data: this.data.join("\n"),
+            raw: this.chunks
+          };
+          this.event = null;
+          this.data = [];
+          this.chunks = [];
+          return sse;
+        }
+        this.chunks.push(line);
+        if (line.startsWith(":")) {
+          return null;
+        }
+        let [fieldname, _, value] = partition(line, ":");
+        if (value.startsWith(" ")) {
+          value = value.substring(1);
+        }
+        if (fieldname === "event") {
+          this.event = value;
+        } else if (fieldname === "data") {
+          this.data.push(value);
+        }
+        return null;
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/parse.mjs
+async function defaultParseResponse(client, props) {
+  const { response, requestLogID, retryOfRequestLogID, startTime } = props;
+  const body = await (async () => {
+    if (props.options.stream) {
+      loggerFor(client).debug("response", response.status, response.url, response.headers, response.body);
+      if (props.options.__streamClass) {
+        return props.options.__streamClass.fromSSEResponse(response, props.controller);
+      }
+      return Stream.fromSSEResponse(response, props.controller);
+    }
+    if (response.status === 204) {
+      return null;
+    }
+    if (props.options.__binaryResponse) {
+      return response;
+    }
+    const contentType = response.headers.get("content-type");
+    const mediaType = contentType?.split(";")[0]?.trim();
+    const isJSON = mediaType?.includes("application/json") || mediaType?.endsWith("+json");
+    if (isJSON) {
+      const contentLength = response.headers.get("content-length");
+      if (contentLength === "0") {
+        return void 0;
+      }
+      const json = await response.json();
+      return addRequestID(json, response);
+    }
+    const text = await response.text();
+    return text;
+  })();
+  loggerFor(client).debug(`[${requestLogID}] response parsed`, formatRequestDetails({
+    retryOfRequestLogID,
+    url: response.url,
+    status: response.status,
+    body,
+    durationMs: Date.now() - startTime
+  }));
+  return body;
+}
+function addRequestID(value, response) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  return Object.defineProperty(value, "_request_id", {
+    value: response.headers.get("request-id"),
+    enumerable: false
+  });
+}
+var init_parse = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/parse.mjs"() {
+    init_streaming();
+    init_log();
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/api-promise.mjs
+var _APIPromise_client, APIPromise;
+var init_api_promise = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/api-promise.mjs"() {
+    init_tslib();
+    init_parse();
+    APIPromise = class _APIPromise extends Promise {
+      constructor(client, responsePromise, parseResponse = defaultParseResponse) {
+        super((resolve4) => {
+          resolve4(null);
+        });
+        this.responsePromise = responsePromise;
+        this.parseResponse = parseResponse;
+        _APIPromise_client.set(this, void 0);
+        __classPrivateFieldSet(this, _APIPromise_client, client, "f");
+      }
+      _thenUnwrap(transform) {
+        return new _APIPromise(__classPrivateFieldGet(this, _APIPromise_client, "f"), this.responsePromise, async (client, props) => addRequestID(transform(await this.parseResponse(client, props), props), props.response));
+      }
+      /**
+       * Gets the raw `Response` instance instead of parsing the response
+       * data.
+       *
+       * If you want to parse the response body but still get the `Response`
+       * instance, you can use {@link withResponse()}.
+       *
+       * 👋 Getting the wrong TypeScript type for `Response`?
+       * Try setting `"moduleResolution": "NodeNext"` or add `"lib": ["DOM"]`
+       * to your `tsconfig.json`.
+       */
+      asResponse() {
+        return this.responsePromise.then((p) => p.response);
+      }
+      /**
+       * Gets the parsed response data, the raw `Response` instance and the ID of the request,
+       * returned via the `request-id` header which is useful for debugging requests and resporting
+       * issues to Anthropic.
+       *
+       * If you just want to get the raw `Response` instance without parsing it,
+       * you can use {@link asResponse()}.
+       *
+       * 👋 Getting the wrong TypeScript type for `Response`?
+       * Try setting `"moduleResolution": "NodeNext"` or add `"lib": ["DOM"]`
+       * to your `tsconfig.json`.
+       */
+      async withResponse() {
+        const [data, response] = await Promise.all([this.parse(), this.asResponse()]);
+        return { data, response, request_id: response.headers.get("request-id") };
+      }
+      parse() {
+        if (!this.parsedPromise) {
+          this.parsedPromise = this.responsePromise.then((data) => this.parseResponse(__classPrivateFieldGet(this, _APIPromise_client, "f"), data));
+        }
+        return this.parsedPromise;
+      }
+      then(onfulfilled, onrejected) {
+        return this.parse().then(onfulfilled, onrejected);
+      }
+      catch(onrejected) {
+        return this.parse().catch(onrejected);
+      }
+      finally(onfinally) {
+        return this.parse().finally(onfinally);
+      }
+    };
+    _APIPromise_client = /* @__PURE__ */ new WeakMap();
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/pagination.mjs
+var _AbstractPage_client, AbstractPage, PagePromise, Page, PageCursor;
+var init_pagination = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/pagination.mjs"() {
+    init_tslib();
+    init_error();
+    init_parse();
+    init_api_promise();
+    init_values();
+    AbstractPage = class {
+      constructor(client, response, body, options) {
+        _AbstractPage_client.set(this, void 0);
+        __classPrivateFieldSet(this, _AbstractPage_client, client, "f");
+        this.options = options;
+        this.response = response;
+        this.body = body;
+      }
+      hasNextPage() {
+        const items = this.getPaginatedItems();
+        if (!items.length)
+          return false;
+        return this.nextPageRequestOptions() != null;
+      }
+      async getNextPage() {
+        const nextOptions = this.nextPageRequestOptions();
+        if (!nextOptions) {
+          throw new AnthropicError("No next page expected; please check `.hasNextPage()` before calling `.getNextPage()`.");
+        }
+        return await __classPrivateFieldGet(this, _AbstractPage_client, "f").requestAPIList(this.constructor, nextOptions);
+      }
+      async *iterPages() {
+        let page = this;
+        yield page;
+        while (page.hasNextPage()) {
+          page = await page.getNextPage();
+          yield page;
+        }
+      }
+      async *[(_AbstractPage_client = /* @__PURE__ */ new WeakMap(), Symbol.asyncIterator)]() {
+        for await (const page of this.iterPages()) {
+          for (const item of page.getPaginatedItems()) {
+            yield item;
+          }
+        }
+      }
+    };
+    PagePromise = class extends APIPromise {
+      constructor(client, request, Page2) {
+        super(client, request, async (client2, props) => new Page2(client2, props.response, await defaultParseResponse(client2, props), props.options));
+      }
+      /**
+       * Allow auto-paginating iteration on an unawaited list call, eg:
+       *
+       *    for await (const item of client.items.list()) {
+       *      console.log(item)
+       *    }
+       */
+      async *[Symbol.asyncIterator]() {
+        const page = await this;
+        for await (const item of page) {
+          yield item;
+        }
+      }
+    };
+    Page = class extends AbstractPage {
+      constructor(client, response, body, options) {
+        super(client, response, body, options);
+        this.data = body.data || [];
+        this.has_more = body.has_more || false;
+        this.first_id = body.first_id || null;
+        this.last_id = body.last_id || null;
+      }
+      getPaginatedItems() {
+        return this.data ?? [];
+      }
+      hasNextPage() {
+        if (this.has_more === false) {
+          return false;
+        }
+        return super.hasNextPage();
+      }
+      nextPageRequestOptions() {
+        if (this.options.query?.["before_id"]) {
+          const first_id = this.first_id;
+          if (!first_id) {
+            return null;
+          }
+          return {
+            ...this.options,
+            query: {
+              ...maybeObj(this.options.query),
+              before_id: first_id
+            }
+          };
+        }
+        const cursor = this.last_id;
+        if (!cursor) {
+          return null;
+        }
+        return {
+          ...this.options,
+          query: {
+            ...maybeObj(this.options.query),
+            after_id: cursor
+          }
+        };
+      }
+    };
+    PageCursor = class extends AbstractPage {
+      constructor(client, response, body, options) {
+        super(client, response, body, options);
+        this.data = body.data || [];
+        this.next_page = body.next_page || null;
+      }
+      getPaginatedItems() {
+        return this.data ?? [];
+      }
+      nextPageRequestOptions() {
+        const cursor = this.next_page;
+        if (!cursor) {
+          return null;
+        }
+        return {
+          ...this.options,
+          query: {
+            ...maybeObj(this.options.query),
+            page: cursor
+          }
+        };
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/uploads.mjs
+function makeFile(fileBits, fileName, options) {
+  checkFileSupport();
+  return new File(fileBits, fileName ?? "unknown_file", options);
+}
+function getName(value, stripPath) {
+  const val = typeof value === "object" && value !== null && ("name" in value && value.name && String(value.name) || "url" in value && value.url && String(value.url) || "filename" in value && value.filename && String(value.filename) || "path" in value && value.path && String(value.path)) || "";
+  return stripPath ? val.split(/[\\/]/).pop() || void 0 : val;
+}
+function supportsFormData(fetchObject) {
+  const fetch2 = typeof fetchObject === "function" ? fetchObject : fetchObject.fetch;
+  const cached = supportsFormDataMap.get(fetch2);
+  if (cached)
+    return cached;
+  const promise = (async () => {
+    try {
+      const FetchResponse = "Response" in fetch2 ? fetch2.Response : (await fetch2("data:,")).constructor;
+      const data = new FormData();
+      if (data.toString() === await new FetchResponse(data).text()) {
+        return false;
+      }
+      return true;
+    } catch {
+      return true;
+    }
+  })();
+  supportsFormDataMap.set(fetch2, promise);
+  return promise;
+}
+var checkFileSupport, isAsyncIterable, multipartFormRequestOptions, supportsFormDataMap, createForm, isNamedBlob, addFormValue;
+var init_uploads = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/uploads.mjs"() {
+    init_shims();
+    checkFileSupport = () => {
+      if (typeof File === "undefined") {
+        const { process: process2 } = globalThis;
+        const isOldNode = typeof process2?.versions?.node === "string" && parseInt(process2.versions.node.split(".")) < 20;
+        throw new Error("`File` is not defined as a global, which is required for file uploads." + (isOldNode ? " Update to Node 20 LTS or newer, or set `globalThis.File` to `import('node:buffer').File`." : ""));
+      }
+    };
+    isAsyncIterable = (value) => value != null && typeof value === "object" && typeof value[Symbol.asyncIterator] === "function";
+    multipartFormRequestOptions = async (opts, fetch2, stripFilenames = true) => {
+      return { ...opts, body: await createForm(opts.body, fetch2, stripFilenames) };
+    };
+    supportsFormDataMap = /* @__PURE__ */ new WeakMap();
+    createForm = async (body, fetch2, stripFilenames = true) => {
+      if (!await supportsFormData(fetch2)) {
+        throw new TypeError("The provided fetch function does not support file uploads with the current global FormData class.");
+      }
+      const form = new FormData();
+      await Promise.all(Object.entries(body || {}).map(([key, value]) => addFormValue(form, key, value, stripFilenames)));
+      return form;
+    };
+    isNamedBlob = (value) => value instanceof Blob && "name" in value;
+    addFormValue = async (form, key, value, stripFilenames) => {
+      if (value === void 0)
+        return;
+      if (value == null) {
+        throw new TypeError(`Received null for "${key}"; to pass null in FormData, you must use the string 'null'`);
+      }
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+        form.append(key, String(value));
+      } else if (value instanceof Response) {
+        let options = {};
+        const contentType = value.headers.get("Content-Type");
+        if (contentType) {
+          options = { type: contentType };
+        }
+        form.append(key, makeFile([await value.blob()], getName(value, stripFilenames), options));
+      } else if (isAsyncIterable(value)) {
+        form.append(key, makeFile([await new Response(ReadableStreamFrom(value)).blob()], getName(value, stripFilenames)));
+      } else if (isNamedBlob(value)) {
+        form.append(key, makeFile([value], getName(value, stripFilenames), { type: value.type }));
+      } else if (Array.isArray(value)) {
+        await Promise.all(value.map((entry) => addFormValue(form, key + "[]", entry, stripFilenames)));
+      } else if (typeof value === "object") {
+        await Promise.all(Object.entries(value).map(([name, prop]) => addFormValue(form, `${key}[${name}]`, prop, stripFilenames)));
+      } else {
+        throw new TypeError(`Invalid value given to form, expected a string, number, boolean, object, Array, File or Blob but got ${value} instead`);
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/to-file.mjs
+async function toFile(value, name, options) {
+  checkFileSupport();
+  value = await value;
+  name || (name = getName(value, true));
+  if (isFileLike(value)) {
+    if (value instanceof File && name == null && options == null) {
+      return value;
+    }
+    return makeFile([await value.arrayBuffer()], name ?? value.name, {
+      type: value.type,
+      lastModified: value.lastModified,
+      ...options
+    });
+  }
+  if (isResponseLike(value)) {
+    const blob = await value.blob();
+    name || (name = new URL(value.url).pathname.split(/[\\/]/).pop());
+    return makeFile(await getBytes(blob), name, options);
+  }
+  const parts = await getBytes(value);
+  if (!options?.type) {
+    const type = parts.find((part) => typeof part === "object" && "type" in part && part.type);
+    if (typeof type === "string") {
+      options = { ...options, type };
+    }
+  }
+  return makeFile(parts, name, options);
+}
+async function getBytes(value) {
+  let parts = [];
+  if (typeof value === "string" || ArrayBuffer.isView(value) || // includes Uint8Array, Buffer, etc.
+  value instanceof ArrayBuffer) {
+    parts.push(value);
+  } else if (isBlobLike(value)) {
+    parts.push(value instanceof Blob ? value : await value.arrayBuffer());
+  } else if (isAsyncIterable(value)) {
+    for await (const chunk of value) {
+      parts.push(...await getBytes(chunk));
+    }
+  } else {
+    const constructor = value?.constructor?.name;
+    throw new Error(`Unexpected data type: ${typeof value}${constructor ? `; constructor: ${constructor}` : ""}${propsForError(value)}`);
+  }
+  return parts;
+}
+function propsForError(value) {
+  if (typeof value !== "object" || value === null)
+    return "";
+  const props = Object.getOwnPropertyNames(value);
+  return `; props: [${props.map((p) => `"${p}"`).join(", ")}]`;
+}
+var isBlobLike, isFileLike, isResponseLike;
+var init_to_file = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/to-file.mjs"() {
+    init_uploads();
+    init_uploads();
+    isBlobLike = (value) => value != null && typeof value === "object" && typeof value.size === "number" && typeof value.type === "string" && typeof value.text === "function" && typeof value.slice === "function" && typeof value.arrayBuffer === "function";
+    isFileLike = (value) => value != null && typeof value === "object" && typeof value.name === "string" && typeof value.lastModified === "number" && isBlobLike(value);
+    isResponseLike = (value) => value != null && typeof value === "object" && typeof value.url === "string" && typeof value.blob === "function";
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/uploads.mjs
+var init_uploads2 = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/uploads.mjs"() {
+    init_to_file();
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/shared.mjs
+var init_shared = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/shared.mjs"() {
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/resource.mjs
+var APIResource;
+var init_resource = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/resource.mjs"() {
+    APIResource = class {
+      constructor(client) {
+        this._client = client;
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/headers.mjs
+function* iterateHeaders(headers) {
+  if (!headers)
+    return;
+  if (brand_privateNullableHeaders in headers) {
+    const { values, nulls } = headers;
+    yield* values.entries();
+    for (const name of nulls) {
+      yield [name, null];
+    }
+    return;
+  }
+  let shouldClear = false;
+  let iter;
+  if (headers instanceof Headers) {
+    iter = headers.entries();
+  } else if (isReadonlyArray(headers)) {
+    iter = headers;
+  } else {
+    shouldClear = true;
+    iter = Object.entries(headers ?? {});
+  }
+  for (let row of iter) {
+    const name = row[0];
+    if (typeof name !== "string")
+      throw new TypeError("expected header name to be a string");
+    const values = isReadonlyArray(row[1]) ? row[1] : [row[1]];
+    let didClear = false;
+    for (const value of values) {
+      if (value === void 0)
+        continue;
+      if (shouldClear && !didClear) {
+        didClear = true;
+        yield [name, null];
+      }
+      yield [name, value];
+    }
+  }
+}
+var brand_privateNullableHeaders, buildHeaders;
+var init_headers = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/headers.mjs"() {
+    init_values();
+    brand_privateNullableHeaders = /* @__PURE__ */ Symbol.for("brand.privateNullableHeaders");
+    buildHeaders = (newHeaders) => {
+      const targetHeaders = new Headers();
+      const nullHeaders = /* @__PURE__ */ new Set();
+      for (const headers of newHeaders) {
+        const seenHeaders = /* @__PURE__ */ new Set();
+        for (const [name, value] of iterateHeaders(headers)) {
+          const lowerName = name.toLowerCase();
+          if (!seenHeaders.has(lowerName)) {
+            targetHeaders.delete(name);
+            seenHeaders.add(lowerName);
+          }
+          if (value === null) {
+            targetHeaders.delete(name);
+            nullHeaders.add(lowerName);
+          } else {
+            targetHeaders.append(name, value);
+            nullHeaders.delete(lowerName);
+          }
+        }
+      }
+      return { [brand_privateNullableHeaders]: true, values: targetHeaders, nulls: nullHeaders };
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs
+function encodeURIPath(str2) {
+  return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
+}
+var EMPTY, createPathTagFunction, path3;
+var init_path = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs"() {
+    init_error();
+    EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
+    createPathTagFunction = (pathEncoder = encodeURIPath) => function path7(statics, ...params) {
+      if (statics.length === 1)
+        return statics[0];
+      let postPath = false;
+      const invalidSegments = [];
+      const path8 = statics.reduce((previousValue, currentValue, index) => {
+        if (/[?#]/.test(currentValue)) {
+          postPath = true;
+        }
+        const value = params[index];
+        let encoded = (postPath ? encodeURIComponent : pathEncoder)("" + value);
+        if (index !== params.length && (value == null || typeof value === "object" && // handle values from other realms
+        value.toString === Object.getPrototypeOf(Object.getPrototypeOf(value.hasOwnProperty ?? EMPTY) ?? EMPTY)?.toString)) {
+          encoded = value + "";
+          invalidSegments.push({
+            start: previousValue.length + currentValue.length,
+            length: encoded.length,
+            error: `Value of type ${Object.prototype.toString.call(value).slice(8, -1)} is not a valid path parameter`
+          });
+        }
+        return previousValue + currentValue + (index === params.length ? "" : encoded);
+      }, "");
+      const pathOnly = path8.split(/[?#]/, 1)[0];
+      const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
+      let match;
+      while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
+        invalidSegments.push({
+          start: match.index,
+          length: match[0].length,
+          error: `Value "${match[0]}" can't be safely passed as a path parameter`
+        });
+      }
+      invalidSegments.sort((a, b) => a.start - b.start);
+      if (invalidSegments.length > 0) {
+        let lastEnd = 0;
+        const underline = invalidSegments.reduce((acc, segment) => {
+          const spaces = " ".repeat(segment.start - lastEnd);
+          const arrows = "^".repeat(segment.length);
+          lastEnd = segment.start + segment.length;
+          return acc + spaces + arrows;
+        }, "");
+        throw new AnthropicError(`Path parameters result in path with invalid segments:
+${invalidSegments.map((e) => e.error).join("\n")}
+${path8}
+${underline}`);
+      }
+      return path8;
+    };
+    path3 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs
+var Environments;
+var init_environments = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_path();
+    Environments = class extends APIResource {
+      /**
+       * Create a new environment with the specified configuration.
+       *
+       * @example
+       * ```ts
+       * const betaEnvironment =
+       *   await client.beta.environments.create({
+       *     name: 'python-data-analysis',
+       *   });
+       * ```
+       */
+      create(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/environments?beta=true", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Retrieve a specific environment by ID.
+       *
+       * @example
+       * ```ts
+       * const betaEnvironment =
+       *   await client.beta.environments.retrieve(
+       *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
+       *   );
+       * ```
+       */
+      retrieve(environmentID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/environments/${environmentID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Update an existing environment's configuration.
+       *
+       * @example
+       * ```ts
+       * const betaEnvironment =
+       *   await client.beta.environments.update(
+       *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
+       *   );
+       * ```
+       */
+      update(environmentID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path3`/v1/environments/${environmentID}?beta=true`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List environments with pagination support.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaEnvironment of client.beta.environments.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/environments?beta=true", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Delete an environment by ID. Returns a confirmation of the deletion.
+       *
+       * @example
+       * ```ts
+       * const betaEnvironmentDeleteResponse =
+       *   await client.beta.environments.delete(
+       *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
+       *   );
+       * ```
+       */
+      delete(environmentID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.delete(path3`/v1/environments/${environmentID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Archive an environment by ID. Archived environments cannot be used to create new
+       * sessions.
+       *
+       * @example
+       * ```ts
+       * const betaEnvironment =
+       *   await client.beta.environments.archive(
+       *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
+       *   );
+       * ```
+       */
+      archive(environmentID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.post(path3`/v1/environments/${environmentID}/archive?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs
+function wasCreatedByStainlessHelper(value) {
+  return typeof value === "object" && value !== null && SDK_HELPER_SYMBOL in value;
+}
+function collectStainlessHelpers(tools, messages) {
+  const helpers = /* @__PURE__ */ new Set();
+  if (tools) {
+    for (const tool of tools) {
+      if (wasCreatedByStainlessHelper(tool)) {
+        helpers.add(tool[SDK_HELPER_SYMBOL]);
+      }
+    }
+  }
+  if (messages) {
+    for (const message of messages) {
+      if (wasCreatedByStainlessHelper(message)) {
+        helpers.add(message[SDK_HELPER_SYMBOL]);
+      }
+      if (Array.isArray(message.content)) {
+        for (const block of message.content) {
+          if (wasCreatedByStainlessHelper(block)) {
+            helpers.add(block[SDK_HELPER_SYMBOL]);
+          }
+        }
+      }
+    }
+  }
+  return Array.from(helpers);
+}
+function stainlessHelperHeader(tools, messages) {
+  const helpers = collectStainlessHelpers(tools, messages);
+  if (helpers.length === 0)
+    return {};
+  return { "x-stainless-helper": helpers.join(", ") };
+}
+function stainlessHelperHeaderFromFile(file) {
+  if (wasCreatedByStainlessHelper(file)) {
+    return { "x-stainless-helper": file[SDK_HELPER_SYMBOL] };
+  }
+  return {};
+}
+var SDK_HELPER_SYMBOL;
+var init_stainless_helper_header = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs"() {
+    SDK_HELPER_SYMBOL = /* @__PURE__ */ Symbol("anthropic.sdk.stainlessHelper");
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs
+var Files;
+var init_files = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_stainless_helper_header();
+    init_uploads();
+    init_path();
+    Files = class extends APIResource {
+      /**
+       * List Files
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const fileMetadata of client.beta.files.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/files", Page, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Delete File
+       *
+       * @example
+       * ```ts
+       * const deletedFile = await client.beta.files.delete(
+       *   'file_id',
+       * );
+       * ```
+       */
+      delete(fileID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.delete(path3`/v1/files/${fileID}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Download File
+       *
+       * @example
+       * ```ts
+       * const response = await client.beta.files.download(
+       *   'file_id',
+       * );
+       *
+       * const content = await response.blob();
+       * console.log(content);
+       * ```
+       */
+      download(fileID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/files/${fileID}/content`, {
+          ...options,
+          headers: buildHeaders([
+            {
+              "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString(),
+              Accept: "application/binary"
+            },
+            options?.headers
+          ]),
+          __binaryResponse: true
+        });
+      }
+      /**
+       * Get File Metadata
+       *
+       * @example
+       * ```ts
+       * const fileMetadata =
+       *   await client.beta.files.retrieveMetadata('file_id');
+       * ```
+       */
+      retrieveMetadata(fileID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/files/${fileID}`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Upload File
+       *
+       * @example
+       * ```ts
+       * const fileMetadata = await client.beta.files.upload({
+       *   file: fs.createReadStream('path/to/file'),
+       * });
+       * ```
+       */
+      upload(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/files", multipartFormRequestOptions({
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
+            stainlessHelperHeaderFromFile(body.file),
+            options?.headers
+          ])
+        }, this._client));
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs
+var Models;
+var init_models = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_path();
+    Models = class extends APIResource {
+      /**
+       * Get a specific model.
+       *
+       * The Models API response can be used to determine information about a specific
+       * model or resolve a model alias to a model ID.
+       *
+       * @example
+       * ```ts
+       * const betaModelInfo = await client.beta.models.retrieve(
+       *   'model_id',
+       * );
+       * ```
+       */
+      retrieve(modelID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/models/${modelID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List available models.
+       *
+       * The Models API response can be used to determine which models are available for
+       * use in the API. More recently released models are listed first.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaModelInfo of client.beta.models.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/models?beta=true", Page, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ])
+        });
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs
+var UserProfiles;
+var init_user_profiles = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_path();
+    UserProfiles = class extends APIResource {
+      /**
+       * Create User Profile
+       *
+       * @example
+       * ```ts
+       * const betaUserProfile =
+       *   await client.beta.userProfiles.create();
+       * ```
+       */
+      create(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/user_profiles?beta=true", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Get User Profile
+       *
+       * @example
+       * ```ts
+       * const betaUserProfile =
+       *   await client.beta.userProfiles.retrieve(
+       *     'uprof_011CZkZCu8hGbp5mYRQgUmz9',
+       *   );
+       * ```
+       */
+      retrieve(userProfileID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/user_profiles/${userProfileID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Update User Profile
+       *
+       * @example
+       * ```ts
+       * const betaUserProfile =
+       *   await client.beta.userProfiles.update(
+       *     'uprof_011CZkZCu8hGbp5mYRQgUmz9',
+       *   );
+       * ```
+       */
+      update(userProfileID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path3`/v1/user_profiles/${userProfileID}?beta=true`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List User Profiles
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaUserProfile of client.beta.userProfiles.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/user_profiles?beta=true", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Create Enrollment URL
+       *
+       * @example
+       * ```ts
+       * const betaUserProfileEnrollmentURL =
+       *   await client.beta.userProfiles.createEnrollmentURL(
+       *     'uprof_011CZkZCu8hGbp5mYRQgUmz9',
+       *   );
+       * ```
+       */
+      createEnrollmentURL(userProfileID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.post(path3`/v1/user_profiles/${userProfileID}/enrollment_url?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
+            options?.headers
+          ])
+        });
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs
+var Versions;
+var init_versions = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_path();
+    Versions = class extends APIResource {
+      /**
+       * List Agent Versions
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaManagedAgentsAgent of client.beta.agents.versions.list(
+       *   'agent_011CZkYpogX7uDKUyvBTophP',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(agentID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path3`/v1/agents/${agentID}/versions?beta=true`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs
+var Agents;
+var init_agents = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs"() {
+    init_resource();
+    init_versions();
+    init_versions();
+    init_pagination();
+    init_headers();
+    init_path();
+    Agents = class extends APIResource {
+      constructor() {
+        super(...arguments);
+        this.versions = new Versions(this._client);
+      }
+      /**
+       * Create Agent
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsAgent =
+       *   await client.beta.agents.create({
+       *     model: 'claude-sonnet-4-6',
+       *     name: 'My First Agent',
+       *   });
+       * ```
+       */
+      create(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/agents?beta=true", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Get Agent
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsAgent =
+       *   await client.beta.agents.retrieve(
+       *     'agent_011CZkYpogX7uDKUyvBTophP',
+       *   );
+       * ```
+       */
+      retrieve(agentID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.get(path3`/v1/agents/${agentID}?beta=true`, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Update Agent
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsAgent =
+       *   await client.beta.agents.update(
+       *     'agent_011CZkYpogX7uDKUyvBTophP',
+       *     { version: 1 },
+       *   );
+       * ```
+       */
+      update(agentID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path3`/v1/agents/${agentID}?beta=true`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List Agents
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaManagedAgentsAgent of client.beta.agents.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/agents?beta=true", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Archive Agent
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsAgent =
+       *   await client.beta.agents.archive(
+       *     'agent_011CZkYpogX7uDKUyvBTophP',
+       *   );
+       * ```
+       */
+      archive(agentID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.post(path3`/v1/agents/${agentID}/archive?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+    };
+    Agents.Versions = Versions;
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/error.mjs
+var init_error2 = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/error.mjs"() {
+    init_error();
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/constants.mjs
+var MODEL_NONSTREAMING_TOKENS;
+var init_constants = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/constants.mjs"() {
+    MODEL_NONSTREAMING_TOKENS = {
+      "claude-opus-4-20250514": 8192,
+      "claude-opus-4-0": 8192,
+      "claude-4-opus-20250514": 8192,
+      "anthropic.claude-opus-4-20250514-v1:0": 8192,
+      "claude-opus-4@20250514": 8192,
+      "claude-opus-4-1-20250805": 8192,
+      "anthropic.claude-opus-4-1-20250805-v1:0": 8192,
+      "claude-opus-4-1@20250805": 8192
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs
+function getOutputFormat(params) {
+  return params?.output_format ?? params?.output_config?.format;
+}
+function maybeParseBetaMessage(message, params, opts) {
+  const outputFormat = getOutputFormat(params);
+  if (!params || !("parse" in (outputFormat ?? {}))) {
+    return {
+      ...message,
+      content: message.content.map((block) => {
+        if (block.type === "text") {
+          const parsedBlock = Object.defineProperty({ ...block }, "parsed_output", {
+            value: null,
+            enumerable: false
+          });
+          return Object.defineProperty(parsedBlock, "parsed", {
+            get() {
+              opts.logger.warn("The `parsed` property on `text` blocks is deprecated, please use `parsed_output` instead.");
+              return null;
+            },
+            enumerable: false
+          });
+        }
+        return block;
+      }),
+      parsed_output: null
+    };
+  }
+  return parseBetaMessage(message, params, opts);
+}
+function parseBetaMessage(message, params, opts) {
+  let firstParsedOutput = null;
+  const content = message.content.map((block) => {
+    if (block.type === "text") {
+      const parsedOutput = parseBetaOutputFormat(params, block.text);
+      if (firstParsedOutput === null) {
+        firstParsedOutput = parsedOutput;
+      }
+      const parsedBlock = Object.defineProperty({ ...block }, "parsed_output", {
+        value: parsedOutput,
+        enumerable: false
+      });
+      return Object.defineProperty(parsedBlock, "parsed", {
+        get() {
+          opts.logger.warn("The `parsed` property on `text` blocks is deprecated, please use `parsed_output` instead.");
+          return parsedOutput;
+        },
+        enumerable: false
+      });
+    }
+    return block;
+  });
+  return {
+    ...message,
+    content,
+    parsed_output: firstParsedOutput
+  };
+}
+function parseBetaOutputFormat(params, content) {
+  const outputFormat = getOutputFormat(params);
+  if (outputFormat?.type !== "json_schema") {
+    return null;
+  }
+  try {
+    if ("parse" in outputFormat) {
+      return outputFormat.parse(content);
+    }
+    return JSON.parse(content);
+  } catch (error) {
+    throw new AnthropicError(`Failed to parse structured output: ${error}`);
+  }
+}
+var init_beta_parser = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs"() {
+    init_error();
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs
+var tokenize2, strip, unstrip, generate, partialParse;
+var init_parser = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs"() {
+    tokenize2 = (input) => {
+      let current = 0;
+      let tokens = [];
+      while (current < input.length) {
+        let char = input[current];
+        if (char === "\\") {
+          current++;
+          continue;
+        }
+        if (char === "{") {
+          tokens.push({
+            type: "brace",
+            value: "{"
+          });
+          current++;
+          continue;
+        }
+        if (char === "}") {
+          tokens.push({
+            type: "brace",
+            value: "}"
+          });
+          current++;
+          continue;
+        }
+        if (char === "[") {
+          tokens.push({
+            type: "paren",
+            value: "["
+          });
+          current++;
+          continue;
+        }
+        if (char === "]") {
+          tokens.push({
+            type: "paren",
+            value: "]"
+          });
+          current++;
+          continue;
+        }
+        if (char === ":") {
+          tokens.push({
+            type: "separator",
+            value: ":"
+          });
+          current++;
+          continue;
+        }
+        if (char === ",") {
+          tokens.push({
+            type: "delimiter",
+            value: ","
+          });
+          current++;
+          continue;
+        }
+        if (char === '"') {
+          let value = "";
+          let danglingQuote = false;
+          char = input[++current];
+          while (char !== '"') {
+            if (current === input.length) {
+              danglingQuote = true;
+              break;
+            }
+            if (char === "\\") {
+              current++;
+              if (current === input.length) {
+                danglingQuote = true;
+                break;
+              }
+              value += char + input[current];
+              char = input[++current];
+            } else {
+              value += char;
+              char = input[++current];
+            }
+          }
+          char = input[++current];
+          if (!danglingQuote) {
+            tokens.push({
+              type: "string",
+              value
+            });
+          }
+          continue;
+        }
+        let WHITESPACE = /\s/;
+        if (char && WHITESPACE.test(char)) {
+          current++;
+          continue;
+        }
+        let NUMBERS = /[0-9]/;
+        if (char && NUMBERS.test(char) || char === "-" || char === ".") {
+          let value = "";
+          if (char === "-") {
+            value += char;
+            char = input[++current];
+          }
+          while (char && NUMBERS.test(char) || char === ".") {
+            value += char;
+            char = input[++current];
+          }
+          tokens.push({
+            type: "number",
+            value
+          });
+          continue;
+        }
+        let LETTERS = /[a-z]/i;
+        if (char && LETTERS.test(char)) {
+          let value = "";
+          while (char && LETTERS.test(char)) {
+            if (current === input.length) {
+              break;
+            }
+            value += char;
+            char = input[++current];
+          }
+          if (value == "true" || value == "false" || value === "null") {
+            tokens.push({
+              type: "name",
+              value
+            });
+          } else {
+            current++;
+            continue;
+          }
+          continue;
+        }
+        current++;
+      }
+      return tokens;
+    };
+    strip = (tokens) => {
+      if (tokens.length === 0) {
+        return tokens;
+      }
+      let lastToken = tokens[tokens.length - 1];
+      switch (lastToken.type) {
+        case "separator":
+          tokens = tokens.slice(0, tokens.length - 1);
+          return strip(tokens);
+          break;
+        case "number":
+          let lastCharacterOfLastToken = lastToken.value[lastToken.value.length - 1];
+          if (lastCharacterOfLastToken === "." || lastCharacterOfLastToken === "-") {
+            tokens = tokens.slice(0, tokens.length - 1);
+            return strip(tokens);
+          }
+        case "string":
+          let tokenBeforeTheLastToken = tokens[tokens.length - 2];
+          if (tokenBeforeTheLastToken?.type === "delimiter") {
+            tokens = tokens.slice(0, tokens.length - 1);
+            return strip(tokens);
+          } else if (tokenBeforeTheLastToken?.type === "brace" && tokenBeforeTheLastToken.value === "{") {
+            tokens = tokens.slice(0, tokens.length - 1);
+            return strip(tokens);
+          }
+          break;
+        case "delimiter":
+          tokens = tokens.slice(0, tokens.length - 1);
+          return strip(tokens);
+          break;
+      }
+      return tokens;
+    };
+    unstrip = (tokens) => {
+      let tail = [];
+      tokens.map((token) => {
+        if (token.type === "brace") {
+          if (token.value === "{") {
+            tail.push("}");
+          } else {
+            tail.splice(tail.lastIndexOf("}"), 1);
+          }
+        }
+        if (token.type === "paren") {
+          if (token.value === "[") {
+            tail.push("]");
+          } else {
+            tail.splice(tail.lastIndexOf("]"), 1);
+          }
+        }
+      });
+      if (tail.length > 0) {
+        tail.reverse().map((item) => {
+          if (item === "}") {
+            tokens.push({
+              type: "brace",
+              value: "}"
+            });
+          } else if (item === "]") {
+            tokens.push({
+              type: "paren",
+              value: "]"
+            });
+          }
+        });
+      }
+      return tokens;
+    };
+    generate = (tokens) => {
+      let output = "";
+      tokens.map((token) => {
+        switch (token.type) {
+          case "string":
+            output += '"' + token.value + '"';
+            break;
+          default:
+            output += token.value;
+            break;
+        }
+      });
+      return output;
+    };
+    partialParse = (input) => JSON.parse(generate(unstrip(strip(tokenize2(input)))));
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/streaming.mjs
+var init_streaming2 = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/streaming.mjs"() {
+    init_streaming();
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs
+function tracksToolInput(content) {
+  return content.type === "tool_use" || content.type === "server_tool_use" || content.type === "mcp_tool_use";
+}
+function checkNever(x) {
+}
+var _BetaMessageStream_instances, _BetaMessageStream_currentMessageSnapshot, _BetaMessageStream_params, _BetaMessageStream_connectedPromise, _BetaMessageStream_resolveConnectedPromise, _BetaMessageStream_rejectConnectedPromise, _BetaMessageStream_endPromise, _BetaMessageStream_resolveEndPromise, _BetaMessageStream_rejectEndPromise, _BetaMessageStream_listeners, _BetaMessageStream_ended, _BetaMessageStream_errored, _BetaMessageStream_aborted, _BetaMessageStream_catchingPromiseCreated, _BetaMessageStream_response, _BetaMessageStream_request_id, _BetaMessageStream_logger, _BetaMessageStream_getFinalMessage, _BetaMessageStream_getFinalText, _BetaMessageStream_handleError, _BetaMessageStream_beginRequest, _BetaMessageStream_addStreamEvent, _BetaMessageStream_endRequest, _BetaMessageStream_accumulateMessage, JSON_BUF_PROPERTY, BetaMessageStream;
+var init_BetaMessageStream = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs"() {
+    init_tslib();
+    init_parser();
+    init_error2();
+    init_errors();
+    init_streaming2();
+    init_beta_parser();
+    JSON_BUF_PROPERTY = "__json_buf";
+    BetaMessageStream = class _BetaMessageStream {
+      constructor(params, opts) {
+        _BetaMessageStream_instances.add(this);
+        this.messages = [];
+        this.receivedMessages = [];
+        _BetaMessageStream_currentMessageSnapshot.set(this, void 0);
+        _BetaMessageStream_params.set(this, null);
+        this.controller = new AbortController();
+        _BetaMessageStream_connectedPromise.set(this, void 0);
+        _BetaMessageStream_resolveConnectedPromise.set(this, () => {
+        });
+        _BetaMessageStream_rejectConnectedPromise.set(this, () => {
+        });
+        _BetaMessageStream_endPromise.set(this, void 0);
+        _BetaMessageStream_resolveEndPromise.set(this, () => {
+        });
+        _BetaMessageStream_rejectEndPromise.set(this, () => {
+        });
+        _BetaMessageStream_listeners.set(this, {});
+        _BetaMessageStream_ended.set(this, false);
+        _BetaMessageStream_errored.set(this, false);
+        _BetaMessageStream_aborted.set(this, false);
+        _BetaMessageStream_catchingPromiseCreated.set(this, false);
+        _BetaMessageStream_response.set(this, void 0);
+        _BetaMessageStream_request_id.set(this, void 0);
+        _BetaMessageStream_logger.set(this, void 0);
+        _BetaMessageStream_handleError.set(this, (error) => {
+          __classPrivateFieldSet(this, _BetaMessageStream_errored, true, "f");
+          if (isAbortError(error)) {
+            error = new APIUserAbortError();
+          }
+          if (error instanceof APIUserAbortError) {
+            __classPrivateFieldSet(this, _BetaMessageStream_aborted, true, "f");
+            return this._emit("abort", error);
+          }
+          if (error instanceof AnthropicError) {
+            return this._emit("error", error);
+          }
+          if (error instanceof Error) {
+            const anthropicError = new AnthropicError(error.message);
+            anthropicError.cause = error;
+            return this._emit("error", anthropicError);
+          }
+          return this._emit("error", new AnthropicError(String(error)));
+        });
+        __classPrivateFieldSet(this, _BetaMessageStream_connectedPromise, new Promise((resolve4, reject) => {
+          __classPrivateFieldSet(this, _BetaMessageStream_resolveConnectedPromise, resolve4, "f");
+          __classPrivateFieldSet(this, _BetaMessageStream_rejectConnectedPromise, reject, "f");
+        }), "f");
+        __classPrivateFieldSet(this, _BetaMessageStream_endPromise, new Promise((resolve4, reject) => {
+          __classPrivateFieldSet(this, _BetaMessageStream_resolveEndPromise, resolve4, "f");
+          __classPrivateFieldSet(this, _BetaMessageStream_rejectEndPromise, reject, "f");
+        }), "f");
+        __classPrivateFieldGet(this, _BetaMessageStream_connectedPromise, "f").catch(() => {
+        });
+        __classPrivateFieldGet(this, _BetaMessageStream_endPromise, "f").catch(() => {
+        });
+        __classPrivateFieldSet(this, _BetaMessageStream_params, params, "f");
+        __classPrivateFieldSet(this, _BetaMessageStream_logger, opts?.logger ?? console, "f");
+      }
+      get response() {
+        return __classPrivateFieldGet(this, _BetaMessageStream_response, "f");
+      }
+      get request_id() {
+        return __classPrivateFieldGet(this, _BetaMessageStream_request_id, "f");
+      }
+      /**
+       * Returns the `MessageStream` data, the raw `Response` instance and the ID of the request,
+       * returned vie the `request-id` header which is useful for debugging requests and resporting
+       * issues to Anthropic.
+       *
+       * This is the same as the `APIPromise.withResponse()` method.
+       *
+       * This method will raise an error if you created the stream using `MessageStream.fromReadableStream`
+       * as no `Response` is available.
+       */
+      async withResponse() {
+        __classPrivateFieldSet(this, _BetaMessageStream_catchingPromiseCreated, true, "f");
+        const response = await __classPrivateFieldGet(this, _BetaMessageStream_connectedPromise, "f");
+        if (!response) {
+          throw new Error("Could not resolve a `Response` object");
+        }
+        return {
+          data: this,
+          response,
+          request_id: response.headers.get("request-id")
+        };
+      }
+      /**
+       * Intended for use on the frontend, consuming a stream produced with
+       * `.toReadableStream()` on the backend.
+       *
+       * Note that messages sent to the model do not appear in `.on('message')`
+       * in this context.
+       */
+      static fromReadableStream(stream) {
+        const runner = new _BetaMessageStream(null);
+        runner._run(() => runner._fromReadableStream(stream));
+        return runner;
+      }
+      static createMessage(messages, params, options, { logger } = {}) {
+        const runner = new _BetaMessageStream(params, { logger });
+        for (const message of params.messages) {
+          runner._addMessageParam(message);
+        }
+        __classPrivateFieldSet(runner, _BetaMessageStream_params, { ...params, stream: true }, "f");
+        runner._run(() => runner._createMessage(messages, { ...params, stream: true }, { ...options, headers: { ...options?.headers, "X-Stainless-Helper-Method": "stream" } }));
+        return runner;
+      }
+      _run(executor) {
+        executor().then(() => {
+          this._emitFinal();
+          this._emit("end");
+        }, __classPrivateFieldGet(this, _BetaMessageStream_handleError, "f"));
+      }
+      _addMessageParam(message) {
+        this.messages.push(message);
+      }
+      _addMessage(message, emit = true) {
+        this.receivedMessages.push(message);
+        if (emit) {
+          this._emit("message", message);
+        }
+      }
+      async _createMessage(messages, params, options) {
+        const signal = options?.signal;
+        let abortHandler;
+        if (signal) {
+          if (signal.aborted)
+            this.controller.abort();
+          abortHandler = this.controller.abort.bind(this.controller);
+          signal.addEventListener("abort", abortHandler);
+        }
+        try {
+          __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_beginRequest).call(this);
+          const { response, data: stream } = await messages.create({ ...params, stream: true }, { ...options, signal: this.controller.signal }).withResponse();
+          this._connected(response);
+          for await (const event of stream) {
+            __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_addStreamEvent).call(this, event);
+          }
+          if (stream.controller.signal?.aborted) {
+            throw new APIUserAbortError();
+          }
+          __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_endRequest).call(this);
+        } finally {
+          if (signal && abortHandler) {
+            signal.removeEventListener("abort", abortHandler);
+          }
+        }
+      }
+      _connected(response) {
+        if (this.ended)
+          return;
+        __classPrivateFieldSet(this, _BetaMessageStream_response, response, "f");
+        __classPrivateFieldSet(this, _BetaMessageStream_request_id, response?.headers.get("request-id"), "f");
+        __classPrivateFieldGet(this, _BetaMessageStream_resolveConnectedPromise, "f").call(this, response);
+        this._emit("connect");
+      }
+      get ended() {
+        return __classPrivateFieldGet(this, _BetaMessageStream_ended, "f");
+      }
+      get errored() {
+        return __classPrivateFieldGet(this, _BetaMessageStream_errored, "f");
+      }
+      get aborted() {
+        return __classPrivateFieldGet(this, _BetaMessageStream_aborted, "f");
+      }
+      abort() {
+        this.controller.abort();
+      }
+      /**
+       * Adds the listener function to the end of the listeners array for the event.
+       * No checks are made to see if the listener has already been added. Multiple calls passing
+       * the same combination of event and listener will result in the listener being added, and
+       * called, multiple times.
+       * @returns this MessageStream, so that calls can be chained
+       */
+      on(event, listener) {
+        const listeners = __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] || (__classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] = []);
+        listeners.push({ listener });
+        return this;
+      }
+      /**
+       * Removes the specified listener from the listener array for the event.
+       * off() will remove, at most, one instance of a listener from the listener array. If any single
+       * listener has been added multiple times to the listener array for the specified event, then
+       * off() must be called multiple times to remove each instance.
+       * @returns this MessageStream, so that calls can be chained
+       */
+      off(event, listener) {
+        const listeners = __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event];
+        if (!listeners)
+          return this;
+        const index = listeners.findIndex((l) => l.listener === listener);
+        if (index >= 0)
+          listeners.splice(index, 1);
+        return this;
+      }
+      /**
+       * Adds a one-time listener function for the event. The next time the event is triggered,
+       * this listener is removed and then invoked.
+       * @returns this MessageStream, so that calls can be chained
+       */
+      once(event, listener) {
+        const listeners = __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] || (__classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] = []);
+        listeners.push({ listener, once: true });
+        return this;
+      }
+      /**
+       * This is similar to `.once()`, but returns a Promise that resolves the next time
+       * the event is triggered, instead of calling a listener callback.
+       * @returns a Promise that resolves the next time given event is triggered,
+       * or rejects if an error is emitted.  (If you request the 'error' event,
+       * returns a promise that resolves with the error).
+       *
+       * Example:
+       *
+       *   const message = await stream.emitted('message') // rejects if the stream errors
+       */
+      emitted(event) {
+        return new Promise((resolve4, reject) => {
+          __classPrivateFieldSet(this, _BetaMessageStream_catchingPromiseCreated, true, "f");
+          if (event !== "error")
+            this.once("error", reject);
+          this.once(event, resolve4);
+        });
+      }
+      async done() {
+        __classPrivateFieldSet(this, _BetaMessageStream_catchingPromiseCreated, true, "f");
+        await __classPrivateFieldGet(this, _BetaMessageStream_endPromise, "f");
+      }
+      get currentMessage() {
+        return __classPrivateFieldGet(this, _BetaMessageStream_currentMessageSnapshot, "f");
+      }
+      /**
+       * @returns a promise that resolves with the the final assistant Message response,
+       * or rejects if an error occurred or the stream ended prematurely without producing a Message.
+       * If structured outputs were used, this will be a ParsedMessage with a `parsed` field.
+       */
+      async finalMessage() {
+        await this.done();
+        return __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_getFinalMessage).call(this);
+      }
+      /**
+       * @returns a promise that resolves with the the final assistant Message's text response, concatenated
+       * together if there are more than one text blocks.
+       * Rejects if an error occurred or the stream ended prematurely without producing a Message.
+       */
+      async finalText() {
+        await this.done();
+        return __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_getFinalText).call(this);
+      }
+      _emit(event, ...args) {
+        if (__classPrivateFieldGet(this, _BetaMessageStream_ended, "f"))
+          return;
+        if (event === "end") {
+          __classPrivateFieldSet(this, _BetaMessageStream_ended, true, "f");
+          __classPrivateFieldGet(this, _BetaMessageStream_resolveEndPromise, "f").call(this);
+        }
+        const listeners = __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event];
+        if (listeners) {
+          __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] = listeners.filter((l) => !l.once);
+          listeners.forEach(({ listener }) => listener(...args));
+        }
+        if (event === "abort") {
+          const error = args[0];
+          if (!__classPrivateFieldGet(this, _BetaMessageStream_catchingPromiseCreated, "f") && !listeners?.length) {
+            Promise.reject(error);
+          }
+          __classPrivateFieldGet(this, _BetaMessageStream_rejectConnectedPromise, "f").call(this, error);
+          __classPrivateFieldGet(this, _BetaMessageStream_rejectEndPromise, "f").call(this, error);
+          this._emit("end");
+          return;
+        }
+        if (event === "error") {
+          const error = args[0];
+          if (!__classPrivateFieldGet(this, _BetaMessageStream_catchingPromiseCreated, "f") && !listeners?.length) {
+            Promise.reject(error);
+          }
+          __classPrivateFieldGet(this, _BetaMessageStream_rejectConnectedPromise, "f").call(this, error);
+          __classPrivateFieldGet(this, _BetaMessageStream_rejectEndPromise, "f").call(this, error);
+          this._emit("end");
+        }
+      }
+      _emitFinal() {
+        const finalMessage = this.receivedMessages.at(-1);
+        if (finalMessage) {
+          this._emit("finalMessage", __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_getFinalMessage).call(this));
+        }
+      }
+      async _fromReadableStream(readableStream, options) {
+        const signal = options?.signal;
+        let abortHandler;
+        if (signal) {
+          if (signal.aborted)
+            this.controller.abort();
+          abortHandler = this.controller.abort.bind(this.controller);
+          signal.addEventListener("abort", abortHandler);
+        }
+        try {
+          __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_beginRequest).call(this);
+          this._connected(null);
+          const stream = Stream.fromReadableStream(readableStream, this.controller);
+          for await (const event of stream) {
+            __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_addStreamEvent).call(this, event);
+          }
+          if (stream.controller.signal?.aborted) {
+            throw new APIUserAbortError();
+          }
+          __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_endRequest).call(this);
+        } finally {
+          if (signal && abortHandler) {
+            signal.removeEventListener("abort", abortHandler);
+          }
+        }
+      }
+      [(_BetaMessageStream_currentMessageSnapshot = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_params = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_endPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_listeners = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_ended = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_errored = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_aborted = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_response = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_request_id = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_logger = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_handleError = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_instances = /* @__PURE__ */ new WeakSet(), _BetaMessageStream_getFinalMessage = function _BetaMessageStream_getFinalMessage2() {
+        if (this.receivedMessages.length === 0) {
+          throw new AnthropicError("stream ended without producing a Message with role=assistant");
+        }
+        return this.receivedMessages.at(-1);
+      }, _BetaMessageStream_getFinalText = function _BetaMessageStream_getFinalText2() {
+        if (this.receivedMessages.length === 0) {
+          throw new AnthropicError("stream ended without producing a Message with role=assistant");
+        }
+        const textBlocks = this.receivedMessages.at(-1).content.filter((block) => block.type === "text").map((block) => block.text);
+        if (textBlocks.length === 0) {
+          throw new AnthropicError("stream ended without producing a content block with type=text");
+        }
+        return textBlocks.join(" ");
+      }, _BetaMessageStream_beginRequest = function _BetaMessageStream_beginRequest2() {
+        if (this.ended)
+          return;
+        __classPrivateFieldSet(this, _BetaMessageStream_currentMessageSnapshot, void 0, "f");
+      }, _BetaMessageStream_addStreamEvent = function _BetaMessageStream_addStreamEvent2(event) {
+        if (this.ended)
+          return;
+        const messageSnapshot = __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_accumulateMessage).call(this, event);
+        this._emit("streamEvent", event, messageSnapshot);
+        switch (event.type) {
+          case "content_block_delta": {
+            const content = messageSnapshot.content.at(-1);
+            switch (event.delta.type) {
+              case "text_delta": {
+                if (content.type === "text") {
+                  this._emit("text", event.delta.text, content.text || "");
+                }
+                break;
+              }
+              case "citations_delta": {
+                if (content.type === "text") {
+                  this._emit("citation", event.delta.citation, content.citations ?? []);
+                }
+                break;
+              }
+              case "input_json_delta": {
+                if (tracksToolInput(content) && content.input) {
+                  this._emit("inputJson", event.delta.partial_json, content.input);
+                }
+                break;
+              }
+              case "thinking_delta": {
+                if (content.type === "thinking") {
+                  this._emit("thinking", event.delta.thinking, content.thinking);
+                }
+                break;
+              }
+              case "signature_delta": {
+                if (content.type === "thinking") {
+                  this._emit("signature", content.signature);
+                }
+                break;
+              }
+              case "compaction_delta": {
+                if (content.type === "compaction" && content.content) {
+                  this._emit("compaction", content.content);
+                }
+                break;
+              }
+              default:
+                checkNever(event.delta);
+            }
+            break;
+          }
+          case "message_stop": {
+            this._addMessageParam(messageSnapshot);
+            this._addMessage(maybeParseBetaMessage(messageSnapshot, __classPrivateFieldGet(this, _BetaMessageStream_params, "f"), { logger: __classPrivateFieldGet(this, _BetaMessageStream_logger, "f") }), true);
+            break;
+          }
+          case "content_block_stop": {
+            this._emit("contentBlock", messageSnapshot.content.at(-1));
+            break;
+          }
+          case "message_start": {
+            __classPrivateFieldSet(this, _BetaMessageStream_currentMessageSnapshot, messageSnapshot, "f");
+            break;
+          }
+          case "content_block_start":
+          case "message_delta":
+            break;
+        }
+      }, _BetaMessageStream_endRequest = function _BetaMessageStream_endRequest2() {
+        if (this.ended) {
+          throw new AnthropicError(`stream has ended, this shouldn't happen`);
+        }
+        const snapshot = __classPrivateFieldGet(this, _BetaMessageStream_currentMessageSnapshot, "f");
+        if (!snapshot) {
+          throw new AnthropicError(`request ended without sending any chunks`);
+        }
+        __classPrivateFieldSet(this, _BetaMessageStream_currentMessageSnapshot, void 0, "f");
+        return maybeParseBetaMessage(snapshot, __classPrivateFieldGet(this, _BetaMessageStream_params, "f"), { logger: __classPrivateFieldGet(this, _BetaMessageStream_logger, "f") });
+      }, _BetaMessageStream_accumulateMessage = function _BetaMessageStream_accumulateMessage2(event) {
+        let snapshot = __classPrivateFieldGet(this, _BetaMessageStream_currentMessageSnapshot, "f");
+        if (event.type === "message_start") {
+          if (snapshot) {
+            throw new AnthropicError(`Unexpected event order, got ${event.type} before receiving "message_stop"`);
+          }
+          return event.message;
+        }
+        if (!snapshot) {
+          throw new AnthropicError(`Unexpected event order, got ${event.type} before "message_start"`);
+        }
+        switch (event.type) {
+          case "message_stop":
+            return snapshot;
+          case "message_delta":
+            snapshot.container = event.delta.container;
+            snapshot.stop_reason = event.delta.stop_reason;
+            snapshot.stop_sequence = event.delta.stop_sequence;
+            snapshot.usage.output_tokens = event.usage.output_tokens;
+            snapshot.context_management = event.context_management;
+            if (event.usage.input_tokens != null) {
+              snapshot.usage.input_tokens = event.usage.input_tokens;
+            }
+            if (event.usage.cache_creation_input_tokens != null) {
+              snapshot.usage.cache_creation_input_tokens = event.usage.cache_creation_input_tokens;
+            }
+            if (event.usage.cache_read_input_tokens != null) {
+              snapshot.usage.cache_read_input_tokens = event.usage.cache_read_input_tokens;
+            }
+            if (event.usage.server_tool_use != null) {
+              snapshot.usage.server_tool_use = event.usage.server_tool_use;
+            }
+            if (event.usage.iterations != null) {
+              snapshot.usage.iterations = event.usage.iterations;
+            }
+            return snapshot;
+          case "content_block_start":
+            snapshot.content.push(event.content_block);
+            return snapshot;
+          case "content_block_delta": {
+            const snapshotContent = snapshot.content.at(event.index);
+            switch (event.delta.type) {
+              case "text_delta": {
+                if (snapshotContent?.type === "text") {
+                  snapshot.content[event.index] = {
+                    ...snapshotContent,
+                    text: (snapshotContent.text || "") + event.delta.text
+                  };
+                }
+                break;
+              }
+              case "citations_delta": {
+                if (snapshotContent?.type === "text") {
+                  snapshot.content[event.index] = {
+                    ...snapshotContent,
+                    citations: [...snapshotContent.citations ?? [], event.delta.citation]
+                  };
+                }
+                break;
+              }
+              case "input_json_delta": {
+                if (snapshotContent && tracksToolInput(snapshotContent)) {
+                  let jsonBuf = snapshotContent[JSON_BUF_PROPERTY] || "";
+                  jsonBuf += event.delta.partial_json;
+                  const newContent = { ...snapshotContent };
+                  Object.defineProperty(newContent, JSON_BUF_PROPERTY, {
+                    value: jsonBuf,
+                    enumerable: false,
+                    writable: true
+                  });
+                  if (jsonBuf) {
+                    try {
+                      newContent.input = partialParse(jsonBuf);
+                    } catch (err) {
+                      const error = new AnthropicError(`Unable to parse tool parameter JSON from model. Please retry your request or adjust your prompt. Error: ${err}. JSON: ${jsonBuf}`);
+                      __classPrivateFieldGet(this, _BetaMessageStream_handleError, "f").call(this, error);
+                    }
+                  }
+                  snapshot.content[event.index] = newContent;
+                }
+                break;
+              }
+              case "thinking_delta": {
+                if (snapshotContent?.type === "thinking") {
+                  snapshot.content[event.index] = {
+                    ...snapshotContent,
+                    thinking: snapshotContent.thinking + event.delta.thinking
+                  };
+                }
+                break;
+              }
+              case "signature_delta": {
+                if (snapshotContent?.type === "thinking") {
+                  snapshot.content[event.index] = {
+                    ...snapshotContent,
+                    signature: event.delta.signature
+                  };
+                }
+                break;
+              }
+              case "compaction_delta": {
+                if (snapshotContent?.type === "compaction") {
+                  snapshot.content[event.index] = {
+                    ...snapshotContent,
+                    content: (snapshotContent.content || "") + event.delta.content
+                  };
+                }
+                break;
+              }
+              default:
+                checkNever(event.delta);
+            }
+            return snapshot;
+          }
+          case "content_block_stop":
+            return snapshot;
+        }
+      }, Symbol.asyncIterator)]() {
+        const pushQueue = [];
+        const readQueue = [];
+        let done = false;
+        this.on("streamEvent", (event) => {
+          const reader = readQueue.shift();
+          if (reader) {
+            reader.resolve(event);
+          } else {
+            pushQueue.push(event);
+          }
+        });
+        this.on("end", () => {
+          done = true;
+          for (const reader of readQueue) {
+            reader.resolve(void 0);
+          }
+          readQueue.length = 0;
+        });
+        this.on("abort", (err) => {
+          done = true;
+          for (const reader of readQueue) {
+            reader.reject(err);
+          }
+          readQueue.length = 0;
+        });
+        this.on("error", (err) => {
+          done = true;
+          for (const reader of readQueue) {
+            reader.reject(err);
+          }
+          readQueue.length = 0;
+        });
+        return {
+          next: async () => {
+            if (!pushQueue.length) {
+              if (done) {
+                return { value: void 0, done: true };
+              }
+              return new Promise((resolve4, reject) => readQueue.push({ resolve: resolve4, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
+            }
+            const chunk = pushQueue.shift();
+            return { value: chunk, done: false };
+          },
+          return: async () => {
+            this.abort();
+            return { value: void 0, done: true };
+          }
+        };
+      }
+      toReadableStream() {
+        const stream = new Stream(this[Symbol.asyncIterator].bind(this), this.controller);
+        return stream.toReadableStream();
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs
+var ToolError;
+var init_ToolError = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs"() {
+    ToolError = class extends Error {
+      constructor(content) {
+        const message = typeof content === "string" ? content : content.map((block) => {
+          if (block.type === "text")
+            return block.text;
+          return `[${block.type}]`;
+        }).join(" ");
+        super(message);
+        this.name = "ToolError";
+        this.content = content;
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs
+var DEFAULT_TOKEN_THRESHOLD, DEFAULT_SUMMARY_PROMPT;
+var init_CompactionControl = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs"() {
+    DEFAULT_TOKEN_THRESHOLD = 1e5;
+    DEFAULT_SUMMARY_PROMPT = `You have been working on the task described above but have not yet completed it. Write a continuation summary that will allow you (or another instance of yourself) to resume work efficiently in a future context window where the conversation history will be replaced with this summary. Your summary should be structured, concise, and actionable. Include:
+1. Task Overview
+The user's core request and success criteria
+Any clarifications or constraints they specified
+2. Current State
+What has been completed so far
+Files created, modified, or analyzed (with paths if relevant)
+Key outputs or artifacts produced
+3. Important Discoveries
+Technical constraints or requirements uncovered
+Decisions made and their rationale
+Errors encountered and how they were resolved
+What approaches were tried that didn't work (and why)
+4. Next Steps
+Specific actions needed to complete the task
+Any blockers or open questions to resolve
+Priority order if multiple steps remain
+5. Context to Preserve
+User preferences or style requirements
+Domain-specific details that aren't obvious
+Any promises made to the user
+Be concise but complete\u2014err on the side of including information that would prevent duplicate work or repeated mistakes. Write in a way that enables immediate resumption of the task.
+Wrap your summary in <summary></summary> tags.`;
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs
+function promiseWithResolvers() {
+  let resolve4;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve4 = res;
+    reject = rej;
+  });
+  return { promise, resolve: resolve4, reject };
+}
+async function generateToolResponse(params, lastMessage = params.messages.at(-1), requestOptions) {
+  if (!lastMessage || lastMessage.role !== "assistant" || !lastMessage.content || typeof lastMessage.content === "string") {
+    return null;
+  }
+  const toolUseBlocks = lastMessage.content.filter((content) => content.type === "tool_use");
+  if (toolUseBlocks.length === 0) {
+    return null;
+  }
+  const toolResults = await Promise.all(toolUseBlocks.map(async (toolUse) => {
+    const tool = params.tools.find((t) => ("name" in t ? t.name : t.mcp_server_name) === toolUse.name);
+    if (!tool || !("run" in tool)) {
+      return {
+        type: "tool_result",
+        tool_use_id: toolUse.id,
+        content: `Error: Tool '${toolUse.name}' not found`,
+        is_error: true
+      };
+    }
+    try {
+      let input = toolUse.input;
+      if ("parse" in tool && tool.parse) {
+        input = tool.parse(input);
+      }
+      const result = await tool.run(input, {
+        toolUseBlock: toolUse,
+        signal: requestOptions?.signal
+      });
+      return {
+        type: "tool_result",
+        tool_use_id: toolUse.id,
+        content: result
+      };
+    } catch (error) {
+      return {
+        type: "tool_result",
+        tool_use_id: toolUse.id,
+        content: error instanceof ToolError ? error.content : `Error: ${error instanceof Error ? error.message : String(error)}`,
+        is_error: true
+      };
+    }
+  }));
+  return {
+    role: "user",
+    content: toolResults
+  };
+}
+var _BetaToolRunner_instances, _BetaToolRunner_consumed, _BetaToolRunner_mutated, _BetaToolRunner_state, _BetaToolRunner_options, _BetaToolRunner_message, _BetaToolRunner_toolResponse, _BetaToolRunner_completion, _BetaToolRunner_iterationCount, _BetaToolRunner_checkAndCompact, _BetaToolRunner_generateToolResponse, BetaToolRunner;
+var init_BetaToolRunner = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs"() {
+    init_tslib();
+    init_ToolError();
+    init_error();
+    init_headers();
+    init_CompactionControl();
+    init_stainless_helper_header();
+    BetaToolRunner = class {
+      constructor(client, params, options) {
+        _BetaToolRunner_instances.add(this);
+        this.client = client;
+        _BetaToolRunner_consumed.set(this, false);
+        _BetaToolRunner_mutated.set(this, false);
+        _BetaToolRunner_state.set(this, void 0);
+        _BetaToolRunner_options.set(this, void 0);
+        _BetaToolRunner_message.set(this, void 0);
+        _BetaToolRunner_toolResponse.set(this, void 0);
+        _BetaToolRunner_completion.set(this, void 0);
+        _BetaToolRunner_iterationCount.set(this, 0);
+        __classPrivateFieldSet(this, _BetaToolRunner_state, {
+          params: {
+            // You can't clone the entire params since there are functions as handlers.
+            // You also don't really need to clone params.messages, but it probably will prevent a foot gun
+            // somewhere.
+            ...params,
+            messages: structuredClone(params.messages)
+          }
+        }, "f");
+        const helpers = collectStainlessHelpers(params.tools, params.messages);
+        const helperValue = ["BetaToolRunner", ...helpers].join(", ");
+        __classPrivateFieldSet(this, _BetaToolRunner_options, {
+          ...options,
+          headers: buildHeaders([{ "x-stainless-helper": helperValue }, options?.headers])
+        }, "f");
+        __classPrivateFieldSet(this, _BetaToolRunner_completion, promiseWithResolvers(), "f");
+        if (params.compactionControl?.enabled) {
+          console.warn('Anthropic: The `compactionControl` parameter is deprecated and will be removed in a future version. Use server-side compaction instead by passing `edits: [{ type: "compact_20260112" }]` in the params passed to `toolRunner()`. See https://platform.claude.com/docs/en/build-with-claude/compaction');
+        }
+      }
+      async *[(_BetaToolRunner_consumed = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_mutated = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_state = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_options = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_message = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_toolResponse = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_completion = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_iterationCount = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_instances = /* @__PURE__ */ new WeakSet(), _BetaToolRunner_checkAndCompact = async function _BetaToolRunner_checkAndCompact2() {
+        const compactionControl = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.compactionControl;
+        if (!compactionControl || !compactionControl.enabled) {
+          return false;
+        }
+        let tokensUsed = 0;
+        if (__classPrivateFieldGet(this, _BetaToolRunner_message, "f") !== void 0) {
+          try {
+            const message = await __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
+            const totalInputTokens = message.usage.input_tokens + (message.usage.cache_creation_input_tokens ?? 0) + (message.usage.cache_read_input_tokens ?? 0);
+            tokensUsed = totalInputTokens + message.usage.output_tokens;
+          } catch {
+            return false;
+          }
+        }
+        const threshold = compactionControl.contextTokenThreshold ?? DEFAULT_TOKEN_THRESHOLD;
+        if (tokensUsed < threshold) {
+          return false;
+        }
+        const model = compactionControl.model ?? __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.model;
+        const summaryPrompt = compactionControl.summaryPrompt ?? DEFAULT_SUMMARY_PROMPT;
+        const messages = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages;
+        if (messages[messages.length - 1].role === "assistant") {
+          const lastMessage = messages[messages.length - 1];
+          if (Array.isArray(lastMessage.content)) {
+            const nonToolBlocks = lastMessage.content.filter((block) => block.type !== "tool_use");
+            if (nonToolBlocks.length === 0) {
+              messages.pop();
+            } else {
+              lastMessage.content = nonToolBlocks;
+            }
+          }
+        }
+        const response = await this.client.beta.messages.create({
+          model,
+          messages: [
+            ...messages,
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: summaryPrompt
+                }
+              ]
+            }
+          ],
+          max_tokens: __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.max_tokens
+        }, {
+          signal: __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal,
+          headers: buildHeaders([__classPrivateFieldGet(this, _BetaToolRunner_options, "f").headers, { "x-stainless-helper": "compaction" }])
+        });
+        if (response.content[0]?.type !== "text") {
+          throw new AnthropicError("Expected text response for compaction");
+        }
+        __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages = [
+          {
+            role: "user",
+            content: response.content
+          }
+        ];
+        return true;
+      }, Symbol.asyncIterator)]() {
+        var _a2;
+        if (__classPrivateFieldGet(this, _BetaToolRunner_consumed, "f")) {
+          throw new AnthropicError("Cannot iterate over a consumed stream");
+        }
+        __classPrivateFieldSet(this, _BetaToolRunner_consumed, true, "f");
+        __classPrivateFieldSet(this, _BetaToolRunner_mutated, true, "f");
+        __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, void 0, "f");
+        try {
+          while (true) {
+            let stream;
+            try {
+              if (__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.max_iterations && __classPrivateFieldGet(this, _BetaToolRunner_iterationCount, "f") >= __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.max_iterations) {
+                break;
+              }
+              __classPrivateFieldSet(this, _BetaToolRunner_mutated, false, "f");
+              __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, void 0, "f");
+              __classPrivateFieldSet(this, _BetaToolRunner_iterationCount, (_a2 = __classPrivateFieldGet(this, _BetaToolRunner_iterationCount, "f"), _a2++, _a2), "f");
+              __classPrivateFieldSet(this, _BetaToolRunner_message, void 0, "f");
+              const { max_iterations, compactionControl, ...params } = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params;
+              if (params.stream) {
+                stream = this.client.beta.messages.stream({ ...params }, __classPrivateFieldGet(this, _BetaToolRunner_options, "f"));
+                __classPrivateFieldSet(this, _BetaToolRunner_message, stream.finalMessage(), "f");
+                __classPrivateFieldGet(this, _BetaToolRunner_message, "f").catch(() => {
+                });
+                yield stream;
+              } else {
+                __classPrivateFieldSet(this, _BetaToolRunner_message, this.client.beta.messages.create({ ...params, stream: false }, __classPrivateFieldGet(this, _BetaToolRunner_options, "f")), "f");
+                yield __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
+              }
+              const isCompacted = await __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_checkAndCompact).call(this);
+              if (!isCompacted) {
+                if (!__classPrivateFieldGet(this, _BetaToolRunner_mutated, "f")) {
+                  const { role, content } = await __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
+                  __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.push({ role, content });
+                }
+                const toolMessage = await __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_generateToolResponse).call(this, __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.at(-1));
+                if (toolMessage) {
+                  __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.push(toolMessage);
+                } else if (!__classPrivateFieldGet(this, _BetaToolRunner_mutated, "f")) {
+                  break;
+                }
+              }
+            } finally {
+              if (stream) {
+                stream.abort();
+              }
+            }
+          }
+          if (!__classPrivateFieldGet(this, _BetaToolRunner_message, "f")) {
+            throw new AnthropicError("ToolRunner concluded without a message from the server");
+          }
+          __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").resolve(await __classPrivateFieldGet(this, _BetaToolRunner_message, "f"));
+        } catch (error) {
+          __classPrivateFieldSet(this, _BetaToolRunner_consumed, false, "f");
+          __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").promise.catch(() => {
+          });
+          __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").reject(error);
+          __classPrivateFieldSet(this, _BetaToolRunner_completion, promiseWithResolvers(), "f");
+          throw error;
+        }
+      }
+      setMessagesParams(paramsOrMutator) {
+        if (typeof paramsOrMutator === "function") {
+          __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params = paramsOrMutator(__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params);
+        } else {
+          __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params = paramsOrMutator;
+        }
+        __classPrivateFieldSet(this, _BetaToolRunner_mutated, true, "f");
+        __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, void 0, "f");
+      }
+      setRequestOptions(optionsOrMutator) {
+        if (typeof optionsOrMutator === "function") {
+          __classPrivateFieldSet(this, _BetaToolRunner_options, optionsOrMutator(__classPrivateFieldGet(this, _BetaToolRunner_options, "f")), "f");
+        } else {
+          __classPrivateFieldSet(this, _BetaToolRunner_options, { ...__classPrivateFieldGet(this, _BetaToolRunner_options, "f"), ...optionsOrMutator }, "f");
+        }
+      }
+      /**
+       * Get the tool response for the last message from the assistant.
+       * Avoids redundant tool executions by caching results.
+       *
+       * @returns A promise that resolves to a BetaMessageParam containing tool results, or null if no tools need to be executed
+       *
+       * @example
+       * const toolResponse = await runner.generateToolResponse();
+       * if (toolResponse) {
+       *   console.log('Tool results:', toolResponse.content);
+       * }
+       */
+      async generateToolResponse(signal = __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal) {
+        const message = await __classPrivateFieldGet(this, _BetaToolRunner_message, "f") ?? this.params.messages.at(-1);
+        if (!message) {
+          return null;
+        }
+        return __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_generateToolResponse).call(this, message, signal);
+      }
+      /**
+       * Wait for the async iterator to complete. This works even if the async iterator hasn't yet started, and
+       * will wait for an instance to start and go to completion.
+       *
+       * @returns A promise that resolves to the final BetaMessage when the iterator completes
+       *
+       * @example
+       * // Start consuming the iterator
+       * for await (const message of runner) {
+       *   console.log('Message:', message.content);
+       * }
+       *
+       * // Meanwhile, wait for completion from another part of the code
+       * const finalMessage = await runner.done();
+       * console.log('Final response:', finalMessage.content);
+       */
+      done() {
+        return __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").promise;
+      }
+      /**
+       * Returns a promise indicating that the stream is done. Unlike .done(), this will eagerly read the stream:
+       * * If the iterator has not been consumed, consume the entire iterator and return the final message from the
+       * assistant.
+       * * If the iterator has been consumed, waits for it to complete and returns the final message.
+       *
+       * @returns A promise that resolves to the final BetaMessage from the conversation
+       * @throws {AnthropicError} If no messages were processed during the conversation
+       *
+       * @example
+       * const finalMessage = await runner.runUntilDone();
+       * console.log('Final response:', finalMessage.content);
+       */
+      async runUntilDone() {
+        if (!__classPrivateFieldGet(this, _BetaToolRunner_consumed, "f")) {
+          for await (const _ of this) {
+          }
+        }
+        return this.done();
+      }
+      /**
+       * Get the current parameters being used by the ToolRunner.
+       *
+       * @returns A readonly view of the current ToolRunnerParams
+       *
+       * @example
+       * const currentParams = runner.params;
+       * console.log('Current model:', currentParams.model);
+       * console.log('Message count:', currentParams.messages.length);
+       */
+      get params() {
+        return __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params;
+      }
+      /**
+       * Add one or more messages to the conversation history.
+       *
+       * @param messages - One or more BetaMessageParam objects to add to the conversation
+       *
+       * @example
+       * runner.pushMessages(
+       *   { role: 'user', content: 'Also, what about the weather in NYC?' }
+       * );
+       *
+       * @example
+       * // Adding multiple messages
+       * runner.pushMessages(
+       *   { role: 'user', content: 'What about NYC?' },
+       *   { role: 'user', content: 'And Boston?' }
+       * );
+       */
+      pushMessages(...messages) {
+        this.setMessagesParams((params) => ({
+          ...params,
+          messages: [...params.messages, ...messages]
+        }));
+      }
+      /**
+       * Makes the ToolRunner directly awaitable, equivalent to calling .runUntilDone()
+       * This allows using `await runner` instead of `await runner.runUntilDone()`
+       */
+      then(onfulfilled, onrejected) {
+        return this.runUntilDone().then(onfulfilled, onrejected);
+      }
+    };
+    _BetaToolRunner_generateToolResponse = async function _BetaToolRunner_generateToolResponse2(lastMessage, signal = __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal) {
+      if (__classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f") !== void 0) {
+        return __classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f");
+      }
+      __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, generateToolResponse(__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params, lastMessage, {
+        ...__classPrivateFieldGet(this, _BetaToolRunner_options, "f"),
+        signal
+      }), "f");
+      return __classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f");
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs
+var JSONLDecoder;
+var init_jsonl = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs"() {
+    init_error();
+    init_shims();
+    init_line();
+    JSONLDecoder = class _JSONLDecoder {
+      constructor(iterator, controller) {
+        this.iterator = iterator;
+        this.controller = controller;
+      }
+      async *decoder() {
+        const lineDecoder = new LineDecoder();
+        for await (const chunk of this.iterator) {
+          for (const line of lineDecoder.decode(chunk)) {
+            yield JSON.parse(line);
+          }
+        }
+        for (const line of lineDecoder.flush()) {
+          yield JSON.parse(line);
+        }
+      }
+      [Symbol.asyncIterator]() {
+        return this.decoder();
+      }
+      static fromResponse(response, controller) {
+        if (!response.body) {
+          controller.abort();
+          if (typeof globalThis.navigator !== "undefined" && globalThis.navigator.product === "ReactNative") {
+            throw new AnthropicError(`The default react-native fetch implementation does not support streaming. Please use expo/fetch: https://docs.expo.dev/versions/latest/sdk/expo/#expofetch-api`);
+          }
+          throw new AnthropicError(`Attempted to iterate over a response with no body`);
+        }
+        return new _JSONLDecoder(ReadableStreamToAsyncIterable(response.body), controller);
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs
+var Batches;
+var init_batches = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_jsonl();
+    init_error2();
+    init_path();
+    Batches = class extends APIResource {
+      /**
+       * Send a batch of Message creation requests.
+       *
+       * The Message Batches API can be used to process multiple Messages API requests at
+       * once. Once a Message Batch is created, it begins processing immediately. Batches
+       * can take up to 24 hours to complete.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * const betaMessageBatch =
+       *   await client.beta.messages.batches.create({
+       *     requests: [
+       *       {
+       *         custom_id: 'my-custom-id-1',
+       *         params: {
+       *           max_tokens: 1024,
+       *           messages: [
+       *             { content: 'Hello, world', role: 'user' },
+       *           ],
+       *           model: 'claude-opus-4-6',
+       *         },
+       *       },
+       *     ],
+       *   });
+       * ```
+       */
+      create(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/messages/batches?beta=true", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * This endpoint is idempotent and can be used to poll for Message Batch
+       * completion. To access the results of a Message Batch, make a request to the
+       * `results_url` field in the response.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * const betaMessageBatch =
+       *   await client.beta.messages.batches.retrieve(
+       *     'message_batch_id',
+       *   );
+       * ```
+       */
+      retrieve(messageBatchID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/messages/batches/${messageBatchID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List all Message Batches within a Workspace. Most recently created batches are
+       * returned first.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaMessageBatch of client.beta.messages.batches.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/messages/batches?beta=true", Page, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Delete a Message Batch.
+       *
+       * Message Batches can only be deleted once they've finished processing. If you'd
+       * like to delete an in-progress batch, you must first cancel it.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * const betaDeletedMessageBatch =
+       *   await client.beta.messages.batches.delete(
+       *     'message_batch_id',
+       *   );
+       * ```
+       */
+      delete(messageBatchID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.delete(path3`/v1/messages/batches/${messageBatchID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Batches may be canceled any time before processing ends. Once cancellation is
+       * initiated, the batch enters a `canceling` state, at which time the system may
+       * complete any in-progress, non-interruptible requests before finalizing
+       * cancellation.
+       *
+       * The number of canceled requests is specified in `request_counts`. To determine
+       * which requests were canceled, check the individual results within the batch.
+       * Note that cancellation may not result in any canceled requests if they were
+       * non-interruptible.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * const betaMessageBatch =
+       *   await client.beta.messages.batches.cancel(
+       *     'message_batch_id',
+       *   );
+       * ```
+       */
+      cancel(messageBatchID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.post(path3`/v1/messages/batches/${messageBatchID}/cancel?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Streams the results of a Message Batch as a `.jsonl` file.
+       *
+       * Each line in the file is a JSON object containing the result of a single request
+       * in the Message Batch. Results are not guaranteed to be in the same order as
+       * requests. Use the `custom_id` field to match results to requests.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * const betaMessageBatchIndividualResponse =
+       *   await client.beta.messages.batches.results(
+       *     'message_batch_id',
+       *   );
+       * ```
+       */
+      async results(messageBatchID, params = {}, options) {
+        const batch = await this.retrieve(messageBatchID);
+        if (!batch.results_url) {
+          throw new AnthropicError(`No batch \`results_url\`; Has it finished processing? ${batch.processing_status} - ${batch.id}`);
+        }
+        const { betas } = params ?? {};
+        return this._client.get(batch.results_url, {
+          ...options,
+          headers: buildHeaders([
+            {
+              "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString(),
+              Accept: "application/binary"
+            },
+            options?.headers
+          ]),
+          stream: true,
+          __binaryResponse: true
+        })._thenUnwrap((_, props) => JSONLDecoder.fromResponse(props.response, props.controller));
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs
+function transformOutputFormat(params) {
+  if (!params.output_format) {
+    return params;
+  }
+  if (params.output_config?.format) {
+    throw new AnthropicError("Both output_format and output_config.format were provided. Please use only output_config.format (output_format is deprecated).");
+  }
+  const { output_format, ...rest } = params;
+  return {
+    ...rest,
+    output_config: {
+      ...params.output_config,
+      format: output_format
+    }
+  };
+}
+var DEPRECATED_MODELS, MODELS_TO_WARN_WITH_THINKING_ENABLED, Messages;
+var init_messages = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs"() {
+    init_error2();
+    init_resource();
+    init_constants();
+    init_headers();
+    init_stainless_helper_header();
+    init_beta_parser();
+    init_BetaMessageStream();
+    init_BetaToolRunner();
+    init_ToolError();
+    init_batches();
+    init_batches();
+    init_BetaToolRunner();
+    init_ToolError();
+    DEPRECATED_MODELS = {
+      "claude-1.3": "November 6th, 2024",
+      "claude-1.3-100k": "November 6th, 2024",
+      "claude-instant-1.1": "November 6th, 2024",
+      "claude-instant-1.1-100k": "November 6th, 2024",
+      "claude-instant-1.2": "November 6th, 2024",
+      "claude-3-sonnet-20240229": "July 21st, 2025",
+      "claude-3-opus-20240229": "January 5th, 2026",
+      "claude-2.1": "July 21st, 2025",
+      "claude-2.0": "July 21st, 2025",
+      "claude-3-7-sonnet-latest": "February 19th, 2026",
+      "claude-3-7-sonnet-20250219": "February 19th, 2026"
+    };
+    MODELS_TO_WARN_WITH_THINKING_ENABLED = ["claude-mythos-preview", "claude-opus-4-6"];
+    Messages = class extends APIResource {
+      constructor() {
+        super(...arguments);
+        this.batches = new Batches(this._client);
+      }
+      create(params, options) {
+        const modifiedParams = transformOutputFormat(params);
+        const { betas, ...body } = modifiedParams;
+        if (body.model in DEPRECATED_MODELS) {
+          console.warn(`The model '${body.model}' is deprecated and will reach end-of-life on ${DEPRECATED_MODELS[body.model]}
+Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resources/model-deprecations for more information.`);
+        }
+        if (MODELS_TO_WARN_WITH_THINKING_ENABLED.includes(body.model) && body.thinking && body.thinking.type === "enabled") {
+          console.warn(`Using Claude with ${body.model} and 'thinking.type=enabled' is deprecated. Use 'thinking.type=adaptive' instead which results in better model performance in our testing: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`);
+        }
+        let timeout = this._client._options.timeout;
+        if (!body.stream && timeout == null) {
+          const maxNonstreamingTokens = MODEL_NONSTREAMING_TOKENS[body.model] ?? void 0;
+          timeout = this._client.calculateNonstreamingTimeout(body.max_tokens, maxNonstreamingTokens);
+        }
+        const helperHeader = stainlessHelperHeader(body.tools, body.messages);
+        return this._client.post("/v1/messages?beta=true", {
+          body,
+          timeout: timeout ?? 6e5,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            helperHeader,
+            options?.headers
+          ]),
+          stream: modifiedParams.stream ?? false
+        });
+      }
+      /**
+       * Send a structured list of input messages with text and/or image content, along with an expected `output_format` and
+       * the response will be automatically parsed and available in the `parsed_output` property of the message.
+       *
+       * @example
+       * ```ts
+       * const message = await client.beta.messages.parse({
+       *   model: 'claude-3-5-sonnet-20241022',
+       *   max_tokens: 1024,
+       *   messages: [{ role: 'user', content: 'What is 2+2?' }],
+       *   output_format: zodOutputFormat(z.object({ answer: z.number() }), 'math'),
+       * });
+       *
+       * console.log(message.parsed_output?.answer); // 4
+       * ```
+       */
+      parse(params, options) {
+        options = {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...params.betas ?? [], "structured-outputs-2025-12-15"].toString() },
+            options?.headers
+          ])
+        };
+        return this.create(params, options).then((message) => parseBetaMessage(message, params, { logger: this._client.logger ?? console }));
+      }
+      /**
+       * Create a Message stream
+       */
+      stream(body, options) {
+        return BetaMessageStream.createMessage(this, body, options);
+      }
+      /**
+       * Count the number of tokens in a Message.
+       *
+       * The Token Count API can be used to count the number of tokens in a Message,
+       * including tools, images, and documents, without creating it.
+       *
+       * Learn more about token counting in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/token-counting)
+       *
+       * @example
+       * ```ts
+       * const betaMessageTokensCount =
+       *   await client.beta.messages.countTokens({
+       *     messages: [{ content: 'Hello, world', role: 'user' }],
+       *     model: 'claude-opus-4-6',
+       *   });
+       * ```
+       */
+      countTokens(params, options) {
+        const modifiedParams = transformOutputFormat(params);
+        const { betas, ...body } = modifiedParams;
+        return this._client.post("/v1/messages/count_tokens?beta=true", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "token-counting-2024-11-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      toolRunner(body, options) {
+        return new BetaToolRunner(this._client, body, options);
+      }
+    };
+    Messages.Batches = Batches;
+    Messages.BetaToolRunner = BetaToolRunner;
+    Messages.ToolError = ToolError;
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs
+var Events;
+var init_events = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_path();
+    Events = class extends APIResource {
+      /**
+       * List Events
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaManagedAgentsSessionEvent of client.beta.sessions.events.list(
+       *   'sesn_011CZkZAtmR3yMPDzynEDxu7',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(sessionID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path3`/v1/sessions/${sessionID}/events?beta=true`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Send Events
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsSendSessionEvents =
+       *   await client.beta.sessions.events.send(
+       *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+       *     {
+       *       events: [
+       *         {
+       *           content: [
+       *             {
+       *               text: 'Where is my order #1234?',
+       *               type: 'text',
+       *             },
+       *           ],
+       *           type: 'user.message',
+       *         },
+       *       ],
+       *     },
+       *   );
+       * ```
+       */
+      send(sessionID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path3`/v1/sessions/${sessionID}/events?beta=true`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Stream Events
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsStreamSessionEvents =
+       *   await client.beta.sessions.events.stream(
+       *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+       *   );
+       * ```
+       */
+      stream(sessionID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/sessions/${sessionID}/events/stream?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ]),
+          stream: true
+        });
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs
+var Resources;
+var init_resources = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_path();
+    Resources = class extends APIResource {
+      /**
+       * Get Session Resource
+       *
+       * @example
+       * ```ts
+       * const resource =
+       *   await client.beta.sessions.resources.retrieve(
+       *     'sesrsc_011CZkZBJq5dWxk9fVLNcPht',
+       *     { session_id: 'sesn_011CZkZAtmR3yMPDzynEDxu7' },
+       *   );
+       * ```
+       */
+      retrieve(resourceID, params, options) {
+        const { session_id, betas } = params;
+        return this._client.get(path3`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Update Session Resource
+       *
+       * @example
+       * ```ts
+       * const resource =
+       *   await client.beta.sessions.resources.update(
+       *     'sesrsc_011CZkZBJq5dWxk9fVLNcPht',
+       *     {
+       *       session_id: 'sesn_011CZkZAtmR3yMPDzynEDxu7',
+       *       authorization_token: 'ghp_exampletoken',
+       *     },
+       *   );
+       * ```
+       */
+      update(resourceID, params, options) {
+        const { session_id, betas, ...body } = params;
+        return this._client.post(path3`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List Session Resources
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaManagedAgentsSessionResource of client.beta.sessions.resources.list(
+       *   'sesn_011CZkZAtmR3yMPDzynEDxu7',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(sessionID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path3`/v1/sessions/${sessionID}/resources?beta=true`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Delete Session Resource
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsDeleteSessionResource =
+       *   await client.beta.sessions.resources.delete(
+       *     'sesrsc_011CZkZBJq5dWxk9fVLNcPht',
+       *     { session_id: 'sesn_011CZkZAtmR3yMPDzynEDxu7' },
+       *   );
+       * ```
+       */
+      delete(resourceID, params, options) {
+        const { session_id, betas } = params;
+        return this._client.delete(path3`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Add Session Resource
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsFileResource =
+       *   await client.beta.sessions.resources.add(
+       *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+       *     {
+       *       file_id: 'file_011CNha8iCJcU1wXNR6q4V8w',
+       *       type: 'file',
+       *     },
+       *   );
+       * ```
+       */
+      add(sessionID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path3`/v1/sessions/${sessionID}/resources?beta=true`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs
+var Sessions;
+var init_sessions = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs"() {
+    init_resource();
+    init_events();
+    init_events();
+    init_resources();
+    init_resources();
+    init_pagination();
+    init_headers();
+    init_path();
+    Sessions = class extends APIResource {
+      constructor() {
+        super(...arguments);
+        this.events = new Events(this._client);
+        this.resources = new Resources(this._client);
+      }
+      /**
+       * Create Session
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsSession =
+       *   await client.beta.sessions.create({
+       *     agent: 'agent_011CZkYpogX7uDKUyvBTophP',
+       *     environment_id: 'env_011CZkZ9X2dpNyB7HsEFoRfW',
+       *   });
+       * ```
+       */
+      create(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/sessions?beta=true", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Get Session
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsSession =
+       *   await client.beta.sessions.retrieve(
+       *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+       *   );
+       * ```
+       */
+      retrieve(sessionID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/sessions/${sessionID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Update Session
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsSession =
+       *   await client.beta.sessions.update(
+       *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+       *   );
+       * ```
+       */
+      update(sessionID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path3`/v1/sessions/${sessionID}?beta=true`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List Sessions
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaManagedAgentsSession of client.beta.sessions.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/sessions?beta=true", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Delete Session
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsDeletedSession =
+       *   await client.beta.sessions.delete(
+       *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+       *   );
+       * ```
+       */
+      delete(sessionID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.delete(path3`/v1/sessions/${sessionID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Archive Session
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsSession =
+       *   await client.beta.sessions.archive(
+       *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+       *   );
+       * ```
+       */
+      archive(sessionID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.post(path3`/v1/sessions/${sessionID}/archive?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+    };
+    Sessions.Events = Events;
+    Sessions.Resources = Resources;
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs
+var Versions2;
+var init_versions2 = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_uploads();
+    init_path();
+    Versions2 = class extends APIResource {
+      /**
+       * Create Skill Version
+       *
+       * @example
+       * ```ts
+       * const version = await client.beta.skills.versions.create(
+       *   'skill_id',
+       * );
+       * ```
+       */
+      create(skillID, params = {}, options) {
+        const { betas, ...body } = params ?? {};
+        return this._client.post(path3`/v1/skills/${skillID}/versions?beta=true`, multipartFormRequestOptions({
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
+            options?.headers
+          ])
+        }, this._client));
+      }
+      /**
+       * Get Skill Version
+       *
+       * @example
+       * ```ts
+       * const version = await client.beta.skills.versions.retrieve(
+       *   'version',
+       *   { skill_id: 'skill_id' },
+       * );
+       * ```
+       */
+      retrieve(version, params, options) {
+        const { skill_id, betas } = params;
+        return this._client.get(path3`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List Skill Versions
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const versionListResponse of client.beta.skills.versions.list(
+       *   'skill_id',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(skillID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path3`/v1/skills/${skillID}/versions?beta=true`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Delete Skill Version
+       *
+       * @example
+       * ```ts
+       * const version = await client.beta.skills.versions.delete(
+       *   'version',
+       *   { skill_id: 'skill_id' },
+       * );
+       * ```
+       */
+      delete(version, params, options) {
+        const { skill_id, betas } = params;
+        return this._client.delete(path3`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
+            options?.headers
+          ])
+        });
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs
+var Skills;
+var init_skills = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs"() {
+    init_resource();
+    init_versions2();
+    init_versions2();
+    init_pagination();
+    init_headers();
+    init_uploads();
+    init_path();
+    Skills = class extends APIResource {
+      constructor() {
+        super(...arguments);
+        this.versions = new Versions2(this._client);
+      }
+      /**
+       * Create Skill
+       *
+       * @example
+       * ```ts
+       * const skill = await client.beta.skills.create();
+       * ```
+       */
+      create(params = {}, options) {
+        const { betas, ...body } = params ?? {};
+        return this._client.post("/v1/skills?beta=true", multipartFormRequestOptions({
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
+            options?.headers
+          ])
+        }, this._client, false));
+      }
+      /**
+       * Get Skill
+       *
+       * @example
+       * ```ts
+       * const skill = await client.beta.skills.retrieve('skill_id');
+       * ```
+       */
+      retrieve(skillID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/skills/${skillID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List Skills
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const skillListResponse of client.beta.skills.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/skills?beta=true", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Delete Skill
+       *
+       * @example
+       * ```ts
+       * const skill = await client.beta.skills.delete('skill_id');
+       * ```
+       */
+      delete(skillID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.delete(path3`/v1/skills/${skillID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
+            options?.headers
+          ])
+        });
+      }
+    };
+    Skills.Versions = Versions2;
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs
+var Credentials;
+var init_credentials = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_path();
+    Credentials = class extends APIResource {
+      /**
+       * Create Credential
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsCredential =
+       *   await client.beta.vaults.credentials.create(
+       *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+       *     {
+       *       auth: {
+       *         token: 'bearer_exampletoken',
+       *         mcp_server_url:
+       *           'https://example-server.modelcontextprotocol.io/sse',
+       *         type: 'static_bearer',
+       *       },
+       *     },
+       *   );
+       * ```
+       */
+      create(vaultID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path3`/v1/vaults/${vaultID}/credentials?beta=true`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Get Credential
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsCredential =
+       *   await client.beta.vaults.credentials.retrieve(
+       *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
+       *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
+       *   );
+       * ```
+       */
+      retrieve(credentialID, params, options) {
+        const { vault_id, betas } = params;
+        return this._client.get(path3`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Update Credential
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsCredential =
+       *   await client.beta.vaults.credentials.update(
+       *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
+       *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
+       *   );
+       * ```
+       */
+      update(credentialID, params, options) {
+        const { vault_id, betas, ...body } = params;
+        return this._client.post(path3`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List Credentials
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaManagedAgentsCredential of client.beta.vaults.credentials.list(
+       *   'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(vaultID, params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList(path3`/v1/vaults/${vaultID}/credentials?beta=true`, PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Delete Credential
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsDeletedCredential =
+       *   await client.beta.vaults.credentials.delete(
+       *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
+       *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
+       *   );
+       * ```
+       */
+      delete(credentialID, params, options) {
+        const { vault_id, betas } = params;
+        return this._client.delete(path3`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Archive Credential
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsCredential =
+       *   await client.beta.vaults.credentials.archive(
+       *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
+       *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
+       *   );
+       * ```
+       */
+      archive(credentialID, params, options) {
+        const { vault_id, betas } = params;
+        return this._client.post(path3`/v1/vaults/${vault_id}/credentials/${credentialID}/archive?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs
+var Vaults;
+var init_vaults = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs"() {
+    init_resource();
+    init_credentials();
+    init_credentials();
+    init_pagination();
+    init_headers();
+    init_path();
+    Vaults = class extends APIResource {
+      constructor() {
+        super(...arguments);
+        this.credentials = new Credentials(this._client);
+      }
+      /**
+       * Create Vault
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsVault =
+       *   await client.beta.vaults.create({
+       *     display_name: 'Example vault',
+       *   });
+       * ```
+       */
+      create(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/vaults?beta=true", {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Get Vault
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsVault =
+       *   await client.beta.vaults.retrieve(
+       *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+       *   );
+       * ```
+       */
+      retrieve(vaultID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/vaults/${vaultID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Update Vault
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsVault =
+       *   await client.beta.vaults.update(
+       *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+       *   );
+       * ```
+       */
+      update(vaultID, params, options) {
+        const { betas, ...body } = params;
+        return this._client.post(path3`/v1/vaults/${vaultID}?beta=true`, {
+          body,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List Vaults
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const betaManagedAgentsVault of client.beta.vaults.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/vaults?beta=true", PageCursor, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Delete Vault
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsDeletedVault =
+       *   await client.beta.vaults.delete(
+       *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+       *   );
+       * ```
+       */
+      delete(vaultID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.delete(path3`/v1/vaults/${vaultID}?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * Archive Vault
+       *
+       * @example
+       * ```ts
+       * const betaManagedAgentsVault =
+       *   await client.beta.vaults.archive(
+       *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+       *   );
+       * ```
+       */
+      archive(vaultID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.post(path3`/v1/vaults/${vaultID}/archive?beta=true`, {
+          ...options,
+          headers: buildHeaders([
+            { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+            options?.headers
+          ])
+        });
+      }
+    };
+    Vaults.Credentials = Credentials;
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs
+var Beta;
+var init_beta = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs"() {
+    init_resource();
+    init_environments();
+    init_environments();
+    init_files();
+    init_files();
+    init_models();
+    init_models();
+    init_user_profiles();
+    init_user_profiles();
+    init_agents();
+    init_agents();
+    init_messages();
+    init_messages();
+    init_sessions();
+    init_sessions();
+    init_skills();
+    init_skills();
+    init_vaults();
+    init_vaults();
+    Beta = class extends APIResource {
+      constructor() {
+        super(...arguments);
+        this.models = new Models(this._client);
+        this.messages = new Messages(this._client);
+        this.agents = new Agents(this._client);
+        this.environments = new Environments(this._client);
+        this.sessions = new Sessions(this._client);
+        this.vaults = new Vaults(this._client);
+        this.files = new Files(this._client);
+        this.skills = new Skills(this._client);
+        this.userProfiles = new UserProfiles(this._client);
+      }
+    };
+    Beta.Models = Models;
+    Beta.Messages = Messages;
+    Beta.Agents = Agents;
+    Beta.Environments = Environments;
+    Beta.Sessions = Sessions;
+    Beta.Vaults = Vaults;
+    Beta.Files = Files;
+    Beta.Skills = Skills;
+    Beta.UserProfiles = UserProfiles;
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/completions.mjs
+var Completions;
+var init_completions = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/completions.mjs"() {
+    init_resource();
+    init_headers();
+    Completions = class extends APIResource {
+      create(params, options) {
+        const { betas, ...body } = params;
+        return this._client.post("/v1/complete", {
+          body,
+          timeout: this._client._options.timeout ?? 6e5,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ]),
+          stream: params.stream ?? false
+        });
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/parser.mjs
+function getOutputFormat2(params) {
+  return params?.output_config?.format;
+}
+function maybeParseMessage(message, params, opts) {
+  const outputFormat = getOutputFormat2(params);
+  if (!params || !("parse" in (outputFormat ?? {}))) {
+    return {
+      ...message,
+      content: message.content.map((block) => {
+        if (block.type === "text") {
+          const parsedBlock = Object.defineProperty({ ...block }, "parsed_output", {
+            value: null,
+            enumerable: false
+          });
+          return parsedBlock;
+        }
+        return block;
+      }),
+      parsed_output: null
+    };
+  }
+  return parseMessage(message, params, opts);
+}
+function parseMessage(message, params, opts) {
+  let firstParsedOutput = null;
+  const content = message.content.map((block) => {
+    if (block.type === "text") {
+      const parsedOutput = parseOutputFormat(params, block.text);
+      if (firstParsedOutput === null) {
+        firstParsedOutput = parsedOutput;
+      }
+      const parsedBlock = Object.defineProperty({ ...block }, "parsed_output", {
+        value: parsedOutput,
+        enumerable: false
+      });
+      return parsedBlock;
+    }
+    return block;
+  });
+  return {
+    ...message,
+    content,
+    parsed_output: firstParsedOutput
+  };
+}
+function parseOutputFormat(params, content) {
+  const outputFormat = getOutputFormat2(params);
+  if (outputFormat?.type !== "json_schema") {
+    return null;
+  }
+  try {
+    if ("parse" in outputFormat) {
+      return outputFormat.parse(content);
+    }
+    return JSON.parse(content);
+  } catch (error) {
+    throw new AnthropicError(`Failed to parse structured output: ${error}`);
+  }
+}
+var init_parser2 = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/parser.mjs"() {
+    init_error();
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs
+function tracksToolInput2(content) {
+  return content.type === "tool_use" || content.type === "server_tool_use";
+}
+function checkNever2(x) {
+}
+var _MessageStream_instances, _MessageStream_currentMessageSnapshot, _MessageStream_params, _MessageStream_connectedPromise, _MessageStream_resolveConnectedPromise, _MessageStream_rejectConnectedPromise, _MessageStream_endPromise, _MessageStream_resolveEndPromise, _MessageStream_rejectEndPromise, _MessageStream_listeners, _MessageStream_ended, _MessageStream_errored, _MessageStream_aborted, _MessageStream_catchingPromiseCreated, _MessageStream_response, _MessageStream_request_id, _MessageStream_logger, _MessageStream_getFinalMessage, _MessageStream_getFinalText, _MessageStream_handleError, _MessageStream_beginRequest, _MessageStream_addStreamEvent, _MessageStream_endRequest, _MessageStream_accumulateMessage, JSON_BUF_PROPERTY2, MessageStream;
+var init_MessageStream = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs"() {
+    init_tslib();
+    init_errors();
+    init_error2();
+    init_streaming2();
+    init_parser();
+    init_parser2();
+    JSON_BUF_PROPERTY2 = "__json_buf";
+    MessageStream = class _MessageStream {
+      constructor(params, opts) {
+        _MessageStream_instances.add(this);
+        this.messages = [];
+        this.receivedMessages = [];
+        _MessageStream_currentMessageSnapshot.set(this, void 0);
+        _MessageStream_params.set(this, null);
+        this.controller = new AbortController();
+        _MessageStream_connectedPromise.set(this, void 0);
+        _MessageStream_resolveConnectedPromise.set(this, () => {
+        });
+        _MessageStream_rejectConnectedPromise.set(this, () => {
+        });
+        _MessageStream_endPromise.set(this, void 0);
+        _MessageStream_resolveEndPromise.set(this, () => {
+        });
+        _MessageStream_rejectEndPromise.set(this, () => {
+        });
+        _MessageStream_listeners.set(this, {});
+        _MessageStream_ended.set(this, false);
+        _MessageStream_errored.set(this, false);
+        _MessageStream_aborted.set(this, false);
+        _MessageStream_catchingPromiseCreated.set(this, false);
+        _MessageStream_response.set(this, void 0);
+        _MessageStream_request_id.set(this, void 0);
+        _MessageStream_logger.set(this, void 0);
+        _MessageStream_handleError.set(this, (error) => {
+          __classPrivateFieldSet(this, _MessageStream_errored, true, "f");
+          if (isAbortError(error)) {
+            error = new APIUserAbortError();
+          }
+          if (error instanceof APIUserAbortError) {
+            __classPrivateFieldSet(this, _MessageStream_aborted, true, "f");
+            return this._emit("abort", error);
+          }
+          if (error instanceof AnthropicError) {
+            return this._emit("error", error);
+          }
+          if (error instanceof Error) {
+            const anthropicError = new AnthropicError(error.message);
+            anthropicError.cause = error;
+            return this._emit("error", anthropicError);
+          }
+          return this._emit("error", new AnthropicError(String(error)));
+        });
+        __classPrivateFieldSet(this, _MessageStream_connectedPromise, new Promise((resolve4, reject) => {
+          __classPrivateFieldSet(this, _MessageStream_resolveConnectedPromise, resolve4, "f");
+          __classPrivateFieldSet(this, _MessageStream_rejectConnectedPromise, reject, "f");
+        }), "f");
+        __classPrivateFieldSet(this, _MessageStream_endPromise, new Promise((resolve4, reject) => {
+          __classPrivateFieldSet(this, _MessageStream_resolveEndPromise, resolve4, "f");
+          __classPrivateFieldSet(this, _MessageStream_rejectEndPromise, reject, "f");
+        }), "f");
+        __classPrivateFieldGet(this, _MessageStream_connectedPromise, "f").catch(() => {
+        });
+        __classPrivateFieldGet(this, _MessageStream_endPromise, "f").catch(() => {
+        });
+        __classPrivateFieldSet(this, _MessageStream_params, params, "f");
+        __classPrivateFieldSet(this, _MessageStream_logger, opts?.logger ?? console, "f");
+      }
+      get response() {
+        return __classPrivateFieldGet(this, _MessageStream_response, "f");
+      }
+      get request_id() {
+        return __classPrivateFieldGet(this, _MessageStream_request_id, "f");
+      }
+      /**
+       * Returns the `MessageStream` data, the raw `Response` instance and the ID of the request,
+       * returned vie the `request-id` header which is useful for debugging requests and resporting
+       * issues to Anthropic.
+       *
+       * This is the same as the `APIPromise.withResponse()` method.
+       *
+       * This method will raise an error if you created the stream using `MessageStream.fromReadableStream`
+       * as no `Response` is available.
+       */
+      async withResponse() {
+        __classPrivateFieldSet(this, _MessageStream_catchingPromiseCreated, true, "f");
+        const response = await __classPrivateFieldGet(this, _MessageStream_connectedPromise, "f");
+        if (!response) {
+          throw new Error("Could not resolve a `Response` object");
+        }
+        return {
+          data: this,
+          response,
+          request_id: response.headers.get("request-id")
+        };
+      }
+      /**
+       * Intended for use on the frontend, consuming a stream produced with
+       * `.toReadableStream()` on the backend.
+       *
+       * Note that messages sent to the model do not appear in `.on('message')`
+       * in this context.
+       */
+      static fromReadableStream(stream) {
+        const runner = new _MessageStream(null);
+        runner._run(() => runner._fromReadableStream(stream));
+        return runner;
+      }
+      static createMessage(messages, params, options, { logger } = {}) {
+        const runner = new _MessageStream(params, { logger });
+        for (const message of params.messages) {
+          runner._addMessageParam(message);
+        }
+        __classPrivateFieldSet(runner, _MessageStream_params, { ...params, stream: true }, "f");
+        runner._run(() => runner._createMessage(messages, { ...params, stream: true }, { ...options, headers: { ...options?.headers, "X-Stainless-Helper-Method": "stream" } }));
+        return runner;
+      }
+      _run(executor) {
+        executor().then(() => {
+          this._emitFinal();
+          this._emit("end");
+        }, __classPrivateFieldGet(this, _MessageStream_handleError, "f"));
+      }
+      _addMessageParam(message) {
+        this.messages.push(message);
+      }
+      _addMessage(message, emit = true) {
+        this.receivedMessages.push(message);
+        if (emit) {
+          this._emit("message", message);
+        }
+      }
+      async _createMessage(messages, params, options) {
+        const signal = options?.signal;
+        let abortHandler;
+        if (signal) {
+          if (signal.aborted)
+            this.controller.abort();
+          abortHandler = this.controller.abort.bind(this.controller);
+          signal.addEventListener("abort", abortHandler);
+        }
+        try {
+          __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_beginRequest).call(this);
+          const { response, data: stream } = await messages.create({ ...params, stream: true }, { ...options, signal: this.controller.signal }).withResponse();
+          this._connected(response);
+          for await (const event of stream) {
+            __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_addStreamEvent).call(this, event);
+          }
+          if (stream.controller.signal?.aborted) {
+            throw new APIUserAbortError();
+          }
+          __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_endRequest).call(this);
+        } finally {
+          if (signal && abortHandler) {
+            signal.removeEventListener("abort", abortHandler);
+          }
+        }
+      }
+      _connected(response) {
+        if (this.ended)
+          return;
+        __classPrivateFieldSet(this, _MessageStream_response, response, "f");
+        __classPrivateFieldSet(this, _MessageStream_request_id, response?.headers.get("request-id"), "f");
+        __classPrivateFieldGet(this, _MessageStream_resolveConnectedPromise, "f").call(this, response);
+        this._emit("connect");
+      }
+      get ended() {
+        return __classPrivateFieldGet(this, _MessageStream_ended, "f");
+      }
+      get errored() {
+        return __classPrivateFieldGet(this, _MessageStream_errored, "f");
+      }
+      get aborted() {
+        return __classPrivateFieldGet(this, _MessageStream_aborted, "f");
+      }
+      abort() {
+        this.controller.abort();
+      }
+      /**
+       * Adds the listener function to the end of the listeners array for the event.
+       * No checks are made to see if the listener has already been added. Multiple calls passing
+       * the same combination of event and listener will result in the listener being added, and
+       * called, multiple times.
+       * @returns this MessageStream, so that calls can be chained
+       */
+      on(event, listener) {
+        const listeners = __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] || (__classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] = []);
+        listeners.push({ listener });
+        return this;
+      }
+      /**
+       * Removes the specified listener from the listener array for the event.
+       * off() will remove, at most, one instance of a listener from the listener array. If any single
+       * listener has been added multiple times to the listener array for the specified event, then
+       * off() must be called multiple times to remove each instance.
+       * @returns this MessageStream, so that calls can be chained
+       */
+      off(event, listener) {
+        const listeners = __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event];
+        if (!listeners)
+          return this;
+        const index = listeners.findIndex((l) => l.listener === listener);
+        if (index >= 0)
+          listeners.splice(index, 1);
+        return this;
+      }
+      /**
+       * Adds a one-time listener function for the event. The next time the event is triggered,
+       * this listener is removed and then invoked.
+       * @returns this MessageStream, so that calls can be chained
+       */
+      once(event, listener) {
+        const listeners = __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] || (__classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] = []);
+        listeners.push({ listener, once: true });
+        return this;
+      }
+      /**
+       * This is similar to `.once()`, but returns a Promise that resolves the next time
+       * the event is triggered, instead of calling a listener callback.
+       * @returns a Promise that resolves the next time given event is triggered,
+       * or rejects if an error is emitted.  (If you request the 'error' event,
+       * returns a promise that resolves with the error).
+       *
+       * Example:
+       *
+       *   const message = await stream.emitted('message') // rejects if the stream errors
+       */
+      emitted(event) {
+        return new Promise((resolve4, reject) => {
+          __classPrivateFieldSet(this, _MessageStream_catchingPromiseCreated, true, "f");
+          if (event !== "error")
+            this.once("error", reject);
+          this.once(event, resolve4);
+        });
+      }
+      async done() {
+        __classPrivateFieldSet(this, _MessageStream_catchingPromiseCreated, true, "f");
+        await __classPrivateFieldGet(this, _MessageStream_endPromise, "f");
+      }
+      get currentMessage() {
+        return __classPrivateFieldGet(this, _MessageStream_currentMessageSnapshot, "f");
+      }
+      /**
+       * @returns a promise that resolves with the the final assistant Message response,
+       * or rejects if an error occurred or the stream ended prematurely without producing a Message.
+       * If structured outputs were used, this will be a ParsedMessage with a `parsed_output` field.
+       */
+      async finalMessage() {
+        await this.done();
+        return __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_getFinalMessage).call(this);
+      }
+      /**
+       * @returns a promise that resolves with the the final assistant Message's text response, concatenated
+       * together if there are more than one text blocks.
+       * Rejects if an error occurred or the stream ended prematurely without producing a Message.
+       */
+      async finalText() {
+        await this.done();
+        return __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_getFinalText).call(this);
+      }
+      _emit(event, ...args) {
+        if (__classPrivateFieldGet(this, _MessageStream_ended, "f"))
+          return;
+        if (event === "end") {
+          __classPrivateFieldSet(this, _MessageStream_ended, true, "f");
+          __classPrivateFieldGet(this, _MessageStream_resolveEndPromise, "f").call(this);
+        }
+        const listeners = __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event];
+        if (listeners) {
+          __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] = listeners.filter((l) => !l.once);
+          listeners.forEach(({ listener }) => listener(...args));
+        }
+        if (event === "abort") {
+          const error = args[0];
+          if (!__classPrivateFieldGet(this, _MessageStream_catchingPromiseCreated, "f") && !listeners?.length) {
+            Promise.reject(error);
+          }
+          __classPrivateFieldGet(this, _MessageStream_rejectConnectedPromise, "f").call(this, error);
+          __classPrivateFieldGet(this, _MessageStream_rejectEndPromise, "f").call(this, error);
+          this._emit("end");
+          return;
+        }
+        if (event === "error") {
+          const error = args[0];
+          if (!__classPrivateFieldGet(this, _MessageStream_catchingPromiseCreated, "f") && !listeners?.length) {
+            Promise.reject(error);
+          }
+          __classPrivateFieldGet(this, _MessageStream_rejectConnectedPromise, "f").call(this, error);
+          __classPrivateFieldGet(this, _MessageStream_rejectEndPromise, "f").call(this, error);
+          this._emit("end");
+        }
+      }
+      _emitFinal() {
+        const finalMessage = this.receivedMessages.at(-1);
+        if (finalMessage) {
+          this._emit("finalMessage", __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_getFinalMessage).call(this));
+        }
+      }
+      async _fromReadableStream(readableStream, options) {
+        const signal = options?.signal;
+        let abortHandler;
+        if (signal) {
+          if (signal.aborted)
+            this.controller.abort();
+          abortHandler = this.controller.abort.bind(this.controller);
+          signal.addEventListener("abort", abortHandler);
+        }
+        try {
+          __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_beginRequest).call(this);
+          this._connected(null);
+          const stream = Stream.fromReadableStream(readableStream, this.controller);
+          for await (const event of stream) {
+            __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_addStreamEvent).call(this, event);
+          }
+          if (stream.controller.signal?.aborted) {
+            throw new APIUserAbortError();
+          }
+          __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_endRequest).call(this);
+        } finally {
+          if (signal && abortHandler) {
+            signal.removeEventListener("abort", abortHandler);
+          }
+        }
+      }
+      [(_MessageStream_currentMessageSnapshot = /* @__PURE__ */ new WeakMap(), _MessageStream_params = /* @__PURE__ */ new WeakMap(), _MessageStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_endPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_listeners = /* @__PURE__ */ new WeakMap(), _MessageStream_ended = /* @__PURE__ */ new WeakMap(), _MessageStream_errored = /* @__PURE__ */ new WeakMap(), _MessageStream_aborted = /* @__PURE__ */ new WeakMap(), _MessageStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _MessageStream_response = /* @__PURE__ */ new WeakMap(), _MessageStream_request_id = /* @__PURE__ */ new WeakMap(), _MessageStream_logger = /* @__PURE__ */ new WeakMap(), _MessageStream_handleError = /* @__PURE__ */ new WeakMap(), _MessageStream_instances = /* @__PURE__ */ new WeakSet(), _MessageStream_getFinalMessage = function _MessageStream_getFinalMessage2() {
+        if (this.receivedMessages.length === 0) {
+          throw new AnthropicError("stream ended without producing a Message with role=assistant");
+        }
+        return this.receivedMessages.at(-1);
+      }, _MessageStream_getFinalText = function _MessageStream_getFinalText2() {
+        if (this.receivedMessages.length === 0) {
+          throw new AnthropicError("stream ended without producing a Message with role=assistant");
+        }
+        const textBlocks = this.receivedMessages.at(-1).content.filter((block) => block.type === "text").map((block) => block.text);
+        if (textBlocks.length === 0) {
+          throw new AnthropicError("stream ended without producing a content block with type=text");
+        }
+        return textBlocks.join(" ");
+      }, _MessageStream_beginRequest = function _MessageStream_beginRequest2() {
+        if (this.ended)
+          return;
+        __classPrivateFieldSet(this, _MessageStream_currentMessageSnapshot, void 0, "f");
+      }, _MessageStream_addStreamEvent = function _MessageStream_addStreamEvent2(event) {
+        if (this.ended)
+          return;
+        const messageSnapshot = __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_accumulateMessage).call(this, event);
+        this._emit("streamEvent", event, messageSnapshot);
+        switch (event.type) {
+          case "content_block_delta": {
+            const content = messageSnapshot.content.at(-1);
+            switch (event.delta.type) {
+              case "text_delta": {
+                if (content.type === "text") {
+                  this._emit("text", event.delta.text, content.text || "");
+                }
+                break;
+              }
+              case "citations_delta": {
+                if (content.type === "text") {
+                  this._emit("citation", event.delta.citation, content.citations ?? []);
+                }
+                break;
+              }
+              case "input_json_delta": {
+                if (tracksToolInput2(content) && content.input) {
+                  this._emit("inputJson", event.delta.partial_json, content.input);
+                }
+                break;
+              }
+              case "thinking_delta": {
+                if (content.type === "thinking") {
+                  this._emit("thinking", event.delta.thinking, content.thinking);
+                }
+                break;
+              }
+              case "signature_delta": {
+                if (content.type === "thinking") {
+                  this._emit("signature", content.signature);
+                }
+                break;
+              }
+              default:
+                checkNever2(event.delta);
+            }
+            break;
+          }
+          case "message_stop": {
+            this._addMessageParam(messageSnapshot);
+            this._addMessage(maybeParseMessage(messageSnapshot, __classPrivateFieldGet(this, _MessageStream_params, "f"), { logger: __classPrivateFieldGet(this, _MessageStream_logger, "f") }), true);
+            break;
+          }
+          case "content_block_stop": {
+            this._emit("contentBlock", messageSnapshot.content.at(-1));
+            break;
+          }
+          case "message_start": {
+            __classPrivateFieldSet(this, _MessageStream_currentMessageSnapshot, messageSnapshot, "f");
+            break;
+          }
+          case "content_block_start":
+          case "message_delta":
+            break;
+        }
+      }, _MessageStream_endRequest = function _MessageStream_endRequest2() {
+        if (this.ended) {
+          throw new AnthropicError(`stream has ended, this shouldn't happen`);
+        }
+        const snapshot = __classPrivateFieldGet(this, _MessageStream_currentMessageSnapshot, "f");
+        if (!snapshot) {
+          throw new AnthropicError(`request ended without sending any chunks`);
+        }
+        __classPrivateFieldSet(this, _MessageStream_currentMessageSnapshot, void 0, "f");
+        return maybeParseMessage(snapshot, __classPrivateFieldGet(this, _MessageStream_params, "f"), { logger: __classPrivateFieldGet(this, _MessageStream_logger, "f") });
+      }, _MessageStream_accumulateMessage = function _MessageStream_accumulateMessage2(event) {
+        let snapshot = __classPrivateFieldGet(this, _MessageStream_currentMessageSnapshot, "f");
+        if (event.type === "message_start") {
+          if (snapshot) {
+            throw new AnthropicError(`Unexpected event order, got ${event.type} before receiving "message_stop"`);
+          }
+          return event.message;
+        }
+        if (!snapshot) {
+          throw new AnthropicError(`Unexpected event order, got ${event.type} before "message_start"`);
+        }
+        switch (event.type) {
+          case "message_stop":
+            return snapshot;
+          case "message_delta":
+            snapshot.stop_reason = event.delta.stop_reason;
+            snapshot.stop_sequence = event.delta.stop_sequence;
+            snapshot.usage.output_tokens = event.usage.output_tokens;
+            if (event.usage.input_tokens != null) {
+              snapshot.usage.input_tokens = event.usage.input_tokens;
+            }
+            if (event.usage.cache_creation_input_tokens != null) {
+              snapshot.usage.cache_creation_input_tokens = event.usage.cache_creation_input_tokens;
+            }
+            if (event.usage.cache_read_input_tokens != null) {
+              snapshot.usage.cache_read_input_tokens = event.usage.cache_read_input_tokens;
+            }
+            if (event.usage.server_tool_use != null) {
+              snapshot.usage.server_tool_use = event.usage.server_tool_use;
+            }
+            return snapshot;
+          case "content_block_start":
+            snapshot.content.push({ ...event.content_block });
+            return snapshot;
+          case "content_block_delta": {
+            const snapshotContent = snapshot.content.at(event.index);
+            switch (event.delta.type) {
+              case "text_delta": {
+                if (snapshotContent?.type === "text") {
+                  snapshot.content[event.index] = {
+                    ...snapshotContent,
+                    text: (snapshotContent.text || "") + event.delta.text
+                  };
+                }
+                break;
+              }
+              case "citations_delta": {
+                if (snapshotContent?.type === "text") {
+                  snapshot.content[event.index] = {
+                    ...snapshotContent,
+                    citations: [...snapshotContent.citations ?? [], event.delta.citation]
+                  };
+                }
+                break;
+              }
+              case "input_json_delta": {
+                if (snapshotContent && tracksToolInput2(snapshotContent)) {
+                  let jsonBuf = snapshotContent[JSON_BUF_PROPERTY2] || "";
+                  jsonBuf += event.delta.partial_json;
+                  const newContent = { ...snapshotContent };
+                  Object.defineProperty(newContent, JSON_BUF_PROPERTY2, {
+                    value: jsonBuf,
+                    enumerable: false,
+                    writable: true
+                  });
+                  if (jsonBuf) {
+                    newContent.input = partialParse(jsonBuf);
+                  }
+                  snapshot.content[event.index] = newContent;
+                }
+                break;
+              }
+              case "thinking_delta": {
+                if (snapshotContent?.type === "thinking") {
+                  snapshot.content[event.index] = {
+                    ...snapshotContent,
+                    thinking: snapshotContent.thinking + event.delta.thinking
+                  };
+                }
+                break;
+              }
+              case "signature_delta": {
+                if (snapshotContent?.type === "thinking") {
+                  snapshot.content[event.index] = {
+                    ...snapshotContent,
+                    signature: event.delta.signature
+                  };
+                }
+                break;
+              }
+              default:
+                checkNever2(event.delta);
+            }
+            return snapshot;
+          }
+          case "content_block_stop":
+            return snapshot;
+        }
+      }, Symbol.asyncIterator)]() {
+        const pushQueue = [];
+        const readQueue = [];
+        let done = false;
+        this.on("streamEvent", (event) => {
+          const reader = readQueue.shift();
+          if (reader) {
+            reader.resolve(event);
+          } else {
+            pushQueue.push(event);
+          }
+        });
+        this.on("end", () => {
+          done = true;
+          for (const reader of readQueue) {
+            reader.resolve(void 0);
+          }
+          readQueue.length = 0;
+        });
+        this.on("abort", (err) => {
+          done = true;
+          for (const reader of readQueue) {
+            reader.reject(err);
+          }
+          readQueue.length = 0;
+        });
+        this.on("error", (err) => {
+          done = true;
+          for (const reader of readQueue) {
+            reader.reject(err);
+          }
+          readQueue.length = 0;
+        });
+        return {
+          next: async () => {
+            if (!pushQueue.length) {
+              if (done) {
+                return { value: void 0, done: true };
+              }
+              return new Promise((resolve4, reject) => readQueue.push({ resolve: resolve4, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
+            }
+            const chunk = pushQueue.shift();
+            return { value: chunk, done: false };
+          },
+          return: async () => {
+            this.abort();
+            return { value: void 0, done: true };
+          }
+        };
+      }
+      toReadableStream() {
+        const stream = new Stream(this[Symbol.asyncIterator].bind(this), this.controller);
+        return stream.toReadableStream();
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs
+var Batches2;
+var init_batches2 = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_jsonl();
+    init_error2();
+    init_path();
+    Batches2 = class extends APIResource {
+      /**
+       * Send a batch of Message creation requests.
+       *
+       * The Message Batches API can be used to process multiple Messages API requests at
+       * once. Once a Message Batch is created, it begins processing immediately. Batches
+       * can take up to 24 hours to complete.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * const messageBatch = await client.messages.batches.create({
+       *   requests: [
+       *     {
+       *       custom_id: 'my-custom-id-1',
+       *       params: {
+       *         max_tokens: 1024,
+       *         messages: [
+       *           { content: 'Hello, world', role: 'user' },
+       *         ],
+       *         model: 'claude-opus-4-6',
+       *       },
+       *     },
+       *   ],
+       * });
+       * ```
+       */
+      create(body, options) {
+        return this._client.post("/v1/messages/batches", { body, ...options });
+      }
+      /**
+       * This endpoint is idempotent and can be used to poll for Message Batch
+       * completion. To access the results of a Message Batch, make a request to the
+       * `results_url` field in the response.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * const messageBatch = await client.messages.batches.retrieve(
+       *   'message_batch_id',
+       * );
+       * ```
+       */
+      retrieve(messageBatchID, options) {
+        return this._client.get(path3`/v1/messages/batches/${messageBatchID}`, options);
+      }
+      /**
+       * List all Message Batches within a Workspace. Most recently created batches are
+       * returned first.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const messageBatch of client.messages.batches.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query = {}, options) {
+        return this._client.getAPIList("/v1/messages/batches", Page, { query, ...options });
+      }
+      /**
+       * Delete a Message Batch.
+       *
+       * Message Batches can only be deleted once they've finished processing. If you'd
+       * like to delete an in-progress batch, you must first cancel it.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * const deletedMessageBatch =
+       *   await client.messages.batches.delete('message_batch_id');
+       * ```
+       */
+      delete(messageBatchID, options) {
+        return this._client.delete(path3`/v1/messages/batches/${messageBatchID}`, options);
+      }
+      /**
+       * Batches may be canceled any time before processing ends. Once cancellation is
+       * initiated, the batch enters a `canceling` state, at which time the system may
+       * complete any in-progress, non-interruptible requests before finalizing
+       * cancellation.
+       *
+       * The number of canceled requests is specified in `request_counts`. To determine
+       * which requests were canceled, check the individual results within the batch.
+       * Note that cancellation may not result in any canceled requests if they were
+       * non-interruptible.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * const messageBatch = await client.messages.batches.cancel(
+       *   'message_batch_id',
+       * );
+       * ```
+       */
+      cancel(messageBatchID, options) {
+        return this._client.post(path3`/v1/messages/batches/${messageBatchID}/cancel`, options);
+      }
+      /**
+       * Streams the results of a Message Batch as a `.jsonl` file.
+       *
+       * Each line in the file is a JSON object containing the result of a single request
+       * in the Message Batch. Results are not guaranteed to be in the same order as
+       * requests. Use the `custom_id` field to match results to requests.
+       *
+       * Learn more about the Message Batches API in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+       *
+       * @example
+       * ```ts
+       * const messageBatchIndividualResponse =
+       *   await client.messages.batches.results('message_batch_id');
+       * ```
+       */
+      async results(messageBatchID, options) {
+        const batch = await this.retrieve(messageBatchID);
+        if (!batch.results_url) {
+          throw new AnthropicError(`No batch \`results_url\`; Has it finished processing? ${batch.processing_status} - ${batch.id}`);
+        }
+        return this._client.get(batch.results_url, {
+          ...options,
+          headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
+          stream: true,
+          __binaryResponse: true
+        })._thenUnwrap((_, props) => JSONLDecoder.fromResponse(props.response, props.controller));
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs
+var Messages2, DEPRECATED_MODELS2, MODELS_TO_WARN_WITH_THINKING_ENABLED2;
+var init_messages2 = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs"() {
+    init_resource();
+    init_headers();
+    init_stainless_helper_header();
+    init_MessageStream();
+    init_parser2();
+    init_batches2();
+    init_batches2();
+    init_constants();
+    Messages2 = class extends APIResource {
+      constructor() {
+        super(...arguments);
+        this.batches = new Batches2(this._client);
+      }
+      create(body, options) {
+        if (body.model in DEPRECATED_MODELS2) {
+          console.warn(`The model '${body.model}' is deprecated and will reach end-of-life on ${DEPRECATED_MODELS2[body.model]}
+Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resources/model-deprecations for more information.`);
+        }
+        if (MODELS_TO_WARN_WITH_THINKING_ENABLED2.includes(body.model) && body.thinking && body.thinking.type === "enabled") {
+          console.warn(`Using Claude with ${body.model} and 'thinking.type=enabled' is deprecated. Use 'thinking.type=adaptive' instead which results in better model performance in our testing: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`);
+        }
+        let timeout = this._client._options.timeout;
+        if (!body.stream && timeout == null) {
+          const maxNonstreamingTokens = MODEL_NONSTREAMING_TOKENS[body.model] ?? void 0;
+          timeout = this._client.calculateNonstreamingTimeout(body.max_tokens, maxNonstreamingTokens);
+        }
+        const helperHeader = stainlessHelperHeader(body.tools, body.messages);
+        return this._client.post("/v1/messages", {
+          body,
+          timeout: timeout ?? 6e5,
+          ...options,
+          headers: buildHeaders([helperHeader, options?.headers]),
+          stream: body.stream ?? false
+        });
+      }
+      /**
+       * Send a structured list of input messages with text and/or image content, along with an expected `output_config.format` and
+       * the response will be automatically parsed and available in the `parsed_output` property of the message.
+       *
+       * @example
+       * ```ts
+       * const message = await client.messages.parse({
+       *   model: 'claude-sonnet-4-5-20250929',
+       *   max_tokens: 1024,
+       *   messages: [{ role: 'user', content: 'What is 2+2?' }],
+       *   output_config: {
+       *     format: zodOutputFormat(z.object({ answer: z.number() })),
+       *   },
+       * });
+       *
+       * console.log(message.parsed_output?.answer); // 4
+       * ```
+       */
+      parse(params, options) {
+        return this.create(params, options).then((message) => parseMessage(message, params, { logger: this._client.logger ?? console }));
+      }
+      /**
+       * Create a Message stream.
+       *
+       * If `output_config.format` is provided with a parseable format (like `zodOutputFormat()`),
+       * the final message will include a `parsed_output` property with the parsed content.
+       *
+       * @example
+       * ```ts
+       * const stream = client.messages.stream({
+       *   model: 'claude-sonnet-4-5-20250929',
+       *   max_tokens: 1024,
+       *   messages: [{ role: 'user', content: 'What is 2+2?' }],
+       *   output_config: {
+       *     format: zodOutputFormat(z.object({ answer: z.number() })),
+       *   },
+       * });
+       *
+       * const message = await stream.finalMessage();
+       * console.log(message.parsed_output?.answer); // 4
+       * ```
+       */
+      stream(body, options) {
+        return MessageStream.createMessage(this, body, options, { logger: this._client.logger ?? console });
+      }
+      /**
+       * Count the number of tokens in a Message.
+       *
+       * The Token Count API can be used to count the number of tokens in a Message,
+       * including tools, images, and documents, without creating it.
+       *
+       * Learn more about token counting in our
+       * [user guide](https://docs.claude.com/en/docs/build-with-claude/token-counting)
+       *
+       * @example
+       * ```ts
+       * const messageTokensCount =
+       *   await client.messages.countTokens({
+       *     messages: [{ content: 'Hello, world', role: 'user' }],
+       *     model: 'claude-opus-4-6',
+       *   });
+       * ```
+       */
+      countTokens(body, options) {
+        return this._client.post("/v1/messages/count_tokens", { body, ...options });
+      }
+    };
+    DEPRECATED_MODELS2 = {
+      "claude-1.3": "November 6th, 2024",
+      "claude-1.3-100k": "November 6th, 2024",
+      "claude-instant-1.1": "November 6th, 2024",
+      "claude-instant-1.1-100k": "November 6th, 2024",
+      "claude-instant-1.2": "November 6th, 2024",
+      "claude-3-sonnet-20240229": "July 21st, 2025",
+      "claude-3-opus-20240229": "January 5th, 2026",
+      "claude-2.1": "July 21st, 2025",
+      "claude-2.0": "July 21st, 2025",
+      "claude-3-7-sonnet-latest": "February 19th, 2026",
+      "claude-3-7-sonnet-20250219": "February 19th, 2026",
+      "claude-3-5-haiku-latest": "February 19th, 2026",
+      "claude-3-5-haiku-20241022": "February 19th, 2026",
+      "claude-opus-4-0": "June 15th, 2026",
+      "claude-opus-4-20250514": "June 15th, 2026",
+      "claude-sonnet-4-0": "June 15th, 2026",
+      "claude-sonnet-4-20250514": "June 15th, 2026"
+    };
+    MODELS_TO_WARN_WITH_THINKING_ENABLED2 = ["claude-mythos-preview", "claude-opus-4-6"];
+    Messages2.Batches = Batches2;
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/models.mjs
+var Models2;
+var init_models2 = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/models.mjs"() {
+    init_resource();
+    init_pagination();
+    init_headers();
+    init_path();
+    Models2 = class extends APIResource {
+      /**
+       * Get a specific model.
+       *
+       * The Models API response can be used to determine information about a specific
+       * model or resolve a model alias to a model ID.
+       */
+      retrieve(modelID, params = {}, options) {
+        const { betas } = params ?? {};
+        return this._client.get(path3`/v1/models/${modelID}`, {
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ])
+        });
+      }
+      /**
+       * List available models.
+       *
+       * The Models API response can be used to determine which models are available for
+       * use in the API. More recently released models are listed first.
+       */
+      list(params = {}, options) {
+        const { betas, ...query } = params ?? {};
+        return this._client.getAPIList("/v1/models", Page, {
+          query,
+          ...options,
+          headers: buildHeaders([
+            { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+            options?.headers
+          ])
+        });
+      }
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/index.mjs
+var init_resources2 = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/index.mjs"() {
+    init_shared();
+    init_beta();
+    init_completions();
+    init_messages2();
+    init_models2();
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs
+var readEnv;
+var init_env = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs"() {
+    readEnv = (env) => {
+      if (typeof globalThis.process !== "undefined") {
+        return globalThis.process.env?.[env]?.trim() || void 0;
+      }
+      if (typeof globalThis.Deno !== "undefined") {
+        return globalThis.Deno.env?.get?.(env)?.trim() || void 0;
+      }
+      return void 0;
+    };
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/client.mjs
+var _BaseAnthropic_instances, _a, _BaseAnthropic_encoder, _BaseAnthropic_baseURLOverridden, HUMAN_PROMPT, AI_PROMPT, BaseAnthropic, Anthropic;
+var init_client = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/client.mjs"() {
+    init_tslib();
+    init_uuid();
+    init_values();
+    init_sleep();
+    init_errors();
+    init_detect_platform();
+    init_shims();
+    init_request_options();
+    init_query();
+    init_version();
+    init_error();
+    init_pagination();
+    init_uploads2();
+    init_resources2();
+    init_api_promise();
+    init_completions();
+    init_models2();
+    init_beta();
+    init_messages2();
+    init_detect_platform();
+    init_headers();
+    init_env();
+    init_log();
+    init_values();
+    HUMAN_PROMPT = "\\n\\nHuman:";
+    AI_PROMPT = "\\n\\nAssistant:";
+    BaseAnthropic = class {
+      /**
+       * API Client for interfacing with the Anthropic API.
+       *
+       * @param {string | null | undefined} [opts.apiKey=process.env['ANTHROPIC_API_KEY'] ?? null]
+       * @param {string | null | undefined} [opts.authToken=process.env['ANTHROPIC_AUTH_TOKEN'] ?? null]
+       * @param {string} [opts.baseURL=process.env['ANTHROPIC_BASE_URL'] ?? https://api.anthropic.com] - Override the default base URL for the API.
+       * @param {number} [opts.timeout=10 minutes] - The maximum amount of time (in milliseconds) the client will wait for a response before timing out.
+       * @param {MergedRequestInit} [opts.fetchOptions] - Additional `RequestInit` options to be passed to `fetch` calls.
+       * @param {Fetch} [opts.fetch] - Specify a custom `fetch` function implementation.
+       * @param {number} [opts.maxRetries=2] - The maximum number of times the client will retry a request.
+       * @param {HeadersLike} opts.defaultHeaders - Default headers to include with every request to the API.
+       * @param {Record<string, string | undefined>} opts.defaultQuery - Default query parameters to include with every request to the API.
+       * @param {boolean} [opts.dangerouslyAllowBrowser=false] - By default, client-side use of this library is not allowed, as it risks exposing your secret API credentials to attackers.
+       */
+      constructor({ baseURL = readEnv("ANTHROPIC_BASE_URL"), apiKey = readEnv("ANTHROPIC_API_KEY") ?? null, authToken = readEnv("ANTHROPIC_AUTH_TOKEN") ?? null, ...opts } = {}) {
+        _BaseAnthropic_instances.add(this);
+        _BaseAnthropic_encoder.set(this, void 0);
+        const options = {
+          apiKey,
+          authToken,
+          ...opts,
+          baseURL: baseURL || `https://api.anthropic.com`
+        };
+        if (!options.dangerouslyAllowBrowser && isRunningInBrowser()) {
+          throw new AnthropicError("It looks like you're running in a browser-like environment.\n\nThis is disabled by default, as it risks exposing your secret API credentials to attackers.\nIf you understand the risks and have appropriate mitigations in place,\nyou can set the `dangerouslyAllowBrowser` option to `true`, e.g.,\n\nnew Anthropic({ apiKey, dangerouslyAllowBrowser: true });\n");
+        }
+        this.baseURL = options.baseURL;
+        this.timeout = options.timeout ?? _a.DEFAULT_TIMEOUT;
+        this.logger = options.logger ?? console;
+        const defaultLogLevel = "warn";
+        this.logLevel = defaultLogLevel;
+        this.logLevel = parseLogLevel(options.logLevel, "ClientOptions.logLevel", this) ?? parseLogLevel(readEnv("ANTHROPIC_LOG"), "process.env['ANTHROPIC_LOG']", this) ?? defaultLogLevel;
+        this.fetchOptions = options.fetchOptions;
+        this.maxRetries = options.maxRetries ?? 2;
+        this.fetch = options.fetch ?? getDefaultFetch();
+        __classPrivateFieldSet(this, _BaseAnthropic_encoder, FallbackEncoder, "f");
+        this._options = options;
+        this.apiKey = typeof apiKey === "string" ? apiKey : null;
+        this.authToken = authToken;
+      }
+      /**
+       * Create a new client instance re-using the same options given to the current client with optional overriding.
+       */
+      withOptions(options) {
+        const client = new this.constructor({
+          ...this._options,
+          baseURL: this.baseURL,
+          maxRetries: this.maxRetries,
+          timeout: this.timeout,
+          logger: this.logger,
+          logLevel: this.logLevel,
+          fetch: this.fetch,
+          fetchOptions: this.fetchOptions,
+          apiKey: this.apiKey,
+          authToken: this.authToken,
+          ...options
+        });
+        return client;
+      }
+      defaultQuery() {
+        return this._options.defaultQuery;
+      }
+      validateHeaders({ values, nulls }) {
+        if (values.get("x-api-key") || values.get("authorization")) {
+          return;
+        }
+        if (this.apiKey && values.get("x-api-key")) {
+          return;
+        }
+        if (nulls.has("x-api-key")) {
+          return;
+        }
+        if (this.authToken && values.get("authorization")) {
+          return;
+        }
+        if (nulls.has("authorization")) {
+          return;
+        }
+        throw new Error('Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted');
+      }
+      async authHeaders(opts) {
+        return buildHeaders([await this.apiKeyAuth(opts), await this.bearerAuth(opts)]);
+      }
+      async apiKeyAuth(opts) {
+        if (this.apiKey == null) {
+          return void 0;
+        }
+        return buildHeaders([{ "X-Api-Key": this.apiKey }]);
+      }
+      async bearerAuth(opts) {
+        if (this.authToken == null) {
+          return void 0;
+        }
+        return buildHeaders([{ Authorization: `Bearer ${this.authToken}` }]);
+      }
+      /**
+       * Basic re-implementation of `qs.stringify` for primitive types.
+       */
+      stringifyQuery(query) {
+        return stringifyQuery(query);
+      }
+      getUserAgent() {
+        return `${this.constructor.name}/JS ${VERSION}`;
+      }
+      defaultIdempotencyKey() {
+        return `stainless-node-retry-${uuid4()}`;
+      }
+      makeStatusError(status, error, message, headers) {
+        return APIError.generate(status, error, message, headers);
+      }
+      buildURL(path7, query, defaultBaseURL) {
+        const baseURL = !__classPrivateFieldGet(this, _BaseAnthropic_instances, "m", _BaseAnthropic_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
+        const url = isAbsoluteURL(path7) ? new URL(path7) : new URL(baseURL + (baseURL.endsWith("/") && path7.startsWith("/") ? path7.slice(1) : path7));
+        const defaultQuery = this.defaultQuery();
+        const pathQuery = Object.fromEntries(url.searchParams);
+        if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
+          query = { ...pathQuery, ...defaultQuery, ...query };
+        }
+        if (typeof query === "object" && query && !Array.isArray(query)) {
+          url.search = this.stringifyQuery(query);
+        }
+        return url.toString();
+      }
+      _calculateNonstreamingTimeout(maxTokens) {
+        const defaultTimeout = 10 * 60;
+        const expectedTimeout = 60 * 60 * maxTokens / 128e3;
+        if (expectedTimeout > defaultTimeout) {
+          throw new AnthropicError("Streaming is required for operations that may take longer than 10 minutes. See https://github.com/anthropics/anthropic-sdk-typescript#streaming-responses for more details");
+        }
+        return defaultTimeout * 1e3;
+      }
+      /**
+       * Used as a callback for mutating the given `FinalRequestOptions` object.
+       */
+      async prepareOptions(options) {
+      }
+      /**
+       * Used as a callback for mutating the given `RequestInit` object.
+       *
+       * This is useful for cases where you want to add certain headers based off of
+       * the request properties, e.g. `method` or `url`.
+       */
+      async prepareRequest(request, { url, options }) {
+      }
+      get(path7, opts) {
+        return this.methodRequest("get", path7, opts);
+      }
+      post(path7, opts) {
+        return this.methodRequest("post", path7, opts);
+      }
+      patch(path7, opts) {
+        return this.methodRequest("patch", path7, opts);
+      }
+      put(path7, opts) {
+        return this.methodRequest("put", path7, opts);
+      }
+      delete(path7, opts) {
+        return this.methodRequest("delete", path7, opts);
+      }
+      methodRequest(method, path7, opts) {
+        return this.request(Promise.resolve(opts).then((opts2) => {
+          return { method, path: path7, ...opts2 };
+        }));
+      }
+      request(options, remainingRetries = null) {
+        return new APIPromise(this, this.makeRequest(options, remainingRetries, void 0));
+      }
+      async makeRequest(optionsInput, retriesRemaining, retryOfRequestLogID) {
+        const options = await optionsInput;
+        const maxRetries = options.maxRetries ?? this.maxRetries;
+        if (retriesRemaining == null) {
+          retriesRemaining = maxRetries;
+        }
+        await this.prepareOptions(options);
+        const { req, url, timeout } = await this.buildRequest(options, {
+          retryCount: maxRetries - retriesRemaining
+        });
+        await this.prepareRequest(req, { url, options });
+        const requestLogID = "log_" + (Math.random() * (1 << 24) | 0).toString(16).padStart(6, "0");
+        const retryLogStr = retryOfRequestLogID === void 0 ? "" : `, retryOf: ${retryOfRequestLogID}`;
+        const startTime = Date.now();
+        loggerFor(this).debug(`[${requestLogID}] sending request`, formatRequestDetails({
+          retryOfRequestLogID,
+          method: options.method,
+          url,
+          options,
+          headers: req.headers
+        }));
+        if (options.signal?.aborted) {
+          throw new APIUserAbortError();
+        }
+        const controller = new AbortController();
+        const response = await this.fetchWithTimeout(url, req, timeout, controller).catch(castToError);
+        const headersTime = Date.now();
+        if (response instanceof globalThis.Error) {
+          const retryMessage = `retrying, ${retriesRemaining} attempts remaining`;
+          if (options.signal?.aborted) {
+            throw new APIUserAbortError();
+          }
+          const isTimeout = isAbortError(response) || /timed? ?out/i.test(String(response) + ("cause" in response ? String(response.cause) : ""));
+          if (retriesRemaining) {
+            loggerFor(this).info(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} - ${retryMessage}`);
+            loggerFor(this).debug(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} (${retryMessage})`, formatRequestDetails({
+              retryOfRequestLogID,
+              url,
+              durationMs: headersTime - startTime,
+              message: response.message
+            }));
+            return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID);
+          }
+          loggerFor(this).info(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} - error; no more retries left`);
+          loggerFor(this).debug(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} (error; no more retries left)`, formatRequestDetails({
+            retryOfRequestLogID,
+            url,
+            durationMs: headersTime - startTime,
+            message: response.message
+          }));
+          if (isTimeout) {
+            throw new APIConnectionTimeoutError();
+          }
+          throw new APIConnectionError({ cause: response });
+        }
+        const specialHeaders = [...response.headers.entries()].filter(([name]) => name === "request-id").map(([name, value]) => ", " + name + ": " + JSON.stringify(value)).join("");
+        const responseInfo = `[${requestLogID}${retryLogStr}${specialHeaders}] ${req.method} ${url} ${response.ok ? "succeeded" : "failed"} with status ${response.status} in ${headersTime - startTime}ms`;
+        if (!response.ok) {
+          const shouldRetry = await this.shouldRetry(response);
+          if (retriesRemaining && shouldRetry) {
+            const retryMessage2 = `retrying, ${retriesRemaining} attempts remaining`;
+            await CancelReadableStream(response.body);
+            loggerFor(this).info(`${responseInfo} - ${retryMessage2}`);
+            loggerFor(this).debug(`[${requestLogID}] response error (${retryMessage2})`, formatRequestDetails({
+              retryOfRequestLogID,
+              url: response.url,
+              status: response.status,
+              headers: response.headers,
+              durationMs: headersTime - startTime
+            }));
+            return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID, response.headers);
+          }
+          const retryMessage = shouldRetry ? `error; no more retries left` : `error; not retryable`;
+          loggerFor(this).info(`${responseInfo} - ${retryMessage}`);
+          const errText = await response.text().catch((err2) => castToError(err2).message);
+          const errJSON = safeJSON(errText);
+          const errMessage = errJSON ? void 0 : errText;
+          loggerFor(this).debug(`[${requestLogID}] response error (${retryMessage})`, formatRequestDetails({
+            retryOfRequestLogID,
+            url: response.url,
+            status: response.status,
+            headers: response.headers,
+            message: errMessage,
+            durationMs: Date.now() - startTime
+          }));
+          const err = this.makeStatusError(response.status, errJSON, errMessage, response.headers);
+          throw err;
+        }
+        loggerFor(this).info(responseInfo);
+        loggerFor(this).debug(`[${requestLogID}] response start`, formatRequestDetails({
+          retryOfRequestLogID,
+          url: response.url,
+          status: response.status,
+          headers: response.headers,
+          durationMs: headersTime - startTime
+        }));
+        return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
+      }
+      getAPIList(path7, Page2, opts) {
+        return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path7, ...opts2 })) : { method: "get", path: path7, ...opts });
+      }
+      requestAPIList(Page2, options) {
+        const request = this.makeRequest(options, null, void 0);
+        return new PagePromise(this, request, Page2);
+      }
+      async fetchWithTimeout(url, init, ms, controller) {
+        const { signal, method, ...options } = init || {};
+        const abort = this._makeAbort(controller);
+        if (signal)
+          signal.addEventListener("abort", abort, { once: true });
+        const timeout = setTimeout(abort, ms);
+        const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
+        const fetchOptions = {
+          signal: controller.signal,
+          ...isReadableBody ? { duplex: "half" } : {},
+          method: "GET",
+          ...options
+        };
+        if (method) {
+          fetchOptions.method = method.toUpperCase();
+        }
+        try {
+          return await this.fetch.call(void 0, url, fetchOptions);
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+      async shouldRetry(response) {
+        const shouldRetryHeader = response.headers.get("x-should-retry");
+        if (shouldRetryHeader === "true")
+          return true;
+        if (shouldRetryHeader === "false")
+          return false;
+        if (response.status === 408)
+          return true;
+        if (response.status === 409)
+          return true;
+        if (response.status === 429)
+          return true;
+        if (response.status >= 500)
+          return true;
+        return false;
+      }
+      async retryRequest(options, retriesRemaining, requestLogID, responseHeaders) {
+        let timeoutMillis;
+        const retryAfterMillisHeader = responseHeaders?.get("retry-after-ms");
+        if (retryAfterMillisHeader) {
+          const timeoutMs = parseFloat(retryAfterMillisHeader);
+          if (!Number.isNaN(timeoutMs)) {
+            timeoutMillis = timeoutMs;
+          }
+        }
+        const retryAfterHeader = responseHeaders?.get("retry-after");
+        if (retryAfterHeader && !timeoutMillis) {
+          const timeoutSeconds = parseFloat(retryAfterHeader);
+          if (!Number.isNaN(timeoutSeconds)) {
+            timeoutMillis = timeoutSeconds * 1e3;
+          } else {
+            timeoutMillis = Date.parse(retryAfterHeader) - Date.now();
+          }
+        }
+        if (timeoutMillis === void 0) {
+          const maxRetries = options.maxRetries ?? this.maxRetries;
+          timeoutMillis = this.calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries);
+        }
+        await sleep(timeoutMillis);
+        return this.makeRequest(options, retriesRemaining - 1, requestLogID);
+      }
+      calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries) {
+        const initialRetryDelay = 0.5;
+        const maxRetryDelay = 8;
+        const numRetries = maxRetries - retriesRemaining;
+        const sleepSeconds = Math.min(initialRetryDelay * Math.pow(2, numRetries), maxRetryDelay);
+        const jitter = 1 - Math.random() * 0.25;
+        return sleepSeconds * jitter * 1e3;
+      }
+      calculateNonstreamingTimeout(maxTokens, maxNonstreamingTokens) {
+        const maxTime = 60 * 60 * 1e3;
+        const defaultTime = 60 * 10 * 1e3;
+        const expectedTime = maxTime * maxTokens / 128e3;
+        if (expectedTime > defaultTime || maxNonstreamingTokens != null && maxTokens > maxNonstreamingTokens) {
+          throw new AnthropicError("Streaming is required for operations that may take longer than 10 minutes. See https://github.com/anthropics/anthropic-sdk-typescript#long-requests for more details");
+        }
+        return defaultTime;
+      }
+      async buildRequest(inputOptions, { retryCount = 0 } = {}) {
+        const options = { ...inputOptions };
+        const { method, path: path7, query, defaultBaseURL } = options;
+        const url = this.buildURL(path7, query, defaultBaseURL);
+        if ("timeout" in options)
+          validatePositiveInteger("timeout", options.timeout);
+        options.timeout = options.timeout ?? this.timeout;
+        const { bodyHeaders, body } = this.buildBody({ options });
+        const reqHeaders = await this.buildHeaders({ options: inputOptions, method, bodyHeaders, retryCount });
+        const req = {
+          method,
+          headers: reqHeaders,
+          ...options.signal && { signal: options.signal },
+          ...globalThis.ReadableStream && body instanceof globalThis.ReadableStream && { duplex: "half" },
+          ...body && { body },
+          ...this.fetchOptions ?? {},
+          ...options.fetchOptions ?? {}
+        };
+        return { req, url, timeout: options.timeout };
+      }
+      async buildHeaders({ options, method, bodyHeaders, retryCount }) {
+        let idempotencyHeaders = {};
+        if (this.idempotencyHeader && method !== "get") {
+          if (!options.idempotencyKey)
+            options.idempotencyKey = this.defaultIdempotencyKey();
+          idempotencyHeaders[this.idempotencyHeader] = options.idempotencyKey;
+        }
+        const headers = buildHeaders([
+          idempotencyHeaders,
+          {
+            Accept: "application/json",
+            "User-Agent": this.getUserAgent(),
+            "X-Stainless-Retry-Count": String(retryCount),
+            ...options.timeout ? { "X-Stainless-Timeout": String(Math.trunc(options.timeout / 1e3)) } : {},
+            ...getPlatformHeaders(),
+            ...this._options.dangerouslyAllowBrowser ? { "anthropic-dangerous-direct-browser-access": "true" } : void 0,
+            "anthropic-version": "2023-06-01"
+          },
+          await this.authHeaders(options),
+          this._options.defaultHeaders,
+          bodyHeaders,
+          options.headers
+        ]);
+        this.validateHeaders(headers);
+        return headers.values;
+      }
+      _makeAbort(controller) {
+        return () => controller.abort();
+      }
+      buildBody({ options: { body, headers: rawHeaders } }) {
+        if (!body) {
+          return { bodyHeaders: void 0, body: void 0 };
+        }
+        const headers = buildHeaders([rawHeaders]);
+        if (
+          // Pass raw type verbatim
+          ArrayBuffer.isView(body) || body instanceof ArrayBuffer || body instanceof DataView || typeof body === "string" && // Preserve legacy string encoding behavior for now
+          headers.values.has("content-type") || // `Blob` is superset of `File`
+          globalThis.Blob && body instanceof globalThis.Blob || // `FormData` -> `multipart/form-data`
+          body instanceof FormData || // `URLSearchParams` -> `application/x-www-form-urlencoded`
+          body instanceof URLSearchParams || // Send chunked stream (each chunk has own `length`)
+          globalThis.ReadableStream && body instanceof globalThis.ReadableStream
+        ) {
+          return { bodyHeaders: void 0, body };
+        } else if (typeof body === "object" && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function")) {
+          return { bodyHeaders: void 0, body: ReadableStreamFrom(body) };
+        } else if (typeof body === "object" && headers.values.get("content-type") === "application/x-www-form-urlencoded") {
+          return {
+            bodyHeaders: { "content-type": "application/x-www-form-urlencoded" },
+            body: this.stringifyQuery(body)
+          };
+        } else {
+          return __classPrivateFieldGet(this, _BaseAnthropic_encoder, "f").call(this, { body, headers });
+        }
+      }
+    };
+    _a = BaseAnthropic, _BaseAnthropic_encoder = /* @__PURE__ */ new WeakMap(), _BaseAnthropic_instances = /* @__PURE__ */ new WeakSet(), _BaseAnthropic_baseURLOverridden = function _BaseAnthropic_baseURLOverridden2() {
+      return this.baseURL !== "https://api.anthropic.com";
+    };
+    BaseAnthropic.Anthropic = _a;
+    BaseAnthropic.HUMAN_PROMPT = HUMAN_PROMPT;
+    BaseAnthropic.AI_PROMPT = AI_PROMPT;
+    BaseAnthropic.DEFAULT_TIMEOUT = 6e5;
+    BaseAnthropic.AnthropicError = AnthropicError;
+    BaseAnthropic.APIError = APIError;
+    BaseAnthropic.APIConnectionError = APIConnectionError;
+    BaseAnthropic.APIConnectionTimeoutError = APIConnectionTimeoutError;
+    BaseAnthropic.APIUserAbortError = APIUserAbortError;
+    BaseAnthropic.NotFoundError = NotFoundError;
+    BaseAnthropic.ConflictError = ConflictError;
+    BaseAnthropic.RateLimitError = RateLimitError;
+    BaseAnthropic.BadRequestError = BadRequestError;
+    BaseAnthropic.AuthenticationError = AuthenticationError;
+    BaseAnthropic.InternalServerError = InternalServerError;
+    BaseAnthropic.PermissionDeniedError = PermissionDeniedError;
+    BaseAnthropic.UnprocessableEntityError = UnprocessableEntityError;
+    BaseAnthropic.toFile = toFile;
+    Anthropic = class extends BaseAnthropic {
+      constructor() {
+        super(...arguments);
+        this.completions = new Completions(this);
+        this.messages = new Messages2(this);
+        this.models = new Models2(this);
+        this.beta = new Beta(this);
+      }
+    };
+    Anthropic.Completions = Completions;
+    Anthropic.Messages = Messages2;
+    Anthropic.Models = Models2;
+    Anthropic.Beta = Beta;
+  }
+});
+
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/index.mjs
+var init_sdk = __esm({
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/index.mjs"() {
+    init_client();
+    init_uploads2();
+    init_api_promise();
+    init_client();
+    init_pagination();
+    init_error();
+  }
+});
+
+// src/main/llm/anthropic.ts
+function trimSlash(url) {
+  return url.replace(/\/+$/, "");
+}
+function splitAnthropicMessages(messages) {
+  const systemParts = messages.filter((m) => m.role === "system").map((m) => m.content);
+  const system = systemParts.length ? systemParts.join("\n\n") : void 0;
+  const out = [];
+  for (const m of messages) {
+    if (m.role === "system") continue;
+    if (m.role === "tool") {
+      out.push({ role: "user", content: `[tool]
+${m.content}` });
+      continue;
+    }
+    out.push({ role: m.role, content: m.content });
+  }
+  return { system, messages: out };
+}
+function toAnthropicTools(tools) {
+  return tools.map((t) => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.parameters
+  }));
+}
+async function* mapAnthropicStream(stream, signal) {
+  const toolJsonByIndex = /* @__PURE__ */ new Map();
+  const toolNameByIndex = /* @__PURE__ */ new Map();
+  for await (const evt of stream) {
+    if (signal?.aborted) break;
+    if (evt.type === "content_block_start") {
+      const block = evt.content_block;
+      if (block.type === "tool_use") {
+        toolNameByIndex.set(evt.index, block.name);
+        toolJsonByIndex.set(evt.index, "");
+      }
+    }
+    if (evt.type === "content_block_delta") {
+      const d = evt.delta;
+      if (d.type === "text_delta") {
+        yield { text: d.text };
+      }
+      if (d.type === "input_json_delta") {
+        const cur = toolJsonByIndex.get(evt.index) ?? "";
+        toolJsonByIndex.set(evt.index, cur + d.partial_json);
+      }
+    }
+    if (evt.type === "content_block_stop") {
+      const name = toolNameByIndex.get(evt.index);
+      if (name === void 0) continue;
+      const jsonStr = toolJsonByIndex.get(evt.index) ?? "";
+      let args = {};
+      if (jsonStr.trim()) {
+        try {
+          args = JSON.parse(jsonStr);
+        } catch {
+          args = jsonStr;
+        }
+      }
+      yield { toolCall: { name, args } };
+      toolNameByIndex.delete(evt.index);
+      toolJsonByIndex.delete(evt.index);
+    }
+  }
+}
+var AnthropicProvider;
+var init_anthropic = __esm({
+  "src/main/llm/anthropic.ts"() {
+    "use strict";
+    init_sdk();
+    AnthropicProvider = class {
+      constructor(apiKey, model, baseURL) {
+        this.apiKey = apiKey;
+        this.model = model;
+        this.apiBase = trimSlash(baseURL ?? "https://api.anthropic.com");
+        this.client = new Anthropic({
+          apiKey,
+          baseURL: this.apiBase
+        });
+      }
+      apiKey;
+      model;
+      name = "anthropic";
+      client;
+      apiBase;
+      async chat(messages, tools, options) {
+        const { system, messages: mapped } = splitAnthropicMessages(messages);
+        const params = {
+          model: this.model,
+          max_tokens: 4096,
+          messages: mapped,
+          stream: true
+        };
+        if (system) params.system = system;
+        if (tools?.length) {
+          params.tools = toAnthropicTools(tools);
+        }
+        const stream = await this.client.messages.create(params, { signal: options?.signal });
+        return mapAnthropicStream(stream, options?.signal);
+      }
+      async isAvailable() {
+        if (!this.apiKey.trim()) return false;
+        try {
+          const res = await fetch(`${this.apiBase}/v1/models`, {
+            method: "GET",
+            headers: {
+              "x-api-key": this.apiKey,
+              "anthropic-version": "2023-06-01"
+            },
+            signal: AbortSignal.timeout(4e3)
+          });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      }
+    };
+  }
+});
+
+// src/main/llm/configStore.ts
+function readRawConfig() {
+  if (configCache) return configCache;
+  if (!(0, import_node_fs8.existsSync)(OPENRAY_CONFIG_PATH)) {
+    configCache = {};
+    return configCache;
+  }
+  try {
+    const raw = (0, import_node_fs8.readFileSync)(OPENRAY_CONFIG_PATH, "utf-8");
+    configCache = JSON.parse(raw);
+    return configCache;
+  } catch {
+    configCache = {};
+    return configCache;
+  }
+}
+function flushConfig() {
+  if (!configCache || !writeTimeout) return;
+  try {
+    (0, import_node_fs8.mkdirSync)((0, import_node_path8.dirname)(OPENRAY_CONFIG_PATH), { recursive: true });
+    (0, import_node_fs8.writeFileSync)(OPENRAY_CONFIG_PATH, `${JSON.stringify(configCache, null, 2)}
+`, "utf-8");
+    if (writeTimeout) {
+      clearTimeout(writeTimeout);
+      writeTimeout = null;
+    }
+  } catch (err) {
+    console.error("Failed to write config:", err);
+  }
+}
+function writeConfigPatch(patch) {
+  const current = readRawConfig();
+  configCache = { ...current, ...patch };
+  if (writeTimeout) clearTimeout(writeTimeout);
+  writeTimeout = setTimeout(() => {
+    flushConfig();
+    writeTimeout = null;
+  }, 1e3);
+}
+function getUiStateRetentionMs() {
+  const raw = readRawConfig();
+  const v = raw.uiStateRetentionMs;
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+    return v;
+  }
+  return 6e4;
+}
+function getSafetyDryRun() {
+  const raw = readRawConfig();
+  return raw.safetyDryRun === true;
+}
+function setSafetyDryRun(value) {
+  writeConfigPatch({ safetyDryRun: value });
+}
+function getAgentAlwaysAllowedCommands() {
+  const value = readRawConfig().agentAlwaysAllowedCommands;
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value.filter(
+        (entry) => typeof entry === "string" && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)
+      )
+    )
+  );
+}
+function addAgentAlwaysAllowedCommand(command) {
+  if (!/^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(command)) return;
+  writeConfigPatch({
+    agentAlwaysAllowedCommands: Array.from(
+      /* @__PURE__ */ new Set([...getAgentAlwaysAllowedCommands(), command.toLowerCase()])
+    )
+  });
+}
+var import_node_fs8, import_node_os4, import_node_path8, OPENRAY_CONFIG_DIR, OPENRAY_CONFIG_PATH, configCache, writeTimeout;
+var init_configStore = __esm({
+  "src/main/llm/configStore.ts"() {
+    "use strict";
+    import_node_fs8 = require("node:fs");
+    import_node_os4 = require("node:os");
+    import_node_path8 = require("node:path");
+    OPENRAY_CONFIG_DIR = (0, import_node_path8.join)((0, import_node_os4.homedir)(), ".openray");
+    OPENRAY_CONFIG_PATH = (0, import_node_path8.join)(OPENRAY_CONFIG_DIR, "config.json");
+    configCache = null;
+    writeTimeout = null;
+  }
+});
+
+// src/main/llm/githubCopilotAuth.ts
+function clearDeviceSession() {
+  deviceSession = null;
+}
+async function startGithubDeviceFlow(clientId) {
+  const body = new URLSearchParams({
+    client_id: clientId,
+    scope: "read:user user:email"
+  });
+  const res = await fetch("https://github.com/login/device/code", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: body.toString()
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`GitHub device code failed: ${res.status} ${t.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  if (!json.device_code || !json.user_code || !json.verification_uri) {
+    throw new Error("GitHub device code: malformed response");
+  }
+  deviceSession = {
+    device_code: json.device_code,
+    interval: Math.max(5, json.interval ?? 5),
+    client_id: clientId
+  };
+  return json;
+}
+async function pollGithubDeviceFlow() {
+  if (!deviceSession) {
+    return { status: "error", error: "No device session. Start sign-in again." };
+  }
+  const body = new URLSearchParams({
+    client_id: deviceSession.client_id,
+    device_code: deviceSession.device_code,
+    grant_type: "urn:ietf:params:oauth:grant-type:device_code"
+  });
+  const res = await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: body.toString()
+  });
+  const json = await res.json();
+  const err = typeof json.error === "string" ? json.error : "";
+  if (err === "authorization_pending") {
+    return { status: "authorization_pending" };
+  }
+  if (err === "slow_down") {
+    return { status: "slow_down" };
+  }
+  if (err && err !== "") {
+    deviceSession = null;
+    return { status: "error", error: typeof json.error_description === "string" ? json.error_description : err };
+  }
+  const access_token = typeof json.access_token === "string" ? json.access_token : "";
+  if (!access_token) {
+    return { status: "error", error: "No access_token in response" };
+  }
+  const refresh_token = typeof json.refresh_token === "string" ? json.refresh_token : void 0;
+  const expires_in = typeof json.expires_in === "number" ? json.expires_in : void 0;
+  deviceSession = null;
+  return { status: "success", access_token, refresh_token, expires_in };
+}
+async function refreshGithubAccessToken(refreshToken, clientId, signal) {
+  const body = new URLSearchParams({
+    client_id: clientId,
+    grant_type: "refresh_token",
+    refresh_token: refreshToken
+  });
+  const res = await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: body.toString(),
+    signal
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Token refresh failed: ${res.status} ${t.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  const access_token = typeof json.access_token === "string" ? json.access_token : "";
+  if (!access_token) {
+    throw new Error("Token refresh: missing access_token");
+  }
+  return {
+    access_token,
+    refresh_token: typeof json.refresh_token === "string" ? json.refresh_token : refreshToken,
+    expires_in: typeof json.expires_in === "number" ? json.expires_in : void 0
+  };
+}
+function persistCopilotTokens(accessToken, refreshToken, expiresInSec) {
+  const patch = {
+    copilotGithubToken: accessToken
+  };
+  if (refreshToken) patch.copilotRefreshToken = refreshToken;
+  if (expiresInSec !== void 0) {
+    patch.copilotExpiresAt = Date.now() + expiresInSec * 1e3;
+  }
+  writeConfigPatch(patch);
+}
+async function copilotApiPing(token) {
+  try {
+    const res = await fetch(`${COPILOT_API}/models`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Editor-Version": "Tezbar/0.1.0",
+        "Copilot-Integration-Id": "vscode-chat",
+        Accept: "application/json"
+      },
+      signal: AbortSignal.timeout(5e3)
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+var COPILOT_API, deviceSession;
+var init_githubCopilotAuth = __esm({
+  "src/main/llm/githubCopilotAuth.ts"() {
+    "use strict";
+    init_configStore();
+    COPILOT_API = "https://api.githubcopilot.com";
+    deviceSession = null;
+  }
+});
+
+// src/main/llm/openaiSse.ts
+async function* parseOpenAISSE(res, signal) {
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("OpenAI-compatible: empty response body");
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const toolParts = /* @__PURE__ */ new Map();
+  const processPayload = function* (json) {
+    const root = json;
+    const choice = root.choices?.[0];
+    if (!choice) return;
+    const delta = choice.delta;
+    if (delta?.content) {
+      yield { text: delta.content };
+    }
+    if (Array.isArray(delta?.tool_calls)) {
+      for (const tc of delta.tool_calls) {
+        const idx = typeof tc.index === "number" ? tc.index : 0;
+        const cur = toolParts.get(idx) ?? { args: "" };
+        if (tc.id) cur.id = tc.id;
+        if (tc.function?.name) cur.name = tc.function.name;
+        if (tc.function?.arguments) cur.args += tc.function.arguments;
+        toolParts.set(idx, cur);
+      }
+    }
+    if (choice.finish_reason === "tool_calls") {
+      const ordered = Array.from(toolParts.entries()).sort((a, b) => a[0] - b[0]);
+      for (const [, tc] of ordered) {
+        if (!tc.name) continue;
+        let args = {};
+        if (tc.args.trim()) {
+          try {
+            args = JSON.parse(tc.args);
+          } catch {
+            args = tc.args;
+          }
+        }
+        yield { toolCall: { name: tc.name, args } };
+      }
+      toolParts.clear();
+    }
+  };
+  while (true) {
+    if (signal?.aborted) break;
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline;
+    while ((newline = buffer.indexOf("\n")) !== -1) {
+      const rawLine = buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+      const line = rawLine.trimEnd();
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trimStart();
+      if (data === "[DONE]") continue;
+      let json;
+      try {
+        json = JSON.parse(data);
+      } catch {
+        continue;
+      }
+      yield* processPayload(json);
+    }
+  }
+  if (toolParts.size > 0) {
+    for (const [, tc] of Array.from(toolParts.entries()).sort((a, b) => a[0] - b[0])) {
+      if (!tc.name) continue;
+      let args = {};
+      if (tc.args.trim()) {
+        try {
+          args = JSON.parse(tc.args);
+        } catch {
+          args = tc.args;
+        }
+      }
+      yield { toolCall: { name: tc.name, args } };
+    }
+    toolParts.clear();
+  }
+}
+var init_openaiSse = __esm({
+  "src/main/llm/openaiSse.ts"() {
+    "use strict";
+  }
+});
+
+// src/main/llm/copilot.ts
+function toOpenAIMessages(messages) {
+  return messages.map((m) => ({ role: m.role, content: m.content }));
+}
+function toOpenAITools(tools) {
+  return tools.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters
+    }
+  }));
+}
+var COPILOT_CHAT, CopilotProvider;
+var init_copilot = __esm({
+  "src/main/llm/copilot.ts"() {
+    "use strict";
+    init_configStore();
+    init_githubCopilotAuth();
+    init_openaiSse();
+    COPILOT_CHAT = "https://api.githubcopilot.com/chat/completions";
+    CopilotProvider = class {
+      constructor(model) {
+        this.model = model;
+      }
+      model;
+      name = "copilot";
+      readTokens() {
+        const c = readRawConfig();
+        return {
+          access: (typeof c.copilotGithubToken === "string" ? c.copilotGithubToken : "") || (typeof c.apiKey === "string" ? c.apiKey : ""),
+          refresh: typeof c.copilotRefreshToken === "string" ? c.copilotRefreshToken : void 0,
+          expiresAt: typeof c.copilotExpiresAt === "number" ? c.copilotExpiresAt : 0,
+          clientId: typeof c.githubOAuthClientId === "string" ? c.githubOAuthClientId : ""
+        };
+      }
+      async refreshIfNeeded(signal) {
+        const { access, refresh, expiresAt, clientId } = this.readTokens();
+        if (!refresh || !clientId) {
+          return access;
+        }
+        const stale = expiresAt > 0 && Date.now() > expiresAt - 12e4;
+        if (!stale) {
+          return access;
+        }
+        const next = await refreshGithubAccessToken(refresh, clientId, signal);
+        const expires_in = next.expires_in;
+        const patch = {
+          copilotGithubToken: next.access_token,
+          copilotRefreshToken: next.refresh_token ?? refresh
+        };
+        if (expires_in !== void 0) {
+          patch.copilotExpiresAt = Date.now() + expires_in * 1e3;
+        }
+        writeConfigPatch(patch);
+        return next.access_token;
+      }
+      async chat(messages, tools, options) {
+        console.log("[CopilotProvider] chat request to", COPILOT_CHAT);
+        const token = await this.refreshIfNeeded(options?.signal);
+        if (!token.trim()) {
+          console.error("[CopilotProvider] missing token");
+          throw new Error("GitHub Copilot: missing token. Add a PAT or complete device sign-in in Providers.");
+        }
+        const body = {
+          model: this.model,
+          messages: toOpenAIMessages(messages),
+          stream: true
+        };
+        if (tools?.length) {
+          body.tools = toOpenAITools(tools);
+        }
+        console.log("[CopilotProvider] payload size:", JSON.stringify(body).length, "bytes");
+        const res = await fetch(COPILOT_CHAT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            "Editor-Version": "Tezbar/0.1.0",
+            "Copilot-Integration-Id": "vscode-chat"
+          },
+          body: JSON.stringify(body),
+          signal: options?.signal
+        });
+        console.log("[CopilotProvider] response status:", res.status, res.statusText);
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => "");
+          console.error("[CopilotProvider] error body:", errBody);
+          throw new Error(`Copilot error ${res.status}: ${errBody.slice(0, 500)}`);
+        }
+        return parseOpenAISSE(res, options?.signal);
+      }
+      async isAvailable() {
+        const { access } = this.readTokens();
+        if (!access.trim()) return false;
+        const ping = await copilotApiPing(access);
+        if (ping) return true;
+        return access.length > 20;
+      }
+      /** Bearer token after optional OAuth refresh (reads tokens from config on disk). */
+      async getAccessToken(options) {
+        return this.refreshIfNeeded(options?.signal);
+      }
+    };
+  }
+});
+
+// src/main/llm/ollama.ts
+function trimSlash2(url) {
+  return url.replace(/\/+$/, "");
+}
+function toOllamaMessages(messages) {
+  return messages.map((m) => {
+    if (m.role === "tool") {
+      return { role: "user", content: `[tool]
+${m.content}` };
+    }
+    return { role: m.role, content: m.content };
+  });
+}
+function toOllamaTools(tools) {
+  return tools.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters
+    }
+  }));
+}
+async function* parseOllamaStream(res, signal) {
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("Ollama: empty response body");
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    if (signal?.aborted) break;
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line) continue;
+      let row;
+      try {
+        row = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const err = row.error;
+      if (typeof err === "string" && err) {
+        throw new Error(err);
+      }
+      const msg = row.message;
+      if (msg?.role === "assistant" && typeof msg.content === "string" && msg.content.length > 0) {
+        yield { text: msg.content };
+      }
+      const toolCalls = row.message?.tool_calls;
+      if (Array.isArray(toolCalls)) {
+        for (const tc of toolCalls) {
+          const name = tc.function?.name;
+          if (!name) continue;
+          const raw = tc.function?.arguments;
+          let args = raw;
+          if (typeof raw === "string") {
+            try {
+              args = JSON.parse(raw);
+            } catch {
+              args = raw;
+            }
+          }
+          yield { toolCall: { name, args } };
+        }
+      }
+    }
+  }
+}
+var OllamaProvider;
+var init_ollama = __esm({
+  "src/main/llm/ollama.ts"() {
+    "use strict";
+    OllamaProvider = class {
+      constructor(baseURL, model) {
+        this.baseURL = baseURL;
+        this.model = model;
+      }
+      baseURL;
+      model;
+      name = "ollama";
+      async chat(messages, tools, options) {
+        const url = `${trimSlash2(this.baseURL)}/api/chat`;
+        const body = {
+          model: this.model,
+          messages: toOllamaMessages(messages),
+          stream: true
+        };
+        if (tools?.length) {
+          body.tools = toOllamaTools(tools);
+        }
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: options?.signal
+        });
+        if (!res.ok) {
+          const t = await res.text().catch(() => "");
+          throw new Error(`Ollama error ${res.status}: ${t.slice(0, 500)}`);
+        }
+        return parseOllamaStream(res, options?.signal);
+      }
+      async isAvailable() {
+        try {
+          const url = `${trimSlash2(this.baseURL)}/api/tags`;
+          const res = await fetch(url, { method: "GET", signal: AbortSignal.timeout(4e3) });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      }
+    };
+  }
+});
+
+// src/shared/llmErrors.ts
+function apiErrorDetail(raw) {
+  const bodyStart = raw.indexOf("{");
+  if (bodyStart < 0) return null;
+  try {
+    const parsed = JSON.parse(raw.slice(bodyStart));
+    return typeof parsed.error?.message === "string" ? parsed.error.message.trim() : null;
+  } catch {
+    return null;
+  }
+}
+function formatLlmErrorMessage(raw, providerLabel = "AI provider") {
+  const trimmed = raw.trim();
+  const detail = apiErrorDetail(trimmed);
+  const message = detail || trimmed;
+  const unsupportedModel = message.match(
+    /supported API model names are (.+?), but you passed (.+?)(?:\.$|$)/i
+  );
+  if (unsupportedModel) {
+    return `Model "${unsupportedModel[2]}" is not supported by this provider. Choose ${unsupportedModel[1]} and try again.`;
+  }
+  const missingModel = message.match(/Model\s+["']([^"']+)["']\s+not found/i);
+  if (missingModel) {
+    return `The selected model "${missingModel[1]}" is unavailable. Choose another model in AI settings and try again.`;
+  }
+  if (/pi exited before finishing/i.test(message)) {
+    return "The agent stopped before it could finish. Check the selected model in AI settings and try again.";
+  }
+  if (!detail) return trimmed;
+  const status = trimmed.match(/\berror\s+(\d{3})\b/i)?.[1];
+  return `${providerLabel} request failed${status ? ` (${status})` : ""}: ${detail}`;
+}
+var init_llmErrors = __esm({
+  "src/shared/llmErrors.ts"() {
+    "use strict";
+  }
+});
+
+// src/main/llm/openai.ts
+function trimSlash3(url) {
+  return url.replace(/\/+$/, "");
+}
+function chatCompletionsUrl(baseURL) {
+  const base = trimSlash3(baseURL);
+  return base.endsWith("/chat/completions") ? base : `${base}/chat/completions`;
+}
+function modelsUrl(baseURL) {
+  const base = trimSlash3(baseURL);
+  if (base.endsWith("/chat/completions")) {
+    return `${base.slice(0, -"/chat/completions".length)}/models`;
+  }
+  return `${base}/models`;
+}
+function toOpenAIMessages2(messages) {
+  return messages.map((m) => ({ role: m.role, content: m.content }));
+}
+function toOpenAITools2(tools) {
+  return tools.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters
+    }
+  }));
+}
+var OpenAIProvider;
+var init_openai = __esm({
+  "src/main/llm/openai.ts"() {
+    "use strict";
+    init_llmErrors();
+    init_openaiSse();
+    OpenAIProvider = class {
+      constructor(baseURL, apiKey, model, providerLabel = "OpenAI") {
+        this.baseURL = baseURL;
+        this.apiKey = apiKey;
+        this.model = model;
+        this.providerLabel = providerLabel;
+      }
+      baseURL;
+      apiKey;
+      model;
+      providerLabel;
+      name = "openai";
+      async chat(messages, tools, options) {
+        const url = chatCompletionsUrl(this.baseURL);
+        const body = {
+          model: this.model,
+          messages: toOpenAIMessages2(messages),
+          stream: true
+        };
+        if (tools?.length) {
+          body.tools = toOpenAITools2(tools);
+        }
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`
+          },
+          body: JSON.stringify(body),
+          signal: options?.signal
+        });
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => "");
+          throw new Error(
+            formatLlmErrorMessage(
+              `${this.providerLabel} error ${res.status}: ${errBody.slice(0, 500)}`,
+              this.providerLabel
+            )
+          );
+        }
+        return parseOpenAISSE(res, options?.signal);
+      }
+      async isAvailable() {
+        if (!this.apiKey.trim()) return false;
+        try {
+          const url = modelsUrl(this.baseURL);
+          const res = await fetch(url, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${this.apiKey}` },
+            signal: AbortSignal.timeout(4e3)
+          });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      }
+    };
+  }
+});
+
+// src/main/llm/opencode.ts
+var import_node_child_process6, import_node_util5, OpenCodeProvider;
+var init_opencode = __esm({
+  "src/main/llm/opencode.ts"() {
+    "use strict";
+    import_node_child_process6 = require("node:child_process");
+    import_node_util5 = require("node:util");
+    OpenCodeProvider = class {
+      constructor(model) {
+        this.model = model;
+      }
+      model;
+      name = "opencode";
+      async chat(messages, _tools, options) {
+        const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
+        if (!lastUserMessage) {
+          throw new Error("OpenCode: no user message found");
+        }
+        return this.runOpenCode(lastUserMessage.content, options?.signal);
+      }
+      async *runOpenCode(message, signal) {
+        const args = ["run", "--model", this.model, "--", message];
+        const child = (0, import_node_child_process6.spawn)("opencode", args, {
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, TERM: "dumb", CI: "true" }
+        });
+        if (signal) {
+          const onAbort = () => {
+            child.kill();
+          };
+          signal.addEventListener("abort", onAbort);
+          if (signal.aborted) {
+            child.kill();
+          }
+        }
+        let output = "";
+        let errorOutput = "";
+        child.stdout?.on("data", (chunk) => {
+          output += chunk.toString();
+        });
+        child.stderr?.on("data", (chunk) => {
+          errorOutput += chunk.toString();
+        });
+        const exitCode = await new Promise((resolve4) => {
+          child.on("close", (code) => resolve4(code ?? 1));
+        });
+        if (exitCode !== 0) {
+          throw new Error(`OpenCode CLI error (exit ${exitCode}): ${errorOutput.slice(0, 500)}`);
+        }
+        if (output.trim()) {
+          yield { text: output.trim() };
+        }
+      }
+      async isAvailable() {
+        try {
+          const { execFile: execFile13 } = await import("node:child_process");
+          const execFileAsync13 = (0, import_node_util5.promisify)(execFile13);
+          const { stdout } = await execFileAsync13("which", ["opencode"], { timeout: 4e3 });
+          return stdout.trim().length > 0;
+        } catch {
+          return false;
+        }
+      }
+    };
+  }
+});
+
+// src/main/llm/registry.ts
+var registry_exports = {};
+__export(registry_exports, {
+  buildProviderForId: () => buildProviderForId,
+  configForProvider: () => configForProvider,
+  getProvider: () => getProvider,
+  getProviderForTask: () => getProviderForTask,
+  getSelectedPiModelPattern: () => getSelectedPiModelPattern,
+  getSelectedPiProviderBridge: () => getSelectedPiProviderBridge,
+  invalidateProviderCache: () => invalidateProviderCache,
+  readLLMConfig: () => readLLMConfig
+});
+function normalizeCustomProviders(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const entry = value;
+    const id = typeof entry.id === "string" ? entry.id.trim() : "";
+    const title = typeof entry.title === "string" ? entry.title.trim() : "";
+    if (!id.startsWith("custom:") || !title) return [];
+    return [{
+      id,
+      title,
+      subtitle: typeof entry.subtitle === "string" ? entry.subtitle.trim() : void 0
+    }];
+  });
+}
+function providerIds(customProviders) {
+  return [...Object.keys(DEFAULT_PROVIDER_MODELS), ...customProviders.map((provider) => provider.id)];
+}
+function normalizeProviderModels(raw, ids) {
+  if (!raw || typeof raw !== "object") return void 0;
+  const result = {};
+  for (const provider of ids) {
+    const models = raw[provider];
+    if (!Array.isArray(models)) continue;
+    result[provider] = normalizeProviderModelList(provider, models);
+  }
+  return result;
+}
+function normalizeProviderSelectedModels(raw, ids) {
+  if (!raw || typeof raw !== "object") return void 0;
+  const result = {};
+  for (const provider of ids) {
+    const value = raw[provider];
+    if (typeof value === "string" && value.trim()) result[provider] = value.trim();
+  }
+  return result;
+}
+function normalizeProviderConfigs(raw, ids) {
+  if (!raw || typeof raw !== "object") return void 0;
+  const result = {};
+  for (const provider of ids) {
+    const value = raw[provider];
+    if (!value || typeof value !== "object") continue;
+    const config = value;
+    result[provider] = {
+      apiKey: typeof config.apiKey === "string" ? config.apiKey : void 0,
+      baseURL: typeof config.baseURL === "string" ? config.baseURL : void 0,
+      openaiCompatibleBaseURL: typeof config.openaiCompatibleBaseURL === "string" ? config.openaiCompatibleBaseURL : void 0,
+      geminiApiKey: typeof config.geminiApiKey === "string" ? config.geminiApiKey : void 0,
+      copilotGithubToken: typeof config.copilotGithubToken === "string" ? config.copilotGithubToken : void 0,
+      githubOAuthClientId: typeof config.githubOAuthClientId === "string" ? config.githubOAuthClientId : void 0
+    };
+  }
+  return result;
+}
+function normalizeFromRaw(raw) {
+  const customProviders = normalizeCustomProviders(raw.customProviders);
+  const ids = providerIds(customProviders);
+  const p = raw.provider;
+  const hasCopilotToken = typeof raw.copilotGithubToken === "string" && raw.copilotGithubToken.length > 0;
+  const provider = typeof p === "string" && customProviders.some((provider2) => provider2.id === p) || p === "openai" || p === "openai-compatible" || p === "anthropic" || p === "ollama" || p === "copilot" || p === "gemini" || p === "opencode" || p === "deepseek" ? p : hasCopilotToken ? "copilot" : "ollama";
+  const providerModels = normalizeProviderModels(raw.providerModels, ids);
+  const providerSelectedModels = normalizeProviderSelectedModels(raw.providerSelectedModels, ids);
+  const providerConfigs = normalizeProviderConfigs(raw.providerConfigs, ids);
+  const selectedModel = providerSelectedModels?.[provider];
+  const providerConfig = providerConfigs?.[provider] ?? {};
+  const allowLegacyProviderFields = !providerConfigs || Object.keys(providerConfigs).length === 0;
+  return {
+    provider,
+    customProviders,
+    providerConfigs,
+    apiKey: providerConfig.apiKey ?? (allowLegacyProviderFields && typeof raw.apiKey === "string" ? raw.apiKey : void 0),
+    baseURL: providerConfig.baseURL ?? (allowLegacyProviderFields && typeof raw.baseURL === "string" ? raw.baseURL : void 0),
+    openaiCompatibleBaseURL: providerConfig.openaiCompatibleBaseURL ?? (allowLegacyProviderFields && typeof raw.openaiCompatibleBaseURL === "string" ? raw.openaiCompatibleBaseURL : void 0),
+    geminiApiKey: providerConfig.geminiApiKey ?? (allowLegacyProviderFields && typeof raw.geminiApiKey === "string" ? raw.geminiApiKey : void 0),
+    model: selectedModel ?? (typeof raw.model === "string" ? raw.model : void 0),
+    providerModels,
+    providerSelectedModels,
+    copilotGithubToken: providerConfig.copilotGithubToken ?? (allowLegacyProviderFields && typeof raw.copilotGithubToken === "string" ? raw.copilotGithubToken : void 0),
+    copilotRefreshToken: typeof raw.copilotRefreshToken === "string" ? raw.copilotRefreshToken : void 0,
+    copilotExpiresAt: typeof raw.copilotExpiresAt === "number" ? raw.copilotExpiresAt : void 0,
+    githubOAuthClientId: providerConfig.githubOAuthClientId ?? (allowLegacyProviderFields && typeof raw.githubOAuthClientId === "string" ? raw.githubOAuthClientId : void 0),
+    taskProviderOverrides: typeof raw.taskProviderOverrides === "object" && raw.taskProviderOverrides ? raw.taskProviderOverrides : void 0,
+    taskModelOverrides: typeof raw.taskModelOverrides === "object" && raw.taskModelOverrides ? raw.taskModelOverrides : void 0,
+    memoryEnabled: typeof raw.memoryEnabled === "boolean" ? raw.memoryEnabled : void 0,
+    memoryMaxItems: typeof raw.memoryMaxItems === "number" ? raw.memoryMaxItems : void 0,
+    memoryIncludePrivate: typeof raw.memoryIncludePrivate === "boolean" ? raw.memoryIncludePrivate : void 0,
+    aiActionRequirePermission: typeof raw.aiActionRequirePermission === "boolean" ? raw.aiActionRequirePermission : void 0,
+    aiActionRedactionEnabled: typeof raw.aiActionRedactionEnabled === "boolean" ? raw.aiActionRedactionEnabled : void 0,
+    uiStateRetentionMs: typeof raw.uiStateRetentionMs === "number" ? raw.uiStateRetentionMs : void 0
+  };
+}
+function readLLMConfig() {
+  const raw = readRawConfig();
+  if (Object.keys(raw).length === 0) {
+    return { provider: "ollama", baseURL: DEFAULT_OLLAMA_BASE, model: DEFAULT_OLLAMA_MODEL };
+  }
+  const n = normalizeFromRaw(raw);
+  if (n.provider === "ollama") {
+    return {
+      ...n,
+      baseURL: n.baseURL ?? DEFAULT_OLLAMA_BASE,
+      model: n.model ?? DEFAULT_OLLAMA_MODEL
+    };
+  }
+  if (n.provider === "gemini") {
+    return {
+      ...n,
+      baseURL: n.baseURL ?? DEFAULT_GEMINI_BASE,
+      model: n.model ?? DEFAULT_GEMINI_MODEL
+    };
+  }
+  if (n.provider === "deepseek") {
+    return {
+      ...n,
+      baseURL: n.baseURL ?? DEFAULT_DEEPSEEK_BASE,
+      model: n.model ?? DEFAULT_DEEPSEEK_MODEL
+    };
+  }
+  return n;
+}
+function configForProvider(cfg, provider) {
+  const providerConfig = cfg.providerConfigs?.[provider] ?? {};
+  const useCurrentProviderFields = cfg.provider === provider;
+  const model = cfg.providerSelectedModels?.[provider] ?? (useCurrentProviderFields ? cfg.model : void 0);
+  const next = {
+    ...cfg,
+    provider,
+    model,
+    apiKey: providerConfig.apiKey ?? (useCurrentProviderFields ? cfg.apiKey : void 0),
+    baseURL: providerConfig.baseURL ?? (useCurrentProviderFields ? cfg.baseURL : void 0),
+    openaiCompatibleBaseURL: providerConfig.openaiCompatibleBaseURL ?? (useCurrentProviderFields ? cfg.openaiCompatibleBaseURL : void 0),
+    geminiApiKey: providerConfig.geminiApiKey ?? (useCurrentProviderFields ? cfg.geminiApiKey : void 0),
+    copilotGithubToken: providerConfig.copilotGithubToken ?? (useCurrentProviderFields ? cfg.copilotGithubToken : void 0),
+    githubOAuthClientId: providerConfig.githubOAuthClientId ?? (useCurrentProviderFields ? cfg.githubOAuthClientId : void 0)
+  };
+  if (provider === "ollama") {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_OLLAMA_BASE, model: next.model ?? DEFAULT_OLLAMA_MODEL };
+  }
+  if (provider === "gemini") {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_GEMINI_BASE, model: next.model ?? DEFAULT_GEMINI_MODEL };
+  }
+  if (provider === "deepseek") {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_DEEPSEEK_BASE, model: next.model ?? DEFAULT_DEEPSEEK_MODEL };
+  }
+  return {
+    ...next,
+    model: next.model ?? (recommendedModel(provider) || defaultModels(provider)[0]?.id)
+  };
+}
+function buildProviderForId(id, cfg) {
+  return buildProvider(configForProvider(cfg, id));
+}
+function buildProvider(cfg) {
+  if (isCustomProvider(cfg.provider)) {
+    return new OpenAIProvider(
+      cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? "",
+      cfg.apiKey ?? "",
+      cfg.model ?? "",
+      cfg.customProviders?.find((provider) => provider.id === cfg.provider)?.title ?? "Custom provider"
+    );
+  }
+  switch (cfg.provider) {
+    case "openai":
+      return new OpenAIProvider(
+        cfg.baseURL ?? "https://api.openai.com/v1",
+        cfg.apiKey ?? "",
+        cfg.model ?? "gpt-4o-mini",
+        "OpenAI"
+      );
+    case "openai-compatible":
+      return new OpenAIProvider(
+        cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? "https://api.openai.com/v1",
+        cfg.apiKey ?? "",
+        cfg.model ?? "gpt-4o-mini",
+        "OpenAI-compatible provider"
+      );
+    case "anthropic":
+      return new AnthropicProvider(
+        cfg.apiKey ?? "",
+        cfg.model ?? "claude-3-5-haiku-20241022",
+        cfg.baseURL
+      );
+    case "ollama":
+      return new OllamaProvider(cfg.baseURL ?? DEFAULT_OLLAMA_BASE, cfg.model ?? DEFAULT_OLLAMA_MODEL);
+    case "copilot":
+      return new CopilotProvider(cfg.model ?? "gpt-4o");
+    case "gemini":
+      return new OpenAIProvider(
+        cfg.baseURL ?? DEFAULT_GEMINI_BASE,
+        cfg.geminiApiKey ?? cfg.apiKey ?? "",
+        cfg.model ?? DEFAULT_GEMINI_MODEL,
+        "Gemini"
+      );
+    case "opencode":
+      return new OpenCodeProvider(cfg.model ?? "opencode/big-pickle");
+    case "deepseek":
+      return new OpenAIProvider(
+        cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE,
+        cfg.apiKey ?? "",
+        cfg.model ?? DEFAULT_DEEPSEEK_MODEL,
+        "DeepSeek"
+      );
+    default:
+      return new OllamaProvider(DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL);
+  }
+}
+function invalidateProviderCache() {
+  cacheKey = "";
+  active = null;
+}
+function getProvider() {
+  const cfg = readLLMConfig();
+  const key = JSON.stringify(cfg);
+  if (active && key === cacheKey) return active;
+  active = buildProvider(cfg);
+  cacheKey = key;
+  return active;
+}
+function getProviderForTask(task) {
+  const cfg = readLLMConfig();
+  const providerOverride = cfg.taskProviderOverrides?.[task];
+  const modelOverride = cfg.taskModelOverrides?.[task];
+  const targetProvider = providerOverride ?? cfg.provider;
+  const targetConfig = configForProvider(cfg, targetProvider);
+  const merged = {
+    ...targetConfig,
+    model: modelOverride ?? targetConfig.model
+  };
+  return buildProvider(merged);
+}
+function getSelectedPiModelPattern() {
+  const cfg = readLLMConfig();
+  const model = cfg.model?.trim();
+  if (!model) return void 0;
+  const provider = cfg.provider;
+  if (provider === "opencode") {
+    if (model.startsWith("opencode/opencode/")) return model;
+    if (model.startsWith("opencode/")) return `opencode/${model}`;
+    return `opencode/opencode/${model}`;
+  }
+  if (model.startsWith(`${provider}/`)) return model;
+  if (model.includes("/")) return model;
+  return `${provider}/${model}`;
+}
+function stripProviderPrefix(model, provider) {
+  const prefix = `${provider}/`;
+  let normalized = model.trim();
+  while (normalized.startsWith(prefix)) {
+    normalized = normalized.slice(prefix.length);
+  }
+  return normalized;
+}
+function openAiCompatBaseUrl(cfg) {
+  if (cfg.provider === "openai") return cfg.baseURL ?? "https://api.openai.com/v1";
+  if (cfg.provider === "openai-compatible") return cfg.openaiCompatibleBaseURL ?? cfg.baseURL;
+  if (cfg.provider === "gemini") return cfg.baseURL ?? DEFAULT_GEMINI_BASE;
+  if (cfg.provider === "deepseek") return cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE;
+  if (isCustomProvider(cfg.provider)) return cfg.openaiCompatibleBaseURL ?? cfg.baseURL;
+  if (cfg.provider === "ollama") {
+    const base = cfg.baseURL ?? DEFAULT_OLLAMA_BASE;
+    return base.endsWith("/v1") ? base : `${base.replace(/\/+$/, "")}/v1`;
+  }
+  return void 0;
+}
+function piApiKey(cfg) {
+  if (cfg.provider === "gemini") return cfg.geminiApiKey ?? cfg.apiKey;
+  if (cfg.provider === "ollama") return "ollama";
+  return cfg.apiKey;
+}
+function getSelectedPiProviderBridge() {
+  const cfg = readLLMConfig();
+  const model = cfg.model?.trim();
+  if (!model) return void 0;
+  const modelId = stripProviderPrefix(model, cfg.provider);
+  if (!modelId) return void 0;
+  const selectedModel = cfg.providerModels?.[cfg.provider]?.find(
+    (candidate) => stripProviderPrefix(candidate.id, cfg.provider) === modelId
+  );
+  const modelInput = selectedModel?.capabilities.includes("vision") ? ["text", "image"] : ["text"];
+  const isAnthropic = cfg.provider === "anthropic";
+  const baseUrl = isAnthropic ? cfg.baseURL ?? "https://api.anthropic.com" : openAiCompatBaseUrl(cfg);
+  const apiKey = isAnthropic ? cfg.apiKey : piApiKey(cfg);
+  if (!baseUrl || !apiKey) return void 0;
+  const providerJson = JSON.stringify({
+    baseUrl,
+    apiKey,
+    api: isAnthropic ? "anthropic-messages" : "openai-completions",
+    authHeader: true,
+    models: [
+      {
+        id: modelId,
+        name: `Tezbar ${cfg.provider} ${modelId}`,
+        reasoning: /reason|think|r1|o\d|gpt-5|claude|deepseek/i.test(modelId),
+        input: modelInput,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128e3,
+        maxTokens: 8192
+      }
+    ]
+  });
+  return {
+    modelPattern: `tezbar/${modelId}`,
+    providerJson,
+    acceptsImages: modelInput.includes("image")
+  };
+}
+var DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL, DEFAULT_GEMINI_BASE, DEFAULT_GEMINI_MODEL, DEFAULT_DEEPSEEK_BASE, DEFAULT_DEEPSEEK_MODEL, cacheKey, active;
+var init_registry = __esm({
+  "src/main/llm/registry.ts"() {
+    "use strict";
+    init_aiProviders();
+    init_anthropic();
+    init_configStore();
+    init_copilot();
+    init_ollama();
+    init_openai();
+    init_opencode();
+    DEFAULT_OLLAMA_BASE = "http://localhost:11434";
+    DEFAULT_OLLAMA_MODEL = "llama3.2";
+    DEFAULT_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
+    DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+    DEFAULT_DEEPSEEK_BASE = "https://api.deepseek.com";
+    DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
+    cacheKey = "";
+    active = null;
   }
 });
 
@@ -358,11 +8066,12 @@ var init_extension_platform = __esm({
 
 // src/main/esbuild-runtime.ts
 function configurePackagedEsbuildBinary() {
-  if (!app.isPackaged || process.env.ESBUILD_BINARY_PATH || process.platform !== "darwin") {
+  if (!app?.isPackaged || process.env.ESBUILD_BINARY_PATH || process.platform !== "darwin") {
     return;
   }
+  if (typeof process.resourcesPath !== "string" || !process.resourcesPath) return;
   const packageArch = process.arch === "arm64" ? "darwin-arm64" : "darwin-x64";
-  const binaryPath = (0, import_node_path9.join)(
+  const binaryPath = (0, import_node_path11.join)(
     process.resourcesPath,
     "app.asar.unpacked",
     "node_modules",
@@ -371,2518 +8080,17 @@ function configurePackagedEsbuildBinary() {
     "bin",
     "esbuild"
   );
-  if ((0, import_node_fs9.existsSync)(binaryPath)) {
+  if ((0, import_node_fs11.existsSync)(binaryPath)) {
     process.env.ESBUILD_BINARY_PATH = binaryPath;
   }
 }
-var import_node_fs9, import_node_path9;
+var import_node_fs11, import_node_path11;
 var init_esbuild_runtime = __esm({
   "src/main/esbuild-runtime.ts"() {
     "use strict";
     init_electron_shim();
-    import_node_fs9 = require("node:fs");
-    import_node_path9 = require("node:path");
-  }
-});
-
-// node_modules/.pnpm/esbuild@0.28.0/node_modules/esbuild/lib/main.js
-var require_main = __commonJS({
-  "node_modules/.pnpm/esbuild@0.28.0/node_modules/esbuild/lib/main.js"(exports2, module2) {
-    "use strict";
-    var __defProp2 = Object.defineProperty;
-    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
-    var __getOwnPropNames2 = Object.getOwnPropertyNames;
-    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-    var __export2 = (target, all) => {
-      for (var name in all)
-        __defProp2(target, name, { get: all[name], enumerable: true });
-    };
-    var __copyProps2 = (to, from, except, desc) => {
-      if (from && typeof from === "object" || typeof from === "function") {
-        for (let key of __getOwnPropNames2(from))
-          if (!__hasOwnProp2.call(to, key) && key !== except)
-            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
-      }
-      return to;
-    };
-    var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
-    var node_exports = {};
-    __export2(node_exports, {
-      analyzeMetafile: () => analyzeMetafile,
-      analyzeMetafileSync: () => analyzeMetafileSync,
-      build: () => build,
-      buildSync: () => buildSync,
-      context: () => context,
-      default: () => node_default,
-      formatMessages: () => formatMessages,
-      formatMessagesSync: () => formatMessagesSync,
-      initialize: () => initialize,
-      stop: () => stop,
-      transform: () => transform,
-      transformSync: () => transformSync,
-      version: () => version
-    });
-    module2.exports = __toCommonJS2(node_exports);
-    function encodePacket(packet) {
-      let visit = (value) => {
-        if (value === null) {
-          bb.write8(0);
-        } else if (typeof value === "boolean") {
-          bb.write8(1);
-          bb.write8(+value);
-        } else if (typeof value === "number") {
-          bb.write8(2);
-          bb.write32(value | 0);
-        } else if (typeof value === "string") {
-          bb.write8(3);
-          bb.write(encodeUTF82(value));
-        } else if (value instanceof Uint8Array) {
-          bb.write8(4);
-          bb.write(value);
-        } else if (value instanceof Array) {
-          bb.write8(5);
-          bb.write32(value.length);
-          for (let item of value) {
-            visit(item);
-          }
-        } else {
-          let keys = Object.keys(value);
-          bb.write8(6);
-          bb.write32(keys.length);
-          for (let key of keys) {
-            bb.write(encodeUTF82(key));
-            visit(value[key]);
-          }
-        }
-      };
-      let bb = new ByteBuffer();
-      bb.write32(0);
-      bb.write32(packet.id << 1 | +!packet.isRequest);
-      visit(packet.value);
-      writeUInt32LE(bb.buf, bb.len - 4, 0);
-      return bb.buf.subarray(0, bb.len);
-    }
-    function decodePacket(bytes) {
-      let visit = () => {
-        switch (bb.read8()) {
-          case 0:
-            return null;
-          case 1:
-            return !!bb.read8();
-          case 2:
-            return bb.read32();
-          case 3:
-            return decodeUTF82(bb.read());
-          case 4:
-            return bb.read();
-          case 5: {
-            let count = bb.read32();
-            let value2 = [];
-            for (let i = 0; i < count; i++) {
-              value2.push(visit());
-            }
-            return value2;
-          }
-          case 6: {
-            let count = bb.read32();
-            let value2 = {};
-            for (let i = 0; i < count; i++) {
-              value2[decodeUTF82(bb.read())] = visit();
-            }
-            return value2;
-          }
-          default:
-            throw new Error("Invalid packet");
-        }
-      };
-      let bb = new ByteBuffer(bytes);
-      let id = bb.read32();
-      let isRequest = (id & 1) === 0;
-      id >>>= 1;
-      let value = visit();
-      if (bb.ptr !== bytes.length) {
-        throw new Error("Invalid packet");
-      }
-      return { id, isRequest, value };
-    }
-    var ByteBuffer = class {
-      constructor(buf = new Uint8Array(1024)) {
-        this.buf = buf;
-        this.len = 0;
-        this.ptr = 0;
-      }
-      _write(delta) {
-        if (this.len + delta > this.buf.length) {
-          let clone = new Uint8Array((this.len + delta) * 2);
-          clone.set(this.buf);
-          this.buf = clone;
-        }
-        this.len += delta;
-        return this.len - delta;
-      }
-      write8(value) {
-        let offset = this._write(1);
-        this.buf[offset] = value;
-      }
-      write32(value) {
-        let offset = this._write(4);
-        writeUInt32LE(this.buf, value, offset);
-      }
-      write(bytes) {
-        let offset = this._write(4 + bytes.length);
-        writeUInt32LE(this.buf, bytes.length, offset);
-        this.buf.set(bytes, offset + 4);
-      }
-      _read(delta) {
-        if (this.ptr + delta > this.buf.length) {
-          throw new Error("Invalid packet");
-        }
-        this.ptr += delta;
-        return this.ptr - delta;
-      }
-      read8() {
-        return this.buf[this._read(1)];
-      }
-      read32() {
-        return readUInt32LE(this.buf, this._read(4));
-      }
-      read() {
-        let length = this.read32();
-        let bytes = new Uint8Array(length);
-        let ptr = this._read(bytes.length);
-        bytes.set(this.buf.subarray(ptr, ptr + length));
-        return bytes;
-      }
-    };
-    var encodeUTF82;
-    var decodeUTF82;
-    var encodeInvariant;
-    if (typeof TextEncoder !== "undefined" && typeof TextDecoder !== "undefined") {
-      let encoder = new TextEncoder();
-      let decoder = new TextDecoder();
-      encodeUTF82 = (text) => encoder.encode(text);
-      decodeUTF82 = (bytes) => decoder.decode(bytes);
-      encodeInvariant = 'new TextEncoder().encode("")';
-    } else if (typeof Buffer !== "undefined") {
-      encodeUTF82 = (text) => Buffer.from(text);
-      decodeUTF82 = (bytes) => {
-        let { buffer, byteOffset, byteLength } = bytes;
-        return Buffer.from(buffer, byteOffset, byteLength).toString();
-      };
-      encodeInvariant = 'Buffer.from("")';
-    } else {
-      throw new Error("No UTF-8 codec found");
-    }
-    if (!(encodeUTF82("") instanceof Uint8Array))
-      throw new Error(`Invariant violation: "${encodeInvariant} instanceof Uint8Array" is incorrectly false
-
-This indicates that your JavaScript environment is broken. You cannot use
-esbuild in this environment because esbuild relies on this invariant. This
-is not a problem with esbuild. You need to fix your environment instead.
-`);
-    function readUInt32LE(buffer, offset) {
-      return (buffer[offset++] | buffer[offset++] << 8 | buffer[offset++] << 16 | buffer[offset++] << 24) >>> 0;
-    }
-    function writeUInt32LE(buffer, value, offset) {
-      buffer[offset++] = value;
-      buffer[offset++] = value >> 8;
-      buffer[offset++] = value >> 16;
-      buffer[offset++] = value >> 24;
-    }
-    var fromCharCode = String.fromCharCode;
-    function throwSyntaxError(bytes, index, message) {
-      const c = bytes[index];
-      let line = 1;
-      let column = 0;
-      for (let i = 0; i < index; i++) {
-        if (bytes[i] === 10) {
-          line++;
-          column = 0;
-        } else {
-          column++;
-        }
-      }
-      throw new SyntaxError(
-        message ? message : index === bytes.length ? "Unexpected end of input while parsing JSON" : c >= 32 && c <= 126 ? `Unexpected character ${fromCharCode(c)} in JSON at position ${index} (line ${line}, column ${column})` : `Unexpected byte 0x${c.toString(16)} in JSON at position ${index} (line ${line}, column ${column})`
-      );
-    }
-    function JSON_parse(bytes) {
-      if (!(bytes instanceof Uint8Array)) {
-        throw new Error(`JSON input must be a Uint8Array`);
-      }
-      const propertyStack = [];
-      const objectStack = [];
-      const stateStack = [];
-      const length = bytes.length;
-      let property = null;
-      let state = 0;
-      let object;
-      let i = 0;
-      while (i < length) {
-        let c = bytes[i++];
-        if (c <= 32) {
-          continue;
-        }
-        let value;
-        if (state === 2 && property === null && c !== 34 && c !== 125) {
-          throwSyntaxError(bytes, --i);
-        }
-        switch (c) {
-          // True
-          case 116: {
-            if (bytes[i++] !== 114 || bytes[i++] !== 117 || bytes[i++] !== 101) {
-              throwSyntaxError(bytes, --i);
-            }
-            value = true;
-            break;
-          }
-          // False
-          case 102: {
-            if (bytes[i++] !== 97 || bytes[i++] !== 108 || bytes[i++] !== 115 || bytes[i++] !== 101) {
-              throwSyntaxError(bytes, --i);
-            }
-            value = false;
-            break;
-          }
-          // Null
-          case 110: {
-            if (bytes[i++] !== 117 || bytes[i++] !== 108 || bytes[i++] !== 108) {
-              throwSyntaxError(bytes, --i);
-            }
-            value = null;
-            break;
-          }
-          // Number begin
-          case 45:
-          case 46:
-          case 48:
-          case 49:
-          case 50:
-          case 51:
-          case 52:
-          case 53:
-          case 54:
-          case 55:
-          case 56:
-          case 57: {
-            let index = i;
-            value = fromCharCode(c);
-            c = bytes[i];
-            while (true) {
-              switch (c) {
-                case 43:
-                case 45:
-                case 46:
-                case 48:
-                case 49:
-                case 50:
-                case 51:
-                case 52:
-                case 53:
-                case 54:
-                case 55:
-                case 56:
-                case 57:
-                case 101:
-                case 69: {
-                  value += fromCharCode(c);
-                  c = bytes[++i];
-                  continue;
-                }
-              }
-              break;
-            }
-            value = +value;
-            if (isNaN(value)) {
-              throwSyntaxError(bytes, --index, "Invalid number");
-            }
-            break;
-          }
-          // String begin
-          case 34: {
-            value = "";
-            while (true) {
-              if (i >= length) {
-                throwSyntaxError(bytes, length);
-              }
-              c = bytes[i++];
-              if (c === 34) {
-                break;
-              } else if (c === 92) {
-                switch (bytes[i++]) {
-                  // Normal escape sequence
-                  case 34:
-                    value += '"';
-                    break;
-                  case 47:
-                    value += "/";
-                    break;
-                  case 92:
-                    value += "\\";
-                    break;
-                  case 98:
-                    value += "\b";
-                    break;
-                  case 102:
-                    value += "\f";
-                    break;
-                  case 110:
-                    value += "\n";
-                    break;
-                  case 114:
-                    value += "\r";
-                    break;
-                  case 116:
-                    value += "	";
-                    break;
-                  // Unicode escape sequence
-                  case 117: {
-                    let code = 0;
-                    for (let j = 0; j < 4; j++) {
-                      c = bytes[i++];
-                      code <<= 4;
-                      if (c >= 48 && c <= 57) code |= c - 48;
-                      else if (c >= 97 && c <= 102) code |= c + (10 - 97);
-                      else if (c >= 65 && c <= 70) code |= c + (10 - 65);
-                      else throwSyntaxError(bytes, --i);
-                    }
-                    value += fromCharCode(code);
-                    break;
-                  }
-                  // Invalid escape sequence
-                  default:
-                    throwSyntaxError(bytes, --i);
-                    break;
-                }
-              } else if (c <= 127) {
-                value += fromCharCode(c);
-              } else if ((c & 224) === 192) {
-                value += fromCharCode((c & 31) << 6 | bytes[i++] & 63);
-              } else if ((c & 240) === 224) {
-                value += fromCharCode((c & 15) << 12 | (bytes[i++] & 63) << 6 | bytes[i++] & 63);
-              } else if ((c & 248) == 240) {
-                let codePoint = (c & 7) << 18 | (bytes[i++] & 63) << 12 | (bytes[i++] & 63) << 6 | bytes[i++] & 63;
-                if (codePoint > 65535) {
-                  codePoint -= 65536;
-                  value += fromCharCode(codePoint >> 10 & 1023 | 55296);
-                  codePoint = 56320 | codePoint & 1023;
-                }
-                value += fromCharCode(codePoint);
-              }
-            }
-            value[0];
-            break;
-          }
-          // Array begin
-          case 91: {
-            value = [];
-            propertyStack.push(property);
-            objectStack.push(object);
-            stateStack.push(state);
-            property = null;
-            object = value;
-            state = 1;
-            continue;
-          }
-          // Object begin
-          case 123: {
-            value = {};
-            propertyStack.push(property);
-            objectStack.push(object);
-            stateStack.push(state);
-            property = null;
-            object = value;
-            state = 2;
-            continue;
-          }
-          // Array end
-          case 93: {
-            if (state !== 1) {
-              throwSyntaxError(bytes, --i);
-            }
-            value = object;
-            property = propertyStack.pop();
-            object = objectStack.pop();
-            state = stateStack.pop();
-            break;
-          }
-          // Object end
-          case 125: {
-            if (state !== 2) {
-              throwSyntaxError(bytes, --i);
-            }
-            value = object;
-            property = propertyStack.pop();
-            object = objectStack.pop();
-            state = stateStack.pop();
-            break;
-          }
-          default: {
-            throwSyntaxError(bytes, --i);
-          }
-        }
-        c = bytes[i];
-        while (c <= 32) {
-          c = bytes[++i];
-        }
-        switch (state) {
-          case 0: {
-            if (i === length) {
-              return value;
-            }
-            break;
-          }
-          case 1: {
-            object.push(value);
-            if (c === 44) {
-              i++;
-              continue;
-            }
-            if (c === 93) {
-              continue;
-            }
-            break;
-          }
-          case 2: {
-            if (property === null) {
-              property = value;
-              if (c === 58) {
-                i++;
-                continue;
-              }
-            } else {
-              object[property] = value;
-              property = null;
-              if (c === 44) {
-                i++;
-                continue;
-              }
-              if (c === 125) {
-                continue;
-              }
-            }
-            break;
-          }
-        }
-        break;
-      }
-      throwSyntaxError(bytes, i);
-    }
-    var quote = JSON.stringify;
-    var buildLogLevelDefault = "warning";
-    var transformLogLevelDefault = "silent";
-    function validateAndJoinStringArray(values, what) {
-      const toJoin = [];
-      for (const value of values) {
-        validateStringValue(value, what);
-        if (value.indexOf(",") >= 0) throw new Error(`Invalid ${what}: ${value}`);
-        toJoin.push(value);
-      }
-      return toJoin.join(",");
-    }
-    var canBeAnything = () => null;
-    var mustBeBoolean = (value) => typeof value === "boolean" ? null : "a boolean";
-    var mustBeString = (value) => typeof value === "string" ? null : "a string";
-    var mustBeRegExp = (value) => value instanceof RegExp ? null : "a RegExp object";
-    var mustBeInteger = (value) => typeof value === "number" && value === (value | 0) ? null : "an integer";
-    var mustBeValidPortNumber = (value) => typeof value === "number" && value === (value | 0) && value >= 0 && value <= 65535 ? null : "a valid port number";
-    var mustBeFunction = (value) => typeof value === "function" ? null : "a function";
-    var mustBeArray = (value) => Array.isArray(value) ? null : "an array";
-    var mustBeArrayOfStrings = (value) => Array.isArray(value) && value.every((x) => typeof x === "string") ? null : "an array of strings";
-    var mustBeObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value) ? null : "an object";
-    var mustBeEntryPoints = (value) => typeof value === "object" && value !== null ? null : "an array or an object";
-    var mustBeWebAssemblyModule = (value) => value instanceof WebAssembly.Module ? null : "a WebAssembly.Module";
-    var mustBeObjectOrNull = (value) => typeof value === "object" && !Array.isArray(value) ? null : "an object or null";
-    var mustBeStringOrBoolean = (value) => typeof value === "string" || typeof value === "boolean" ? null : "a string or a boolean";
-    var mustBeStringOrObject = (value) => typeof value === "string" || typeof value === "object" && value !== null && !Array.isArray(value) ? null : "a string or an object";
-    var mustBeStringOrArrayOfStrings = (value) => typeof value === "string" || Array.isArray(value) && value.every((x) => typeof x === "string") ? null : "a string or an array of strings";
-    var mustBeStringOrUint8Array = (value) => typeof value === "string" || value instanceof Uint8Array ? null : "a string or a Uint8Array";
-    var mustBeStringOrURL = (value) => typeof value === "string" || value instanceof URL ? null : "a string or a URL";
-    function getFlag(object, keys, key, mustBeFn) {
-      let value = object[key];
-      keys[key + ""] = true;
-      if (value === void 0) return void 0;
-      let mustBe = mustBeFn(value);
-      if (mustBe !== null) throw new Error(`${quote(key)} must be ${mustBe}`);
-      return value;
-    }
-    function checkForInvalidFlags(object, keys, where) {
-      for (let key in object) {
-        if (!(key in keys)) {
-          throw new Error(`Invalid option ${where}: ${quote(key)}`);
-        }
-      }
-    }
-    function validateInitializeOptions(options) {
-      let keys = /* @__PURE__ */ Object.create(null);
-      let wasmURL = getFlag(options, keys, "wasmURL", mustBeStringOrURL);
-      let wasmModule = getFlag(options, keys, "wasmModule", mustBeWebAssemblyModule);
-      let worker = getFlag(options, keys, "worker", mustBeBoolean);
-      checkForInvalidFlags(options, keys, "in initialize() call");
-      return {
-        wasmURL,
-        wasmModule,
-        worker
-      };
-    }
-    function validateMangleCache(mangleCache) {
-      let validated;
-      if (mangleCache !== void 0) {
-        validated = /* @__PURE__ */ Object.create(null);
-        for (let key in mangleCache) {
-          let value = mangleCache[key];
-          if (typeof value === "string" || value === false) {
-            validated[key] = value;
-          } else {
-            throw new Error(`Expected ${quote(key)} in mangle cache to map to either a string or false`);
-          }
-        }
-      }
-      return validated;
-    }
-    function pushLogFlags(flags, options, keys, isTTY2, logLevelDefault) {
-      let color = getFlag(options, keys, "color", mustBeBoolean);
-      let logLevel = getFlag(options, keys, "logLevel", mustBeString);
-      let logLimit = getFlag(options, keys, "logLimit", mustBeInteger);
-      if (color !== void 0) flags.push(`--color=${color}`);
-      else if (isTTY2) flags.push(`--color=true`);
-      flags.push(`--log-level=${logLevel || logLevelDefault}`);
-      flags.push(`--log-limit=${logLimit || 0}`);
-    }
-    function validateStringValue(value, what, key) {
-      if (typeof value !== "string") {
-        throw new Error(`Expected value for ${what}${key !== void 0 ? " " + quote(key) : ""} to be a string, got ${typeof value} instead`);
-      }
-      return value;
-    }
-    function pushCommonFlags(flags, options, keys) {
-      let legalComments = getFlag(options, keys, "legalComments", mustBeString);
-      let sourceRoot = getFlag(options, keys, "sourceRoot", mustBeString);
-      let sourcesContent = getFlag(options, keys, "sourcesContent", mustBeBoolean);
-      let target = getFlag(options, keys, "target", mustBeStringOrArrayOfStrings);
-      let format2 = getFlag(options, keys, "format", mustBeString);
-      let globalName = getFlag(options, keys, "globalName", mustBeString);
-      let mangleProps = getFlag(options, keys, "mangleProps", mustBeRegExp);
-      let reserveProps = getFlag(options, keys, "reserveProps", mustBeRegExp);
-      let mangleQuoted = getFlag(options, keys, "mangleQuoted", mustBeBoolean);
-      let minify = getFlag(options, keys, "minify", mustBeBoolean);
-      let minifySyntax = getFlag(options, keys, "minifySyntax", mustBeBoolean);
-      let minifyWhitespace = getFlag(options, keys, "minifyWhitespace", mustBeBoolean);
-      let minifyIdentifiers = getFlag(options, keys, "minifyIdentifiers", mustBeBoolean);
-      let lineLimit = getFlag(options, keys, "lineLimit", mustBeInteger);
-      let drop = getFlag(options, keys, "drop", mustBeArrayOfStrings);
-      let dropLabels = getFlag(options, keys, "dropLabels", mustBeArrayOfStrings);
-      let charset = getFlag(options, keys, "charset", mustBeString);
-      let treeShaking = getFlag(options, keys, "treeShaking", mustBeBoolean);
-      let ignoreAnnotations = getFlag(options, keys, "ignoreAnnotations", mustBeBoolean);
-      let jsx = getFlag(options, keys, "jsx", mustBeString);
-      let jsxFactory = getFlag(options, keys, "jsxFactory", mustBeString);
-      let jsxFragment = getFlag(options, keys, "jsxFragment", mustBeString);
-      let jsxImportSource = getFlag(options, keys, "jsxImportSource", mustBeString);
-      let jsxDev = getFlag(options, keys, "jsxDev", mustBeBoolean);
-      let jsxSideEffects = getFlag(options, keys, "jsxSideEffects", mustBeBoolean);
-      let define = getFlag(options, keys, "define", mustBeObject);
-      let logOverride = getFlag(options, keys, "logOverride", mustBeObject);
-      let supported = getFlag(options, keys, "supported", mustBeObject);
-      let pure = getFlag(options, keys, "pure", mustBeArrayOfStrings);
-      let keepNames = getFlag(options, keys, "keepNames", mustBeBoolean);
-      let platform = getFlag(options, keys, "platform", mustBeString);
-      let tsconfigRaw = getFlag(options, keys, "tsconfigRaw", mustBeStringOrObject);
-      let absPaths = getFlag(options, keys, "absPaths", mustBeArrayOfStrings);
-      if (legalComments) flags.push(`--legal-comments=${legalComments}`);
-      if (sourceRoot !== void 0) flags.push(`--source-root=${sourceRoot}`);
-      if (sourcesContent !== void 0) flags.push(`--sources-content=${sourcesContent}`);
-      if (target) flags.push(`--target=${validateAndJoinStringArray(Array.isArray(target) ? target : [target], "target")}`);
-      if (format2) flags.push(`--format=${format2}`);
-      if (globalName) flags.push(`--global-name=${globalName}`);
-      if (platform) flags.push(`--platform=${platform}`);
-      if (tsconfigRaw) flags.push(`--tsconfig-raw=${typeof tsconfigRaw === "string" ? tsconfigRaw : JSON.stringify(tsconfigRaw)}`);
-      if (minify) flags.push("--minify");
-      if (minifySyntax) flags.push("--minify-syntax");
-      if (minifyWhitespace) flags.push("--minify-whitespace");
-      if (minifyIdentifiers) flags.push("--minify-identifiers");
-      if (lineLimit) flags.push(`--line-limit=${lineLimit}`);
-      if (charset) flags.push(`--charset=${charset}`);
-      if (treeShaking !== void 0) flags.push(`--tree-shaking=${treeShaking}`);
-      if (ignoreAnnotations) flags.push(`--ignore-annotations`);
-      if (drop) for (let what of drop) flags.push(`--drop:${validateStringValue(what, "drop")}`);
-      if (dropLabels) flags.push(`--drop-labels=${validateAndJoinStringArray(dropLabels, "drop label")}`);
-      if (absPaths) flags.push(`--abs-paths=${validateAndJoinStringArray(absPaths, "abs paths")}`);
-      if (mangleProps) flags.push(`--mangle-props=${jsRegExpToGoRegExp(mangleProps)}`);
-      if (reserveProps) flags.push(`--reserve-props=${jsRegExpToGoRegExp(reserveProps)}`);
-      if (mangleQuoted !== void 0) flags.push(`--mangle-quoted=${mangleQuoted}`);
-      if (jsx) flags.push(`--jsx=${jsx}`);
-      if (jsxFactory) flags.push(`--jsx-factory=${jsxFactory}`);
-      if (jsxFragment) flags.push(`--jsx-fragment=${jsxFragment}`);
-      if (jsxImportSource) flags.push(`--jsx-import-source=${jsxImportSource}`);
-      if (jsxDev) flags.push(`--jsx-dev`);
-      if (jsxSideEffects) flags.push(`--jsx-side-effects`);
-      if (define) {
-        for (let key in define) {
-          if (key.indexOf("=") >= 0) throw new Error(`Invalid define: ${key}`);
-          flags.push(`--define:${key}=${validateStringValue(define[key], "define", key)}`);
-        }
-      }
-      if (logOverride) {
-        for (let key in logOverride) {
-          if (key.indexOf("=") >= 0) throw new Error(`Invalid log override: ${key}`);
-          flags.push(`--log-override:${key}=${validateStringValue(logOverride[key], "log override", key)}`);
-        }
-      }
-      if (supported) {
-        for (let key in supported) {
-          if (key.indexOf("=") >= 0) throw new Error(`Invalid supported: ${key}`);
-          const value = supported[key];
-          if (typeof value !== "boolean") throw new Error(`Expected value for supported ${quote(key)} to be a boolean, got ${typeof value} instead`);
-          flags.push(`--supported:${key}=${value}`);
-        }
-      }
-      if (pure) for (let fn of pure) flags.push(`--pure:${validateStringValue(fn, "pure")}`);
-      if (keepNames) flags.push(`--keep-names`);
-    }
-    function flagsForBuildOptions(callName, options, isTTY2, logLevelDefault, writeDefault) {
-      var _a22;
-      let flags = [];
-      let entries = [];
-      let keys = /* @__PURE__ */ Object.create(null);
-      let stdinContents = null;
-      let stdinResolveDir = null;
-      pushLogFlags(flags, options, keys, isTTY2, logLevelDefault);
-      pushCommonFlags(flags, options, keys);
-      let sourcemap = getFlag(options, keys, "sourcemap", mustBeStringOrBoolean);
-      let bundle = getFlag(options, keys, "bundle", mustBeBoolean);
-      let splitting = getFlag(options, keys, "splitting", mustBeBoolean);
-      let preserveSymlinks = getFlag(options, keys, "preserveSymlinks", mustBeBoolean);
-      let metafile = getFlag(options, keys, "metafile", mustBeBoolean);
-      let outfile = getFlag(options, keys, "outfile", mustBeString);
-      let outdir = getFlag(options, keys, "outdir", mustBeString);
-      let outbase = getFlag(options, keys, "outbase", mustBeString);
-      let tsconfig = getFlag(options, keys, "tsconfig", mustBeString);
-      let resolveExtensions = getFlag(options, keys, "resolveExtensions", mustBeArrayOfStrings);
-      let nodePathsInput = getFlag(options, keys, "nodePaths", mustBeArrayOfStrings);
-      let mainFields = getFlag(options, keys, "mainFields", mustBeArrayOfStrings);
-      let conditions = getFlag(options, keys, "conditions", mustBeArrayOfStrings);
-      let external = getFlag(options, keys, "external", mustBeArrayOfStrings);
-      let packages = getFlag(options, keys, "packages", mustBeString);
-      let alias = getFlag(options, keys, "alias", mustBeObject);
-      let loader = getFlag(options, keys, "loader", mustBeObject);
-      let outExtension = getFlag(options, keys, "outExtension", mustBeObject);
-      let publicPath = getFlag(options, keys, "publicPath", mustBeString);
-      let entryNames = getFlag(options, keys, "entryNames", mustBeString);
-      let chunkNames = getFlag(options, keys, "chunkNames", mustBeString);
-      let assetNames = getFlag(options, keys, "assetNames", mustBeString);
-      let inject = getFlag(options, keys, "inject", mustBeArrayOfStrings);
-      let banner = getFlag(options, keys, "banner", mustBeObject);
-      let footer = getFlag(options, keys, "footer", mustBeObject);
-      let entryPoints = getFlag(options, keys, "entryPoints", mustBeEntryPoints);
-      let absWorkingDir = getFlag(options, keys, "absWorkingDir", mustBeString);
-      let stdin = getFlag(options, keys, "stdin", mustBeObject);
-      let write = (_a22 = getFlag(options, keys, "write", mustBeBoolean)) != null ? _a22 : writeDefault;
-      let allowOverwrite = getFlag(options, keys, "allowOverwrite", mustBeBoolean);
-      let mangleCache = getFlag(options, keys, "mangleCache", mustBeObject);
-      keys.plugins = true;
-      checkForInvalidFlags(options, keys, `in ${callName}() call`);
-      if (sourcemap) flags.push(`--sourcemap${sourcemap === true ? "" : `=${sourcemap}`}`);
-      if (bundle) flags.push("--bundle");
-      if (allowOverwrite) flags.push("--allow-overwrite");
-      if (splitting) flags.push("--splitting");
-      if (preserveSymlinks) flags.push("--preserve-symlinks");
-      if (metafile) flags.push(`--metafile`);
-      if (outfile) flags.push(`--outfile=${outfile}`);
-      if (outdir) flags.push(`--outdir=${outdir}`);
-      if (outbase) flags.push(`--outbase=${outbase}`);
-      if (tsconfig) flags.push(`--tsconfig=${tsconfig}`);
-      if (packages) flags.push(`--packages=${packages}`);
-      if (resolveExtensions) flags.push(`--resolve-extensions=${validateAndJoinStringArray(resolveExtensions, "resolve extension")}`);
-      if (publicPath) flags.push(`--public-path=${publicPath}`);
-      if (entryNames) flags.push(`--entry-names=${entryNames}`);
-      if (chunkNames) flags.push(`--chunk-names=${chunkNames}`);
-      if (assetNames) flags.push(`--asset-names=${assetNames}`);
-      if (mainFields) flags.push(`--main-fields=${validateAndJoinStringArray(mainFields, "main field")}`);
-      if (conditions) flags.push(`--conditions=${validateAndJoinStringArray(conditions, "condition")}`);
-      if (external) for (let name of external) flags.push(`--external:${validateStringValue(name, "external")}`);
-      if (alias) {
-        for (let old in alias) {
-          if (old.indexOf("=") >= 0) throw new Error(`Invalid package name in alias: ${old}`);
-          flags.push(`--alias:${old}=${validateStringValue(alias[old], "alias", old)}`);
-        }
-      }
-      if (banner) {
-        for (let type in banner) {
-          if (type.indexOf("=") >= 0) throw new Error(`Invalid banner file type: ${type}`);
-          flags.push(`--banner:${type}=${validateStringValue(banner[type], "banner", type)}`);
-        }
-      }
-      if (footer) {
-        for (let type in footer) {
-          if (type.indexOf("=") >= 0) throw new Error(`Invalid footer file type: ${type}`);
-          flags.push(`--footer:${type}=${validateStringValue(footer[type], "footer", type)}`);
-        }
-      }
-      if (inject) for (let path32 of inject) flags.push(`--inject:${validateStringValue(path32, "inject")}`);
-      if (loader) {
-        for (let ext in loader) {
-          if (ext.indexOf("=") >= 0) throw new Error(`Invalid loader extension: ${ext}`);
-          flags.push(`--loader:${ext}=${validateStringValue(loader[ext], "loader", ext)}`);
-        }
-      }
-      if (outExtension) {
-        for (let ext in outExtension) {
-          if (ext.indexOf("=") >= 0) throw new Error(`Invalid out extension: ${ext}`);
-          flags.push(`--out-extension:${ext}=${validateStringValue(outExtension[ext], "out extension", ext)}`);
-        }
-      }
-      if (entryPoints) {
-        if (Array.isArray(entryPoints)) {
-          for (let i = 0, n = entryPoints.length; i < n; i++) {
-            let entryPoint = entryPoints[i];
-            if (typeof entryPoint === "object" && entryPoint !== null) {
-              let entryPointKeys = /* @__PURE__ */ Object.create(null);
-              let input = getFlag(entryPoint, entryPointKeys, "in", mustBeString);
-              let output = getFlag(entryPoint, entryPointKeys, "out", mustBeString);
-              checkForInvalidFlags(entryPoint, entryPointKeys, "in entry point at index " + i);
-              if (input === void 0) throw new Error('Missing property "in" for entry point at index ' + i);
-              if (output === void 0) throw new Error('Missing property "out" for entry point at index ' + i);
-              entries.push([output, input]);
-            } else {
-              entries.push(["", validateStringValue(entryPoint, "entry point at index " + i)]);
-            }
-          }
-        } else {
-          for (let key in entryPoints) {
-            entries.push([key, validateStringValue(entryPoints[key], "entry point", key)]);
-          }
-        }
-      }
-      if (stdin) {
-        let stdinKeys = /* @__PURE__ */ Object.create(null);
-        let contents = getFlag(stdin, stdinKeys, "contents", mustBeStringOrUint8Array);
-        let resolveDir = getFlag(stdin, stdinKeys, "resolveDir", mustBeString);
-        let sourcefile = getFlag(stdin, stdinKeys, "sourcefile", mustBeString);
-        let loader2 = getFlag(stdin, stdinKeys, "loader", mustBeString);
-        checkForInvalidFlags(stdin, stdinKeys, 'in "stdin" object');
-        if (sourcefile) flags.push(`--sourcefile=${sourcefile}`);
-        if (loader2) flags.push(`--loader=${loader2}`);
-        if (resolveDir) stdinResolveDir = resolveDir;
-        if (typeof contents === "string") stdinContents = encodeUTF82(contents);
-        else if (contents instanceof Uint8Array) stdinContents = contents;
-      }
-      let nodePaths = [];
-      if (nodePathsInput) {
-        for (let value of nodePathsInput) {
-          value += "";
-          nodePaths.push(value);
-        }
-      }
-      return {
-        entries,
-        flags,
-        write,
-        stdinContents,
-        stdinResolveDir,
-        absWorkingDir,
-        nodePaths,
-        mangleCache: validateMangleCache(mangleCache)
-      };
-    }
-    function flagsForTransformOptions(callName, options, isTTY2, logLevelDefault) {
-      let flags = [];
-      let keys = /* @__PURE__ */ Object.create(null);
-      pushLogFlags(flags, options, keys, isTTY2, logLevelDefault);
-      pushCommonFlags(flags, options, keys);
-      let sourcemap = getFlag(options, keys, "sourcemap", mustBeStringOrBoolean);
-      let sourcefile = getFlag(options, keys, "sourcefile", mustBeString);
-      let loader = getFlag(options, keys, "loader", mustBeString);
-      let banner = getFlag(options, keys, "banner", mustBeString);
-      let footer = getFlag(options, keys, "footer", mustBeString);
-      let mangleCache = getFlag(options, keys, "mangleCache", mustBeObject);
-      checkForInvalidFlags(options, keys, `in ${callName}() call`);
-      if (sourcemap) flags.push(`--sourcemap=${sourcemap === true ? "external" : sourcemap}`);
-      if (sourcefile) flags.push(`--sourcefile=${sourcefile}`);
-      if (loader) flags.push(`--loader=${loader}`);
-      if (banner) flags.push(`--banner=${banner}`);
-      if (footer) flags.push(`--footer=${footer}`);
-      return {
-        flags,
-        mangleCache: validateMangleCache(mangleCache)
-      };
-    }
-    function createChannel(streamIn) {
-      const requestCallbacksByKey = {};
-      const closeData = { didClose: false, reason: "" };
-      let responseCallbacks = {};
-      let nextRequestID = 0;
-      let nextBuildKey = 0;
-      let stdout = new Uint8Array(16 * 1024);
-      let stdoutUsed = 0;
-      let readFromStdout = (chunk) => {
-        let limit = stdoutUsed + chunk.length;
-        if (limit > stdout.length) {
-          let swap = new Uint8Array(limit * 2);
-          swap.set(stdout);
-          stdout = swap;
-        }
-        stdout.set(chunk, stdoutUsed);
-        stdoutUsed += chunk.length;
-        let offset = 0;
-        while (offset + 4 <= stdoutUsed) {
-          let length = readUInt32LE(stdout, offset);
-          if (offset + 4 + length > stdoutUsed) {
-            break;
-          }
-          offset += 4;
-          handleIncomingPacket(stdout.subarray(offset, offset + length));
-          offset += length;
-        }
-        if (offset > 0) {
-          stdout.copyWithin(0, offset, stdoutUsed);
-          stdoutUsed -= offset;
-        }
-      };
-      let afterClose = (error) => {
-        closeData.didClose = true;
-        if (error) closeData.reason = ": " + (error.message || error);
-        const text = "The service was stopped" + closeData.reason;
-        for (let id in responseCallbacks) {
-          responseCallbacks[id](text, null);
-        }
-        responseCallbacks = {};
-      };
-      let sendRequest = (refs, value, callback) => {
-        if (closeData.didClose) return callback("The service is no longer running" + closeData.reason, null);
-        let id = nextRequestID++;
-        responseCallbacks[id] = (error, response) => {
-          try {
-            callback(error, response);
-          } finally {
-            if (refs) refs.unref();
-          }
-        };
-        if (refs) refs.ref();
-        streamIn.writeToStdin(encodePacket({ id, isRequest: true, value }));
-      };
-      let sendResponse = (id, value) => {
-        if (closeData.didClose) throw new Error("The service is no longer running" + closeData.reason);
-        streamIn.writeToStdin(encodePacket({ id, isRequest: false, value }));
-      };
-      let handleRequest = async (id, request) => {
-        try {
-          if (request.command === "ping") {
-            sendResponse(id, {});
-            return;
-          }
-          if (typeof request.key === "number") {
-            const requestCallbacks = requestCallbacksByKey[request.key];
-            if (!requestCallbacks) {
-              return;
-            }
-            const callback = requestCallbacks[request.command];
-            if (callback) {
-              await callback(id, request);
-              return;
-            }
-          }
-          throw new Error(`Invalid command: ` + request.command);
-        } catch (e) {
-          const errors = [extractErrorMessageV8(e, streamIn, null, void 0, "")];
-          try {
-            sendResponse(id, { errors });
-          } catch {
-          }
-        }
-      };
-      let isFirstPacket = true;
-      let handleIncomingPacket = (bytes) => {
-        if (isFirstPacket) {
-          isFirstPacket = false;
-          let binaryVersion = String.fromCharCode(...bytes);
-          if (binaryVersion !== "0.28.0") {
-            throw new Error(`Cannot start service: Host version "${"0.28.0"}" does not match binary version ${quote(binaryVersion)}`);
-          }
-          return;
-        }
-        let packet = decodePacket(bytes);
-        if (packet.isRequest) {
-          handleRequest(packet.id, packet.value);
-        } else {
-          let callback = responseCallbacks[packet.id];
-          delete responseCallbacks[packet.id];
-          if (packet.value.error) callback(packet.value.error, {});
-          else callback(null, packet.value);
-        }
-      };
-      let buildOrContext = ({ callName, refs, options, isTTY: isTTY2, defaultWD: defaultWD2, callback }) => {
-        let refCount = 0;
-        const buildKey = nextBuildKey++;
-        const requestCallbacks = {};
-        const buildRefs = {
-          ref() {
-            if (++refCount === 1) {
-              if (refs) refs.ref();
-            }
-          },
-          unref() {
-            if (--refCount === 0) {
-              delete requestCallbacksByKey[buildKey];
-              if (refs) refs.unref();
-            }
-          }
-        };
-        requestCallbacksByKey[buildKey] = requestCallbacks;
-        buildRefs.ref();
-        buildOrContextImpl(
-          callName,
-          buildKey,
-          sendRequest,
-          sendResponse,
-          buildRefs,
-          streamIn,
-          requestCallbacks,
-          options,
-          isTTY2,
-          defaultWD2,
-          (err, res) => {
-            try {
-              callback(err, res);
-            } finally {
-              buildRefs.unref();
-            }
-          }
-        );
-      };
-      let transform2 = ({ callName, refs, input, options, isTTY: isTTY2, fs: fs32, callback }) => {
-        const details = createObjectStash();
-        let start = (inputPath) => {
-          try {
-            if (typeof input !== "string" && !(input instanceof Uint8Array))
-              throw new Error('The input to "transform" must be a string or a Uint8Array');
-            let {
-              flags,
-              mangleCache
-            } = flagsForTransformOptions(callName, options, isTTY2, transformLogLevelDefault);
-            let request = {
-              command: "transform",
-              flags,
-              inputFS: inputPath !== null,
-              input: inputPath !== null ? encodeUTF82(inputPath) : typeof input === "string" ? encodeUTF82(input) : input
-            };
-            if (mangleCache) request.mangleCache = mangleCache;
-            sendRequest(refs, request, (error, response) => {
-              if (error) return callback(new Error(error), null);
-              let errors = replaceDetailsInMessages(response.errors, details);
-              let warnings = replaceDetailsInMessages(response.warnings, details);
-              let outstanding = 1;
-              let next = () => {
-                if (--outstanding === 0) {
-                  let result = {
-                    warnings,
-                    code: response.code,
-                    map: response.map,
-                    mangleCache: void 0,
-                    legalComments: void 0
-                  };
-                  if ("legalComments" in response) result.legalComments = response == null ? void 0 : response.legalComments;
-                  if (response.mangleCache) result.mangleCache = response == null ? void 0 : response.mangleCache;
-                  callback(null, result);
-                }
-              };
-              if (errors.length > 0) return callback(failureErrorWithLog("Transform failed", errors, warnings), null);
-              if (response.codeFS) {
-                outstanding++;
-                fs32.readFile(response.code, (err, contents) => {
-                  if (err !== null) {
-                    callback(err, null);
-                  } else {
-                    response.code = contents;
-                    next();
-                  }
-                });
-              }
-              if (response.mapFS) {
-                outstanding++;
-                fs32.readFile(response.map, (err, contents) => {
-                  if (err !== null) {
-                    callback(err, null);
-                  } else {
-                    response.map = contents;
-                    next();
-                  }
-                });
-              }
-              next();
-            });
-          } catch (e) {
-            let flags = [];
-            try {
-              pushLogFlags(flags, options, {}, isTTY2, transformLogLevelDefault);
-            } catch {
-            }
-            const error = extractErrorMessageV8(e, streamIn, details, void 0, "");
-            sendRequest(refs, { command: "error", flags, error }, () => {
-              error.detail = details.load(error.detail);
-              callback(failureErrorWithLog("Transform failed", [error], []), null);
-            });
-          }
-        };
-        if ((typeof input === "string" || input instanceof Uint8Array) && input.length > 1024 * 1024) {
-          let next = start;
-          start = () => fs32.writeFile(input, next);
-        }
-        start(null);
-      };
-      let formatMessages2 = ({ callName, refs, messages, options, callback }) => {
-        if (!options) throw new Error(`Missing second argument in ${callName}() call`);
-        let keys = {};
-        let kind = getFlag(options, keys, "kind", mustBeString);
-        let color = getFlag(options, keys, "color", mustBeBoolean);
-        let terminalWidth = getFlag(options, keys, "terminalWidth", mustBeInteger);
-        checkForInvalidFlags(options, keys, `in ${callName}() call`);
-        if (kind === void 0) throw new Error(`Missing "kind" in ${callName}() call`);
-        if (kind !== "error" && kind !== "warning") throw new Error(`Expected "kind" to be "error" or "warning" in ${callName}() call`);
-        let request = {
-          command: "format-msgs",
-          messages: sanitizeMessages(messages, "messages", null, "", terminalWidth),
-          isWarning: kind === "warning"
-        };
-        if (color !== void 0) request.color = color;
-        if (terminalWidth !== void 0) request.terminalWidth = terminalWidth;
-        sendRequest(refs, request, (error, response) => {
-          if (error) return callback(new Error(error), null);
-          callback(null, response.messages);
-        });
-      };
-      let analyzeMetafile2 = ({ callName, refs, metafile, options, callback }) => {
-        if (options === void 0) options = {};
-        let keys = {};
-        let color = getFlag(options, keys, "color", mustBeBoolean);
-        let verbose = getFlag(options, keys, "verbose", mustBeBoolean);
-        checkForInvalidFlags(options, keys, `in ${callName}() call`);
-        let request = {
-          command: "analyze-metafile",
-          metafile
-        };
-        if (color !== void 0) request.color = color;
-        if (verbose !== void 0) request.verbose = verbose;
-        sendRequest(refs, request, (error, response) => {
-          if (error) return callback(new Error(error), null);
-          callback(null, response.result);
-        });
-      };
-      return {
-        readFromStdout,
-        afterClose,
-        service: {
-          buildOrContext,
-          transform: transform2,
-          formatMessages: formatMessages2,
-          analyzeMetafile: analyzeMetafile2
-        }
-      };
-    }
-    function buildOrContextImpl(callName, buildKey, sendRequest, sendResponse, refs, streamIn, requestCallbacks, options, isTTY2, defaultWD2, callback) {
-      const details = createObjectStash();
-      const isContext = callName === "context";
-      const handleError = (e, pluginName) => {
-        const flags = [];
-        try {
-          pushLogFlags(flags, options, {}, isTTY2, buildLogLevelDefault);
-        } catch {
-        }
-        const message = extractErrorMessageV8(e, streamIn, details, void 0, pluginName);
-        sendRequest(refs, { command: "error", flags, error: message }, () => {
-          message.detail = details.load(message.detail);
-          callback(failureErrorWithLog(isContext ? "Context failed" : "Build failed", [message], []), null);
-        });
-      };
-      let plugins;
-      if (typeof options === "object") {
-        const value = options.plugins;
-        if (value !== void 0) {
-          if (!Array.isArray(value)) return handleError(new Error(`"plugins" must be an array`), "");
-          plugins = value;
-        }
-      }
-      if (plugins && plugins.length > 0) {
-        if (streamIn.isSync) return handleError(new Error("Cannot use plugins in synchronous API calls"), "");
-        handlePlugins(
-          buildKey,
-          sendRequest,
-          sendResponse,
-          refs,
-          streamIn,
-          requestCallbacks,
-          options,
-          plugins,
-          details
-        ).then(
-          (result) => {
-            if (!result.ok) return handleError(result.error, result.pluginName);
-            try {
-              buildOrContextContinue(result.requestPlugins, result.runOnEndCallbacks, result.scheduleOnDisposeCallbacks);
-            } catch (e) {
-              handleError(e, "");
-            }
-          },
-          (e) => handleError(e, "")
-        );
-        return;
-      }
-      try {
-        buildOrContextContinue(null, (result, done) => done([], []), () => {
-        });
-      } catch (e) {
-        handleError(e, "");
-      }
-      function buildOrContextContinue(requestPlugins, runOnEndCallbacks, scheduleOnDisposeCallbacks) {
-        const writeDefault = streamIn.hasFS;
-        const {
-          entries,
-          flags,
-          write,
-          stdinContents,
-          stdinResolveDir,
-          absWorkingDir,
-          nodePaths,
-          mangleCache
-        } = flagsForBuildOptions(callName, options, isTTY2, buildLogLevelDefault, writeDefault);
-        if (write && !streamIn.hasFS) throw new Error(`The "write" option is unavailable in this environment`);
-        const request = {
-          command: "build",
-          key: buildKey,
-          entries,
-          flags,
-          write,
-          stdinContents,
-          stdinResolveDir,
-          absWorkingDir: absWorkingDir || defaultWD2,
-          nodePaths,
-          context: isContext
-        };
-        if (requestPlugins) request.plugins = requestPlugins;
-        if (mangleCache) request.mangleCache = mangleCache;
-        const buildResponseToResult = (response, callback2) => {
-          const result = {
-            errors: replaceDetailsInMessages(response.errors, details),
-            warnings: replaceDetailsInMessages(response.warnings, details),
-            outputFiles: void 0,
-            metafile: void 0,
-            mangleCache: void 0
-          };
-          const originalErrors = result.errors.slice();
-          const originalWarnings = result.warnings.slice();
-          if (response.outputFiles) result.outputFiles = response.outputFiles.map(convertOutputFiles);
-          if (response.metafile && response.metafile.length) result.metafile = parseJSON(response.metafile);
-          if (response.mangleCache) result.mangleCache = response.mangleCache;
-          if (response.writeToStdout !== void 0) console.log(decodeUTF82(response.writeToStdout).replace(/\n$/, ""));
-          runOnEndCallbacks(result, (onEndErrors, onEndWarnings) => {
-            if (originalErrors.length > 0 || onEndErrors.length > 0) {
-              const error = failureErrorWithLog("Build failed", originalErrors.concat(onEndErrors), originalWarnings.concat(onEndWarnings));
-              return callback2(error, null, onEndErrors, onEndWarnings);
-            }
-            callback2(null, result, onEndErrors, onEndWarnings);
-          });
-        };
-        let latestResultPromise;
-        let provideLatestResult;
-        if (isContext)
-          requestCallbacks["on-end"] = (id, request2) => new Promise((resolve4) => {
-            buildResponseToResult(request2, (err, result, onEndErrors, onEndWarnings) => {
-              const response = {
-                errors: onEndErrors,
-                warnings: onEndWarnings
-              };
-              if (provideLatestResult) provideLatestResult(err, result);
-              latestResultPromise = void 0;
-              provideLatestResult = void 0;
-              sendResponse(id, response);
-              resolve4();
-            });
-          });
-        sendRequest(refs, request, (error, response) => {
-          if (error) return callback(new Error(error), null);
-          if (!isContext) {
-            return buildResponseToResult(response, (err, res) => {
-              scheduleOnDisposeCallbacks();
-              return callback(err, res);
-            });
-          }
-          if (response.errors.length > 0) {
-            return callback(failureErrorWithLog("Context failed", response.errors, response.warnings), null);
-          }
-          let didDispose = false;
-          const result = {
-            rebuild: () => {
-              if (!latestResultPromise) latestResultPromise = new Promise((resolve4, reject) => {
-                let settlePromise;
-                provideLatestResult = (err, result2) => {
-                  if (!settlePromise) settlePromise = () => err ? reject(err) : resolve4(result2);
-                };
-                const triggerAnotherBuild = () => {
-                  const request2 = {
-                    command: "rebuild",
-                    key: buildKey
-                  };
-                  sendRequest(refs, request2, (error2, response2) => {
-                    if (error2) {
-                      reject(new Error(error2));
-                    } else if (settlePromise) {
-                      settlePromise();
-                    } else {
-                      triggerAnotherBuild();
-                    }
-                  });
-                };
-                triggerAnotherBuild();
-              });
-              return latestResultPromise;
-            },
-            watch: (options2 = {}) => new Promise((resolve4, reject) => {
-              if (!streamIn.hasFS) throw new Error(`Cannot use the "watch" API in this environment`);
-              const keys = {};
-              const delay2 = getFlag(options2, keys, "delay", mustBeInteger);
-              checkForInvalidFlags(options2, keys, `in watch() call`);
-              const request2 = {
-                command: "watch",
-                key: buildKey
-              };
-              if (delay2) request2.delay = delay2;
-              sendRequest(refs, request2, (error2) => {
-                if (error2) reject(new Error(error2));
-                else resolve4(void 0);
-              });
-            }),
-            serve: (options2 = {}) => new Promise((resolve4, reject) => {
-              if (!streamIn.hasFS) throw new Error(`Cannot use the "serve" API in this environment`);
-              const keys = {};
-              const port = getFlag(options2, keys, "port", mustBeValidPortNumber);
-              const host = getFlag(options2, keys, "host", mustBeString);
-              const servedir = getFlag(options2, keys, "servedir", mustBeString);
-              const keyfile = getFlag(options2, keys, "keyfile", mustBeString);
-              const certfile = getFlag(options2, keys, "certfile", mustBeString);
-              const fallback = getFlag(options2, keys, "fallback", mustBeString);
-              const cors = getFlag(options2, keys, "cors", mustBeObject);
-              const onRequest = getFlag(options2, keys, "onRequest", mustBeFunction);
-              checkForInvalidFlags(options2, keys, `in serve() call`);
-              const request2 = {
-                command: "serve",
-                key: buildKey,
-                onRequest: !!onRequest
-              };
-              if (port !== void 0) request2.port = port;
-              if (host !== void 0) request2.host = host;
-              if (servedir !== void 0) request2.servedir = servedir;
-              if (keyfile !== void 0) request2.keyfile = keyfile;
-              if (certfile !== void 0) request2.certfile = certfile;
-              if (fallback !== void 0) request2.fallback = fallback;
-              if (cors) {
-                const corsKeys = {};
-                const origin = getFlag(cors, corsKeys, "origin", mustBeStringOrArrayOfStrings);
-                checkForInvalidFlags(cors, corsKeys, `on "cors" object`);
-                if (Array.isArray(origin)) request2.corsOrigin = origin;
-                else if (origin !== void 0) request2.corsOrigin = [origin];
-              }
-              sendRequest(refs, request2, (error2, response2) => {
-                if (error2) return reject(new Error(error2));
-                if (onRequest) {
-                  requestCallbacks["serve-request"] = (id, request3) => {
-                    onRequest(request3.args);
-                    sendResponse(id, {});
-                  };
-                }
-                resolve4(response2);
-              });
-            }),
-            cancel: () => new Promise((resolve4) => {
-              if (didDispose) return resolve4();
-              const request2 = {
-                command: "cancel",
-                key: buildKey
-              };
-              sendRequest(refs, request2, () => {
-                resolve4();
-              });
-            }),
-            dispose: () => new Promise((resolve4) => {
-              if (didDispose) return resolve4();
-              didDispose = true;
-              const request2 = {
-                command: "dispose",
-                key: buildKey
-              };
-              sendRequest(refs, request2, () => {
-                resolve4();
-                scheduleOnDisposeCallbacks();
-                refs.unref();
-              });
-            })
-          };
-          refs.ref();
-          callback(null, result);
-        });
-      }
-    }
-    var handlePlugins = async (buildKey, sendRequest, sendResponse, refs, streamIn, requestCallbacks, initialOptions, plugins, details) => {
-      let onStartCallbacks = [];
-      let onEndCallbacks = [];
-      let onResolveCallbacks = {};
-      let onLoadCallbacks = {};
-      let onDisposeCallbacks = [];
-      let nextCallbackID = 0;
-      let i = 0;
-      let requestPlugins = [];
-      let isSetupDone = false;
-      plugins = [...plugins];
-      for (let item of plugins) {
-        let keys = {};
-        if (typeof item !== "object") throw new Error(`Plugin at index ${i} must be an object`);
-        const name = getFlag(item, keys, "name", mustBeString);
-        if (typeof name !== "string" || name === "") throw new Error(`Plugin at index ${i} is missing a name`);
-        try {
-          let setup = getFlag(item, keys, "setup", mustBeFunction);
-          if (typeof setup !== "function") throw new Error(`Plugin is missing a setup function`);
-          checkForInvalidFlags(item, keys, `on plugin ${quote(name)}`);
-          let plugin = {
-            name,
-            onStart: false,
-            onEnd: false,
-            onResolve: [],
-            onLoad: []
-          };
-          i++;
-          let resolve4 = (path32, options = {}) => {
-            if (!isSetupDone) throw new Error('Cannot call "resolve" before plugin setup has completed');
-            if (typeof path32 !== "string") throw new Error(`The path to resolve must be a string`);
-            let keys2 = /* @__PURE__ */ Object.create(null);
-            let pluginName = getFlag(options, keys2, "pluginName", mustBeString);
-            let importer = getFlag(options, keys2, "importer", mustBeString);
-            let namespace = getFlag(options, keys2, "namespace", mustBeString);
-            let resolveDir = getFlag(options, keys2, "resolveDir", mustBeString);
-            let kind = getFlag(options, keys2, "kind", mustBeString);
-            let pluginData = getFlag(options, keys2, "pluginData", canBeAnything);
-            let importAttributes = getFlag(options, keys2, "with", mustBeObject);
-            checkForInvalidFlags(options, keys2, "in resolve() call");
-            return new Promise((resolve22, reject) => {
-              const request = {
-                command: "resolve",
-                path: path32,
-                key: buildKey,
-                pluginName: name
-              };
-              if (pluginName != null) request.pluginName = pluginName;
-              if (importer != null) request.importer = importer;
-              if (namespace != null) request.namespace = namespace;
-              if (resolveDir != null) request.resolveDir = resolveDir;
-              if (kind != null) request.kind = kind;
-              else throw new Error(`Must specify "kind" when calling "resolve"`);
-              if (pluginData != null) request.pluginData = details.store(pluginData);
-              if (importAttributes != null) request.with = sanitizeStringMap(importAttributes, "with");
-              sendRequest(refs, request, (error, response) => {
-                if (error !== null) reject(new Error(error));
-                else resolve22({
-                  errors: replaceDetailsInMessages(response.errors, details),
-                  warnings: replaceDetailsInMessages(response.warnings, details),
-                  path: response.path,
-                  external: response.external,
-                  sideEffects: response.sideEffects,
-                  namespace: response.namespace,
-                  suffix: response.suffix,
-                  pluginData: details.load(response.pluginData)
-                });
-              });
-            });
-          };
-          let promise = setup({
-            initialOptions,
-            resolve: resolve4,
-            onStart(callback) {
-              let registeredText = `This error came from the "onStart" callback registered here:`;
-              let registeredNote = extractCallerV8(new Error(registeredText), streamIn, "onStart");
-              onStartCallbacks.push({ name, callback, note: registeredNote });
-              plugin.onStart = true;
-            },
-            onEnd(callback) {
-              let registeredText = `This error came from the "onEnd" callback registered here:`;
-              let registeredNote = extractCallerV8(new Error(registeredText), streamIn, "onEnd");
-              onEndCallbacks.push({ name, callback, note: registeredNote });
-              plugin.onEnd = true;
-            },
-            onResolve(options, callback) {
-              let registeredText = `This error came from the "onResolve" callback registered here:`;
-              let registeredNote = extractCallerV8(new Error(registeredText), streamIn, "onResolve");
-              let keys2 = {};
-              let filter = getFlag(options, keys2, "filter", mustBeRegExp);
-              let namespace = getFlag(options, keys2, "namespace", mustBeString);
-              checkForInvalidFlags(options, keys2, `in onResolve() call for plugin ${quote(name)}`);
-              if (filter == null) throw new Error(`onResolve() call is missing a filter`);
-              let id = nextCallbackID++;
-              onResolveCallbacks[id] = { name, callback, note: registeredNote };
-              plugin.onResolve.push({ id, filter: jsRegExpToGoRegExp(filter), namespace: namespace || "" });
-            },
-            onLoad(options, callback) {
-              let registeredText = `This error came from the "onLoad" callback registered here:`;
-              let registeredNote = extractCallerV8(new Error(registeredText), streamIn, "onLoad");
-              let keys2 = {};
-              let filter = getFlag(options, keys2, "filter", mustBeRegExp);
-              let namespace = getFlag(options, keys2, "namespace", mustBeString);
-              checkForInvalidFlags(options, keys2, `in onLoad() call for plugin ${quote(name)}`);
-              if (filter == null) throw new Error(`onLoad() call is missing a filter`);
-              let id = nextCallbackID++;
-              onLoadCallbacks[id] = { name, callback, note: registeredNote };
-              plugin.onLoad.push({ id, filter: jsRegExpToGoRegExp(filter), namespace: namespace || "" });
-            },
-            onDispose(callback) {
-              onDisposeCallbacks.push(callback);
-            },
-            esbuild: streamIn.esbuild
-          });
-          if (promise) await promise;
-          requestPlugins.push(plugin);
-        } catch (e) {
-          return { ok: false, error: e, pluginName: name };
-        }
-      }
-      requestCallbacks["on-start"] = async (id, request) => {
-        details.clear();
-        let response = { errors: [], warnings: [] };
-        await Promise.all(onStartCallbacks.map(async ({ name, callback, note }) => {
-          try {
-            let result = await callback();
-            if (result != null) {
-              if (typeof result !== "object") throw new Error(`Expected onStart() callback in plugin ${quote(name)} to return an object`);
-              let keys = {};
-              let errors = getFlag(result, keys, "errors", mustBeArray);
-              let warnings = getFlag(result, keys, "warnings", mustBeArray);
-              checkForInvalidFlags(result, keys, `from onStart() callback in plugin ${quote(name)}`);
-              if (errors != null) response.errors.push(...sanitizeMessages(errors, "errors", details, name, void 0));
-              if (warnings != null) response.warnings.push(...sanitizeMessages(warnings, "warnings", details, name, void 0));
-            }
-          } catch (e) {
-            response.errors.push(extractErrorMessageV8(e, streamIn, details, note && note(), name));
-          }
-        }));
-        sendResponse(id, response);
-      };
-      requestCallbacks["on-resolve"] = async (id, request) => {
-        let response = {}, name = "", callback, note;
-        for (let id2 of request.ids) {
-          try {
-            ({ name, callback, note } = onResolveCallbacks[id2]);
-            let result = await callback({
-              path: request.path,
-              importer: request.importer,
-              namespace: request.namespace,
-              resolveDir: request.resolveDir,
-              kind: request.kind,
-              pluginData: details.load(request.pluginData),
-              with: request.with
-            });
-            if (result != null) {
-              if (typeof result !== "object") throw new Error(`Expected onResolve() callback in plugin ${quote(name)} to return an object`);
-              let keys = {};
-              let pluginName = getFlag(result, keys, "pluginName", mustBeString);
-              let path32 = getFlag(result, keys, "path", mustBeString);
-              let namespace = getFlag(result, keys, "namespace", mustBeString);
-              let suffix = getFlag(result, keys, "suffix", mustBeString);
-              let external = getFlag(result, keys, "external", mustBeBoolean);
-              let sideEffects = getFlag(result, keys, "sideEffects", mustBeBoolean);
-              let pluginData = getFlag(result, keys, "pluginData", canBeAnything);
-              let errors = getFlag(result, keys, "errors", mustBeArray);
-              let warnings = getFlag(result, keys, "warnings", mustBeArray);
-              let watchFiles = getFlag(result, keys, "watchFiles", mustBeArrayOfStrings);
-              let watchDirs = getFlag(result, keys, "watchDirs", mustBeArrayOfStrings);
-              checkForInvalidFlags(result, keys, `from onResolve() callback in plugin ${quote(name)}`);
-              response.id = id2;
-              if (pluginName != null) response.pluginName = pluginName;
-              if (path32 != null) response.path = path32;
-              if (namespace != null) response.namespace = namespace;
-              if (suffix != null) response.suffix = suffix;
-              if (external != null) response.external = external;
-              if (sideEffects != null) response.sideEffects = sideEffects;
-              if (pluginData != null) response.pluginData = details.store(pluginData);
-              if (errors != null) response.errors = sanitizeMessages(errors, "errors", details, name, void 0);
-              if (warnings != null) response.warnings = sanitizeMessages(warnings, "warnings", details, name, void 0);
-              if (watchFiles != null) response.watchFiles = sanitizeStringArray(watchFiles, "watchFiles");
-              if (watchDirs != null) response.watchDirs = sanitizeStringArray(watchDirs, "watchDirs");
-              break;
-            }
-          } catch (e) {
-            response = { id: id2, errors: [extractErrorMessageV8(e, streamIn, details, note && note(), name)] };
-            break;
-          }
-        }
-        sendResponse(id, response);
-      };
-      requestCallbacks["on-load"] = async (id, request) => {
-        let response = {}, name = "", callback, note;
-        for (let id2 of request.ids) {
-          try {
-            ({ name, callback, note } = onLoadCallbacks[id2]);
-            let result = await callback({
-              path: request.path,
-              namespace: request.namespace,
-              suffix: request.suffix,
-              pluginData: details.load(request.pluginData),
-              with: request.with
-            });
-            if (result != null) {
-              if (typeof result !== "object") throw new Error(`Expected onLoad() callback in plugin ${quote(name)} to return an object`);
-              let keys = {};
-              let pluginName = getFlag(result, keys, "pluginName", mustBeString);
-              let contents = getFlag(result, keys, "contents", mustBeStringOrUint8Array);
-              let resolveDir = getFlag(result, keys, "resolveDir", mustBeString);
-              let pluginData = getFlag(result, keys, "pluginData", canBeAnything);
-              let loader = getFlag(result, keys, "loader", mustBeString);
-              let errors = getFlag(result, keys, "errors", mustBeArray);
-              let warnings = getFlag(result, keys, "warnings", mustBeArray);
-              let watchFiles = getFlag(result, keys, "watchFiles", mustBeArrayOfStrings);
-              let watchDirs = getFlag(result, keys, "watchDirs", mustBeArrayOfStrings);
-              checkForInvalidFlags(result, keys, `from onLoad() callback in plugin ${quote(name)}`);
-              response.id = id2;
-              if (pluginName != null) response.pluginName = pluginName;
-              if (contents instanceof Uint8Array) response.contents = contents;
-              else if (contents != null) response.contents = encodeUTF82(contents);
-              if (resolveDir != null) response.resolveDir = resolveDir;
-              if (pluginData != null) response.pluginData = details.store(pluginData);
-              if (loader != null) response.loader = loader;
-              if (errors != null) response.errors = sanitizeMessages(errors, "errors", details, name, void 0);
-              if (warnings != null) response.warnings = sanitizeMessages(warnings, "warnings", details, name, void 0);
-              if (watchFiles != null) response.watchFiles = sanitizeStringArray(watchFiles, "watchFiles");
-              if (watchDirs != null) response.watchDirs = sanitizeStringArray(watchDirs, "watchDirs");
-              break;
-            }
-          } catch (e) {
-            response = { id: id2, errors: [extractErrorMessageV8(e, streamIn, details, note && note(), name)] };
-            break;
-          }
-        }
-        sendResponse(id, response);
-      };
-      let runOnEndCallbacks = (result, done) => done([], []);
-      if (onEndCallbacks.length > 0) {
-        runOnEndCallbacks = (result, done) => {
-          (async () => {
-            const onEndErrors = [];
-            const onEndWarnings = [];
-            for (const { name, callback, note } of onEndCallbacks) {
-              let newErrors;
-              let newWarnings;
-              try {
-                const value = await callback(result);
-                if (value != null) {
-                  if (typeof value !== "object") throw new Error(`Expected onEnd() callback in plugin ${quote(name)} to return an object`);
-                  let keys = {};
-                  let errors = getFlag(value, keys, "errors", mustBeArray);
-                  let warnings = getFlag(value, keys, "warnings", mustBeArray);
-                  checkForInvalidFlags(value, keys, `from onEnd() callback in plugin ${quote(name)}`);
-                  if (errors != null) newErrors = sanitizeMessages(errors, "errors", details, name, void 0);
-                  if (warnings != null) newWarnings = sanitizeMessages(warnings, "warnings", details, name, void 0);
-                }
-              } catch (e) {
-                newErrors = [extractErrorMessageV8(e, streamIn, details, note && note(), name)];
-              }
-              if (newErrors) {
-                onEndErrors.push(...newErrors);
-                try {
-                  result.errors.push(...newErrors);
-                } catch {
-                }
-              }
-              if (newWarnings) {
-                onEndWarnings.push(...newWarnings);
-                try {
-                  result.warnings.push(...newWarnings);
-                } catch {
-                }
-              }
-            }
-            done(onEndErrors, onEndWarnings);
-          })();
-        };
-      }
-      let scheduleOnDisposeCallbacks = () => {
-        for (const cb of onDisposeCallbacks) {
-          setTimeout(() => cb(), 0);
-        }
-      };
-      isSetupDone = true;
-      return {
-        ok: true,
-        requestPlugins,
-        runOnEndCallbacks,
-        scheduleOnDisposeCallbacks
-      };
-    };
-    function createObjectStash() {
-      const map = /* @__PURE__ */ new Map();
-      let nextID = 0;
-      return {
-        clear() {
-          map.clear();
-        },
-        load(id) {
-          return map.get(id);
-        },
-        store(value) {
-          if (value === void 0) return -1;
-          const id = nextID++;
-          map.set(id, value);
-          return id;
-        }
-      };
-    }
-    function extractCallerV8(e, streamIn, ident) {
-      let note;
-      let tried = false;
-      return () => {
-        if (tried) return note;
-        tried = true;
-        try {
-          let lines = (e.stack + "").split("\n");
-          lines.splice(1, 1);
-          let location = parseStackLinesV8(streamIn, lines, ident);
-          if (location) {
-            note = { text: e.message, location };
-            return note;
-          }
-        } catch {
-        }
-      };
-    }
-    function extractErrorMessageV8(e, streamIn, stash, note, pluginName) {
-      let text = "Internal error";
-      let location = null;
-      try {
-        text = (e && e.message || e) + "";
-      } catch {
-      }
-      try {
-        location = parseStackLinesV8(streamIn, (e.stack + "").split("\n"), "");
-      } catch {
-      }
-      return { id: "", pluginName, text, location, notes: note ? [note] : [], detail: stash ? stash.store(e) : -1 };
-    }
-    function parseStackLinesV8(streamIn, lines, ident) {
-      let at = "    at ";
-      if (streamIn.readFileSync && !lines[0].startsWith(at) && lines[1].startsWith(at)) {
-        for (let i = 1; i < lines.length; i++) {
-          let line = lines[i];
-          if (!line.startsWith(at)) continue;
-          line = line.slice(at.length);
-          while (true) {
-            let match = /^(?:new |async )?\S+ \((.*)\)$/.exec(line);
-            if (match) {
-              line = match[1];
-              continue;
-            }
-            match = /^eval at \S+ \((.*)\)(?:, \S+:\d+:\d+)?$/.exec(line);
-            if (match) {
-              line = match[1];
-              continue;
-            }
-            match = /^(\S+):(\d+):(\d+)$/.exec(line);
-            if (match) {
-              let contents;
-              try {
-                contents = streamIn.readFileSync(match[1], "utf8");
-              } catch {
-                break;
-              }
-              let lineText = contents.split(/\r\n|\r|\n|\u2028|\u2029/)[+match[2] - 1] || "";
-              let column = +match[3] - 1;
-              let length = lineText.slice(column, column + ident.length) === ident ? ident.length : 0;
-              return {
-                file: match[1],
-                namespace: "file",
-                line: +match[2],
-                column: encodeUTF82(lineText.slice(0, column)).length,
-                length: encodeUTF82(lineText.slice(column, column + length)).length,
-                lineText: lineText + "\n" + lines.slice(1).join("\n"),
-                suggestion: ""
-              };
-            }
-            break;
-          }
-        }
-      }
-      return null;
-    }
-    function failureErrorWithLog(text, errors, warnings) {
-      let limit = 5;
-      text += errors.length < 1 ? "" : ` with ${errors.length} error${errors.length < 2 ? "" : "s"}:` + errors.slice(0, limit + 1).map((e, i) => {
-        if (i === limit) return "\n...";
-        if (!e.location) return `
-error: ${e.text}`;
-        let { file, line, column } = e.location;
-        let pluginText = e.pluginName ? `[plugin: ${e.pluginName}] ` : "";
-        return `
-${file}:${line}:${column}: ERROR: ${pluginText}${e.text}`;
-      }).join("");
-      let error = new Error(text);
-      for (const [key, value] of [["errors", errors], ["warnings", warnings]]) {
-        Object.defineProperty(error, key, {
-          configurable: true,
-          enumerable: true,
-          get: () => value,
-          set: (value2) => Object.defineProperty(error, key, {
-            configurable: true,
-            enumerable: true,
-            value: value2
-          })
-        });
-      }
-      return error;
-    }
-    function replaceDetailsInMessages(messages, stash) {
-      for (const message of messages) {
-        message.detail = stash.load(message.detail);
-      }
-      return messages;
-    }
-    function sanitizeLocation(location, where, terminalWidth) {
-      if (location == null) return null;
-      let keys = {};
-      let file = getFlag(location, keys, "file", mustBeString);
-      let namespace = getFlag(location, keys, "namespace", mustBeString);
-      let line = getFlag(location, keys, "line", mustBeInteger);
-      let column = getFlag(location, keys, "column", mustBeInteger);
-      let length = getFlag(location, keys, "length", mustBeInteger);
-      let lineText = getFlag(location, keys, "lineText", mustBeString);
-      let suggestion = getFlag(location, keys, "suggestion", mustBeString);
-      checkForInvalidFlags(location, keys, where);
-      if (lineText) {
-        const relevantASCII = lineText.slice(
-          0,
-          (column && column > 0 ? column : 0) + (length && length > 0 ? length : 0) + (terminalWidth && terminalWidth > 0 ? terminalWidth : 80)
-        );
-        if (!/[\x7F-\uFFFF]/.test(relevantASCII) && !/\n/.test(lineText)) {
-          lineText = relevantASCII;
-        }
-      }
-      return {
-        file: file || "",
-        namespace: namespace || "",
-        line: line || 0,
-        column: column || 0,
-        length: length || 0,
-        lineText: lineText || "",
-        suggestion: suggestion || ""
-      };
-    }
-    function sanitizeMessages(messages, property, stash, fallbackPluginName, terminalWidth) {
-      let messagesClone = [];
-      let index = 0;
-      for (const message of messages) {
-        let keys = {};
-        let id = getFlag(message, keys, "id", mustBeString);
-        let pluginName = getFlag(message, keys, "pluginName", mustBeString);
-        let text = getFlag(message, keys, "text", mustBeString);
-        let location = getFlag(message, keys, "location", mustBeObjectOrNull);
-        let notes = getFlag(message, keys, "notes", mustBeArray);
-        let detail = getFlag(message, keys, "detail", canBeAnything);
-        let where = `in element ${index} of "${property}"`;
-        checkForInvalidFlags(message, keys, where);
-        let notesClone = [];
-        if (notes) {
-          for (const note of notes) {
-            let noteKeys = {};
-            let noteText = getFlag(note, noteKeys, "text", mustBeString);
-            let noteLocation = getFlag(note, noteKeys, "location", mustBeObjectOrNull);
-            checkForInvalidFlags(note, noteKeys, where);
-            notesClone.push({
-              text: noteText || "",
-              location: sanitizeLocation(noteLocation, where, terminalWidth)
-            });
-          }
-        }
-        messagesClone.push({
-          id: id || "",
-          pluginName: pluginName || fallbackPluginName,
-          text: text || "",
-          location: sanitizeLocation(location, where, terminalWidth),
-          notes: notesClone,
-          detail: stash ? stash.store(detail) : -1
-        });
-        index++;
-      }
-      return messagesClone;
-    }
-    function sanitizeStringArray(values, property) {
-      const result = [];
-      for (const value of values) {
-        if (typeof value !== "string") throw new Error(`${quote(property)} must be an array of strings`);
-        result.push(value);
-      }
-      return result;
-    }
-    function sanitizeStringMap(map, property) {
-      const result = /* @__PURE__ */ Object.create(null);
-      for (const key in map) {
-        const value = map[key];
-        if (typeof value !== "string") throw new Error(`key ${quote(key)} in object ${quote(property)} must be a string`);
-        result[key] = value;
-      }
-      return result;
-    }
-    function convertOutputFiles({ path: path32, contents, hash }) {
-      let text = null;
-      return {
-        path: path32,
-        contents,
-        hash,
-        get text() {
-          const binary = this.contents;
-          if (text === null || binary !== contents) {
-            contents = binary;
-            text = decodeUTF82(binary);
-          }
-          return text;
-        }
-      };
-    }
-    function jsRegExpToGoRegExp(regexp) {
-      let result = regexp.source;
-      if (regexp.flags) result = `(?${regexp.flags})${result}`;
-      return result;
-    }
-    function parseJSON(bytes) {
-      let text;
-      try {
-        text = decodeUTF82(bytes);
-      } catch {
-        return JSON_parse(bytes);
-      }
-      return JSON.parse(text);
-    }
-    var fs5 = require("fs");
-    var os2 = require("os");
-    var path6 = require("path");
-    var ESBUILD_BINARY_PATH = process.env.ESBUILD_BINARY_PATH || ESBUILD_BINARY_PATH;
-    var isValidBinaryPath = (x) => !!x && x !== "/usr/bin/esbuild";
-    var packageDarwin_arm64 = "@esbuild/darwin-arm64";
-    var packageDarwin_x64 = "@esbuild/darwin-x64";
-    var knownWindowsPackages = {
-      "win32 arm64 LE": "@esbuild/win32-arm64",
-      "win32 ia32 LE": "@esbuild/win32-ia32",
-      "win32 x64 LE": "@esbuild/win32-x64"
-    };
-    var knownUnixlikePackages = {
-      "aix ppc64 BE": "@esbuild/aix-ppc64",
-      "android arm64 LE": "@esbuild/android-arm64",
-      "darwin arm64 LE": "@esbuild/darwin-arm64",
-      "darwin x64 LE": "@esbuild/darwin-x64",
-      "freebsd arm64 LE": "@esbuild/freebsd-arm64",
-      "freebsd x64 LE": "@esbuild/freebsd-x64",
-      "linux arm LE": "@esbuild/linux-arm",
-      "linux arm64 LE": "@esbuild/linux-arm64",
-      "linux ia32 LE": "@esbuild/linux-ia32",
-      "linux mips64el LE": "@esbuild/linux-mips64el",
-      "linux ppc64 LE": "@esbuild/linux-ppc64",
-      "linux riscv64 LE": "@esbuild/linux-riscv64",
-      "linux s390x BE": "@esbuild/linux-s390x",
-      "linux x64 LE": "@esbuild/linux-x64",
-      "linux loong64 LE": "@esbuild/linux-loong64",
-      "netbsd arm64 LE": "@esbuild/netbsd-arm64",
-      "netbsd x64 LE": "@esbuild/netbsd-x64",
-      "openbsd arm64 LE": "@esbuild/openbsd-arm64",
-      "openbsd x64 LE": "@esbuild/openbsd-x64",
-      "sunos x64 LE": "@esbuild/sunos-x64"
-    };
-    var knownWebAssemblyFallbackPackages = {
-      "android arm LE": "@esbuild/android-arm",
-      "android x64 LE": "@esbuild/android-x64",
-      "openharmony arm64 LE": "@esbuild/openharmony-arm64"
-    };
-    function pkgAndSubpathForCurrentPlatform() {
-      let pkg;
-      let subpath;
-      let isWASM = false;
-      let platformKey = `${process.platform} ${os2.arch()} ${os2.endianness()}`;
-      if (platformKey in knownWindowsPackages) {
-        pkg = knownWindowsPackages[platformKey];
-        subpath = "esbuild.exe";
-      } else if (platformKey in knownUnixlikePackages) {
-        pkg = knownUnixlikePackages[platformKey];
-        subpath = "bin/esbuild";
-      } else if (platformKey in knownWebAssemblyFallbackPackages) {
-        pkg = knownWebAssemblyFallbackPackages[platformKey];
-        subpath = "bin/esbuild";
-        isWASM = true;
-      } else {
-        throw new Error(`Unsupported platform: ${platformKey}`);
-      }
-      return { pkg, subpath, isWASM };
-    }
-    function pkgForSomeOtherPlatform() {
-      const libMainJS = require.resolve("esbuild");
-      const nodeModulesDirectory = path6.dirname(path6.dirname(path6.dirname(libMainJS)));
-      if (path6.basename(nodeModulesDirectory) === "node_modules") {
-        for (const unixKey in knownUnixlikePackages) {
-          try {
-            const pkg = knownUnixlikePackages[unixKey];
-            if (fs5.existsSync(path6.join(nodeModulesDirectory, pkg))) return pkg;
-          } catch {
-          }
-        }
-        for (const windowsKey in knownWindowsPackages) {
-          try {
-            const pkg = knownWindowsPackages[windowsKey];
-            if (fs5.existsSync(path6.join(nodeModulesDirectory, pkg))) return pkg;
-          } catch {
-          }
-        }
-      }
-      return null;
-    }
-    function downloadedBinPath(pkg, subpath) {
-      const esbuildLibDir = path6.dirname(require.resolve("esbuild"));
-      return path6.join(esbuildLibDir, `downloaded-${pkg.replace("/", "-")}-${path6.basename(subpath)}`);
-    }
-    function generateBinPath() {
-      if (isValidBinaryPath(ESBUILD_BINARY_PATH)) {
-        if (!fs5.existsSync(ESBUILD_BINARY_PATH)) {
-          console.warn(`[esbuild] Ignoring bad configuration: ESBUILD_BINARY_PATH=${ESBUILD_BINARY_PATH}`);
-        } else {
-          return { binPath: ESBUILD_BINARY_PATH, isWASM: false };
-        }
-      }
-      const { pkg, subpath, isWASM } = pkgAndSubpathForCurrentPlatform();
-      let binPath;
-      try {
-        binPath = require.resolve(`${pkg}/${subpath}`);
-      } catch (e) {
-        binPath = downloadedBinPath(pkg, subpath);
-        if (!fs5.existsSync(binPath)) {
-          try {
-            require.resolve(pkg);
-          } catch {
-            const otherPkg = pkgForSomeOtherPlatform();
-            if (otherPkg) {
-              let suggestions = `
-Specifically the "${otherPkg}" package is present but this platform
-needs the "${pkg}" package instead. People often get into this
-situation by installing esbuild on Windows or macOS and copying "node_modules"
-into a Docker image that runs Linux, or by copying "node_modules" between
-Windows and WSL environments.
-
-If you are installing with npm, you can try not copying the "node_modules"
-directory when you copy the files over, and running "npm ci" or "npm install"
-on the destination platform after the copy. Or you could consider using yarn
-instead of npm which has built-in support for installing a package on multiple
-platforms simultaneously.
-
-If you are installing with yarn, you can try listing both this platform and the
-other platform in your ".yarnrc.yml" file using the "supportedArchitectures"
-feature: https://yarnpkg.com/configuration/yarnrc/#supportedArchitectures
-Keep in mind that this means multiple copies of esbuild will be present.
-`;
-              if (pkg === packageDarwin_x64 && otherPkg === packageDarwin_arm64 || pkg === packageDarwin_arm64 && otherPkg === packageDarwin_x64) {
-                suggestions = `
-Specifically the "${otherPkg}" package is present but this platform
-needs the "${pkg}" package instead. People often get into this
-situation by installing esbuild with npm running inside of Rosetta 2 and then
-trying to use it with node running outside of Rosetta 2, or vice versa (Rosetta
-2 is Apple's on-the-fly x86_64-to-arm64 translation service).
-
-If you are installing with npm, you can try ensuring that both npm and node are
-not running under Rosetta 2 and then reinstalling esbuild. This likely involves
-changing how you installed npm and/or node. For example, installing node with
-the universal installer here should work: https://nodejs.org/en/download/. Or
-you could consider using yarn instead of npm which has built-in support for
-installing a package on multiple platforms simultaneously.
-
-If you are installing with yarn, you can try listing both "arm64" and "x64"
-in your ".yarnrc.yml" file using the "supportedArchitectures" feature:
-https://yarnpkg.com/configuration/yarnrc/#supportedArchitectures
-Keep in mind that this means multiple copies of esbuild will be present.
-`;
-              }
-              throw new Error(`
-You installed esbuild for another platform than the one you're currently using.
-This won't work because esbuild is written with native code and needs to
-install a platform-specific binary executable.
-${suggestions}
-Another alternative is to use the "esbuild-wasm" package instead, which works
-the same way on all platforms. But it comes with a heavy performance cost and
-can sometimes be 10x slower than the "esbuild" package, so you may also not
-want to do that.
-`);
-            }
-            throw new Error(`The package "${pkg}" could not be found, and is needed by esbuild.
-
-If you are installing esbuild with npm, make sure that you don't specify the
-"--no-optional" or "--omit=optional" flags. The "optionalDependencies" feature
-of "package.json" is used by esbuild to install the correct binary executable
-for your current platform.`);
-          }
-          throw e;
-        }
-      }
-      if (/\.zip\//.test(binPath)) {
-        let pnpapi;
-        try {
-          pnpapi = require("pnpapi");
-        } catch (e) {
-        }
-        if (pnpapi) {
-          const root = pnpapi.getPackageInformation(pnpapi.topLevel).packageLocation;
-          const binTargetPath = path6.join(
-            root,
-            "node_modules",
-            ".cache",
-            "esbuild",
-            `pnpapi-${pkg.replace("/", "-")}-${"0.28.0"}-${path6.basename(subpath)}`
-          );
-          if (!fs5.existsSync(binTargetPath)) {
-            fs5.mkdirSync(path6.dirname(binTargetPath), { recursive: true });
-            fs5.copyFileSync(binPath, binTargetPath);
-            fs5.chmodSync(binTargetPath, 493);
-          }
-          return { binPath: binTargetPath, isWASM };
-        }
-      }
-      return { binPath, isWASM };
-    }
-    var child_process = require("child_process");
-    var crypto = require("crypto");
-    var path22 = require("path");
-    var fs22 = require("fs");
-    var os22 = require("os");
-    var tty = require("tty");
-    var worker_threads;
-    if (process.env.ESBUILD_WORKER_THREADS !== "0") {
-      try {
-        worker_threads = require("worker_threads");
-      } catch {
-      }
-      let [major, minor] = process.versions.node.split(".");
-      if (
-        // <v12.17.0 does not work
-        +major < 12 || +major === 12 && +minor < 17 || +major === 13 && +minor < 13
-      ) {
-        worker_threads = void 0;
-      }
-    }
-    var _a2;
-    var isInternalWorkerThread = ((_a2 = worker_threads == null ? void 0 : worker_threads.workerData) == null ? void 0 : _a2.esbuildVersion) === "0.28.0";
-    var esbuildCommandAndArgs = () => {
-      if ((!ESBUILD_BINARY_PATH || false) && (path22.basename(__filename) !== "main.js" || path22.basename(__dirname) !== "lib")) {
-        throw new Error(
-          `The esbuild JavaScript API cannot be bundled. Please mark the "esbuild" package as external so it's not included in the bundle.
-
-More information: The file containing the code for esbuild's JavaScript API (${__filename}) does not appear to be inside the esbuild package on the file system, which usually means that the esbuild package was bundled into another file. This is problematic because the API needs to run a binary executable inside the esbuild package which is located using a relative path from the API code to the executable. If the esbuild package is bundled, the relative path will be incorrect and the executable won't be found.`
-        );
-      }
-      if (false) {
-        return ["node", [path22.join(__dirname, "..", "bin", "esbuild")]];
-      } else {
-        const { binPath, isWASM } = generateBinPath();
-        if (isWASM) {
-          return ["node", [binPath]];
-        } else {
-          return [binPath, []];
-        }
-      }
-    };
-    var isTTY = () => tty.isatty(2);
-    var fsSync = {
-      readFile(tempFile, callback) {
-        try {
-          let contents = fs22.readFileSync(tempFile, "utf8");
-          try {
-            fs22.unlinkSync(tempFile);
-          } catch {
-          }
-          callback(null, contents);
-        } catch (err) {
-          callback(err, null);
-        }
-      },
-      writeFile(contents, callback) {
-        try {
-          let tempFile = randomFileName();
-          fs22.writeFileSync(tempFile, contents);
-          callback(tempFile);
-        } catch {
-          callback(null);
-        }
-      }
-    };
-    var fsAsync = {
-      readFile(tempFile, callback) {
-        try {
-          fs22.readFile(tempFile, "utf8", (err, contents) => {
-            try {
-              fs22.unlink(tempFile, () => callback(err, contents));
-            } catch {
-              callback(err, contents);
-            }
-          });
-        } catch (err) {
-          callback(err, null);
-        }
-      },
-      writeFile(contents, callback) {
-        try {
-          let tempFile = randomFileName();
-          fs22.writeFile(tempFile, contents, (err) => err !== null ? callback(null) : callback(tempFile));
-        } catch {
-          callback(null);
-        }
-      }
-    };
-    var version = "0.28.0";
-    var build = (options) => ensureServiceIsRunning().build(options);
-    var context = (buildOptions) => ensureServiceIsRunning().context(buildOptions);
-    var transform = (input, options) => ensureServiceIsRunning().transform(input, options);
-    var formatMessages = (messages, options) => ensureServiceIsRunning().formatMessages(messages, options);
-    var analyzeMetafile = (messages, options) => ensureServiceIsRunning().analyzeMetafile(messages, options);
-    var buildSync = (options) => {
-      if (worker_threads && !isInternalWorkerThread) {
-        if (!workerThreadService) workerThreadService = startWorkerThreadService(worker_threads);
-        return workerThreadService.buildSync(options);
-      }
-      let result;
-      runServiceSync((service) => service.buildOrContext({
-        callName: "buildSync",
-        refs: null,
-        options,
-        isTTY: isTTY(),
-        defaultWD,
-        callback: (err, res) => {
-          if (err) throw err;
-          result = res;
-        }
-      }));
-      return result;
-    };
-    var transformSync = (input, options) => {
-      if (worker_threads && !isInternalWorkerThread) {
-        if (!workerThreadService) workerThreadService = startWorkerThreadService(worker_threads);
-        return workerThreadService.transformSync(input, options);
-      }
-      let result;
-      runServiceSync((service) => service.transform({
-        callName: "transformSync",
-        refs: null,
-        input,
-        options: options || {},
-        isTTY: isTTY(),
-        fs: fsSync,
-        callback: (err, res) => {
-          if (err) throw err;
-          result = res;
-        }
-      }));
-      return result;
-    };
-    var formatMessagesSync = (messages, options) => {
-      if (worker_threads && !isInternalWorkerThread) {
-        if (!workerThreadService) workerThreadService = startWorkerThreadService(worker_threads);
-        return workerThreadService.formatMessagesSync(messages, options);
-      }
-      let result;
-      runServiceSync((service) => service.formatMessages({
-        callName: "formatMessagesSync",
-        refs: null,
-        messages,
-        options,
-        callback: (err, res) => {
-          if (err) throw err;
-          result = res;
-        }
-      }));
-      return result;
-    };
-    var analyzeMetafileSync = (metafile, options) => {
-      if (worker_threads && !isInternalWorkerThread) {
-        if (!workerThreadService) workerThreadService = startWorkerThreadService(worker_threads);
-        return workerThreadService.analyzeMetafileSync(metafile, options);
-      }
-      let result;
-      runServiceSync((service) => service.analyzeMetafile({
-        callName: "analyzeMetafileSync",
-        refs: null,
-        metafile: typeof metafile === "string" ? metafile : JSON.stringify(metafile),
-        options,
-        callback: (err, res) => {
-          if (err) throw err;
-          result = res;
-        }
-      }));
-      return result;
-    };
-    var stop = () => {
-      if (stopService) stopService();
-      if (workerThreadService) workerThreadService.stop();
-      return Promise.resolve();
-    };
-    var initializeWasCalled = false;
-    var initialize = (options) => {
-      options = validateInitializeOptions(options || {});
-      if (options.wasmURL) throw new Error(`The "wasmURL" option only works in the browser`);
-      if (options.wasmModule) throw new Error(`The "wasmModule" option only works in the browser`);
-      if (options.worker) throw new Error(`The "worker" option only works in the browser`);
-      if (initializeWasCalled) throw new Error('Cannot call "initialize" more than once');
-      ensureServiceIsRunning();
-      initializeWasCalled = true;
-      return Promise.resolve();
-    };
-    var defaultWD = process.cwd();
-    var longLivedService;
-    var stopService;
-    var ensureServiceIsRunning = () => {
-      if (longLivedService) return longLivedService;
-      let [command, args] = esbuildCommandAndArgs();
-      let child = child_process.spawn(command, args.concat(`--service=${"0.28.0"}`, "--ping"), {
-        windowsHide: true,
-        stdio: ["pipe", "pipe", "inherit"],
-        cwd: defaultWD
-      });
-      let { readFromStdout, afterClose, service } = createChannel({
-        writeToStdin(bytes) {
-          child.stdin.write(bytes, (err) => {
-            if (err) afterClose(err);
-          });
-        },
-        readFileSync: fs22.readFileSync,
-        isSync: false,
-        hasFS: true,
-        esbuild: node_exports
-      });
-      child.stdin.on("error", afterClose);
-      child.on("error", afterClose);
-      const stdin = child.stdin;
-      const stdout = child.stdout;
-      stdout.on("data", readFromStdout);
-      stdout.on("end", afterClose);
-      stopService = () => {
-        stdin.destroy();
-        stdout.destroy();
-        child.kill();
-        initializeWasCalled = false;
-        longLivedService = void 0;
-        stopService = void 0;
-      };
-      let refCount = 0;
-      child.unref();
-      if (stdin.unref) {
-        stdin.unref();
-      }
-      if (stdout.unref) {
-        stdout.unref();
-      }
-      const refs = {
-        ref() {
-          if (++refCount === 1) child.ref();
-        },
-        unref() {
-          if (--refCount === 0) child.unref();
-        }
-      };
-      longLivedService = {
-        build: (options) => new Promise((resolve4, reject) => {
-          service.buildOrContext({
-            callName: "build",
-            refs,
-            options,
-            isTTY: isTTY(),
-            defaultWD,
-            callback: (err, res) => err ? reject(err) : resolve4(res)
-          });
-        }),
-        context: (options) => new Promise((resolve4, reject) => service.buildOrContext({
-          callName: "context",
-          refs,
-          options,
-          isTTY: isTTY(),
-          defaultWD,
-          callback: (err, res) => err ? reject(err) : resolve4(res)
-        })),
-        transform: (input, options) => new Promise((resolve4, reject) => service.transform({
-          callName: "transform",
-          refs,
-          input,
-          options: options || {},
-          isTTY: isTTY(),
-          fs: fsAsync,
-          callback: (err, res) => err ? reject(err) : resolve4(res)
-        })),
-        formatMessages: (messages, options) => new Promise((resolve4, reject) => service.formatMessages({
-          callName: "formatMessages",
-          refs,
-          messages,
-          options,
-          callback: (err, res) => err ? reject(err) : resolve4(res)
-        })),
-        analyzeMetafile: (metafile, options) => new Promise((resolve4, reject) => service.analyzeMetafile({
-          callName: "analyzeMetafile",
-          refs,
-          metafile: typeof metafile === "string" ? metafile : JSON.stringify(metafile),
-          options,
-          callback: (err, res) => err ? reject(err) : resolve4(res)
-        }))
-      };
-      return longLivedService;
-    };
-    var runServiceSync = (callback) => {
-      let [command, args] = esbuildCommandAndArgs();
-      let stdin = new Uint8Array();
-      let { readFromStdout, afterClose, service } = createChannel({
-        writeToStdin(bytes) {
-          if (stdin.length !== 0) throw new Error("Must run at most one command");
-          stdin = bytes;
-        },
-        isSync: true,
-        hasFS: true,
-        esbuild: node_exports
-      });
-      callback(service);
-      let stdout = child_process.execFileSync(command, args.concat(`--service=${"0.28.0"}`), {
-        cwd: defaultWD,
-        windowsHide: true,
-        input: stdin,
-        // We don't know how large the output could be. If it's too large, the
-        // command will fail with ENOBUFS. Reserve 16mb for now since that feels
-        // like it should be enough. Also allow overriding this with an environment
-        // variable.
-        maxBuffer: +process.env.ESBUILD_MAX_BUFFER || 16 * 1024 * 1024
-      });
-      readFromStdout(stdout);
-      afterClose(null);
-    };
-    var randomFileName = () => {
-      return path22.join(os22.tmpdir(), `esbuild-${crypto.randomBytes(32).toString("hex")}`);
-    };
-    var workerThreadService = null;
-    var startWorkerThreadService = (worker_threads2) => {
-      let { port1: mainPort, port2: workerPort } = new worker_threads2.MessageChannel();
-      let worker = new worker_threads2.Worker(__filename, {
-        workerData: { workerPort, defaultWD, esbuildVersion: "0.28.0" },
-        transferList: [workerPort],
-        // From node's documentation: https://nodejs.org/api/worker_threads.html
-        //
-        //   Take care when launching worker threads from preload scripts (scripts loaded
-        //   and run using the `-r` command line flag). Unless the `execArgv` option is
-        //   explicitly set, new Worker threads automatically inherit the command line flags
-        //   from the running process and will preload the same preload scripts as the main
-        //   thread. If the preload script unconditionally launches a worker thread, every
-        //   thread spawned will spawn another until the application crashes.
-        //
-        execArgv: []
-      });
-      let nextID = 0;
-      let fakeBuildError = (text) => {
-        let error = new Error(`Build failed with 1 error:
-error: ${text}`);
-        let errors = [{ id: "", pluginName: "", text, location: null, notes: [], detail: void 0 }];
-        error.errors = errors;
-        error.warnings = [];
-        return error;
-      };
-      let validateBuildSyncOptions = (options) => {
-        if (!options) return;
-        let plugins = options.plugins;
-        if (plugins && plugins.length > 0) throw fakeBuildError(`Cannot use plugins in synchronous API calls`);
-      };
-      let applyProperties = (object, properties) => {
-        for (let key in properties) {
-          object[key] = properties[key];
-        }
-      };
-      let runCallSync = (command, args) => {
-        let id = nextID++;
-        let sharedBuffer = new SharedArrayBuffer(8);
-        let sharedBufferView = new Int32Array(sharedBuffer);
-        let msg = { sharedBuffer, id, command, args };
-        worker.postMessage(msg);
-        let status = Atomics.wait(sharedBufferView, 0, 0);
-        if (status !== "ok" && status !== "not-equal") throw new Error("Internal error: Atomics.wait() failed: " + status);
-        let { message: { id: id2, resolve: resolve4, reject, properties } } = worker_threads2.receiveMessageOnPort(mainPort);
-        if (id !== id2) throw new Error(`Internal error: Expected id ${id} but got id ${id2}`);
-        if (reject) {
-          applyProperties(reject, properties);
-          throw reject;
-        }
-        return resolve4;
-      };
-      worker.unref();
-      return {
-        buildSync(options) {
-          validateBuildSyncOptions(options);
-          return runCallSync("build", [options]);
-        },
-        transformSync(input, options) {
-          return runCallSync("transform", [input, options]);
-        },
-        formatMessagesSync(messages, options) {
-          return runCallSync("formatMessages", [messages, options]);
-        },
-        analyzeMetafileSync(metafile, options) {
-          return runCallSync("analyzeMetafile", [metafile, options]);
-        },
-        stop() {
-          worker.terminate();
-          workerThreadService = null;
-        }
-      };
-    };
-    var startSyncServiceWorker = () => {
-      let workerPort = worker_threads.workerData.workerPort;
-      let parentPort = worker_threads.parentPort;
-      let extractProperties = (object) => {
-        let properties = {};
-        if (object && typeof object === "object") {
-          for (let key in object) {
-            properties[key] = object[key];
-          }
-        }
-        return properties;
-      };
-      try {
-        let service = ensureServiceIsRunning();
-        defaultWD = worker_threads.workerData.defaultWD;
-        parentPort.on("message", (msg) => {
-          (async () => {
-            let { sharedBuffer, id, command, args } = msg;
-            let sharedBufferView = new Int32Array(sharedBuffer);
-            try {
-              switch (command) {
-                case "build":
-                  workerPort.postMessage({ id, resolve: await service.build(args[0]) });
-                  break;
-                case "transform":
-                  workerPort.postMessage({ id, resolve: await service.transform(args[0], args[1]) });
-                  break;
-                case "formatMessages":
-                  workerPort.postMessage({ id, resolve: await service.formatMessages(args[0], args[1]) });
-                  break;
-                case "analyzeMetafile":
-                  workerPort.postMessage({ id, resolve: await service.analyzeMetafile(args[0], args[1]) });
-                  break;
-                default:
-                  throw new Error(`Invalid command: ${command}`);
-              }
-            } catch (reject) {
-              workerPort.postMessage({ id, reject, properties: extractProperties(reject) });
-            }
-            Atomics.add(sharedBufferView, 0, 1);
-            Atomics.notify(sharedBufferView, 0, Infinity);
-          })();
-        });
-      } catch (reject) {
-        parentPort.on("message", (msg) => {
-          let { sharedBuffer, id } = msg;
-          let sharedBufferView = new Int32Array(sharedBuffer);
-          workerPort.postMessage({ id, reject, properties: extractProperties(reject) });
-          Atomics.add(sharedBufferView, 0, 1);
-          Atomics.notify(sharedBufferView, 0, Infinity);
-        });
-      }
-    };
-    if (isInternalWorkerThread) {
-      startSyncServiceWorker();
-    }
-    var node_default = node_exports;
+    import_node_fs11 = require("node:fs");
+    import_node_path11 = require("node:path");
   }
 });
 
@@ -2897,17 +8105,37 @@ __export(extension_builder_exports, {
 });
 function requireEsbuild() {
   configurePackagedEsbuildBinary();
-  return require_main();
+  return require("esbuild");
+}
+function legacyCheerioInteropPlugin() {
+  return {
+    name: "legacy-cheerio-default-interop",
+    setup(build) {
+      build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, (args) => {
+        const source = fs.readFileSync(args.path, "utf8");
+        if (!/import\s+[A-Za-z_$][\w$]*\s+from\s+['"]cheerio['"]/.test(source)) return null;
+        const extension = path4.extname(args.path).toLowerCase();
+        const loader = extension.endsWith("x") ? extension.slice(1) : extension.slice(1) || "js";
+        return {
+          contents: source.replace(
+            /import\s+([A-Za-z_$][\w$]*)\s+from\s+(['"])cheerio\2/g,
+            "import * as $1 from $2cheerio$2"
+          ),
+          loader
+        };
+      });
+    }
+  };
 }
 function getManagedExtensionsDir() {
-  const dir = path3.join(app.getPath("userData"), "extensions");
+  const dir = path4.join(app.getPath("userData"), "extensions");
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
   return dir;
 }
 function getBuildDir(extPath) {
-  const dir = path3.join(extPath, ".sc-build");
+  const dir = path4.join(extPath, ".sc-build");
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -2916,11 +8144,11 @@ function getBuildDir(extPath) {
 function expandHome(inputPath) {
   const raw = String(inputPath || "").trim();
   if (!raw) return "";
-  if (raw.startsWith("~/")) return path3.join(os.homedir(), raw.slice(2));
+  if (raw.startsWith("~/")) return path4.join(os.homedir(), raw.slice(2));
   return raw;
 }
 function normalizeFsPath(inputPath) {
-  return path3.resolve(expandHome(inputPath));
+  return path4.resolve(expandHome(inputPath));
 }
 function normalizeExtensionName(name) {
   const raw = String(name || "").trim();
@@ -2929,12 +8157,12 @@ function normalizeExtensionName(name) {
 }
 function getConfiguredExtensionRoots() {
   const settingsPaths = [];
-  const envPaths = String(process.env.SUPERCMD_EXTENSION_PATHS || "").split(path3.delimiter).map((value) => value.trim()).filter(Boolean);
+  const envPaths = String(process.env.SUPERCMD_EXTENSION_PATHS || "").split(path4.delimiter).map((value) => value.trim()).filter(Boolean);
   const unique = /* @__PURE__ */ new Set();
   for (const root of [
     getManagedExtensionsDir(),
-    path3.join(getManagedExtensionsDir(), "packages"),
-    path3.join(app.getPath("userData"), "extension-registry", "packages"),
+    path4.join(getManagedExtensionsDir(), "packages"),
+    path4.join(app.getPath("userData"), "extension-registry", "packages"),
     ...settingsPaths,
     ...envPaths
   ]) {
@@ -2948,7 +8176,7 @@ function collectInstalledExtensions() {
   const results = [];
   const seen = /* @__PURE__ */ new Set();
   const addIfValid = (extPath, sourceRoot, fallbackName) => {
-    const pkgPath = path3.join(extPath, "package.json");
+    const pkgPath = path4.join(extPath, "package.json");
     if (!fs.existsSync(pkgPath)) return;
     try {
       if (!fs.statSync(extPath).isDirectory()) return;
@@ -2964,9 +8192,9 @@ function collectInstalledExtensions() {
   };
   for (const sourceRoot of getConfiguredExtensionRoots()) {
     if (!fs.existsSync(sourceRoot)) continue;
-    const sourceRootPkg = path3.join(sourceRoot, "package.json");
+    const sourceRootPkg = path4.join(sourceRoot, "package.json");
     if (fs.existsSync(sourceRootPkg)) {
-      addIfValid(sourceRoot, sourceRoot, path3.basename(sourceRoot));
+      addIfValid(sourceRoot, sourceRoot, path4.basename(sourceRoot));
       continue;
     }
     let entries = [];
@@ -2976,7 +8204,7 @@ function collectInstalledExtensions() {
       continue;
     }
     for (const entry of entries) {
-      addIfValid(path3.join(sourceRoot, entry), sourceRoot, entry);
+      addIfValid(path4.join(sourceRoot, entry), sourceRoot, entry);
     }
   }
   return results;
@@ -2989,13 +8217,13 @@ function resolveInstalledExtensionPath(extName) {
 }
 function getExtensionIconDataUrl(extPath, iconFile) {
   const candidates = [
-    path3.join(extPath, "assets", iconFile),
-    path3.join(extPath, iconFile)
+    path4.join(extPath, "assets", iconFile),
+    path4.join(extPath, iconFile)
   ];
   for (const p of candidates) {
     if (!fs.existsSync(p)) continue;
     try {
-      const ext = path3.extname(p).toLowerCase();
+      const ext = path4.extname(p).toLowerCase();
       const data = fs.readFileSync(p);
       if (data.length < 50) continue;
       const mime = ext === ".svg" ? "image/svg+xml" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
@@ -3034,7 +8262,7 @@ function discoverInstalledExtensionCommands() {
   const results = [];
   for (const source of collectInstalledExtensions()) {
     const extPath = source.extPath;
-    const pkgPath = path3.join(extPath, "package.json");
+    const pkgPath = path4.join(extPath, "package.json");
     const extName = source.extName;
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
@@ -3086,7 +8314,7 @@ function getInstalledExtensionsSettingsSchema() {
   const results = [];
   for (const source of collectInstalledExtensions()) {
     const extPath = source.extPath;
-    const pkgPath = path3.join(extPath, "package.json");
+    const pkgPath = path4.join(extPath, "package.json");
     const extName = source.extName;
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
@@ -3171,7 +8399,7 @@ function parseJsonc(source) {
   return JSON.parse(out);
 }
 function getExtensionCompilerOptions(extPath) {
-  const tsconfigPath = path3.join(extPath, "tsconfig.json");
+  const tsconfigPath = path4.join(extPath, "tsconfig.json");
   if (!fs.existsSync(tsconfigPath)) return {};
   try {
     const parsed = parseJsonc(fs.readFileSync(tsconfigPath, "utf-8"));
@@ -3192,7 +8420,7 @@ function getExtensionCompilerOptions(extPath) {
     }
     return options;
   } catch (error) {
-    console.warn(`Failed to parse tsconfig for ${path3.basename(extPath)}:`, error?.message || error);
+    console.warn(`Failed to parse tsconfig for ${path4.basename(extPath)}:`, error?.message || error);
     return {};
   }
 }
@@ -3213,23 +8441,23 @@ function getEsbuildTsconfigRaw(extPath) {
 function resolveEntryFile(extPath, cmd) {
   const cmdName = String(cmd?.name || "").trim();
   if (!cmdName) return null;
-  const srcDir = path3.join(extPath, "src");
+  const srcDir = path4.join(extPath, "src");
   const validExt = /\.(tsx?|jsx?)$/i;
   const explicitEntry = typeof cmd?.path === "string" ? cmd.path : typeof cmd?.entrypoint === "string" ? cmd.entrypoint : typeof cmd?.entry === "string" ? cmd.entry : typeof cmd?.file === "string" ? cmd.file : typeof cmd?.source === "string" ? cmd.source : "";
   const candidates = [
-    explicitEntry ? path3.join(extPath, explicitEntry) : "",
-    path3.join(srcDir, `${cmdName}.tsx`),
-    path3.join(srcDir, `${cmdName}.ts`),
-    path3.join(srcDir, `${cmdName}.jsx`),
-    path3.join(srcDir, `${cmdName}.js`),
-    path3.join(srcDir, cmdName, "index.tsx"),
-    path3.join(srcDir, cmdName, "index.ts"),
-    path3.join(srcDir, cmdName, "index.jsx"),
-    path3.join(srcDir, cmdName, "index.js"),
-    path3.join(srcDir, "commands", `${cmdName}.tsx`),
-    path3.join(srcDir, "commands", `${cmdName}.ts`),
-    path3.join(srcDir, "commands", `${cmdName}.jsx`),
-    path3.join(srcDir, "commands", `${cmdName}.js`)
+    explicitEntry ? path4.join(extPath, explicitEntry) : "",
+    path4.join(srcDir, `${cmdName}.tsx`),
+    path4.join(srcDir, `${cmdName}.ts`),
+    path4.join(srcDir, `${cmdName}.jsx`),
+    path4.join(srcDir, `${cmdName}.js`),
+    path4.join(srcDir, cmdName, "index.tsx"),
+    path4.join(srcDir, cmdName, "index.ts"),
+    path4.join(srcDir, cmdName, "index.jsx"),
+    path4.join(srcDir, cmdName, "index.js"),
+    path4.join(srcDir, "commands", `${cmdName}.tsx`),
+    path4.join(srcDir, "commands", `${cmdName}.ts`),
+    path4.join(srcDir, "commands", `${cmdName}.jsx`),
+    path4.join(srcDir, "commands", `${cmdName}.js`)
   ].filter(Boolean);
   const found = candidates.find((p) => fs.existsSync(p));
   if (found) return found;
@@ -3245,7 +8473,7 @@ function resolveEntryFile(extPath, cmd) {
       continue;
     }
     for (const entry of entries) {
-      const full = path3.join(dir, entry);
+      const full = path4.join(dir, entry);
       let stat2;
       try {
         stat2 = fs.statSync(full);
@@ -3257,7 +8485,7 @@ function resolveEntryFile(extPath, cmd) {
         continue;
       }
       if (!validExt.test(entry)) continue;
-      const base = path3.basename(entry, path3.extname(entry)).toLowerCase();
+      const base = path4.basename(entry, path4.extname(entry)).toLowerCase();
       if (base === normalized) return full;
     }
   }
@@ -3269,7 +8497,7 @@ async function buildAllCommands(extName, extPathOverride) {
     console.error(`Extension path not found for ${extName}`);
     return 0;
   }
-  const pkgPath = path3.join(extPath, "package.json");
+  const pkgPath = path4.join(extPath, "package.json");
   if (!fs.existsSync(pkgPath)) {
     console.error(`No package.json found for extension ${extName}`);
     return 0;
@@ -3291,7 +8519,7 @@ async function buildAllCommands(extName, extPathOverride) {
   }
   if (commands.length === 0) return 0;
   const esbuild = requireEsbuild();
-  const extNodeModules = path3.join(extPath, "node_modules");
+  const extNodeModules = path4.join(extPath, "node_modules");
   if (requiresNodeModules && !fs.existsSync(extNodeModules)) {
     try {
       const { installExtensionDeps: installExtensionDeps2 } = (init_extension_registry(), __toCommonJS(extension_registry_exports));
@@ -3320,8 +8548,8 @@ async function buildAllCommands(extName, extPathOverride) {
       console.warn(`No entry file for ${extName}/${cmd.name}, skipping`);
       continue;
     }
-    const outFile = path3.join(buildDir, `${cmd.name}.js`);
-    fs.mkdirSync(path3.dirname(outFile), { recursive: true });
+    const outFile = path4.join(buildDir, `${cmd.name}.js`);
+    fs.mkdirSync(path4.dirname(outFile), { recursive: true });
     try {
       console.log(`  Building ${extName}/${cmd.name}\u2026`);
       await runEsbuildBuild(
@@ -3332,8 +8560,10 @@ async function buildAllCommands(extName, extPathOverride) {
           bundle: true,
           format: "cjs",
           platform: "node",
+          conditions: ["require", "node"],
           outfile: outFile,
           plugins: [
+            legacyCheerioInteropPlugin(),
             // Mark swift: imports as external so fakeRequire can handle them at runtime
             {
               name: "swift-external",
@@ -3465,7 +8695,7 @@ async function buildSingleCommand(extName, cmdName) {
     console.error(`buildSingleCommand: extension path not found for ${extName}`);
     return false;
   }
-  const pkgPath = path3.join(extPath, "package.json");
+  const pkgPath = path4.join(extPath, "package.json");
   if (!fs.existsSync(pkgPath)) {
     console.error(`buildSingleCommand: package.json not found at ${pkgPath}`);
     return false;
@@ -3502,9 +8732,9 @@ async function buildSingleCommand(extName, cmdName) {
   }
   const buildDir = getBuildDir(extPath);
   fs.mkdirSync(buildDir, { recursive: true });
-  const outFile = path3.join(buildDir, `${cmdName}.js`);
-  fs.mkdirSync(path3.dirname(outFile), { recursive: true });
-  const extNodeModules = path3.join(extPath, "node_modules");
+  const outFile = path4.join(buildDir, `${cmdName}.js`);
+  fs.mkdirSync(path4.dirname(outFile), { recursive: true });
+  const extNodeModules = path4.join(extPath, "node_modules");
   if (requiresNodeModules && !fs.existsSync(extNodeModules)) {
     console.log(`  node_modules missing for ${extName}, installing dependencies\u2026`);
     try {
@@ -3527,8 +8757,10 @@ async function buildSingleCommand(extName, cmdName) {
         bundle: true,
         format: "cjs",
         platform: "node",
+        conditions: ["require", "node"],
         outfile: outFile,
         plugins: [
+          legacyCheerioInteropPlugin(),
           {
             name: "swift-external",
             setup(build) {
@@ -3632,7 +8864,7 @@ async function getExtensionBundle(extName, cmdName) {
     console.error(msg);
     throw new Error(msg);
   }
-  let outFile = path3.join(extPath, ".sc-build", `${cmdName}.js`);
+  let outFile = path4.join(extPath, ".sc-build", `${cmdName}.js`);
   if (!fs.existsSync(outFile)) {
     console.log(`Pre-built bundle not found for ${normalizedExtName}/${cmdName}, building on-demand\u2026`);
     const built = await buildSingleCommand(normalizedExtName, cmdName);
@@ -3647,11 +8879,11 @@ async function getExtensionBundle(extName, cmdName) {
     if (!fs.existsSync(outFile)) {
       let diagnostic = "";
       try {
-        const pkgPath = path3.join(extPath, "package.json");
+        const pkgPath = path4.join(extPath, "package.json");
         const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
         const commands = Array.isArray(pkg?.commands) ? pkg.commands : [];
         const cmd = commands.find((c) => c?.name === cmdName);
-        const nodeModulesExists = fs.existsSync(path3.join(extPath, "node_modules"));
+        const nodeModulesExists = fs.existsSync(path4.join(extPath, "node_modules"));
         const requiresNodeModules = extensionRequiresNodeModules(pkg);
         if (!cmd) {
           diagnostic = ` Command "${cmdName}" not found in package.json.`;
@@ -3688,7 +8920,7 @@ async function getExtensionBundle(extName, cmdName) {
   let preferenceDefinitions = [];
   let commandArgumentDefinitions = [];
   try {
-    const pkgPath = path3.join(extPath, "package.json");
+    const pkgPath = path4.join(extPath, "package.json");
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
     if (!isManifestPlatformCompatible(pkg)) {
       return null;
@@ -3717,8 +8949,8 @@ async function getExtensionBundle(extName, cmdName) {
     })) : [];
   } catch {
   }
-  const assetsPath = path3.join(extPath, "assets");
-  const supportPath = path3.join(app.getPath("userData"), "extension-support", normalizedExtName);
+  const assetsPath = path4.join(extPath, "assets");
+  const supportPath = path4.join(app.getPath("userData"), "extension-support", normalizedExtName);
   if (!fs.existsSync(supportPath)) {
     fs.mkdirSync(supportPath, { recursive: true });
   }
@@ -3740,14 +8972,14 @@ async function getExtensionBundle(extName, cmdName) {
     commandArgumentDefinitions
   };
 }
-var fs, os, path3, nodeBuiltins, lastBuildError;
+var fs, os, path4, nodeBuiltins, lastBuildError;
 var init_extension_builder = __esm({
   "src/main/extension-builder.ts"() {
     "use strict";
     init_electron_shim();
     fs = __toESM(require("fs"));
     os = __toESM(require("os"));
-    path3 = __toESM(require("path"));
+    path4 = __toESM(require("path"));
     init_extension_platform();
     init_esbuild_runtime();
     nodeBuiltins = [
@@ -3963,10 +9195,10 @@ function getBunDownloadUrl() {
   return "";
 }
 function getBunDir() {
-  return path4.join(app.getPath("userData"), "bun");
+  return path5.join(app.getPath("userData"), "bun");
 }
 function getBunBinaryPath() {
-  return path4.join(getBunDir(), "bun");
+  return path5.join(getBunDir(), "bun");
 }
 function isBunAvailable() {
   const binPath = getBunBinaryPath();
@@ -3993,9 +9225,9 @@ async function ensureBun() {
     const zipBuffer = await downloadFile(url);
     broadcastInstallStatus("Setting up installer\u2026");
     console.log(`Downloaded Bun (${(zipBuffer.length / 1024 / 1024).toFixed(1)}MB), extracting...`);
-    const tmpZipPath = path4.join(app.getPath("temp"), `bun-${Date.now()}.zip`);
+    const tmpZipPath = path5.join(app.getPath("temp"), `bun-${Date.now()}.zip`);
     fs2.writeFileSync(tmpZipPath, zipBuffer);
-    const tmpExtractDir = path4.join(app.getPath("temp"), `bun-extract-${Date.now()}`);
+    const tmpExtractDir = path5.join(app.getPath("temp"), `bun-extract-${Date.now()}`);
     fs2.mkdirSync(tmpExtractDir, { recursive: true });
     await execAsync(`unzip -o "${tmpZipPath}" -d "${tmpExtractDir}"`, {
       timeout: 3e4
@@ -4030,7 +9262,7 @@ async function ensureBun() {
 async function installDepsWithBun(extPath) {
   const bunPath = await ensureBun();
   if (!bunPath) return false;
-  const pkgPath = path4.join(extPath, "package.json");
+  const pkgPath = path5.join(extPath, "package.json");
   if (!fs2.existsSync(pkgPath)) return true;
   let pkg;
   try {
@@ -4044,10 +9276,10 @@ async function installDepsWithBun(extPath) {
   };
   const thirdPartyDeps = Object.entries(deps).filter(([name]) => !name.startsWith("@raycast/")).map(([name, version]) => `${name}@${version}`).filter(Boolean);
   if (thirdPartyDeps.length === 0) {
-    console.log(`No third-party deps for ${path4.basename(extPath)} \u2014 skipping bun install`);
+    console.log(`No third-party deps for ${path5.basename(extPath)} \u2014 skipping bun install`);
     return true;
   }
-  console.log(`Installing ${thirdPartyDeps.length} deps via Bun for ${path4.basename(extPath)}...`);
+  console.log(`Installing ${thirdPartyDeps.length} deps via Bun for ${path5.basename(extPath)}...`);
   try {
     const cleanPkg = {
       name: pkg.name || "extension",
@@ -4061,7 +9293,7 @@ async function installDepsWithBun(extPath) {
     fs2.writeFileSync(pkgPath, JSON.stringify(cleanPkg, null, 2));
     for (const lockfile of ["package-lock.json", "bun.lockb", "bun.lock", "yarn.lock", "pnpm-lock.yaml"]) {
       try {
-        fs2.rmSync(path4.join(extPath, lockfile), { force: true });
+        fs2.rmSync(path5.join(extPath, lockfile), { force: true });
       } catch {
       }
     }
@@ -4070,20 +9302,20 @@ async function installDepsWithBun(extPath) {
       timeout: 12e4,
       env: {
         ...process.env,
-        PATH: `${path4.dirname(bunPath)}:${process.env.PATH || ""}`
+        PATH: `${path5.dirname(bunPath)}:${process.env.PATH || ""}`
       }
     });
     fs2.writeFileSync(pkgPath, originalPkg);
-    const hasNodeModules2 = fs2.existsSync(path4.join(extPath, "node_modules"));
+    const hasNodeModules2 = fs2.existsSync(path5.join(extPath, "node_modules"));
     if (hasNodeModules2) {
-      console.log(`Bun install succeeded for ${path4.basename(extPath)}`);
+      console.log(`Bun install succeeded for ${path5.basename(extPath)}`);
       return true;
     }
-    console.warn(`Bun completed but node_modules missing for ${path4.basename(extPath)}`);
+    console.warn(`Bun completed but node_modules missing for ${path5.basename(extPath)}`);
     fs2.writeFileSync(pkgPath, originalPkg);
     return false;
   } catch (error) {
-    console.warn(`Bun install failed for ${path4.basename(extPath)}:`, error?.message);
+    console.warn(`Bun install failed for ${path5.basename(extPath)}:`, error?.message);
     try {
       const originalContent = JSON.stringify(pkg, null, 2);
       fs2.writeFileSync(pkgPath, originalContent);
@@ -4105,19 +9337,19 @@ async function installSpecificPackagesWithBun(extPath, packageNames) {
     console.warn(`Refusing invalid package name from extension build: ${invalid}`);
     return false;
   }
-  console.log(`Installing specific packages via Bun for ${path4.basename(extPath)}: ${unique.join(", ")}`);
+  console.log(`Installing specific packages via Bun for ${path5.basename(extPath)}: ${unique.join(", ")}`);
   try {
-    await execFileAsync4(bunPath, ["add", "--no-save", ...unique], {
+    await execFileAsync6(bunPath, ["add", "--no-save", ...unique], {
       cwd: extPath,
       timeout: 3e5,
       env: {
         ...process.env,
-        PATH: `${path4.dirname(bunPath)}:${process.env.PATH || ""}`
+        PATH: `${path5.dirname(bunPath)}:${process.env.PATH || ""}`
       }
     });
-    return fs2.existsSync(path4.join(extPath, "node_modules"));
+    return fs2.existsSync(path5.join(extPath, "node_modules"));
   } catch (error) {
-    console.warn(`Bun add failed for ${path4.basename(extPath)}:`, error?.message);
+    console.warn(`Bun add failed for ${path5.basename(extPath)}:`, error?.message);
     return false;
   }
 }
@@ -4152,7 +9384,7 @@ function findFile(dir, name) {
   try {
     const entries = fs2.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      const full = path4.join(dir, entry.name);
+      const full = path5.join(dir, entry.name);
       if (entry.isFile() && entry.name === name) return full;
       if (entry.isDirectory()) {
         const found = findFile(full, name);
@@ -4163,7 +9395,7 @@ function findFile(dir, name) {
   }
   return null;
 }
-var import_child_process, import_util, fs2, path4, https2, http2, execAsync, execFileAsync4, BUN_VERSION;
+var import_child_process, import_util, fs2, path5, https2, http2, execAsync, execFileAsync6, BUN_VERSION;
 var init_bun_manager = __esm({
   "src/main/bun-manager.ts"() {
     "use strict";
@@ -4171,11 +9403,11 @@ var init_bun_manager = __esm({
     import_child_process = require("child_process");
     import_util = require("util");
     fs2 = __toESM(require("fs"));
-    path4 = __toESM(require("path"));
+    path5 = __toESM(require("path"));
     https2 = __toESM(require("https"));
     http2 = __toESM(require("http"));
     execAsync = (0, import_util.promisify)(import_child_process.exec);
-    execFileAsync4 = (0, import_util.promisify)(import_child_process.execFile);
+    execFileAsync6 = (0, import_util.promisify)(import_child_process.execFile);
     BUN_VERSION = "1.2.5";
   }
 });
@@ -4205,7 +9437,7 @@ __export(extension_registry_exports, {
 });
 function hasNodeModules(extPath) {
   try {
-    return fs3.existsSync(path5.join(extPath, "node_modules"));
+    return fs3.existsSync(path6.join(extPath, "node_modules"));
   } catch {
     return false;
   }
@@ -4260,13 +9492,13 @@ async function downloadExtensionFromTree(name, tmpDir) {
     (entry) => entry.type === "blob" && entry.path.startsWith(prefix)
   );
   if (fileEntries.length === 0) return null;
-  const srcDir = path5.join(tmpDir, "extensions", name);
+  const srcDir = path6.join(tmpDir, "extensions", name);
   fs3.mkdirSync(srcDir, { recursive: true });
   for (const entry of fileEntries) {
     const relativePath = entry.path.slice(prefix.length);
     if (!relativePath) continue;
-    const destination = path5.join(srcDir, relativePath);
-    fs3.mkdirSync(path5.dirname(destination), { recursive: true });
+    const destination = path6.join(srcDir, relativePath);
+    fs3.mkdirSync(path6.dirname(destination), { recursive: true });
   }
   const CONCURRENCY = 30;
   let index = 0;
@@ -4276,7 +9508,7 @@ async function downloadExtensionFromTree(name, tmpDir) {
       const entry = fileEntries[i];
       const relativePath = entry.path.slice(prefix.length);
       if (!relativePath) continue;
-      const destination = path5.join(srcDir, relativePath);
+      const destination = path6.join(srcDir, relativePath);
       const fileUrl = `${GITHUB_RAW}/${entry.path}`;
       const response = await fetchWithTimeout(
         fileUrl,
@@ -4303,6 +9535,32 @@ async function downloadExtensionFromTree(name, tmpDir) {
   console.log(`Downloaded ${fileEntries.length} files for "${name}"`);
   return srcDir;
 }
+function downloadExtensionViaSparseGit(name, tmpDir) {
+  const checkoutDir = path6.join(tmpDir, "raymes-extensions-source");
+  try {
+    (0, import_child_process2.execFileSync)("git", [
+      "clone",
+      "--depth",
+      "1",
+      "--filter=blob:none",
+      "--sparse",
+      RAYMES_EXTENSIONS_GIT,
+      checkoutDir
+    ], { stdio: "ignore", timeout: 18e4 });
+    (0, import_child_process2.execFileSync)("git", [
+      "-C",
+      checkoutDir,
+      "sparse-checkout",
+      "set",
+      `extensions/${name}`
+    ], { stdio: "ignore", timeout: 12e4 });
+    const extensionDir = path6.join(checkoutDir, "extensions", name);
+    return fs3.existsSync(path6.join(extensionDir, "package.json")) ? extensionDir : null;
+  } catch (error) {
+    console.warn(`Sparse git fallback failed for "${name}":`, error);
+    return null;
+  }
+}
 function coerceCatalogEntry(raw) {
   if (!raw || typeof raw !== "object") return null;
   const name = typeof raw.name === "string" ? raw.name : "";
@@ -4327,25 +9585,25 @@ function coerceCatalogEntry(raw) {
   };
 }
 function getCatalogPath() {
-  return path5.join(app.getPath("userData"), "extension-catalog.json");
+  return path6.join(app.getPath("userData"), "extension-catalog.json");
 }
 function getExtensionsDir() {
-  const dir = path5.join(app.getPath("userData"), "extensions");
+  const dir = path6.join(app.getPath("userData"), "extensions");
   if (!fs3.existsSync(dir)) {
     fs3.mkdirSync(dir, { recursive: true });
   }
   return dir;
 }
 function getInstalledPath(name) {
-  return path5.join(getExtensionsDir(), name);
+  return path6.join(getExtensionsDir(), name);
 }
 function getLegacyInstalledPath(name) {
   const slug = slugFromRaymesExtensionId(name);
-  return path5.join(getExtensionsDir(), "packages", normalizeRaymesExtensionId(slug));
+  return path6.join(getExtensionsDir(), "packages", normalizeRaymesExtensionId(slug));
 }
 function getLegacyRegistryInstalledPath(name) {
   const slug = slugFromRaymesExtensionId(name);
-  return path5.join(app.getPath("userData"), "extension-registry", "packages", normalizeRaymesExtensionId(slug));
+  return path6.join(app.getPath("userData"), "extension-registry", "packages", normalizeRaymesExtensionId(slug));
 }
 function resolveInstalledExtensionPathForRaymes(name) {
   const slug = slugFromRaymesExtensionId(name);
@@ -4357,7 +9615,7 @@ function resolveInstalledExtensionPathForRaymes(name) {
     getLegacyRegistryInstalledPath(slug)
   ];
   for (const candidate of candidates) {
-    if (fs3.existsSync(path5.join(candidate, "package.json"))) return candidate;
+    if (fs3.existsSync(path6.join(candidate, "package.json"))) return candidate;
   }
   return null;
 }
@@ -4455,15 +9713,15 @@ async function installSpecificPackages(extPath, packageNames) {
   );
   if (unique.length === 0) return;
   console.log(
-    `Installing missing packages for ${path5.basename(extPath)}: ${unique.join(", ")}`
+    `Installing missing packages for ${path6.basename(extPath)}: ${unique.join(", ")}`
   );
   const ok = await installSpecificPackagesWithBun(extPath, unique);
   if (!ok) {
-    throw new Error(`Bun failed to install packages for ${path5.basename(extPath)}`);
+    throw new Error(`Bun failed to install packages for ${path6.basename(extPath)}`);
   }
 }
 async function installExtensionDeps(extPath) {
-  const pkgPath = path5.join(extPath, "package.json");
+  const pkgPath = path6.join(extPath, "package.json");
   if (!fs3.existsSync(pkgPath)) return;
   let pkg;
   try {
@@ -4477,20 +9735,20 @@ async function installExtensionDeps(extPath) {
   };
   const thirdPartyDeps = Object.entries(deps).filter(([name]) => !name.startsWith("@raycast/")).map(([name, version]) => `${name}@${version}`).filter(Boolean);
   if (thirdPartyDeps.length === 0) {
-    console.log(`No third-party dependencies for ${path5.basename(extPath)}`);
+    console.log(`No third-party dependencies for ${path6.basename(extPath)}`);
     return;
   }
   console.log(
-    `Installing ${thirdPartyDeps.length} dependencies for ${path5.basename(extPath)}: ${thirdPartyDeps.join(", ")}`
+    `Installing ${thirdPartyDeps.length} dependencies for ${path6.basename(extPath)}: ${thirdPartyDeps.join(", ")}`
   );
   const ok = await installDepsWithBun(extPath);
   if (!ok) {
-    throw new Error(`Bun dependency installation failed for ${path5.basename(extPath)}`);
+    throw new Error(`Bun dependency installation failed for ${path6.basename(extPath)}`);
   }
   if (!hasNodeModules(extPath)) {
     throw new Error("Bun completed but node_modules is still missing");
   }
-  console.log(`Dependencies installed for ${path5.basename(extPath)}`);
+  console.log(`Dependencies installed for ${path6.basename(extPath)}`);
 }
 function isExtensionInstalled(name) {
   return resolveInstalledExtensionPathForRaymes(name) !== null;
@@ -4501,8 +9759,8 @@ function getInstalledExtensionNames() {
     if (!fs3.existsSync(root)) return;
     try {
       for (const d of fs3.readdirSync(root)) {
-        const p = path5.join(root, d);
-        if (fs3.statSync(p).isDirectory() && fs3.existsSync(path5.join(p, "package.json"))) {
+        const p = path6.join(root, d);
+        if (fs3.statSync(p).isDirectory() && fs3.existsSync(path6.join(p, "package.json"))) {
           names.add(stripRaycastPrefix ? slugFromRaymesExtensionId(d) : d);
         }
       }
@@ -4510,8 +9768,8 @@ function getInstalledExtensionNames() {
     }
   };
   scanRoot(getExtensionsDir(), false);
-  scanRoot(path5.join(getExtensionsDir(), "packages"), true);
-  scanRoot(path5.join(app.getPath("userData"), "extension-registry", "packages"), true);
+  scanRoot(path6.join(getExtensionsDir(), "packages"), true);
+  scanRoot(path6.join(app.getPath("userData"), "extension-registry", "packages"), true);
   return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b));
 }
 async function installExtension2(name) {
@@ -4536,32 +9794,37 @@ async function installExtension2(name) {
 async function installExtensionFromBundle(name) {
   const installPath = getInstalledPath(name);
   const hadExistingInstall = fs3.existsSync(installPath);
-  const backupPath = hadExistingInstall ? path5.join(getExtensionsDir(), `${name}.backup-${Date.now()}`) : "";
-  const tmpDir = path5.join(app.getPath("temp"), `supercmd-bundle-${Date.now()}`);
+  const backupPath = hadExistingInstall ? path6.join(getExtensionsDir(), `${name}.backup-${Date.now()}`) : "";
+  const tmpDir = path6.join(app.getPath("temp"), `supercmd-bundle-${Date.now()}`);
   try {
     const t0 = Date.now();
     const { url } = await getExtensionBundleUrl(name);
     console.log(`Downloading pre-built bundle for "${name}"\u2026`);
     fs3.mkdirSync(tmpDir, { recursive: true });
     await downloadAndExtractTarball(url, tmpDir);
-    const nestedPath = path5.join(tmpDir, name);
+    const nestedPath = path6.join(tmpDir, name);
     let srcDir = tmpDir;
-    if (fs3.existsSync(path5.join(nestedPath, "package.json"))) {
+    if (fs3.existsSync(path6.join(nestedPath, "package.json"))) {
       srcDir = nestedPath;
-    } else if (!fs3.existsSync(path5.join(srcDir, "package.json"))) {
+    } else if (!fs3.existsSync(path6.join(srcDir, "package.json"))) {
       const subdirs = fs3.readdirSync(tmpDir, { withFileTypes: true }).filter((d) => d.isDirectory());
       for (const sub of subdirs) {
-        if (fs3.existsSync(path5.join(tmpDir, sub.name, "package.json"))) {
-          srcDir = path5.join(tmpDir, sub.name);
+        if (fs3.existsSync(path6.join(tmpDir, sub.name, "package.json"))) {
+          srcDir = path6.join(tmpDir, sub.name);
           break;
         }
       }
     }
-    if (!fs3.existsSync(path5.join(srcDir, "package.json"))) {
+    if (!fs3.existsSync(path6.join(srcDir, "package.json"))) {
       throw new Error("Bundle has no package.json");
     }
-    if (!fs3.existsSync(path5.join(srcDir, ".sc-build"))) {
+    if (!fs3.existsSync(path6.join(srcDir, ".sc-build"))) {
       throw new Error("Bundle has no .sc-build/ directory \u2014 not a pre-built bundle");
+    }
+    const bundleManifest = JSON.parse(fs3.readFileSync(path6.join(srcDir, "package.json"), "utf8"));
+    const missingCommandBundles = (Array.isArray(bundleManifest.commands) ? bundleManifest.commands : []).filter((command) => command?.name).filter((command) => !fs3.existsSync(path6.join(srcDir, ".sc-build", `${command.name}.js`))).map((command) => command.name);
+    if (missingCommandBundles.length > 0) {
+      throw new Error(`Bundle is incomplete; missing commands: ${missingCommandBundles.join(", ")}`);
     }
     if (hadExistingInstall) {
       fs3.renameSync(installPath, backupPath);
@@ -4602,18 +9865,24 @@ async function installExtensionFromBundle(name) {
 async function installExtensionViaAPI(name) {
   const installPath = getInstalledPath(name);
   const hadExistingInstall = fs3.existsSync(installPath);
-  const backupPath = hadExistingInstall ? path5.join(getExtensionsDir(), `${name}.backup-${Date.now()}`) : "";
-  const tmpDir = path5.join(app.getPath("temp"), `supercmd-api-install-${Date.now()}`);
+  const backupPath = hadExistingInstall ? path6.join(getExtensionsDir(), `${name}.backup-${Date.now()}`) : "";
+  const tmpDir = path6.join(app.getPath("temp"), `supercmd-api-install-${Date.now()}`);
   try {
     const t0 = Date.now();
     console.log(`Installing extension: ${name}\u2026`);
     fs3.mkdirSync(tmpDir, { recursive: true });
-    const srcDir = await downloadExtensionFromTree(name, tmpDir);
+    let srcDir = null;
+    try {
+      srcDir = await downloadExtensionFromTree(name, tmpDir);
+    } catch (error) {
+      console.warn(`GitHub API source download failed for "${name}"; trying sparse git.`, error);
+    }
+    if (!srcDir) srcDir = downloadExtensionViaSparseGit(name, tmpDir);
     console.log(`  Download: ${Date.now() - t0}ms`);
-    if (!srcDir || !fs3.existsSync(path5.join(srcDir, "package.json"))) {
+    if (!srcDir || !fs3.existsSync(path6.join(srcDir, "package.json"))) {
       throw new Error(`Extension "${name}" not found or has no package.json`);
     }
-    const srcPkg = JSON.parse(fs3.readFileSync(path5.join(srcDir, "package.json"), "utf-8"));
+    const srcPkg = JSON.parse(fs3.readFileSync(path6.join(srcDir, "package.json"), "utf-8"));
     if (!isManifestPlatformCompatible(srcPkg)) {
       const supported = getManifestPlatforms(srcPkg);
       console.error(`Extension "${name}" is not compatible with ${getCurrentRaycastPlatform()} (supports: ${supported.join(", ")})`);
@@ -4624,7 +9893,7 @@ async function installExtensionViaAPI(name) {
     }
     fs3.cpSync(srcDir, installPath, { recursive: true });
     {
-      const extPkg = JSON.parse(fs3.readFileSync(path5.join(installPath, "package.json"), "utf-8"));
+      const extPkg = JSON.parse(fs3.readFileSync(path6.join(installPath, "package.json"), "utf-8"));
       const allDeps = { ...extPkg.dependencies || {}, ...extPkg.optionalDependencies || {} };
       const thirdPartyDeps = Object.keys(allDeps).filter((d) => !d.startsWith("@raycast/"));
       if (thirdPartyDeps.length === 0) {
@@ -4639,6 +9908,10 @@ async function installExtensionViaAPI(name) {
       console.log(`  Deps: ${t1 - t0}ms. Pre-building commands for "${name}"\u2026`);
       const { buildAllCommands: buildAllCommands2 } = (init_extension_builder(), __toCommonJS(extension_builder_exports));
       const builtCount = await buildAllCommands2(name);
+      const expectedCount = (Array.isArray(extPkg.commands) ? extPkg.commands : []).filter((command) => command?.name).length;
+      if (builtCount < expectedCount) {
+        throw new Error(`Built ${builtCount}/${expectedCount} commands for "${name}"`);
+      }
       console.log(`  Build: ${Date.now() - t1}ms. Extension "${name}" installed (${builtCount} commands) in ${Date.now() - t0}ms total`);
     }
     if (backupPath && fs3.existsSync(backupPath)) {
@@ -4723,11 +9996,11 @@ function extractTarGz(buffer, destDir) {
     const size = parseInt(sizeOctal, 8) || 0;
     offset += 512;
     if (typeFlag === 53 || fullName.endsWith("/")) {
-      const dirPath = path5.join(destDir, fullName);
+      const dirPath = path6.join(destDir, fullName);
       fs3.mkdirSync(dirPath, { recursive: true });
     } else if (typeFlag === 0 || typeFlag === 48) {
-      const filePath = path5.join(destDir, fullName);
-      fs3.mkdirSync(path5.dirname(filePath), { recursive: true });
+      const filePath = path6.join(destDir, fullName);
+      fs3.mkdirSync(path6.dirname(filePath), { recursive: true });
       const fileData = decompressed.subarray(offset, offset + size);
       fs3.writeFileSync(filePath, fileData);
     }
@@ -4737,7 +10010,7 @@ function extractTarGz(buffer, destDir) {
 }
 function getMachineId() {
   if (_machineId) return _machineId;
-  const idPath = path5.join(app.getPath("userData"), ".machine-id");
+  const idPath = path6.join(app.getPath("userData"), ".machine-id");
   try {
     const existing = fs3.readFileSync(idPath, "utf-8").trim();
     if (existing) {
@@ -4786,7 +10059,7 @@ function extensionNameFromSlug(slug) {
 }
 function readInstalledPackage(slug) {
   const extensionPath = resolveInstalledExtensionPathForRaymes(slug);
-  const pkgPath = extensionPath ? path5.join(extensionPath, "package.json") : "";
+  const pkgPath = extensionPath ? path6.join(extensionPath, "package.json") : "";
   if (!fs3.existsSync(pkgPath)) return {};
   try {
     return JSON.parse(fs3.readFileSync(pkgPath, "utf-8"));
@@ -4826,13 +10099,13 @@ function resolveInstalledIconPath(extensionPath, icon) {
   if (/^https?:\/\//i.test(icon)) return icon;
   const normalized = icon.replace(/^\.?\//, "");
   const candidates = [
-    path5.join(extensionPath, normalized),
-    path5.join(extensionPath, "assets", normalized)
+    path6.join(extensionPath, normalized),
+    path6.join(extensionPath, "assets", normalized)
   ];
   return candidates.find((candidate) => fs3.existsSync(candidate));
 }
 function readAppBundleIdentifier(appPath) {
-  const infoPlistPath = path5.join(appPath, "Contents", "Info.plist");
+  const infoPlistPath = path6.join(appPath, "Contents", "Info.plist");
   if (!fs3.existsSync(infoPlistPath)) return void 0;
   try {
     return (0, import_child_process2.execFileSync)("/usr/bin/plutil", ["-extract", "CFBundleIdentifier", "raw", "-o", "-", infoPlistPath], {
@@ -4888,7 +10161,7 @@ function listInstalledRegistryExtensions() {
       owner: owner || void 0,
       authorIconUrl,
       iconPath,
-      packageJsonPath: path5.join(extensionPath, "package.json"),
+      packageJsonPath: path6.join(extensionPath, "package.json"),
       extensionPath,
       commands: (commandsBySlug.get(slug) || []).map(normalizeRegistryCommand),
       installedAt: (() => {
@@ -4905,7 +10178,7 @@ function resolveInstalledPackageJsonPath(extensionId) {
   const slug = slugFromRaymesExtensionId(extensionId);
   if (!slug) return null;
   const extensionPath = resolveInstalledExtensionPathForRaymes(slug);
-  const pkgPath = extensionPath ? path5.join(extensionPath, "package.json") : "";
+  const pkgPath = extensionPath ? path6.join(extensionPath, "package.json") : "";
   return fs3.existsSync(pkgPath) ? pkgPath : null;
 }
 async function searchExtensionCatalog(query) {
@@ -4967,7 +10240,7 @@ function uninstallRegistryExtension(extensionIdOrSlug) {
 function listInstalledExtensionSlugsFromDisk() {
   return getInstalledExtensionNames();
 }
-function getExtensionPreferences(extensionId, commandName) {
+function getExtensionPreferences(extensionId, commandName2) {
   const slug = slugFromRaymesExtensionId(extensionId);
   const pkg = readInstalledPackage(slug);
   const values = {};
@@ -4989,17 +10262,17 @@ function getExtensionPreferences(extensionId, commandName) {
     }
   };
   applyDefaults(Array.isArray(pkg.preferences) ? pkg.preferences : []);
-  const command = Array.isArray(pkg.commands) ? pkg.commands.find((cmd) => cmd?.name === commandName) : null;
+  const command = Array.isArray(pkg.commands) ? pkg.commands.find((cmd) => cmd?.name === commandName2) : null;
   applyDefaults(Array.isArray(command?.preferences) ? command.preferences : []);
   const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
-  const preferencesPath = path5.join(extensionPath, "preferences.json");
+  const preferencesPath = path6.join(extensionPath, "preferences.json");
   if (fs3.existsSync(preferencesPath)) {
     try {
       const saved = JSON.parse(fs3.readFileSync(preferencesPath, "utf-8"));
       if (saved && typeof saved === "object") {
         Object.assign(values, saved);
-        if (commandName && saved.commands?.[commandName]) {
-          Object.assign(values, saved.commands[commandName]);
+        if (commandName2 && saved.commands?.[commandName2]) {
+          Object.assign(values, saved.commands[commandName2]);
         }
       }
     } catch {
@@ -5007,28 +10280,31 @@ function getExtensionPreferences(extensionId, commandName) {
   }
   return values;
 }
-function getExtensionPreferenceSetup(extensionId, commandName) {
+function getExtensionPreferenceSetup(extensionId, commandName2) {
   const slug = slugFromRaymesExtensionId(extensionId);
   const pkg = readInstalledPackage(slug);
   const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
-  const command = Array.isArray(pkg.commands) ? pkg.commands.find((cmd) => cmd?.name === commandName) : null;
-  const preferences = [
-    ...Array.isArray(pkg.preferences) ? pkg.preferences : [],
-    ...Array.isArray(command?.preferences) ? command.preferences : []
-  ];
-  const preferencesPath = path5.join(extensionPath, "preferences.json");
+  const command = Array.isArray(pkg.commands) ? pkg.commands.find((cmd) => cmd?.name === commandName2) : null;
+  const extensionPreferences = Array.isArray(pkg.preferences) ? pkg.preferences.map((preference) => ({ ...preference })) : [];
+  const commandPreferences = Array.isArray(command?.preferences) ? command.preferences.map((preference) => ({
+    ...preference,
+    commandName: commandName2,
+    commandTitle: String(command?.title || commandName2)
+  })) : [];
+  const preferences = [...extensionPreferences, ...commandPreferences];
+  const preferencesPath = path6.join(extensionPath, "preferences.json");
   return {
     extensionId: normalizeRaymesExtensionId(slug),
-    commandName,
+    commandName: commandName2,
     title: String(pkg.title || extensionNameFromSlug(slug)),
     iconPath: resolveInstalledIconPath(extensionPath, pkg.icon || "icon.png") || void 0,
     preferences,
-    values: getExtensionPreferences(extensionId, commandName),
+    values: getExtensionPreferences(extensionId, commandName2),
     hasSavedPreferences: fs3.existsSync(preferencesPath)
   };
 }
-function shouldShowExtensionPreferenceSetup(extensionId, commandName) {
-  const setup = getExtensionPreferenceSetup(extensionId, commandName);
+function shouldShowExtensionPreferenceSetup(extensionId, commandName2) {
+  const setup = getExtensionPreferenceSetup(extensionId, commandName2);
   if (setup.preferences.length === 0) return false;
   const needsRequiredValue = setup.preferences.some((pref) => {
     if (!pref?.required || !pref?.name) return false;
@@ -5036,13 +10312,22 @@ function shouldShowExtensionPreferenceSetup(extensionId, commandName) {
     return value === void 0 || value === null || String(value).trim() === "";
   });
   if (needsRequiredValue) return true;
+  const needsCredentialValue = setup.preferences.some((pref) => {
+    if (pref?.type !== "password" || !pref?.name) return false;
+    const value = setup.values[pref.name];
+    return value === void 0 || value === null || String(value).trim() === "";
+  });
+  if (needsCredentialValue) return true;
+  if (!setup.hasSavedPreferences && setup.preferences.some((pref) => pref?.required)) {
+    return true;
+  }
   return !setup.hasSavedPreferences && extensionId === "raycast.google-translate";
 }
-function saveExtensionPreferences(extensionId, values, commandName) {
+function saveExtensionPreferences(extensionId, values, commandName2) {
   const slug = slugFromRaymesExtensionId(extensionId);
   const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
   fs3.mkdirSync(extensionPath, { recursive: true });
-  const preferencesPath = path5.join(extensionPath, "preferences.json");
+  const preferencesPath = path6.join(extensionPath, "preferences.json");
   let existing = {};
   if (fs3.existsSync(preferencesPath)) {
     try {
@@ -5051,10 +10336,10 @@ function saveExtensionPreferences(extensionId, values, commandName) {
     } catch {
     }
   }
-  if (commandName) {
+  if (commandName2) {
     existing.commands = existing.commands && typeof existing.commands === "object" ? existing.commands : {};
-    existing.commands[commandName] = {
-      ...existing.commands[commandName] || {},
+    existing.commands[commandName2] = {
+      ...existing.commands[commandName2] || {},
       ...values
     };
   } else {
@@ -5064,9 +10349,9 @@ function saveExtensionPreferences(extensionId, values, commandName) {
     };
   }
   fs3.writeFileSync(preferencesPath, JSON.stringify(existing, null, 2));
-  return getExtensionPreferences(extensionId, commandName);
+  return getExtensionPreferences(extensionId, commandName2);
 }
-var import_child_process2, import_events2, fs3, path5, zlib, extensionRegistryEvents, GITHUB_RAW, GITHUB_API, GITHUB_TREE_API, REPO_TREE_TTL_MS, repoTreeCache, CATALOG_VERSION, CATALOG_TTL, catalogCache2, _machineId;
+var import_child_process2, import_events2, fs3, path6, zlib, extensionRegistryEvents, GITHUB_RAW, GITHUB_API, GITHUB_TREE_API, RAYMES_EXTENSIONS_GIT, REPO_TREE_TTL_MS, repoTreeCache, CATALOG_VERSION, CATALOG_TTL, catalogCache2, _machineId;
 var init_extension_registry = __esm({
   "src/main/extension-registry.ts"() {
     "use strict";
@@ -5074,7 +10359,7 @@ var init_extension_registry = __esm({
     import_child_process2 = require("child_process");
     import_events2 = require("events");
     fs3 = __toESM(require("fs"));
-    path5 = __toESM(require("path"));
+    path6 = __toESM(require("path"));
     zlib = __toESM(require("zlib"));
     init_extension_platform();
     init_extension_builder();
@@ -5084,12 +10369,53 @@ var init_extension_registry = __esm({
     GITHUB_RAW = "https://raw.githubusercontent.com/raycast/extensions/main";
     GITHUB_API = "https://api.github.com/repos/raycast/extensions/contents";
     GITHUB_TREE_API = "https://api.github.com/repos/raycast/extensions/git/trees/main?recursive=1";
+    RAYMES_EXTENSIONS_GIT = "https://github.com/almatkai/raymes-extensions.git";
     REPO_TREE_TTL_MS = 10 * 60 * 1e3;
     repoTreeCache = null;
     CATALOG_VERSION = 6;
     CATALOG_TTL = 24 * 60 * 60 * 1e3;
     catalogCache2 = null;
     _machineId = null;
+  }
+});
+
+// src/main/llm/extensionAI.ts
+async function askExtensionAI(prompt) {
+  const normalizedPrompt = String(prompt || "").trim();
+  if (!normalizedPrompt) throw new Error("AI prompt is required");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EXTENSION_AI_TIMEOUT_MS);
+  const messages = [
+    { role: "system", content: EXTENSION_AI_SYSTEM },
+    { role: "user", content: normalizedPrompt }
+  ];
+  try {
+    const { getProviderForTask: getProviderForTask2 } = await Promise.resolve().then(() => (init_registry(), registry_exports));
+    const provider = getProviderForTask2("action");
+    if (!await provider.isAvailable()) {
+      throw new Error("The configured AI provider is unavailable");
+    }
+    const stream = await provider.chat(messages, void 0, { signal: controller.signal });
+    let answer = "";
+    for await (const delta of stream) {
+      if (delta.text) answer += delta.text;
+    }
+    return answer.trim();
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error("Extension AI request timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+var EXTENSION_AI_TIMEOUT_MS, EXTENSION_AI_SYSTEM;
+var init_extensionAI = __esm({
+  "src/main/llm/extensionAI.ts"() {
+    "use strict";
+    EXTENSION_AI_TIMEOUT_MS = 6e4;
+    EXTENSION_AI_SYSTEM = "You are answering an AI request from a Raycast-compatible extension. Return only the requested result, without commentary or tool use.";
   }
 });
 
@@ -5124,6 +10450,31 @@ function delay(ms) {
 function elapsedMs(startedAt) {
   return `${Date.now() - startedAt}ms`;
 }
+function hookDepsEqual(previous, next) {
+  if (!previous || !next || previous.length !== next.length) return false;
+  return next.every((value, index) => Object.is(value, previous[index]));
+}
+function flushPendingEffects(session2) {
+  const effects = session2.pendingEffects.splice(0);
+  for (const { idx, sideEffect, deps, label } of effects) {
+    const previousCleanup = session2.effectCleanups.get(idx);
+    if (previousCleanup) {
+      try {
+        previousCleanup();
+      } catch (error) {
+        console.error(`[${label}] cleanup threw:`, error);
+      }
+      session2.effectCleanups.delete(idx);
+    }
+    try {
+      const cleanup2 = sideEffect();
+      session2.effectDeps.set(idx, deps);
+      if (typeof cleanup2 === "function") session2.effectCleanups.set(idx, cleanup2);
+    } catch (error) {
+      console.error(`[${label}] side effect threw:`, error);
+    }
+  }
+}
 function promiseHookLabel(hookIdx, fn, args) {
   const source = typeof fn === "function" ? fn.toString().replace(/\s+/g, " ").slice(0, 90) : String(fn).slice(0, 90);
   let serializedArgs = "";
@@ -5135,8 +10486,8 @@ function promiseHookLabel(hookIdx, fn, args) {
   return `hook=${hookIdx} fn="${source}" args=${serializedArgs.slice(0, 160)}`;
 }
 function promiseResultCachePath(session2, key) {
-  const digest = (0, import_node_crypto4.createHash)("sha256").update(session2.bundledCode).update("\0").update(session2.extensionId).update("\0").update(session2.commandName).update("\0").update(key).digest("hex");
-  return (0, import_node_path10.join)(session2.packageRoot, ".tezbar-runtime-cache", `${digest}.bin.gz`);
+  const digest = (0, import_node_crypto5.createHash)("sha256").update(session2.bundledCode).update("\0").update(session2.extensionId).update("\0").update(session2.commandName).update("\0").update(key).digest("hex");
+  return (0, import_node_path12.join)(session2.packageRoot, ".tezbar-runtime-cache", `${digest}.bin.gz`);
 }
 function readPromiseResultCache(session2, key) {
   const memoryKey = `${session2.extensionId}/${session2.commandName}:${key}`;
@@ -5146,9 +10497,9 @@ function readPromiseResultCache(session2, key) {
   }
   const cachePath = promiseResultCachePath(session2, key);
   try {
-    const stats = (0, import_node_fs10.statSync)(cachePath);
+    const stats = (0, import_node_fs12.statSync)(cachePath);
     if (Date.now() - stats.mtimeMs > PROMISE_RESULT_CACHE_TTL_MS) return null;
-    const compressed = (0, import_node_fs10.readFileSync)(cachePath);
+    const compressed = (0, import_node_fs12.readFileSync)(cachePath);
     const payload = (0, import_node_v8.deserialize)((0, import_node_zlib.gunzipSync)(compressed));
     setPromiseResultMemoryCache(memoryKey, payload);
     console.log(
@@ -5170,8 +10521,8 @@ function writePromiseResultCache(session2, key, data) {
     try {
       const encoded = (0, import_node_v8.serialize)({ data, cachedAt });
       const compressed = await gzipAsync(encoded);
-      (0, import_node_fs10.mkdirSync)((0, import_node_path10.dirname)(cachePath), { recursive: true });
-      await (0, import_promises.writeFile)(cachePath, compressed);
+      (0, import_node_fs12.mkdirSync)((0, import_node_path12.dirname)(cachePath), { recursive: true });
+      await (0, import_promises2.writeFile)(cachePath, compressed);
       console.log(
         `[usePromise] Persistent cache write complete after ${elapsedMs(startedAt)}; raw=${encoded.byteLength}, compressed=${compressed.byteLength}`
       );
@@ -5183,9 +10534,11 @@ function writePromiseResultCache(session2, key, data) {
     }
   })();
 }
-function createLoggedFetch(session2) {
+function createLoggedFetch() {
   return async (input, init) => {
-    const method = String(init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    const method = String(
+      init?.method ?? (input instanceof Request ? input.method : "GET")
+    ).toUpperCase();
     const url = input instanceof Request ? input.url : String(input);
     const startedAt = Date.now();
     console.log(`[ExtensionFetch] start ${method} ${url}`);
@@ -5244,15 +10597,15 @@ async function recoverIncompleteChunkedCache(session2, error, promiseKey) {
   const indexPath = missingIndex[1];
   const cacheName = missingIndex[2];
   if (!indexPath || !cacheName) return false;
-  const supportRoot = (0, import_node_path10.join)(session2.packageRoot, ".tezbar-support");
-  const chunkDirectory = (0, import_node_path10.join)(indexPath, cacheName);
-  const sourcePath = (0, import_node_path10.join)(indexPath, `${cacheName}.json`);
-  if ((0, import_node_path10.dirname)(sourcePath) !== supportRoot || (0, import_node_path10.dirname)(chunkDirectory) !== supportRoot) {
+  const supportRoot = (0, import_node_path12.join)(session2.packageRoot, ".tezbar-support");
+  const chunkDirectory = (0, import_node_path12.join)(indexPath, cacheName);
+  const sourcePath = (0, import_node_path12.join)(indexPath, `${cacheName}.json`);
+  if ((0, import_node_path12.dirname)(sourcePath) !== supportRoot || (0, import_node_path12.dirname)(chunkDirectory) !== supportRoot) {
     return false;
   }
   let handle = null;
   try {
-    handle = await (0, import_promises.open)(sourcePath, "r");
+    handle = await (0, import_promises2.open)(sourcePath, "r");
     const stats = await handle.stat();
     if (stats.size <= 0) return false;
     const tailSize = Math.min(stats.size, 4096);
@@ -5268,54 +10621,13 @@ async function recoverIncompleteChunkedCache(session2, error, promiseKey) {
   }
   session2.cacheRecoveryKeys.add(promiseKey);
   await Promise.all([
-    (0, import_promises.rm)(sourcePath, { force: true }),
-    (0, import_promises.rm)(chunkDirectory, { recursive: true, force: true })
+    (0, import_promises2.rm)(sourcePath, { force: true }),
+    (0, import_promises2.rm)(chunkDirectory, { recursive: true, force: true })
   ]);
   console.warn(
     `[Runner] Removed incomplete extension cache "${cacheName}" and scheduled one rebuild.`
   );
   return true;
-}
-function axiosGetShim(url, options) {
-  if (options?.responseType !== "stream") {
-    return fetch(url).then(async (response) => {
-      const text = await response.text();
-      let data = text;
-      try {
-        if (response.headers.get("content-type")?.includes("application/json")) {
-          data = JSON.parse(text);
-        }
-      } catch {
-      }
-      const headers = {};
-      response.headers.forEach((v, k) => {
-        headers[k] = v;
-      });
-      return { data, status: response.status, headers };
-    });
-  }
-  return new Promise((resolve4, reject) => {
-    const client = url.startsWith("https:") ? import_node_https.get : import_node_http.get;
-    const request = client(url, (response) => {
-      const status = response.statusCode ?? 0;
-      if (status >= 300 && status < 400 && response.headers.location) {
-        void axiosGetShim(new URL(response.headers.location, url).toString(), options).then(resolve4, reject);
-        response.resume();
-        return;
-      }
-      if (status < 200 || status >= 300) {
-        response.resume();
-        reject(new Error(`Request failed with status ${status}`));
-        return;
-      }
-      const headers = {};
-      for (const [k, v] of Object.entries(response.headers)) {
-        if (v !== void 0) headers[k] = Array.isArray(v) ? v.join(", ") : v;
-      }
-      resolve4({ data: response, status, headers });
-    });
-    request.on("error", reject);
-  });
 }
 function createFetchModuleShim() {
   const boundFetch = fetch.bind(globalThis);
@@ -5334,34 +10646,39 @@ async function runAppleScript2(source) {
   if (typeof source !== "string" || source.trim().length === 0) {
     return "";
   }
-  const { stdout } = await execFileAsync5("/usr/bin/osascript", ["-e", source], {
+  const { stdout } = await execFileAsync7("/usr/bin/osascript", ["-e", source], {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024
   });
   return String(stdout).replace(/\r?\n$/, "");
 }
+async function runAppleScriptForSession(session2, source) {
+  pushEffect(session2, { kind: "apple-script", value: String(source ?? "").slice(0, 2e3) });
+  if (session2.effectMode === "record") return "";
+  return runAppleScript2(source);
+}
 function nativeColorPickerBinaryPath() {
-  return (0, import_node_path10.join)(app.getPath("userData"), "native", "color-picker");
+  return (0, import_node_path12.join)(app.getPath("userData"), "native", "color-picker");
 }
 function nativeColorPickerSourcePath() {
   const candidates = [
-    (0, import_node_path10.join)(process.cwd(), "native", "color-picker", "main.swift"),
-    (0, import_node_path10.join)(process.cwd(), "src", "native", "color-picker.swift"),
-    (0, import_node_path10.join)(app.getAppPath(), "native", "color-picker", "main.swift"),
-    (0, import_node_path10.join)(app.getAppPath(), "src", "native", "color-picker.swift")
+    (0, import_node_path12.join)(process.cwd(), "native", "color-picker", "main.swift"),
+    (0, import_node_path12.join)(process.cwd(), "src", "native", "color-picker.swift"),
+    (0, import_node_path12.join)(app.getAppPath(), "native", "color-picker", "main.swift"),
+    (0, import_node_path12.join)(app.getAppPath(), "src", "native", "color-picker.swift")
   ];
-  return candidates.find((candidate) => (0, import_node_fs10.existsSync)(candidate)) ?? null;
+  return candidates.find((candidate) => (0, import_node_fs12.existsSync)(candidate)) ?? null;
 }
 async function ensureNativeColorPickerBinary() {
   const binaryPath = nativeColorPickerBinaryPath();
-  if ((0, import_node_fs10.existsSync)(binaryPath)) return binaryPath;
+  if ((0, import_node_fs12.existsSync)(binaryPath)) return binaryPath;
   const sourcePath = nativeColorPickerSourcePath();
   if (!sourcePath) return null;
-  const moduleCachePath = (0, import_node_path10.join)((0, import_node_path10.dirname)(binaryPath), "swift-module-cache");
-  (0, import_node_fs10.mkdirSync)((0, import_node_path10.dirname)(binaryPath), { recursive: true });
-  (0, import_node_fs10.mkdirSync)(moduleCachePath, { recursive: true });
+  const moduleCachePath = (0, import_node_path12.join)((0, import_node_path12.dirname)(binaryPath), "swift-module-cache");
+  (0, import_node_fs12.mkdirSync)((0, import_node_path12.dirname)(binaryPath), { recursive: true });
+  (0, import_node_fs12.mkdirSync)(moduleCachePath, { recursive: true });
   try {
-    await execFileAsync5("/usr/bin/swiftc", [
+    await execFileAsync7("/usr/bin/swiftc", [
       "-module-cache-path",
       moduleCachePath,
       "-O",
@@ -5371,7 +10688,7 @@ async function ensureNativeColorPickerBinary() {
       "-framework",
       "AppKit"
     ]);
-    return (0, import_node_fs10.existsSync)(binaryPath) ? binaryPath : null;
+    return (0, import_node_fs12.existsSync)(binaryPath) ? binaryPath : null;
   } catch (error) {
     console.error("[ColorPicker] Failed to compile native helper:", error);
     return null;
@@ -5390,7 +10707,7 @@ async function pickColorWithNativeSampler() {
     }
     app.hide();
     await delay(80);
-    const { stdout } = await execFileAsync5(binaryPath);
+    const { stdout } = await execFileAsync7(binaryPath);
     const trimmed = stdout.trim();
     if (!trimmed || trimmed === "null") return null;
     const parsed = JSON.parse(trimmed);
@@ -5425,25 +10742,66 @@ async function pickColorWithNativeSampler() {
     }
   }
 }
+function screenOcrHelperPath2() {
+  if (process.env.SCREENOCR_HELPER_PATH) return process.env.SCREENOCR_HELPER_PATH;
+  if (app?.isPackaged) {
+    const resourcesPath = process.resourcesPath;
+    if (resourcesPath) {
+      return (0, import_node_path12.join)(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper");
+    }
+  }
+  return (0, import_node_path12.join)(process.cwd(), "native", "screenocr", "screenocr-helper");
+}
+async function runScreenOcrHelper(command, values) {
+  const helperPath = screenOcrHelperPath2();
+  if (!(0, import_node_fs12.existsSync)(helperPath)) {
+    throw new Error(`ScreenOCR native helper is missing at ${helperPath}`);
+  }
+  const visibleWindows = BrowserWindow?.getAllWindows ? BrowserWindow.getAllWindows().filter((window2) => window2.isVisible()) : [];
+  const shouldHideApp = command === "recognize-text" && values.fullscreen === true;
+  try {
+    if (shouldHideApp) {
+      setSuppressBlurHide(true);
+      for (const window2 of visibleWindows) window2.hide();
+      app?.hide?.();
+      await delay(120);
+    }
+    const { stdout } = await execFileAsync7(helperPath, [command, JSON.stringify(values)], {
+      timeout: 18e4,
+      maxBuffer: 10 * 1024 * 1024
+    });
+    const response = JSON.parse(stdout.trim());
+    if (!response.ok) throw new Error(response.error || "ScreenOCR native helper failed");
+    return response.value ?? "";
+  } finally {
+    if (shouldHideApp) {
+      setSuppressBlurHide(false);
+      app?.show?.();
+      for (const window2 of visibleWindows) {
+        if (!window2.isDestroyed()) window2.show();
+      }
+    }
+  }
+}
 function colorWheelMarkdown() {
   return "![RGB Color Wheel](rgb-color-wheel.webp?&raycast-height=350)";
 }
 function attachRuntimeRootMetadata(root, session2) {
   root.props = {
     ...root.props ?? {},
-    assetsPath: (0, import_node_path10.join)(session2.packageRoot, "assets")
+    assetsPath: (0, import_node_path12.join)(session2.packageRoot, "assets")
   };
   if (typeof root.props.markdown === "string") {
     root.props.markdown = resolveExtensionMarkdownAssets(root.props.markdown, session2.packageRoot);
   }
 }
-function buildPreferenceSetupRoot(extensionId, commandName) {
-  const setup = getExtensionPreferenceSetup(extensionId, commandName);
+function buildPreferenceSetupRoot(extensionId, commandName2) {
+  const setup = getExtensionPreferenceSetup(extensionId, commandName2);
   return {
     type: "Tezbar.PreferenceSetup",
     props: {
       extensionId: setup.extensionId,
-      commandName,
+      commandName: commandName2,
       title: setup.title,
       iconPath: setup.iconPath,
       preferences: setup.preferences,
@@ -5453,60 +10811,80 @@ function buildPreferenceSetupRoot(extensionId, commandName) {
     children: []
   };
 }
-function parsePackageJson(path6) {
-  if (!(0, import_node_fs10.existsSync)(path6)) {
-    throw new Error(`Missing package.json at ${path6}`);
+function parsePackageJson(path7) {
+  if (!(0, import_node_fs12.existsSync)(path7)) {
+    throw new Error(`Missing package.json at ${path7}`);
   }
-  const raw = (0, import_node_fs10.readFileSync)(path6, "utf8");
+  const raw = (0, import_node_fs12.readFileSync)(path7, "utf8");
   const parsed = JSON.parse(raw);
   return parsed && typeof parsed === "object" ? parsed : {};
 }
-function findCommandInManifest(pkg, commandName) {
-  const command = (pkg.commands ?? []).find((entry) => entry.name === commandName);
+function findCommandInManifest(pkg, commandName2) {
+  const command = (pkg.commands ?? []).find((entry) => entry.name === commandName2);
   if (!command) {
-    throw new Error(`Command not found: ${commandName}`);
+    throw new Error(`Command not found: ${commandName2}`);
   }
   return command;
 }
-function resolveCommandEntry(packageRoot, commandName, command) {
-  const prebuilt = (0, import_node_path10.join)(packageRoot, ".sc-build", `${commandName}.js`);
-  if ((0, import_node_fs10.existsSync)(prebuilt)) return prebuilt;
-  const explicit = [command.path, command.entrypoint, command.entry, command.file, command.source].filter((entry) => typeof entry === "string" && entry.trim().length > 0).map((entry) => (0, import_node_path10.join)(packageRoot, entry));
-  const src = (0, import_node_path10.join)(packageRoot, "src");
+function resolveCommandEntry(packageRoot, commandName2, command) {
+  const prebuilt = (0, import_node_path12.join)(packageRoot, ".sc-build", `${commandName2}.js`);
+  if ((0, import_node_fs12.existsSync)(prebuilt)) return prebuilt;
+  const explicit = [command.path, command.entrypoint, command.entry, command.file, command.source].filter((entry) => typeof entry === "string" && entry.trim().length > 0).map((entry) => (0, import_node_path12.join)(packageRoot, entry));
+  const src = (0, import_node_path12.join)(packageRoot, "src");
   const defaults = [
-    (0, import_node_path10.join)(src, `${commandName}.tsx`),
-    (0, import_node_path10.join)(src, `${commandName}.ts`),
-    (0, import_node_path10.join)(src, `${commandName}.jsx`),
-    (0, import_node_path10.join)(src, `${commandName}.js`),
-    (0, import_node_path10.join)(src, commandName, "index.tsx"),
-    (0, import_node_path10.join)(src, commandName, "index.ts"),
-    (0, import_node_path10.join)(src, commandName, "index.jsx"),
-    (0, import_node_path10.join)(src, commandName, "index.js"),
-    (0, import_node_path10.join)(src, "commands", `${commandName}.tsx`),
-    (0, import_node_path10.join)(src, "commands", `${commandName}.ts`),
-    (0, import_node_path10.join)(src, "commands", `${commandName}.jsx`),
-    (0, import_node_path10.join)(src, "commands", `${commandName}.js`)
+    (0, import_node_path12.join)(src, `${commandName2}.tsx`),
+    (0, import_node_path12.join)(src, `${commandName2}.ts`),
+    (0, import_node_path12.join)(src, `${commandName2}.jsx`),
+    (0, import_node_path12.join)(src, `${commandName2}.js`),
+    (0, import_node_path12.join)(src, commandName2, "index.tsx"),
+    (0, import_node_path12.join)(src, commandName2, "index.ts"),
+    (0, import_node_path12.join)(src, commandName2, "index.jsx"),
+    (0, import_node_path12.join)(src, commandName2, "index.js"),
+    (0, import_node_path12.join)(src, "commands", `${commandName2}.tsx`),
+    (0, import_node_path12.join)(src, "commands", `${commandName2}.ts`),
+    (0, import_node_path12.join)(src, "commands", `${commandName2}.jsx`),
+    (0, import_node_path12.join)(src, "commands", `${commandName2}.js`)
   ];
-  const candidate = [...explicit, ...defaults].find((entry) => (0, import_node_fs10.existsSync)(entry));
+  const candidate = [...explicit, ...defaults].find((entry) => (0, import_node_fs12.existsSync)(entry));
   if (!candidate) {
-    throw new Error(`Could not resolve entry file for command ${commandName}`);
+    throw new Error(`Could not resolve entry file for command ${commandName2}`);
   }
   return candidate;
 }
 async function bundleCommand(entryPath, packageRoot) {
-  if (entryPath.includes(`${(0, import_node_path10.join)(".sc-build", "")}`) || entryPath.includes("/.sc-build/")) {
-    const prebuilt = (0, import_node_fs10.readFileSync)(entryPath, "utf8");
+  if (entryPath.includes(`${(0, import_node_path12.join)(".sc-build", "")}`) || entryPath.includes("/.sc-build/")) {
+    const prebuilt = (0, import_node_fs12.readFileSync)(entryPath, "utf8");
     if (!prebuilt.trim()) throw new Error(`Prebuilt extension bundle is empty: ${entryPath}`);
     return prebuilt;
   }
   configurePackagedEsbuildBinary();
-  const esbuild = await Promise.resolve().then(() => __toESM(require_main()));
+  const esbuild = await import("esbuild");
+  const legacyCheerioInterop = {
+    name: "legacy-cheerio-default-interop",
+    setup(build) {
+      build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, (args) => {
+        const source = (0, import_node_fs12.readFileSync)(args.path, "utf8");
+        if (!/import\s+[A-Za-z_$][\w$]*\s+from\s+['"]cheerio['"]/.test(source)) return null;
+        const extension = (0, import_node_path12.extname)(args.path).toLowerCase();
+        const loader = extension.endsWith("x") ? extension.slice(1) : extension.slice(1) || "js";
+        return {
+          contents: source.replace(
+            /import\s+([A-Za-z_$][\w$]*)\s+from\s+(['"])cheerio\2/g,
+            "import * as $1 from $2cheerio$2"
+          ),
+          loader
+        };
+      });
+    }
+  };
   const result = await esbuild.build({
     entryPoints: [entryPath],
     absWorkingDir: packageRoot,
     bundle: true,
     format: "cjs",
     platform: "node",
+    conditions: ["require", "node"],
+    plugins: [legacyCheerioInterop],
     write: false,
     target: "node20",
     external: [
@@ -5516,7 +10894,7 @@ async function bundleCommand(entryPath, packageRoot) {
       "react/jsx-runtime",
       "react/jsx-dev-runtime"
     ],
-    nodePaths: [(0, import_node_path10.join)(packageRoot, "node_modules")],
+    nodePaths: [(0, import_node_path12.join)(packageRoot, "node_modules")],
     logLevel: "silent"
   });
   const output = result.outputFiles?.[0]?.text;
@@ -5542,32 +10920,10 @@ function createJsxRuntimeShim() {
 function createReactShim(session2) {
   const jsxRuntime = createJsxRuntimeShim();
   const jsx = jsxRuntime.jsx;
-  const areHookDepsEqual = (prev, next) => {
-    if (!prev || !next) return false;
-    if (prev.length !== next.length) return false;
-    return next.every((value, index) => Object.is(value, prev[index]));
-  };
-  const runEffect = (idx, sideEffect, deps, label = "useEffect") => {
+  const queueEffect = (idx, sideEffect, deps, label = "useEffect") => {
     const prevDeps = session2.effectDeps.get(idx);
-    if (deps && areHookDepsEqual(prevDeps, deps)) return;
-    const previousCleanup = session2.effectCleanups.get(idx);
-    if (previousCleanup) {
-      try {
-        previousCleanup();
-      } catch (e) {
-        console.error(`[${label}] cleanup threw:`, e);
-      }
-      session2.effectCleanups.delete(idx);
-    }
-    try {
-      const cleanup2 = sideEffect();
-      session2.effectDeps.set(idx, deps);
-      if (typeof cleanup2 === "function") {
-        session2.effectCleanups.set(idx, cleanup2);
-      }
-    } catch (e) {
-      console.error(`[${label}] side effect threw:`, e);
-    }
+    if (deps && hookDepsEqual(prevDeps, deps)) return;
+    session2.pendingEffects.push({ idx, sideEffect, deps, label });
   };
   class Component {
     props;
@@ -5637,16 +10993,16 @@ function createReactShim(session2) {
     },
     useEffect: (sideEffect, deps) => {
       const idx = session2.hookIndex++;
-      runEffect(idx, sideEffect, deps, "useEffect");
+      queueEffect(idx, sideEffect, deps, "useEffect");
     },
     useLayoutEffect: (sideEffect, deps) => {
       const idx = session2.hookIndex++;
-      runEffect(idx, sideEffect, deps, "useLayoutEffect");
+      queueEffect(idx, sideEffect, deps, "useLayoutEffect");
     },
     useMemo: (factory, deps) => {
       const idx = session2.hookIndex++;
       const existing = session2.hookStates[idx];
-      if (existing?.kind === "memo" && deps && areHookDepsEqual(existing.deps, deps)) {
+      if (existing?.kind === "memo" && deps && hookDepsEqual(existing.deps, deps)) {
         return existing.value;
       }
       const value = factory();
@@ -5656,7 +11012,7 @@ function createReactShim(session2) {
     useCallback: (callback, deps) => {
       const idx = session2.hookIndex++;
       const existing = session2.hookStates[idx];
-      if (existing?.kind === "callback" && deps && areHookDepsEqual(existing.deps, deps)) {
+      if (existing?.kind === "callback" && deps && hookDepsEqual(existing.deps, deps)) {
         return existing.value;
       }
       session2.hookStates[idx] = { kind: "callback", value: callback, deps };
@@ -5675,6 +11031,30 @@ function createReactShim(session2) {
     useContext: (context) => {
       session2.hookIndex++;
       return context && context.$$typeof === REACT_CONTEXT ? context._currentValue : null;
+    },
+    useDebugValue: () => {
+      session2.hookIndex++;
+    },
+    useSyncExternalStore: (subscribe, getSnapshot, getServerSnapshot) => {
+      void getServerSnapshot;
+      const idx = session2.hookIndex++;
+      const snapshot = getSnapshot();
+      const existing = session2.hookStates[idx];
+      const state = existing?.kind === "external-store" ? existing : { kind: "external-store", snapshot };
+      state.snapshot = snapshot;
+      session2.hookStates[idx] = state;
+      queueEffect(
+        idx,
+        () => subscribe(() => {
+          const nextSnapshot = getSnapshot();
+          if (Object.is(state.snapshot, nextSnapshot)) return;
+          state.snapshot = nextSnapshot;
+          session2.hasStateUpdates = true;
+        }),
+        [subscribe, getSnapshot],
+        "useSyncExternalStore"
+      );
+      return snapshot;
     },
     useReducer: (reducer, initialArg) => {
       const idx = session2.hookIndex++;
@@ -5733,7 +11113,7 @@ function normalizeActionTitle(typeName, props) {
   }
 }
 function stableActionId(index, typeName, title) {
-  const hash = (0, import_node_crypto4.createHash)("sha1").update(`${index}:${typeName}:${title}`).digest("hex").slice(0, 12);
+  const hash = (0, import_node_crypto5.createHash)("sha1").update(`${index}:${typeName}:${title}`).digest("hex").slice(0, 12);
   return `ext-action-${index}-${hash}`;
 }
 function parseShortcut(shortcut) {
@@ -5750,20 +11130,26 @@ function pushFeedback(session2, feedback) {
     session2.feedback.splice(0, session2.feedback.length - 20);
   }
 }
+function pushEffect(session2, effect) {
+  session2.effects.push(effect);
+  if (session2.effects.length > 50) {
+    session2.effects.splice(0, session2.effects.length - 50);
+  }
+}
 function createLocalStorageShim(packageRoot) {
-  const storagePath = (0, import_node_path10.join)(packageRoot, ".tezbar-local-storage.json");
+  const storagePath = (0, import_node_path12.join)(packageRoot, ".tezbar-local-storage.json");
   const readAll2 = () => {
-    if (!(0, import_node_fs10.existsSync)(storagePath)) return {};
+    if (!(0, import_node_fs12.existsSync)(storagePath)) return {};
     try {
-      const parsed = JSON.parse((0, import_node_fs10.readFileSync)(storagePath, "utf8"));
+      const parsed = JSON.parse((0, import_node_fs12.readFileSync)(storagePath, "utf8"));
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch {
       return {};
     }
   };
   const writeAll2 = (value) => {
-    (0, import_node_fs10.mkdirSync)((0, import_node_path10.dirname)(storagePath), { recursive: true });
-    (0, import_node_fs10.writeFileSync)(storagePath, JSON.stringify(value, null, 2), "utf8");
+    (0, import_node_fs12.mkdirSync)((0, import_node_path12.dirname)(storagePath), { recursive: true });
+    (0, import_node_fs12.writeFileSync)(storagePath, JSON.stringify(value, null, 2), "utf8");
   };
   return {
     getItem: async (key) => readAll2()[String(key)],
@@ -5788,20 +11174,20 @@ function createCacheShim(packageRoot) {
     constructor(options) {
       const rawNamespace = typeof options?.namespace === "string" && options.namespace.trim().length > 0 ? options.namespace.trim() : "shared";
       const safeNamespace = rawNamespace.replace(/[^a-z0-9._-]+/gi, "_");
-      this.storagePath = (0, import_node_path10.join)(packageRoot, ".tezbar-support", "cache", `${safeNamespace}.json`);
+      this.storagePath = (0, import_node_path12.join)(packageRoot, ".tezbar-support", "cache", `${safeNamespace}.json`);
     }
     readAll() {
-      if (!(0, import_node_fs10.existsSync)(this.storagePath)) return {};
+      if (!(0, import_node_fs12.existsSync)(this.storagePath)) return {};
       try {
-        const parsed = JSON.parse((0, import_node_fs10.readFileSync)(this.storagePath, "utf8"));
+        const parsed = JSON.parse((0, import_node_fs12.readFileSync)(this.storagePath, "utf8"));
         return parsed && typeof parsed === "object" ? parsed : {};
       } catch {
         return {};
       }
     }
     writeAll(value) {
-      (0, import_node_fs10.mkdirSync)((0, import_node_path10.dirname)(this.storagePath), { recursive: true });
-      (0, import_node_fs10.writeFileSync)(this.storagePath, JSON.stringify(value, null, 2), "utf8");
+      (0, import_node_fs12.mkdirSync)((0, import_node_path12.dirname)(this.storagePath), { recursive: true });
+      (0, import_node_fs12.writeFileSync)(this.storagePath, JSON.stringify(value, null, 2), "utf8");
     }
     notify(key, value) {
       for (const subscriber of this.subscribers) {
@@ -5850,7 +11236,12 @@ function createCacheShim(packageRoot) {
     }
   };
 }
-function copyToSystemClipboard(value) {
+function copyToSystemClipboard(session2, value) {
+  const effectValue = typeof value === "string" ? value : value && typeof value === "object" ? String(
+    value.text ?? value.file ?? ""
+  ) : String(value ?? "");
+  pushEffect(session2, { kind: "clipboard", value: effectValue.slice(0, 2e3) });
+  if (session2.effectMode === "record") return;
   if (value && typeof value === "object") {
     const payload = value;
     if (typeof payload.file === "string" && payload.file.trim()) {
@@ -5878,7 +11269,60 @@ function copyToSystemClipboard(value) {
   }
   clipboard.writeText(String(value ?? ""));
 }
+function avatarIcon(value) {
+  const text = String(value ?? "?").trim() || "?";
+  const initials = text.split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("").replace(/[<>&"']/g, "") || "?";
+  let hash = 0;
+  for (const char of text) hash = hash * 31 + char.charCodeAt(0) >>> 0;
+  const hue = hash % 360;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="hsl(${hue} 58% 42%)"/><text x="32" y="39" text-anchor="middle" fill="white" font-family="-apple-system, sans-serif" font-size="22" font-weight="600">${initials}</text></svg>`;
+  return { source: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` };
+}
 function createRaycastApiShim(session2) {
+  class PKCEClientShim {
+    tokenPath;
+    constructor(options = {}) {
+      const providerId = String(options.providerId ?? options.providerName ?? "oauth").replace(/[^a-z0-9._-]+/gi, "_").toLowerCase();
+      this.tokenPath = (0, import_node_path12.join)(session2.packageRoot, ".tezbar-support", "oauth", `${providerId}.json`);
+    }
+    async getTokens() {
+      if (!(0, import_node_fs12.existsSync)(this.tokenPath)) return void 0;
+      try {
+        const stored = JSON.parse((0, import_node_fs12.readFileSync)(this.tokenPath, "utf8"));
+        return {
+          ...stored,
+          isExpired: () => typeof stored.expiresIn === "number" && stored.expiresIn <= Date.now()
+        };
+      } catch {
+        return void 0;
+      }
+    }
+    async setTokens(response) {
+      const expiresInSeconds = Number(response.expires_in);
+      const tokens = {
+        accessToken: String(response.access_token ?? response.accessToken ?? ""),
+        refreshToken: String(response.refresh_token ?? response.refreshToken ?? ""),
+        idToken: String(response.id_token ?? response.idToken ?? ""),
+        scope: String(response.scope ?? ""),
+        expiresIn: Number.isFinite(expiresInSeconds) ? Date.now() + expiresInSeconds * 1e3 : Number(response.expiresIn) || void 0
+      };
+      (0, import_node_fs12.mkdirSync)((0, import_node_path12.dirname)(this.tokenPath), { recursive: true });
+      (0, import_node_fs12.writeFileSync)(this.tokenPath, JSON.stringify(tokens), "utf8");
+    }
+    async removeTokens() {
+      await (0, import_promises2.rm)(this.tokenPath, { force: true });
+    }
+    async authorizationRequest(options) {
+      return {
+        ...options,
+        codeVerifier: makeId2("pkce").replace(/[^a-z0-9]/gi, ""),
+        redirectURI: `raycast://oauth?extension=${encodeURIComponent(session2.extensionId)}`
+      };
+    }
+    async authorize() {
+      throw new Error("Interactive OAuth authorization is not yet available in Raymes");
+    }
+  }
   const ListItemDetailMetadata = Object.assign(makeToken("List.Item.Detail.Metadata"), {
     Label: makeToken("List.Item.Detail.Metadata.Label"),
     TagList: Object.assign(makeToken("List.Item.Detail.Metadata.TagList"), {
@@ -5901,11 +11345,20 @@ function createRaycastApiShim(session2) {
       Item: makeToken("List.Dropdown.Item")
     })
   });
+  const FormDropdown = Object.assign(makeToken("Form.Dropdown"), {
+    Item: makeToken("Form.Dropdown.Item"),
+    Section: makeToken("Form.Dropdown.Section")
+  });
+  const FormTagPicker = Object.assign(makeToken("Form.TagPicker"), {
+    Item: makeToken("Form.TagPicker.Item")
+  });
   const Form = Object.assign(makeToken("Form"), {
     TextField: makeToken("Form.TextField"),
     TextArea: makeToken("Form.TextArea"),
     Checkbox: makeToken("Form.Checkbox"),
-    Dropdown: makeToken("Form.Dropdown"),
+    Dropdown: FormDropdown,
+    TagPicker: FormTagPicker,
+    FilePicker: makeToken("Form.FilePicker"),
     DatePicker: makeToken("Form.DatePicker"),
     PasswordField: makeToken("Form.PasswordField"),
     Separator: makeToken("Form.Separator"),
@@ -5920,6 +11373,10 @@ function createRaycastApiShim(session2) {
       Small: "small",
       Medium: "medium",
       Large: "large"
+    },
+    Fit: {
+      Fill: "fill",
+      Contain: "contain"
     }
   });
   const Detail = Object.assign(makeToken("Detail"), {
@@ -5960,21 +11417,55 @@ function createRaycastApiShim(session2) {
       Failure: "failure",
       Animated: "animated"
     };
-    style;
-    title;
-    message;
+    currentStyle;
+    currentTitle;
+    currentMessage;
+    shownFeedback;
+    shownEffect;
     constructor(options) {
-      this.style = options.style;
-      this.title = options.title;
-      this.message = options.message;
+      this.currentStyle = options.style;
+      this.currentTitle = options.title;
+      this.currentMessage = options.message;
+    }
+    get style() {
+      return this.currentStyle;
+    }
+    set style(value) {
+      this.currentStyle = value;
+      if (this.shownFeedback) this.shownFeedback.style = value;
+      if (this.shownEffect) this.shownEffect.style = value;
+    }
+    get title() {
+      return this.currentTitle;
+    }
+    set title(value) {
+      this.currentTitle = value;
+      if (this.shownFeedback) this.shownFeedback.title = value;
+      if (this.shownEffect) this.shownEffect.title = value;
+    }
+    get message() {
+      return this.currentMessage;
+    }
+    set message(value) {
+      this.currentMessage = value;
+      if (this.shownFeedback) this.shownFeedback.message = value;
+      if (this.shownEffect) this.shownEffect.message = value;
     }
     async show() {
-      pushFeedback(session2, {
+      this.shownFeedback = {
         kind: "toast",
-        style: this.style,
-        title: this.title,
-        message: this.message
-      });
+        style: this.currentStyle,
+        title: this.currentTitle,
+        message: this.currentMessage
+      };
+      this.shownEffect = {
+        kind: "toast",
+        style: this.currentStyle,
+        title: this.currentTitle,
+        message: this.currentMessage
+      };
+      pushFeedback(session2, this.shownFeedback);
+      pushEffect(session2, this.shownEffect);
     }
     async hide() {
     }
@@ -5983,8 +11474,25 @@ function createRaycastApiShim(session2) {
     List,
     Form,
     Grid,
+    AI: {
+      ask: async (prompt) => askExtensionAI(String(prompt ?? "")),
+      Creativity: {
+        None: "none",
+        Low: "low",
+        Medium: "medium",
+        High: "high",
+        Maximum: "maximum"
+      }
+    },
     Detail,
     MenuBarExtra,
+    OAuth: {
+      PKCEClient: PKCEClientShim,
+      RedirectMethod: {
+        AppURI: "appURI",
+        Web: "web"
+      }
+    },
     Action,
     ActionPanel,
     Icon: iconProxy,
@@ -6009,22 +11517,23 @@ function createRaycastApiShim(session2) {
       extensionName: session2.extensionId,
       commandName: session2.commandName,
       isDevelopment: false,
-      commandMode: "view",
-      assetsPath: (0, import_node_path10.join)(session2.packageRoot, "assets"),
-      supportPath: (0, import_node_path10.join)(session2.packageRoot, ".tezbar-support"),
+      commandMode: session2.commandMode,
+      assetsPath: (0, import_node_path12.join)(session2.packageRoot, "assets"),
+      supportPath: (0, import_node_path12.join)(session2.packageRoot, ".tezbar-support"),
+      canAccess: () => false,
       get searchText() {
         return session2.searchText;
       }
     },
     LocalStorage: createLocalStorageShim(session2.packageRoot),
     Cache: createCacheShim(session2.packageRoot),
-    runAppleScript: runAppleScript2,
+    runAppleScript: (source) => runAppleScriptForSession(session2, source),
     Clipboard: {
       copy: async (value) => {
-        copyToSystemClipboard(value);
+        copyToSystemClipboard(session2, value);
       },
       paste: async (value) => {
-        copyToSystemClipboard(value);
+        copyToSystemClipboard(session2, value);
       },
       read: async () => {
         const text = clipboard.readText();
@@ -6033,6 +11542,25 @@ function createRaycastApiShim(session2) {
       readText: async () => clipboard.readText()
     },
     getPreferenceValues: () => session2.preferences,
+    getSelectedFinderItems: async () => {
+      if (process.platform !== "darwin") return [];
+      try {
+        const output = await runAppleScript2(`
+          tell application "Finder"
+            set selectedItems to selection as alias list
+            set selectedPaths to {}
+            repeat with selectedItem in selectedItems
+              set end of selectedPaths to POSIX path of selectedItem
+            end repeat
+            set AppleScript's text item delimiters to linefeed
+            return selectedPaths as text
+          end tell
+        `);
+        return output.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).map((path7) => ({ path: path7 }));
+      } catch {
+        return [];
+      }
+    },
     launchCommand: async () => {
     },
     useNavigation: () => ({
@@ -6065,17 +11593,23 @@ function createRaycastApiShim(session2) {
       return toast;
     },
     showHUD: async (title) => {
-      pushFeedback(session2, { kind: "hud", message: String(title || "") });
+      const message = String(title || "");
+      pushFeedback(session2, { kind: "hud", message });
+      pushEffect(session2, { kind: "hud", message });
     },
     open: async (target) => {
       if (typeof target !== "string") return;
       if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target) || target.startsWith("mailto:")) {
+        pushEffect(session2, { kind: "open", value: target });
+        if (session2.effectMode === "record") return;
         await shell.openExternal(target);
       }
     },
-    showInFinder: async (path6) => {
-      if (typeof path6 !== "string") return;
-      shell.showItemInFolder(path6);
+    showInFinder: async (path7) => {
+      if (typeof path7 !== "string") return;
+      pushEffect(session2, { kind: "show-in-finder", value: path7 });
+      if (session2.effectMode === "record") return;
+      shell.showItemInFolder(path7);
     },
     getApplications: async () => {
       const now = Date.now();
@@ -6085,7 +11619,7 @@ function createRaycastApiShim(session2) {
       console.log("[getApplications] Starting Spotlight query for installed apps...");
       const promise = (async () => {
         try {
-          const { stdout } = await execFileAsync5(
+          const { stdout } = await execFileAsync7(
             "/usr/bin/mdfind",
             ["kMDItemKind == 'Application'"],
             {
@@ -6093,18 +11627,18 @@ function createRaycastApiShim(session2) {
               timeout: 3e3
             }
           );
-          const apps = stdout.trim().split("\n").filter((p) => p.endsWith(".app")).map((appPath) => ({ name: (0, import_node_path10.basename)(appPath, ".app"), path: appPath })).sort((a, b) => a.name.localeCompare(b.name));
+          const apps = stdout.trim().split("\n").filter((p) => p.endsWith(".app")).map((appPath) => ({ name: (0, import_node_path12.basename)(appPath, ".app"), path: appPath })).sort((a, b) => a.name.localeCompare(b.name));
           console.log(`[getApplications] mdfind returned ${apps.length} applications`);
           return apps;
         } catch (err) {
           console.warn("[getApplications] mdfind failed, falling back to directory scan:", err);
           const apps = [];
-          const dirs = ["/Applications", "/System/Applications", (0, import_node_path10.join)((0, import_node_os6.homedir)(), "Applications")];
+          const dirs = ["/Applications", "/System/Applications", (0, import_node_path12.join)((0, import_node_os7.homedir)(), "Applications")];
           for (const dir of dirs) {
             try {
-              for (const entry of (0, import_node_fs10.readdirSync)(dir)) {
+              for (const entry of (0, import_node_fs12.readdirSync)(dir)) {
                 if (entry.endsWith(".app")) {
-                  apps.push({ name: (0, import_node_path10.basename)(entry, ".app"), path: (0, import_node_path10.join)(dir, entry) });
+                  apps.push({ name: (0, import_node_path12.basename)(entry, ".app"), path: (0, import_node_path12.join)(dir, entry) });
                 }
               }
             } catch (dirErr) {
@@ -6124,12 +11658,14 @@ function createRaycastApiShim(session2) {
     getFrontmostApplication: async () => {
       try {
         const script = 'tell application "System Events" to get name of first application process whose frontmost is true';
-        const { stdout } = await execFileAsync5("/usr/bin/osascript", ["-e", script], { timeout: 3e3 });
+        const { stdout } = await execFileAsync7("/usr/bin/osascript", ["-e", script], {
+          timeout: 3e3
+        });
         const name = stdout.trim();
         if (name) return { name, path: `/Applications/${name}.app` };
-        return null;
+        return { name: "Raymes", path: process.execPath };
       } catch {
-        return null;
+        return { name: "Raymes", path: process.execPath };
       }
     },
     getDefaultApplication: async () => {
@@ -6153,6 +11689,7 @@ function createRaycastApiShim(session2) {
 function createRaycastUtilsShim(session2) {
   const CacheShim = createCacheShim(session2.packageRoot);
   const cache2 = new CacheShim();
+  const functionCache = /* @__PURE__ */ new Map();
   const useCachedState = (key, initialValue) => {
     const hookIdx = session2.hookIndex++;
     const existing = session2.hookStates[hookIdx];
@@ -6203,6 +11740,7 @@ function createRaycastUtilsShim(session2) {
       if (previousKey !== key) {
         opts.abortable?.current?.abort();
         if (previousKey) session2.promiseCache.delete(previousKey);
+        session2.promisePaginationByHook.delete(hookIdx);
         session2.promiseKeysByHook.set(hookIdx, key);
       }
       const schedule = (retainedData) => {
@@ -6213,24 +11751,39 @@ function createRaycastUtilsShim(session2) {
         const controller = new AbortController();
         if (opts.abortable) opts.abortable.current = controller;
         session2.abortControllers.add(controller);
-        let tracked;
-        tracked = delay(0).then(async () => {
+        const tracked = delay(0).then(async () => {
           if (session2.disposed || controller.signal.aborted) {
             const error = new Error("Aborted");
             error.name = "AbortError";
             throw error;
           }
           console.log(`[usePromise] Starting ${label}`);
-          return await Promise.resolve(
-            fn(...stableArgs)
-          );
+          await Promise.resolve(opts.onWillExecute?.(stableArgs));
+          return await Promise.resolve(fn(...stableArgs));
         }).then(async (data) => {
           if (session2.promiseCache.get(key)?.promise !== tracked) return data;
+          if (typeof data === "function") {
+            const loader = data;
+            const paginationState = {
+              key,
+              page: -1,
+              hasMore: true,
+              loader,
+              loadingPromise: null
+            };
+            session2.promisePaginationByHook.set(hookIdx, paginationState);
+            const firstPage = await Promise.resolve(loader({ page: 0 }));
+            const pageResult = firstPage && typeof firstPage === "object" ? firstPage : { data: firstPage, hasMore: false };
+            paginationState.page = 0;
+            paginationState.hasMore = pageResult.hasMore === true;
+            data = pageResult.data;
+          }
           console.log(
             `[usePromise] Resolved ${label} after ${elapsedMs(startedAt)}; data=${Array.isArray(data) ? `array(${data.length})` : typeof data}`
           );
           session2.promiseCache.set(key, { data, error: void 0, label });
           if (persistent) writePromiseResultCache(session2, key, data);
+          await Promise.resolve(opts.onData?.(data));
           if (!session2.disposed) session2.hasStateUpdates = true;
           return data;
         }).catch(async (error) => {
@@ -6249,6 +11802,10 @@ function createRaycastUtilsShim(session2) {
             data: retainedData,
             error: isAbort ? void 0 : error
           });
+          const paginationState = session2.promisePaginationByHook.get(hookIdx);
+          if (paginationState?.key === key && paginationState.page < 0) {
+            session2.promisePaginationByHook.delete(hookIdx);
+          }
           if (isAbort) return void 0;
           console.error(
             `[usePromise] Rejected ${label} after ${elapsedMs(startedAt)}:`,
@@ -6286,6 +11843,44 @@ function createRaycastUtilsShim(session2) {
         schedule(retainedData);
         cached = session2.promiseCache.get(key);
       }
+      const pagination = () => {
+        const paginationState = session2.promisePaginationByHook.get(hookIdx);
+        if (!paginationState || paginationState.key !== key) return void 0;
+        return {
+          hasMore: paginationState.hasMore,
+          onLoadMore: async () => {
+            if (!paginationState.hasMore || session2.disposed) return;
+            if (paginationState.loadingPromise) return paginationState.loadingPromise;
+            const nextPage = paginationState.page + 1;
+            const loadingPromise = Promise.resolve(paginationState.loader({ page: nextPage })).then(async (rawResult) => {
+              const pageResult = rawResult && typeof rawResult === "object" ? rawResult : { data: rawResult, hasMore: false };
+              const currentData = session2.promiseCache.get(key)?.data;
+              const mergedData = Array.isArray(currentData) && Array.isArray(pageResult.data) ? [...currentData, ...pageResult.data] : pageResult.data;
+              paginationState.page = nextPage;
+              paginationState.hasMore = pageResult.hasMore === true;
+              session2.promiseCache.set(key, { data: mergedData, error: void 0, label });
+              await Promise.resolve(opts.onData?.(mergedData));
+              if (!session2.disposed) session2.hasStateUpdates = true;
+            }).catch(async (error) => {
+              session2.promiseCache.set(key, {
+                data: session2.promiseCache.get(key)?.data,
+                error,
+                label
+              });
+              paginationState.hasMore = false;
+              if (typeof opts.onError === "function") {
+                await Promise.resolve(opts.onError(error));
+              }
+              if (!session2.disposed) session2.hasStateUpdates = true;
+              throw error;
+            }).finally(() => {
+              paginationState.loadingPromise = null;
+            });
+            paginationState.loadingPromise = loadingPromise;
+            return loadingPromise;
+          }
+        };
+      };
       if (cached) {
         if (cached.promise) {
           session2.pendingPromises.push(cached.promise);
@@ -6302,7 +11897,7 @@ function createRaycastUtilsShim(session2) {
               if (!session2.disposed) session2.hasStateUpdates = true;
               return value;
             },
-            pagination: void 0
+            pagination: pagination()
           };
         }
         return {
@@ -6318,7 +11913,7 @@ function createRaycastUtilsShim(session2) {
             if (!session2.disposed) session2.hasStateUpdates = true;
             return value;
           },
-          pagination: void 0
+          pagination: pagination()
         };
       }
       return {
@@ -6329,15 +11924,402 @@ function createRaycastUtilsShim(session2) {
           await schedule(previousData ?? opts.initialData);
         },
         mutate: async (next) => next,
-        pagination: void 0
+        pagination: pagination()
       };
     };
   };
+  const useExecPromise = makePromiseHook();
+  const useFetchPromise = makePromiseHook();
+  const useAIPromise = makePromiseHook();
+  const useSQLPromise = makePromiseHook();
+  const useExec = (command, args = [], options) => {
+    const exec2 = async () => {
+      const { stdout, stderr } = await execFileAsync7(command, args, {
+        encoding: "utf8",
+        maxBuffer: 10 * 1024 * 1024
+      });
+      const result = { stdout, stderr, exitCode: 0 };
+      return options?.parseOutput ? options.parseOutput(result) : stdout;
+    };
+    return useExecPromise(exec2, [command, ...args], options);
+  };
+  const useFetch = (input, options) => {
+    const requestInit = {
+      method: options?.method,
+      headers: options?.headers,
+      body: options?.body
+    };
+    const load2 = async () => {
+      const response = await fetch(input, requestInit);
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+      if (options?.parseResponse) return options.parseResponse(response);
+      const contentType = response.headers.get("content-type") ?? "";
+      const parsed = contentType.includes("json") ? await response.json() : await response.text();
+      const mapped = options?.mapResult ? options.mapResult(parsed) : parsed;
+      return mapped && typeof mapped === "object" && "data" in mapped ? mapped.data : mapped;
+    };
+    return useFetchPromise(load2, [String(input), requestInit], options);
+  };
+  const useSQL = (databasePath, query, options) => {
+    const load2 = async (dbPath3, sql) => {
+      const sqlite = process.platform === "win32" ? "sqlite3.exe" : "/usr/bin/sqlite3";
+      const { stdout } = await execFileAsync7(sqlite, ["-readonly", "-json", dbPath3, sql], {
+        encoding: "utf8",
+        maxBuffer: 20 * 1024 * 1024
+      });
+      const trimmed = stdout.trim();
+      return trimmed ? JSON.parse(trimmed) : [];
+    };
+    const result = useSQLPromise(load2, [databasePath, query], options);
+    return { ...result, permissionView: void 0 };
+  };
+  const FormValidation = { Required: "required" };
+  const useForm = (options = {}) => {
+    const [values, setValues] = useCachedState(
+      `form-values:${session2.commandName}`,
+      options.initialValues ?? {}
+    );
+    const [errors, setErrors] = useCachedState(
+      `form-errors:${session2.commandName}`,
+      {}
+    );
+    const validate = (candidate) => {
+      const nextErrors = {};
+      for (const [key, rule] of Object.entries(options.validation ?? {})) {
+        const value = candidate[key];
+        const empty = value === void 0 || value === null || value === "" || Array.isArray(value) && value.length === 0;
+        const error = rule === FormValidation.Required ? empty ? "This field is required" : void 0 : typeof rule === "function" ? rule(value) : void 0;
+        if (error) nextErrors[key] = String(error);
+      }
+      setErrors(nextErrors);
+      return Object.keys(nextErrors).length === 0;
+    };
+    const setValue = (key, value) => {
+      setValues((current) => ({ ...current, [key]: value }));
+      setErrors((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    };
+    const keys = /* @__PURE__ */ new Set([
+      ...Object.keys(options.initialValues ?? {}),
+      ...Object.keys(options.validation ?? {}),
+      ...Object.keys(values)
+    ]);
+    const itemProps = Object.fromEntries([...keys].map((key) => [key, {
+      id: key,
+      value: values[key],
+      error: errors[key],
+      onChange: (value) => setValue(key, value)
+    }]));
+    return {
+      values,
+      itemProps,
+      setValue,
+      setValidationError: (key, error) => setErrors((current) => ({ ...current, [key]: error })),
+      reset: (next) => {
+        setValues(next ?? options.initialValues ?? {});
+        setErrors({});
+      },
+      focus: () => void 0,
+      handleSubmit: async (submitted) => {
+        const candidate = submitted ?? values;
+        if (!validate(candidate)) return false;
+        return await Promise.resolve(options.onSubmit?.(candidate)) !== false;
+      }
+    };
+  };
+  const useFrecencySorting = (input, options) => {
+    const namespace = options?.namespace || "default";
+    const [ranking, setRanking] = useCachedState(
+      `frecency:${namespace}`,
+      {}
+    );
+    const keyFor = options?.key ?? ((item) => {
+      const candidate = item;
+      return candidate?.id === void 0 ? String(item) : String(candidate.id);
+    });
+    const source = Array.isArray(input) ? input : input && Array.isArray(input.data) ? input.data : [];
+    const score = (entry) => {
+      const ageHours = (Date.now() - entry.lastVisited) / 36e5;
+      return entry.count * Math.pow(0.5, ageHours / 72);
+    };
+    const data = [...source].sort((a, b) => {
+      const aEntry = ranking[keyFor(a)];
+      const bEntry = ranking[keyFor(b)];
+      if (aEntry && bEntry) return score(bEntry) - score(aEntry);
+      if (aEntry) return -1;
+      if (bEntry) return 1;
+      return options?.sortUnvisited?.(a, b) ?? 0;
+    });
+    return {
+      data,
+      visitItem: async (item) => {
+        const key = keyFor(item);
+        setRanking((current) => ({
+          ...current,
+          [key]: {
+            count: (current[key]?.count ?? 0) + 1,
+            lastVisited: Date.now()
+          }
+        }));
+      },
+      resetRanking: async (item) => {
+        const key = keyFor(item);
+        setRanking((current) => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
+    };
+  };
+  let activeAccessToken;
+  class OAuthServiceShim {
+    static github(options) {
+      return new OAuthServiceShim("github", options);
+    }
+    static slack(options) {
+      return new OAuthServiceShim("slack", options);
+    }
+    static google(options) {
+      return new OAuthServiceShim("google", options);
+    }
+    client = {
+      removeTokens: async () => {
+        activeAccessToken = void 0;
+        await (0, import_promises2.rm)(this.tokenPath, { force: true });
+      }
+    };
+    provider;
+    options;
+    token;
+    onAuthorize;
+    tokenPath;
+    constructor(provider, options = {}) {
+      this.provider = provider;
+      this.options = options;
+      this.token = typeof options.personalAccessToken === "string" && options.personalAccessToken.trim() ? options.personalAccessToken.trim() : void 0;
+      this.onAuthorize = options.onAuthorize;
+      this.tokenPath = (0, import_node_path12.join)(
+        session2.packageRoot,
+        ".tezbar-support",
+        "oauth-service",
+        `${provider}.json`
+      );
+      if (!this.applyPersonalToken()) this.applyStoredToken();
+    }
+    applyPersonalToken() {
+      if (!this.token) return false;
+      activeAccessToken = this.token;
+      this.onAuthorize?.({ token: this.token, type: "personal" });
+      return true;
+    }
+    readStoredTokens() {
+      if (!(0, import_node_fs12.existsSync)(this.tokenPath)) return void 0;
+      try {
+        const value = JSON.parse((0, import_node_fs12.readFileSync)(this.tokenPath, "utf8"));
+        return typeof value.accessToken === "string" && value.accessToken ? value : void 0;
+      } catch {
+        return void 0;
+      }
+    }
+    applyStoredToken() {
+      const stored = this.readStoredTokens();
+      if (!stored || stored.expiresAt && stored.expiresAt <= Date.now()) return false;
+      activeAccessToken = stored.accessToken;
+      this.onAuthorize?.({ token: stored.accessToken, type: "oauth" });
+      return true;
+    }
+    async persistTokenResponse(response, existingRefreshToken) {
+      const accessToken = String(response.access_token ?? "");
+      if (!accessToken) throw new Error(`${this.provider} OAuth response did not include an access token`);
+      const expiresIn = Number(response.expires_in);
+      const stored = {
+        accessToken,
+        refreshToken: String(response.refresh_token ?? existingRefreshToken ?? "") || void 0,
+        expiresAt: Number.isFinite(expiresIn) ? Date.now() + expiresIn * 1e3 : void 0,
+        scope: String(response.scope ?? "") || void 0
+      };
+      (0, import_node_fs12.mkdirSync)((0, import_node_path12.dirname)(this.tokenPath), { recursive: true });
+      (0, import_node_fs12.writeFileSync)(this.tokenPath, JSON.stringify(stored), "utf8");
+      activeAccessToken = accessToken;
+      await Promise.resolve(this.onAuthorize?.({ token: accessToken, type: "oauth" }));
+    }
+    async exchangeGoogleToken(parameters) {
+      const endpoint = typeof this.options.tokenEndpoint === "string" && this.options.tokenEndpoint ? this.options.tokenEndpoint : "https://oauth2.googleapis.com/token";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: parameters
+      });
+      const text = await response.text();
+      let payload = {};
+      try {
+        payload = text ? JSON.parse(text) : {};
+      } catch {
+        payload = { error_description: text };
+      }
+      if (!response.ok) {
+        throw new Error(
+          String(payload.error_description ?? payload.error ?? `OAuth token exchange failed (${response.status})`)
+        );
+      }
+      return payload;
+    }
+    async refreshGoogleToken(stored) {
+      const clientId = String(this.options.clientId ?? "");
+      if (!clientId || !stored.refreshToken) return false;
+      const response = await this.exchangeGoogleToken(
+        new URLSearchParams({
+          client_id: clientId,
+          refresh_token: stored.refreshToken,
+          grant_type: "refresh_token"
+        })
+      );
+      await this.persistTokenResponse(response, stored.refreshToken);
+      return true;
+    }
+    async authorizeGoogle() {
+      const clientId = String(this.options.clientId ?? "");
+      const scope = String(this.options.scope ?? "");
+      if (!clientId || !scope) throw new Error("Google OAuth requires clientId and scope");
+      const stored = this.readStoredTokens();
+      if (stored?.refreshToken && await this.refreshGoogleToken(stored)) return;
+      const state = (0, import_node_crypto5.randomBytes)(24).toString("base64url");
+      const codeVerifier = (0, import_node_crypto5.randomBytes)(48).toString("base64url");
+      const codeChallenge = (0, import_node_crypto5.createHash)("sha256").update(codeVerifier).digest("base64url");
+      let settleCallback = null;
+      let rejectCallback = null;
+      const callbackPromise = new Promise((resolve4, reject) => {
+        settleCallback = resolve4;
+        rejectCallback = reject;
+      });
+      const server = (0, import_node_http.createServer)((request, response) => {
+        const address2 = server.address();
+        const port2 = address2 && typeof address2 === "object" ? address2.port : 0;
+        const redirectUri2 = `http://127.0.0.1:${port2}/oauth/callback`;
+        const callbackUrl = new URL(request.url ?? "/", redirectUri2);
+        if (callbackUrl.pathname !== "/oauth/callback") {
+          response.writeHead(404).end("Not found");
+          return;
+        }
+        if (callbackUrl.searchParams.get("state") !== state) {
+          response.writeHead(400).end("Invalid OAuth state");
+          rejectCallback?.(new Error("OAuth callback state did not match"));
+          return;
+        }
+        const providerError = callbackUrl.searchParams.get("error");
+        const code = callbackUrl.searchParams.get("code");
+        if (providerError || !code) {
+          response.writeHead(400).end("Authorization failed");
+          rejectCallback?.(new Error(providerError || "OAuth callback did not include a code"));
+          return;
+        }
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        response.end("<!doctype html><title>Tezbar authorized</title><p>You can close this window.</p>");
+        settleCallback?.({ code, redirectUri: redirectUri2 });
+      });
+      await new Promise((resolve4, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", resolve4);
+      });
+      const address = server.address();
+      const port = address && typeof address === "object" ? address.port : 0;
+      const redirectUri = `http://127.0.0.1:${port}/oauth/callback`;
+      const authorizationEndpoint = typeof this.options.authorizationEndpoint === "string" && this.options.authorizationEndpoint ? this.options.authorizationEndpoint : "https://accounts.google.com/o/oauth2/v2/auth";
+      const authorizationUrl = new URL(authorizationEndpoint);
+      authorizationUrl.search = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope,
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+        access_type: "offline",
+        prompt: "consent"
+      }).toString();
+      pushEffect(session2, { kind: "open", value: authorizationUrl.toString() });
+      const timeoutMs = Math.max(1e3, Number(this.options.timeoutMs) || 12e4);
+      const timeout = setTimeout(
+        () => rejectCallback?.(new Error("OAuth authorization timed out")),
+        timeoutMs
+      );
+      try {
+        if (this.options.openAuthorizationUrl) {
+          await Promise.resolve(this.options.openAuthorizationUrl(authorizationUrl.toString()));
+        } else if (session2.effectMode === "record") {
+          throw new Error("Interactive OAuth requires system effect mode");
+        } else {
+          await shell.openExternal(authorizationUrl.toString());
+        }
+        const callback = await callbackPromise;
+        const tokenResponse = await this.exchangeGoogleToken(
+          new URLSearchParams({
+            client_id: clientId,
+            code: callback.code,
+            code_verifier: codeVerifier,
+            redirect_uri: callback.redirectUri,
+            grant_type: "authorization_code"
+          })
+        );
+        await this.persistTokenResponse(tokenResponse);
+      } finally {
+        clearTimeout(timeout);
+        await new Promise((resolve4) => server.close(() => resolve4()));
+      }
+    }
+    async authorize() {
+      if (this.applyPersonalToken() || this.applyStoredToken()) return;
+      if (this.provider === "google") return this.authorizeGoogle();
+      throw new Error("Add a personal access token in this extension's preferences");
+    }
+    hasAccessToken() {
+      return Boolean(this.token || this.applyStoredToken());
+    }
+    requiresInteractiveAuthorization() {
+      return this.provider === "google";
+    }
+  }
   return {
     useCachedState,
+    FormValidation,
+    useForm,
+    useFrecencySorting,
     usePromise: makePromiseHook(),
-    useFetch: makePromiseHook(),
+    useFetch,
+    useAI: (prompt, options) => useAIPromise(() => askExtensionAI(String(prompt ?? "")), [String(prompt ?? "")], options),
     useCachedPromise: makePromiseHook(true),
+    useExec,
+    useSQL,
+    useLocalStorage: (key, initialValue) => {
+      const [value, setValue] = useCachedState(key, initialValue);
+      return {
+        value,
+        setValue: async (next) => setValue(next),
+        removeValue: async () => {
+          cache2.remove(String(key));
+          setValue(initialValue);
+        },
+        isLoading: false
+      };
+    },
+    getAvatarIcon: avatarIcon,
+    withCache: (fn, options) => {
+      return async (...args) => {
+        const key = cacheKey2(fn, args);
+        const cached = functionCache.get(key);
+        if (cached && cached.expiresAt > Date.now()) return cached.value;
+        const value = await Promise.resolve(fn(...args));
+        functionCache.set(key, {
+          expiresAt: Date.now() + Math.max(0, options?.maxAge ?? 5 * 6e4),
+          value
+        });
+        return value;
+      };
+    },
     getProgressIcon: (progress, color = "#ff6363", options) => {
       const value = Math.max(0, Math.min(1, Number(progress) || 0));
       const radius = 10;
@@ -6353,13 +12335,36 @@ function createRaycastUtilsShim(session2) {
       ].join("");
       return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
     },
-    runAppleScript: runAppleScript2,
+    runAppleScript: (source) => runAppleScriptForSession(session2, source),
+    OAuthService: OAuthServiceShim,
+    getAccessToken: () => {
+      if (!activeAccessToken) throw new Error("No extension access token is configured");
+      return { token: activeAccessToken };
+    },
+    withAccessToken: (service) => (Component) => async (props) => {
+      if (!service?.hasAccessToken()) {
+        if (service?.requiresInteractiveAuthorization()) {
+          await service.authorize();
+          return Component(props);
+        }
+        return {
+          __jsx: true,
+          type: makeToken("Detail"),
+          props: {
+            markdown: "# Authentication Required\n\nAdd a personal access token in this extension's preferences."
+          }
+        };
+      }
+      return Component(props);
+    },
     showFailureToast: (error) => {
-      pushFeedback(session2, {
+      const feedback = {
         kind: "toast",
         style: "failure",
         title: error instanceof Error ? error.message : String(error)
-      });
+      };
+      pushFeedback(session2, feedback);
+      pushEffect(session2, feedback);
     }
   };
 }
@@ -6390,8 +12395,8 @@ function sanitizeValue(value) {
   }
   return void 0;
 }
-function mimeTypeForAsset(path6) {
-  switch ((0, import_node_path10.extname)(path6).toLowerCase()) {
+function mimeTypeForAsset(path7) {
+  switch ((0, import_node_path12.extname)(path7).toLowerCase()) {
     case ".svg":
       return "image/svg+xml";
     case ".png":
@@ -6410,24 +12415,27 @@ function mimeTypeForAsset(path6) {
   }
 }
 function resolveExtensionMarkdownAssets(markdown, packageRoot) {
-  return markdown.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (match, alt, rawSrc) => {
-    const src = String(rawSrc || "").trim();
-    if (!src || /^(?:https?:|data:|file:)/i.test(src)) return match;
-    const cleanSrc = src.split(/[?#]/)[0]?.replace(/^\.?\//, "") ?? "";
-    if (!cleanSrc || cleanSrc.startsWith("/") || cleanSrc.includes("..")) return match;
-    const assetPath = (0, import_node_path10.join)(packageRoot, "assets", cleanSrc);
-    if (!(0, import_node_fs10.existsSync)(assetPath)) {
-      console.warn(`[ExtensionAssets] Missing markdown asset: ${assetPath}`);
-      return match;
+  return markdown.replace(
+    /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+    (match, alt, rawSrc) => {
+      const src = String(rawSrc || "").trim();
+      if (!src || /^(?:https?:|data:|file:)/i.test(src)) return match;
+      const cleanSrc = src.split(/[?#]/)[0]?.replace(/^\.?\//, "") ?? "";
+      if (!cleanSrc || cleanSrc.startsWith("/") || cleanSrc.includes("..")) return match;
+      const assetPath = (0, import_node_path12.join)(packageRoot, "assets", cleanSrc);
+      if (!(0, import_node_fs12.existsSync)(assetPath)) {
+        console.warn(`[ExtensionAssets] Missing markdown asset: ${assetPath}`);
+        return match;
+      }
+      try {
+        const encoded = (0, import_node_fs12.readFileSync)(assetPath).toString("base64");
+        console.log(`[ExtensionAssets] Inlined markdown asset: ${assetPath}`);
+        return `![${alt}](data:${mimeTypeForAsset(assetPath)};base64,${encoded})`;
+      } catch {
+        return match;
+      }
     }
-    try {
-      const encoded = (0, import_node_fs10.readFileSync)(assetPath).toString("base64");
-      console.log(`[ExtensionAssets] Inlined markdown asset: ${assetPath}`);
-      return `![${alt}](data:${mimeTypeForAsset(assetPath)};base64,${encoded})`;
-    } catch {
-      return match;
-    }
-  });
+  );
 }
 function registerAction(typeName, props, session2) {
   const index = session2.currentActions.length;
@@ -6446,7 +12454,7 @@ function registerAction(typeName, props, session2) {
   const handler = async (formValues) => {
     if (kind === "copy") {
       const content = props.content ?? props.title ?? "";
-      copyToSystemClipboard(content);
+      copyToSystemClipboard(session2, content);
       if (typeof props.onPaste === "function") {
         await Promise.resolve(props.onPaste());
       }
@@ -6454,13 +12462,15 @@ function registerAction(typeName, props, session2) {
     if (kind === "open") {
       const url = typeof props.url === "string" ? props.url : "";
       if (url) {
-        await shell.openExternal(url);
+        pushEffect(session2, { kind: "open", value: url });
+        if (session2.effectMode !== "record") await shell.openExternal(url);
       }
     }
     if (kind === "show-in-finder") {
-      const path6 = typeof props.path === "string" ? props.path : "";
-      if (path6) {
-        shell.showItemInFolder(path6);
+      const path7 = typeof props.path === "string" ? props.path : "";
+      if (path7) {
+        pushEffect(session2, { kind: "show-in-finder", value: path7 });
+        if (session2.effectMode !== "record") shell.showItemInFolder(path7);
       }
     }
     if (kind === "push" && props.target !== void 0) {
@@ -6472,7 +12482,9 @@ function registerAction(typeName, props, session2) {
       }
     }
     if (kind === "submit-form" && typeof props.onSubmit === "function") {
-      await Promise.resolve(props.onSubmit(formValues ?? {}));
+      await Promise.resolve(
+        props.onSubmit(formValues ?? {})
+      );
       return;
     }
     if (typeof props.onAction === "function") {
@@ -6480,12 +12492,6 @@ function registerAction(typeName, props, session2) {
     }
   };
   session2.actionHandlers.set(id, handler);
-}
-function hasDirectListSections(input) {
-  if (Array.isArray(input)) return input.some((entry) => hasDirectListSections(entry));
-  if (!isJsxNode(input)) return false;
-  if (input.type === JSX_FRAGMENT) return hasDirectListSections(input.props?.children);
-  return isToken(input.type) && input.type.name === "List.Section";
 }
 function walkRuntimeNodes(input, session2, depth, budget, options = {}) {
   if (budget.remaining <= 0 || depth > RUNTIME_RECURSION_LIMIT) {
@@ -6532,6 +12538,8 @@ function walkRuntimeNodes(input, session2, depth, budget, options = {}) {
       }
     } catch (error) {
       console.error("[ExtensionRuntime] Component render failed:", error);
+      const message = error && typeof error === "object" && typeof error.message === "string" ? String(error.message) : String(error);
+      session2.renderErrors.push(message);
       return [];
     }
     return walkRuntimeNodes(rendered, session2, depth + 1, budget, options);
@@ -6555,13 +12563,19 @@ function walkRuntimeNodes(input, session2, depth, budget, options = {}) {
     session2.searchTextChangeHandler = props.onSearchTextChange;
   }
   const actionStart = session2.currentActions.length;
+  const nestedOptions = {
+    ...options,
+    listItemsSeen: void 0,
+    listItemLimit: void 0,
+    listItemsTruncated: void 0
+  };
   if (props.actions !== void 0) {
-    walkRuntimeNodes(props.actions, session2, depth + 1, budget, options);
+    walkRuntimeNodes(props.actions, session2, depth + 1, budget, nestedOptions);
   }
   const actionIds = session2.currentActions.slice(actionStart).map((action) => action.id);
-  const metadataNodes = props.metadata !== void 0 ? walkRuntimeNodes(props.metadata, session2, depth + 1, budget, options) : [];
-  const detailNodes = props.detail !== void 0 ? walkRuntimeNodes(props.detail, session2, depth + 1, budget, options) : [];
-  const searchBarAccessoryNodes = props.searchBarAccessory !== void 0 ? walkRuntimeNodes(props.searchBarAccessory, session2, depth + 1, budget, options) : [];
+  const metadataNodes = props.metadata !== void 0 ? walkRuntimeNodes(props.metadata, session2, depth + 1, budget, nestedOptions) : [];
+  const detailNodes = props.detail !== void 0 ? walkRuntimeNodes(props.detail, session2, depth + 1, budget, nestedOptions) : [];
+  const searchBarAccessoryNodes = props.searchBarAccessory !== void 0 ? walkRuntimeNodes(props.searchBarAccessory, session2, depth + 1, budget, nestedOptions) : [];
   budget.remaining -= 1;
   const sanitizedProps = sanitizeValue(props);
   if (actionIds.length > 0) {
@@ -6590,20 +12604,27 @@ function walkRuntimeNodes(input, session2, depth, budget, options = {}) {
   if (typeName === "List" && session2.searchTextChangeHandler && sanitizedProps) {
     sanitizedProps.__hasServerSearch = true;
   }
+  if (typeName === "List" && props.pagination && typeof props.pagination === "object") {
+    const pagination = props.pagination;
+    if (typeof pagination.onLoadMore === "function") {
+      session2.serverLoadMoreHandler = pagination.onLoadMore;
+      session2.serverHasMore = pagination.hasMore === true;
+    }
+  }
   const listItemsTruncated = typeName === "List" ? { value: false } : options.listItemsTruncated;
   const childOptions = typeName === "List" ? {
     ...options,
-    listItemsSeen: hasDirectListSections(props.children) ? void 0 : { count: 0 },
+    listItemsSeen: { count: 0 },
     listItemLimit: session2.listItemLimit,
     listItemsTruncated
   } : typeName === "List.Section" ? {
     ...options,
-    listItemsSeen: { count: 0 },
+    listItemsSeen: options.listItemsSeen ?? { count: 0 },
     listItemLimit: session2.listItemLimit
   } : options;
   const children = walkRuntimeNodes(props.children, session2, depth + 1, budget, childOptions);
   if (typeName === "List" && sanitizedProps && listItemsTruncated) {
-    sanitizedProps.__hasMore = listItemsTruncated.value && session2.listItemLimit < RUNTIME_COMPONENT_LIMIT;
+    sanitizedProps.__hasMore = session2.serverHasMore || listItemsTruncated.value && session2.listItemLimit < RUNTIME_COMPONENT_LIMIT;
     sanitizedProps.__pageSize = session2.listItemLimit;
   }
   const node = {
@@ -6638,11 +12659,23 @@ function renderCurrentView(session2) {
   }
   session2.actionHandlers.clear();
   session2.currentActions = [];
+  session2.renderErrors = [];
+  session2.serverLoadMoreHandler = null;
+  session2.serverHasMore = false;
   const budget = { remaining: RUNTIME_COMPONENT_LIMIT };
-  const nodes = walkRuntimeNodes(top, session2, 0, budget);
+  const internalTop = top;
+  const nodes = typeof internalTop.type === "string" && internalTop.type.startsWith("Tezbar.") ? [top] : walkRuntimeNodes(top, session2, 0, budget);
   console.log(
     `[Runner] walkRuntimeNodes complete after ${elapsedMs(startedAt)}; nodes=${nodes.length}, budgetUsed=${RUNTIME_COMPONENT_LIMIT - budget.remaining}, actions=${session2.currentActions.length}`
   );
+  if (session2.renderErrors.length > 0) {
+    session2.pendingEffects = [];
+    return {
+      ok: false,
+      message: `Extension render failed: ${session2.renderErrors.join("; ")}`
+    };
+  }
+  flushPendingEffects(session2);
   const root = nodes[0] ?? {
     type: "Detail",
     props: { markdown: "This extension returned an empty view." },
@@ -6661,7 +12694,8 @@ function renderCurrentView(session2) {
     commandName: session2.commandName,
     title: session2.title,
     root,
-    actions: [...session2.currentActions]
+    actions: [...session2.currentActions],
+    effects: [...session2.effects]
   };
 }
 async function rerenderSessionCommand(session2, label) {
@@ -6695,7 +12729,9 @@ async function refreshExtensionSession(request) {
   if (!session2) {
     return { ok: false, message: "Extension session not found." };
   }
-  const inFlight = [...session2.promiseCache.values()].filter((entry) => entry.promise).map((entry) => `${entry.label ?? "unknown"} age=${entry.startedAt ? elapsedMs(entry.startedAt) : "?"}`);
+  const inFlight = [...session2.promiseCache.values()].filter((entry) => entry.promise).map(
+    (entry) => `${entry.label ?? "unknown"} age=${entry.startedAt ? elapsedMs(entry.startedAt) : "?"}`
+  );
   console.log(
     `[Runner] Refresh request ${session2.extensionId}/${session2.commandName}; stateUpdates=${session2.hasStateUpdates}, inFlight=${inFlight.length}${inFlight.length ? `
   ${inFlight.join("\n  ")}` : ""}`
@@ -6707,10 +12743,26 @@ async function loadMoreExtensionSession(request) {
   const sessionId = String(request.sessionId || "").trim();
   const session2 = sessions.get(sessionId);
   if (!session2) return { ok: false, message: "Extension session not found." };
-  const nextLimit = Math.min(
-    session2.listItemLimit + LIST_ITEM_PAGE_SIZE,
-    RUNTIME_COMPONENT_LIMIT
-  );
+  if (session2.serverLoadMoreHandler) {
+    if (!session2.serverHasMore) return { ok: true, mode: "unchanged" };
+    if (session2.serverLoadMoreRequest) return session2.serverLoadMoreRequest;
+    const request2 = (async () => {
+      try {
+        await session2.serverLoadMoreHandler?.();
+        return await rerenderSessionCommand(session2, "Load more");
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error)
+        };
+      } finally {
+        session2.serverLoadMoreRequest = null;
+      }
+    })();
+    session2.serverLoadMoreRequest = request2;
+    return request2;
+  }
+  const nextLimit = Math.min(session2.listItemLimit + LIST_ITEM_PAGE_SIZE, RUNTIME_COMPONENT_LIMIT);
   if (nextLimit === session2.listItemLimit) return { ok: true, mode: "unchanged" };
   session2.listItemLimit = nextLimit;
   return rerenderSessionCommand(session2, "Load more");
@@ -6726,7 +12778,7 @@ async function updateSearchText(request) {
     return { ok: false, message: "Extension session not found." };
   }
   session2.searchText = searchText;
-  session2.listItemLimit = LIST_ITEM_PAGE_SIZE;
+  session2.listItemLimit = searchText.trim() && !session2.searchTextChangeHandler ? RUNTIME_COMPONENT_LIMIT : LIST_ITEM_PAGE_SIZE;
   if (session2.searchTextChangeHandler) {
     try {
       session2.searchTextChangeHandler(searchText);
@@ -6742,7 +12794,9 @@ async function updateSearchText(request) {
       const execArgs = { arguments: session2.commandArgs };
       let result;
       const searchPass = async (label) => {
-        console.log(`[Runner] ${label}: executing ${session2.extensionId}/${session2.commandName} search="${searchText}"`);
+        console.log(
+          `[Runner] ${label}: executing ${session2.extensionId}/${session2.commandName} search="${searchText}"`
+        );
         session2.hookIndex = 0;
         session2.pendingPromises = [];
         session2.actionHandlers.clear();
@@ -6759,9 +12813,13 @@ async function updateSearchText(request) {
         result = await searchPass(`Search Pass ${p}`);
         if (!session2.hasStateUpdates) break;
       }
-      const searchInFlight = [...session2.promiseCache.values()].filter((entry) => entry.promise).length;
+      const searchInFlight = [...session2.promiseCache.values()].filter(
+        (entry) => entry.promise
+      ).length;
       if (searchInFlight > 0) {
-        console.log(`[Runner] Search render returned with ${searchInFlight} in-flight promises; refresh will continue.`);
+        console.log(
+          `[Runner] Search render returned with ${searchInFlight} in-flight promises; refresh will continue.`
+        );
       }
       session2.stack = isJsxNode(result) ? [result] : [];
       if (session2.stack.length > 0) {
@@ -6798,6 +12856,7 @@ function cleanupRuntimeSession(session2) {
   session2.effectDeps.clear();
   session2.promiseCache.clear();
   session2.promiseKeysByHook.clear();
+  session2.promisePaginationByHook.clear();
   session2.cacheRecoveryKeys.clear();
 }
 function deleteRuntimeSession(sessionId) {
@@ -6816,7 +12875,7 @@ function pruneSessions() {
   }
 }
 function runBundle(code, packageRoot, session2) {
-  const fileRequire = (0, import_node_module2.createRequire)((0, import_node_path10.join)(packageRoot, "package.json"));
+  const fileRequire = (0, import_node_module2.createRequire)((0, import_node_path12.join)(packageRoot, "package.json"));
   const jsxRuntimeShim = createJsxRuntimeShim();
   const reactShim = createReactShim(session2);
   const raycastApiShim = createRaycastApiShim(session2);
@@ -6832,7 +12891,7 @@ function runBundle(code, packageRoot, session2) {
       return {
         ...fileRequire(specifier),
         spawn: (...args) => {
-          const child = (0, import_node_child_process6.spawn)(...args);
+          const child = (0, import_node_child_process8.spawn)(...args);
           const stdout = child.stdout;
           if (stdout) {
             const originalOn = stdout.on.bind(stdout);
@@ -6894,7 +12953,7 @@ function runBundle(code, packageRoot, session2) {
     if (specifier === "sha256-file") {
       return (filename, callback) => {
         try {
-          const sum = (0, import_node_crypto4.createHash)("sha256").update((0, import_node_fs10.readFileSync)(filename)).digest("hex");
+          const sum = (0, import_node_crypto5.createHash)("sha256").update((0, import_node_fs12.readFileSync)(filename)).digest("hex");
           callback(null, sum);
         } catch (error) {
           callback(error instanceof Error ? error : new Error(String(error)));
@@ -6902,23 +12961,94 @@ function runBundle(code, packageRoot, session2) {
       };
     }
     if (specifier === "axios") {
-      const axiosShim = {
-        get: axiosGetShim,
-        post: async () => {
-          return { data: {}, status: 200, headers: {} };
-        },
-        defaults: { headers: { common: {} } },
-        interceptors: {
-          request: { use: () => 0, eject: () => {
-          } },
-          response: { use: () => 0, eject: () => {
-          } }
-        },
-        __esModule: true
+      const createAxiosShim = (instanceConfig = {}) => {
+        const commonHeaders = {};
+        const defaults = {
+          ...instanceConfig,
+          headers: {
+            common: commonHeaders,
+            ...instanceConfig.headers ?? {}
+          }
+        };
+        const execute = async (requestConfig) => {
+          const merged = { ...instanceConfig, ...requestConfig };
+          const rawUrl = String(merged.url ?? "");
+          const url = new URL(rawUrl, merged.baseURL || instanceConfig.baseURL);
+          for (const [key, value] of Object.entries(merged.params ?? {})) {
+            if (value !== void 0 && value !== null) url.searchParams.set(key, String(value));
+          }
+          const headers = new Headers({
+            ...instanceConfig.headers ?? {},
+            ...commonHeaders,
+            ...requestConfig.headers ?? {}
+          });
+          const method = String(merged.method ?? "GET").toUpperCase();
+          let body;
+          if (merged.data !== void 0 && method !== "GET" && method !== "HEAD") {
+            if (typeof merged.data === "string" || merged.data instanceof ArrayBuffer || ArrayBuffer.isView(merged.data) || typeof FormData !== "undefined" && merged.data instanceof FormData) {
+              body = merged.data;
+            } else {
+              body = JSON.stringify(merged.data);
+              if (!headers.has("content-type")) headers.set("content-type", "application/json");
+            }
+          }
+          const response = await fetch(url, {
+            method,
+            headers,
+            body
+          });
+          const responseHeaders = {};
+          response.headers.forEach((value, key) => {
+            responseHeaders[key] = value;
+          });
+          let data;
+          if (merged.responseType === "stream") {
+            data = response.body ? import_node_stream.Readable.fromWeb(response.body) : import_node_stream.Readable.from([]);
+          } else {
+            const text = await response.text();
+            data = text;
+            try {
+              data = text ? JSON.parse(text) : null;
+            } catch {
+            }
+          }
+          const result = {
+            data,
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders,
+            config: merged
+          };
+          if (!response.ok) {
+            const error = new Error(`Request failed with status code ${response.status}`);
+            error.response = result;
+            error.config = merged;
+            throw error;
+          }
+          return result;
+        };
+        const instance2 = ((config) => execute(config));
+        Object.assign(instance2, {
+          get: (url, config) => execute({ ...config, url, method: "GET" }),
+          delete: (url, config) => execute({ ...config, url, method: "DELETE" }),
+          post: (url, data, config) => execute({ ...config, url, data, method: "POST" }),
+          put: (url, data, config) => execute({ ...config, url, data, method: "PUT" }),
+          patch: (url, data, config) => execute({ ...config, url, data, method: "PATCH" }),
+          request: execute,
+          defaults,
+          interceptors: {
+            request: { use: () => 0, eject: () => {
+            } },
+            response: { use: () => 0, eject: () => {
+            } }
+          },
+          create: createAxiosShim,
+          __esModule: true
+        });
+        instance2.default = instance2;
+        return instance2;
       };
-      axiosShim.create = () => axiosShim;
-      axiosShim.default = axiosShim;
-      return axiosShim;
+      return createAxiosShim();
     }
     if (specifier === "node-fetch" || specifier === "cross-fetch") {
       return createFetchModuleShim();
@@ -6958,7 +13088,7 @@ function runBundle(code, packageRoot, session2) {
     if (specifier === "tar") {
       const extract = async (options) => {
         if (!options?.file || !options.cwd) throw new Error("tar.extract requires file and cwd");
-        (0, import_node_fs10.mkdirSync)(options.cwd, { recursive: true });
+        (0, import_node_fs12.mkdirSync)(options.cwd, { recursive: true });
         const args = ["-xzf", options.file, "-C", options.cwd];
         try {
           if (typeof options.filter === "function") {
@@ -6968,7 +13098,7 @@ function runBundle(code, packageRoot, session2) {
           }
         } catch {
         }
-        await execFileAsync5("/usr/bin/tar", args);
+        await execFileAsync7("/usr/bin/tar", args);
       };
       return {
         extract,
@@ -6981,8 +13111,8 @@ function runBundle(code, packageRoot, session2) {
       const extractZip = async (file, options) => {
         const dir = options?.dir;
         if (!dir) throw new Error("extract-zip requires dir");
-        (0, import_node_fs10.mkdirSync)(dir, { recursive: true });
-        await execFileAsync5("/usr/bin/unzip", ["-o", file, "-d", dir]);
+        (0, import_node_fs12.mkdirSync)(dir, { recursive: true });
+        await execFileAsync7("/usr/bin/unzip", ["-o", file, "-d", dir]);
       };
       return {
         default: extractZip,
@@ -6996,9 +13126,24 @@ function runBundle(code, packageRoot, session2) {
         session2.pickedColor = picked;
         return picked;
       };
+      const recognizeText = async (fullscreen = false, keepImage = false, fast = false, languageCorrection = false, ignoreLineBreaks = false, customWordsList = [], languages = [], playSound = false) => runScreenOcrHelper("recognize-text", {
+        fullscreen,
+        keepImage,
+        fast,
+        languageCorrection,
+        ignoreLineBreaks,
+        customWordsList,
+        languages,
+        playSound
+      });
+      const detectBarcode = async (keepImage = false, playSound = false) => runScreenOcrHelper("detect-barcode", { keepImage, playSound });
       return {
         pickColor,
-        pick_color: pickColor
+        pick_color: pickColor,
+        recognizeText,
+        recognize_text: recognizeText,
+        detectBarcode,
+        detect_barcode: detectBarcode
       };
     }
     if (specifier.startsWith("./") || specifier.startsWith("../") || specifier.startsWith("/")) {
@@ -7010,7 +13155,7 @@ function runBundle(code, packageRoot, session2) {
     return fileRequire(specifier);
   };
   const webGlobals = globalThis;
-  const loggedFetch = createLoggedFetch(session2);
+  const loggedFetch = createLoggedFetch();
   const context = import_node_vm.default.createContext({
     console,
     Buffer,
@@ -7028,10 +13173,30 @@ function runBundle(code, packageRoot, session2) {
     clearTimeout,
     setInterval,
     clearInterval,
+    setImmediate,
+    clearImmediate,
     TextEncoder,
     TextDecoder,
-    URL
+    Blob,
+    File,
+    FormData,
+    Event,
+    EventTarget,
+    DOMException,
+    MessageChannel,
+    MessagePort,
+    BroadcastChannel,
+    crypto: globalThis.crypto,
+    performance: globalThis.performance,
+    structuredClone,
+    atob,
+    btoa,
+    URL,
+    URLSearchParams
   });
+  context.global = context;
+  context.globalThis = context;
+  context.window = context;
   const runtimeCode = code.replace(
     /\bimport\(\s*(["'])(swift:[^"']+|rust:[^"']+)\1\s*\)/g,
     (_match, quote, specifier) => `Promise.resolve(require(${quote}${specifier}${quote}))`
@@ -7040,11 +13205,11 @@ function runBundle(code, packageRoot, session2) {
 ${runtimeCode}
 })`;
   const script = new import_node_vm.default.Script(wrapped, {
-    filename: (0, import_node_path10.join)(packageRoot, ".tezbar-runtime-bundle.cjs")
+    filename: (0, import_node_path12.join)(packageRoot, ".tezbar-runtime-bundle.cjs")
   });
   const fn = script.runInContext(context);
   const mod = { exports: {} };
-  fn(mod.exports, customRequire, mod, (0, import_node_path10.join)(packageRoot, ".tezbar-runtime-bundle.cjs"), packageRoot);
+  fn(mod.exports, customRequire, mod, (0, import_node_path12.join)(packageRoot, ".tezbar-runtime-bundle.cjs"), packageRoot);
   return mod.exports;
 }
 function getCommandExport(moduleExports) {
@@ -7059,27 +13224,30 @@ function getCommandExport(moduleExports) {
   }
   return null;
 }
-async function runCommandFromPackagePath(packageJsonPath, extensionId, commandName, argumentValues) {
-  const packageRoot = (0, import_node_path10.dirname)(packageJsonPath);
+async function runCommandFromPackagePath(packageJsonPath, extensionId, commandName2, argumentValues, preferenceValues, options) {
+  const packageRoot = (0, import_node_path12.dirname)(packageJsonPath);
   const pkg = parsePackageJson(packageJsonPath);
-  const command = findCommandInManifest(pkg, commandName);
+  const command = findCommandInManifest(pkg, commandName2);
   const mode = String(command.mode || "").toLowerCase();
-  const title = String(command.title || commandName);
-  const entryPath = resolveCommandEntry(packageRoot, commandName, command);
+  const title = String(command.title || commandName2);
+  const entryPath = resolveCommandEntry(packageRoot, commandName2, command);
   console.log(`[Runner] Mode=${mode}, title="${title}", entry=${entryPath}`);
   const bundled = await bundleCommand(entryPath, packageRoot);
   console.log(`[Runner] Bundle size: ${bundled.length} chars`);
   const session2 = {
     id: makeId2("ext-session"),
     extensionId,
-    commandName,
+    commandName: commandName2,
+    commandMode: mode || "view",
     title,
     packageRoot,
     actionHandlers: /* @__PURE__ */ new Map(),
     currentActions: [],
     feedback: [],
+    effects: [],
+    effectMode: options?.effectMode ?? "system",
     stack: [],
-    preferences: getExtensionPreferences(extensionId, commandName),
+    preferences: preferenceValues ?? getExtensionPreferences(extensionId, commandName2),
     searchTextChangeHandler: null,
     commandFn: null,
     commandArgs: argumentValues,
@@ -7090,18 +13258,24 @@ async function runCommandFromPackagePath(packageJsonPath, extensionId, commandNa
     pendingPromises: [],
     promiseCache: /* @__PURE__ */ new Map(),
     promiseKeysByHook: /* @__PURE__ */ new Map(),
+    promisePaginationByHook: /* @__PURE__ */ new Map(),
+    serverLoadMoreHandler: null,
+    serverHasMore: false,
+    serverLoadMoreRequest: null,
     cacheRecoveryKeys: /* @__PURE__ */ new Set(),
     abortControllers: /* @__PURE__ */ new Set(),
     effectCleanups: /* @__PURE__ */ new Map(),
     effectDeps: /* @__PURE__ */ new Map(),
+    pendingEffects: [],
     hasStateUpdates: false,
     disposed: false,
     listItemLimit: LIST_ITEM_PAGE_SIZE,
     hookStateSnapshot: null,
-    pickedColor: null
+    pickedColor: null,
+    renderErrors: []
   };
-  if (shouldShowExtensionPreferenceSetup(extensionId, commandName)) {
-    session2.stack = [buildPreferenceSetupRoot(extensionId, commandName)];
+  if (preferenceValues === void 0 && shouldShowExtensionPreferenceSetup(extensionId, commandName2)) {
+    session2.stack = [buildPreferenceSetupRoot(extensionId, commandName2)];
     sessions.set(session2.id, session2);
     pruneSessions();
     return renderCurrentView(session2);
@@ -7115,7 +13289,7 @@ async function runCommandFromPackagePath(packageJsonPath, extensionId, commandNa
   const execArgs = { arguments: argumentValues };
   let result;
   const executePass = async (passLabel) => {
-    console.log(`[Runner] ${passLabel}: executing ${extensionId}/${commandName}`);
+    console.log(`[Runner] ${passLabel}: executing ${extensionId}/${commandName2}`);
     session2.hookIndex = 0;
     session2.pendingPromises = [];
     session2.actionHandlers.clear();
@@ -7131,30 +13305,38 @@ async function runCommandFromPackagePath(packageJsonPath, extensionId, commandNa
     await executePass(`Pass ${p}`);
     if (!session2.hasStateUpdates) break;
   }
-  const remainingInFlight = [...session2.promiseCache.values()].filter((entry) => entry.promise).length;
+  const remainingInFlight = [...session2.promiseCache.values()].filter(
+    (entry) => entry.promise
+  ).length;
   if (remainingInFlight > 0) {
-    console.log(`[Runner] Initial multi-pass exited with ${remainingInFlight} in-flight promises; polling refresh will pick them up.`);
+    console.log(
+      `[Runner] Initial multi-pass exited with ${remainingInFlight} in-flight promises; polling refresh will pick them up.`
+    );
   }
-  if (commandName === "pick-color" && session2.pickedColor) {
+  if (commandName2 === "pick-color" && session2.pickedColor) {
     session2.title = "Color Wheel";
-    session2.stack = [{
-      __jsx: true,
-      type: makeToken("Detail"),
-      props: {
-        markdown: colorWheelMarkdown(),
-        initialColor: session2.pickedColor
+    session2.stack = [
+      {
+        __jsx: true,
+        type: makeToken("Detail"),
+        props: {
+          markdown: colorWheelMarkdown(),
+          initialColor: session2.pickedColor
+        }
       }
-    }];
+    ];
     sessions.set(session2.id, session2);
     pruneSessions();
     return renderCurrentView(session2);
   }
   if (mode === "no-view" || !isJsxNode(result)) {
+    flushPendingEffects(session2);
     const message = formatFeedback(session2.feedback.at(-1)) || "";
     return {
       ok: true,
       mode: "no-view",
-      message
+      message,
+      effects: [...session2.effects]
     };
   }
   session2.stack = [result];
@@ -7164,9 +13346,9 @@ async function runCommandFromPackagePath(packageJsonPath, extensionId, commandNa
 }
 async function runExtensionCommand(request) {
   const extensionId = String(request.extensionId || "").trim();
-  const commandName = String(request.commandName || "").trim();
-  console.log(`[Runner] runExtensionCommand called: ${extensionId}/${commandName}`);
-  if (!extensionId || !commandName) {
+  const commandName2 = String(request.commandName || "").trim();
+  console.log(`[Runner] runExtensionCommand called: ${extensionId}/${commandName2}`);
+  if (!extensionId || !commandName2) {
     return { ok: false, message: "Extension id and command name are required." };
   }
   const packagePath = resolveInstalledPackageJsonPath(extensionId);
@@ -7176,7 +13358,7 @@ async function runExtensionCommand(request) {
   }
   console.log(`[Runner] Found package.json at ${packagePath}`);
   for (const [sessionId, session2] of sessions) {
-    if (session2.extensionId === extensionId && session2.commandName === commandName) {
+    if (session2.extensionId === extensionId && session2.commandName === commandName2) {
       deleteRuntimeSession(sessionId);
     }
   }
@@ -7184,7 +13366,7 @@ async function runExtensionCommand(request) {
     return await runCommandFromPackagePath(
       packagePath,
       extensionId,
-      commandName,
+      commandName2,
       request.argumentValues ?? {}
     );
   } catch (error) {
@@ -7194,19 +13376,21 @@ async function runExtensionCommand(request) {
     };
   }
 }
-async function runExtensionCommandFromPackageJson(packageJsonPath, commandName, argumentValues) {
+async function runExtensionCommandFromPackageJson(packageJsonPath, commandName2, argumentValues, preferenceValues, options) {
   const normalizedPath = String(packageJsonPath || "").trim();
-  const normalizedCommandName = String(commandName || "").trim();
+  const normalizedCommandName = String(commandName2 || "").trim();
   if (!normalizedPath || !normalizedCommandName) {
     return { ok: false, message: "packageJsonPath and commandName are required." };
   }
-  const extensionId = `raycast.${(0, import_node_path10.dirname)(normalizedPath).split("/").pop() || "external"}`;
+  const extensionId = `raycast.${(0, import_node_path12.dirname)(normalizedPath).split("/").pop() || "external"}`;
   try {
     return await runCommandFromPackagePath(
       normalizedPath,
       extensionId,
       normalizedCommandName,
-      argumentValues ?? {}
+      argumentValues ?? {},
+      preferenceValues,
+      options
     );
   } catch (error) {
     return {
@@ -7236,7 +13420,11 @@ async function invokeExtensionAction(request) {
     return { ok: false, message: "Action is no longer available in this session." };
   }
   try {
+    const stackDepthBefore = session2.stack.length;
     await Promise.resolve(handler(request.formValues ?? {}));
+    if (session2.stack.length !== stackDepthBefore) {
+      return renderCurrentView(session2);
+    }
     if (session2.commandFn && session2.hasStateUpdates) {
       return rerenderSessionCommand(session2, "Action");
     }
@@ -7246,7 +13434,8 @@ async function invokeExtensionAction(request) {
     return {
       ok: true,
       mode: "no-view",
-      message: formatFeedback(session2.feedback.at(-1)) || ""
+      message: formatFeedback(session2.feedback.at(-1)) || "",
+      effects: [...session2.effects]
     };
   } catch (error) {
     return {
@@ -7264,26 +13453,27 @@ function clearAllExtensionSessions() {
   }
   sessions.clear();
 }
-var import_node_fs10, import_promises, import_node_child_process6, import_node_crypto4, import_node_http, import_node_https, import_node_os6, import_node_module2, import_node_path10, import_web, import_node_util5, import_node_v8, import_node_zlib, import_node_vm, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync5, gzipAsync, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
+var import_node_fs12, import_promises2, import_node_child_process8, import_node_crypto5, import_node_http, import_node_os7, import_node_module2, import_node_path12, import_node_stream, import_web, import_node_util7, import_node_v8, import_node_zlib, import_node_vm, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync7, gzipAsync, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
 var init_extension_runner = __esm({
   "src/main/extension-runner.ts"() {
     "use strict";
     init_electron_shim();
-    import_node_fs10 = require("node:fs");
-    import_promises = require("node:fs/promises");
-    import_node_child_process6 = require("node:child_process");
-    import_node_crypto4 = require("node:crypto");
+    import_node_fs12 = require("node:fs");
+    import_promises2 = require("node:fs/promises");
+    import_node_child_process8 = require("node:child_process");
+    import_node_crypto5 = require("node:crypto");
     import_node_http = require("node:http");
-    import_node_https = require("node:https");
-    import_node_os6 = require("node:os");
+    import_node_os7 = require("node:os");
     import_node_module2 = require("node:module");
-    import_node_path10 = require("node:path");
+    import_node_path12 = require("node:path");
+    import_node_stream = require("node:stream");
     import_web = require("node:stream/web");
-    import_node_util5 = require("node:util");
+    import_node_util7 = require("node:util");
     import_node_v8 = require("node:v8");
     import_node_zlib = require("node:zlib");
     import_node_vm = __toESM(require("node:vm"));
     init_esbuild_runtime();
+    init_extensionAI();
     init_windowState();
     init_extension_registry();
     RUNTIME_COMPONENT_LIMIT = 1e4;
@@ -7298,8 +13488,8 @@ var init_extension_runner = __esm({
     BUILTIN_SET = new Set(import_node_module2.builtinModules);
     JSX_FRAGMENT = /* @__PURE__ */ Symbol.for("tezbar.jsx.fragment");
     REACT_CONTEXT = /* @__PURE__ */ Symbol.for("react.context");
-    execFileAsync5 = (0, import_node_util5.promisify)(import_node_child_process6.execFile);
-    gzipAsync = (0, import_node_util5.promisify)(import_node_zlib.gzip);
+    execFileAsync7 = (0, import_node_util7.promisify)(import_node_child_process8.execFile);
+    gzipAsync = (0, import_node_util7.promisify)(import_node_zlib.gzip);
     sessions = /* @__PURE__ */ new Map();
     promiseResultMemoryCache = /* @__PURE__ */ new Map();
     applicationsCache = null;
@@ -7320,7 +13510,9 @@ init_windowState();
 var AGENT_IPC = {
   RUN: "agent:run",
   CANCEL: "agent:cancel",
-  EVENT: "agent:event"
+  EVENT: "agent:event",
+  APPROVE: "agent:approve",
+  CAPTURE_ACTIVE_SCREEN: "agent:capture-active-screen"
 };
 
 // src/shared/chat.ts
@@ -7575,6 +13767,47 @@ async function observe(cwd, query) {
   };
 }
 
+// src/main/agent/prompt.ts
+var MAX_AGENT_IMAGES = 4;
+var MAX_AGENT_IMAGE_BYTES = 8 * 1024 * 1024;
+var SUPPORTED_IMAGE_TYPES = /* @__PURE__ */ new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp"
+]);
+function rawBase64(data) {
+  const trimmed = data.trim();
+  const comma = trimmed.indexOf(",");
+  return trimmed.startsWith("data:image/") && comma >= 0 ? trimmed.slice(comma + 1) : trimmed;
+}
+function estimatedDecodedBytes(data) {
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor(data.length * 3 / 4) - padding);
+}
+function normalizeAgentImages(images) {
+  if (!images?.length) return [];
+  if (images.length > MAX_AGENT_IMAGES) {
+    throw new Error(`Agent accepts at most ${MAX_AGENT_IMAGES} images per prompt`);
+  }
+  return images.map((image) => {
+    if (!SUPPORTED_IMAGE_TYPES.has(image.mimeType)) {
+      throw new Error(`Unsupported agent image type: ${image.mimeType}`);
+    }
+    const data = rawBase64(image.data);
+    if (!data || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+      throw new Error("Agent image is not valid base64 data");
+    }
+    if (estimatedDecodedBytes(data) > MAX_AGENT_IMAGE_BYTES) {
+      throw new Error("Agent image exceeds the 8 MB limit");
+    }
+    return { type: "image", data, mimeType: image.mimeType };
+  });
+}
+function buildPromptCommand(message, images) {
+  const normalized = normalizeAgentImages(images);
+  return normalized.length > 0 ? { type: "prompt", message, images: normalized } : { type: "prompt", message };
+}
+
 // src/main/agent/bridge.ts
 var PI_BIN_CANDIDATES = [
   // Where pnpm installs global bins for this user (matches `which pi`
@@ -7583,14 +13816,24 @@ var PI_BIN_CANDIDATES = [
   import_node_path2.default.join((0, import_node_os2.homedir)(), "Library", "pnpm", "pi"),
   import_node_path2.default.join((0, import_node_os2.homedir)(), ".local", "share", "pnpm", "pi")
 ];
-var OPENCODE_PI_EXTENSION = import_node_path2.default.join((0, import_node_os2.homedir)(), ".pi", "agent", "extensions", "opencode", "index.ts");
+var OPENCODE_PI_EXTENSION = import_node_path2.default.join(
+  (0, import_node_os2.homedir)(),
+  ".pi",
+  "agent",
+  "extensions",
+  "opencode",
+  "index.ts"
+);
 function resolveRaymesPiExtension() {
+  const resourcesPath = process.resourcesPath;
   const candidates = [
     process.env["RAYMES_PI_EXTENSION"],
     import_node_path2.default.join(process.cwd(), "src", "main", "agent", "raymes-pi-policy.ts"),
-    ...app.isPackaged ? [import_node_path2.default.join(process.resourcesPath, "agent", "raymes-pi-policy.ts")] : []
+    ...app.isPackaged && resourcesPath ? [import_node_path2.default.join(resourcesPath, "agent", "raymes-pi-policy.ts")] : []
   ];
-  return candidates.find((candidate) => Boolean(candidate && (0, import_node_fs2.existsSync)(candidate)));
+  return candidates.find(
+    (candidate) => Boolean(candidate && (0, import_node_fs2.existsSync)(candidate))
+  );
 }
 function resolvePiBinary(override) {
   if (override && override.trim()) return override.trim();
@@ -7624,7 +13867,8 @@ function spawnRpc(options) {
     cwd: options.cwd,
     env: {
       ...process.env,
-      ...options.raymesProviderJson ? { RAYMES_PI_PROVIDER_JSON: options.raymesProviderJson } : {}
+      ...options.raymesProviderJson ? { RAYMES_PI_PROVIDER_JSON: options.raymesProviderJson } : {},
+      ...options.raymesAlwaysAllowJson ? { RAYMES_PI_ALWAYS_ALLOW_JSON: options.raymesAlwaysAllowJson } : {}
     },
     stdio: ["pipe", "pipe", "pipe"]
   });
@@ -7633,28 +13877,26 @@ function spawnRpc(options) {
   return child;
 }
 function shouldSuppressPiStderr(line) {
-  return /^Warning: No models match pattern "opencode\/opencode\/[^"]+"$/.test(line.trim());
+  return /^Warning: No models match pattern "(?:kiro-cli\/|opencode\/opencode\/)[^"]+"$/.test(
+    line.trim()
+  );
 }
 async function handleExtensionUiRequest(handle, msg) {
   const id = msg.id;
   if (typeof id !== "string") return;
   if (msg.method === "confirm") {
     const title = msg.title || "Allow command?";
-    const detail = msg.message || "";
-    const result = await dialog.showMessageBox({
-      type: "warning",
-      title,
-      message: title,
-      detail,
-      buttons: ["Cancel", "Allow"],
-      cancelId: 0,
-      defaultId: 0,
-      noLink: true
-    });
+    const command = msg.message || "";
+    let confirmed = false;
+    try {
+      confirmed = await handle.requestApproval?.({ title, command }) ?? false;
+    } catch {
+      confirmed = false;
+    }
     writeCommand(handle.child, {
       type: "extension_ui_response",
       id,
-      confirmed: result.response === 1
+      confirmed
     });
     return;
   }
@@ -7792,6 +14034,7 @@ function createBridge() {
         ephemeral,
         model: options.model,
         raymesProviderJson: options.raymesProviderJson,
+        raymesAlwaysAllowJson: options.raymesAlwaysAllowJson,
         extraArgs: options.extraArgs ?? []
       });
       trackChild(child);
@@ -7817,6 +14060,7 @@ function createBridge() {
         pending: /* @__PURE__ */ new Map(),
         stderrBuffer: [],
         closed: false,
+        requestApproval: options.requestApproval,
         onEvent: (event) => {
           driver(event);
           if (event.type === "agent_end") agentEnded();
@@ -7835,12 +14079,24 @@ function createBridge() {
       };
       options.signal?.addEventListener("abort", onAbort, { once: true });
       try {
-        const promptId = makeId();
-        writeCommand(child, { id: promptId, type: "prompt", message: task });
-        await Promise.race([
-          agentEndPromise,
-          (0, import_node_events.once)(child, "close").then(() => void 0)
-        ]);
+        await sendAndAwait(handle, buildPromptCommand(task, options.images), 15e3);
+        let runTimeout;
+        try {
+          await Promise.race([
+            agentEndPromise,
+            (0, import_node_events.once)(child, "close").then(() => void 0),
+            new Promise((_resolve, reject) => {
+              runTimeout = setTimeout(
+                () => reject(
+                  new Error(`Agent run timed out after ${options.timeoutMs ?? 15 * 6e4}ms`)
+                ),
+                options.timeoutMs ?? 15 * 6e4
+              );
+            })
+          ]);
+        } finally {
+          if (runTimeout) clearTimeout(runTimeout);
+        }
         if (options.signal?.aborted) {
           throw new Error("Agent run aborted");
         }
@@ -7851,6 +14107,11 @@ function createBridge() {
 ${tail}` : "pi exited before finishing"
           );
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const tail = handle.stderrBuffer.filter((line) => !message.includes(line)).slice(-6).join("\n").trim();
+        throw new Error(tail ? `${message}
+${tail}` : message);
       } finally {
         options.signal?.removeEventListener("abort", onAbort);
         if (!handle.closed) {
@@ -7877,6 +14138,7 @@ ${tail}` : "pi exited before finishing"
         pending: /* @__PURE__ */ new Map(),
         stderrBuffer: [],
         closed: false,
+        requestApproval: void 0,
         onEvent: () => void 0
       };
       attachHandlers(handle);
@@ -7917,6 +14179,65 @@ function getSharedBridge() {
 function disposeSharedBridge() {
   sharedBridge?.dispose();
   sharedBridge = void 0;
+}
+
+// src/main/agent/imageContext.ts
+var import_node_child_process3 = require("node:child_process");
+var import_node_fs3 = require("node:fs");
+var import_promises = require("node:fs/promises");
+var import_node_os3 = require("node:os");
+var import_node_path3 = __toESM(require("node:path"));
+var import_node_util2 = require("node:util");
+init_electron_shim();
+var execFileAsync2 = (0, import_node_util2.promisify)(import_node_child_process3.execFile);
+var MAX_OCR_CHARS = 4e4;
+function screenOcrHelperPath() {
+  const resourcesPath = process.resourcesPath;
+  const candidates = [
+    process.env["SCREENOCR_HELPER_PATH"],
+    app.isPackaged && resourcesPath ? import_node_path3.default.join(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper") : void 0,
+    import_node_path3.default.join(process.cwd(), "native", "screenocr", "screenocr-helper")
+  ];
+  return candidates.find((candidate) => Boolean(candidate && (0, import_node_fs3.existsSync)(candidate)));
+}
+function imageExtension(mimeType) {
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/webp") return "webp";
+  return "png";
+}
+async function extractTextFromAgentImages(images) {
+  if (process.platform !== "darwin" || images.length === 0) return "";
+  const helperPath = screenOcrHelperPath();
+  if (!helperPath) return "";
+  const workDir = await (0, import_promises.mkdtemp)(import_node_path3.default.join((0, import_node_os3.tmpdir)(), "raymes-agent-image-"));
+  try {
+    const textBlocks = [];
+    for (let index = 0; index < images.length; index += 1) {
+      const image = images[index];
+      if (!image) continue;
+      const imagePath = import_node_path3.default.join(workDir, `attachment-${index}.${imageExtension(image.mimeType)}`);
+      await (0, import_promises.writeFile)(imagePath, Buffer.from(image.data, "base64"));
+      const { stdout } = await execFileAsync2(
+        helperPath,
+        [
+          "recognize-text",
+          JSON.stringify({
+            imagePath,
+            fast: false,
+            languageCorrection: true,
+            ignoreLineBreaks: false
+          })
+        ],
+        { timeout: 45e3, maxBuffer: 4 * 1024 * 1024 }
+      );
+      const response = JSON.parse(stdout.trim());
+      if (!response.ok) throw new Error(response.error || "Local screen text extraction failed");
+      if (response.value?.trim()) textBlocks.push(response.value.trim());
+    }
+    return textBlocks.join("\n\n").slice(0, MAX_OCR_CHARS);
+  } finally {
+    await (0, import_promises.rm)(workDir, { recursive: true, force: true });
+  }
 }
 
 // src/main/chat/sessionStore.ts
@@ -7965,8 +14286,8 @@ var DatabaseShim = class {
 var better_sqlite3_shim_default = DatabaseShim;
 
 // src/main/chat/sessionStore.ts
-var import_node_fs3 = require("node:fs");
-var import_node_path3 = require("node:path");
+var import_node_fs4 = require("node:fs");
+var import_node_path4 = require("node:path");
 function safeParseStages(raw) {
   if (!raw) return void 0;
   try {
@@ -7982,10 +14303,25 @@ function safeParseStages(raw) {
     return void 0;
   }
 }
+function safeParseAttachments(raw) {
+  if (!raw) return void 0;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return void 0;
+    const attachments = parsed.filter((item) => {
+      if (!item || typeof item !== "object") return false;
+      const attachment = item;
+      return attachment.kind === "image" && typeof attachment.name === "string" && (attachment.mimeType === "image/png" || attachment.mimeType === "image/jpeg" || attachment.mimeType === "image/webp");
+    });
+    return attachments.length > 0 ? attachments : void 0;
+  } catch {
+    return void 0;
+  }
+}
 function dbPath() {
-  const dir = (0, import_node_path3.join)(app.getPath("userData"), "chat");
-  (0, import_node_fs3.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path3.join)(dir, "sessions.sqlite3");
+  const dir = (0, import_node_path4.join)(app.getPath("userData"), "chat");
+  (0, import_node_fs4.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path4.join)(dir, "sessions.sqlite3");
 }
 var ChatSessionDatabase = class {
   _db = null;
@@ -8024,6 +14360,7 @@ var ChatSessionDatabase = class {
         role TEXT NOT NULL,
         text TEXT NOT NULL,
         stages_json TEXT,
+        attachments_json TEXT,
         error TEXT,
         created_at INTEGER NOT NULL,
         FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
@@ -8031,6 +14368,10 @@ var ChatSessionDatabase = class {
       CREATE INDEX IF NOT EXISTS idx_chat_turns_session ON chat_turns(session_id);
       CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
     `);
+    try {
+      this.db.exec(`ALTER TABLE chat_turns ADD COLUMN attachments_json TEXT;`);
+    } catch {
+    }
   }
   listSessions(limit = 100) {
     const rows = this.db.prepare(
@@ -8058,7 +14399,7 @@ var ChatSessionDatabase = class {
     ).get(id);
     if (!sessionRow) return null;
     const turnRows = this.db.prepare(
-      `SELECT id, session_id, role, text, stages_json, error, created_at
+      `SELECT id, session_id, role, text, stages_json, attachments_json, error, created_at
          FROM chat_turns WHERE session_id = ? ORDER BY created_at ASC`
     ).all(id);
     return {
@@ -8071,6 +14412,7 @@ var ChatSessionDatabase = class {
         role: t.role === "assistant" ? "assistant" : "user",
         text: t.text,
         stages: safeParseStages(t.stages_json),
+        attachments: safeParseAttachments(t.attachments_json),
         error: t.error ?? void 0,
         createdAt: t.created_at
       }))
@@ -8087,11 +14429,12 @@ var ChatSessionDatabase = class {
   }
   appendTurn(sessionId, turn) {
     this.db.prepare(
-      `INSERT INTO chat_turns(id, session_id, role, text, stages_json, error, created_at)
-         VALUES(?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO chat_turns(id, session_id, role, text, stages_json, attachments_json, error, created_at)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            text = excluded.text,
            stages_json = excluded.stages_json,
+           attachments_json = excluded.attachments_json,
            error = excluded.error`
     ).run(
       turn.id,
@@ -8099,6 +14442,13 @@ var ChatSessionDatabase = class {
       turn.role,
       turn.text,
       turn.stages ? JSON.stringify(turn.stages) : null,
+      turn.attachments ? JSON.stringify(
+        turn.attachments.map((attachment) => {
+          const metadata = { ...attachment };
+          delete metadata.data;
+          return metadata;
+        })
+      ) : null,
       turn.error ?? null,
       turn.createdAt
     );
@@ -8154,6 +14504,7 @@ var IPC_CHANNELS = {
   QUERY: "query",
   SEARCH_ALL: "search:all",
   PATH_COMPLETE: "path:complete",
+  DIRECTORY_VISIT_RECORD: "directory-visit:record",
   SEARCH_EXECUTE: "search:execute",
   SEARCH_BENCHMARK_RUN: "search:benchmark:run",
   SEARCH_BENCHMARK_HISTORY: "search:benchmark:history",
@@ -8232,31 +14583,58 @@ function parseAiActionRequest(payload) {
 
 // src/main/appIcon.ts
 init_electron_shim();
-var import_node_child_process3 = require("node:child_process");
+var import_node_child_process4 = require("node:child_process");
 var import_node_crypto2 = require("node:crypto");
-var import_node_fs4 = require("node:fs");
-var import_node_path4 = require("node:path");
-var import_node_util2 = require("node:util");
-var execFileAsync2 = (0, import_node_util2.promisify)(import_node_child_process3.execFile);
+var import_node_fs5 = require("node:fs");
+var import_node_path5 = require("node:path");
+var import_node_util3 = require("node:util");
+var execFileAsync3 = (0, import_node_util3.promisify)(import_node_child_process4.execFile);
 var appIconCache = /* @__PURE__ */ new Map();
 async function appIconDataUrl(appPath) {
   if (appIconCache.has(appPath)) return appIconCache.get(appPath) ?? void 0;
   try {
-    const resourceDir = (0, import_node_path4.join)(appPath, "Contents", "Resources");
-    const iconName = (0, import_node_fs4.readdirSync)(resourceDir).find((entry) => entry.toLowerCase().endsWith(".icns"));
+    const resourceDir = (0, import_node_path5.join)(appPath, "Contents", "Resources");
+    let iconName;
+    try {
+      const { stdout } = await execFileAsync3("/usr/bin/plutil", [
+        "-extract",
+        "CFBundleIconFile",
+        "raw",
+        "-o",
+        "-",
+        (0, import_node_path5.join)(appPath, "Contents", "Info.plist")
+      ]);
+      const configured = stdout.trim();
+      if (configured) iconName = (0, import_node_path5.extname)(configured) ? configured : `${configured}.icns`;
+    } catch {
+    }
+    const resourceEntries = (0, import_node_fs5.readdirSync)(resourceDir);
+    if (!iconName || !(0, import_node_fs5.existsSync)((0, import_node_path5.join)(resourceDir, iconName))) {
+      const appName = (0, import_node_path5.basename)(appPath, ".app").toLowerCase();
+      iconName = resourceEntries.find((entry) => entry.toLowerCase() === `${appName}.icns`) ?? resourceEntries.find((entry) => entry.toLowerCase().endsWith(".icns"));
+    }
     if (!iconName) {
       appIconCache.set(appPath, null);
       return void 0;
     }
-    const iconPath = (0, import_node_path4.join)(resourceDir, iconName);
-    const cacheDir = (0, import_node_path4.join)(app.getPath("userData"), "icon-cache");
-    (0, import_node_fs4.mkdirSync)(cacheDir, { recursive: true });
-    const cacheName = `${(0, import_node_crypto2.createHash)("sha1").update(iconPath).digest("hex")}.png`;
-    const pngPath = (0, import_node_path4.join)(cacheDir, cacheName);
-    if (!(0, import_node_fs4.existsSync)(pngPath)) {
-      await execFileAsync2("/usr/bin/sips", ["-s", "format", "png", iconPath, "--out", pngPath]);
+    const iconPath = (0, import_node_path5.join)(resourceDir, iconName);
+    const cacheDir = (0, import_node_path5.join)(app.getPath("userData"), "icon-cache");
+    (0, import_node_fs5.mkdirSync)(cacheDir, { recursive: true });
+    const cacheName = `${(0, import_node_crypto2.createHash)("sha1").update(iconPath).digest("hex")}-64.png`;
+    const pngPath = (0, import_node_path5.join)(cacheDir, cacheName);
+    if (!(0, import_node_fs5.existsSync)(pngPath)) {
+      await execFileAsync3("/usr/bin/sips", [
+        "-Z",
+        "64",
+        "-s",
+        "format",
+        "png",
+        iconPath,
+        "--out",
+        pngPath
+      ]);
     }
-    const dataUrl = `data:image/png;base64,${(0, import_node_fs4.readFileSync)(pngPath).toString("base64")}`;
+    const dataUrl = `data:image/png;base64,${(0, import_node_fs5.readFileSync)(pngPath).toString("base64")}`;
     appIconCache.set(appPath, dataUrl);
     return dataUrl;
   } catch {
@@ -8265,18 +14643,124 @@ async function appIconDataUrl(appPath) {
   }
 }
 
+// src/main/pathIcons.ts
+init_electron_shim();
+var import_node_child_process5 = require("node:child_process");
+var import_node_crypto3 = require("node:crypto");
+var import_node_fs6 = require("node:fs");
+var import_node_path6 = require("node:path");
+var import_node_util4 = require("node:util");
+var execFileAsync4 = (0, import_node_util4.promisify)(import_node_child_process5.execFile);
+var FILE_ICON_STYLES = {
+  ".c": { label: "C", color: "#6b8dd6" },
+  ".cpp": { label: "C++", color: "#5e74c9" },
+  ".css": { label: "CSS", color: "#4a90e2" },
+  ".go": { label: "GO", color: "#45b8d8" },
+  ".html": { label: "HTML", color: "#e66b3d" },
+  ".java": { label: "JAVA", color: "#d95d54" },
+  ".js": { label: "JS", color: "#e5c441" },
+  ".jsx": { label: "JSX", color: "#5fc9e8" },
+  ".json": { label: "{}", color: "#d2b84c" },
+  ".kt": { label: "KT", color: "#8c6bd1" },
+  ".md": { label: "MD", color: "#778195" },
+  ".pdf": { label: "PDF", color: "#df5b5b" },
+  ".php": { label: "PHP", color: "#777bb3" },
+  ".py": { label: "PY", color: "#4d8fbd" },
+  ".rb": { label: "RB", color: "#c95151" },
+  ".rs": { label: "RS", color: "#c7764d" },
+  ".scss": { label: "SASS", color: "#cc6699" },
+  ".sh": { label: ">_", color: "#58a36b" },
+  ".sql": { label: "SQL", color: "#527fa5" },
+  ".swift": { label: "SW", color: "#ef704f" },
+  ".ts": { label: "TS", color: "#3178c6" },
+  ".tsx": { label: "TSX", color: "#4ba6c8" },
+  ".txt": { label: "TXT", color: "#7d8798" },
+  ".xml": { label: "XML", color: "#d58945" },
+  ".yaml": { label: "YML", color: "#c85a67" },
+  ".yml": { label: "YML", color: "#c85a67" },
+  ".zip": { label: "ZIP", color: "#a78a55" }
+};
+var IMAGE_EXTENSIONS = /* @__PURE__ */ new Set([
+  ".avif",
+  ".bmp",
+  ".gif",
+  ".heic",
+  ".jpeg",
+  ".jpg",
+  ".png",
+  ".svg",
+  ".webp"
+]);
+var ARCHIVE_EXTENSIONS = /* @__PURE__ */ new Set([".7z", ".bz2", ".gz", ".rar", ".tar", ".tgz"]);
+var nativeFileIconCache = /* @__PURE__ */ new Map();
+function svgDataUrl(svg) {
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+function documentSvg(label, color) {
+  const safeLabel = label.replace(/[&<>"']/g, "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path fill="#f5f6f8" d="M13 5h25l13 13v41H13z"/><path fill="#d9dde5" d="M38 5v14h13z"/><rect x="17" y="36" width="30" height="17" rx="4" fill="${color}"/><text x="32" y="48" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="10" font-weight="800" fill="white">${safeLabel}</text></svg>`;
+}
+var folderIconDataUrl = svgDataUrl(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path fill="#62a8ed" d="M5 15a6 6 0 0 1 6-6h15l6 7h21a6 6 0 0 1 6 6v29a6 6 0 0 1-6 6H11a6 6 0 0 1-6-6z"/><path fill="#8bc4f7" d="M5 25h54v26a6 6 0 0 1-6 6H11a6 6 0 0 1-6-6z"/></svg>'
+);
+function fileIconDataUrl(path7) {
+  const extension = (0, import_node_path6.extname)(path7).toLowerCase();
+  const style = FILE_ICON_STYLES[extension];
+  if (style) return svgDataUrl(documentSvg(style.label, style.color));
+  if (IMAGE_EXTENSIONS.has(extension)) return svgDataUrl(documentSvg("IMG", "#8b6fc0"));
+  if (ARCHIVE_EXTENSIONS.has(extension)) return svgDataUrl(documentSvg("ZIP", "#a78a55"));
+  return svgDataUrl(
+    documentSvg(extension ? extension.slice(1, 5).toUpperCase() : "FILE", "#7d8798")
+  );
+}
+function imageFileDataUrl(path7) {
+  if (!(0, import_node_fs6.existsSync)(path7)) return void 0;
+  const mimeType = (0, import_node_path6.extname)(path7).toLowerCase() === ".svg" ? "image/svg+xml" : (0, import_node_path6.extname)(path7).toLowerCase() === ".jpg" || (0, import_node_path6.extname)(path7).toLowerCase() === ".jpeg" ? "image/jpeg" : (0, import_node_path6.extname)(path7).toLowerCase() === ".webp" ? "image/webp" : "image/png";
+  try {
+    return `data:${mimeType};base64,${(0, import_node_fs6.readFileSync)(path7).toString("base64")}`;
+  } catch {
+    return void 0;
+  }
+}
+async function nativeFileIconDataUrl(path7) {
+  if (nativeFileIconCache.has(path7)) return nativeFileIconCache.get(path7) ?? void 0;
+  if (!(0, import_node_fs6.existsSync)(path7)) return void 0;
+  try {
+    const stats = (0, import_node_fs6.statSync)(path7);
+    const cacheKey2 = (0, import_node_crypto3.createHash)("sha1").update(`${path7}:${stats.mtimeMs}:${stats.size}`).digest("hex");
+    const outputDir = (0, import_node_path6.join)(app.getPath("userData"), "icon-cache", "files", cacheKey2);
+    const outputPath = (0, import_node_path6.join)(outputDir, `${(0, import_node_path6.basename)(path7)}.png`);
+    (0, import_node_fs6.mkdirSync)(outputDir, { recursive: true });
+    if (!(0, import_node_fs6.existsSync)(outputPath)) {
+      await execFileAsync4("/usr/bin/qlmanage", ["-t", "-i", "-s", "64", "-o", outputDir, path7], {
+        timeout: 3e3
+      });
+    }
+    if (!(0, import_node_fs6.existsSync)(outputPath)) {
+      nativeFileIconCache.set(path7, null);
+      return void 0;
+    }
+    const dataUrl = `data:image/png;base64,${(0, import_node_fs6.readFileSync)(outputPath).toString("base64")}`;
+    nativeFileIconCache.set(path7, dataUrl);
+    return dataUrl;
+  } catch {
+    nativeFileIconCache.set(path7, null);
+    return void 0;
+  }
+}
+
 // src/main/llm/memoryStore.ts
 init_electron_shim();
-var import_node_fs5 = require("node:fs");
-var import_node_path5 = require("node:path");
+var import_node_fs7 = require("node:fs");
+var import_node_path7 = require("node:path");
 function memoryPath() {
-  const dir = (0, import_node_path5.join)(app.getPath("userData"), "llm");
-  (0, import_node_fs5.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path5.join)(dir, "memory.json");
+  const dir = (0, import_node_path7.join)(app.getPath("userData"), "llm");
+  (0, import_node_fs7.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path7.join)(dir, "memory.json");
 }
 function readDb() {
   try {
-    const raw = (0, import_node_fs5.readFileSync)(memoryPath(), "utf8");
+    const raw = (0, import_node_fs7.readFileSync)(memoryPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.entries)) return { entries: [] };
     return { entries: parsed.entries };
@@ -8285,7 +14769,7 @@ function readDb() {
   }
 }
 function writeDb(db) {
-  (0, import_node_fs5.writeFileSync)(memoryPath(), `${JSON.stringify(db, null, 2)}
+  (0, import_node_fs7.writeFileSync)(memoryPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
 }
 function tokenize(input) {
@@ -8334,7100 +14818,8 @@ function retrieveMemories(query, policy) {
   }).slice(0, policy.maxItems).map((entry) => entry.text);
 }
 
-// src/shared/aiProviders.ts
-var RECOMMENDED_AI_MODEL = {
-  openai: "gpt-4o-mini",
-  deepseek: "deepseek-v4-flash",
-  "openai-compatible": "gpt-4o-mini",
-  gemini: "gemini-2.0-flash",
-  anthropic: "claude-3-5-haiku-20241022",
-  ollama: "llama3.2",
-  copilot: "gpt-4o",
-  opencode: "opencode/big-pickle"
-};
-var DEFAULT_PROVIDER_MODELS = {
-  openai: [
-    { id: "gpt-4o-mini", capabilities: ["vision", "tools"], contextWindow: 128e3 },
-    { id: "gpt-4o", capabilities: ["vision", "tools"], contextWindow: 128e3 },
-    { id: "o3-mini", capabilities: ["thinking", "tools"], contextWindow: 2e5 }
-  ],
-  deepseek: [
-    { id: "deepseek-v4-flash", capabilities: ["tools"], contextWindow: 128e3 },
-    { id: "deepseek-v4-pro", capabilities: ["thinking", "tools"], contextWindow: 128e3 },
-    { id: "deepseek-reasoner", capabilities: ["thinking"], contextWindow: 64e3 }
-  ],
-  "openai-compatible": [
-    { id: "gpt-4o-mini", capabilities: ["vision", "tools"], contextWindow: 128e3 }
-  ],
-  gemini: [
-    { id: "gemini-2.0-flash", capabilities: ["vision", "tools"], contextWindow: 1e6 },
-    { id: "gemini-1.5-pro", capabilities: ["vision", "thinking", "tools"], contextWindow: 2e6 }
-  ],
-  anthropic: [
-    { id: "claude-3-5-haiku-20241022", capabilities: ["vision", "tools"], contextWindow: 2e5 },
-    { id: "claude-3-5-sonnet-20241022", capabilities: ["vision", "thinking", "tools"], contextWindow: 2e5 }
-  ],
-  ollama: [
-    { id: "llama3.2", capabilities: ["tools"], contextWindow: 128e3 },
-    { id: "llava", capabilities: ["vision"], contextWindow: 32e3 }
-  ],
-  copilot: [
-    { id: "gpt-4o", capabilities: ["vision", "tools"], contextWindow: 128e3 },
-    { id: "claude-3.5-sonnet", capabilities: ["thinking", "tools"], contextWindow: 2e5 }
-  ],
-  opencode: [
-    { id: "opencode/big-pickle", capabilities: ["thinking", "tools"], contextWindow: 128e3 }
-  ]
-};
-function isCustomProvider(id) {
-  return id.startsWith("custom:");
-}
-function recommendedModel(provider) {
-  return isCustomProvider(provider) ? "" : RECOMMENDED_AI_MODEL[provider];
-}
-function defaultModels(provider) {
-  return isCustomProvider(provider) ? [] : DEFAULT_PROVIDER_MODELS[provider];
-}
-function inferCapabilities(modelId) {
-  const lower = modelId.toLowerCase();
-  const caps = [];
-  if (/vision|vl|llava|gpt-4o|gemini|claude/.test(lower)) caps.unshift("vision");
-  if (/reason|think|r1|o\d|sonnet|pro|v4-pro|claude|deepseek/.test(lower)) caps.push("thinking");
-  if (!/embed|whisper|tts/.test(lower)) caps.push("tools");
-  return Array.from(new Set(caps));
-}
-function normalizeModelList(models, fallbackId) {
-  const seen = /* @__PURE__ */ new Set();
-  const normalized = models.map((model) => {
-    const next = {
-      id: String(model.id || "").trim(),
-      capabilities: Array.isArray(model.capabilities) ? model.capabilities.filter(
-        (capability) => capability === "vision" || capability === "thinking" || capability === "tools"
-      ) : inferCapabilities(model.id)
-    };
-    if (typeof model.contextWindow === "number" && Number.isFinite(model.contextWindow)) {
-      next.contextWindow = Math.max(0, Math.round(model.contextWindow));
-    }
-    return next;
-  }).filter((model) => {
-    if (!model.id || seen.has(model.id)) return false;
-    seen.add(model.id);
-    return true;
-  });
-  if (fallbackId && !seen.has(fallbackId)) {
-    normalized.unshift({ id: fallbackId, capabilities: inferCapabilities(fallbackId) });
-  }
-  return normalized;
-}
-function normalizeProviderModelList(provider, models) {
-  if (isCustomProvider(provider)) {
-    return normalizeModelList(models, models[0]?.id ?? "");
-  }
-  if (provider === "openai-compatible") {
-    return normalizeModelList(models, RECOMMENDED_AI_MODEL[provider]);
-  }
-  const ownDefaults = new Set(DEFAULT_PROVIDER_MODELS[provider].map((model) => model.id));
-  const otherDefaults = /* @__PURE__ */ new Set();
-  for (const [otherProvider, otherModels] of Object.entries(DEFAULT_PROVIDER_MODELS)) {
-    if (otherProvider === provider) continue;
-    for (const model of otherModels) {
-      otherDefaults.add(model.id);
-    }
-  }
-  return normalizeModelList(
-    models.filter((model) => ownDefaults.has(model.id) || !otherDefaults.has(model.id)),
-    RECOMMENDED_AI_MODEL[provider]
-  );
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/tslib.mjs
-function __classPrivateFieldSet(receiver, state, value, kind, f) {
-  if (kind === "m")
-    throw new TypeError("Private method is not writable");
-  if (kind === "a" && !f)
-    throw new TypeError("Private accessor was defined without a setter");
-  if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
-    throw new TypeError("Cannot write private member to an object whose class did not declare it");
-  return kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value), value;
-}
-function __classPrivateFieldGet(receiver, state, kind, f) {
-  if (kind === "a" && !f)
-    throw new TypeError("Private accessor was defined without a getter");
-  if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
-    throw new TypeError("Cannot read private member from an object whose class did not declare it");
-  return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs
-var uuid4 = function() {
-  const { crypto } = globalThis;
-  if (crypto?.randomUUID) {
-    uuid4 = crypto.randomUUID.bind(crypto);
-    return crypto.randomUUID();
-  }
-  const u8 = new Uint8Array(1);
-  const randomByte = crypto ? () => crypto.getRandomValues(u8)[0] : () => Math.random() * 255 & 255;
-  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (+c ^ randomByte() & 15 >> +c / 4).toString(16));
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/errors.mjs
-function isAbortError(err) {
-  return typeof err === "object" && err !== null && // Spec-compliant fetch implementations
-  ("name" in err && err.name === "AbortError" || // Expo fetch
-  "message" in err && String(err.message).includes("FetchRequestCanceledException"));
-}
-var castToError = (err) => {
-  if (err instanceof Error)
-    return err;
-  if (typeof err === "object" && err !== null) {
-    try {
-      if (Object.prototype.toString.call(err) === "[object Error]") {
-        const error = new Error(err.message, err.cause ? { cause: err.cause } : {});
-        if (err.stack)
-          error.stack = err.stack;
-        if (err.cause && !error.cause)
-          error.cause = err.cause;
-        if (err.name)
-          error.name = err.name;
-        return error;
-      }
-    } catch {
-    }
-    try {
-      return new Error(JSON.stringify(err));
-    } catch {
-    }
-  }
-  return new Error(err);
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/error.mjs
-var AnthropicError = class extends Error {
-};
-var APIError = class _APIError extends AnthropicError {
-  constructor(status, error, message, headers, type) {
-    super(`${_APIError.makeMessage(status, error, message)}`);
-    this.status = status;
-    this.headers = headers;
-    this.requestID = headers?.get("request-id");
-    this.error = error;
-    this.type = type ?? null;
-  }
-  static makeMessage(status, error, message) {
-    const msg = error?.message ? typeof error.message === "string" ? error.message : JSON.stringify(error.message) : error ? JSON.stringify(error) : message;
-    if (status && msg) {
-      return `${status} ${msg}`;
-    }
-    if (status) {
-      return `${status} status code (no body)`;
-    }
-    if (msg) {
-      return msg;
-    }
-    return "(no status code or body)";
-  }
-  static generate(status, errorResponse, message, headers) {
-    if (!status || !headers) {
-      return new APIConnectionError({ message, cause: castToError(errorResponse) });
-    }
-    const error = errorResponse;
-    const type = error?.["error"]?.["type"];
-    if (status === 400) {
-      return new BadRequestError(status, error, message, headers, type);
-    }
-    if (status === 401) {
-      return new AuthenticationError(status, error, message, headers, type);
-    }
-    if (status === 403) {
-      return new PermissionDeniedError(status, error, message, headers, type);
-    }
-    if (status === 404) {
-      return new NotFoundError(status, error, message, headers, type);
-    }
-    if (status === 409) {
-      return new ConflictError(status, error, message, headers, type);
-    }
-    if (status === 422) {
-      return new UnprocessableEntityError(status, error, message, headers, type);
-    }
-    if (status === 429) {
-      return new RateLimitError(status, error, message, headers, type);
-    }
-    if (status >= 500) {
-      return new InternalServerError(status, error, message, headers, type);
-    }
-    return new _APIError(status, error, message, headers, type);
-  }
-};
-var APIUserAbortError = class extends APIError {
-  constructor({ message } = {}) {
-    super(void 0, void 0, message || "Request was aborted.", void 0);
-  }
-};
-var APIConnectionError = class extends APIError {
-  constructor({ message, cause }) {
-    super(void 0, void 0, message || "Connection error.", void 0);
-    if (cause)
-      this.cause = cause;
-  }
-};
-var APIConnectionTimeoutError = class extends APIConnectionError {
-  constructor({ message } = {}) {
-    super({ message: message ?? "Request timed out." });
-  }
-};
-var BadRequestError = class extends APIError {
-};
-var AuthenticationError = class extends APIError {
-};
-var PermissionDeniedError = class extends APIError {
-};
-var NotFoundError = class extends APIError {
-};
-var ConflictError = class extends APIError {
-};
-var UnprocessableEntityError = class extends APIError {
-};
-var RateLimitError = class extends APIError {
-};
-var InternalServerError = class extends APIError {
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs
-var startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
-var isAbsoluteURL = (url) => {
-  return startsWithSchemeRegexp.test(url);
-};
-var isArray = (val) => (isArray = Array.isArray, isArray(val));
-var isReadonlyArray = isArray;
-function maybeObj(x) {
-  if (typeof x !== "object") {
-    return {};
-  }
-  return x ?? {};
-}
-function isEmptyObj(obj) {
-  if (!obj)
-    return true;
-  for (const _k in obj)
-    return false;
-  return true;
-}
-function hasOwn(obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key);
-}
-var validatePositiveInteger = (name, n) => {
-  if (typeof n !== "number" || !Number.isInteger(n)) {
-    throw new AnthropicError(`${name} must be an integer`);
-  }
-  if (n < 0) {
-    throw new AnthropicError(`${name} must be a positive integer`);
-  }
-  return n;
-};
-var safeJSON = (text) => {
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    return void 0;
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs
-var sleep = (ms) => new Promise((resolve4) => setTimeout(resolve4, ms));
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/version.mjs
-var VERSION = "0.90.0";
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
-var isRunningInBrowser = () => {
-  return (
-    // @ts-ignore
-    typeof window !== "undefined" && // @ts-ignore
-    typeof window.document !== "undefined" && // @ts-ignore
-    typeof navigator !== "undefined"
-  );
-};
-function getDetectedPlatform() {
-  if (typeof Deno !== "undefined" && Deno.build != null) {
-    return "deno";
-  }
-  if (typeof EdgeRuntime !== "undefined") {
-    return "edge";
-  }
-  if (Object.prototype.toString.call(typeof globalThis.process !== "undefined" ? globalThis.process : 0) === "[object process]") {
-    return "node";
-  }
-  return "unknown";
-}
-var getPlatformProperties = () => {
-  const detectedPlatform = getDetectedPlatform();
-  if (detectedPlatform === "deno") {
-    return {
-      "X-Stainless-Lang": "js",
-      "X-Stainless-Package-Version": VERSION,
-      "X-Stainless-OS": normalizePlatform(Deno.build.os),
-      "X-Stainless-Arch": normalizeArch(Deno.build.arch),
-      "X-Stainless-Runtime": "deno",
-      "X-Stainless-Runtime-Version": typeof Deno.version === "string" ? Deno.version : Deno.version?.deno ?? "unknown"
-    };
-  }
-  if (typeof EdgeRuntime !== "undefined") {
-    return {
-      "X-Stainless-Lang": "js",
-      "X-Stainless-Package-Version": VERSION,
-      "X-Stainless-OS": "Unknown",
-      "X-Stainless-Arch": `other:${EdgeRuntime}`,
-      "X-Stainless-Runtime": "edge",
-      "X-Stainless-Runtime-Version": globalThis.process.version
-    };
-  }
-  if (detectedPlatform === "node") {
-    return {
-      "X-Stainless-Lang": "js",
-      "X-Stainless-Package-Version": VERSION,
-      "X-Stainless-OS": normalizePlatform(globalThis.process.platform ?? "unknown"),
-      "X-Stainless-Arch": normalizeArch(globalThis.process.arch ?? "unknown"),
-      "X-Stainless-Runtime": "node",
-      "X-Stainless-Runtime-Version": globalThis.process.version ?? "unknown"
-    };
-  }
-  const browserInfo = getBrowserInfo();
-  if (browserInfo) {
-    return {
-      "X-Stainless-Lang": "js",
-      "X-Stainless-Package-Version": VERSION,
-      "X-Stainless-OS": "Unknown",
-      "X-Stainless-Arch": "unknown",
-      "X-Stainless-Runtime": `browser:${browserInfo.browser}`,
-      "X-Stainless-Runtime-Version": browserInfo.version
-    };
-  }
-  return {
-    "X-Stainless-Lang": "js",
-    "X-Stainless-Package-Version": VERSION,
-    "X-Stainless-OS": "Unknown",
-    "X-Stainless-Arch": "unknown",
-    "X-Stainless-Runtime": "unknown",
-    "X-Stainless-Runtime-Version": "unknown"
-  };
-};
-function getBrowserInfo() {
-  if (typeof navigator === "undefined" || !navigator) {
-    return null;
-  }
-  const browserPatterns = [
-    { key: "edge", pattern: /Edge(?:\W+(\d+)\.(\d+)(?:\.(\d+))?)?/ },
-    { key: "ie", pattern: /MSIE(?:\W+(\d+)\.(\d+)(?:\.(\d+))?)?/ },
-    { key: "ie", pattern: /Trident(?:.*rv\:(\d+)\.(\d+)(?:\.(\d+))?)?/ },
-    { key: "chrome", pattern: /Chrome(?:\W+(\d+)\.(\d+)(?:\.(\d+))?)?/ },
-    { key: "firefox", pattern: /Firefox(?:\W+(\d+)\.(\d+)(?:\.(\d+))?)?/ },
-    { key: "safari", pattern: /(?:Version\W+(\d+)\.(\d+)(?:\.(\d+))?)?(?:\W+Mobile\S*)?\W+Safari/ }
-  ];
-  for (const { key, pattern } of browserPatterns) {
-    const match = pattern.exec(navigator.userAgent);
-    if (match) {
-      const major = match[1] || 0;
-      const minor = match[2] || 0;
-      const patch = match[3] || 0;
-      return { browser: key, version: `${major}.${minor}.${patch}` };
-    }
-  }
-  return null;
-}
-var normalizeArch = (arch) => {
-  if (arch === "x32")
-    return "x32";
-  if (arch === "x86_64" || arch === "x64")
-    return "x64";
-  if (arch === "arm")
-    return "arm";
-  if (arch === "aarch64" || arch === "arm64")
-    return "arm64";
-  if (arch)
-    return `other:${arch}`;
-  return "unknown";
-};
-var normalizePlatform = (platform) => {
-  platform = platform.toLowerCase();
-  if (platform.includes("ios"))
-    return "iOS";
-  if (platform === "android")
-    return "Android";
-  if (platform === "darwin")
-    return "MacOS";
-  if (platform === "win32")
-    return "Windows";
-  if (platform === "freebsd")
-    return "FreeBSD";
-  if (platform === "openbsd")
-    return "OpenBSD";
-  if (platform === "linux")
-    return "Linux";
-  if (platform)
-    return `Other:${platform}`;
-  return "Unknown";
-};
-var _platformHeaders;
-var getPlatformHeaders = () => {
-  return _platformHeaders ?? (_platformHeaders = getPlatformProperties());
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/shims.mjs
-function getDefaultFetch() {
-  if (typeof fetch !== "undefined") {
-    return fetch;
-  }
-  throw new Error("`fetch` is not defined as a global; Either pass `fetch` to the client, `new Anthropic({ fetch })` or polyfill the global, `globalThis.fetch = fetch`");
-}
-function makeReadableStream(...args) {
-  const ReadableStream = globalThis.ReadableStream;
-  if (typeof ReadableStream === "undefined") {
-    throw new Error("`ReadableStream` is not defined as a global; You will need to polyfill it, `globalThis.ReadableStream = ReadableStream`");
-  }
-  return new ReadableStream(...args);
-}
-function ReadableStreamFrom(iterable) {
-  let iter = Symbol.asyncIterator in iterable ? iterable[Symbol.asyncIterator]() : iterable[Symbol.iterator]();
-  return makeReadableStream({
-    start() {
-    },
-    async pull(controller) {
-      const { done, value } = await iter.next();
-      if (done) {
-        controller.close();
-      } else {
-        controller.enqueue(value);
-      }
-    },
-    async cancel() {
-      await iter.return?.();
-    }
-  });
-}
-function ReadableStreamToAsyncIterable(stream) {
-  if (stream[Symbol.asyncIterator])
-    return stream;
-  const reader = stream.getReader();
-  return {
-    async next() {
-      try {
-        const result = await reader.read();
-        if (result?.done)
-          reader.releaseLock();
-        return result;
-      } catch (e) {
-        reader.releaseLock();
-        throw e;
-      }
-    },
-    async return() {
-      const cancelPromise = reader.cancel();
-      reader.releaseLock();
-      await cancelPromise;
-      return { done: true, value: void 0 };
-    },
-    [Symbol.asyncIterator]() {
-      return this;
-    }
-  };
-}
-async function CancelReadableStream(stream) {
-  if (stream === null || typeof stream !== "object")
-    return;
-  if (stream[Symbol.asyncIterator]) {
-    await stream[Symbol.asyncIterator]().return?.();
-    return;
-  }
-  const reader = stream.getReader();
-  const cancelPromise = reader.cancel();
-  reader.releaseLock();
-  await cancelPromise;
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/request-options.mjs
-var FallbackEncoder = ({ headers, body }) => {
-  return {
-    bodyHeaders: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify(body)
-  };
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs
-function stringifyQuery(query) {
-  return Object.entries(query).filter(([_, value]) => typeof value !== "undefined").map(([key, value]) => {
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-      return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
-    }
-    if (value === null) {
-      return `${encodeURIComponent(key)}=`;
-    }
-    throw new AnthropicError(`Cannot stringify type ${typeof value}; Expected string, number, boolean, or null. If you need to pass nested query parameters, you can manually encode them, e.g. { query: { 'foo[key1]': value1, 'foo[key2]': value2 } }, and please open a GitHub issue requesting better support for your use case.`);
-  }).join("&");
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs
-function concatBytes(buffers) {
-  let length = 0;
-  for (const buffer of buffers) {
-    length += buffer.length;
-  }
-  const output = new Uint8Array(length);
-  let index = 0;
-  for (const buffer of buffers) {
-    output.set(buffer, index);
-    index += buffer.length;
-  }
-  return output;
-}
-var encodeUTF8_;
-function encodeUTF8(str2) {
-  let encoder;
-  return (encodeUTF8_ ?? (encoder = new globalThis.TextEncoder(), encodeUTF8_ = encoder.encode.bind(encoder)))(str2);
-}
-var decodeUTF8_;
-function decodeUTF8(bytes) {
-  let decoder;
-  return (decodeUTF8_ ?? (decoder = new globalThis.TextDecoder(), decodeUTF8_ = decoder.decode.bind(decoder)))(bytes);
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs
-var _LineDecoder_buffer;
-var _LineDecoder_carriageReturnIndex;
-var LineDecoder = class {
-  constructor() {
-    _LineDecoder_buffer.set(this, void 0);
-    _LineDecoder_carriageReturnIndex.set(this, void 0);
-    __classPrivateFieldSet(this, _LineDecoder_buffer, new Uint8Array(), "f");
-    __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, null, "f");
-  }
-  decode(chunk) {
-    if (chunk == null) {
-      return [];
-    }
-    const binaryChunk = chunk instanceof ArrayBuffer ? new Uint8Array(chunk) : typeof chunk === "string" ? encodeUTF8(chunk) : chunk;
-    __classPrivateFieldSet(this, _LineDecoder_buffer, concatBytes([__classPrivateFieldGet(this, _LineDecoder_buffer, "f"), binaryChunk]), "f");
-    const lines = [];
-    let patternIndex;
-    while ((patternIndex = findNewlineIndex(__classPrivateFieldGet(this, _LineDecoder_buffer, "f"), __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f"))) != null) {
-      if (patternIndex.carriage && __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") == null) {
-        __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, patternIndex.index, "f");
-        continue;
-      }
-      if (__classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") != null && (patternIndex.index !== __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") + 1 || patternIndex.carriage)) {
-        lines.push(decodeUTF8(__classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(0, __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") - 1)));
-        __classPrivateFieldSet(this, _LineDecoder_buffer, __classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(__classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f")), "f");
-        __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, null, "f");
-        continue;
-      }
-      const endIndex = __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") !== null ? patternIndex.preceding - 1 : patternIndex.preceding;
-      const line = decodeUTF8(__classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(0, endIndex));
-      lines.push(line);
-      __classPrivateFieldSet(this, _LineDecoder_buffer, __classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(patternIndex.index), "f");
-      __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, null, "f");
-    }
-    return lines;
-  }
-  flush() {
-    if (!__classPrivateFieldGet(this, _LineDecoder_buffer, "f").length) {
-      return [];
-    }
-    return this.decode("\n");
-  }
-};
-_LineDecoder_buffer = /* @__PURE__ */ new WeakMap(), _LineDecoder_carriageReturnIndex = /* @__PURE__ */ new WeakMap();
-LineDecoder.NEWLINE_CHARS = /* @__PURE__ */ new Set(["\n", "\r"]);
-LineDecoder.NEWLINE_REGEXP = /\r\n|[\n\r]/g;
-function findNewlineIndex(buffer, startIndex) {
-  const newline = 10;
-  const carriage = 13;
-  for (let i = startIndex ?? 0; i < buffer.length; i++) {
-    if (buffer[i] === newline) {
-      return { preceding: i, index: i + 1, carriage: false };
-    }
-    if (buffer[i] === carriage) {
-      return { preceding: i, index: i + 1, carriage: true };
-    }
-  }
-  return null;
-}
-function findDoubleNewlineIndex(buffer) {
-  const newline = 10;
-  const carriage = 13;
-  for (let i = 0; i < buffer.length - 1; i++) {
-    if (buffer[i] === newline && buffer[i + 1] === newline) {
-      return i + 2;
-    }
-    if (buffer[i] === carriage && buffer[i + 1] === carriage) {
-      return i + 2;
-    }
-    if (buffer[i] === carriage && buffer[i + 1] === newline && i + 3 < buffer.length && buffer[i + 2] === carriage && buffer[i + 3] === newline) {
-      return i + 4;
-    }
-  }
-  return -1;
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs
-var levelNumbers = {
-  off: 0,
-  error: 200,
-  warn: 300,
-  info: 400,
-  debug: 500
-};
-var parseLogLevel = (maybeLevel, sourceName, client) => {
-  if (!maybeLevel) {
-    return void 0;
-  }
-  if (hasOwn(levelNumbers, maybeLevel)) {
-    return maybeLevel;
-  }
-  loggerFor(client).warn(`${sourceName} was set to ${JSON.stringify(maybeLevel)}, expected one of ${JSON.stringify(Object.keys(levelNumbers))}`);
-  return void 0;
-};
-function noop() {
-}
-function makeLogFn(fnLevel, logger, logLevel) {
-  if (!logger || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
-    return noop;
-  } else {
-    return logger[fnLevel].bind(logger);
-  }
-}
-var noopLogger = {
-  error: noop,
-  warn: noop,
-  info: noop,
-  debug: noop
-};
-var cachedLoggers = /* @__PURE__ */ new WeakMap();
-function loggerFor(client) {
-  const logger = client.logger;
-  const logLevel = client.logLevel ?? "off";
-  if (!logger) {
-    return noopLogger;
-  }
-  const cachedLogger = cachedLoggers.get(logger);
-  if (cachedLogger && cachedLogger[0] === logLevel) {
-    return cachedLogger[1];
-  }
-  const levelLogger = {
-    error: makeLogFn("error", logger, logLevel),
-    warn: makeLogFn("warn", logger, logLevel),
-    info: makeLogFn("info", logger, logLevel),
-    debug: makeLogFn("debug", logger, logLevel)
-  };
-  cachedLoggers.set(logger, [logLevel, levelLogger]);
-  return levelLogger;
-}
-var formatRequestDetails = (details) => {
-  if (details.options) {
-    details.options = { ...details.options };
-    delete details.options["headers"];
-  }
-  if (details.headers) {
-    details.headers = Object.fromEntries((details.headers instanceof Headers ? [...details.headers] : Object.entries(details.headers)).map(([name, value]) => [
-      name,
-      name.toLowerCase() === "x-api-key" || name.toLowerCase() === "authorization" || name.toLowerCase() === "cookie" || name.toLowerCase() === "set-cookie" ? "***" : value
-    ]));
-  }
-  if ("retryOfRequestLogID" in details) {
-    if (details.retryOfRequestLogID) {
-      details.retryOf = details.retryOfRequestLogID;
-    }
-    delete details.retryOfRequestLogID;
-  }
-  return details;
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/streaming.mjs
-var _Stream_client;
-var Stream = class _Stream {
-  constructor(iterator, controller, client) {
-    this.iterator = iterator;
-    _Stream_client.set(this, void 0);
-    this.controller = controller;
-    __classPrivateFieldSet(this, _Stream_client, client, "f");
-  }
-  static fromSSEResponse(response, controller, client) {
-    let consumed = false;
-    const logger = client ? loggerFor(client) : console;
-    async function* iterator() {
-      if (consumed) {
-        throw new AnthropicError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
-      }
-      consumed = true;
-      let done = false;
-      try {
-        for await (const sse of _iterSSEMessages(response, controller)) {
-          if (sse.event === "completion") {
-            try {
-              yield JSON.parse(sse.data);
-            } catch (e) {
-              logger.error(`Could not parse message into JSON:`, sse.data);
-              logger.error(`From chunk:`, sse.raw);
-              throw e;
-            }
-          }
-          if (sse.event === "message_start" || sse.event === "message_delta" || sse.event === "message_stop" || sse.event === "content_block_start" || sse.event === "content_block_delta" || sse.event === "content_block_stop" || sse.event === "message" || sse.event === "user.message" || sse.event === "user.interrupt" || sse.event === "user.tool_confirmation" || sse.event === "user.custom_tool_result" || sse.event === "agent.message" || sse.event === "agent.thinking" || sse.event === "agent.tool_use" || sse.event === "agent.tool_result" || sse.event === "agent.mcp_tool_use" || sse.event === "agent.mcp_tool_result" || sse.event === "agent.custom_tool_use" || sse.event === "agent.thread_context_compacted" || sse.event === "session.status_running" || sse.event === "session.status_idle" || sse.event === "session.status_rescheduled" || sse.event === "session.status_terminated" || sse.event === "session.error" || sse.event === "session.deleted" || sse.event === "span.model_request_start" || sse.event === "span.model_request_end") {
-            try {
-              yield JSON.parse(sse.data);
-            } catch (e) {
-              logger.error(`Could not parse message into JSON:`, sse.data);
-              logger.error(`From chunk:`, sse.raw);
-              throw e;
-            }
-          }
-          if (sse.event === "ping") {
-            continue;
-          }
-          if (sse.event === "error") {
-            const body = safeJSON(sse.data) ?? sse.data;
-            const type = body?.error?.type;
-            throw new APIError(void 0, body, void 0, response.headers, type);
-          }
-        }
-        done = true;
-      } catch (e) {
-        if (isAbortError(e))
-          return;
-        throw e;
-      } finally {
-        if (!done)
-          controller.abort();
-      }
-    }
-    return new _Stream(iterator, controller, client);
-  }
-  /**
-   * Generates a Stream from a newline-separated ReadableStream
-   * where each item is a JSON value.
-   */
-  static fromReadableStream(readableStream, controller, client) {
-    let consumed = false;
-    async function* iterLines() {
-      const lineDecoder = new LineDecoder();
-      const iter = ReadableStreamToAsyncIterable(readableStream);
-      for await (const chunk of iter) {
-        for (const line of lineDecoder.decode(chunk)) {
-          yield line;
-        }
-      }
-      for (const line of lineDecoder.flush()) {
-        yield line;
-      }
-    }
-    async function* iterator() {
-      if (consumed) {
-        throw new AnthropicError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
-      }
-      consumed = true;
-      let done = false;
-      try {
-        for await (const line of iterLines()) {
-          if (done)
-            continue;
-          if (line)
-            yield JSON.parse(line);
-        }
-        done = true;
-      } catch (e) {
-        if (isAbortError(e))
-          return;
-        throw e;
-      } finally {
-        if (!done)
-          controller.abort();
-      }
-    }
-    return new _Stream(iterator, controller, client);
-  }
-  [(_Stream_client = /* @__PURE__ */ new WeakMap(), Symbol.asyncIterator)]() {
-    return this.iterator();
-  }
-  /**
-   * Splits the stream into two streams which can be
-   * independently read from at different speeds.
-   */
-  tee() {
-    const left = [];
-    const right = [];
-    const iterator = this.iterator();
-    const teeIterator = (queue) => {
-      return {
-        next: () => {
-          if (queue.length === 0) {
-            const result = iterator.next();
-            left.push(result);
-            right.push(result);
-          }
-          return queue.shift();
-        }
-      };
-    };
-    return [
-      new _Stream(() => teeIterator(left), this.controller, __classPrivateFieldGet(this, _Stream_client, "f")),
-      new _Stream(() => teeIterator(right), this.controller, __classPrivateFieldGet(this, _Stream_client, "f"))
-    ];
-  }
-  /**
-   * Converts this stream to a newline-separated ReadableStream of
-   * JSON stringified values in the stream
-   * which can be turned back into a Stream with `Stream.fromReadableStream()`.
-   */
-  toReadableStream() {
-    const self = this;
-    let iter;
-    return makeReadableStream({
-      async start() {
-        iter = self[Symbol.asyncIterator]();
-      },
-      async pull(ctrl) {
-        try {
-          const { value, done } = await iter.next();
-          if (done)
-            return ctrl.close();
-          const bytes = encodeUTF8(JSON.stringify(value) + "\n");
-          ctrl.enqueue(bytes);
-        } catch (err) {
-          ctrl.error(err);
-        }
-      },
-      async cancel() {
-        await iter.return?.();
-      }
-    });
-  }
-};
-async function* _iterSSEMessages(response, controller) {
-  if (!response.body) {
-    controller.abort();
-    if (typeof globalThis.navigator !== "undefined" && globalThis.navigator.product === "ReactNative") {
-      throw new AnthropicError(`The default react-native fetch implementation does not support streaming. Please use expo/fetch: https://docs.expo.dev/versions/latest/sdk/expo/#expofetch-api`);
-    }
-    throw new AnthropicError(`Attempted to iterate over a response with no body`);
-  }
-  const sseDecoder = new SSEDecoder();
-  const lineDecoder = new LineDecoder();
-  const iter = ReadableStreamToAsyncIterable(response.body);
-  for await (const sseChunk of iterSSEChunks(iter)) {
-    for (const line of lineDecoder.decode(sseChunk)) {
-      const sse = sseDecoder.decode(line);
-      if (sse)
-        yield sse;
-    }
-  }
-  for (const line of lineDecoder.flush()) {
-    const sse = sseDecoder.decode(line);
-    if (sse)
-      yield sse;
-  }
-}
-async function* iterSSEChunks(iterator) {
-  let data = new Uint8Array();
-  for await (const chunk of iterator) {
-    if (chunk == null) {
-      continue;
-    }
-    const binaryChunk = chunk instanceof ArrayBuffer ? new Uint8Array(chunk) : typeof chunk === "string" ? encodeUTF8(chunk) : chunk;
-    let newData = new Uint8Array(data.length + binaryChunk.length);
-    newData.set(data);
-    newData.set(binaryChunk, data.length);
-    data = newData;
-    let patternIndex;
-    while ((patternIndex = findDoubleNewlineIndex(data)) !== -1) {
-      yield data.slice(0, patternIndex);
-      data = data.slice(patternIndex);
-    }
-  }
-  if (data.length > 0) {
-    yield data;
-  }
-}
-var SSEDecoder = class {
-  constructor() {
-    this.event = null;
-    this.data = [];
-    this.chunks = [];
-  }
-  decode(line) {
-    if (line.endsWith("\r")) {
-      line = line.substring(0, line.length - 1);
-    }
-    if (!line) {
-      if (!this.event && !this.data.length)
-        return null;
-      const sse = {
-        event: this.event,
-        data: this.data.join("\n"),
-        raw: this.chunks
-      };
-      this.event = null;
-      this.data = [];
-      this.chunks = [];
-      return sse;
-    }
-    this.chunks.push(line);
-    if (line.startsWith(":")) {
-      return null;
-    }
-    let [fieldname, _, value] = partition(line, ":");
-    if (value.startsWith(" ")) {
-      value = value.substring(1);
-    }
-    if (fieldname === "event") {
-      this.event = value;
-    } else if (fieldname === "data") {
-      this.data.push(value);
-    }
-    return null;
-  }
-};
-function partition(str2, delimiter2) {
-  const index = str2.indexOf(delimiter2);
-  if (index !== -1) {
-    return [str2.substring(0, index), delimiter2, str2.substring(index + delimiter2.length)];
-  }
-  return [str2, "", ""];
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/parse.mjs
-async function defaultParseResponse(client, props) {
-  const { response, requestLogID, retryOfRequestLogID, startTime } = props;
-  const body = await (async () => {
-    if (props.options.stream) {
-      loggerFor(client).debug("response", response.status, response.url, response.headers, response.body);
-      if (props.options.__streamClass) {
-        return props.options.__streamClass.fromSSEResponse(response, props.controller);
-      }
-      return Stream.fromSSEResponse(response, props.controller);
-    }
-    if (response.status === 204) {
-      return null;
-    }
-    if (props.options.__binaryResponse) {
-      return response;
-    }
-    const contentType = response.headers.get("content-type");
-    const mediaType = contentType?.split(";")[0]?.trim();
-    const isJSON = mediaType?.includes("application/json") || mediaType?.endsWith("+json");
-    if (isJSON) {
-      const contentLength = response.headers.get("content-length");
-      if (contentLength === "0") {
-        return void 0;
-      }
-      const json = await response.json();
-      return addRequestID(json, response);
-    }
-    const text = await response.text();
-    return text;
-  })();
-  loggerFor(client).debug(`[${requestLogID}] response parsed`, formatRequestDetails({
-    retryOfRequestLogID,
-    url: response.url,
-    status: response.status,
-    body,
-    durationMs: Date.now() - startTime
-  }));
-  return body;
-}
-function addRequestID(value, response) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return value;
-  }
-  return Object.defineProperty(value, "_request_id", {
-    value: response.headers.get("request-id"),
-    enumerable: false
-  });
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/api-promise.mjs
-var _APIPromise_client;
-var APIPromise = class _APIPromise extends Promise {
-  constructor(client, responsePromise, parseResponse = defaultParseResponse) {
-    super((resolve4) => {
-      resolve4(null);
-    });
-    this.responsePromise = responsePromise;
-    this.parseResponse = parseResponse;
-    _APIPromise_client.set(this, void 0);
-    __classPrivateFieldSet(this, _APIPromise_client, client, "f");
-  }
-  _thenUnwrap(transform) {
-    return new _APIPromise(__classPrivateFieldGet(this, _APIPromise_client, "f"), this.responsePromise, async (client, props) => addRequestID(transform(await this.parseResponse(client, props), props), props.response));
-  }
-  /**
-   * Gets the raw `Response` instance instead of parsing the response
-   * data.
-   *
-   * If you want to parse the response body but still get the `Response`
-   * instance, you can use {@link withResponse()}.
-   *
-   * 👋 Getting the wrong TypeScript type for `Response`?
-   * Try setting `"moduleResolution": "NodeNext"` or add `"lib": ["DOM"]`
-   * to your `tsconfig.json`.
-   */
-  asResponse() {
-    return this.responsePromise.then((p) => p.response);
-  }
-  /**
-   * Gets the parsed response data, the raw `Response` instance and the ID of the request,
-   * returned via the `request-id` header which is useful for debugging requests and resporting
-   * issues to Anthropic.
-   *
-   * If you just want to get the raw `Response` instance without parsing it,
-   * you can use {@link asResponse()}.
-   *
-   * 👋 Getting the wrong TypeScript type for `Response`?
-   * Try setting `"moduleResolution": "NodeNext"` or add `"lib": ["DOM"]`
-   * to your `tsconfig.json`.
-   */
-  async withResponse() {
-    const [data, response] = await Promise.all([this.parse(), this.asResponse()]);
-    return { data, response, request_id: response.headers.get("request-id") };
-  }
-  parse() {
-    if (!this.parsedPromise) {
-      this.parsedPromise = this.responsePromise.then((data) => this.parseResponse(__classPrivateFieldGet(this, _APIPromise_client, "f"), data));
-    }
-    return this.parsedPromise;
-  }
-  then(onfulfilled, onrejected) {
-    return this.parse().then(onfulfilled, onrejected);
-  }
-  catch(onrejected) {
-    return this.parse().catch(onrejected);
-  }
-  finally(onfinally) {
-    return this.parse().finally(onfinally);
-  }
-};
-_APIPromise_client = /* @__PURE__ */ new WeakMap();
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/pagination.mjs
-var _AbstractPage_client;
-var AbstractPage = class {
-  constructor(client, response, body, options) {
-    _AbstractPage_client.set(this, void 0);
-    __classPrivateFieldSet(this, _AbstractPage_client, client, "f");
-    this.options = options;
-    this.response = response;
-    this.body = body;
-  }
-  hasNextPage() {
-    const items = this.getPaginatedItems();
-    if (!items.length)
-      return false;
-    return this.nextPageRequestOptions() != null;
-  }
-  async getNextPage() {
-    const nextOptions = this.nextPageRequestOptions();
-    if (!nextOptions) {
-      throw new AnthropicError("No next page expected; please check `.hasNextPage()` before calling `.getNextPage()`.");
-    }
-    return await __classPrivateFieldGet(this, _AbstractPage_client, "f").requestAPIList(this.constructor, nextOptions);
-  }
-  async *iterPages() {
-    let page = this;
-    yield page;
-    while (page.hasNextPage()) {
-      page = await page.getNextPage();
-      yield page;
-    }
-  }
-  async *[(_AbstractPage_client = /* @__PURE__ */ new WeakMap(), Symbol.asyncIterator)]() {
-    for await (const page of this.iterPages()) {
-      for (const item of page.getPaginatedItems()) {
-        yield item;
-      }
-    }
-  }
-};
-var PagePromise = class extends APIPromise {
-  constructor(client, request, Page2) {
-    super(client, request, async (client2, props) => new Page2(client2, props.response, await defaultParseResponse(client2, props), props.options));
-  }
-  /**
-   * Allow auto-paginating iteration on an unawaited list call, eg:
-   *
-   *    for await (const item of client.items.list()) {
-   *      console.log(item)
-   *    }
-   */
-  async *[Symbol.asyncIterator]() {
-    const page = await this;
-    for await (const item of page) {
-      yield item;
-    }
-  }
-};
-var Page = class extends AbstractPage {
-  constructor(client, response, body, options) {
-    super(client, response, body, options);
-    this.data = body.data || [];
-    this.has_more = body.has_more || false;
-    this.first_id = body.first_id || null;
-    this.last_id = body.last_id || null;
-  }
-  getPaginatedItems() {
-    return this.data ?? [];
-  }
-  hasNextPage() {
-    if (this.has_more === false) {
-      return false;
-    }
-    return super.hasNextPage();
-  }
-  nextPageRequestOptions() {
-    if (this.options.query?.["before_id"]) {
-      const first_id = this.first_id;
-      if (!first_id) {
-        return null;
-      }
-      return {
-        ...this.options,
-        query: {
-          ...maybeObj(this.options.query),
-          before_id: first_id
-        }
-      };
-    }
-    const cursor = this.last_id;
-    if (!cursor) {
-      return null;
-    }
-    return {
-      ...this.options,
-      query: {
-        ...maybeObj(this.options.query),
-        after_id: cursor
-      }
-    };
-  }
-};
-var PageCursor = class extends AbstractPage {
-  constructor(client, response, body, options) {
-    super(client, response, body, options);
-    this.data = body.data || [];
-    this.next_page = body.next_page || null;
-  }
-  getPaginatedItems() {
-    return this.data ?? [];
-  }
-  nextPageRequestOptions() {
-    const cursor = this.next_page;
-    if (!cursor) {
-      return null;
-    }
-    return {
-      ...this.options,
-      query: {
-        ...maybeObj(this.options.query),
-        page: cursor
-      }
-    };
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/uploads.mjs
-var checkFileSupport = () => {
-  if (typeof File === "undefined") {
-    const { process: process2 } = globalThis;
-    const isOldNode = typeof process2?.versions?.node === "string" && parseInt(process2.versions.node.split(".")) < 20;
-    throw new Error("`File` is not defined as a global, which is required for file uploads." + (isOldNode ? " Update to Node 20 LTS or newer, or set `globalThis.File` to `import('node:buffer').File`." : ""));
-  }
-};
-function makeFile(fileBits, fileName, options) {
-  checkFileSupport();
-  return new File(fileBits, fileName ?? "unknown_file", options);
-}
-function getName(value, stripPath) {
-  const val = typeof value === "object" && value !== null && ("name" in value && value.name && String(value.name) || "url" in value && value.url && String(value.url) || "filename" in value && value.filename && String(value.filename) || "path" in value && value.path && String(value.path)) || "";
-  return stripPath ? val.split(/[\\/]/).pop() || void 0 : val;
-}
-var isAsyncIterable = (value) => value != null && typeof value === "object" && typeof value[Symbol.asyncIterator] === "function";
-var multipartFormRequestOptions = async (opts, fetch2, stripFilenames = true) => {
-  return { ...opts, body: await createForm(opts.body, fetch2, stripFilenames) };
-};
-var supportsFormDataMap = /* @__PURE__ */ new WeakMap();
-function supportsFormData(fetchObject) {
-  const fetch2 = typeof fetchObject === "function" ? fetchObject : fetchObject.fetch;
-  const cached = supportsFormDataMap.get(fetch2);
-  if (cached)
-    return cached;
-  const promise = (async () => {
-    try {
-      const FetchResponse = "Response" in fetch2 ? fetch2.Response : (await fetch2("data:,")).constructor;
-      const data = new FormData();
-      if (data.toString() === await new FetchResponse(data).text()) {
-        return false;
-      }
-      return true;
-    } catch {
-      return true;
-    }
-  })();
-  supportsFormDataMap.set(fetch2, promise);
-  return promise;
-}
-var createForm = async (body, fetch2, stripFilenames = true) => {
-  if (!await supportsFormData(fetch2)) {
-    throw new TypeError("The provided fetch function does not support file uploads with the current global FormData class.");
-  }
-  const form = new FormData();
-  await Promise.all(Object.entries(body || {}).map(([key, value]) => addFormValue(form, key, value, stripFilenames)));
-  return form;
-};
-var isNamedBlob = (value) => value instanceof Blob && "name" in value;
-var addFormValue = async (form, key, value, stripFilenames) => {
-  if (value === void 0)
-    return;
-  if (value == null) {
-    throw new TypeError(`Received null for "${key}"; to pass null in FormData, you must use the string 'null'`);
-  }
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    form.append(key, String(value));
-  } else if (value instanceof Response) {
-    let options = {};
-    const contentType = value.headers.get("Content-Type");
-    if (contentType) {
-      options = { type: contentType };
-    }
-    form.append(key, makeFile([await value.blob()], getName(value, stripFilenames), options));
-  } else if (isAsyncIterable(value)) {
-    form.append(key, makeFile([await new Response(ReadableStreamFrom(value)).blob()], getName(value, stripFilenames)));
-  } else if (isNamedBlob(value)) {
-    form.append(key, makeFile([value], getName(value, stripFilenames), { type: value.type }));
-  } else if (Array.isArray(value)) {
-    await Promise.all(value.map((entry) => addFormValue(form, key + "[]", entry, stripFilenames)));
-  } else if (typeof value === "object") {
-    await Promise.all(Object.entries(value).map(([name, prop]) => addFormValue(form, `${key}[${name}]`, prop, stripFilenames)));
-  } else {
-    throw new TypeError(`Invalid value given to form, expected a string, number, boolean, object, Array, File or Blob but got ${value} instead`);
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/to-file.mjs
-var isBlobLike = (value) => value != null && typeof value === "object" && typeof value.size === "number" && typeof value.type === "string" && typeof value.text === "function" && typeof value.slice === "function" && typeof value.arrayBuffer === "function";
-var isFileLike = (value) => value != null && typeof value === "object" && typeof value.name === "string" && typeof value.lastModified === "number" && isBlobLike(value);
-var isResponseLike = (value) => value != null && typeof value === "object" && typeof value.url === "string" && typeof value.blob === "function";
-async function toFile(value, name, options) {
-  checkFileSupport();
-  value = await value;
-  name || (name = getName(value, true));
-  if (isFileLike(value)) {
-    if (value instanceof File && name == null && options == null) {
-      return value;
-    }
-    return makeFile([await value.arrayBuffer()], name ?? value.name, {
-      type: value.type,
-      lastModified: value.lastModified,
-      ...options
-    });
-  }
-  if (isResponseLike(value)) {
-    const blob = await value.blob();
-    name || (name = new URL(value.url).pathname.split(/[\\/]/).pop());
-    return makeFile(await getBytes(blob), name, options);
-  }
-  const parts = await getBytes(value);
-  if (!options?.type) {
-    const type = parts.find((part) => typeof part === "object" && "type" in part && part.type);
-    if (typeof type === "string") {
-      options = { ...options, type };
-    }
-  }
-  return makeFile(parts, name, options);
-}
-async function getBytes(value) {
-  let parts = [];
-  if (typeof value === "string" || ArrayBuffer.isView(value) || // includes Uint8Array, Buffer, etc.
-  value instanceof ArrayBuffer) {
-    parts.push(value);
-  } else if (isBlobLike(value)) {
-    parts.push(value instanceof Blob ? value : await value.arrayBuffer());
-  } else if (isAsyncIterable(value)) {
-    for await (const chunk of value) {
-      parts.push(...await getBytes(chunk));
-    }
-  } else {
-    const constructor = value?.constructor?.name;
-    throw new Error(`Unexpected data type: ${typeof value}${constructor ? `; constructor: ${constructor}` : ""}${propsForError(value)}`);
-  }
-  return parts;
-}
-function propsForError(value) {
-  if (typeof value !== "object" || value === null)
-    return "";
-  const props = Object.getOwnPropertyNames(value);
-  return `; props: [${props.map((p) => `"${p}"`).join(", ")}]`;
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/resource.mjs
-var APIResource = class {
-  constructor(client) {
-    this._client = client;
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/headers.mjs
-var brand_privateNullableHeaders = /* @__PURE__ */ Symbol.for("brand.privateNullableHeaders");
-function* iterateHeaders(headers) {
-  if (!headers)
-    return;
-  if (brand_privateNullableHeaders in headers) {
-    const { values, nulls } = headers;
-    yield* values.entries();
-    for (const name of nulls) {
-      yield [name, null];
-    }
-    return;
-  }
-  let shouldClear = false;
-  let iter;
-  if (headers instanceof Headers) {
-    iter = headers.entries();
-  } else if (isReadonlyArray(headers)) {
-    iter = headers;
-  } else {
-    shouldClear = true;
-    iter = Object.entries(headers ?? {});
-  }
-  for (let row of iter) {
-    const name = row[0];
-    if (typeof name !== "string")
-      throw new TypeError("expected header name to be a string");
-    const values = isReadonlyArray(row[1]) ? row[1] : [row[1]];
-    let didClear = false;
-    for (const value of values) {
-      if (value === void 0)
-        continue;
-      if (shouldClear && !didClear) {
-        didClear = true;
-        yield [name, null];
-      }
-      yield [name, value];
-    }
-  }
-}
-var buildHeaders = (newHeaders) => {
-  const targetHeaders = new Headers();
-  const nullHeaders = /* @__PURE__ */ new Set();
-  for (const headers of newHeaders) {
-    const seenHeaders = /* @__PURE__ */ new Set();
-    for (const [name, value] of iterateHeaders(headers)) {
-      const lowerName = name.toLowerCase();
-      if (!seenHeaders.has(lowerName)) {
-        targetHeaders.delete(name);
-        seenHeaders.add(lowerName);
-      }
-      if (value === null) {
-        targetHeaders.delete(name);
-        nullHeaders.add(lowerName);
-      } else {
-        targetHeaders.append(name, value);
-        nullHeaders.delete(lowerName);
-      }
-    }
-  }
-  return { [brand_privateNullableHeaders]: true, values: targetHeaders, nulls: nullHeaders };
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs
-function encodeURIPath(str2) {
-  return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
-}
-var EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
-var createPathTagFunction = (pathEncoder = encodeURIPath) => function path6(statics, ...params) {
-  if (statics.length === 1)
-    return statics[0];
-  let postPath = false;
-  const invalidSegments = [];
-  const path7 = statics.reduce((previousValue, currentValue, index) => {
-    if (/[?#]/.test(currentValue)) {
-      postPath = true;
-    }
-    const value = params[index];
-    let encoded = (postPath ? encodeURIComponent : pathEncoder)("" + value);
-    if (index !== params.length && (value == null || typeof value === "object" && // handle values from other realms
-    value.toString === Object.getPrototypeOf(Object.getPrototypeOf(value.hasOwnProperty ?? EMPTY) ?? EMPTY)?.toString)) {
-      encoded = value + "";
-      invalidSegments.push({
-        start: previousValue.length + currentValue.length,
-        length: encoded.length,
-        error: `Value of type ${Object.prototype.toString.call(value).slice(8, -1)} is not a valid path parameter`
-      });
-    }
-    return previousValue + currentValue + (index === params.length ? "" : encoded);
-  }, "");
-  const pathOnly = path7.split(/[?#]/, 1)[0];
-  const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
-  let match;
-  while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
-    invalidSegments.push({
-      start: match.index,
-      length: match[0].length,
-      error: `Value "${match[0]}" can't be safely passed as a path parameter`
-    });
-  }
-  invalidSegments.sort((a, b) => a.start - b.start);
-  if (invalidSegments.length > 0) {
-    let lastEnd = 0;
-    const underline = invalidSegments.reduce((acc, segment) => {
-      const spaces = " ".repeat(segment.start - lastEnd);
-      const arrows = "^".repeat(segment.length);
-      lastEnd = segment.start + segment.length;
-      return acc + spaces + arrows;
-    }, "");
-    throw new AnthropicError(`Path parameters result in path with invalid segments:
-${invalidSegments.map((e) => e.error).join("\n")}
-${path7}
-${underline}`);
-  }
-  return path7;
-};
-var path2 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs
-var Environments = class extends APIResource {
-  /**
-   * Create a new environment with the specified configuration.
-   *
-   * @example
-   * ```ts
-   * const betaEnvironment =
-   *   await client.beta.environments.create({
-   *     name: 'python-data-analysis',
-   *   });
-   * ```
-   */
-  create(params, options) {
-    const { betas, ...body } = params;
-    return this._client.post("/v1/environments?beta=true", {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Retrieve a specific environment by ID.
-   *
-   * @example
-   * ```ts
-   * const betaEnvironment =
-   *   await client.beta.environments.retrieve(
-   *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
-   *   );
-   * ```
-   */
-  retrieve(environmentID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/environments/${environmentID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Update an existing environment's configuration.
-   *
-   * @example
-   * ```ts
-   * const betaEnvironment =
-   *   await client.beta.environments.update(
-   *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
-   *   );
-   * ```
-   */
-  update(environmentID, params, options) {
-    const { betas, ...body } = params;
-    return this._client.post(path2`/v1/environments/${environmentID}?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List environments with pagination support.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaEnvironment of client.beta.environments.list()) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList("/v1/environments?beta=true", PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Delete an environment by ID. Returns a confirmation of the deletion.
-   *
-   * @example
-   * ```ts
-   * const betaEnvironmentDeleteResponse =
-   *   await client.beta.environments.delete(
-   *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
-   *   );
-   * ```
-   */
-  delete(environmentID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.delete(path2`/v1/environments/${environmentID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Archive an environment by ID. Archived environments cannot be used to create new
-   * sessions.
-   *
-   * @example
-   * ```ts
-   * const betaEnvironment =
-   *   await client.beta.environments.archive(
-   *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
-   *   );
-   * ```
-   */
-  archive(environmentID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.post(path2`/v1/environments/${environmentID}/archive?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs
-var SDK_HELPER_SYMBOL = /* @__PURE__ */ Symbol("anthropic.sdk.stainlessHelper");
-function wasCreatedByStainlessHelper(value) {
-  return typeof value === "object" && value !== null && SDK_HELPER_SYMBOL in value;
-}
-function collectStainlessHelpers(tools, messages) {
-  const helpers = /* @__PURE__ */ new Set();
-  if (tools) {
-    for (const tool of tools) {
-      if (wasCreatedByStainlessHelper(tool)) {
-        helpers.add(tool[SDK_HELPER_SYMBOL]);
-      }
-    }
-  }
-  if (messages) {
-    for (const message of messages) {
-      if (wasCreatedByStainlessHelper(message)) {
-        helpers.add(message[SDK_HELPER_SYMBOL]);
-      }
-      if (Array.isArray(message.content)) {
-        for (const block of message.content) {
-          if (wasCreatedByStainlessHelper(block)) {
-            helpers.add(block[SDK_HELPER_SYMBOL]);
-          }
-        }
-      }
-    }
-  }
-  return Array.from(helpers);
-}
-function stainlessHelperHeader(tools, messages) {
-  const helpers = collectStainlessHelpers(tools, messages);
-  if (helpers.length === 0)
-    return {};
-  return { "x-stainless-helper": helpers.join(", ") };
-}
-function stainlessHelperHeaderFromFile(file) {
-  if (wasCreatedByStainlessHelper(file)) {
-    return { "x-stainless-helper": file[SDK_HELPER_SYMBOL] };
-  }
-  return {};
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs
-var Files = class extends APIResource {
-  /**
-   * List Files
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const fileMetadata of client.beta.files.list()) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList("/v1/files", Page, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Delete File
-   *
-   * @example
-   * ```ts
-   * const deletedFile = await client.beta.files.delete(
-   *   'file_id',
-   * );
-   * ```
-   */
-  delete(fileID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.delete(path2`/v1/files/${fileID}`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Download File
-   *
-   * @example
-   * ```ts
-   * const response = await client.beta.files.download(
-   *   'file_id',
-   * );
-   *
-   * const content = await response.blob();
-   * console.log(content);
-   * ```
-   */
-  download(fileID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/files/${fileID}/content`, {
-      ...options,
-      headers: buildHeaders([
-        {
-          "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString(),
-          Accept: "application/binary"
-        },
-        options?.headers
-      ]),
-      __binaryResponse: true
-    });
-  }
-  /**
-   * Get File Metadata
-   *
-   * @example
-   * ```ts
-   * const fileMetadata =
-   *   await client.beta.files.retrieveMetadata('file_id');
-   * ```
-   */
-  retrieveMetadata(fileID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/files/${fileID}`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Upload File
-   *
-   * @example
-   * ```ts
-   * const fileMetadata = await client.beta.files.upload({
-   *   file: fs.createReadStream('path/to/file'),
-   * });
-   * ```
-   */
-  upload(params, options) {
-    const { betas, ...body } = params;
-    return this._client.post("/v1/files", multipartFormRequestOptions({
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
-        stainlessHelperHeaderFromFile(body.file),
-        options?.headers
-      ])
-    }, this._client));
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs
-var Models = class extends APIResource {
-  /**
-   * Get a specific model.
-   *
-   * The Models API response can be used to determine information about a specific
-   * model or resolve a model alias to a model ID.
-   *
-   * @example
-   * ```ts
-   * const betaModelInfo = await client.beta.models.retrieve(
-   *   'model_id',
-   * );
-   * ```
-   */
-  retrieve(modelID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/models/${modelID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List available models.
-   *
-   * The Models API response can be used to determine which models are available for
-   * use in the API. More recently released models are listed first.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaModelInfo of client.beta.models.list()) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList("/v1/models?beta=true", Page, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ])
-    });
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs
-var UserProfiles = class extends APIResource {
-  /**
-   * Create User Profile
-   *
-   * @example
-   * ```ts
-   * const betaUserProfile =
-   *   await client.beta.userProfiles.create();
-   * ```
-   */
-  create(params, options) {
-    const { betas, ...body } = params;
-    return this._client.post("/v1/user_profiles?beta=true", {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Get User Profile
-   *
-   * @example
-   * ```ts
-   * const betaUserProfile =
-   *   await client.beta.userProfiles.retrieve(
-   *     'uprof_011CZkZCu8hGbp5mYRQgUmz9',
-   *   );
-   * ```
-   */
-  retrieve(userProfileID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/user_profiles/${userProfileID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Update User Profile
-   *
-   * @example
-   * ```ts
-   * const betaUserProfile =
-   *   await client.beta.userProfiles.update(
-   *     'uprof_011CZkZCu8hGbp5mYRQgUmz9',
-   *   );
-   * ```
-   */
-  update(userProfileID, params, options) {
-    const { betas, ...body } = params;
-    return this._client.post(path2`/v1/user_profiles/${userProfileID}?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List User Profiles
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaUserProfile of client.beta.userProfiles.list()) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList("/v1/user_profiles?beta=true", PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Create Enrollment URL
-   *
-   * @example
-   * ```ts
-   * const betaUserProfileEnrollmentURL =
-   *   await client.beta.userProfiles.createEnrollmentURL(
-   *     'uprof_011CZkZCu8hGbp5mYRQgUmz9',
-   *   );
-   * ```
-   */
-  createEnrollmentURL(userProfileID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.post(path2`/v1/user_profiles/${userProfileID}/enrollment_url?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
-        options?.headers
-      ])
-    });
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs
-var Versions = class extends APIResource {
-  /**
-   * List Agent Versions
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaManagedAgentsAgent of client.beta.agents.versions.list(
-   *   'agent_011CZkYpogX7uDKUyvBTophP',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(agentID, params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList(path2`/v1/agents/${agentID}/versions?beta=true`, PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs
-var Agents = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.versions = new Versions(this._client);
-  }
-  /**
-   * Create Agent
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsAgent =
-   *   await client.beta.agents.create({
-   *     model: 'claude-sonnet-4-6',
-   *     name: 'My First Agent',
-   *   });
-   * ```
-   */
-  create(params, options) {
-    const { betas, ...body } = params;
-    return this._client.post("/v1/agents?beta=true", {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Get Agent
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsAgent =
-   *   await client.beta.agents.retrieve(
-   *     'agent_011CZkYpogX7uDKUyvBTophP',
-   *   );
-   * ```
-   */
-  retrieve(agentID, params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.get(path2`/v1/agents/${agentID}?beta=true`, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Update Agent
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsAgent =
-   *   await client.beta.agents.update(
-   *     'agent_011CZkYpogX7uDKUyvBTophP',
-   *     { version: 1 },
-   *   );
-   * ```
-   */
-  update(agentID, params, options) {
-    const { betas, ...body } = params;
-    return this._client.post(path2`/v1/agents/${agentID}?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List Agents
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaManagedAgentsAgent of client.beta.agents.list()) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList("/v1/agents?beta=true", PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Archive Agent
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsAgent =
-   *   await client.beta.agents.archive(
-   *     'agent_011CZkYpogX7uDKUyvBTophP',
-   *   );
-   * ```
-   */
-  archive(agentID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.post(path2`/v1/agents/${agentID}/archive?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-};
-Agents.Versions = Versions;
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/constants.mjs
-var MODEL_NONSTREAMING_TOKENS = {
-  "claude-opus-4-20250514": 8192,
-  "claude-opus-4-0": 8192,
-  "claude-4-opus-20250514": 8192,
-  "anthropic.claude-opus-4-20250514-v1:0": 8192,
-  "claude-opus-4@20250514": 8192,
-  "claude-opus-4-1-20250805": 8192,
-  "anthropic.claude-opus-4-1-20250805-v1:0": 8192,
-  "claude-opus-4-1@20250805": 8192
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs
-function getOutputFormat(params) {
-  return params?.output_format ?? params?.output_config?.format;
-}
-function maybeParseBetaMessage(message, params, opts) {
-  const outputFormat = getOutputFormat(params);
-  if (!params || !("parse" in (outputFormat ?? {}))) {
-    return {
-      ...message,
-      content: message.content.map((block) => {
-        if (block.type === "text") {
-          const parsedBlock = Object.defineProperty({ ...block }, "parsed_output", {
-            value: null,
-            enumerable: false
-          });
-          return Object.defineProperty(parsedBlock, "parsed", {
-            get() {
-              opts.logger.warn("The `parsed` property on `text` blocks is deprecated, please use `parsed_output` instead.");
-              return null;
-            },
-            enumerable: false
-          });
-        }
-        return block;
-      }),
-      parsed_output: null
-    };
-  }
-  return parseBetaMessage(message, params, opts);
-}
-function parseBetaMessage(message, params, opts) {
-  let firstParsedOutput = null;
-  const content = message.content.map((block) => {
-    if (block.type === "text") {
-      const parsedOutput = parseBetaOutputFormat(params, block.text);
-      if (firstParsedOutput === null) {
-        firstParsedOutput = parsedOutput;
-      }
-      const parsedBlock = Object.defineProperty({ ...block }, "parsed_output", {
-        value: parsedOutput,
-        enumerable: false
-      });
-      return Object.defineProperty(parsedBlock, "parsed", {
-        get() {
-          opts.logger.warn("The `parsed` property on `text` blocks is deprecated, please use `parsed_output` instead.");
-          return parsedOutput;
-        },
-        enumerable: false
-      });
-    }
-    return block;
-  });
-  return {
-    ...message,
-    content,
-    parsed_output: firstParsedOutput
-  };
-}
-function parseBetaOutputFormat(params, content) {
-  const outputFormat = getOutputFormat(params);
-  if (outputFormat?.type !== "json_schema") {
-    return null;
-  }
-  try {
-    if ("parse" in outputFormat) {
-      return outputFormat.parse(content);
-    }
-    return JSON.parse(content);
-  } catch (error) {
-    throw new AnthropicError(`Failed to parse structured output: ${error}`);
-  }
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs
-var tokenize2 = (input) => {
-  let current = 0;
-  let tokens = [];
-  while (current < input.length) {
-    let char = input[current];
-    if (char === "\\") {
-      current++;
-      continue;
-    }
-    if (char === "{") {
-      tokens.push({
-        type: "brace",
-        value: "{"
-      });
-      current++;
-      continue;
-    }
-    if (char === "}") {
-      tokens.push({
-        type: "brace",
-        value: "}"
-      });
-      current++;
-      continue;
-    }
-    if (char === "[") {
-      tokens.push({
-        type: "paren",
-        value: "["
-      });
-      current++;
-      continue;
-    }
-    if (char === "]") {
-      tokens.push({
-        type: "paren",
-        value: "]"
-      });
-      current++;
-      continue;
-    }
-    if (char === ":") {
-      tokens.push({
-        type: "separator",
-        value: ":"
-      });
-      current++;
-      continue;
-    }
-    if (char === ",") {
-      tokens.push({
-        type: "delimiter",
-        value: ","
-      });
-      current++;
-      continue;
-    }
-    if (char === '"') {
-      let value = "";
-      let danglingQuote = false;
-      char = input[++current];
-      while (char !== '"') {
-        if (current === input.length) {
-          danglingQuote = true;
-          break;
-        }
-        if (char === "\\") {
-          current++;
-          if (current === input.length) {
-            danglingQuote = true;
-            break;
-          }
-          value += char + input[current];
-          char = input[++current];
-        } else {
-          value += char;
-          char = input[++current];
-        }
-      }
-      char = input[++current];
-      if (!danglingQuote) {
-        tokens.push({
-          type: "string",
-          value
-        });
-      }
-      continue;
-    }
-    let WHITESPACE = /\s/;
-    if (char && WHITESPACE.test(char)) {
-      current++;
-      continue;
-    }
-    let NUMBERS = /[0-9]/;
-    if (char && NUMBERS.test(char) || char === "-" || char === ".") {
-      let value = "";
-      if (char === "-") {
-        value += char;
-        char = input[++current];
-      }
-      while (char && NUMBERS.test(char) || char === ".") {
-        value += char;
-        char = input[++current];
-      }
-      tokens.push({
-        type: "number",
-        value
-      });
-      continue;
-    }
-    let LETTERS = /[a-z]/i;
-    if (char && LETTERS.test(char)) {
-      let value = "";
-      while (char && LETTERS.test(char)) {
-        if (current === input.length) {
-          break;
-        }
-        value += char;
-        char = input[++current];
-      }
-      if (value == "true" || value == "false" || value === "null") {
-        tokens.push({
-          type: "name",
-          value
-        });
-      } else {
-        current++;
-        continue;
-      }
-      continue;
-    }
-    current++;
-  }
-  return tokens;
-};
-var strip = (tokens) => {
-  if (tokens.length === 0) {
-    return tokens;
-  }
-  let lastToken = tokens[tokens.length - 1];
-  switch (lastToken.type) {
-    case "separator":
-      tokens = tokens.slice(0, tokens.length - 1);
-      return strip(tokens);
-      break;
-    case "number":
-      let lastCharacterOfLastToken = lastToken.value[lastToken.value.length - 1];
-      if (lastCharacterOfLastToken === "." || lastCharacterOfLastToken === "-") {
-        tokens = tokens.slice(0, tokens.length - 1);
-        return strip(tokens);
-      }
-    case "string":
-      let tokenBeforeTheLastToken = tokens[tokens.length - 2];
-      if (tokenBeforeTheLastToken?.type === "delimiter") {
-        tokens = tokens.slice(0, tokens.length - 1);
-        return strip(tokens);
-      } else if (tokenBeforeTheLastToken?.type === "brace" && tokenBeforeTheLastToken.value === "{") {
-        tokens = tokens.slice(0, tokens.length - 1);
-        return strip(tokens);
-      }
-      break;
-    case "delimiter":
-      tokens = tokens.slice(0, tokens.length - 1);
-      return strip(tokens);
-      break;
-  }
-  return tokens;
-};
-var unstrip = (tokens) => {
-  let tail = [];
-  tokens.map((token) => {
-    if (token.type === "brace") {
-      if (token.value === "{") {
-        tail.push("}");
-      } else {
-        tail.splice(tail.lastIndexOf("}"), 1);
-      }
-    }
-    if (token.type === "paren") {
-      if (token.value === "[") {
-        tail.push("]");
-      } else {
-        tail.splice(tail.lastIndexOf("]"), 1);
-      }
-    }
-  });
-  if (tail.length > 0) {
-    tail.reverse().map((item) => {
-      if (item === "}") {
-        tokens.push({
-          type: "brace",
-          value: "}"
-        });
-      } else if (item === "]") {
-        tokens.push({
-          type: "paren",
-          value: "]"
-        });
-      }
-    });
-  }
-  return tokens;
-};
-var generate = (tokens) => {
-  let output = "";
-  tokens.map((token) => {
-    switch (token.type) {
-      case "string":
-        output += '"' + token.value + '"';
-        break;
-      default:
-        output += token.value;
-        break;
-    }
-  });
-  return output;
-};
-var partialParse = (input) => JSON.parse(generate(unstrip(strip(tokenize2(input)))));
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs
-var _BetaMessageStream_instances;
-var _BetaMessageStream_currentMessageSnapshot;
-var _BetaMessageStream_params;
-var _BetaMessageStream_connectedPromise;
-var _BetaMessageStream_resolveConnectedPromise;
-var _BetaMessageStream_rejectConnectedPromise;
-var _BetaMessageStream_endPromise;
-var _BetaMessageStream_resolveEndPromise;
-var _BetaMessageStream_rejectEndPromise;
-var _BetaMessageStream_listeners;
-var _BetaMessageStream_ended;
-var _BetaMessageStream_errored;
-var _BetaMessageStream_aborted;
-var _BetaMessageStream_catchingPromiseCreated;
-var _BetaMessageStream_response;
-var _BetaMessageStream_request_id;
-var _BetaMessageStream_logger;
-var _BetaMessageStream_getFinalMessage;
-var _BetaMessageStream_getFinalText;
-var _BetaMessageStream_handleError;
-var _BetaMessageStream_beginRequest;
-var _BetaMessageStream_addStreamEvent;
-var _BetaMessageStream_endRequest;
-var _BetaMessageStream_accumulateMessage;
-var JSON_BUF_PROPERTY = "__json_buf";
-function tracksToolInput(content) {
-  return content.type === "tool_use" || content.type === "server_tool_use" || content.type === "mcp_tool_use";
-}
-var BetaMessageStream = class _BetaMessageStream {
-  constructor(params, opts) {
-    _BetaMessageStream_instances.add(this);
-    this.messages = [];
-    this.receivedMessages = [];
-    _BetaMessageStream_currentMessageSnapshot.set(this, void 0);
-    _BetaMessageStream_params.set(this, null);
-    this.controller = new AbortController();
-    _BetaMessageStream_connectedPromise.set(this, void 0);
-    _BetaMessageStream_resolveConnectedPromise.set(this, () => {
-    });
-    _BetaMessageStream_rejectConnectedPromise.set(this, () => {
-    });
-    _BetaMessageStream_endPromise.set(this, void 0);
-    _BetaMessageStream_resolveEndPromise.set(this, () => {
-    });
-    _BetaMessageStream_rejectEndPromise.set(this, () => {
-    });
-    _BetaMessageStream_listeners.set(this, {});
-    _BetaMessageStream_ended.set(this, false);
-    _BetaMessageStream_errored.set(this, false);
-    _BetaMessageStream_aborted.set(this, false);
-    _BetaMessageStream_catchingPromiseCreated.set(this, false);
-    _BetaMessageStream_response.set(this, void 0);
-    _BetaMessageStream_request_id.set(this, void 0);
-    _BetaMessageStream_logger.set(this, void 0);
-    _BetaMessageStream_handleError.set(this, (error) => {
-      __classPrivateFieldSet(this, _BetaMessageStream_errored, true, "f");
-      if (isAbortError(error)) {
-        error = new APIUserAbortError();
-      }
-      if (error instanceof APIUserAbortError) {
-        __classPrivateFieldSet(this, _BetaMessageStream_aborted, true, "f");
-        return this._emit("abort", error);
-      }
-      if (error instanceof AnthropicError) {
-        return this._emit("error", error);
-      }
-      if (error instanceof Error) {
-        const anthropicError = new AnthropicError(error.message);
-        anthropicError.cause = error;
-        return this._emit("error", anthropicError);
-      }
-      return this._emit("error", new AnthropicError(String(error)));
-    });
-    __classPrivateFieldSet(this, _BetaMessageStream_connectedPromise, new Promise((resolve4, reject) => {
-      __classPrivateFieldSet(this, _BetaMessageStream_resolveConnectedPromise, resolve4, "f");
-      __classPrivateFieldSet(this, _BetaMessageStream_rejectConnectedPromise, reject, "f");
-    }), "f");
-    __classPrivateFieldSet(this, _BetaMessageStream_endPromise, new Promise((resolve4, reject) => {
-      __classPrivateFieldSet(this, _BetaMessageStream_resolveEndPromise, resolve4, "f");
-      __classPrivateFieldSet(this, _BetaMessageStream_rejectEndPromise, reject, "f");
-    }), "f");
-    __classPrivateFieldGet(this, _BetaMessageStream_connectedPromise, "f").catch(() => {
-    });
-    __classPrivateFieldGet(this, _BetaMessageStream_endPromise, "f").catch(() => {
-    });
-    __classPrivateFieldSet(this, _BetaMessageStream_params, params, "f");
-    __classPrivateFieldSet(this, _BetaMessageStream_logger, opts?.logger ?? console, "f");
-  }
-  get response() {
-    return __classPrivateFieldGet(this, _BetaMessageStream_response, "f");
-  }
-  get request_id() {
-    return __classPrivateFieldGet(this, _BetaMessageStream_request_id, "f");
-  }
-  /**
-   * Returns the `MessageStream` data, the raw `Response` instance and the ID of the request,
-   * returned vie the `request-id` header which is useful for debugging requests and resporting
-   * issues to Anthropic.
-   *
-   * This is the same as the `APIPromise.withResponse()` method.
-   *
-   * This method will raise an error if you created the stream using `MessageStream.fromReadableStream`
-   * as no `Response` is available.
-   */
-  async withResponse() {
-    __classPrivateFieldSet(this, _BetaMessageStream_catchingPromiseCreated, true, "f");
-    const response = await __classPrivateFieldGet(this, _BetaMessageStream_connectedPromise, "f");
-    if (!response) {
-      throw new Error("Could not resolve a `Response` object");
-    }
-    return {
-      data: this,
-      response,
-      request_id: response.headers.get("request-id")
-    };
-  }
-  /**
-   * Intended for use on the frontend, consuming a stream produced with
-   * `.toReadableStream()` on the backend.
-   *
-   * Note that messages sent to the model do not appear in `.on('message')`
-   * in this context.
-   */
-  static fromReadableStream(stream) {
-    const runner = new _BetaMessageStream(null);
-    runner._run(() => runner._fromReadableStream(stream));
-    return runner;
-  }
-  static createMessage(messages, params, options, { logger } = {}) {
-    const runner = new _BetaMessageStream(params, { logger });
-    for (const message of params.messages) {
-      runner._addMessageParam(message);
-    }
-    __classPrivateFieldSet(runner, _BetaMessageStream_params, { ...params, stream: true }, "f");
-    runner._run(() => runner._createMessage(messages, { ...params, stream: true }, { ...options, headers: { ...options?.headers, "X-Stainless-Helper-Method": "stream" } }));
-    return runner;
-  }
-  _run(executor) {
-    executor().then(() => {
-      this._emitFinal();
-      this._emit("end");
-    }, __classPrivateFieldGet(this, _BetaMessageStream_handleError, "f"));
-  }
-  _addMessageParam(message) {
-    this.messages.push(message);
-  }
-  _addMessage(message, emit = true) {
-    this.receivedMessages.push(message);
-    if (emit) {
-      this._emit("message", message);
-    }
-  }
-  async _createMessage(messages, params, options) {
-    const signal = options?.signal;
-    let abortHandler;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      abortHandler = this.controller.abort.bind(this.controller);
-      signal.addEventListener("abort", abortHandler);
-    }
-    try {
-      __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_beginRequest).call(this);
-      const { response, data: stream } = await messages.create({ ...params, stream: true }, { ...options, signal: this.controller.signal }).withResponse();
-      this._connected(response);
-      for await (const event of stream) {
-        __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_addStreamEvent).call(this, event);
-      }
-      if (stream.controller.signal?.aborted) {
-        throw new APIUserAbortError();
-      }
-      __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_endRequest).call(this);
-    } finally {
-      if (signal && abortHandler) {
-        signal.removeEventListener("abort", abortHandler);
-      }
-    }
-  }
-  _connected(response) {
-    if (this.ended)
-      return;
-    __classPrivateFieldSet(this, _BetaMessageStream_response, response, "f");
-    __classPrivateFieldSet(this, _BetaMessageStream_request_id, response?.headers.get("request-id"), "f");
-    __classPrivateFieldGet(this, _BetaMessageStream_resolveConnectedPromise, "f").call(this, response);
-    this._emit("connect");
-  }
-  get ended() {
-    return __classPrivateFieldGet(this, _BetaMessageStream_ended, "f");
-  }
-  get errored() {
-    return __classPrivateFieldGet(this, _BetaMessageStream_errored, "f");
-  }
-  get aborted() {
-    return __classPrivateFieldGet(this, _BetaMessageStream_aborted, "f");
-  }
-  abort() {
-    this.controller.abort();
-  }
-  /**
-   * Adds the listener function to the end of the listeners array for the event.
-   * No checks are made to see if the listener has already been added. Multiple calls passing
-   * the same combination of event and listener will result in the listener being added, and
-   * called, multiple times.
-   * @returns this MessageStream, so that calls can be chained
-   */
-  on(event, listener) {
-    const listeners = __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] || (__classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] = []);
-    listeners.push({ listener });
-    return this;
-  }
-  /**
-   * Removes the specified listener from the listener array for the event.
-   * off() will remove, at most, one instance of a listener from the listener array. If any single
-   * listener has been added multiple times to the listener array for the specified event, then
-   * off() must be called multiple times to remove each instance.
-   * @returns this MessageStream, so that calls can be chained
-   */
-  off(event, listener) {
-    const listeners = __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event];
-    if (!listeners)
-      return this;
-    const index = listeners.findIndex((l) => l.listener === listener);
-    if (index >= 0)
-      listeners.splice(index, 1);
-    return this;
-  }
-  /**
-   * Adds a one-time listener function for the event. The next time the event is triggered,
-   * this listener is removed and then invoked.
-   * @returns this MessageStream, so that calls can be chained
-   */
-  once(event, listener) {
-    const listeners = __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] || (__classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] = []);
-    listeners.push({ listener, once: true });
-    return this;
-  }
-  /**
-   * This is similar to `.once()`, but returns a Promise that resolves the next time
-   * the event is triggered, instead of calling a listener callback.
-   * @returns a Promise that resolves the next time given event is triggered,
-   * or rejects if an error is emitted.  (If you request the 'error' event,
-   * returns a promise that resolves with the error).
-   *
-   * Example:
-   *
-   *   const message = await stream.emitted('message') // rejects if the stream errors
-   */
-  emitted(event) {
-    return new Promise((resolve4, reject) => {
-      __classPrivateFieldSet(this, _BetaMessageStream_catchingPromiseCreated, true, "f");
-      if (event !== "error")
-        this.once("error", reject);
-      this.once(event, resolve4);
-    });
-  }
-  async done() {
-    __classPrivateFieldSet(this, _BetaMessageStream_catchingPromiseCreated, true, "f");
-    await __classPrivateFieldGet(this, _BetaMessageStream_endPromise, "f");
-  }
-  get currentMessage() {
-    return __classPrivateFieldGet(this, _BetaMessageStream_currentMessageSnapshot, "f");
-  }
-  /**
-   * @returns a promise that resolves with the the final assistant Message response,
-   * or rejects if an error occurred or the stream ended prematurely without producing a Message.
-   * If structured outputs were used, this will be a ParsedMessage with a `parsed` field.
-   */
-  async finalMessage() {
-    await this.done();
-    return __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_getFinalMessage).call(this);
-  }
-  /**
-   * @returns a promise that resolves with the the final assistant Message's text response, concatenated
-   * together if there are more than one text blocks.
-   * Rejects if an error occurred or the stream ended prematurely without producing a Message.
-   */
-  async finalText() {
-    await this.done();
-    return __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_getFinalText).call(this);
-  }
-  _emit(event, ...args) {
-    if (__classPrivateFieldGet(this, _BetaMessageStream_ended, "f"))
-      return;
-    if (event === "end") {
-      __classPrivateFieldSet(this, _BetaMessageStream_ended, true, "f");
-      __classPrivateFieldGet(this, _BetaMessageStream_resolveEndPromise, "f").call(this);
-    }
-    const listeners = __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event];
-    if (listeners) {
-      __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] = listeners.filter((l) => !l.once);
-      listeners.forEach(({ listener }) => listener(...args));
-    }
-    if (event === "abort") {
-      const error = args[0];
-      if (!__classPrivateFieldGet(this, _BetaMessageStream_catchingPromiseCreated, "f") && !listeners?.length) {
-        Promise.reject(error);
-      }
-      __classPrivateFieldGet(this, _BetaMessageStream_rejectConnectedPromise, "f").call(this, error);
-      __classPrivateFieldGet(this, _BetaMessageStream_rejectEndPromise, "f").call(this, error);
-      this._emit("end");
-      return;
-    }
-    if (event === "error") {
-      const error = args[0];
-      if (!__classPrivateFieldGet(this, _BetaMessageStream_catchingPromiseCreated, "f") && !listeners?.length) {
-        Promise.reject(error);
-      }
-      __classPrivateFieldGet(this, _BetaMessageStream_rejectConnectedPromise, "f").call(this, error);
-      __classPrivateFieldGet(this, _BetaMessageStream_rejectEndPromise, "f").call(this, error);
-      this._emit("end");
-    }
-  }
-  _emitFinal() {
-    const finalMessage = this.receivedMessages.at(-1);
-    if (finalMessage) {
-      this._emit("finalMessage", __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_getFinalMessage).call(this));
-    }
-  }
-  async _fromReadableStream(readableStream, options) {
-    const signal = options?.signal;
-    let abortHandler;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      abortHandler = this.controller.abort.bind(this.controller);
-      signal.addEventListener("abort", abortHandler);
-    }
-    try {
-      __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_beginRequest).call(this);
-      this._connected(null);
-      const stream = Stream.fromReadableStream(readableStream, this.controller);
-      for await (const event of stream) {
-        __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_addStreamEvent).call(this, event);
-      }
-      if (stream.controller.signal?.aborted) {
-        throw new APIUserAbortError();
-      }
-      __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_endRequest).call(this);
-    } finally {
-      if (signal && abortHandler) {
-        signal.removeEventListener("abort", abortHandler);
-      }
-    }
-  }
-  [(_BetaMessageStream_currentMessageSnapshot = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_params = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_endPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_listeners = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_ended = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_errored = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_aborted = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_response = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_request_id = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_logger = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_handleError = /* @__PURE__ */ new WeakMap(), _BetaMessageStream_instances = /* @__PURE__ */ new WeakSet(), _BetaMessageStream_getFinalMessage = function _BetaMessageStream_getFinalMessage2() {
-    if (this.receivedMessages.length === 0) {
-      throw new AnthropicError("stream ended without producing a Message with role=assistant");
-    }
-    return this.receivedMessages.at(-1);
-  }, _BetaMessageStream_getFinalText = function _BetaMessageStream_getFinalText2() {
-    if (this.receivedMessages.length === 0) {
-      throw new AnthropicError("stream ended without producing a Message with role=assistant");
-    }
-    const textBlocks = this.receivedMessages.at(-1).content.filter((block) => block.type === "text").map((block) => block.text);
-    if (textBlocks.length === 0) {
-      throw new AnthropicError("stream ended without producing a content block with type=text");
-    }
-    return textBlocks.join(" ");
-  }, _BetaMessageStream_beginRequest = function _BetaMessageStream_beginRequest2() {
-    if (this.ended)
-      return;
-    __classPrivateFieldSet(this, _BetaMessageStream_currentMessageSnapshot, void 0, "f");
-  }, _BetaMessageStream_addStreamEvent = function _BetaMessageStream_addStreamEvent2(event) {
-    if (this.ended)
-      return;
-    const messageSnapshot = __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_accumulateMessage).call(this, event);
-    this._emit("streamEvent", event, messageSnapshot);
-    switch (event.type) {
-      case "content_block_delta": {
-        const content = messageSnapshot.content.at(-1);
-        switch (event.delta.type) {
-          case "text_delta": {
-            if (content.type === "text") {
-              this._emit("text", event.delta.text, content.text || "");
-            }
-            break;
-          }
-          case "citations_delta": {
-            if (content.type === "text") {
-              this._emit("citation", event.delta.citation, content.citations ?? []);
-            }
-            break;
-          }
-          case "input_json_delta": {
-            if (tracksToolInput(content) && content.input) {
-              this._emit("inputJson", event.delta.partial_json, content.input);
-            }
-            break;
-          }
-          case "thinking_delta": {
-            if (content.type === "thinking") {
-              this._emit("thinking", event.delta.thinking, content.thinking);
-            }
-            break;
-          }
-          case "signature_delta": {
-            if (content.type === "thinking") {
-              this._emit("signature", content.signature);
-            }
-            break;
-          }
-          case "compaction_delta": {
-            if (content.type === "compaction" && content.content) {
-              this._emit("compaction", content.content);
-            }
-            break;
-          }
-          default:
-            checkNever(event.delta);
-        }
-        break;
-      }
-      case "message_stop": {
-        this._addMessageParam(messageSnapshot);
-        this._addMessage(maybeParseBetaMessage(messageSnapshot, __classPrivateFieldGet(this, _BetaMessageStream_params, "f"), { logger: __classPrivateFieldGet(this, _BetaMessageStream_logger, "f") }), true);
-        break;
-      }
-      case "content_block_stop": {
-        this._emit("contentBlock", messageSnapshot.content.at(-1));
-        break;
-      }
-      case "message_start": {
-        __classPrivateFieldSet(this, _BetaMessageStream_currentMessageSnapshot, messageSnapshot, "f");
-        break;
-      }
-      case "content_block_start":
-      case "message_delta":
-        break;
-    }
-  }, _BetaMessageStream_endRequest = function _BetaMessageStream_endRequest2() {
-    if (this.ended) {
-      throw new AnthropicError(`stream has ended, this shouldn't happen`);
-    }
-    const snapshot = __classPrivateFieldGet(this, _BetaMessageStream_currentMessageSnapshot, "f");
-    if (!snapshot) {
-      throw new AnthropicError(`request ended without sending any chunks`);
-    }
-    __classPrivateFieldSet(this, _BetaMessageStream_currentMessageSnapshot, void 0, "f");
-    return maybeParseBetaMessage(snapshot, __classPrivateFieldGet(this, _BetaMessageStream_params, "f"), { logger: __classPrivateFieldGet(this, _BetaMessageStream_logger, "f") });
-  }, _BetaMessageStream_accumulateMessage = function _BetaMessageStream_accumulateMessage2(event) {
-    let snapshot = __classPrivateFieldGet(this, _BetaMessageStream_currentMessageSnapshot, "f");
-    if (event.type === "message_start") {
-      if (snapshot) {
-        throw new AnthropicError(`Unexpected event order, got ${event.type} before receiving "message_stop"`);
-      }
-      return event.message;
-    }
-    if (!snapshot) {
-      throw new AnthropicError(`Unexpected event order, got ${event.type} before "message_start"`);
-    }
-    switch (event.type) {
-      case "message_stop":
-        return snapshot;
-      case "message_delta":
-        snapshot.container = event.delta.container;
-        snapshot.stop_reason = event.delta.stop_reason;
-        snapshot.stop_sequence = event.delta.stop_sequence;
-        snapshot.usage.output_tokens = event.usage.output_tokens;
-        snapshot.context_management = event.context_management;
-        if (event.usage.input_tokens != null) {
-          snapshot.usage.input_tokens = event.usage.input_tokens;
-        }
-        if (event.usage.cache_creation_input_tokens != null) {
-          snapshot.usage.cache_creation_input_tokens = event.usage.cache_creation_input_tokens;
-        }
-        if (event.usage.cache_read_input_tokens != null) {
-          snapshot.usage.cache_read_input_tokens = event.usage.cache_read_input_tokens;
-        }
-        if (event.usage.server_tool_use != null) {
-          snapshot.usage.server_tool_use = event.usage.server_tool_use;
-        }
-        if (event.usage.iterations != null) {
-          snapshot.usage.iterations = event.usage.iterations;
-        }
-        return snapshot;
-      case "content_block_start":
-        snapshot.content.push(event.content_block);
-        return snapshot;
-      case "content_block_delta": {
-        const snapshotContent = snapshot.content.at(event.index);
-        switch (event.delta.type) {
-          case "text_delta": {
-            if (snapshotContent?.type === "text") {
-              snapshot.content[event.index] = {
-                ...snapshotContent,
-                text: (snapshotContent.text || "") + event.delta.text
-              };
-            }
-            break;
-          }
-          case "citations_delta": {
-            if (snapshotContent?.type === "text") {
-              snapshot.content[event.index] = {
-                ...snapshotContent,
-                citations: [...snapshotContent.citations ?? [], event.delta.citation]
-              };
-            }
-            break;
-          }
-          case "input_json_delta": {
-            if (snapshotContent && tracksToolInput(snapshotContent)) {
-              let jsonBuf = snapshotContent[JSON_BUF_PROPERTY] || "";
-              jsonBuf += event.delta.partial_json;
-              const newContent = { ...snapshotContent };
-              Object.defineProperty(newContent, JSON_BUF_PROPERTY, {
-                value: jsonBuf,
-                enumerable: false,
-                writable: true
-              });
-              if (jsonBuf) {
-                try {
-                  newContent.input = partialParse(jsonBuf);
-                } catch (err) {
-                  const error = new AnthropicError(`Unable to parse tool parameter JSON from model. Please retry your request or adjust your prompt. Error: ${err}. JSON: ${jsonBuf}`);
-                  __classPrivateFieldGet(this, _BetaMessageStream_handleError, "f").call(this, error);
-                }
-              }
-              snapshot.content[event.index] = newContent;
-            }
-            break;
-          }
-          case "thinking_delta": {
-            if (snapshotContent?.type === "thinking") {
-              snapshot.content[event.index] = {
-                ...snapshotContent,
-                thinking: snapshotContent.thinking + event.delta.thinking
-              };
-            }
-            break;
-          }
-          case "signature_delta": {
-            if (snapshotContent?.type === "thinking") {
-              snapshot.content[event.index] = {
-                ...snapshotContent,
-                signature: event.delta.signature
-              };
-            }
-            break;
-          }
-          case "compaction_delta": {
-            if (snapshotContent?.type === "compaction") {
-              snapshot.content[event.index] = {
-                ...snapshotContent,
-                content: (snapshotContent.content || "") + event.delta.content
-              };
-            }
-            break;
-          }
-          default:
-            checkNever(event.delta);
-        }
-        return snapshot;
-      }
-      case "content_block_stop":
-        return snapshot;
-    }
-  }, Symbol.asyncIterator)]() {
-    const pushQueue = [];
-    const readQueue = [];
-    let done = false;
-    this.on("streamEvent", (event) => {
-      const reader = readQueue.shift();
-      if (reader) {
-        reader.resolve(event);
-      } else {
-        pushQueue.push(event);
-      }
-    });
-    this.on("end", () => {
-      done = true;
-      for (const reader of readQueue) {
-        reader.resolve(void 0);
-      }
-      readQueue.length = 0;
-    });
-    this.on("abort", (err) => {
-      done = true;
-      for (const reader of readQueue) {
-        reader.reject(err);
-      }
-      readQueue.length = 0;
-    });
-    this.on("error", (err) => {
-      done = true;
-      for (const reader of readQueue) {
-        reader.reject(err);
-      }
-      readQueue.length = 0;
-    });
-    return {
-      next: async () => {
-        if (!pushQueue.length) {
-          if (done) {
-            return { value: void 0, done: true };
-          }
-          return new Promise((resolve4, reject) => readQueue.push({ resolve: resolve4, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
-        }
-        const chunk = pushQueue.shift();
-        return { value: chunk, done: false };
-      },
-      return: async () => {
-        this.abort();
-        return { value: void 0, done: true };
-      }
-    };
-  }
-  toReadableStream() {
-    const stream = new Stream(this[Symbol.asyncIterator].bind(this), this.controller);
-    return stream.toReadableStream();
-  }
-};
-function checkNever(x) {
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs
-var ToolError = class extends Error {
-  constructor(content) {
-    const message = typeof content === "string" ? content : content.map((block) => {
-      if (block.type === "text")
-        return block.text;
-      return `[${block.type}]`;
-    }).join(" ");
-    super(message);
-    this.name = "ToolError";
-    this.content = content;
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs
-var DEFAULT_TOKEN_THRESHOLD = 1e5;
-var DEFAULT_SUMMARY_PROMPT = `You have been working on the task described above but have not yet completed it. Write a continuation summary that will allow you (or another instance of yourself) to resume work efficiently in a future context window where the conversation history will be replaced with this summary. Your summary should be structured, concise, and actionable. Include:
-1. Task Overview
-The user's core request and success criteria
-Any clarifications or constraints they specified
-2. Current State
-What has been completed so far
-Files created, modified, or analyzed (with paths if relevant)
-Key outputs or artifacts produced
-3. Important Discoveries
-Technical constraints or requirements uncovered
-Decisions made and their rationale
-Errors encountered and how they were resolved
-What approaches were tried that didn't work (and why)
-4. Next Steps
-Specific actions needed to complete the task
-Any blockers or open questions to resolve
-Priority order if multiple steps remain
-5. Context to Preserve
-User preferences or style requirements
-Domain-specific details that aren't obvious
-Any promises made to the user
-Be concise but complete\u2014err on the side of including information that would prevent duplicate work or repeated mistakes. Write in a way that enables immediate resumption of the task.
-Wrap your summary in <summary></summary> tags.`;
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs
-var _BetaToolRunner_instances;
-var _BetaToolRunner_consumed;
-var _BetaToolRunner_mutated;
-var _BetaToolRunner_state;
-var _BetaToolRunner_options;
-var _BetaToolRunner_message;
-var _BetaToolRunner_toolResponse;
-var _BetaToolRunner_completion;
-var _BetaToolRunner_iterationCount;
-var _BetaToolRunner_checkAndCompact;
-var _BetaToolRunner_generateToolResponse;
-function promiseWithResolvers() {
-  let resolve4;
-  let reject;
-  const promise = new Promise((res, rej) => {
-    resolve4 = res;
-    reject = rej;
-  });
-  return { promise, resolve: resolve4, reject };
-}
-var BetaToolRunner = class {
-  constructor(client, params, options) {
-    _BetaToolRunner_instances.add(this);
-    this.client = client;
-    _BetaToolRunner_consumed.set(this, false);
-    _BetaToolRunner_mutated.set(this, false);
-    _BetaToolRunner_state.set(this, void 0);
-    _BetaToolRunner_options.set(this, void 0);
-    _BetaToolRunner_message.set(this, void 0);
-    _BetaToolRunner_toolResponse.set(this, void 0);
-    _BetaToolRunner_completion.set(this, void 0);
-    _BetaToolRunner_iterationCount.set(this, 0);
-    __classPrivateFieldSet(this, _BetaToolRunner_state, {
-      params: {
-        // You can't clone the entire params since there are functions as handlers.
-        // You also don't really need to clone params.messages, but it probably will prevent a foot gun
-        // somewhere.
-        ...params,
-        messages: structuredClone(params.messages)
-      }
-    }, "f");
-    const helpers = collectStainlessHelpers(params.tools, params.messages);
-    const helperValue = ["BetaToolRunner", ...helpers].join(", ");
-    __classPrivateFieldSet(this, _BetaToolRunner_options, {
-      ...options,
-      headers: buildHeaders([{ "x-stainless-helper": helperValue }, options?.headers])
-    }, "f");
-    __classPrivateFieldSet(this, _BetaToolRunner_completion, promiseWithResolvers(), "f");
-    if (params.compactionControl?.enabled) {
-      console.warn('Anthropic: The `compactionControl` parameter is deprecated and will be removed in a future version. Use server-side compaction instead by passing `edits: [{ type: "compact_20260112" }]` in the params passed to `toolRunner()`. See https://platform.claude.com/docs/en/build-with-claude/compaction');
-    }
-  }
-  async *[(_BetaToolRunner_consumed = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_mutated = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_state = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_options = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_message = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_toolResponse = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_completion = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_iterationCount = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_instances = /* @__PURE__ */ new WeakSet(), _BetaToolRunner_checkAndCompact = async function _BetaToolRunner_checkAndCompact2() {
-    const compactionControl = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.compactionControl;
-    if (!compactionControl || !compactionControl.enabled) {
-      return false;
-    }
-    let tokensUsed = 0;
-    if (__classPrivateFieldGet(this, _BetaToolRunner_message, "f") !== void 0) {
-      try {
-        const message = await __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
-        const totalInputTokens = message.usage.input_tokens + (message.usage.cache_creation_input_tokens ?? 0) + (message.usage.cache_read_input_tokens ?? 0);
-        tokensUsed = totalInputTokens + message.usage.output_tokens;
-      } catch {
-        return false;
-      }
-    }
-    const threshold = compactionControl.contextTokenThreshold ?? DEFAULT_TOKEN_THRESHOLD;
-    if (tokensUsed < threshold) {
-      return false;
-    }
-    const model = compactionControl.model ?? __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.model;
-    const summaryPrompt = compactionControl.summaryPrompt ?? DEFAULT_SUMMARY_PROMPT;
-    const messages = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages;
-    if (messages[messages.length - 1].role === "assistant") {
-      const lastMessage = messages[messages.length - 1];
-      if (Array.isArray(lastMessage.content)) {
-        const nonToolBlocks = lastMessage.content.filter((block) => block.type !== "tool_use");
-        if (nonToolBlocks.length === 0) {
-          messages.pop();
-        } else {
-          lastMessage.content = nonToolBlocks;
-        }
-      }
-    }
-    const response = await this.client.beta.messages.create({
-      model,
-      messages: [
-        ...messages,
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: summaryPrompt
-            }
-          ]
-        }
-      ],
-      max_tokens: __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.max_tokens
-    }, {
-      signal: __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal,
-      headers: buildHeaders([__classPrivateFieldGet(this, _BetaToolRunner_options, "f").headers, { "x-stainless-helper": "compaction" }])
-    });
-    if (response.content[0]?.type !== "text") {
-      throw new AnthropicError("Expected text response for compaction");
-    }
-    __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages = [
-      {
-        role: "user",
-        content: response.content
-      }
-    ];
-    return true;
-  }, Symbol.asyncIterator)]() {
-    var _a2;
-    if (__classPrivateFieldGet(this, _BetaToolRunner_consumed, "f")) {
-      throw new AnthropicError("Cannot iterate over a consumed stream");
-    }
-    __classPrivateFieldSet(this, _BetaToolRunner_consumed, true, "f");
-    __classPrivateFieldSet(this, _BetaToolRunner_mutated, true, "f");
-    __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, void 0, "f");
-    try {
-      while (true) {
-        let stream;
-        try {
-          if (__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.max_iterations && __classPrivateFieldGet(this, _BetaToolRunner_iterationCount, "f") >= __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.max_iterations) {
-            break;
-          }
-          __classPrivateFieldSet(this, _BetaToolRunner_mutated, false, "f");
-          __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, void 0, "f");
-          __classPrivateFieldSet(this, _BetaToolRunner_iterationCount, (_a2 = __classPrivateFieldGet(this, _BetaToolRunner_iterationCount, "f"), _a2++, _a2), "f");
-          __classPrivateFieldSet(this, _BetaToolRunner_message, void 0, "f");
-          const { max_iterations, compactionControl, ...params } = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params;
-          if (params.stream) {
-            stream = this.client.beta.messages.stream({ ...params }, __classPrivateFieldGet(this, _BetaToolRunner_options, "f"));
-            __classPrivateFieldSet(this, _BetaToolRunner_message, stream.finalMessage(), "f");
-            __classPrivateFieldGet(this, _BetaToolRunner_message, "f").catch(() => {
-            });
-            yield stream;
-          } else {
-            __classPrivateFieldSet(this, _BetaToolRunner_message, this.client.beta.messages.create({ ...params, stream: false }, __classPrivateFieldGet(this, _BetaToolRunner_options, "f")), "f");
-            yield __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
-          }
-          const isCompacted = await __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_checkAndCompact).call(this);
-          if (!isCompacted) {
-            if (!__classPrivateFieldGet(this, _BetaToolRunner_mutated, "f")) {
-              const { role, content } = await __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
-              __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.push({ role, content });
-            }
-            const toolMessage = await __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_generateToolResponse).call(this, __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.at(-1));
-            if (toolMessage) {
-              __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.push(toolMessage);
-            } else if (!__classPrivateFieldGet(this, _BetaToolRunner_mutated, "f")) {
-              break;
-            }
-          }
-        } finally {
-          if (stream) {
-            stream.abort();
-          }
-        }
-      }
-      if (!__classPrivateFieldGet(this, _BetaToolRunner_message, "f")) {
-        throw new AnthropicError("ToolRunner concluded without a message from the server");
-      }
-      __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").resolve(await __classPrivateFieldGet(this, _BetaToolRunner_message, "f"));
-    } catch (error) {
-      __classPrivateFieldSet(this, _BetaToolRunner_consumed, false, "f");
-      __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").promise.catch(() => {
-      });
-      __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").reject(error);
-      __classPrivateFieldSet(this, _BetaToolRunner_completion, promiseWithResolvers(), "f");
-      throw error;
-    }
-  }
-  setMessagesParams(paramsOrMutator) {
-    if (typeof paramsOrMutator === "function") {
-      __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params = paramsOrMutator(__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params);
-    } else {
-      __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params = paramsOrMutator;
-    }
-    __classPrivateFieldSet(this, _BetaToolRunner_mutated, true, "f");
-    __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, void 0, "f");
-  }
-  setRequestOptions(optionsOrMutator) {
-    if (typeof optionsOrMutator === "function") {
-      __classPrivateFieldSet(this, _BetaToolRunner_options, optionsOrMutator(__classPrivateFieldGet(this, _BetaToolRunner_options, "f")), "f");
-    } else {
-      __classPrivateFieldSet(this, _BetaToolRunner_options, { ...__classPrivateFieldGet(this, _BetaToolRunner_options, "f"), ...optionsOrMutator }, "f");
-    }
-  }
-  /**
-   * Get the tool response for the last message from the assistant.
-   * Avoids redundant tool executions by caching results.
-   *
-   * @returns A promise that resolves to a BetaMessageParam containing tool results, or null if no tools need to be executed
-   *
-   * @example
-   * const toolResponse = await runner.generateToolResponse();
-   * if (toolResponse) {
-   *   console.log('Tool results:', toolResponse.content);
-   * }
-   */
-  async generateToolResponse(signal = __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal) {
-    const message = await __classPrivateFieldGet(this, _BetaToolRunner_message, "f") ?? this.params.messages.at(-1);
-    if (!message) {
-      return null;
-    }
-    return __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_generateToolResponse).call(this, message, signal);
-  }
-  /**
-   * Wait for the async iterator to complete. This works even if the async iterator hasn't yet started, and
-   * will wait for an instance to start and go to completion.
-   *
-   * @returns A promise that resolves to the final BetaMessage when the iterator completes
-   *
-   * @example
-   * // Start consuming the iterator
-   * for await (const message of runner) {
-   *   console.log('Message:', message.content);
-   * }
-   *
-   * // Meanwhile, wait for completion from another part of the code
-   * const finalMessage = await runner.done();
-   * console.log('Final response:', finalMessage.content);
-   */
-  done() {
-    return __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").promise;
-  }
-  /**
-   * Returns a promise indicating that the stream is done. Unlike .done(), this will eagerly read the stream:
-   * * If the iterator has not been consumed, consume the entire iterator and return the final message from the
-   * assistant.
-   * * If the iterator has been consumed, waits for it to complete and returns the final message.
-   *
-   * @returns A promise that resolves to the final BetaMessage from the conversation
-   * @throws {AnthropicError} If no messages were processed during the conversation
-   *
-   * @example
-   * const finalMessage = await runner.runUntilDone();
-   * console.log('Final response:', finalMessage.content);
-   */
-  async runUntilDone() {
-    if (!__classPrivateFieldGet(this, _BetaToolRunner_consumed, "f")) {
-      for await (const _ of this) {
-      }
-    }
-    return this.done();
-  }
-  /**
-   * Get the current parameters being used by the ToolRunner.
-   *
-   * @returns A readonly view of the current ToolRunnerParams
-   *
-   * @example
-   * const currentParams = runner.params;
-   * console.log('Current model:', currentParams.model);
-   * console.log('Message count:', currentParams.messages.length);
-   */
-  get params() {
-    return __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params;
-  }
-  /**
-   * Add one or more messages to the conversation history.
-   *
-   * @param messages - One or more BetaMessageParam objects to add to the conversation
-   *
-   * @example
-   * runner.pushMessages(
-   *   { role: 'user', content: 'Also, what about the weather in NYC?' }
-   * );
-   *
-   * @example
-   * // Adding multiple messages
-   * runner.pushMessages(
-   *   { role: 'user', content: 'What about NYC?' },
-   *   { role: 'user', content: 'And Boston?' }
-   * );
-   */
-  pushMessages(...messages) {
-    this.setMessagesParams((params) => ({
-      ...params,
-      messages: [...params.messages, ...messages]
-    }));
-  }
-  /**
-   * Makes the ToolRunner directly awaitable, equivalent to calling .runUntilDone()
-   * This allows using `await runner` instead of `await runner.runUntilDone()`
-   */
-  then(onfulfilled, onrejected) {
-    return this.runUntilDone().then(onfulfilled, onrejected);
-  }
-};
-_BetaToolRunner_generateToolResponse = async function _BetaToolRunner_generateToolResponse2(lastMessage, signal = __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal) {
-  if (__classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f") !== void 0) {
-    return __classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f");
-  }
-  __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, generateToolResponse(__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params, lastMessage, {
-    ...__classPrivateFieldGet(this, _BetaToolRunner_options, "f"),
-    signal
-  }), "f");
-  return __classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f");
-};
-async function generateToolResponse(params, lastMessage = params.messages.at(-1), requestOptions) {
-  if (!lastMessage || lastMessage.role !== "assistant" || !lastMessage.content || typeof lastMessage.content === "string") {
-    return null;
-  }
-  const toolUseBlocks = lastMessage.content.filter((content) => content.type === "tool_use");
-  if (toolUseBlocks.length === 0) {
-    return null;
-  }
-  const toolResults = await Promise.all(toolUseBlocks.map(async (toolUse) => {
-    const tool = params.tools.find((t) => ("name" in t ? t.name : t.mcp_server_name) === toolUse.name);
-    if (!tool || !("run" in tool)) {
-      return {
-        type: "tool_result",
-        tool_use_id: toolUse.id,
-        content: `Error: Tool '${toolUse.name}' not found`,
-        is_error: true
-      };
-    }
-    try {
-      let input = toolUse.input;
-      if ("parse" in tool && tool.parse) {
-        input = tool.parse(input);
-      }
-      const result = await tool.run(input, {
-        toolUseBlock: toolUse,
-        signal: requestOptions?.signal
-      });
-      return {
-        type: "tool_result",
-        tool_use_id: toolUse.id,
-        content: result
-      };
-    } catch (error) {
-      return {
-        type: "tool_result",
-        tool_use_id: toolUse.id,
-        content: error instanceof ToolError ? error.content : `Error: ${error instanceof Error ? error.message : String(error)}`,
-        is_error: true
-      };
-    }
-  }));
-  return {
-    role: "user",
-    content: toolResults
-  };
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs
-var JSONLDecoder = class _JSONLDecoder {
-  constructor(iterator, controller) {
-    this.iterator = iterator;
-    this.controller = controller;
-  }
-  async *decoder() {
-    const lineDecoder = new LineDecoder();
-    for await (const chunk of this.iterator) {
-      for (const line of lineDecoder.decode(chunk)) {
-        yield JSON.parse(line);
-      }
-    }
-    for (const line of lineDecoder.flush()) {
-      yield JSON.parse(line);
-    }
-  }
-  [Symbol.asyncIterator]() {
-    return this.decoder();
-  }
-  static fromResponse(response, controller) {
-    if (!response.body) {
-      controller.abort();
-      if (typeof globalThis.navigator !== "undefined" && globalThis.navigator.product === "ReactNative") {
-        throw new AnthropicError(`The default react-native fetch implementation does not support streaming. Please use expo/fetch: https://docs.expo.dev/versions/latest/sdk/expo/#expofetch-api`);
-      }
-      throw new AnthropicError(`Attempted to iterate over a response with no body`);
-    }
-    return new _JSONLDecoder(ReadableStreamToAsyncIterable(response.body), controller);
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs
-var Batches = class extends APIResource {
-  /**
-   * Send a batch of Message creation requests.
-   *
-   * The Message Batches API can be used to process multiple Messages API requests at
-   * once. Once a Message Batch is created, it begins processing immediately. Batches
-   * can take up to 24 hours to complete.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * const betaMessageBatch =
-   *   await client.beta.messages.batches.create({
-   *     requests: [
-   *       {
-   *         custom_id: 'my-custom-id-1',
-   *         params: {
-   *           max_tokens: 1024,
-   *           messages: [
-   *             { content: 'Hello, world', role: 'user' },
-   *           ],
-   *           model: 'claude-opus-4-6',
-   *         },
-   *       },
-   *     ],
-   *   });
-   * ```
-   */
-  create(params, options) {
-    const { betas, ...body } = params;
-    return this._client.post("/v1/messages/batches?beta=true", {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * This endpoint is idempotent and can be used to poll for Message Batch
-   * completion. To access the results of a Message Batch, make a request to the
-   * `results_url` field in the response.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * const betaMessageBatch =
-   *   await client.beta.messages.batches.retrieve(
-   *     'message_batch_id',
-   *   );
-   * ```
-   */
-  retrieve(messageBatchID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/messages/batches/${messageBatchID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List all Message Batches within a Workspace. Most recently created batches are
-   * returned first.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaMessageBatch of client.beta.messages.batches.list()) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList("/v1/messages/batches?beta=true", Page, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Delete a Message Batch.
-   *
-   * Message Batches can only be deleted once they've finished processing. If you'd
-   * like to delete an in-progress batch, you must first cancel it.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * const betaDeletedMessageBatch =
-   *   await client.beta.messages.batches.delete(
-   *     'message_batch_id',
-   *   );
-   * ```
-   */
-  delete(messageBatchID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.delete(path2`/v1/messages/batches/${messageBatchID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Batches may be canceled any time before processing ends. Once cancellation is
-   * initiated, the batch enters a `canceling` state, at which time the system may
-   * complete any in-progress, non-interruptible requests before finalizing
-   * cancellation.
-   *
-   * The number of canceled requests is specified in `request_counts`. To determine
-   * which requests were canceled, check the individual results within the batch.
-   * Note that cancellation may not result in any canceled requests if they were
-   * non-interruptible.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * const betaMessageBatch =
-   *   await client.beta.messages.batches.cancel(
-   *     'message_batch_id',
-   *   );
-   * ```
-   */
-  cancel(messageBatchID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.post(path2`/v1/messages/batches/${messageBatchID}/cancel?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Streams the results of a Message Batch as a `.jsonl` file.
-   *
-   * Each line in the file is a JSON object containing the result of a single request
-   * in the Message Batch. Results are not guaranteed to be in the same order as
-   * requests. Use the `custom_id` field to match results to requests.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * const betaMessageBatchIndividualResponse =
-   *   await client.beta.messages.batches.results(
-   *     'message_batch_id',
-   *   );
-   * ```
-   */
-  async results(messageBatchID, params = {}, options) {
-    const batch = await this.retrieve(messageBatchID);
-    if (!batch.results_url) {
-      throw new AnthropicError(`No batch \`results_url\`; Has it finished processing? ${batch.processing_status} - ${batch.id}`);
-    }
-    const { betas } = params ?? {};
-    return this._client.get(batch.results_url, {
-      ...options,
-      headers: buildHeaders([
-        {
-          "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString(),
-          Accept: "application/binary"
-        },
-        options?.headers
-      ]),
-      stream: true,
-      __binaryResponse: true
-    })._thenUnwrap((_, props) => JSONLDecoder.fromResponse(props.response, props.controller));
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs
-var DEPRECATED_MODELS = {
-  "claude-1.3": "November 6th, 2024",
-  "claude-1.3-100k": "November 6th, 2024",
-  "claude-instant-1.1": "November 6th, 2024",
-  "claude-instant-1.1-100k": "November 6th, 2024",
-  "claude-instant-1.2": "November 6th, 2024",
-  "claude-3-sonnet-20240229": "July 21st, 2025",
-  "claude-3-opus-20240229": "January 5th, 2026",
-  "claude-2.1": "July 21st, 2025",
-  "claude-2.0": "July 21st, 2025",
-  "claude-3-7-sonnet-latest": "February 19th, 2026",
-  "claude-3-7-sonnet-20250219": "February 19th, 2026"
-};
-var MODELS_TO_WARN_WITH_THINKING_ENABLED = ["claude-mythos-preview", "claude-opus-4-6"];
-var Messages = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.batches = new Batches(this._client);
-  }
-  create(params, options) {
-    const modifiedParams = transformOutputFormat(params);
-    const { betas, ...body } = modifiedParams;
-    if (body.model in DEPRECATED_MODELS) {
-      console.warn(`The model '${body.model}' is deprecated and will reach end-of-life on ${DEPRECATED_MODELS[body.model]}
-Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resources/model-deprecations for more information.`);
-    }
-    if (MODELS_TO_WARN_WITH_THINKING_ENABLED.includes(body.model) && body.thinking && body.thinking.type === "enabled") {
-      console.warn(`Using Claude with ${body.model} and 'thinking.type=enabled' is deprecated. Use 'thinking.type=adaptive' instead which results in better model performance in our testing: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`);
-    }
-    let timeout = this._client._options.timeout;
-    if (!body.stream && timeout == null) {
-      const maxNonstreamingTokens = MODEL_NONSTREAMING_TOKENS[body.model] ?? void 0;
-      timeout = this._client.calculateNonstreamingTimeout(body.max_tokens, maxNonstreamingTokens);
-    }
-    const helperHeader = stainlessHelperHeader(body.tools, body.messages);
-    return this._client.post("/v1/messages?beta=true", {
-      body,
-      timeout: timeout ?? 6e5,
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-        helperHeader,
-        options?.headers
-      ]),
-      stream: modifiedParams.stream ?? false
-    });
-  }
-  /**
-   * Send a structured list of input messages with text and/or image content, along with an expected `output_format` and
-   * the response will be automatically parsed and available in the `parsed_output` property of the message.
-   *
-   * @example
-   * ```ts
-   * const message = await client.beta.messages.parse({
-   *   model: 'claude-3-5-sonnet-20241022',
-   *   max_tokens: 1024,
-   *   messages: [{ role: 'user', content: 'What is 2+2?' }],
-   *   output_format: zodOutputFormat(z.object({ answer: z.number() }), 'math'),
-   * });
-   *
-   * console.log(message.parsed_output?.answer); // 4
-   * ```
-   */
-  parse(params, options) {
-    options = {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...params.betas ?? [], "structured-outputs-2025-12-15"].toString() },
-        options?.headers
-      ])
-    };
-    return this.create(params, options).then((message) => parseBetaMessage(message, params, { logger: this._client.logger ?? console }));
-  }
-  /**
-   * Create a Message stream
-   */
-  stream(body, options) {
-    return BetaMessageStream.createMessage(this, body, options);
-  }
-  /**
-   * Count the number of tokens in a Message.
-   *
-   * The Token Count API can be used to count the number of tokens in a Message,
-   * including tools, images, and documents, without creating it.
-   *
-   * Learn more about token counting in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/token-counting)
-   *
-   * @example
-   * ```ts
-   * const betaMessageTokensCount =
-   *   await client.beta.messages.countTokens({
-   *     messages: [{ content: 'Hello, world', role: 'user' }],
-   *     model: 'claude-opus-4-6',
-   *   });
-   * ```
-   */
-  countTokens(params, options) {
-    const modifiedParams = transformOutputFormat(params);
-    const { betas, ...body } = modifiedParams;
-    return this._client.post("/v1/messages/count_tokens?beta=true", {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "token-counting-2024-11-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  toolRunner(body, options) {
-    return new BetaToolRunner(this._client, body, options);
-  }
-};
-function transformOutputFormat(params) {
-  if (!params.output_format) {
-    return params;
-  }
-  if (params.output_config?.format) {
-    throw new AnthropicError("Both output_format and output_config.format were provided. Please use only output_config.format (output_format is deprecated).");
-  }
-  const { output_format, ...rest } = params;
-  return {
-    ...rest,
-    output_config: {
-      ...params.output_config,
-      format: output_format
-    }
-  };
-}
-Messages.Batches = Batches;
-Messages.BetaToolRunner = BetaToolRunner;
-Messages.ToolError = ToolError;
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs
-var Events = class extends APIResource {
-  /**
-   * List Events
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaManagedAgentsSessionEvent of client.beta.sessions.events.list(
-   *   'sesn_011CZkZAtmR3yMPDzynEDxu7',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(sessionID, params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList(path2`/v1/sessions/${sessionID}/events?beta=true`, PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Send Events
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsSendSessionEvents =
-   *   await client.beta.sessions.events.send(
-   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
-   *     {
-   *       events: [
-   *         {
-   *           content: [
-   *             {
-   *               text: 'Where is my order #1234?',
-   *               type: 'text',
-   *             },
-   *           ],
-   *           type: 'user.message',
-   *         },
-   *       ],
-   *     },
-   *   );
-   * ```
-   */
-  send(sessionID, params, options) {
-    const { betas, ...body } = params;
-    return this._client.post(path2`/v1/sessions/${sessionID}/events?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Stream Events
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsStreamSessionEvents =
-   *   await client.beta.sessions.events.stream(
-   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
-   *   );
-   * ```
-   */
-  stream(sessionID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/sessions/${sessionID}/events/stream?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ]),
-      stream: true
-    });
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs
-var Resources = class extends APIResource {
-  /**
-   * Get Session Resource
-   *
-   * @example
-   * ```ts
-   * const resource =
-   *   await client.beta.sessions.resources.retrieve(
-   *     'sesrsc_011CZkZBJq5dWxk9fVLNcPht',
-   *     { session_id: 'sesn_011CZkZAtmR3yMPDzynEDxu7' },
-   *   );
-   * ```
-   */
-  retrieve(resourceID, params, options) {
-    const { session_id, betas } = params;
-    return this._client.get(path2`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Update Session Resource
-   *
-   * @example
-   * ```ts
-   * const resource =
-   *   await client.beta.sessions.resources.update(
-   *     'sesrsc_011CZkZBJq5dWxk9fVLNcPht',
-   *     {
-   *       session_id: 'sesn_011CZkZAtmR3yMPDzynEDxu7',
-   *       authorization_token: 'ghp_exampletoken',
-   *     },
-   *   );
-   * ```
-   */
-  update(resourceID, params, options) {
-    const { session_id, betas, ...body } = params;
-    return this._client.post(path2`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List Session Resources
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaManagedAgentsSessionResource of client.beta.sessions.resources.list(
-   *   'sesn_011CZkZAtmR3yMPDzynEDxu7',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(sessionID, params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList(path2`/v1/sessions/${sessionID}/resources?beta=true`, PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Delete Session Resource
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsDeleteSessionResource =
-   *   await client.beta.sessions.resources.delete(
-   *     'sesrsc_011CZkZBJq5dWxk9fVLNcPht',
-   *     { session_id: 'sesn_011CZkZAtmR3yMPDzynEDxu7' },
-   *   );
-   * ```
-   */
-  delete(resourceID, params, options) {
-    const { session_id, betas } = params;
-    return this._client.delete(path2`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Add Session Resource
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsFileResource =
-   *   await client.beta.sessions.resources.add(
-   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
-   *     {
-   *       file_id: 'file_011CNha8iCJcU1wXNR6q4V8w',
-   *       type: 'file',
-   *     },
-   *   );
-   * ```
-   */
-  add(sessionID, params, options) {
-    const { betas, ...body } = params;
-    return this._client.post(path2`/v1/sessions/${sessionID}/resources?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs
-var Sessions = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.events = new Events(this._client);
-    this.resources = new Resources(this._client);
-  }
-  /**
-   * Create Session
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsSession =
-   *   await client.beta.sessions.create({
-   *     agent: 'agent_011CZkYpogX7uDKUyvBTophP',
-   *     environment_id: 'env_011CZkZ9X2dpNyB7HsEFoRfW',
-   *   });
-   * ```
-   */
-  create(params, options) {
-    const { betas, ...body } = params;
-    return this._client.post("/v1/sessions?beta=true", {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Get Session
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsSession =
-   *   await client.beta.sessions.retrieve(
-   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
-   *   );
-   * ```
-   */
-  retrieve(sessionID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/sessions/${sessionID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Update Session
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsSession =
-   *   await client.beta.sessions.update(
-   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
-   *   );
-   * ```
-   */
-  update(sessionID, params, options) {
-    const { betas, ...body } = params;
-    return this._client.post(path2`/v1/sessions/${sessionID}?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List Sessions
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaManagedAgentsSession of client.beta.sessions.list()) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList("/v1/sessions?beta=true", PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Delete Session
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsDeletedSession =
-   *   await client.beta.sessions.delete(
-   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
-   *   );
-   * ```
-   */
-  delete(sessionID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.delete(path2`/v1/sessions/${sessionID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Archive Session
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsSession =
-   *   await client.beta.sessions.archive(
-   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
-   *   );
-   * ```
-   */
-  archive(sessionID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.post(path2`/v1/sessions/${sessionID}/archive?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-};
-Sessions.Events = Events;
-Sessions.Resources = Resources;
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs
-var Versions2 = class extends APIResource {
-  /**
-   * Create Skill Version
-   *
-   * @example
-   * ```ts
-   * const version = await client.beta.skills.versions.create(
-   *   'skill_id',
-   * );
-   * ```
-   */
-  create(skillID, params = {}, options) {
-    const { betas, ...body } = params ?? {};
-    return this._client.post(path2`/v1/skills/${skillID}/versions?beta=true`, multipartFormRequestOptions({
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
-        options?.headers
-      ])
-    }, this._client));
-  }
-  /**
-   * Get Skill Version
-   *
-   * @example
-   * ```ts
-   * const version = await client.beta.skills.versions.retrieve(
-   *   'version',
-   *   { skill_id: 'skill_id' },
-   * );
-   * ```
-   */
-  retrieve(version, params, options) {
-    const { skill_id, betas } = params;
-    return this._client.get(path2`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List Skill Versions
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const versionListResponse of client.beta.skills.versions.list(
-   *   'skill_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(skillID, params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList(path2`/v1/skills/${skillID}/versions?beta=true`, PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Delete Skill Version
-   *
-   * @example
-   * ```ts
-   * const version = await client.beta.skills.versions.delete(
-   *   'version',
-   *   { skill_id: 'skill_id' },
-   * );
-   * ```
-   */
-  delete(version, params, options) {
-    const { skill_id, betas } = params;
-    return this._client.delete(path2`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
-        options?.headers
-      ])
-    });
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs
-var Skills = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.versions = new Versions2(this._client);
-  }
-  /**
-   * Create Skill
-   *
-   * @example
-   * ```ts
-   * const skill = await client.beta.skills.create();
-   * ```
-   */
-  create(params = {}, options) {
-    const { betas, ...body } = params ?? {};
-    return this._client.post("/v1/skills?beta=true", multipartFormRequestOptions({
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
-        options?.headers
-      ])
-    }, this._client, false));
-  }
-  /**
-   * Get Skill
-   *
-   * @example
-   * ```ts
-   * const skill = await client.beta.skills.retrieve('skill_id');
-   * ```
-   */
-  retrieve(skillID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/skills/${skillID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List Skills
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const skillListResponse of client.beta.skills.list()) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList("/v1/skills?beta=true", PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Delete Skill
-   *
-   * @example
-   * ```ts
-   * const skill = await client.beta.skills.delete('skill_id');
-   * ```
-   */
-  delete(skillID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.delete(path2`/v1/skills/${skillID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
-        options?.headers
-      ])
-    });
-  }
-};
-Skills.Versions = Versions2;
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs
-var Credentials = class extends APIResource {
-  /**
-   * Create Credential
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsCredential =
-   *   await client.beta.vaults.credentials.create(
-   *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
-   *     {
-   *       auth: {
-   *         token: 'bearer_exampletoken',
-   *         mcp_server_url:
-   *           'https://example-server.modelcontextprotocol.io/sse',
-   *         type: 'static_bearer',
-   *       },
-   *     },
-   *   );
-   * ```
-   */
-  create(vaultID, params, options) {
-    const { betas, ...body } = params;
-    return this._client.post(path2`/v1/vaults/${vaultID}/credentials?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Get Credential
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsCredential =
-   *   await client.beta.vaults.credentials.retrieve(
-   *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
-   *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
-   *   );
-   * ```
-   */
-  retrieve(credentialID, params, options) {
-    const { vault_id, betas } = params;
-    return this._client.get(path2`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Update Credential
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsCredential =
-   *   await client.beta.vaults.credentials.update(
-   *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
-   *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
-   *   );
-   * ```
-   */
-  update(credentialID, params, options) {
-    const { vault_id, betas, ...body } = params;
-    return this._client.post(path2`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List Credentials
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaManagedAgentsCredential of client.beta.vaults.credentials.list(
-   *   'vlt_011CZkZDLs7fYzm1hXNPeRjv',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(vaultID, params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList(path2`/v1/vaults/${vaultID}/credentials?beta=true`, PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Delete Credential
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsDeletedCredential =
-   *   await client.beta.vaults.credentials.delete(
-   *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
-   *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
-   *   );
-   * ```
-   */
-  delete(credentialID, params, options) {
-    const { vault_id, betas } = params;
-    return this._client.delete(path2`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Archive Credential
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsCredential =
-   *   await client.beta.vaults.credentials.archive(
-   *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
-   *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
-   *   );
-   * ```
-   */
-  archive(credentialID, params, options) {
-    const { vault_id, betas } = params;
-    return this._client.post(path2`/v1/vaults/${vault_id}/credentials/${credentialID}/archive?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs
-var Vaults = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.credentials = new Credentials(this._client);
-  }
-  /**
-   * Create Vault
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsVault =
-   *   await client.beta.vaults.create({
-   *     display_name: 'Example vault',
-   *   });
-   * ```
-   */
-  create(params, options) {
-    const { betas, ...body } = params;
-    return this._client.post("/v1/vaults?beta=true", {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Get Vault
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsVault =
-   *   await client.beta.vaults.retrieve(
-   *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
-   *   );
-   * ```
-   */
-  retrieve(vaultID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/vaults/${vaultID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Update Vault
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsVault =
-   *   await client.beta.vaults.update(
-   *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
-   *   );
-   * ```
-   */
-  update(vaultID, params, options) {
-    const { betas, ...body } = params;
-    return this._client.post(path2`/v1/vaults/${vaultID}?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List Vaults
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaManagedAgentsVault of client.beta.vaults.list()) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList("/v1/vaults?beta=true", PageCursor, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Delete Vault
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsDeletedVault =
-   *   await client.beta.vaults.delete(
-   *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
-   *   );
-   * ```
-   */
-  delete(vaultID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.delete(path2`/v1/vaults/${vaultID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * Archive Vault
-   *
-   * @example
-   * ```ts
-   * const betaManagedAgentsVault =
-   *   await client.beta.vaults.archive(
-   *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
-   *   );
-   * ```
-   */
-  archive(vaultID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.post(path2`/v1/vaults/${vaultID}/archive?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
-        options?.headers
-      ])
-    });
-  }
-};
-Vaults.Credentials = Credentials;
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs
-var Beta = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.models = new Models(this._client);
-    this.messages = new Messages(this._client);
-    this.agents = new Agents(this._client);
-    this.environments = new Environments(this._client);
-    this.sessions = new Sessions(this._client);
-    this.vaults = new Vaults(this._client);
-    this.files = new Files(this._client);
-    this.skills = new Skills(this._client);
-    this.userProfiles = new UserProfiles(this._client);
-  }
-};
-Beta.Models = Models;
-Beta.Messages = Messages;
-Beta.Agents = Agents;
-Beta.Environments = Environments;
-Beta.Sessions = Sessions;
-Beta.Vaults = Vaults;
-Beta.Files = Files;
-Beta.Skills = Skills;
-Beta.UserProfiles = UserProfiles;
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/completions.mjs
-var Completions = class extends APIResource {
-  create(params, options) {
-    const { betas, ...body } = params;
-    return this._client.post("/v1/complete", {
-      body,
-      timeout: this._client._options.timeout ?? 6e5,
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ]),
-      stream: params.stream ?? false
-    });
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/parser.mjs
-function getOutputFormat2(params) {
-  return params?.output_config?.format;
-}
-function maybeParseMessage(message, params, opts) {
-  const outputFormat = getOutputFormat2(params);
-  if (!params || !("parse" in (outputFormat ?? {}))) {
-    return {
-      ...message,
-      content: message.content.map((block) => {
-        if (block.type === "text") {
-          const parsedBlock = Object.defineProperty({ ...block }, "parsed_output", {
-            value: null,
-            enumerable: false
-          });
-          return parsedBlock;
-        }
-        return block;
-      }),
-      parsed_output: null
-    };
-  }
-  return parseMessage(message, params, opts);
-}
-function parseMessage(message, params, opts) {
-  let firstParsedOutput = null;
-  const content = message.content.map((block) => {
-    if (block.type === "text") {
-      const parsedOutput = parseOutputFormat(params, block.text);
-      if (firstParsedOutput === null) {
-        firstParsedOutput = parsedOutput;
-      }
-      const parsedBlock = Object.defineProperty({ ...block }, "parsed_output", {
-        value: parsedOutput,
-        enumerable: false
-      });
-      return parsedBlock;
-    }
-    return block;
-  });
-  return {
-    ...message,
-    content,
-    parsed_output: firstParsedOutput
-  };
-}
-function parseOutputFormat(params, content) {
-  const outputFormat = getOutputFormat2(params);
-  if (outputFormat?.type !== "json_schema") {
-    return null;
-  }
-  try {
-    if ("parse" in outputFormat) {
-      return outputFormat.parse(content);
-    }
-    return JSON.parse(content);
-  } catch (error) {
-    throw new AnthropicError(`Failed to parse structured output: ${error}`);
-  }
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs
-var _MessageStream_instances;
-var _MessageStream_currentMessageSnapshot;
-var _MessageStream_params;
-var _MessageStream_connectedPromise;
-var _MessageStream_resolveConnectedPromise;
-var _MessageStream_rejectConnectedPromise;
-var _MessageStream_endPromise;
-var _MessageStream_resolveEndPromise;
-var _MessageStream_rejectEndPromise;
-var _MessageStream_listeners;
-var _MessageStream_ended;
-var _MessageStream_errored;
-var _MessageStream_aborted;
-var _MessageStream_catchingPromiseCreated;
-var _MessageStream_response;
-var _MessageStream_request_id;
-var _MessageStream_logger;
-var _MessageStream_getFinalMessage;
-var _MessageStream_getFinalText;
-var _MessageStream_handleError;
-var _MessageStream_beginRequest;
-var _MessageStream_addStreamEvent;
-var _MessageStream_endRequest;
-var _MessageStream_accumulateMessage;
-var JSON_BUF_PROPERTY2 = "__json_buf";
-function tracksToolInput2(content) {
-  return content.type === "tool_use" || content.type === "server_tool_use";
-}
-var MessageStream = class _MessageStream {
-  constructor(params, opts) {
-    _MessageStream_instances.add(this);
-    this.messages = [];
-    this.receivedMessages = [];
-    _MessageStream_currentMessageSnapshot.set(this, void 0);
-    _MessageStream_params.set(this, null);
-    this.controller = new AbortController();
-    _MessageStream_connectedPromise.set(this, void 0);
-    _MessageStream_resolveConnectedPromise.set(this, () => {
-    });
-    _MessageStream_rejectConnectedPromise.set(this, () => {
-    });
-    _MessageStream_endPromise.set(this, void 0);
-    _MessageStream_resolveEndPromise.set(this, () => {
-    });
-    _MessageStream_rejectEndPromise.set(this, () => {
-    });
-    _MessageStream_listeners.set(this, {});
-    _MessageStream_ended.set(this, false);
-    _MessageStream_errored.set(this, false);
-    _MessageStream_aborted.set(this, false);
-    _MessageStream_catchingPromiseCreated.set(this, false);
-    _MessageStream_response.set(this, void 0);
-    _MessageStream_request_id.set(this, void 0);
-    _MessageStream_logger.set(this, void 0);
-    _MessageStream_handleError.set(this, (error) => {
-      __classPrivateFieldSet(this, _MessageStream_errored, true, "f");
-      if (isAbortError(error)) {
-        error = new APIUserAbortError();
-      }
-      if (error instanceof APIUserAbortError) {
-        __classPrivateFieldSet(this, _MessageStream_aborted, true, "f");
-        return this._emit("abort", error);
-      }
-      if (error instanceof AnthropicError) {
-        return this._emit("error", error);
-      }
-      if (error instanceof Error) {
-        const anthropicError = new AnthropicError(error.message);
-        anthropicError.cause = error;
-        return this._emit("error", anthropicError);
-      }
-      return this._emit("error", new AnthropicError(String(error)));
-    });
-    __classPrivateFieldSet(this, _MessageStream_connectedPromise, new Promise((resolve4, reject) => {
-      __classPrivateFieldSet(this, _MessageStream_resolveConnectedPromise, resolve4, "f");
-      __classPrivateFieldSet(this, _MessageStream_rejectConnectedPromise, reject, "f");
-    }), "f");
-    __classPrivateFieldSet(this, _MessageStream_endPromise, new Promise((resolve4, reject) => {
-      __classPrivateFieldSet(this, _MessageStream_resolveEndPromise, resolve4, "f");
-      __classPrivateFieldSet(this, _MessageStream_rejectEndPromise, reject, "f");
-    }), "f");
-    __classPrivateFieldGet(this, _MessageStream_connectedPromise, "f").catch(() => {
-    });
-    __classPrivateFieldGet(this, _MessageStream_endPromise, "f").catch(() => {
-    });
-    __classPrivateFieldSet(this, _MessageStream_params, params, "f");
-    __classPrivateFieldSet(this, _MessageStream_logger, opts?.logger ?? console, "f");
-  }
-  get response() {
-    return __classPrivateFieldGet(this, _MessageStream_response, "f");
-  }
-  get request_id() {
-    return __classPrivateFieldGet(this, _MessageStream_request_id, "f");
-  }
-  /**
-   * Returns the `MessageStream` data, the raw `Response` instance and the ID of the request,
-   * returned vie the `request-id` header which is useful for debugging requests and resporting
-   * issues to Anthropic.
-   *
-   * This is the same as the `APIPromise.withResponse()` method.
-   *
-   * This method will raise an error if you created the stream using `MessageStream.fromReadableStream`
-   * as no `Response` is available.
-   */
-  async withResponse() {
-    __classPrivateFieldSet(this, _MessageStream_catchingPromiseCreated, true, "f");
-    const response = await __classPrivateFieldGet(this, _MessageStream_connectedPromise, "f");
-    if (!response) {
-      throw new Error("Could not resolve a `Response` object");
-    }
-    return {
-      data: this,
-      response,
-      request_id: response.headers.get("request-id")
-    };
-  }
-  /**
-   * Intended for use on the frontend, consuming a stream produced with
-   * `.toReadableStream()` on the backend.
-   *
-   * Note that messages sent to the model do not appear in `.on('message')`
-   * in this context.
-   */
-  static fromReadableStream(stream) {
-    const runner = new _MessageStream(null);
-    runner._run(() => runner._fromReadableStream(stream));
-    return runner;
-  }
-  static createMessage(messages, params, options, { logger } = {}) {
-    const runner = new _MessageStream(params, { logger });
-    for (const message of params.messages) {
-      runner._addMessageParam(message);
-    }
-    __classPrivateFieldSet(runner, _MessageStream_params, { ...params, stream: true }, "f");
-    runner._run(() => runner._createMessage(messages, { ...params, stream: true }, { ...options, headers: { ...options?.headers, "X-Stainless-Helper-Method": "stream" } }));
-    return runner;
-  }
-  _run(executor) {
-    executor().then(() => {
-      this._emitFinal();
-      this._emit("end");
-    }, __classPrivateFieldGet(this, _MessageStream_handleError, "f"));
-  }
-  _addMessageParam(message) {
-    this.messages.push(message);
-  }
-  _addMessage(message, emit = true) {
-    this.receivedMessages.push(message);
-    if (emit) {
-      this._emit("message", message);
-    }
-  }
-  async _createMessage(messages, params, options) {
-    const signal = options?.signal;
-    let abortHandler;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      abortHandler = this.controller.abort.bind(this.controller);
-      signal.addEventListener("abort", abortHandler);
-    }
-    try {
-      __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_beginRequest).call(this);
-      const { response, data: stream } = await messages.create({ ...params, stream: true }, { ...options, signal: this.controller.signal }).withResponse();
-      this._connected(response);
-      for await (const event of stream) {
-        __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_addStreamEvent).call(this, event);
-      }
-      if (stream.controller.signal?.aborted) {
-        throw new APIUserAbortError();
-      }
-      __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_endRequest).call(this);
-    } finally {
-      if (signal && abortHandler) {
-        signal.removeEventListener("abort", abortHandler);
-      }
-    }
-  }
-  _connected(response) {
-    if (this.ended)
-      return;
-    __classPrivateFieldSet(this, _MessageStream_response, response, "f");
-    __classPrivateFieldSet(this, _MessageStream_request_id, response?.headers.get("request-id"), "f");
-    __classPrivateFieldGet(this, _MessageStream_resolveConnectedPromise, "f").call(this, response);
-    this._emit("connect");
-  }
-  get ended() {
-    return __classPrivateFieldGet(this, _MessageStream_ended, "f");
-  }
-  get errored() {
-    return __classPrivateFieldGet(this, _MessageStream_errored, "f");
-  }
-  get aborted() {
-    return __classPrivateFieldGet(this, _MessageStream_aborted, "f");
-  }
-  abort() {
-    this.controller.abort();
-  }
-  /**
-   * Adds the listener function to the end of the listeners array for the event.
-   * No checks are made to see if the listener has already been added. Multiple calls passing
-   * the same combination of event and listener will result in the listener being added, and
-   * called, multiple times.
-   * @returns this MessageStream, so that calls can be chained
-   */
-  on(event, listener) {
-    const listeners = __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] || (__classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] = []);
-    listeners.push({ listener });
-    return this;
-  }
-  /**
-   * Removes the specified listener from the listener array for the event.
-   * off() will remove, at most, one instance of a listener from the listener array. If any single
-   * listener has been added multiple times to the listener array for the specified event, then
-   * off() must be called multiple times to remove each instance.
-   * @returns this MessageStream, so that calls can be chained
-   */
-  off(event, listener) {
-    const listeners = __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event];
-    if (!listeners)
-      return this;
-    const index = listeners.findIndex((l) => l.listener === listener);
-    if (index >= 0)
-      listeners.splice(index, 1);
-    return this;
-  }
-  /**
-   * Adds a one-time listener function for the event. The next time the event is triggered,
-   * this listener is removed and then invoked.
-   * @returns this MessageStream, so that calls can be chained
-   */
-  once(event, listener) {
-    const listeners = __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] || (__classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] = []);
-    listeners.push({ listener, once: true });
-    return this;
-  }
-  /**
-   * This is similar to `.once()`, but returns a Promise that resolves the next time
-   * the event is triggered, instead of calling a listener callback.
-   * @returns a Promise that resolves the next time given event is triggered,
-   * or rejects if an error is emitted.  (If you request the 'error' event,
-   * returns a promise that resolves with the error).
-   *
-   * Example:
-   *
-   *   const message = await stream.emitted('message') // rejects if the stream errors
-   */
-  emitted(event) {
-    return new Promise((resolve4, reject) => {
-      __classPrivateFieldSet(this, _MessageStream_catchingPromiseCreated, true, "f");
-      if (event !== "error")
-        this.once("error", reject);
-      this.once(event, resolve4);
-    });
-  }
-  async done() {
-    __classPrivateFieldSet(this, _MessageStream_catchingPromiseCreated, true, "f");
-    await __classPrivateFieldGet(this, _MessageStream_endPromise, "f");
-  }
-  get currentMessage() {
-    return __classPrivateFieldGet(this, _MessageStream_currentMessageSnapshot, "f");
-  }
-  /**
-   * @returns a promise that resolves with the the final assistant Message response,
-   * or rejects if an error occurred or the stream ended prematurely without producing a Message.
-   * If structured outputs were used, this will be a ParsedMessage with a `parsed_output` field.
-   */
-  async finalMessage() {
-    await this.done();
-    return __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_getFinalMessage).call(this);
-  }
-  /**
-   * @returns a promise that resolves with the the final assistant Message's text response, concatenated
-   * together if there are more than one text blocks.
-   * Rejects if an error occurred or the stream ended prematurely without producing a Message.
-   */
-  async finalText() {
-    await this.done();
-    return __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_getFinalText).call(this);
-  }
-  _emit(event, ...args) {
-    if (__classPrivateFieldGet(this, _MessageStream_ended, "f"))
-      return;
-    if (event === "end") {
-      __classPrivateFieldSet(this, _MessageStream_ended, true, "f");
-      __classPrivateFieldGet(this, _MessageStream_resolveEndPromise, "f").call(this);
-    }
-    const listeners = __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event];
-    if (listeners) {
-      __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] = listeners.filter((l) => !l.once);
-      listeners.forEach(({ listener }) => listener(...args));
-    }
-    if (event === "abort") {
-      const error = args[0];
-      if (!__classPrivateFieldGet(this, _MessageStream_catchingPromiseCreated, "f") && !listeners?.length) {
-        Promise.reject(error);
-      }
-      __classPrivateFieldGet(this, _MessageStream_rejectConnectedPromise, "f").call(this, error);
-      __classPrivateFieldGet(this, _MessageStream_rejectEndPromise, "f").call(this, error);
-      this._emit("end");
-      return;
-    }
-    if (event === "error") {
-      const error = args[0];
-      if (!__classPrivateFieldGet(this, _MessageStream_catchingPromiseCreated, "f") && !listeners?.length) {
-        Promise.reject(error);
-      }
-      __classPrivateFieldGet(this, _MessageStream_rejectConnectedPromise, "f").call(this, error);
-      __classPrivateFieldGet(this, _MessageStream_rejectEndPromise, "f").call(this, error);
-      this._emit("end");
-    }
-  }
-  _emitFinal() {
-    const finalMessage = this.receivedMessages.at(-1);
-    if (finalMessage) {
-      this._emit("finalMessage", __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_getFinalMessage).call(this));
-    }
-  }
-  async _fromReadableStream(readableStream, options) {
-    const signal = options?.signal;
-    let abortHandler;
-    if (signal) {
-      if (signal.aborted)
-        this.controller.abort();
-      abortHandler = this.controller.abort.bind(this.controller);
-      signal.addEventListener("abort", abortHandler);
-    }
-    try {
-      __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_beginRequest).call(this);
-      this._connected(null);
-      const stream = Stream.fromReadableStream(readableStream, this.controller);
-      for await (const event of stream) {
-        __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_addStreamEvent).call(this, event);
-      }
-      if (stream.controller.signal?.aborted) {
-        throw new APIUserAbortError();
-      }
-      __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_endRequest).call(this);
-    } finally {
-      if (signal && abortHandler) {
-        signal.removeEventListener("abort", abortHandler);
-      }
-    }
-  }
-  [(_MessageStream_currentMessageSnapshot = /* @__PURE__ */ new WeakMap(), _MessageStream_params = /* @__PURE__ */ new WeakMap(), _MessageStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_endPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_listeners = /* @__PURE__ */ new WeakMap(), _MessageStream_ended = /* @__PURE__ */ new WeakMap(), _MessageStream_errored = /* @__PURE__ */ new WeakMap(), _MessageStream_aborted = /* @__PURE__ */ new WeakMap(), _MessageStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _MessageStream_response = /* @__PURE__ */ new WeakMap(), _MessageStream_request_id = /* @__PURE__ */ new WeakMap(), _MessageStream_logger = /* @__PURE__ */ new WeakMap(), _MessageStream_handleError = /* @__PURE__ */ new WeakMap(), _MessageStream_instances = /* @__PURE__ */ new WeakSet(), _MessageStream_getFinalMessage = function _MessageStream_getFinalMessage2() {
-    if (this.receivedMessages.length === 0) {
-      throw new AnthropicError("stream ended without producing a Message with role=assistant");
-    }
-    return this.receivedMessages.at(-1);
-  }, _MessageStream_getFinalText = function _MessageStream_getFinalText2() {
-    if (this.receivedMessages.length === 0) {
-      throw new AnthropicError("stream ended without producing a Message with role=assistant");
-    }
-    const textBlocks = this.receivedMessages.at(-1).content.filter((block) => block.type === "text").map((block) => block.text);
-    if (textBlocks.length === 0) {
-      throw new AnthropicError("stream ended without producing a content block with type=text");
-    }
-    return textBlocks.join(" ");
-  }, _MessageStream_beginRequest = function _MessageStream_beginRequest2() {
-    if (this.ended)
-      return;
-    __classPrivateFieldSet(this, _MessageStream_currentMessageSnapshot, void 0, "f");
-  }, _MessageStream_addStreamEvent = function _MessageStream_addStreamEvent2(event) {
-    if (this.ended)
-      return;
-    const messageSnapshot = __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_accumulateMessage).call(this, event);
-    this._emit("streamEvent", event, messageSnapshot);
-    switch (event.type) {
-      case "content_block_delta": {
-        const content = messageSnapshot.content.at(-1);
-        switch (event.delta.type) {
-          case "text_delta": {
-            if (content.type === "text") {
-              this._emit("text", event.delta.text, content.text || "");
-            }
-            break;
-          }
-          case "citations_delta": {
-            if (content.type === "text") {
-              this._emit("citation", event.delta.citation, content.citations ?? []);
-            }
-            break;
-          }
-          case "input_json_delta": {
-            if (tracksToolInput2(content) && content.input) {
-              this._emit("inputJson", event.delta.partial_json, content.input);
-            }
-            break;
-          }
-          case "thinking_delta": {
-            if (content.type === "thinking") {
-              this._emit("thinking", event.delta.thinking, content.thinking);
-            }
-            break;
-          }
-          case "signature_delta": {
-            if (content.type === "thinking") {
-              this._emit("signature", content.signature);
-            }
-            break;
-          }
-          default:
-            checkNever2(event.delta);
-        }
-        break;
-      }
-      case "message_stop": {
-        this._addMessageParam(messageSnapshot);
-        this._addMessage(maybeParseMessage(messageSnapshot, __classPrivateFieldGet(this, _MessageStream_params, "f"), { logger: __classPrivateFieldGet(this, _MessageStream_logger, "f") }), true);
-        break;
-      }
-      case "content_block_stop": {
-        this._emit("contentBlock", messageSnapshot.content.at(-1));
-        break;
-      }
-      case "message_start": {
-        __classPrivateFieldSet(this, _MessageStream_currentMessageSnapshot, messageSnapshot, "f");
-        break;
-      }
-      case "content_block_start":
-      case "message_delta":
-        break;
-    }
-  }, _MessageStream_endRequest = function _MessageStream_endRequest2() {
-    if (this.ended) {
-      throw new AnthropicError(`stream has ended, this shouldn't happen`);
-    }
-    const snapshot = __classPrivateFieldGet(this, _MessageStream_currentMessageSnapshot, "f");
-    if (!snapshot) {
-      throw new AnthropicError(`request ended without sending any chunks`);
-    }
-    __classPrivateFieldSet(this, _MessageStream_currentMessageSnapshot, void 0, "f");
-    return maybeParseMessage(snapshot, __classPrivateFieldGet(this, _MessageStream_params, "f"), { logger: __classPrivateFieldGet(this, _MessageStream_logger, "f") });
-  }, _MessageStream_accumulateMessage = function _MessageStream_accumulateMessage2(event) {
-    let snapshot = __classPrivateFieldGet(this, _MessageStream_currentMessageSnapshot, "f");
-    if (event.type === "message_start") {
-      if (snapshot) {
-        throw new AnthropicError(`Unexpected event order, got ${event.type} before receiving "message_stop"`);
-      }
-      return event.message;
-    }
-    if (!snapshot) {
-      throw new AnthropicError(`Unexpected event order, got ${event.type} before "message_start"`);
-    }
-    switch (event.type) {
-      case "message_stop":
-        return snapshot;
-      case "message_delta":
-        snapshot.stop_reason = event.delta.stop_reason;
-        snapshot.stop_sequence = event.delta.stop_sequence;
-        snapshot.usage.output_tokens = event.usage.output_tokens;
-        if (event.usage.input_tokens != null) {
-          snapshot.usage.input_tokens = event.usage.input_tokens;
-        }
-        if (event.usage.cache_creation_input_tokens != null) {
-          snapshot.usage.cache_creation_input_tokens = event.usage.cache_creation_input_tokens;
-        }
-        if (event.usage.cache_read_input_tokens != null) {
-          snapshot.usage.cache_read_input_tokens = event.usage.cache_read_input_tokens;
-        }
-        if (event.usage.server_tool_use != null) {
-          snapshot.usage.server_tool_use = event.usage.server_tool_use;
-        }
-        return snapshot;
-      case "content_block_start":
-        snapshot.content.push({ ...event.content_block });
-        return snapshot;
-      case "content_block_delta": {
-        const snapshotContent = snapshot.content.at(event.index);
-        switch (event.delta.type) {
-          case "text_delta": {
-            if (snapshotContent?.type === "text") {
-              snapshot.content[event.index] = {
-                ...snapshotContent,
-                text: (snapshotContent.text || "") + event.delta.text
-              };
-            }
-            break;
-          }
-          case "citations_delta": {
-            if (snapshotContent?.type === "text") {
-              snapshot.content[event.index] = {
-                ...snapshotContent,
-                citations: [...snapshotContent.citations ?? [], event.delta.citation]
-              };
-            }
-            break;
-          }
-          case "input_json_delta": {
-            if (snapshotContent && tracksToolInput2(snapshotContent)) {
-              let jsonBuf = snapshotContent[JSON_BUF_PROPERTY2] || "";
-              jsonBuf += event.delta.partial_json;
-              const newContent = { ...snapshotContent };
-              Object.defineProperty(newContent, JSON_BUF_PROPERTY2, {
-                value: jsonBuf,
-                enumerable: false,
-                writable: true
-              });
-              if (jsonBuf) {
-                newContent.input = partialParse(jsonBuf);
-              }
-              snapshot.content[event.index] = newContent;
-            }
-            break;
-          }
-          case "thinking_delta": {
-            if (snapshotContent?.type === "thinking") {
-              snapshot.content[event.index] = {
-                ...snapshotContent,
-                thinking: snapshotContent.thinking + event.delta.thinking
-              };
-            }
-            break;
-          }
-          case "signature_delta": {
-            if (snapshotContent?.type === "thinking") {
-              snapshot.content[event.index] = {
-                ...snapshotContent,
-                signature: event.delta.signature
-              };
-            }
-            break;
-          }
-          default:
-            checkNever2(event.delta);
-        }
-        return snapshot;
-      }
-      case "content_block_stop":
-        return snapshot;
-    }
-  }, Symbol.asyncIterator)]() {
-    const pushQueue = [];
-    const readQueue = [];
-    let done = false;
-    this.on("streamEvent", (event) => {
-      const reader = readQueue.shift();
-      if (reader) {
-        reader.resolve(event);
-      } else {
-        pushQueue.push(event);
-      }
-    });
-    this.on("end", () => {
-      done = true;
-      for (const reader of readQueue) {
-        reader.resolve(void 0);
-      }
-      readQueue.length = 0;
-    });
-    this.on("abort", (err) => {
-      done = true;
-      for (const reader of readQueue) {
-        reader.reject(err);
-      }
-      readQueue.length = 0;
-    });
-    this.on("error", (err) => {
-      done = true;
-      for (const reader of readQueue) {
-        reader.reject(err);
-      }
-      readQueue.length = 0;
-    });
-    return {
-      next: async () => {
-        if (!pushQueue.length) {
-          if (done) {
-            return { value: void 0, done: true };
-          }
-          return new Promise((resolve4, reject) => readQueue.push({ resolve: resolve4, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
-        }
-        const chunk = pushQueue.shift();
-        return { value: chunk, done: false };
-      },
-      return: async () => {
-        this.abort();
-        return { value: void 0, done: true };
-      }
-    };
-  }
-  toReadableStream() {
-    const stream = new Stream(this[Symbol.asyncIterator].bind(this), this.controller);
-    return stream.toReadableStream();
-  }
-};
-function checkNever2(x) {
-}
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs
-var Batches2 = class extends APIResource {
-  /**
-   * Send a batch of Message creation requests.
-   *
-   * The Message Batches API can be used to process multiple Messages API requests at
-   * once. Once a Message Batch is created, it begins processing immediately. Batches
-   * can take up to 24 hours to complete.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * const messageBatch = await client.messages.batches.create({
-   *   requests: [
-   *     {
-   *       custom_id: 'my-custom-id-1',
-   *       params: {
-   *         max_tokens: 1024,
-   *         messages: [
-   *           { content: 'Hello, world', role: 'user' },
-   *         ],
-   *         model: 'claude-opus-4-6',
-   *       },
-   *     },
-   *   ],
-   * });
-   * ```
-   */
-  create(body, options) {
-    return this._client.post("/v1/messages/batches", { body, ...options });
-  }
-  /**
-   * This endpoint is idempotent and can be used to poll for Message Batch
-   * completion. To access the results of a Message Batch, make a request to the
-   * `results_url` field in the response.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * const messageBatch = await client.messages.batches.retrieve(
-   *   'message_batch_id',
-   * );
-   * ```
-   */
-  retrieve(messageBatchID, options) {
-    return this._client.get(path2`/v1/messages/batches/${messageBatchID}`, options);
-  }
-  /**
-   * List all Message Batches within a Workspace. Most recently created batches are
-   * returned first.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const messageBatch of client.messages.batches.list()) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(query = {}, options) {
-    return this._client.getAPIList("/v1/messages/batches", Page, { query, ...options });
-  }
-  /**
-   * Delete a Message Batch.
-   *
-   * Message Batches can only be deleted once they've finished processing. If you'd
-   * like to delete an in-progress batch, you must first cancel it.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * const deletedMessageBatch =
-   *   await client.messages.batches.delete('message_batch_id');
-   * ```
-   */
-  delete(messageBatchID, options) {
-    return this._client.delete(path2`/v1/messages/batches/${messageBatchID}`, options);
-  }
-  /**
-   * Batches may be canceled any time before processing ends. Once cancellation is
-   * initiated, the batch enters a `canceling` state, at which time the system may
-   * complete any in-progress, non-interruptible requests before finalizing
-   * cancellation.
-   *
-   * The number of canceled requests is specified in `request_counts`. To determine
-   * which requests were canceled, check the individual results within the batch.
-   * Note that cancellation may not result in any canceled requests if they were
-   * non-interruptible.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * const messageBatch = await client.messages.batches.cancel(
-   *   'message_batch_id',
-   * );
-   * ```
-   */
-  cancel(messageBatchID, options) {
-    return this._client.post(path2`/v1/messages/batches/${messageBatchID}/cancel`, options);
-  }
-  /**
-   * Streams the results of a Message Batch as a `.jsonl` file.
-   *
-   * Each line in the file is a JSON object containing the result of a single request
-   * in the Message Batch. Results are not guaranteed to be in the same order as
-   * requests. Use the `custom_id` field to match results to requests.
-   *
-   * Learn more about the Message Batches API in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
-   *
-   * @example
-   * ```ts
-   * const messageBatchIndividualResponse =
-   *   await client.messages.batches.results('message_batch_id');
-   * ```
-   */
-  async results(messageBatchID, options) {
-    const batch = await this.retrieve(messageBatchID);
-    if (!batch.results_url) {
-      throw new AnthropicError(`No batch \`results_url\`; Has it finished processing? ${batch.processing_status} - ${batch.id}`);
-    }
-    return this._client.get(batch.results_url, {
-      ...options,
-      headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
-      stream: true,
-      __binaryResponse: true
-    })._thenUnwrap((_, props) => JSONLDecoder.fromResponse(props.response, props.controller));
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs
-var Messages2 = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.batches = new Batches2(this._client);
-  }
-  create(body, options) {
-    if (body.model in DEPRECATED_MODELS2) {
-      console.warn(`The model '${body.model}' is deprecated and will reach end-of-life on ${DEPRECATED_MODELS2[body.model]}
-Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resources/model-deprecations for more information.`);
-    }
-    if (MODELS_TO_WARN_WITH_THINKING_ENABLED2.includes(body.model) && body.thinking && body.thinking.type === "enabled") {
-      console.warn(`Using Claude with ${body.model} and 'thinking.type=enabled' is deprecated. Use 'thinking.type=adaptive' instead which results in better model performance in our testing: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`);
-    }
-    let timeout = this._client._options.timeout;
-    if (!body.stream && timeout == null) {
-      const maxNonstreamingTokens = MODEL_NONSTREAMING_TOKENS[body.model] ?? void 0;
-      timeout = this._client.calculateNonstreamingTimeout(body.max_tokens, maxNonstreamingTokens);
-    }
-    const helperHeader = stainlessHelperHeader(body.tools, body.messages);
-    return this._client.post("/v1/messages", {
-      body,
-      timeout: timeout ?? 6e5,
-      ...options,
-      headers: buildHeaders([helperHeader, options?.headers]),
-      stream: body.stream ?? false
-    });
-  }
-  /**
-   * Send a structured list of input messages with text and/or image content, along with an expected `output_config.format` and
-   * the response will be automatically parsed and available in the `parsed_output` property of the message.
-   *
-   * @example
-   * ```ts
-   * const message = await client.messages.parse({
-   *   model: 'claude-sonnet-4-5-20250929',
-   *   max_tokens: 1024,
-   *   messages: [{ role: 'user', content: 'What is 2+2?' }],
-   *   output_config: {
-   *     format: zodOutputFormat(z.object({ answer: z.number() })),
-   *   },
-   * });
-   *
-   * console.log(message.parsed_output?.answer); // 4
-   * ```
-   */
-  parse(params, options) {
-    return this.create(params, options).then((message) => parseMessage(message, params, { logger: this._client.logger ?? console }));
-  }
-  /**
-   * Create a Message stream.
-   *
-   * If `output_config.format` is provided with a parseable format (like `zodOutputFormat()`),
-   * the final message will include a `parsed_output` property with the parsed content.
-   *
-   * @example
-   * ```ts
-   * const stream = client.messages.stream({
-   *   model: 'claude-sonnet-4-5-20250929',
-   *   max_tokens: 1024,
-   *   messages: [{ role: 'user', content: 'What is 2+2?' }],
-   *   output_config: {
-   *     format: zodOutputFormat(z.object({ answer: z.number() })),
-   *   },
-   * });
-   *
-   * const message = await stream.finalMessage();
-   * console.log(message.parsed_output?.answer); // 4
-   * ```
-   */
-  stream(body, options) {
-    return MessageStream.createMessage(this, body, options, { logger: this._client.logger ?? console });
-  }
-  /**
-   * Count the number of tokens in a Message.
-   *
-   * The Token Count API can be used to count the number of tokens in a Message,
-   * including tools, images, and documents, without creating it.
-   *
-   * Learn more about token counting in our
-   * [user guide](https://docs.claude.com/en/docs/build-with-claude/token-counting)
-   *
-   * @example
-   * ```ts
-   * const messageTokensCount =
-   *   await client.messages.countTokens({
-   *     messages: [{ content: 'Hello, world', role: 'user' }],
-   *     model: 'claude-opus-4-6',
-   *   });
-   * ```
-   */
-  countTokens(body, options) {
-    return this._client.post("/v1/messages/count_tokens", { body, ...options });
-  }
-};
-var DEPRECATED_MODELS2 = {
-  "claude-1.3": "November 6th, 2024",
-  "claude-1.3-100k": "November 6th, 2024",
-  "claude-instant-1.1": "November 6th, 2024",
-  "claude-instant-1.1-100k": "November 6th, 2024",
-  "claude-instant-1.2": "November 6th, 2024",
-  "claude-3-sonnet-20240229": "July 21st, 2025",
-  "claude-3-opus-20240229": "January 5th, 2026",
-  "claude-2.1": "July 21st, 2025",
-  "claude-2.0": "July 21st, 2025",
-  "claude-3-7-sonnet-latest": "February 19th, 2026",
-  "claude-3-7-sonnet-20250219": "February 19th, 2026",
-  "claude-3-5-haiku-latest": "February 19th, 2026",
-  "claude-3-5-haiku-20241022": "February 19th, 2026",
-  "claude-opus-4-0": "June 15th, 2026",
-  "claude-opus-4-20250514": "June 15th, 2026",
-  "claude-sonnet-4-0": "June 15th, 2026",
-  "claude-sonnet-4-20250514": "June 15th, 2026"
-};
-var MODELS_TO_WARN_WITH_THINKING_ENABLED2 = ["claude-mythos-preview", "claude-opus-4-6"];
-Messages2.Batches = Batches2;
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/models.mjs
-var Models2 = class extends APIResource {
-  /**
-   * Get a specific model.
-   *
-   * The Models API response can be used to determine information about a specific
-   * model or resolve a model alias to a model ID.
-   */
-  retrieve(modelID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.get(path2`/v1/models/${modelID}`, {
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ])
-    });
-  }
-  /**
-   * List available models.
-   *
-   * The Models API response can be used to determine which models are available for
-   * use in the API. More recently released models are listed first.
-   */
-  list(params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList("/v1/models", Page, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ])
-    });
-  }
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs
-var readEnv = (env) => {
-  if (typeof globalThis.process !== "undefined") {
-    return globalThis.process.env?.[env]?.trim() || void 0;
-  }
-  if (typeof globalThis.Deno !== "undefined") {
-    return globalThis.Deno.env?.get?.(env)?.trim() || void 0;
-  }
-  return void 0;
-};
-
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/client.mjs
-var _BaseAnthropic_instances;
-var _a;
-var _BaseAnthropic_encoder;
-var _BaseAnthropic_baseURLOverridden;
-var HUMAN_PROMPT = "\\n\\nHuman:";
-var AI_PROMPT = "\\n\\nAssistant:";
-var BaseAnthropic = class {
-  /**
-   * API Client for interfacing with the Anthropic API.
-   *
-   * @param {string | null | undefined} [opts.apiKey=process.env['ANTHROPIC_API_KEY'] ?? null]
-   * @param {string | null | undefined} [opts.authToken=process.env['ANTHROPIC_AUTH_TOKEN'] ?? null]
-   * @param {string} [opts.baseURL=process.env['ANTHROPIC_BASE_URL'] ?? https://api.anthropic.com] - Override the default base URL for the API.
-   * @param {number} [opts.timeout=10 minutes] - The maximum amount of time (in milliseconds) the client will wait for a response before timing out.
-   * @param {MergedRequestInit} [opts.fetchOptions] - Additional `RequestInit` options to be passed to `fetch` calls.
-   * @param {Fetch} [opts.fetch] - Specify a custom `fetch` function implementation.
-   * @param {number} [opts.maxRetries=2] - The maximum number of times the client will retry a request.
-   * @param {HeadersLike} opts.defaultHeaders - Default headers to include with every request to the API.
-   * @param {Record<string, string | undefined>} opts.defaultQuery - Default query parameters to include with every request to the API.
-   * @param {boolean} [opts.dangerouslyAllowBrowser=false] - By default, client-side use of this library is not allowed, as it risks exposing your secret API credentials to attackers.
-   */
-  constructor({ baseURL = readEnv("ANTHROPIC_BASE_URL"), apiKey = readEnv("ANTHROPIC_API_KEY") ?? null, authToken = readEnv("ANTHROPIC_AUTH_TOKEN") ?? null, ...opts } = {}) {
-    _BaseAnthropic_instances.add(this);
-    _BaseAnthropic_encoder.set(this, void 0);
-    const options = {
-      apiKey,
-      authToken,
-      ...opts,
-      baseURL: baseURL || `https://api.anthropic.com`
-    };
-    if (!options.dangerouslyAllowBrowser && isRunningInBrowser()) {
-      throw new AnthropicError("It looks like you're running in a browser-like environment.\n\nThis is disabled by default, as it risks exposing your secret API credentials to attackers.\nIf you understand the risks and have appropriate mitigations in place,\nyou can set the `dangerouslyAllowBrowser` option to `true`, e.g.,\n\nnew Anthropic({ apiKey, dangerouslyAllowBrowser: true });\n");
-    }
-    this.baseURL = options.baseURL;
-    this.timeout = options.timeout ?? _a.DEFAULT_TIMEOUT;
-    this.logger = options.logger ?? console;
-    const defaultLogLevel = "warn";
-    this.logLevel = defaultLogLevel;
-    this.logLevel = parseLogLevel(options.logLevel, "ClientOptions.logLevel", this) ?? parseLogLevel(readEnv("ANTHROPIC_LOG"), "process.env['ANTHROPIC_LOG']", this) ?? defaultLogLevel;
-    this.fetchOptions = options.fetchOptions;
-    this.maxRetries = options.maxRetries ?? 2;
-    this.fetch = options.fetch ?? getDefaultFetch();
-    __classPrivateFieldSet(this, _BaseAnthropic_encoder, FallbackEncoder, "f");
-    this._options = options;
-    this.apiKey = typeof apiKey === "string" ? apiKey : null;
-    this.authToken = authToken;
-  }
-  /**
-   * Create a new client instance re-using the same options given to the current client with optional overriding.
-   */
-  withOptions(options) {
-    const client = new this.constructor({
-      ...this._options,
-      baseURL: this.baseURL,
-      maxRetries: this.maxRetries,
-      timeout: this.timeout,
-      logger: this.logger,
-      logLevel: this.logLevel,
-      fetch: this.fetch,
-      fetchOptions: this.fetchOptions,
-      apiKey: this.apiKey,
-      authToken: this.authToken,
-      ...options
-    });
-    return client;
-  }
-  defaultQuery() {
-    return this._options.defaultQuery;
-  }
-  validateHeaders({ values, nulls }) {
-    if (values.get("x-api-key") || values.get("authorization")) {
-      return;
-    }
-    if (this.apiKey && values.get("x-api-key")) {
-      return;
-    }
-    if (nulls.has("x-api-key")) {
-      return;
-    }
-    if (this.authToken && values.get("authorization")) {
-      return;
-    }
-    if (nulls.has("authorization")) {
-      return;
-    }
-    throw new Error('Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted');
-  }
-  async authHeaders(opts) {
-    return buildHeaders([await this.apiKeyAuth(opts), await this.bearerAuth(opts)]);
-  }
-  async apiKeyAuth(opts) {
-    if (this.apiKey == null) {
-      return void 0;
-    }
-    return buildHeaders([{ "X-Api-Key": this.apiKey }]);
-  }
-  async bearerAuth(opts) {
-    if (this.authToken == null) {
-      return void 0;
-    }
-    return buildHeaders([{ Authorization: `Bearer ${this.authToken}` }]);
-  }
-  /**
-   * Basic re-implementation of `qs.stringify` for primitive types.
-   */
-  stringifyQuery(query) {
-    return stringifyQuery(query);
-  }
-  getUserAgent() {
-    return `${this.constructor.name}/JS ${VERSION}`;
-  }
-  defaultIdempotencyKey() {
-    return `stainless-node-retry-${uuid4()}`;
-  }
-  makeStatusError(status, error, message, headers) {
-    return APIError.generate(status, error, message, headers);
-  }
-  buildURL(path6, query, defaultBaseURL) {
-    const baseURL = !__classPrivateFieldGet(this, _BaseAnthropic_instances, "m", _BaseAnthropic_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-    const url = isAbsoluteURL(path6) ? new URL(path6) : new URL(baseURL + (baseURL.endsWith("/") && path6.startsWith("/") ? path6.slice(1) : path6));
-    const defaultQuery = this.defaultQuery();
-    const pathQuery = Object.fromEntries(url.searchParams);
-    if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
-      query = { ...pathQuery, ...defaultQuery, ...query };
-    }
-    if (typeof query === "object" && query && !Array.isArray(query)) {
-      url.search = this.stringifyQuery(query);
-    }
-    return url.toString();
-  }
-  _calculateNonstreamingTimeout(maxTokens) {
-    const defaultTimeout = 10 * 60;
-    const expectedTimeout = 60 * 60 * maxTokens / 128e3;
-    if (expectedTimeout > defaultTimeout) {
-      throw new AnthropicError("Streaming is required for operations that may take longer than 10 minutes. See https://github.com/anthropics/anthropic-sdk-typescript#streaming-responses for more details");
-    }
-    return defaultTimeout * 1e3;
-  }
-  /**
-   * Used as a callback for mutating the given `FinalRequestOptions` object.
-   */
-  async prepareOptions(options) {
-  }
-  /**
-   * Used as a callback for mutating the given `RequestInit` object.
-   *
-   * This is useful for cases where you want to add certain headers based off of
-   * the request properties, e.g. `method` or `url`.
-   */
-  async prepareRequest(request, { url, options }) {
-  }
-  get(path6, opts) {
-    return this.methodRequest("get", path6, opts);
-  }
-  post(path6, opts) {
-    return this.methodRequest("post", path6, opts);
-  }
-  patch(path6, opts) {
-    return this.methodRequest("patch", path6, opts);
-  }
-  put(path6, opts) {
-    return this.methodRequest("put", path6, opts);
-  }
-  delete(path6, opts) {
-    return this.methodRequest("delete", path6, opts);
-  }
-  methodRequest(method, path6, opts) {
-    return this.request(Promise.resolve(opts).then((opts2) => {
-      return { method, path: path6, ...opts2 };
-    }));
-  }
-  request(options, remainingRetries = null) {
-    return new APIPromise(this, this.makeRequest(options, remainingRetries, void 0));
-  }
-  async makeRequest(optionsInput, retriesRemaining, retryOfRequestLogID) {
-    const options = await optionsInput;
-    const maxRetries = options.maxRetries ?? this.maxRetries;
-    if (retriesRemaining == null) {
-      retriesRemaining = maxRetries;
-    }
-    await this.prepareOptions(options);
-    const { req, url, timeout } = await this.buildRequest(options, {
-      retryCount: maxRetries - retriesRemaining
-    });
-    await this.prepareRequest(req, { url, options });
-    const requestLogID = "log_" + (Math.random() * (1 << 24) | 0).toString(16).padStart(6, "0");
-    const retryLogStr = retryOfRequestLogID === void 0 ? "" : `, retryOf: ${retryOfRequestLogID}`;
-    const startTime = Date.now();
-    loggerFor(this).debug(`[${requestLogID}] sending request`, formatRequestDetails({
-      retryOfRequestLogID,
-      method: options.method,
-      url,
-      options,
-      headers: req.headers
-    }));
-    if (options.signal?.aborted) {
-      throw new APIUserAbortError();
-    }
-    const controller = new AbortController();
-    const response = await this.fetchWithTimeout(url, req, timeout, controller).catch(castToError);
-    const headersTime = Date.now();
-    if (response instanceof globalThis.Error) {
-      const retryMessage = `retrying, ${retriesRemaining} attempts remaining`;
-      if (options.signal?.aborted) {
-        throw new APIUserAbortError();
-      }
-      const isTimeout = isAbortError(response) || /timed? ?out/i.test(String(response) + ("cause" in response ? String(response.cause) : ""));
-      if (retriesRemaining) {
-        loggerFor(this).info(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} - ${retryMessage}`);
-        loggerFor(this).debug(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} (${retryMessage})`, formatRequestDetails({
-          retryOfRequestLogID,
-          url,
-          durationMs: headersTime - startTime,
-          message: response.message
-        }));
-        return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID);
-      }
-      loggerFor(this).info(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} - error; no more retries left`);
-      loggerFor(this).debug(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} (error; no more retries left)`, formatRequestDetails({
-        retryOfRequestLogID,
-        url,
-        durationMs: headersTime - startTime,
-        message: response.message
-      }));
-      if (isTimeout) {
-        throw new APIConnectionTimeoutError();
-      }
-      throw new APIConnectionError({ cause: response });
-    }
-    const specialHeaders = [...response.headers.entries()].filter(([name]) => name === "request-id").map(([name, value]) => ", " + name + ": " + JSON.stringify(value)).join("");
-    const responseInfo = `[${requestLogID}${retryLogStr}${specialHeaders}] ${req.method} ${url} ${response.ok ? "succeeded" : "failed"} with status ${response.status} in ${headersTime - startTime}ms`;
-    if (!response.ok) {
-      const shouldRetry = await this.shouldRetry(response);
-      if (retriesRemaining && shouldRetry) {
-        const retryMessage2 = `retrying, ${retriesRemaining} attempts remaining`;
-        await CancelReadableStream(response.body);
-        loggerFor(this).info(`${responseInfo} - ${retryMessage2}`);
-        loggerFor(this).debug(`[${requestLogID}] response error (${retryMessage2})`, formatRequestDetails({
-          retryOfRequestLogID,
-          url: response.url,
-          status: response.status,
-          headers: response.headers,
-          durationMs: headersTime - startTime
-        }));
-        return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID, response.headers);
-      }
-      const retryMessage = shouldRetry ? `error; no more retries left` : `error; not retryable`;
-      loggerFor(this).info(`${responseInfo} - ${retryMessage}`);
-      const errText = await response.text().catch((err2) => castToError(err2).message);
-      const errJSON = safeJSON(errText);
-      const errMessage = errJSON ? void 0 : errText;
-      loggerFor(this).debug(`[${requestLogID}] response error (${retryMessage})`, formatRequestDetails({
-        retryOfRequestLogID,
-        url: response.url,
-        status: response.status,
-        headers: response.headers,
-        message: errMessage,
-        durationMs: Date.now() - startTime
-      }));
-      const err = this.makeStatusError(response.status, errJSON, errMessage, response.headers);
-      throw err;
-    }
-    loggerFor(this).info(responseInfo);
-    loggerFor(this).debug(`[${requestLogID}] response start`, formatRequestDetails({
-      retryOfRequestLogID,
-      url: response.url,
-      status: response.status,
-      headers: response.headers,
-      durationMs: headersTime - startTime
-    }));
-    return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
-  }
-  getAPIList(path6, Page2, opts) {
-    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path6, ...opts2 })) : { method: "get", path: path6, ...opts });
-  }
-  requestAPIList(Page2, options) {
-    const request = this.makeRequest(options, null, void 0);
-    return new PagePromise(this, request, Page2);
-  }
-  async fetchWithTimeout(url, init, ms, controller) {
-    const { signal, method, ...options } = init || {};
-    const abort = this._makeAbort(controller);
-    if (signal)
-      signal.addEventListener("abort", abort, { once: true });
-    const timeout = setTimeout(abort, ms);
-    const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
-    const fetchOptions = {
-      signal: controller.signal,
-      ...isReadableBody ? { duplex: "half" } : {},
-      method: "GET",
-      ...options
-    };
-    if (method) {
-      fetchOptions.method = method.toUpperCase();
-    }
-    try {
-      return await this.fetch.call(void 0, url, fetchOptions);
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-  async shouldRetry(response) {
-    const shouldRetryHeader = response.headers.get("x-should-retry");
-    if (shouldRetryHeader === "true")
-      return true;
-    if (shouldRetryHeader === "false")
-      return false;
-    if (response.status === 408)
-      return true;
-    if (response.status === 409)
-      return true;
-    if (response.status === 429)
-      return true;
-    if (response.status >= 500)
-      return true;
-    return false;
-  }
-  async retryRequest(options, retriesRemaining, requestLogID, responseHeaders) {
-    let timeoutMillis;
-    const retryAfterMillisHeader = responseHeaders?.get("retry-after-ms");
-    if (retryAfterMillisHeader) {
-      const timeoutMs = parseFloat(retryAfterMillisHeader);
-      if (!Number.isNaN(timeoutMs)) {
-        timeoutMillis = timeoutMs;
-      }
-    }
-    const retryAfterHeader = responseHeaders?.get("retry-after");
-    if (retryAfterHeader && !timeoutMillis) {
-      const timeoutSeconds = parseFloat(retryAfterHeader);
-      if (!Number.isNaN(timeoutSeconds)) {
-        timeoutMillis = timeoutSeconds * 1e3;
-      } else {
-        timeoutMillis = Date.parse(retryAfterHeader) - Date.now();
-      }
-    }
-    if (timeoutMillis === void 0) {
-      const maxRetries = options.maxRetries ?? this.maxRetries;
-      timeoutMillis = this.calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries);
-    }
-    await sleep(timeoutMillis);
-    return this.makeRequest(options, retriesRemaining - 1, requestLogID);
-  }
-  calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries) {
-    const initialRetryDelay = 0.5;
-    const maxRetryDelay = 8;
-    const numRetries = maxRetries - retriesRemaining;
-    const sleepSeconds = Math.min(initialRetryDelay * Math.pow(2, numRetries), maxRetryDelay);
-    const jitter = 1 - Math.random() * 0.25;
-    return sleepSeconds * jitter * 1e3;
-  }
-  calculateNonstreamingTimeout(maxTokens, maxNonstreamingTokens) {
-    const maxTime = 60 * 60 * 1e3;
-    const defaultTime = 60 * 10 * 1e3;
-    const expectedTime = maxTime * maxTokens / 128e3;
-    if (expectedTime > defaultTime || maxNonstreamingTokens != null && maxTokens > maxNonstreamingTokens) {
-      throw new AnthropicError("Streaming is required for operations that may take longer than 10 minutes. See https://github.com/anthropics/anthropic-sdk-typescript#long-requests for more details");
-    }
-    return defaultTime;
-  }
-  async buildRequest(inputOptions, { retryCount = 0 } = {}) {
-    const options = { ...inputOptions };
-    const { method, path: path6, query, defaultBaseURL } = options;
-    const url = this.buildURL(path6, query, defaultBaseURL);
-    if ("timeout" in options)
-      validatePositiveInteger("timeout", options.timeout);
-    options.timeout = options.timeout ?? this.timeout;
-    const { bodyHeaders, body } = this.buildBody({ options });
-    const reqHeaders = await this.buildHeaders({ options: inputOptions, method, bodyHeaders, retryCount });
-    const req = {
-      method,
-      headers: reqHeaders,
-      ...options.signal && { signal: options.signal },
-      ...globalThis.ReadableStream && body instanceof globalThis.ReadableStream && { duplex: "half" },
-      ...body && { body },
-      ...this.fetchOptions ?? {},
-      ...options.fetchOptions ?? {}
-    };
-    return { req, url, timeout: options.timeout };
-  }
-  async buildHeaders({ options, method, bodyHeaders, retryCount }) {
-    let idempotencyHeaders = {};
-    if (this.idempotencyHeader && method !== "get") {
-      if (!options.idempotencyKey)
-        options.idempotencyKey = this.defaultIdempotencyKey();
-      idempotencyHeaders[this.idempotencyHeader] = options.idempotencyKey;
-    }
-    const headers = buildHeaders([
-      idempotencyHeaders,
-      {
-        Accept: "application/json",
-        "User-Agent": this.getUserAgent(),
-        "X-Stainless-Retry-Count": String(retryCount),
-        ...options.timeout ? { "X-Stainless-Timeout": String(Math.trunc(options.timeout / 1e3)) } : {},
-        ...getPlatformHeaders(),
-        ...this._options.dangerouslyAllowBrowser ? { "anthropic-dangerous-direct-browser-access": "true" } : void 0,
-        "anthropic-version": "2023-06-01"
-      },
-      await this.authHeaders(options),
-      this._options.defaultHeaders,
-      bodyHeaders,
-      options.headers
-    ]);
-    this.validateHeaders(headers);
-    return headers.values;
-  }
-  _makeAbort(controller) {
-    return () => controller.abort();
-  }
-  buildBody({ options: { body, headers: rawHeaders } }) {
-    if (!body) {
-      return { bodyHeaders: void 0, body: void 0 };
-    }
-    const headers = buildHeaders([rawHeaders]);
-    if (
-      // Pass raw type verbatim
-      ArrayBuffer.isView(body) || body instanceof ArrayBuffer || body instanceof DataView || typeof body === "string" && // Preserve legacy string encoding behavior for now
-      headers.values.has("content-type") || // `Blob` is superset of `File`
-      globalThis.Blob && body instanceof globalThis.Blob || // `FormData` -> `multipart/form-data`
-      body instanceof FormData || // `URLSearchParams` -> `application/x-www-form-urlencoded`
-      body instanceof URLSearchParams || // Send chunked stream (each chunk has own `length`)
-      globalThis.ReadableStream && body instanceof globalThis.ReadableStream
-    ) {
-      return { bodyHeaders: void 0, body };
-    } else if (typeof body === "object" && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function")) {
-      return { bodyHeaders: void 0, body: ReadableStreamFrom(body) };
-    } else if (typeof body === "object" && headers.values.get("content-type") === "application/x-www-form-urlencoded") {
-      return {
-        bodyHeaders: { "content-type": "application/x-www-form-urlencoded" },
-        body: this.stringifyQuery(body)
-      };
-    } else {
-      return __classPrivateFieldGet(this, _BaseAnthropic_encoder, "f").call(this, { body, headers });
-    }
-  }
-};
-_a = BaseAnthropic, _BaseAnthropic_encoder = /* @__PURE__ */ new WeakMap(), _BaseAnthropic_instances = /* @__PURE__ */ new WeakSet(), _BaseAnthropic_baseURLOverridden = function _BaseAnthropic_baseURLOverridden2() {
-  return this.baseURL !== "https://api.anthropic.com";
-};
-BaseAnthropic.Anthropic = _a;
-BaseAnthropic.HUMAN_PROMPT = HUMAN_PROMPT;
-BaseAnthropic.AI_PROMPT = AI_PROMPT;
-BaseAnthropic.DEFAULT_TIMEOUT = 6e5;
-BaseAnthropic.AnthropicError = AnthropicError;
-BaseAnthropic.APIError = APIError;
-BaseAnthropic.APIConnectionError = APIConnectionError;
-BaseAnthropic.APIConnectionTimeoutError = APIConnectionTimeoutError;
-BaseAnthropic.APIUserAbortError = APIUserAbortError;
-BaseAnthropic.NotFoundError = NotFoundError;
-BaseAnthropic.ConflictError = ConflictError;
-BaseAnthropic.RateLimitError = RateLimitError;
-BaseAnthropic.BadRequestError = BadRequestError;
-BaseAnthropic.AuthenticationError = AuthenticationError;
-BaseAnthropic.InternalServerError = InternalServerError;
-BaseAnthropic.PermissionDeniedError = PermissionDeniedError;
-BaseAnthropic.UnprocessableEntityError = UnprocessableEntityError;
-BaseAnthropic.toFile = toFile;
-var Anthropic = class extends BaseAnthropic {
-  constructor() {
-    super(...arguments);
-    this.completions = new Completions(this);
-    this.messages = new Messages2(this);
-    this.models = new Models2(this);
-    this.beta = new Beta(this);
-  }
-};
-Anthropic.Completions = Completions;
-Anthropic.Messages = Messages2;
-Anthropic.Models = Models2;
-Anthropic.Beta = Beta;
-
-// src/main/llm/anthropic.ts
-function trimSlash(url) {
-  return url.replace(/\/+$/, "");
-}
-function splitAnthropicMessages(messages) {
-  const systemParts = messages.filter((m) => m.role === "system").map((m) => m.content);
-  const system = systemParts.length ? systemParts.join("\n\n") : void 0;
-  const out = [];
-  for (const m of messages) {
-    if (m.role === "system") continue;
-    if (m.role === "tool") {
-      out.push({ role: "user", content: `[tool]
-${m.content}` });
-      continue;
-    }
-    out.push({ role: m.role, content: m.content });
-  }
-  return { system, messages: out };
-}
-function toAnthropicTools(tools) {
-  return tools.map((t) => ({
-    name: t.name,
-    description: t.description,
-    input_schema: t.parameters
-  }));
-}
-async function* mapAnthropicStream(stream, signal) {
-  const toolJsonByIndex = /* @__PURE__ */ new Map();
-  const toolNameByIndex = /* @__PURE__ */ new Map();
-  for await (const evt of stream) {
-    if (signal?.aborted) break;
-    if (evt.type === "content_block_start") {
-      const block = evt.content_block;
-      if (block.type === "tool_use") {
-        toolNameByIndex.set(evt.index, block.name);
-        toolJsonByIndex.set(evt.index, "");
-      }
-    }
-    if (evt.type === "content_block_delta") {
-      const d = evt.delta;
-      if (d.type === "text_delta") {
-        yield { text: d.text };
-      }
-      if (d.type === "input_json_delta") {
-        const cur = toolJsonByIndex.get(evt.index) ?? "";
-        toolJsonByIndex.set(evt.index, cur + d.partial_json);
-      }
-    }
-    if (evt.type === "content_block_stop") {
-      const name = toolNameByIndex.get(evt.index);
-      if (name === void 0) continue;
-      const jsonStr = toolJsonByIndex.get(evt.index) ?? "";
-      let args = {};
-      if (jsonStr.trim()) {
-        try {
-          args = JSON.parse(jsonStr);
-        } catch {
-          args = jsonStr;
-        }
-      }
-      yield { toolCall: { name, args } };
-      toolNameByIndex.delete(evt.index);
-      toolJsonByIndex.delete(evt.index);
-    }
-  }
-}
-var AnthropicProvider = class {
-  constructor(apiKey, model, baseURL) {
-    this.apiKey = apiKey;
-    this.model = model;
-    this.apiBase = trimSlash(baseURL ?? "https://api.anthropic.com");
-    this.client = new Anthropic({
-      apiKey,
-      baseURL: this.apiBase
-    });
-  }
-  apiKey;
-  model;
-  name = "anthropic";
-  client;
-  apiBase;
-  async chat(messages, tools, options) {
-    const { system, messages: mapped } = splitAnthropicMessages(messages);
-    const params = {
-      model: this.model,
-      max_tokens: 4096,
-      messages: mapped,
-      stream: true
-    };
-    if (system) params.system = system;
-    if (tools?.length) {
-      params.tools = toAnthropicTools(tools);
-    }
-    const stream = await this.client.messages.create(params, { signal: options?.signal });
-    return mapAnthropicStream(stream, options?.signal);
-  }
-  async isAvailable() {
-    if (!this.apiKey.trim()) return false;
-    try {
-      const res = await fetch(`${this.apiBase}/v1/models`, {
-        method: "GET",
-        headers: {
-          "x-api-key": this.apiKey,
-          "anthropic-version": "2023-06-01"
-        },
-        signal: AbortSignal.timeout(4e3)
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
-};
-
-// src/main/llm/configStore.ts
-var import_node_fs6 = require("node:fs");
-var import_node_os3 = require("node:os");
-var import_node_path6 = require("node:path");
-var OPENRAY_CONFIG_DIR = (0, import_node_path6.join)((0, import_node_os3.homedir)(), ".openray");
-var OPENRAY_CONFIG_PATH = (0, import_node_path6.join)(OPENRAY_CONFIG_DIR, "config.json");
-var configCache = null;
-function readRawConfig() {
-  if (configCache) return configCache;
-  if (!(0, import_node_fs6.existsSync)(OPENRAY_CONFIG_PATH)) {
-    configCache = {};
-    return configCache;
-  }
-  try {
-    const raw = (0, import_node_fs6.readFileSync)(OPENRAY_CONFIG_PATH, "utf-8");
-    configCache = JSON.parse(raw);
-    return configCache;
-  } catch {
-    configCache = {};
-    return configCache;
-  }
-}
-var writeTimeout = null;
-function flushConfig() {
-  if (!configCache || !writeTimeout) return;
-  try {
-    (0, import_node_fs6.mkdirSync)((0, import_node_path6.dirname)(OPENRAY_CONFIG_PATH), { recursive: true });
-    (0, import_node_fs6.writeFileSync)(OPENRAY_CONFIG_PATH, `${JSON.stringify(configCache, null, 2)}
-`, "utf-8");
-    if (writeTimeout) {
-      clearTimeout(writeTimeout);
-      writeTimeout = null;
-    }
-  } catch (err) {
-    console.error("Failed to write config:", err);
-  }
-}
-function writeConfigPatch(patch) {
-  const current = readRawConfig();
-  configCache = { ...current, ...patch };
-  if (writeTimeout) clearTimeout(writeTimeout);
-  writeTimeout = setTimeout(() => {
-    flushConfig();
-    writeTimeout = null;
-  }, 1e3);
-}
-function getUiStateRetentionMs() {
-  const raw = readRawConfig();
-  const v = raw.uiStateRetentionMs;
-  if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
-    return v;
-  }
-  return 6e4;
-}
-function getSafetyDryRun() {
-  const raw = readRawConfig();
-  return raw.safetyDryRun === true;
-}
-function setSafetyDryRun(value) {
-  writeConfigPatch({ safetyDryRun: value });
-}
-
-// src/main/llm/githubCopilotAuth.ts
-var COPILOT_API = "https://api.githubcopilot.com";
-var deviceSession = null;
-function clearDeviceSession() {
-  deviceSession = null;
-}
-async function startGithubDeviceFlow(clientId) {
-  const body = new URLSearchParams({
-    client_id: clientId,
-    scope: "read:user user:email"
-  });
-  const res = await fetch("https://github.com/login/device/code", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: body.toString()
-  });
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`GitHub device code failed: ${res.status} ${t.slice(0, 200)}`);
-  }
-  const json = await res.json();
-  if (!json.device_code || !json.user_code || !json.verification_uri) {
-    throw new Error("GitHub device code: malformed response");
-  }
-  deviceSession = {
-    device_code: json.device_code,
-    interval: Math.max(5, json.interval ?? 5),
-    client_id: clientId
-  };
-  return json;
-}
-async function pollGithubDeviceFlow() {
-  if (!deviceSession) {
-    return { status: "error", error: "No device session. Start sign-in again." };
-  }
-  const body = new URLSearchParams({
-    client_id: deviceSession.client_id,
-    device_code: deviceSession.device_code,
-    grant_type: "urn:ietf:params:oauth:grant-type:device_code"
-  });
-  const res = await fetch("https://github.com/login/oauth/access_token", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: body.toString()
-  });
-  const json = await res.json();
-  const err = typeof json.error === "string" ? json.error : "";
-  if (err === "authorization_pending") {
-    return { status: "authorization_pending" };
-  }
-  if (err === "slow_down") {
-    return { status: "slow_down" };
-  }
-  if (err && err !== "") {
-    deviceSession = null;
-    return { status: "error", error: typeof json.error_description === "string" ? json.error_description : err };
-  }
-  const access_token = typeof json.access_token === "string" ? json.access_token : "";
-  if (!access_token) {
-    return { status: "error", error: "No access_token in response" };
-  }
-  const refresh_token = typeof json.refresh_token === "string" ? json.refresh_token : void 0;
-  const expires_in = typeof json.expires_in === "number" ? json.expires_in : void 0;
-  deviceSession = null;
-  return { status: "success", access_token, refresh_token, expires_in };
-}
-async function refreshGithubAccessToken(refreshToken, clientId, signal) {
-  const body = new URLSearchParams({
-    client_id: clientId,
-    grant_type: "refresh_token",
-    refresh_token: refreshToken
-  });
-  const res = await fetch("https://github.com/login/oauth/access_token", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: body.toString(),
-    signal
-  });
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`Token refresh failed: ${res.status} ${t.slice(0, 200)}`);
-  }
-  const json = await res.json();
-  const access_token = typeof json.access_token === "string" ? json.access_token : "";
-  if (!access_token) {
-    throw new Error("Token refresh: missing access_token");
-  }
-  return {
-    access_token,
-    refresh_token: typeof json.refresh_token === "string" ? json.refresh_token : refreshToken,
-    expires_in: typeof json.expires_in === "number" ? json.expires_in : void 0
-  };
-}
-function persistCopilotTokens(accessToken, refreshToken, expiresInSec) {
-  const patch = {
-    copilotGithubToken: accessToken
-  };
-  if (refreshToken) patch.copilotRefreshToken = refreshToken;
-  if (expiresInSec !== void 0) {
-    patch.copilotExpiresAt = Date.now() + expiresInSec * 1e3;
-  }
-  writeConfigPatch(patch);
-}
-async function copilotApiPing(token) {
-  try {
-    const res = await fetch(`${COPILOT_API}/models`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Editor-Version": "Tezbar/0.1.0",
-        "Copilot-Integration-Id": "vscode-chat",
-        Accept: "application/json"
-      },
-      signal: AbortSignal.timeout(5e3)
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-// src/main/llm/openaiSse.ts
-async function* parseOpenAISSE(res, signal) {
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error("OpenAI-compatible: empty response body");
-  const decoder = new TextDecoder();
-  let buffer = "";
-  const toolParts = /* @__PURE__ */ new Map();
-  const processPayload = function* (json) {
-    const root = json;
-    const choice = root.choices?.[0];
-    if (!choice) return;
-    const delta = choice.delta;
-    if (delta?.content) {
-      yield { text: delta.content };
-    }
-    if (Array.isArray(delta?.tool_calls)) {
-      for (const tc of delta.tool_calls) {
-        const idx = typeof tc.index === "number" ? tc.index : 0;
-        const cur = toolParts.get(idx) ?? { args: "" };
-        if (tc.id) cur.id = tc.id;
-        if (tc.function?.name) cur.name = tc.function.name;
-        if (tc.function?.arguments) cur.args += tc.function.arguments;
-        toolParts.set(idx, cur);
-      }
-    }
-    if (choice.finish_reason === "tool_calls") {
-      const ordered = Array.from(toolParts.entries()).sort((a, b) => a[0] - b[0]);
-      for (const [, tc] of ordered) {
-        if (!tc.name) continue;
-        let args = {};
-        if (tc.args.trim()) {
-          try {
-            args = JSON.parse(tc.args);
-          } catch {
-            args = tc.args;
-          }
-        }
-        yield { toolCall: { name: tc.name, args } };
-      }
-      toolParts.clear();
-    }
-  };
-  while (true) {
-    if (signal?.aborted) break;
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let newline;
-    while ((newline = buffer.indexOf("\n")) !== -1) {
-      const rawLine = buffer.slice(0, newline);
-      buffer = buffer.slice(newline + 1);
-      const line = rawLine.trimEnd();
-      if (!line.startsWith("data:")) continue;
-      const data = line.slice(5).trimStart();
-      if (data === "[DONE]") continue;
-      let json;
-      try {
-        json = JSON.parse(data);
-      } catch {
-        continue;
-      }
-      yield* processPayload(json);
-    }
-  }
-  if (toolParts.size > 0) {
-    for (const [, tc] of Array.from(toolParts.entries()).sort((a, b) => a[0] - b[0])) {
-      if (!tc.name) continue;
-      let args = {};
-      if (tc.args.trim()) {
-        try {
-          args = JSON.parse(tc.args);
-        } catch {
-          args = tc.args;
-        }
-      }
-      yield { toolCall: { name: tc.name, args } };
-    }
-    toolParts.clear();
-  }
-}
-
-// src/main/llm/copilot.ts
-var COPILOT_CHAT = "https://api.githubcopilot.com/chat/completions";
-function toOpenAIMessages(messages) {
-  return messages.map((m) => ({ role: m.role, content: m.content }));
-}
-function toOpenAITools(tools) {
-  return tools.map((t) => ({
-    type: "function",
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters
-    }
-  }));
-}
-var CopilotProvider = class {
-  constructor(model) {
-    this.model = model;
-  }
-  model;
-  name = "copilot";
-  readTokens() {
-    const c = readRawConfig();
-    return {
-      access: (typeof c.copilotGithubToken === "string" ? c.copilotGithubToken : "") || (typeof c.apiKey === "string" ? c.apiKey : ""),
-      refresh: typeof c.copilotRefreshToken === "string" ? c.copilotRefreshToken : void 0,
-      expiresAt: typeof c.copilotExpiresAt === "number" ? c.copilotExpiresAt : 0,
-      clientId: typeof c.githubOAuthClientId === "string" ? c.githubOAuthClientId : ""
-    };
-  }
-  async refreshIfNeeded(signal) {
-    const { access, refresh, expiresAt, clientId } = this.readTokens();
-    if (!refresh || !clientId) {
-      return access;
-    }
-    const stale = expiresAt > 0 && Date.now() > expiresAt - 12e4;
-    if (!stale) {
-      return access;
-    }
-    const next = await refreshGithubAccessToken(refresh, clientId, signal);
-    const expires_in = next.expires_in;
-    const patch = {
-      copilotGithubToken: next.access_token,
-      copilotRefreshToken: next.refresh_token ?? refresh
-    };
-    if (expires_in !== void 0) {
-      patch.copilotExpiresAt = Date.now() + expires_in * 1e3;
-    }
-    writeConfigPatch(patch);
-    return next.access_token;
-  }
-  async chat(messages, tools, options) {
-    console.log("[CopilotProvider] chat request to", COPILOT_CHAT);
-    const token = await this.refreshIfNeeded(options?.signal);
-    if (!token.trim()) {
-      console.error("[CopilotProvider] missing token");
-      throw new Error("GitHub Copilot: missing token. Add a PAT or complete device sign-in in Providers.");
-    }
-    const body = {
-      model: this.model,
-      messages: toOpenAIMessages(messages),
-      stream: true
-    };
-    if (tools?.length) {
-      body.tools = toOpenAITools(tools);
-    }
-    console.log("[CopilotProvider] payload size:", JSON.stringify(body).length, "bytes");
-    const res = await fetch(COPILOT_CHAT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        "Editor-Version": "Tezbar/0.1.0",
-        "Copilot-Integration-Id": "vscode-chat"
-      },
-      body: JSON.stringify(body),
-      signal: options?.signal
-    });
-    console.log("[CopilotProvider] response status:", res.status, res.statusText);
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => "");
-      console.error("[CopilotProvider] error body:", errBody);
-      throw new Error(`Copilot error ${res.status}: ${errBody.slice(0, 500)}`);
-    }
-    return parseOpenAISSE(res, options?.signal);
-  }
-  async isAvailable() {
-    const { access } = this.readTokens();
-    if (!access.trim()) return false;
-    const ping = await copilotApiPing(access);
-    if (ping) return true;
-    return access.length > 20;
-  }
-  /** Bearer token after optional OAuth refresh (reads tokens from config on disk). */
-  async getAccessToken(options) {
-    return this.refreshIfNeeded(options?.signal);
-  }
-};
-
-// src/main/llm/ollama.ts
-function trimSlash2(url) {
-  return url.replace(/\/+$/, "");
-}
-function toOllamaMessages(messages) {
-  return messages.map((m) => {
-    if (m.role === "tool") {
-      return { role: "user", content: `[tool]
-${m.content}` };
-    }
-    return { role: m.role, content: m.content };
-  });
-}
-function toOllamaTools(tools) {
-  return tools.map((t) => ({
-    type: "function",
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters
-    }
-  }));
-}
-async function* parseOllamaStream(res, signal) {
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error("Ollama: empty response body");
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    if (signal?.aborted) break;
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let nl;
-    while ((nl = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, nl).trim();
-      buffer = buffer.slice(nl + 1);
-      if (!line) continue;
-      let row;
-      try {
-        row = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      const err = row.error;
-      if (typeof err === "string" && err) {
-        throw new Error(err);
-      }
-      const msg = row.message;
-      if (msg?.role === "assistant" && typeof msg.content === "string" && msg.content.length > 0) {
-        yield { text: msg.content };
-      }
-      const toolCalls = row.message?.tool_calls;
-      if (Array.isArray(toolCalls)) {
-        for (const tc of toolCalls) {
-          const name = tc.function?.name;
-          if (!name) continue;
-          const raw = tc.function?.arguments;
-          let args = raw;
-          if (typeof raw === "string") {
-            try {
-              args = JSON.parse(raw);
-            } catch {
-              args = raw;
-            }
-          }
-          yield { toolCall: { name, args } };
-        }
-      }
-    }
-  }
-}
-var OllamaProvider = class {
-  constructor(baseURL, model) {
-    this.baseURL = baseURL;
-    this.model = model;
-  }
-  baseURL;
-  model;
-  name = "ollama";
-  async chat(messages, tools, options) {
-    const url = `${trimSlash2(this.baseURL)}/api/chat`;
-    const body = {
-      model: this.model,
-      messages: toOllamaMessages(messages),
-      stream: true
-    };
-    if (tools?.length) {
-      body.tools = toOllamaTools(tools);
-    }
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: options?.signal
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      throw new Error(`Ollama error ${res.status}: ${t.slice(0, 500)}`);
-    }
-    return parseOllamaStream(res, options?.signal);
-  }
-  async isAvailable() {
-    try {
-      const url = `${trimSlash2(this.baseURL)}/api/tags`;
-      const res = await fetch(url, { method: "GET", signal: AbortSignal.timeout(4e3) });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
-};
-
-// src/shared/llmErrors.ts
-function apiErrorDetail(raw) {
-  const bodyStart = raw.indexOf("{");
-  if (bodyStart < 0) return null;
-  try {
-    const parsed = JSON.parse(raw.slice(bodyStart));
-    return typeof parsed.error?.message === "string" ? parsed.error.message.trim() : null;
-  } catch {
-    return null;
-  }
-}
-function formatLlmErrorMessage(raw, providerLabel = "AI provider") {
-  const trimmed = raw.trim();
-  const detail = apiErrorDetail(trimmed);
-  const message = detail || trimmed;
-  const unsupportedModel = message.match(
-    /supported API model names are (.+?), but you passed (.+?)(?:\.$|$)/i
-  );
-  if (unsupportedModel) {
-    return `Model "${unsupportedModel[2]}" is not supported by this provider. Choose ${unsupportedModel[1]} and try again.`;
-  }
-  const missingModel = message.match(/Model\s+["']([^"']+)["']\s+not found/i);
-  if (missingModel) {
-    return `The selected model "${missingModel[1]}" is unavailable. Choose another model in AI settings and try again.`;
-  }
-  if (/pi exited before finishing/i.test(message)) {
-    return "The agent stopped before it could finish. Check the selected model in AI settings and try again.";
-  }
-  if (!detail) return trimmed;
-  const status = trimmed.match(/\berror\s+(\d{3})\b/i)?.[1];
-  return `${providerLabel} request failed${status ? ` (${status})` : ""}: ${detail}`;
-}
-
-// src/main/llm/openai.ts
-function trimSlash3(url) {
-  return url.replace(/\/+$/, "");
-}
-function chatCompletionsUrl(baseURL) {
-  const base = trimSlash3(baseURL);
-  return base.endsWith("/chat/completions") ? base : `${base}/chat/completions`;
-}
-function modelsUrl(baseURL) {
-  const base = trimSlash3(baseURL);
-  if (base.endsWith("/chat/completions")) {
-    return `${base.slice(0, -"/chat/completions".length)}/models`;
-  }
-  return `${base}/models`;
-}
-function toOpenAIMessages2(messages) {
-  return messages.map((m) => ({ role: m.role, content: m.content }));
-}
-function toOpenAITools2(tools) {
-  return tools.map((t) => ({
-    type: "function",
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters
-    }
-  }));
-}
-var OpenAIProvider = class {
-  constructor(baseURL, apiKey, model, providerLabel = "OpenAI") {
-    this.baseURL = baseURL;
-    this.apiKey = apiKey;
-    this.model = model;
-    this.providerLabel = providerLabel;
-  }
-  baseURL;
-  apiKey;
-  model;
-  providerLabel;
-  name = "openai";
-  async chat(messages, tools, options) {
-    const url = chatCompletionsUrl(this.baseURL);
-    const body = {
-      model: this.model,
-      messages: toOpenAIMessages2(messages),
-      stream: true
-    };
-    if (tools?.length) {
-      body.tools = toOpenAITools2(tools);
-    }
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(body),
-      signal: options?.signal
-    });
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => "");
-      throw new Error(
-        formatLlmErrorMessage(
-          `${this.providerLabel} error ${res.status}: ${errBody.slice(0, 500)}`,
-          this.providerLabel
-        )
-      );
-    }
-    return parseOpenAISSE(res, options?.signal);
-  }
-  async isAvailable() {
-    if (!this.apiKey.trim()) return false;
-    try {
-      const url = modelsUrl(this.baseURL);
-      const res = await fetch(url, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(4e3)
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
-};
-
-// src/main/llm/opencode.ts
-var import_node_child_process4 = require("node:child_process");
-var import_node_util3 = require("node:util");
-var OpenCodeProvider = class {
-  constructor(model) {
-    this.model = model;
-  }
-  model;
-  name = "opencode";
-  async chat(messages, _tools, options) {
-    const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
-    if (!lastUserMessage) {
-      throw new Error("OpenCode: no user message found");
-    }
-    return this.runOpenCode(lastUserMessage.content, options?.signal);
-  }
-  async *runOpenCode(message, signal) {
-    const args = ["run", "--model", this.model, "--", message];
-    const child = (0, import_node_child_process4.spawn)("opencode", args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, TERM: "dumb", CI: "true" }
-    });
-    if (signal) {
-      const onAbort = () => {
-        child.kill();
-      };
-      signal.addEventListener("abort", onAbort);
-      if (signal.aborted) {
-        child.kill();
-      }
-    }
-    let output = "";
-    let errorOutput = "";
-    child.stdout?.on("data", (chunk) => {
-      output += chunk.toString();
-    });
-    child.stderr?.on("data", (chunk) => {
-      errorOutput += chunk.toString();
-    });
-    const exitCode = await new Promise((resolve4) => {
-      child.on("close", (code) => resolve4(code ?? 1));
-    });
-    if (exitCode !== 0) {
-      throw new Error(`OpenCode CLI error (exit ${exitCode}): ${errorOutput.slice(0, 500)}`);
-    }
-    if (output.trim()) {
-      yield { text: output.trim() };
-    }
-  }
-  async isAvailable() {
-    try {
-      const { execFile: execFile11 } = await import("node:child_process");
-      const execFileAsync11 = (0, import_node_util3.promisify)(execFile11);
-      const { stdout } = await execFileAsync11("which", ["opencode"], { timeout: 4e3 });
-      return stdout.trim().length > 0;
-    } catch {
-      return false;
-    }
-  }
-};
-
-// src/main/llm/registry.ts
-var DEFAULT_OLLAMA_BASE = "http://localhost:11434";
-var DEFAULT_OLLAMA_MODEL = "llama3.2";
-var DEFAULT_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
-var DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
-var DEFAULT_DEEPSEEK_BASE = "https://api.deepseek.com";
-var DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
-function normalizeCustomProviders(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((value) => {
-    if (!value || typeof value !== "object") return [];
-    const entry = value;
-    const id = typeof entry.id === "string" ? entry.id.trim() : "";
-    const title = typeof entry.title === "string" ? entry.title.trim() : "";
-    if (!id.startsWith("custom:") || !title) return [];
-    return [{
-      id,
-      title,
-      subtitle: typeof entry.subtitle === "string" ? entry.subtitle.trim() : void 0
-    }];
-  });
-}
-function providerIds(customProviders) {
-  return [...Object.keys(DEFAULT_PROVIDER_MODELS), ...customProviders.map((provider) => provider.id)];
-}
-function normalizeProviderModels(raw, ids) {
-  if (!raw || typeof raw !== "object") return void 0;
-  const result = {};
-  for (const provider of ids) {
-    const models = raw[provider];
-    if (!Array.isArray(models)) continue;
-    result[provider] = normalizeProviderModelList(provider, models);
-  }
-  return result;
-}
-function normalizeProviderSelectedModels(raw, ids) {
-  if (!raw || typeof raw !== "object") return void 0;
-  const result = {};
-  for (const provider of ids) {
-    const value = raw[provider];
-    if (typeof value === "string" && value.trim()) result[provider] = value.trim();
-  }
-  return result;
-}
-function normalizeProviderConfigs(raw, ids) {
-  if (!raw || typeof raw !== "object") return void 0;
-  const result = {};
-  for (const provider of ids) {
-    const value = raw[provider];
-    if (!value || typeof value !== "object") continue;
-    const config = value;
-    result[provider] = {
-      apiKey: typeof config.apiKey === "string" ? config.apiKey : void 0,
-      baseURL: typeof config.baseURL === "string" ? config.baseURL : void 0,
-      openaiCompatibleBaseURL: typeof config.openaiCompatibleBaseURL === "string" ? config.openaiCompatibleBaseURL : void 0,
-      geminiApiKey: typeof config.geminiApiKey === "string" ? config.geminiApiKey : void 0,
-      copilotGithubToken: typeof config.copilotGithubToken === "string" ? config.copilotGithubToken : void 0,
-      githubOAuthClientId: typeof config.githubOAuthClientId === "string" ? config.githubOAuthClientId : void 0
-    };
-  }
-  return result;
-}
-function normalizeFromRaw(raw) {
-  const customProviders = normalizeCustomProviders(raw.customProviders);
-  const ids = providerIds(customProviders);
-  const p = raw.provider;
-  const hasCopilotToken = typeof raw.copilotGithubToken === "string" && raw.copilotGithubToken.length > 0;
-  const provider = typeof p === "string" && customProviders.some((provider2) => provider2.id === p) || p === "openai" || p === "openai-compatible" || p === "anthropic" || p === "ollama" || p === "copilot" || p === "gemini" || p === "opencode" || p === "deepseek" ? p : hasCopilotToken ? "copilot" : "ollama";
-  const providerModels = normalizeProviderModels(raw.providerModels, ids);
-  const providerSelectedModels = normalizeProviderSelectedModels(raw.providerSelectedModels, ids);
-  const providerConfigs = normalizeProviderConfigs(raw.providerConfigs, ids);
-  const selectedModel = providerSelectedModels?.[provider];
-  const providerConfig = providerConfigs?.[provider] ?? {};
-  const allowLegacyProviderFields = !providerConfigs || Object.keys(providerConfigs).length === 0;
-  return {
-    provider,
-    customProviders,
-    providerConfigs,
-    apiKey: providerConfig.apiKey ?? (allowLegacyProviderFields && typeof raw.apiKey === "string" ? raw.apiKey : void 0),
-    baseURL: providerConfig.baseURL ?? (allowLegacyProviderFields && typeof raw.baseURL === "string" ? raw.baseURL : void 0),
-    openaiCompatibleBaseURL: providerConfig.openaiCompatibleBaseURL ?? (allowLegacyProviderFields && typeof raw.openaiCompatibleBaseURL === "string" ? raw.openaiCompatibleBaseURL : void 0),
-    geminiApiKey: providerConfig.geminiApiKey ?? (allowLegacyProviderFields && typeof raw.geminiApiKey === "string" ? raw.geminiApiKey : void 0),
-    model: selectedModel ?? (typeof raw.model === "string" ? raw.model : void 0),
-    providerModels,
-    providerSelectedModels,
-    copilotGithubToken: providerConfig.copilotGithubToken ?? (allowLegacyProviderFields && typeof raw.copilotGithubToken === "string" ? raw.copilotGithubToken : void 0),
-    copilotRefreshToken: typeof raw.copilotRefreshToken === "string" ? raw.copilotRefreshToken : void 0,
-    copilotExpiresAt: typeof raw.copilotExpiresAt === "number" ? raw.copilotExpiresAt : void 0,
-    githubOAuthClientId: providerConfig.githubOAuthClientId ?? (allowLegacyProviderFields && typeof raw.githubOAuthClientId === "string" ? raw.githubOAuthClientId : void 0),
-    taskProviderOverrides: typeof raw.taskProviderOverrides === "object" && raw.taskProviderOverrides ? raw.taskProviderOverrides : void 0,
-    taskModelOverrides: typeof raw.taskModelOverrides === "object" && raw.taskModelOverrides ? raw.taskModelOverrides : void 0,
-    memoryEnabled: typeof raw.memoryEnabled === "boolean" ? raw.memoryEnabled : void 0,
-    memoryMaxItems: typeof raw.memoryMaxItems === "number" ? raw.memoryMaxItems : void 0,
-    memoryIncludePrivate: typeof raw.memoryIncludePrivate === "boolean" ? raw.memoryIncludePrivate : void 0,
-    aiActionRequirePermission: typeof raw.aiActionRequirePermission === "boolean" ? raw.aiActionRequirePermission : void 0,
-    aiActionRedactionEnabled: typeof raw.aiActionRedactionEnabled === "boolean" ? raw.aiActionRedactionEnabled : void 0,
-    uiStateRetentionMs: typeof raw.uiStateRetentionMs === "number" ? raw.uiStateRetentionMs : void 0
-  };
-}
-function readLLMConfig() {
-  const raw = readRawConfig();
-  if (Object.keys(raw).length === 0) {
-    return { provider: "ollama", baseURL: DEFAULT_OLLAMA_BASE, model: DEFAULT_OLLAMA_MODEL };
-  }
-  const n = normalizeFromRaw(raw);
-  if (n.provider === "ollama") {
-    return {
-      ...n,
-      baseURL: n.baseURL ?? DEFAULT_OLLAMA_BASE,
-      model: n.model ?? DEFAULT_OLLAMA_MODEL
-    };
-  }
-  if (n.provider === "gemini") {
-    return {
-      ...n,
-      baseURL: n.baseURL ?? DEFAULT_GEMINI_BASE,
-      model: n.model ?? DEFAULT_GEMINI_MODEL
-    };
-  }
-  if (n.provider === "deepseek") {
-    return {
-      ...n,
-      baseURL: n.baseURL ?? DEFAULT_DEEPSEEK_BASE,
-      model: n.model ?? DEFAULT_DEEPSEEK_MODEL
-    };
-  }
-  return n;
-}
-function configForProvider(cfg, provider) {
-  const providerConfig = cfg.providerConfigs?.[provider] ?? {};
-  const useCurrentProviderFields = cfg.provider === provider;
-  const model = cfg.providerSelectedModels?.[provider] ?? (useCurrentProviderFields ? cfg.model : void 0);
-  const next = {
-    ...cfg,
-    provider,
-    model,
-    apiKey: providerConfig.apiKey ?? (useCurrentProviderFields ? cfg.apiKey : void 0),
-    baseURL: providerConfig.baseURL ?? (useCurrentProviderFields ? cfg.baseURL : void 0),
-    openaiCompatibleBaseURL: providerConfig.openaiCompatibleBaseURL ?? (useCurrentProviderFields ? cfg.openaiCompatibleBaseURL : void 0),
-    geminiApiKey: providerConfig.geminiApiKey ?? (useCurrentProviderFields ? cfg.geminiApiKey : void 0),
-    copilotGithubToken: providerConfig.copilotGithubToken ?? (useCurrentProviderFields ? cfg.copilotGithubToken : void 0),
-    githubOAuthClientId: providerConfig.githubOAuthClientId ?? (useCurrentProviderFields ? cfg.githubOAuthClientId : void 0)
-  };
-  if (provider === "ollama") {
-    return { ...next, baseURL: next.baseURL ?? DEFAULT_OLLAMA_BASE, model: next.model ?? DEFAULT_OLLAMA_MODEL };
-  }
-  if (provider === "gemini") {
-    return { ...next, baseURL: next.baseURL ?? DEFAULT_GEMINI_BASE, model: next.model ?? DEFAULT_GEMINI_MODEL };
-  }
-  if (provider === "deepseek") {
-    return { ...next, baseURL: next.baseURL ?? DEFAULT_DEEPSEEK_BASE, model: next.model ?? DEFAULT_DEEPSEEK_MODEL };
-  }
-  return {
-    ...next,
-    model: next.model ?? (recommendedModel(provider) || defaultModels(provider)[0]?.id)
-  };
-}
-function buildProviderForId(id, cfg) {
-  return buildProvider(configForProvider(cfg, id));
-}
-function buildProvider(cfg) {
-  if (isCustomProvider(cfg.provider)) {
-    return new OpenAIProvider(
-      cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? "",
-      cfg.apiKey ?? "",
-      cfg.model ?? "",
-      cfg.customProviders?.find((provider) => provider.id === cfg.provider)?.title ?? "Custom provider"
-    );
-  }
-  switch (cfg.provider) {
-    case "openai":
-      return new OpenAIProvider(
-        cfg.baseURL ?? "https://api.openai.com/v1",
-        cfg.apiKey ?? "",
-        cfg.model ?? "gpt-4o-mini",
-        "OpenAI"
-      );
-    case "openai-compatible":
-      return new OpenAIProvider(
-        cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? "https://api.openai.com/v1",
-        cfg.apiKey ?? "",
-        cfg.model ?? "gpt-4o-mini",
-        "OpenAI-compatible provider"
-      );
-    case "anthropic":
-      return new AnthropicProvider(
-        cfg.apiKey ?? "",
-        cfg.model ?? "claude-3-5-haiku-20241022",
-        cfg.baseURL
-      );
-    case "ollama":
-      return new OllamaProvider(cfg.baseURL ?? DEFAULT_OLLAMA_BASE, cfg.model ?? DEFAULT_OLLAMA_MODEL);
-    case "copilot":
-      return new CopilotProvider(cfg.model ?? "gpt-4o");
-    case "gemini":
-      return new OpenAIProvider(
-        cfg.baseURL ?? DEFAULT_GEMINI_BASE,
-        cfg.geminiApiKey ?? cfg.apiKey ?? "",
-        cfg.model ?? DEFAULT_GEMINI_MODEL,
-        "Gemini"
-      );
-    case "opencode":
-      return new OpenCodeProvider(cfg.model ?? "opencode/big-pickle");
-    case "deepseek":
-      return new OpenAIProvider(
-        cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE,
-        cfg.apiKey ?? "",
-        cfg.model ?? DEFAULT_DEEPSEEK_MODEL,
-        "DeepSeek"
-      );
-    default:
-      return new OllamaProvider(DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL);
-  }
-}
-var cacheKey = "";
-var active = null;
-function invalidateProviderCache() {
-  cacheKey = "";
-  active = null;
-}
-function getProviderForTask(task) {
-  const cfg = readLLMConfig();
-  const providerOverride = cfg.taskProviderOverrides?.[task];
-  const modelOverride = cfg.taskModelOverrides?.[task];
-  const targetProvider = providerOverride ?? cfg.provider;
-  const targetConfig = configForProvider(cfg, targetProvider);
-  const merged = {
-    ...targetConfig,
-    model: modelOverride ?? targetConfig.model
-  };
-  return buildProvider(merged);
-}
-function getSelectedPiModelPattern() {
-  const cfg = readLLMConfig();
-  const model = cfg.model?.trim();
-  if (!model) return void 0;
-  const provider = cfg.provider;
-  if (provider === "opencode") {
-    if (model.startsWith("opencode/opencode/")) return model;
-    if (model.startsWith("opencode/")) return `opencode/${model}`;
-    return `opencode/opencode/${model}`;
-  }
-  if (model.startsWith(`${provider}/`)) return model;
-  if (model.includes("/")) return model;
-  return `${provider}/${model}`;
-}
-function stripProviderPrefix(model, provider) {
-  const prefix = `${provider}/`;
-  let normalized = model.trim();
-  while (normalized.startsWith(prefix)) {
-    normalized = normalized.slice(prefix.length);
-  }
-  return normalized;
-}
-function openAiCompatBaseUrl(cfg) {
-  if (cfg.provider === "openai") return cfg.baseURL ?? "https://api.openai.com/v1";
-  if (cfg.provider === "openai-compatible") return cfg.openaiCompatibleBaseURL ?? cfg.baseURL;
-  if (cfg.provider === "gemini") return cfg.baseURL ?? DEFAULT_GEMINI_BASE;
-  if (cfg.provider === "deepseek") return cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE;
-  if (isCustomProvider(cfg.provider)) return cfg.openaiCompatibleBaseURL ?? cfg.baseURL;
-  if (cfg.provider === "ollama") {
-    const base = cfg.baseURL ?? DEFAULT_OLLAMA_BASE;
-    return base.endsWith("/v1") ? base : `${base.replace(/\/+$/, "")}/v1`;
-  }
-  return void 0;
-}
-function piApiKey(cfg) {
-  if (cfg.provider === "gemini") return cfg.geminiApiKey ?? cfg.apiKey;
-  if (cfg.provider === "ollama") return "ollama";
-  return cfg.apiKey;
-}
-function getSelectedPiProviderBridge() {
-  const cfg = readLLMConfig();
-  const model = cfg.model?.trim();
-  if (!model) return void 0;
-  const modelId = stripProviderPrefix(model, cfg.provider);
-  if (!modelId) return void 0;
-  const isAnthropic = cfg.provider === "anthropic";
-  const baseUrl = isAnthropic ? cfg.baseURL ?? "https://api.anthropic.com" : openAiCompatBaseUrl(cfg);
-  const apiKey = isAnthropic ? cfg.apiKey : piApiKey(cfg);
-  if (!baseUrl || !apiKey) return void 0;
-  const providerJson = JSON.stringify({
-    baseUrl,
-    apiKey,
-    api: isAnthropic ? "anthropic-messages" : "openai-completions",
-    authHeader: true,
-    models: [
-      {
-        id: modelId,
-        name: `Tezbar ${cfg.provider} ${modelId}`,
-        reasoning: /reason|think|r1|o\d|gpt-5|claude|deepseek/i.test(modelId),
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 128e3,
-        maxTokens: 8192
-      }
-    ]
-  });
-  return {
-    modelPattern: `tezbar/${modelId}`,
-    providerJson
-  };
-}
-
 // src/main/llm/answerStream.ts
+init_registry();
 var HERMES_ANSWER_SYSTEM = "You are Hermes, a helpful assistant. Answer briefly and clearly unless the user asks for more detail.";
 async function streamAnswerToRenderer(sender, userText, signal) {
   const token = (text) => {
@@ -15506,7 +14898,14 @@ function setLauncherContentHeight(win, rawHeight, rawZoomFactor = 1) {
   win.setContentSize(WINDOW_WIDTH, height, false);
 }
 
+// src/main/ipc.ts
+init_configStore();
+init_githubCopilotAuth();
+
 // src/main/llm/listModels.ts
+init_aiProviders();
+init_copilot();
+init_registry();
 function trimSlash4(url) {
   return url.replace(/\/+$/, "");
 }
@@ -15675,11 +15074,11 @@ async function listModelsForProvider(id, signal) {
     }
     case "opencode": {
       try {
-        const { execFile: execFile11 } = await import("node:child_process");
-        const { promisify: promisify12 } = await import("node:util");
-        const execFileAsync11 = promisify12(execFile11);
-        const { stdout } = await execFileAsync11("opencode", ["models"], { timeout: 12e3, signal });
-        const models = stdout.replace(/\x1b\[[0-9;]*m/g, "").split("\n").map((line) => line.trim()).filter((line) => line.startsWith("opencode/"));
+        const { execFile: execFile13 } = await import("node:child_process");
+        const { promisify: promisify14 } = await import("node:util");
+        const execFileAsync13 = promisify14(execFile13);
+        const { stdout } = await execFileAsync13("opencode", ["models"], { timeout: 12e3, signal });
+        const models = stdout.replace(/\x1b\[[0-9;]*m/g, "").split("\n").map((line) => line.trim()).filter((line) => line.startsWith("opencode/") || line.startsWith("opencode-go/"));
         return models.length > 0 ? models : ["opencode/big-pickle"];
       } catch {
         return ["opencode/big-pickle"];
@@ -15706,6 +15105,9 @@ async function listModelsForProvider(id, signal) {
       return [];
   }
 }
+
+// src/main/ipc.ts
+init_registry();
 
 // src/main/router.ts
 var QUESTION_PREFIX_RE = /^(what|why|how|who|when|is|are|can|does)\b/i;
@@ -15803,11 +15205,11 @@ async function classifyIntent(raw) {
 
 // src/main/extensions/service.ts
 init_electron_shim();
-var import_node_crypto3 = require("node:crypto");
+var import_node_crypto4 = require("node:crypto");
 var import_node_module = require("node:module");
-var import_node_path8 = require("node:path");
-var import_node_fs8 = require("node:fs");
-var import_node_os5 = require("node:os");
+var import_node_path10 = require("node:path");
+var import_node_fs10 = require("node:fs");
+var import_node_os6 = require("node:os");
 
 // node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs
 function isArray2(value) {
@@ -15882,14 +15284,14 @@ var KeyStore = class {
   }
 };
 function createKey(key) {
-  let path6 = null;
+  let path7 = null;
   let id = null;
   let src = null;
   let weight = 1;
   let getFn = null;
   if (isString(key) || isArray2(key)) {
     src = key;
-    path6 = createKeyPath(key);
+    path7 = createKeyPath(key);
     id = createKeyId(key);
   } else {
     if (!hasOwn2.call(key, "name")) {
@@ -15903,12 +15305,12 @@ function createKey(key) {
         throw new Error(INVALID_KEY_WEIGHT_VALUE(name));
       }
     }
-    path6 = createKeyPath(name);
+    path7 = createKeyPath(name);
     id = createKeyId(name);
     getFn = key.getFn;
   }
   return {
-    path: path6,
+    path: path7,
     id,
     weight,
     src,
@@ -15921,25 +15323,25 @@ function createKeyPath(key) {
 function createKeyId(key) {
   return isArray2(key) ? key.join(".") : key;
 }
-function get(obj, path6) {
+function get(obj, path7) {
   const list = [];
   let arr = false;
-  const deepGet = (obj2, path7, index, arrayIndex) => {
+  const deepGet = (obj2, path8, index, arrayIndex) => {
     if (!isDefined(obj2)) {
       return;
     }
-    if (!path7[index]) {
+    if (!path8[index]) {
       list.push(arrayIndex !== void 0 ? {
         v: obj2,
         i: arrayIndex
       } : obj2);
     } else {
-      const key = path7[index];
+      const key = path8[index];
       const value = obj2[key];
       if (!isDefined(value)) {
         return;
       }
-      if (index === path7.length - 1 && (isString(value) || isNumber(value) || isBoolean(value) || typeof value === "bigint")) {
+      if (index === path8.length - 1 && (isString(value) || isNumber(value) || isBoolean(value) || typeof value === "bigint")) {
         list.push(arrayIndex !== void 0 ? {
           v: toString(value),
           i: arrayIndex
@@ -15947,14 +15349,14 @@ function get(obj, path6) {
       } else if (isArray2(value)) {
         arr = true;
         for (let i = 0, len = value.length; i < len; i += 1) {
-          deepGet(value[i], path7, index + 1, i);
+          deepGet(value[i], path8, index + 1, i);
         }
-      } else if (path7.length) {
-        deepGet(value, path7, index + 1, arrayIndex);
+      } else if (path8.length) {
+        deepGet(value, path8, index + 1, arrayIndex);
       }
     }
   };
-  deepGet(obj, isString(path6) ? path6.split(".") : path6, 0);
+  deepGet(obj, isString(path7) ? path7.split(".") : path7, 0);
   return arr ? list : list[0];
 }
 var MatchOptions = {
@@ -17739,17 +17141,17 @@ Fuse.use = function(...plugins) {
 
 // src/main/extensions/raycastShim.ts
 init_electron_shim();
-var import_node_child_process5 = require("node:child_process");
-var import_node_fs7 = require("node:fs");
-var import_node_os4 = require("node:os");
-var import_node_path7 = require("node:path");
-var import_node_util4 = require("node:util");
+var import_node_child_process7 = require("node:child_process");
+var import_node_fs9 = require("node:fs");
+var import_node_os5 = require("node:os");
+var import_node_path9 = require("node:path");
+var import_node_util6 = require("node:util");
 var TOAST_STYLE = {
   Success: "success",
   Failure: "failure",
   Animated: "animated"
 };
-var execFileAsync3 = (0, import_node_util4.promisify)(import_node_child_process5.execFile);
+var execFileAsync5 = (0, import_node_util6.promisify)(import_node_child_process7.execFile);
 async function runAppleScript(source) {
   if (process.platform !== "darwin") {
     throw new Error("AppleScript is only available on macOS");
@@ -17757,7 +17159,7 @@ async function runAppleScript(source) {
   if (typeof source !== "string" || source.trim().length === 0) {
     return "";
   }
-  const { stdout } = await execFileAsync3("/usr/bin/osascript", ["-e", source], {
+  const { stdout } = await execFileAsync5("/usr/bin/osascript", ["-e", source], {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024
   });
@@ -17785,10 +17187,10 @@ function createRenderProxy(name) {
   });
 }
 function createLocalStorage(packageRoot) {
-  const file = (0, import_node_path7.join)(packageRoot, "localStorage.json");
+  const file = (0, import_node_path9.join)(packageRoot, "localStorage.json");
   const readAll2 = () => {
     try {
-      const raw = (0, import_node_fs7.readFileSync)(file, "utf8");
+      const raw = (0, import_node_fs9.readFileSync)(file, "utf8");
       const parsed = JSON.parse(raw);
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch {
@@ -17796,8 +17198,8 @@ function createLocalStorage(packageRoot) {
     }
   };
   const writeAll2 = (value) => {
-    (0, import_node_fs7.mkdirSync)(packageRoot, { recursive: true });
-    (0, import_node_fs7.writeFileSync)(file, JSON.stringify(value, null, 2), "utf8");
+    (0, import_node_fs9.mkdirSync)(packageRoot, { recursive: true });
+    (0, import_node_fs9.writeFileSync)(file, JSON.stringify(value, null, 2), "utf8");
   };
   return {
     getItem: async (key) => readAll2()[key],
@@ -17818,9 +17220,9 @@ function createLocalStorage(packageRoot) {
   };
 }
 function readPreferences(packageRoot) {
-  const file = (0, import_node_path7.join)(packageRoot, "preferences.json");
+  const file = (0, import_node_path9.join)(packageRoot, "preferences.json");
   try {
-    const raw = (0, import_node_fs7.readFileSync)(file, "utf8");
+    const raw = (0, import_node_fs9.readFileSync)(file, "utf8");
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
@@ -17855,9 +17257,9 @@ function createClipboardShim() {
   };
 }
 function createEnvironment(ctx) {
-  const supportPath = (0, import_node_path7.join)(ctx.packageRoot, "support");
+  const supportPath = (0, import_node_path9.join)(ctx.packageRoot, "support");
   try {
-    (0, import_node_fs7.mkdirSync)(supportPath, { recursive: true });
+    (0, import_node_fs9.mkdirSync)(supportPath, { recursive: true });
   } catch {
   }
   return {
@@ -17868,7 +17270,7 @@ function createEnvironment(ctx) {
     raycastVersion: "1.77.0",
     isDevelopment: !app.isPackaged,
     supportPath,
-    assetsPath: (0, import_node_path7.join)(ctx.packageRoot, "assets"),
+    assetsPath: (0, import_node_path9.join)(ctx.packageRoot, "assets"),
     launchType: "userInitiated",
     textSize: "medium"
   };
@@ -17929,7 +17331,7 @@ function createRaycastApi(ctx) {
       if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target) || target.startsWith("mailto:")) {
         await shell.openExternal(target);
       } else {
-        const resolved = target.startsWith("~") ? target.replace(/^~/, (0, import_node_os4.homedir)()) : target;
+        const resolved = target.startsWith("~") ? target.replace(/^~/, (0, import_node_os5.homedir)()) : target;
         await shell.openPath(resolved);
       }
     },
@@ -17959,9 +17361,9 @@ function createRaycastApi(ctx) {
     showHUD: async (message) => {
       ctx.feedback.push({ kind: "hud", message: String(message ?? "") });
     },
-    showInFinder: async (path6) => {
-      if (typeof path6 !== "string") return;
-      shell.showItemInFolder(path6);
+    showInFinder: async (path7) => {
+      if (typeof path7 !== "string") return;
+      shell.showItemInFolder(path7);
     },
     confirmAlert: async () => true,
     closeMainWindow: async () => {
@@ -18098,46 +17500,46 @@ var DEFAULT_DB = {
 var catalogCache = null;
 var commandCache = /* @__PURE__ */ new Map();
 function getDbPath() {
-  const dir = (0, import_node_path8.join)(app.getPath("userData"), "extensions");
-  (0, import_node_fs8.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path8.join)(dir, "installed.json");
+  const dir = (0, import_node_path10.join)(app.getPath("userData"), "extensions");
+  (0, import_node_fs10.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path10.join)(dir, "installed.json");
 }
 function extensionsRootDir() {
-  const dir = (0, import_node_path8.join)(app.getPath("userData"), "extensions");
-  (0, import_node_fs8.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_node_path10.join)(app.getPath("userData"), "extensions");
+  (0, import_node_fs10.mkdirSync)(dir, { recursive: true });
   return dir;
 }
 function installedPackageRoot(extensionId) {
-  return (0, import_node_path8.join)(extensionsRootDir(), "packages", extensionId);
+  return (0, import_node_path10.join)(extensionsRootDir(), "packages", extensionId);
 }
 function packageJsonPathForInstalledExtension(extensionId) {
-  return (0, import_node_path8.join)(installedPackageRoot(extensionId), "package.json");
+  return (0, import_node_path10.join)(installedPackageRoot(extensionId), "package.json");
 }
-function scriptPathForInstalledExtensionCommand(extensionId, commandName) {
-  return (0, import_node_path8.join)(installedPackageRoot(extensionId), ".sc-build", `${commandName}.js`);
+function scriptPathForInstalledExtensionCommand(extensionId, commandName2) {
+  return (0, import_node_path10.join)(installedPackageRoot(extensionId), ".sc-build", `${commandName2}.js`);
 }
 function metaPathForInstalledExtension(extensionId) {
-  return (0, import_node_path8.join)(installedPackageRoot(extensionId), "meta.json");
+  return (0, import_node_path10.join)(installedPackageRoot(extensionId), "meta.json");
 }
 function backupPackageRoot(extensionId) {
-  return (0, import_node_path8.join)(extensionsRootDir(), "packages", `${extensionId}.backup`);
+  return (0, import_node_path10.join)(extensionsRootDir(), "packages", `${extensionId}.backup`);
 }
 function readInstallMeta(extensionId) {
   const p = metaPathForInstalledExtension(extensionId);
-  if (!(0, import_node_fs8.existsSync)(p)) return null;
+  if (!(0, import_node_fs10.existsSync)(p)) return null;
   try {
-    return JSON.parse((0, import_node_fs8.readFileSync)(p, "utf8"));
+    return JSON.parse((0, import_node_fs10.readFileSync)(p, "utf8"));
   } catch {
     return null;
   }
 }
 function writeInstallMeta(meta) {
   const p = metaPathForInstalledExtension(meta.extensionId);
-  (0, import_node_fs8.mkdirSync)((0, import_node_path8.dirname)(p), { recursive: true });
-  (0, import_node_fs8.writeFileSync)(p, JSON.stringify(meta, null, 2), "utf8");
+  (0, import_node_fs10.mkdirSync)((0, import_node_path10.dirname)(p), { recursive: true });
+  (0, import_node_fs10.writeFileSync)(p, JSON.stringify(meta, null, 2), "utf8");
 }
 function hashText(text) {
-  return (0, import_node_crypto3.createHash)("sha256").update(text).digest("hex");
+  return (0, import_node_crypto4.createHash)("sha256").update(text).digest("hex");
 }
 function inspectIntegrity(extensionId) {
   const meta = readInstallMeta(extensionId);
@@ -18155,14 +17557,14 @@ function inspectIntegrity(extensionId) {
   for (const name of meta.commandNames) {
     if (meta.missingScripts.includes(name)) continue;
     const scriptPath = scriptPathForInstalledExtensionCommand(extensionId, name);
-    if (!(0, import_node_fs8.existsSync)(scriptPath)) {
+    if (!(0, import_node_fs10.existsSync)(scriptPath)) {
       missing.push(name);
       continue;
     }
     const expected = meta.scriptHashes[name];
     if (!expected) continue;
     try {
-      const actual = hashText((0, import_node_fs8.readFileSync)(scriptPath, "utf8"));
+      const actual = hashText((0, import_node_fs10.readFileSync)(scriptPath, "utf8"));
       if (actual !== expected) tampered.push(name);
     } catch {
       missing.push(name);
@@ -18187,9 +17589,9 @@ function parseJsonSafe(raw) {
 }
 function readInstalledPackageJson(extensionId) {
   const p = packageJsonPathForInstalledExtension(extensionId);
-  if (!(0, import_node_fs8.existsSync)(p)) return null;
+  if (!(0, import_node_fs10.existsSync)(p)) return null;
   try {
-    const raw = (0, import_node_fs8.readFileSync)(p, "utf8");
+    const raw = (0, import_node_fs10.readFileSync)(p, "utf8");
     return parseJsonSafe(raw);
   } catch {
     return null;
@@ -18201,7 +17603,7 @@ function extensionSlugFromId(extensionId) {
 function readDb2() {
   const p = getDbPath();
   try {
-    const raw = (0, import_node_fs8.readFileSync)(p, "utf8");
+    const raw = (0, import_node_fs10.readFileSync)(p, "utf8");
     const parsed = JSON.parse(raw);
     return {
       installed: Array.isArray(parsed.installed) ? parsed.installed : []
@@ -18212,7 +17614,7 @@ function readDb2() {
 }
 function writeDb2(db) {
   const p = getDbPath();
-  (0, import_node_fs8.writeFileSync)(p, JSON.stringify(db, null, 2), "utf8");
+  (0, import_node_fs10.writeFileSync)(p, JSON.stringify(db, null, 2), "utf8");
 }
 function byName(a, b) {
   return a.name.localeCompare(b.name);
@@ -18301,10 +17703,10 @@ async function fetchRaycastCatalogFromGithub() {
 }
 async function stageAndInstallExtension(extensionId, slug) {
   const pkg = await fetchRaycastPackage(slug);
-  const staging = (0, import_node_fs8.mkdtempSync)((0, import_node_path8.join)((0, import_node_os5.tmpdir)(), `tezbar-ext-${extensionId}-`));
-  const stagingBuild = (0, import_node_path8.join)(staging, ".sc-build");
-  (0, import_node_fs8.mkdirSync)(stagingBuild, { recursive: true });
-  (0, import_node_fs8.writeFileSync)((0, import_node_path8.join)(staging, "package.json"), JSON.stringify(pkg, null, 2), "utf8");
+  const staging = (0, import_node_fs10.mkdtempSync)((0, import_node_path10.join)((0, import_node_os6.tmpdir)(), `tezbar-ext-${extensionId}-`));
+  const stagingBuild = (0, import_node_path10.join)(staging, ".sc-build");
+  (0, import_node_fs10.mkdirSync)(stagingBuild, { recursive: true });
+  (0, import_node_fs10.writeFileSync)((0, import_node_path10.join)(staging, "package.json"), JSON.stringify(pkg, null, 2), "utf8");
   const commandEntries = (pkg.commands ?? []).map((cmd) => ({
     name: typeof cmd.name === "string" ? cmd.name.trim() : "",
     mode: typeof cmd.mode === "string" ? cmd.mode.trim() : ""
@@ -18316,7 +17718,7 @@ async function stageAndInstallExtension(extensionId, slug) {
       const url = `https://raw.githubusercontent.com/raycast/extensions/${RAYCAST_EXTENSIONS_REF}/${RAYCAST_EXTENSIONS_PATH}/${slug}/.sc-build/${entry.name}.js`;
       try {
         const js = await fetchText(url);
-        (0, import_node_fs8.writeFileSync)((0, import_node_path8.join)(stagingBuild, `${entry.name}.js`), js, "utf8");
+        (0, import_node_fs10.writeFileSync)((0, import_node_path10.join)(stagingBuild, `${entry.name}.js`), js, "utf8");
         scriptHashes[entry.name] = hashText(js);
       } catch {
         missingScripts.push(entry.name);
@@ -18325,22 +17727,22 @@ async function stageAndInstallExtension(extensionId, slug) {
   );
   const root = installedPackageRoot(extensionId);
   const backup = backupPackageRoot(extensionId);
-  if ((0, import_node_fs8.existsSync)(backup)) (0, import_node_fs8.rmSync)(backup, { recursive: true, force: true });
+  if ((0, import_node_fs10.existsSync)(backup)) (0, import_node_fs10.rmSync)(backup, { recursive: true, force: true });
   try {
-    if ((0, import_node_fs8.existsSync)(root)) (0, import_node_fs8.renameSync)(root, backup);
-    (0, import_node_fs8.mkdirSync)((0, import_node_path8.dirname)(root), { recursive: true });
-    (0, import_node_fs8.renameSync)(staging, root);
+    if ((0, import_node_fs10.existsSync)(root)) (0, import_node_fs10.renameSync)(root, backup);
+    (0, import_node_fs10.mkdirSync)((0, import_node_path10.dirname)(root), { recursive: true });
+    (0, import_node_fs10.renameSync)(staging, root);
   } catch (error) {
-    if ((0, import_node_fs8.existsSync)(backup) && !(0, import_node_fs8.existsSync)(root)) {
+    if ((0, import_node_fs10.existsSync)(backup) && !(0, import_node_fs10.existsSync)(root)) {
       try {
-        (0, import_node_fs8.renameSync)(backup, root);
+        (0, import_node_fs10.renameSync)(backup, root);
       } catch {
       }
     }
-    (0, import_node_fs8.rmSync)(staging, { recursive: true, force: true });
+    (0, import_node_fs10.rmSync)(staging, { recursive: true, force: true });
     throw error;
   } finally {
-    if ((0, import_node_fs8.existsSync)(backup)) (0, import_node_fs8.rmSync)(backup, { recursive: true, force: true });
+    if ((0, import_node_fs10.existsSync)(backup)) (0, import_node_fs10.rmSync)(backup, { recursive: true, force: true });
   }
   writeInstallMeta({
     extensionId,
@@ -18399,11 +17801,11 @@ async function reinstallExtension(extensionId) {
   commandCache.delete(extensionId);
   return inspectIntegrity(extensionId);
 }
-async function executeNoViewScript(extensionId, commandName, scriptPath, argumentValues) {
+async function executeNoViewScript(extensionId, commandName2, scriptPath, argumentValues) {
   const fileRequire = (0, import_node_module.createRequire)(scriptPath);
   const feedback = [];
   const packageRoot = installedPackageRoot(extensionId);
-  const shimCtx = { extensionId, commandName, packageRoot, feedback };
+  const shimCtx = { extensionId, commandName: commandName2, packageRoot, feedback };
   const raycastApiShim = createRaycastApi(shimCtx);
   const raycastUtilsShim = createRaycastUtils(shimCtx);
   const builtinSet = new Set(import_node_module.builtinModules);
@@ -18425,9 +17827,9 @@ async function executeNoViewScript(extensionId, commandName, scriptPath, argumen
     "module",
     "__filename",
     "__dirname",
-    (0, import_node_fs8.readFileSync)(scriptPath, "utf8")
+    (0, import_node_fs10.readFileSync)(scriptPath, "utf8")
   );
-  wrapper(mod.exports, customRequire, mod, scriptPath, (0, import_node_path8.dirname)(scriptPath));
+  wrapper(mod.exports, customRequire, mod, scriptPath, (0, import_node_path10.dirname)(scriptPath));
   const exported = mod.exports;
   const command = typeof exported.default === "function" ? exported.default : typeof mod.exports === "function" ? mod.exports : null;
   if (!command) {
@@ -18454,30 +17856,30 @@ function isUnsupportedRuntimeModeError(error) {
   if (!error || typeof error !== "object") return false;
   return error.code === RUNTIME_UNSUPPORTED_MODE;
 }
-async function executeExtensionCommandRuntime(extensionId, commandName, argumentValues) {
+async function executeExtensionCommandRuntime(extensionId, commandName2, argumentValues) {
   const pkg = await ensureExtensionBundle(extensionId);
   if (!pkg) {
     throw new Error(`Runtime bundle not available for extension: ${extensionId}`);
   }
-  const commandMeta = (pkg.commands ?? []).find((command) => command.name === commandName);
+  const commandMeta = (pkg.commands ?? []).find((command) => command.name === commandName2);
   if (!commandMeta) {
-    throw new Error(`Command not found: ${commandName}`);
+    throw new Error(`Command not found: ${commandName2}`);
   }
   const mode = (commandMeta.mode ?? "").toLowerCase();
   if (mode && mode !== "no-view") {
     throw unsupportedModeError();
   }
   const meta = readInstallMeta(extensionId);
-  if (meta?.missingScripts.includes(commandName)) {
+  if (meta?.missingScripts.includes(commandName2)) {
     throw new Error(
-      `No prebuilt script for ${commandName}. This extension doesn't ship an executable .sc-build file for this command.`
+      `No prebuilt script for ${commandName2}. This extension doesn't ship an executable .sc-build file for this command.`
     );
   }
-  const scriptPath = scriptPathForInstalledExtensionCommand(extensionId, commandName);
-  if (!(0, import_node_fs8.existsSync)(scriptPath)) {
-    throw new Error(`Missing command script: ${commandName}.js`);
+  const scriptPath = scriptPathForInstalledExtensionCommand(extensionId, commandName2);
+  if (!(0, import_node_fs10.existsSync)(scriptPath)) {
+    throw new Error(`Missing command script: ${commandName2}.js`);
   }
-  return await executeNoViewScript(extensionId, commandName, scriptPath, argumentValues);
+  return await executeNoViewScript(extensionId, commandName2, scriptPath, argumentValues);
 }
 async function getStoreCatalog() {
   const now = Date.now();
@@ -18583,8 +17985,8 @@ function uninstallExtension(extensionId) {
   writeDb2(db);
   commandCache.delete(extensionId);
   installErrors.delete(extensionId);
-  (0, import_node_fs8.rmSync)(installedPackageRoot(extensionId), { recursive: true, force: true });
-  (0, import_node_fs8.rmSync)(backupPackageRoot(extensionId), { recursive: true, force: true });
+  (0, import_node_fs10.rmSync)(installedPackageRoot(extensionId), { recursive: true, force: true });
+  (0, import_node_fs10.rmSync)(backupPackageRoot(extensionId), { recursive: true, force: true });
   return true;
 }
 
@@ -18594,15 +17996,15 @@ init_extension_runner();
 
 // src/main/search/service.ts
 init_electron_shim();
-var import_node_child_process10 = require("node:child_process");
-var import_node_fs19 = require("node:fs");
-var import_node_os10 = require("node:os");
-var import_node_path19 = require("node:path");
-var import_node_util9 = require("node:util");
+var import_node_child_process12 = require("node:child_process");
+var import_node_fs21 = require("node:fs");
+var import_node_os11 = require("node:os");
+var import_node_path22 = require("node:path");
+var import_node_util11 = require("node:util");
 
 // src/main/nativeCommands/executor.ts
-var import_node_child_process7 = require("node:child_process");
-var import_node_util6 = require("node:util");
+var import_node_child_process9 = require("node:child_process");
+var import_node_util8 = require("node:util");
 
 // src/main/nativeCommands/registry.ts
 var DESCRIPTORS = {
@@ -18990,20 +18392,20 @@ function listNativeCommands() {
 }
 
 // src/main/nativeCommands/executor.ts
-var execFileAsync6 = (0, import_node_util6.promisify)(import_node_child_process7.execFile);
+var execFileAsync8 = (0, import_node_util8.promisify)(import_node_child_process9.execFile);
 async function runAppleScript3(source) {
-  const { stdout } = await execFileAsync6("osascript", ["-e", source]);
+  const { stdout } = await execFileAsync8("osascript", ["-e", source]);
   return stdout.trim();
 }
 async function runShell(script) {
-  const { stdout } = await execFileAsync6("bash", ["-lc", script]);
+  const { stdout } = await execFileAsync8("bash", ["-lc", script]);
   return stdout.trim();
 }
 var backgroundProcesses = /* @__PURE__ */ new Map();
 function startBackground(key, command, args) {
   const existing = backgroundProcesses.get(key);
   if (existing && isProcessAlive(existing)) return;
-  const child = (0, import_node_child_process7.spawn)(command, args, { detached: true, stdio: "ignore" });
+  const child = (0, import_node_child_process9.spawn)(command, args, { detached: true, stdio: "ignore" });
   child.unref();
   if (child.pid) backgroundProcesses.set(key, child.pid);
 }
@@ -19169,13 +18571,13 @@ async function executeNativeCommand(id) {
         return { ok: true, message: "Opened ~/Library" };
       }
       case "copy-current-path": {
-        const path6 = await runAppleScript3(
+        const path7 = await runAppleScript3(
           'tell application "Finder" to try\nset thePath to POSIX path of (target of front Finder window as alias)\nset the clipboard to thePath\nreturn thePath\non error\nreturn ""\nend try'
         );
-        if (!path6) {
+        if (!path7) {
           return { ok: false, message: "No Finder window is open." };
         }
-        return { ok: true, message: `Copied: ${path6}` };
+        return { ok: true, message: `Copied: ${path7}` };
       }
       case "show-macos-version": {
         const out = await runShell("sw_vers && uname -v");
@@ -19208,18 +18610,18 @@ async function executeNativeCommand(id) {
         };
       }
       case "git-root": {
-        const path6 = await runAppleScript3(
+        const path7 = await runAppleScript3(
           'tell application "Finder" to try\nset thePath to POSIX path of (target of front Finder window as alias)\nreturn thePath\non error\nreturn ""\nend try'
         );
-        if (!path6) {
+        if (!path7) {
           return { ok: false, message: "No Finder window is open." };
         }
         try {
-          const root = await runShell(`cd ${JSON.stringify(path6)} && git rev-parse --show-toplevel`);
+          const root = await runShell(`cd ${JSON.stringify(path7)} && git rev-parse --show-toplevel`);
           await runShell(`printf %s ${JSON.stringify(root)} | pbcopy`);
           return { ok: true, message: `Copied repo root: ${root}` };
         } catch {
-          return { ok: false, message: `${path6} is not inside a git repo.` };
+          return { ok: false, message: `${path7} is not inside a git repo.` };
         }
       }
       case "brew-outdated": {
@@ -19280,6 +18682,9 @@ async function executeNativeCommand(id) {
     return { ok: false, message: `${descriptor.title} failed: ${message}` };
   }
 }
+
+// src/main/search/service.ts
+init_configStore();
 
 // src/main/safety/confirm.ts
 init_electron_shim();
@@ -19420,19 +18825,19 @@ async function confirmSafetyAction(window2, descriptor, context, options) {
 
 // src/main/safety/log.ts
 init_electron_shim();
-var import_node_fs11 = require("node:fs");
-var import_node_path11 = require("node:path");
+var import_node_fs13 = require("node:fs");
+var import_node_path13 = require("node:path");
 var MAX_ENTRIES = 200;
 var cache = null;
 function logPath() {
-  const dir = (0, import_node_path11.join)(app.getPath("userData"), "safety");
-  (0, import_node_fs11.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path11.join)(dir, "action-log.json");
+  const dir = (0, import_node_path13.join)(app.getPath("userData"), "safety");
+  (0, import_node_fs13.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path13.join)(dir, "action-log.json");
 }
 function load() {
   if (cache) return cache;
   try {
-    const raw = (0, import_node_fs11.readFileSync)(logPath(), "utf8");
+    const raw = (0, import_node_fs13.readFileSync)(logPath(), "utf8");
     const parsed = JSON.parse(raw);
     cache = Array.isArray(parsed.entries) ? parsed.entries : [];
   } catch {
@@ -19443,7 +18848,7 @@ function load() {
 function persist() {
   if (!cache) return;
   try {
-    (0, import_node_fs11.writeFileSync)(logPath(), JSON.stringify({ entries: cache }, null, 2), "utf8");
+    (0, import_node_fs13.writeFileSync)(logPath(), JSON.stringify({ entries: cache }, null, 2), "utf8");
   } catch {
   }
 }
@@ -19488,12 +18893,12 @@ function clearSafetyLog() {
 }
 
 // src/main/search/commandBus.ts
-var import_node_child_process8 = require("node:child_process");
-var import_node_util7 = require("node:util");
-var execFileAsync7 = (0, import_node_util7.promisify)(import_node_child_process8.execFile);
+var import_node_child_process10 = require("node:child_process");
+var import_node_util9 = require("node:util");
+var execFileAsync9 = (0, import_node_util9.promisify)(import_node_child_process10.execFile);
 function osascriptCommandHandler(script, successMessage) {
   return async () => {
-    await execFileAsync7("/usr/bin/osascript", ["-e", script]);
+    await execFileAsync9("/usr/bin/osascript", ["-e", script]);
     return { ok: true, message: successMessage };
   };
 }
@@ -19539,7 +18944,7 @@ var CommandBus = class {
         if (!text) {
           return { ok: false, message: "No text provided for read-aloud" };
         }
-        await execFileAsync7("say", [text]);
+        await execFileAsync9("say", [text]);
         return { ok: true, message: "Reading aloud" };
       }
     });
@@ -19556,8 +18961,8 @@ var commandBus = new CommandBus();
 
 // src/main/search/indexDb.ts
 init_electron_shim();
-var import_node_fs12 = require("node:fs");
-var import_node_path12 = require("node:path");
+var import_node_fs14 = require("node:fs");
+var import_node_path14 = require("node:path");
 
 // src/main/search/textMatch.ts
 function tokenizeQuery(query) {
@@ -19606,9 +19011,9 @@ function buildFtsQuery(query) {
 
 // src/main/search/indexDb.ts
 function dbPath2() {
-  const dir = (0, import_node_path12.join)(app.getPath("userData"), "search");
-  (0, import_node_fs12.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path12.join)(dir, "index.sqlite3");
+  const dir = (0, import_node_path14.join)(app.getPath("userData"), "search");
+  (0, import_node_fs14.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path14.join)(dir, "index.sqlite3");
 }
 function safeJsonParse(value, fallback) {
   try {
@@ -20028,9 +19433,9 @@ var SearchIndexDatabase = class {
 };
 
 // src/main/search/providers/appsProvider.ts
-var import_node_fs13 = require("node:fs");
-var import_node_os7 = require("node:os");
-var import_node_path13 = require("node:path");
+var import_node_fs15 = require("node:fs");
+var import_node_os8 = require("node:os");
+var import_node_path15 = require("node:path");
 function listApplications() {
   const roots = [
     "/Applications",
@@ -20039,20 +19444,20 @@ function listApplications() {
     "/System/Applications/Utilities",
     "/System/Library/CoreServices/Applications",
     "/System/Library/CoreServices",
-    (0, import_node_path13.join)((0, import_node_os7.homedir)(), "Applications")
+    (0, import_node_path15.join)((0, import_node_os8.homedir)(), "Applications")
   ];
   const out = [];
   const seen = /* @__PURE__ */ new Set();
   for (const root of roots) {
     try {
-      for (const entry of (0, import_node_fs13.readdirSync)(root)) {
+      for (const entry of (0, import_node_fs15.readdirSync)(root)) {
         if (!entry.endsWith(".app")) continue;
         const name = entry.replace(/\.app$/, "");
         if (seen.has(name)) continue;
         seen.add(name);
         out.push({
           name,
-          path: (0, import_node_path13.join)(root, entry)
+          path: (0, import_node_path15.join)(root, entry)
         });
       }
     } catch {
@@ -20079,9 +19484,10 @@ var appsProvider = {
 
 // src/main/search/providers/clipboardProvider.ts
 init_electron_shim();
-var import_node_crypto5 = require("node:crypto");
-var import_node_fs14 = require("node:fs");
-var import_node_path14 = require("node:path");
+var import_node_crypto6 = require("node:crypto");
+var import_node_fs16 = require("node:fs");
+var import_node_path16 = require("node:path");
+init_configStore();
 var CLIPBOARD_LIMIT = 200;
 var CLIPBOARD_WATCH_ENABLED_KEY = "clipboardWatchEnabled";
 var CLIPBOARD_CAPTURE_IMAGES_KEY = "clipboardCaptureImages";
@@ -20110,17 +19516,17 @@ function setClipboardConfig(patch) {
   writeConfigPatch(next);
 }
 function storeDir() {
-  const dir = (0, import_node_path14.join)(app.getPath("userData"), "search");
-  (0, import_node_fs14.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_node_path16.join)(app.getPath("userData"), "search");
+  (0, import_node_fs16.mkdirSync)(dir, { recursive: true });
   return dir;
 }
 function imagesDir() {
-  const dir = (0, import_node_path14.join)(storeDir(), "clipboard-images");
-  (0, import_node_fs14.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_node_path16.join)(storeDir(), "clipboard-images");
+  (0, import_node_fs16.mkdirSync)(dir, { recursive: true });
   return dir;
 }
 function clipboardPath() {
-  return (0, import_node_path14.join)(storeDir(), "clipboard.json");
+  return (0, import_node_path16.join)(storeDir(), "clipboard.json");
 }
 var _readClipboardDb = null;
 var _cacheTimestamp = 0;
@@ -20130,7 +19536,7 @@ async function ensureDbLoaded() {
     return;
   }
   try {
-    const raw = (0, import_node_fs14.readFileSync)(clipboardPath(), "utf8");
+    const raw = (0, import_node_fs16.readFileSync)(clipboardPath(), "utf8");
     const parsed = JSON.parse(raw);
     _readClipboardDb = {
       items: Array.isArray(parsed.items) ? parsed.items : []
@@ -20141,7 +19547,7 @@ async function ensureDbLoaded() {
   _cacheTimestamp = Date.now();
 }
 function writeDb3(db) {
-  (0, import_node_fs14.writeFileSync)(clipboardPath(), `${JSON.stringify(db, null, 2)}
+  (0, import_node_fs16.writeFileSync)(clipboardPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
   _readClipboardDb = db;
   _cacheTimestamp = Date.now();
@@ -20179,7 +19585,7 @@ function sanitizeEntry(entry) {
     }
     case "image": {
       const imagePath = String(entry.imagePath ?? "");
-      if (!imagePath || !(0, import_node_fs14.existsSync)(imagePath)) return null;
+      if (!imagePath || !(0, import_node_fs16.existsSync)(imagePath)) return null;
       return {
         ...base,
         kind: "image",
@@ -20196,7 +19602,7 @@ function sanitizeEntry(entry) {
         ...base,
         kind: "file",
         paths,
-        preview: paths.length === 1 ? (0, import_node_path14.basename)(paths[0]) : `${(0, import_node_path14.basename)(paths[0])} + ${paths.length - 1} more`
+        preview: paths.length === 1 ? (0, import_node_path16.basename)(paths[0]) : `${(0, import_node_path16.basename)(paths[0])} + ${paths.length - 1} more`
       };
     }
     default:
@@ -20218,7 +19624,7 @@ function insertEntry(db, entry) {
   return { items: [...pinned, entry, ...rest].slice(0, CLIPBOARD_LIMIT) };
 }
 function hashKey(kind, payload) {
-  return (0, import_node_crypto5.createHash)("sha1").update(`${kind}|${payload}`).digest("hex").slice(0, 16);
+  return (0, import_node_crypto6.createHash)("sha1").update(`${kind}|${payload}`).digest("hex").slice(0, 16);
 }
 function readFileUrls() {
   if (process.platform !== "darwin") return [];
@@ -20264,7 +19670,7 @@ function captureFileEntry(paths, now) {
     pinned: false,
     isSecret: false,
     paths,
-    preview: paths.length === 1 ? (0, import_node_path14.basename)(paths[0]) : `${(0, import_node_path14.basename)(paths[0])} + ${paths.length - 1} more`
+    preview: paths.length === 1 ? (0, import_node_path16.basename)(paths[0]) : `${(0, import_node_path16.basename)(paths[0])} + ${paths.length - 1} more`
   };
 }
 function resizeToMegapixels(image, maxMegapixels) {
@@ -20285,11 +19691,11 @@ function captureImageEntry(now) {
   const resized = resizeToMegapixels(image, config.maxImageMegapixels);
   const buffer = resized.toPNG();
   if (buffer.length === 0) return null;
-  const hash = (0, import_node_crypto5.createHash)("sha1").update(buffer).digest("hex");
+  const hash = (0, import_node_crypto6.createHash)("sha1").update(buffer).digest("hex");
   const id = idForImage(hash);
-  const file = (0, import_node_path14.join)(imagesDir(), `${hash}.png`);
-  if (!(0, import_node_fs14.existsSync)(file)) {
-    (0, import_node_fs14.writeFileSync)(file, buffer);
+  const file = (0, import_node_path16.join)(imagesDir(), `${hash}.png`);
+  if (!(0, import_node_fs16.existsSync)(file)) {
+    (0, import_node_fs16.writeFileSync)(file, buffer);
   }
   return {
     id,
@@ -20353,9 +19759,9 @@ function deleteClipboardEntry(id) {
     const stillReferenced = next.some(
       (item) => item.kind === "image" && item.imagePath === entry.imagePath
     );
-    if (!stillReferenced && (0, import_node_fs14.existsSync)(entry.imagePath)) {
+    if (!stillReferenced && (0, import_node_fs16.existsSync)(entry.imagePath)) {
       try {
-        (0, import_node_fs14.rmSync)(entry.imagePath, { force: true });
+        (0, import_node_fs16.rmSync)(entry.imagePath, { force: true });
       } catch {
       }
     }
@@ -20375,9 +19781,9 @@ function togglePinClipboardEntry(id) {
 function clearClipboardHistory() {
   const db = normalizeDb(_readClipboardDb || { items: [] });
   for (const item of db.items) {
-    if (item.kind === "image" && (0, import_node_fs14.existsSync)(item.imagePath)) {
+    if (item.kind === "image" && (0, import_node_fs16.existsSync)(item.imagePath)) {
       try {
-        (0, import_node_fs14.rmSync)(item.imagePath, { force: true });
+        (0, import_node_fs16.rmSync)(item.imagePath, { force: true });
       } catch {
       }
     }
@@ -20393,15 +19799,15 @@ async function cleanupOrphanClipboardImages() {
   );
   let removed = 0;
   let freedBytes = 0;
-  for (const entry of (0, import_node_fs14.readdirSync)(dir, { withFileTypes: true })) {
+  for (const entry of (0, import_node_fs16.readdirSync)(dir, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
-    const ext = (0, import_node_path14.extname)(entry.name).toLowerCase();
+    const ext = (0, import_node_path16.extname)(entry.name).toLowerCase();
     if (ext !== ".png") continue;
-    const fullPath = (0, import_node_path14.join)(dir, entry.name);
+    const fullPath = (0, import_node_path16.join)(dir, entry.name);
     if (referenced.has(fullPath)) continue;
     try {
-      const stats = (0, import_node_fs14.statSync)(fullPath);
-      (0, import_node_fs14.rmSync)(fullPath, { force: true });
+      const stats = (0, import_node_fs16.statSync)(fullPath);
+      (0, import_node_fs16.rmSync)(fullPath, { force: true });
       removed += 1;
       freedBytes += stats.size;
     } catch {
@@ -20435,7 +19841,7 @@ function restoreClipboardEntry(id) {
       clipboard.writeText(entry.text);
       return true;
     case "image": {
-      if (!(0, import_node_fs14.existsSync)(entry.imagePath)) return false;
+      if (!(0, import_node_fs16.existsSync)(entry.imagePath)) return false;
       const img = nativeImage.createFromPath(entry.imagePath);
       if (img.isEmpty()) return false;
       clipboard.writeImage(img);
@@ -20470,8 +19876,8 @@ function revealClipboardEntryInFinder(id) {
 function readClipboardImagePayload(id) {
   const entry = getClipboardEntry(id);
   if (!entry || entry.kind !== "image") return null;
-  if (!(0, import_node_fs14.existsSync)(entry.imagePath)) return null;
-  const bytes = (0, import_node_fs14.readFileSync)(entry.imagePath);
+  if (!(0, import_node_fs16.existsSync)(entry.imagePath)) return null;
+  const bytes = (0, import_node_fs16.readFileSync)(entry.imagePath);
   return {
     dataUrl: `data:image/png;base64,${bytes.toString("base64")}`,
     width: entry.width,
@@ -20621,6 +20027,7 @@ var extensionsProvider = {
             extensionId: ext.id,
             commandName: cmd.name,
             title: cmd.title,
+            iconPath: ext.iconPath,
             commandArgumentDefinitions: cmd.argumentDefinitions
           },
           updatedAt: ext.installedAt,
@@ -20633,12 +20040,12 @@ var extensionsProvider = {
 };
 
 // src/main/search/providers/filesProvider.ts
-var import_node_child_process9 = require("node:child_process");
-var import_node_fs15 = require("node:fs");
-var import_node_os8 = require("node:os");
-var import_node_path15 = require("node:path");
-var import_node_util8 = require("node:util");
-var execFileAsync8 = (0, import_node_util8.promisify)(import_node_child_process9.execFile);
+var import_node_child_process11 = require("node:child_process");
+var import_node_fs17 = require("node:fs");
+var import_node_os9 = require("node:os");
+var import_node_path17 = require("node:path");
+var import_node_util10 = require("node:util");
+var execFileAsync10 = (0, import_node_util10.promisify)(import_node_child_process11.execFile);
 var ALLOWED_EXTENSIONS = /* @__PURE__ */ new Set([
   "",
   ".md",
@@ -20670,28 +20077,28 @@ var SKIP_NAMES = /* @__PURE__ */ new Set([
   "out",
   "target"
 ]);
-function isAllowedFile(path6) {
-  const ext = (0, import_node_path15.extname)(path6).toLowerCase();
+function isAllowedFile(path7) {
+  const ext = (0, import_node_path17.extname)(path7).toLowerCase();
   return ALLOWED_EXTENSIONS.has(ext);
 }
-function containsSkippedDirectory(path6) {
-  return path6.split(import_node_path15.sep).some((part) => SKIP_NAMES.has(part));
+function containsSkippedDirectory(path7) {
+  return path7.split(import_node_path17.sep).some((part) => SKIP_NAMES.has(part));
 }
-function makeFileDocument(path6) {
+function makeFileDocument(path7) {
   try {
-    const stat2 = (0, import_node_fs15.statSync)(path6);
+    const stat2 = (0, import_node_fs17.statSync)(path7);
     if (!stat2.isFile()) return null;
-    if (!isAllowedFile(path6)) return null;
-    const title = path6.split("/").pop() ?? path6;
+    if (!isAllowedFile(path7)) return null;
+    const title = path7.split("/").pop() ?? path7;
     return {
-      id: `file:${path6}`,
+      id: `file:${path7}`,
       category: "files",
       title,
-      subtitle: path6,
-      tokens: `${title} ${path6}`,
-      action: { type: "open-file", path: path6 },
+      subtitle: path7,
+      tokens: `${title} ${path7}`,
+      action: { type: "open-file", path: path7 },
       updatedAt: stat2.mtimeMs,
-      sourcePath: path6,
+      sourcePath: path7,
       sourceMtime: stat2.mtimeMs
     };
   } catch {
@@ -20699,8 +20106,8 @@ function makeFileDocument(path6) {
   }
 }
 function initialRoots() {
-  const home = (0, import_node_os8.homedir)();
-  return [(0, import_node_path15.join)(home, "Desktop"), (0, import_node_path15.join)(home, "Documents"), (0, import_node_path15.join)(home, "Downloads")].filter((root) => (0, import_node_fs15.existsSync)(root));
+  const home = (0, import_node_os9.homedir)();
+  return [(0, import_node_path17.join)(home, "Desktop"), (0, import_node_path17.join)(home, "Documents"), (0, import_node_path17.join)(home, "Downloads")].filter((root) => (0, import_node_fs17.existsSync)(root));
 }
 async function collectInitialFileDocuments(limit = 4e3) {
   const roots = initialRoots();
@@ -20712,14 +20119,14 @@ async function collectInitialFileDocuments(limit = 4e3) {
     const current = queue.shift();
     if (!current) continue;
     try {
-      const entries = (0, import_node_fs15.readdirSync)(current, { withFileTypes: true });
+      const entries = (0, import_node_fs17.readdirSync)(current, { withFileTypes: true });
       for (const entry of entries) {
         if (out.length >= limit) break;
         visitedEntries += 1;
         if (visitedEntries % 250 === 0) {
           await new Promise((resolve4) => setImmediate(resolve4));
         }
-        const absolute = (0, import_node_path15.join)(current, entry.name);
+        const absolute = (0, import_node_path17.join)(current, entry.name);
         if (entry.isDirectory()) {
           if (!SKIP_NAMES.has(entry.name)) queue.push(absolute);
           continue;
@@ -20755,11 +20162,11 @@ function startFileWatcher(listener) {
   };
   for (const root of roots) {
     try {
-      const watcher = (0, import_node_fs15.watch)(root, { recursive: true }, (_event, filename) => {
+      const watcher = (0, import_node_fs17.watch)(root, { recursive: true }, (_event, filename) => {
         if (!filename) return;
         const relative = filename.toString();
         if (containsSkippedDirectory(relative)) return;
-        const absolute = (0, import_node_path15.join)(root, relative);
+        const absolute = (0, import_node_path17.join)(root, relative);
         const doc = makeFileDocument(absolute);
         if (doc) {
           pendingRemovals.delete(doc.id);
@@ -20767,7 +20174,7 @@ function startFileWatcher(listener) {
           scheduleFlush();
           return;
         }
-        if (!(0, import_node_fs15.existsSync)(absolute)) {
+        if (!(0, import_node_fs17.existsSync)(absolute)) {
           const id = `file:${absolute}`;
           pendingUpserts.delete(id);
           pendingRemovals.add(id);
@@ -20794,14 +20201,14 @@ async function spotlightFallback(query, limit = 8) {
     "/Application Support/tezbar/"
   ];
   try {
-    const { stdout } = await execFileAsync8("mdfind", ["-name", trimmed, "-onlyin", (0, import_node_os8.homedir)()]);
-    return stdout.split("\n").map((line) => line.trim()).filter(Boolean).filter((path6) => !INTERNAL_PATH_PATTERNS.some((pattern) => path6.includes(pattern))).slice(0, limit).map((path6, index) => ({
-      id: `spotlight:${path6}`,
-      title: path6.split("/").pop() ?? path6,
-      subtitle: path6,
+    const { stdout } = await execFileAsync10("mdfind", ["-name", trimmed, "-onlyin", (0, import_node_os9.homedir)()]);
+    return stdout.split("\n").map((line) => line.trim()).filter(Boolean).filter((path7) => !INTERNAL_PATH_PATTERNS.some((pattern) => path7.includes(pattern))).slice(0, limit).map((path7, index) => ({
+      id: `spotlight:${path7}`,
+      title: path7.split("/").pop() ?? path7,
+      subtitle: path7,
       category: "files",
       score: 150 - index,
-      action: { type: "open-file", path: path6 }
+      action: { type: "open-file", path: path7 }
     }));
   } catch {
     return [];
@@ -20810,8 +20217,8 @@ async function spotlightFallback(query, limit = 8) {
 
 // src/main/search/providers/notesProvider.ts
 init_electron_shim();
-var import_node_fs16 = require("node:fs");
-var import_node_path16 = require("node:path");
+var import_node_fs18 = require("node:fs");
+var import_node_path18 = require("node:path");
 var NOTES_LIMIT = 250;
 function stripMarkdownSyntax(text) {
   return text.replace(/\*\*([^*\n]+)\*\*/g, "$1").replace(/__([^_\n]+)__/g, "$1").replace(/\*([^*\n]+)\*/g, "$1").replace(/_([^_\n]+)_/g, "$1").replace(/`([^`\n]+)`/g, "$1").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/^#{1,6}\s+/gm, "").replace(/^\s*[-*+]\s+/gm, "").replace(/^\s*\d+\.\s+/gm, "");
@@ -20824,9 +20231,9 @@ function notePlainText(text) {
   return stripMarkdownSyntax(decodeBasicEntities(withoutHtml)).replace(/\r/g, "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function notesPath() {
-  const dir = (0, import_node_path16.join)(app.getPath("userData"), "search");
-  (0, import_node_fs16.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path16.join)(dir, "notes.json");
+  const dir = (0, import_node_path18.join)(app.getPath("userData"), "search");
+  (0, import_node_fs18.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path18.join)(dir, "notes.json");
 }
 function migrateNote(raw) {
   if (!raw || typeof raw !== "object") return null;
@@ -20841,7 +20248,7 @@ function migrateNote(raw) {
 }
 function readNotesDb() {
   try {
-    const raw = (0, import_node_fs16.readFileSync)(notesPath(), "utf8");
+    const raw = (0, import_node_fs18.readFileSync)(notesPath(), "utf8");
     const parsed = JSON.parse(raw);
     const notes = [];
     if (Array.isArray(parsed.notes)) {
@@ -20856,7 +20263,7 @@ function readNotesDb() {
   }
 }
 function writeNotesDb(db) {
-  (0, import_node_fs16.writeFileSync)(notesPath(), `${JSON.stringify(db, null, 2)}
+  (0, import_node_fs18.writeFileSync)(notesPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
 }
 function listQuickNotes() {
@@ -20912,16 +20319,16 @@ var notesProvider = {
 
 // src/main/search/providers/quickLinksProvider.ts
 init_electron_shim();
-var import_node_fs17 = require("node:fs");
-var import_node_path17 = require("node:path");
+var import_node_fs19 = require("node:fs");
+var import_node_path19 = require("node:path");
 function quickLinksPath() {
-  const dir = (0, import_node_path17.join)(app.getPath("userData"), "search");
-  (0, import_node_fs17.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path17.join)(dir, "quick-links.json");
+  const dir = (0, import_node_path19.join)(app.getPath("userData"), "search");
+  (0, import_node_fs19.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path19.join)(dir, "quick-links.json");
 }
 function readQuickLinksDb() {
   try {
-    const raw = (0, import_node_fs17.readFileSync)(quickLinksPath(), "utf8");
+    const raw = (0, import_node_fs19.readFileSync)(quickLinksPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.links)) return { links: [] };
     return { links: parsed.links };
@@ -20936,7 +20343,7 @@ function readQuickLinksDb() {
         }
       ]
     };
-    (0, import_node_fs17.writeFileSync)(quickLinksPath(), `${JSON.stringify(db, null, 2)}
+    (0, import_node_fs19.writeFileSync)(quickLinksPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
     return db;
   }
@@ -20962,14 +20369,14 @@ var quickLinksProvider = {
 
 // src/main/search/providers/snippetsProvider.ts
 init_electron_shim();
-var import_node_crypto6 = require("node:crypto");
-var import_node_fs18 = require("node:fs");
-var import_node_os9 = require("node:os");
-var import_node_path18 = require("node:path");
+var import_node_crypto7 = require("node:crypto");
+var import_node_fs20 = require("node:fs");
+var import_node_os10 = require("node:os");
+var import_node_path20 = require("node:path");
 function snippetsPath() {
-  const dir = (0, import_node_path18.join)(app.getPath("userData"), "search");
-  (0, import_node_fs18.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path18.join)(dir, "snippets.json");
+  const dir = (0, import_node_path20.join)(app.getPath("userData"), "search");
+  (0, import_node_fs20.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path20.join)(dir, "snippets.json");
 }
 function defaultSnippets() {
   const t = Date.now();
@@ -21199,13 +20606,13 @@ function mergeMissingBuiltins(existing, builtins) {
 function readSnippetsDb() {
   const builtins = defaultSnippets();
   try {
-    const raw = (0, import_node_fs18.readFileSync)(snippetsPath(), "utf8");
+    const raw = (0, import_node_fs20.readFileSync)(snippetsPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.snippets)) return { snippets: builtins };
     return { snippets: mergeMissingBuiltins(parsed.snippets, builtins) };
   } catch {
     const db = { snippets: builtins };
-    (0, import_node_fs18.writeFileSync)(snippetsPath(), `${JSON.stringify(db, null, 2)}
+    (0, import_node_fs20.writeFileSync)(snippetsPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
     return db;
   }
@@ -21217,9 +20624,9 @@ function isBuiltinSnippetId(id) {
   return getBuiltinSnippetIds().has(id);
 }
 function persistSnippetsDb(snippets) {
-  const dir = (0, import_node_path18.join)(app.getPath("userData"), "search");
-  (0, import_node_fs18.mkdirSync)(dir, { recursive: true });
-  (0, import_node_fs18.writeFileSync)(snippetsPath(), `${JSON.stringify({ snippets }, null, 2)}
+  const dir = (0, import_node_path20.join)(app.getPath("userData"), "search");
+  (0, import_node_fs20.mkdirSync)(dir, { recursive: true });
+  (0, import_node_fs20.writeFileSync)(snippetsPath(), `${JSON.stringify({ snippets }, null, 2)}
 `, "utf8");
 }
 var SNIPPET_LABEL_MAX = 200;
@@ -21257,7 +20664,7 @@ function addUserSnippet(payload) {
   if (triggerTaken(db.snippets, trigger, null)) {
     return { ok: false, message: "Another snippet already uses this trigger" };
   }
-  const id = `snippet:user:${(0, import_node_crypto6.randomUUID)()}`;
+  const id = `snippet:user:${(0, import_node_crypto7.randomUUID)()}`;
   const createdAt = Date.now();
   const next = [...db.snippets, { id, label, trigger, body, createdAt }];
   persistSnippetsDb(next);
@@ -21301,7 +20708,7 @@ function formatTime(date) {
   return date.toTimeString().slice(0, 8);
 }
 function interpolateSnippet(input, now = /* @__PURE__ */ new Date()) {
-  return input.split("${date}").join(formatDate(now)).split("${time}").join(formatTime(now)).split("${datetime}").join(`${formatDate(now)} ${formatTime(now)}`).split("${iso}").join(now.toISOString()).split("${year}").join(String(now.getFullYear())).split("${timestamp}").join(String(Math.floor(now.getTime() / 1e3))).split("${hostname}").join((0, import_node_os9.hostname)()).replace(/\$\{uuid\}/g, () => (0, import_node_crypto6.randomUUID)());
+  return input.split("${date}").join(formatDate(now)).split("${time}").join(formatTime(now)).split("${datetime}").join(`${formatDate(now)} ${formatTime(now)}`).split("${iso}").join(now.toISOString()).split("${year}").join(String(now.getFullYear())).split("${timestamp}").join(String(Math.floor(now.getTime() / 1e3))).split("${hostname}").join((0, import_node_os10.hostname)()).replace(/\$\{uuid\}/g, () => (0, import_node_crypto7.randomUUID)());
 }
 function friendlyTriggerDisplay(trigger) {
   const stripped = trigger.replace(/^;/, "").trim();
@@ -21433,8 +20840,57 @@ function shouldPreferRecent(leftScore, leftAgeMs, rightScore, rightAgeMs) {
   return leftAgeMs < rightAgeMs;
 }
 
+// src/main/search/directoryRecommendations.ts
+var import_node_path21 = require("node:path");
+function visitScore(visit, now) {
+  const ageDays = Math.max(0, (now - visit.lastVisitedAt) / 864e5);
+  const recencyBoost = Math.max(0, 14 - ageDays);
+  return visit.count * 10 + recencyBoost;
+}
+function rankDirectoryRecommendations(visits, options = {}) {
+  const now = options.now ?? Date.now();
+  const limit = options.limit ?? 5;
+  const siblingThreshold = options.siblingThreshold ?? 3;
+  const excluded = new Set(options.excludedPaths ?? []);
+  const validVisits = Object.entries(visits).filter(
+    ([path7, visit]) => path7.startsWith("/") && visit !== null && typeof visit === "object" && Number.isFinite(visit.count) && visit.count > 0 && Number.isFinite(visit.lastVisitedAt)
+  );
+  const childrenByParent = /* @__PURE__ */ new Map();
+  for (const entry of validVisits) {
+    const parent = (0, import_node_path21.dirname)(entry[0]);
+    const siblings = childrenByParent.get(parent) ?? [];
+    siblings.push(entry);
+    childrenByParent.set(parent, siblings);
+  }
+  const collapsedParents = new Set(
+    Array.from(childrenByParent.entries()).filter(([parent, children]) => !excluded.has(parent) && children.length >= siblingThreshold).map(([parent]) => parent)
+  );
+  const recommendations = /* @__PURE__ */ new Map();
+  for (const [path7, visit] of validVisits) {
+    const parent = (0, import_node_path21.dirname)(path7);
+    const recommendationPath = collapsedParents.has(parent) ? parent : path7;
+    if (excluded.has(recommendationPath)) continue;
+    const existing = recommendations.get(recommendationPath);
+    const score = visitScore(visit, now);
+    recommendations.set(recommendationPath, {
+      path: recommendationPath,
+      count: (existing?.count ?? 0) + visit.count,
+      lastVisitedAt: Math.max(existing?.lastVisitedAt ?? 0, visit.lastVisitedAt),
+      score: (existing?.score ?? 0) + score
+    });
+  }
+  const ranked = Array.from(recommendations.values()).sort(
+    (a, b) => b.score - a.score || b.lastVisitedAt - a.lastVisitedAt || a.path.localeCompare(b.path)
+  );
+  return ranked.filter((candidate, index) => {
+    return !ranked.slice(0, index).some((stronger) => {
+      return candidate.path.startsWith(`${stronger.path}/`) || stronger.path.startsWith(`${candidate.path}/`);
+    });
+  }).slice(0, Math.max(0, limit));
+}
+
 // src/main/search/service.ts
-var execFileAsync9 = (0, import_node_util9.promisify)(import_node_child_process10.execFile);
+var execFileAsync11 = (0, import_node_util11.promisify)(import_node_child_process12.execFile);
 var MAX_RESULTS = 80;
 var PROVIDER_REFRESH_MIN_AGE_MS = 1e4;
 var FILE_INDEX_LIMIT = 4e3;
@@ -21534,6 +20990,11 @@ function uniqById(items) {
   }
   return out;
 }
+function attachSearchResultIcons(items) {
+  return items.map(
+    (item) => item.action.type === "open-file" ? { ...item, iconDataUrl: fileIconDataUrl(item.action.path) } : item
+  );
+}
 function actionIdFromResult(action, resultId) {
   if (resultId) return resultId;
   switch (action.type) {
@@ -21594,10 +21055,15 @@ async function refreshAllProviders() {
     upsertProvider(notesProvider),
     upsertProvider(snippetsProvider),
     upsertProvider(quickLinksProvider),
-    upsertProvider(extensionsProvider),
     upsertProvider(appsProvider)
   ]);
   indexDb.clearSearchCache();
+  void upsertProvider(extensionsProvider).then(() => {
+    lastExtensionRefreshAt = Date.now();
+    indexDb.clearSearchCache();
+  }).catch((error) => {
+    console.warn("[Search] Failed to build extension index:", error);
+  });
 }
 async function refreshVolatileProviders() {
   if (volatileRefreshPromise) return volatileRefreshPromise;
@@ -21710,8 +21176,10 @@ function internalSurfaceBoost(category, title, query, subtitle) {
     if (extName) {
       const slugName = extName.replace(/\s+/g, "");
       if (extName === normalizedQuery || slugName === normalizedQuery) boost = Math.max(boost, 1200);
-      else if (extName.startsWith(normalizedQuery) || slugName.startsWith(normalizedQuery)) boost = Math.max(boost, 800);
-      else if (extName.includes(normalizedQuery) || slugName.includes(normalizedQuery)) boost = Math.max(boost, 400);
+      else if (extName.startsWith(normalizedQuery) || slugName.startsWith(normalizedQuery))
+        boost = Math.max(boost, 800);
+      else if (extName.includes(normalizedQuery) || slugName.includes(normalizedQuery))
+        boost = Math.max(boost, 400);
     }
   }
   return boost;
@@ -21754,7 +21222,13 @@ function rankRows(query, docs) {
       category: entry.doc.category,
       fuzzyDistance: entry.fuzzyDistance,
       popularity: entry.doc.popularity
-    }) + internalSurfaceBoost(entry.doc.category, entry.doc.title, query, entry.doc.subtitle) + recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) + exactRecentQuickNoteBoost(entry.doc.category, entry.doc.title, query, entry.doc.updatedAt, now) + (() => {
+    }) + internalSurfaceBoost(entry.doc.category, entry.doc.title, query, entry.doc.subtitle) + recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) + exactRecentQuickNoteBoost(
+      entry.doc.category,
+      entry.doc.title,
+      query,
+      entry.doc.updatedAt,
+      now
+    ) + (() => {
       const q = query.trim().toLowerCase();
       if (!q) return 120;
       if (/\bnotes?\b/.test(q) || q.includes("quick note")) return 780;
@@ -21885,7 +21359,7 @@ function parseProcessNameMap(stdout) {
 }
 async function readProcessNameMap() {
   try {
-    const { stdout } = await execFileAsync9("/bin/ps", ["-axo", "pid=,comm="]);
+    const { stdout } = await execFileAsync11("/bin/ps", ["-axo", "pid=,comm="]);
     return parseProcessNameMap(stdout);
   } catch {
     return /* @__PURE__ */ new Map();
@@ -21930,23 +21404,25 @@ async function searchEverything(query) {
   refreshVolatileProvidersIfStale();
   const trimmed = query.trim();
   if (!trimmed) {
-    return buildRecommendations();
+    return attachSearchResultIcons(buildRecommendations());
   }
   const rows = indexDb.getSearch(trimmed, MAX_RESULTS);
-  const docs = rows.map((row) => ({
-    doc: {
-      id: row.id,
-      category: row.category,
-      title: row.title,
-      subtitle: row.subtitle,
-      tokens: `${row.title} ${row.subtitle}`,
-      action: indexDb.parseAction(row.actionJson),
-      updatedAt: row.updatedAt,
-      popularity: row.popularity
-    },
-    lexical: row.lexical,
-    fuzzyDistance: row.fuzzyDistance
-  }));
+  const docs = rows.map(
+    (row) => ({
+      doc: {
+        id: row.id,
+        category: row.category,
+        title: row.title,
+        subtitle: row.subtitle,
+        tokens: `${row.title} ${row.subtitle}`,
+        action: indexDb.parseAction(row.actionJson),
+        updatedAt: row.updatedAt,
+        popularity: row.popularity
+      },
+      lexical: row.lexical,
+      fuzzyDistance: row.fuzzyDistance
+    })
+  );
   const ranked = rankRows(trimmed, docs);
   const asResults = ranked.map((item) => ({
     id: item.id,
@@ -21983,7 +21459,7 @@ async function searchEverything(query) {
       action: { type: "add-note", text: trimmed }
     }
   ] : [];
-  return uniqById([
+  const results = uniqById([
     ...resultsWithoutFiles,
     ...emojiPickerResult,
     ...fileResults,
@@ -21991,28 +21467,37 @@ async function searchEverything(query) {
     ...openPortResults,
     ...noteAdd
   ]).sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS);
+  return attachSearchResultIcons(results);
 }
 function expandUserPath(input) {
-  if (input === "~") return (0, import_node_os10.homedir)();
-  if (input.startsWith("~/")) return (0, import_node_path19.join)((0, import_node_os10.homedir)(), input.slice(2));
+  if (input === "~") return (0, import_node_os11.homedir)();
+  if (input.startsWith("~/")) return (0, import_node_path22.join)((0, import_node_os11.homedir)(), input.slice(2));
   return input;
 }
 function resolveSlashPathInput(input) {
   if (!input.startsWith("/")) return expandUserPath(input);
-  const absolutePrefixes = ["/Users/", "/Volumes/", "/private/", "/tmp/", "/var/", "/System/", "/Library/"];
+  const absolutePrefixes = [
+    "/Users/",
+    "/Volumes/",
+    "/private/",
+    "/tmp/",
+    "/var/",
+    "/System/",
+    "/Library/"
+  ];
   if (absolutePrefixes.some((prefix) => input.startsWith(prefix))) {
     return input;
   }
   if (input === "/Users" || input === "/Volumes") {
     return input;
   }
-  return (0, import_node_path19.join)((0, import_node_os10.homedir)(), input.slice(1));
+  return (0, import_node_path22.join)((0, import_node_os11.homedir)(), input.slice(1));
 }
-function displayUserPath(path6) {
-  const home = (0, import_node_os10.homedir)();
-  if (path6 === home) return "~";
-  if (path6.startsWith(`${home}/`)) return `~/${path6.slice(home.length + 1)}`;
-  return path6;
+function displayUserPath(path7) {
+  const home = (0, import_node_os11.homedir)();
+  if (path7 === home) return "~";
+  if (path7.startsWith(`${home}/`)) return `~/${path7.slice(home.length + 1)}`;
+  return path7;
 }
 function splitPathCompletionQuery(raw) {
   const query = raw.trimStart();
@@ -22022,16 +21507,16 @@ function splitPathCompletionQuery(raw) {
   let targetPart = expandedBody;
   let appTerm = "";
   const trimmedBody = expandedBody.trimEnd();
-  if (expandedBody.endsWith(" ") && trimmedBody && (0, import_node_fs19.existsSync)(trimmedBody)) {
+  if (expandedBody.endsWith(" ") && trimmedBody && (0, import_node_fs21.existsSync)(trimmedBody)) {
     appMode = true;
     targetPart = trimmedBody;
     appTerm = "";
-  } else if (!(0, import_node_fs19.existsSync)(expandedBody)) {
+  } else if (!(0, import_node_fs21.existsSync)(expandedBody)) {
     let splitAt = -1;
     for (let index = expandedBody.length - 1; index >= 0; index--) {
       if (expandedBody[index] !== " ") continue;
       const beforeSpace = expandedBody.slice(0, index).trimEnd();
-      if (beforeSpace && (0, import_node_fs19.existsSync)(beforeSpace)) {
+      if (beforeSpace && (0, import_node_fs21.existsSync)(beforeSpace)) {
         splitAt = index;
         break;
       }
@@ -22043,7 +21528,7 @@ function splitPathCompletionQuery(raw) {
     }
   }
   if (!targetPart) {
-    return { targetPath: (0, import_node_os10.homedir)(), appTerm, appMode };
+    return { targetPath: (0, import_node_os11.homedir)(), appTerm, appMode };
   }
   if (targetPart.startsWith("/")) {
     return { targetPath: targetPart, appTerm, appMode };
@@ -22051,24 +21536,78 @@ function splitPathCompletionQuery(raw) {
   if (targetPart.startsWith("~")) {
     return { targetPath: expandUserPath(targetPart), appTerm, appMode };
   }
-  return { targetPath: (0, import_node_path19.resolve)((0, import_node_os10.homedir)(), targetPart), appTerm, appMode };
+  return { targetPath: (0, import_node_path22.resolve)((0, import_node_os11.homedir)(), targetPart), appTerm, appMode };
 }
 function pathCompletionBase(targetPath) {
   if (targetPath.endsWith("/")) return { directory: targetPath, prefix: "" };
   try {
-    if ((0, import_node_fs19.existsSync)(targetPath) && (0, import_node_fs19.statSync)(targetPath).isDirectory()) {
+    if ((0, import_node_fs21.existsSync)(targetPath) && (0, import_node_fs21.statSync)(targetPath).isDirectory()) {
       return { directory: targetPath, prefix: "" };
     }
   } catch {
   }
-  return { directory: (0, import_node_path19.dirname)(targetPath), prefix: (0, import_node_path19.basename)(targetPath) };
+  return { directory: (0, import_node_path22.dirname)(targetPath), prefix: (0, import_node_path22.basename)(targetPath) };
+}
+function directoryVisitStorePath() {
+  return (0, import_node_path22.join)(app.getPath("userData"), "directory-visits.json");
+}
+function readDirectoryVisitStore() {
+  try {
+    const parsed = JSON.parse((0, import_node_fs21.readFileSync)(directoryVisitStorePath(), "utf8"));
+    if (!parsed || parsed.version !== 1 || typeof parsed.visits !== "object") {
+      return { version: 1, visits: {} };
+    }
+    return parsed;
+  } catch {
+    return { version: 1, visits: {} };
+  }
+}
+function recordDirectoryVisit(path7) {
+  try {
+    const normalized = (0, import_node_path22.resolve)(path7);
+    if (!(0, import_node_fs21.statSync)(normalized).isDirectory()) return;
+    const store2 = readDirectoryVisitStore();
+    const existing = store2.visits[normalized];
+    store2.visits[normalized] = {
+      count: (existing?.count ?? 0) + 1,
+      lastVisitedAt: Date.now()
+    };
+    const storePath2 = directoryVisitStorePath();
+    (0, import_node_fs21.mkdirSync)((0, import_node_path22.dirname)(storePath2), { recursive: true });
+    (0, import_node_fs21.writeFileSync)(storePath2, JSON.stringify(store2), "utf8");
+  } catch (error) {
+    console.warn("[Search] Failed to record directory visit:", error);
+  }
+}
+function recommendedDirectories() {
+  return rankDirectoryRecommendations(readDirectoryVisitStore().visits, {
+    limit: 50,
+    excludedPaths: [(0, import_node_os11.homedir)()]
+  }).filter((item) => {
+    try {
+      return (0, import_node_fs21.statSync)(item.path).isDirectory();
+    } catch {
+      return false;
+    }
+  }).slice(0, 5).map((item, index) => ({
+    id: `path-recommended:${item.path}`,
+    title: (0, import_node_path22.basename)(item.path),
+    subtitle: displayUserPath(item.path),
+    kind: "directory",
+    section: "recommended",
+    badge: "Recommended",
+    iconDataUrl: folderIconDataUrl,
+    value: `${item.path}/`,
+    path: item.path,
+    score: 5e3 - index
+  }));
 }
 function openWithUsageStorePath() {
-  return (0, import_node_path19.join)(app.getPath("userData"), "open-with-usage.json");
+  return (0, import_node_path22.join)(app.getPath("userData"), "open-with-usage.json");
 }
 function readOpenWithUsageStore() {
   try {
-    const parsed = JSON.parse((0, import_node_fs19.readFileSync)(openWithUsageStorePath(), "utf8"));
+    const parsed = JSON.parse((0, import_node_fs21.readFileSync)(openWithUsageStorePath(), "utf8"));
     if (!parsed || typeof parsed !== "object" || parsed.version !== 1 || typeof parsed.keys !== "object") {
       return { version: 1, keys: {} };
     }
@@ -22081,20 +21620,20 @@ function readOpenWithUsageStore() {
   }
 }
 function writeOpenWithUsageStore(store2) {
-  const path6 = openWithUsageStorePath();
-  (0, import_node_fs19.mkdirSync)((0, import_node_path19.dirname)(path6), { recursive: true });
-  (0, import_node_fs19.writeFileSync)(path6, JSON.stringify(store2), "utf8");
+  const path7 = openWithUsageStorePath();
+  (0, import_node_fs21.mkdirSync)((0, import_node_path22.dirname)(path7), { recursive: true });
+  (0, import_node_fs21.writeFileSync)(path7, JSON.stringify(store2), "utf8");
 }
 function openWithUsageKeysForPath(targetPath) {
   try {
-    const stat2 = (0, import_node_fs19.statSync)(targetPath);
+    const stat2 = (0, import_node_fs21.statSync)(targetPath);
     if (stat2.isDirectory()) {
-      return [`folder:${targetPath}`, `sibling-folder:${(0, import_node_path19.dirname)(targetPath)}`];
+      return [`folder:${targetPath}`, `sibling-folder:${(0, import_node_path22.dirname)(targetPath)}`];
     }
   } catch {
   }
-  const ext = (0, import_node_path19.extname)(targetPath).toLowerCase();
-  const parent = (0, import_node_path19.dirname)(targetPath);
+  const ext = (0, import_node_path22.extname)(targetPath).toLowerCase();
+  const parent = (0, import_node_path22.dirname)(targetPath);
   const keys = [`parent:${parent}`];
   if (ext) {
     keys.push(`parent-ext:${parent}:${ext}`, `ext:${ext}`);
@@ -22141,7 +21680,9 @@ function appMatchesTerm(appName, term, learnedAliases) {
   const normalizedName = normalizeAppSearchTerm(appName);
   if (normalizedName.includes(normalizedTerm)) return true;
   if (appAcronym(appName).includes(normalizedTerm)) return true;
-  if (builtInAppAliases(appName).some((alias) => normalizeAppSearchTerm(alias).includes(normalizedTerm))) {
+  if (builtInAppAliases(appName).some(
+    (alias) => normalizeAppSearchTerm(alias).includes(normalizedTerm)
+  )) {
     return true;
   }
   return Boolean(learnedAliases?.[appName]);
@@ -22186,17 +21727,17 @@ function recommendedOpenWithApps(targetPath) {
   });
   return Array.from(weights.entries()).map(([appName, score]) => ({ appName, score })).sort((a, b) => b.score - a.score || a.appName.localeCompare(b.appName));
 }
-function isApplicationsDirectory(path6) {
-  const normalized = path6.replace(/\/+$/, "");
-  return normalized === "/Applications" || normalized === "/System/Applications" || normalized === "/System/Applications/Utilities" || normalized === (0, import_node_path19.join)((0, import_node_os10.homedir)(), "Applications");
+function isApplicationsDirectory(path7) {
+  const normalized = path7.replace(/\/+$/, "");
+  return normalized === "/Applications" || normalized === "/System/Applications" || normalized === "/System/Applications/Utilities" || normalized === (0, import_node_path22.join)((0, import_node_os11.homedir)(), "Applications");
 }
 function inferredDefaultAppName(targetPath) {
   try {
-    if ((0, import_node_fs19.statSync)(targetPath).isDirectory()) return "Finder";
+    if ((0, import_node_fs21.statSync)(targetPath).isDirectory()) return "Finder";
   } catch {
   }
-  const ext = (0, import_node_path19.extname)(targetPath).toLowerCase();
-  const parent = (0, import_node_path19.dirname)(targetPath).toLowerCase();
+  const ext = (0, import_node_path22.extname)(targetPath).toLowerCase();
+  const parent = (0, import_node_path22.dirname)(targetPath).toLowerCase();
   if (/\b(movie|movies|video|videos)\b/.test(parent) && [".ts", ".m2ts", ".mts"].includes(ext)) {
     return "QuickTime Player";
   }
@@ -22208,7 +21749,7 @@ function inferredDefaultAppName(targetPath) {
   }
   return "Default App";
 }
-async function applicationCompletionItem(targetPath, appInfo, index, section, score) {
+function applicationCompletionItem(targetPath, appInfo, index, section, score) {
   return {
     id: `path-app:${section}:${appInfo.path}`,
     title: appInfo.name,
@@ -22218,13 +21759,13 @@ async function applicationCompletionItem(targetPath, appInfo, index, section, sc
     badge: section === "recommended" ? "Recommended" : "Open With",
     value: `${targetPath} ${appInfo.name}`,
     path: targetPath,
+    appPath: appInfo.path,
     appName: appInfo.name,
     applicationAction: "open-with",
-    iconDataUrl: await appIconDataUrl(appInfo.path),
     score: score - index
   };
 }
-async function installedApplicationItem(appInfo, index) {
+function installedApplicationItem(appInfo, index) {
   return {
     id: `path-installed-app:${appInfo.path}`,
     title: appInfo.name,
@@ -22233,9 +21774,9 @@ async function installedApplicationItem(appInfo, index) {
     badge: "Application",
     value: appInfo.path,
     path: appInfo.path,
+    appPath: appInfo.path,
     appName: appInfo.name,
     applicationAction: "open",
-    iconDataUrl: await appIconDataUrl(appInfo.path),
     score: 2e3 - index
   };
 }
@@ -22243,13 +21784,13 @@ async function completePath(query, limit = 50) {
   const applicationQuery = query.trimStart();
   if (applicationQuery.startsWith("`")) {
     const appTerm2 = applicationQuery.slice(1).trim();
-    const apps = listApplications().filter((item) => appMatchesTerm(item.name, appTerm2)).sort((a, b) => a.name.localeCompare(b.name));
-    return Promise.all(apps.map((item, index) => installedApplicationItem(item, index)));
+    const apps = listApplications().filter((item) => appMatchesTerm(item.name, appTerm2)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
+    return apps.map((item, index) => installedApplicationItem(item, index));
   }
   const { targetPath, appTerm, appMode } = splitPathCompletionQuery(query);
   if (!appMode && isApplicationsDirectory(targetPath)) {
     const apps = listApplications().sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
-    return Promise.all(apps.map((item, index) => installedApplicationItem(item, index)));
+    return apps.map((item, index) => installedApplicationItem(item, index));
   }
   if (appMode) {
     const learnedAliases = learnedAliasScores(appTerm);
@@ -22257,18 +21798,16 @@ async function completePath(query, limit = 50) {
     const appsByName = new Map(allApps.map((item) => [item.name, item]));
     const learnedRecommended = Object.entries(learnedAliases ?? {}).sort((a, b) => b[1].count - a[1].count || b[1].lastUsedAt - a[1].lastUsedAt).map(([appName]) => appsByName.get(appName)).filter(isPresent);
     const usageRecommended = recommendedOpenWithApps(targetPath).map((item) => appsByName.get(item.appName)).filter(isPresent);
-    const recommended = [...learnedRecommended, ...usageRecommended].filter((item, index, items) => items.findIndex((other) => other.name === item.name) === index).slice(0, 5);
+    const recommended = [...learnedRecommended, ...usageRecommended].filter(
+      (item, index, items) => items.findIndex((other) => other.name === item.name) === index
+    ).slice(0, 5);
     const recommendedNames = new Set(recommended.map((item) => item.name));
     const rest = allApps.filter((item) => !recommendedNames.has(item.name)).slice(0, limit);
-    const recommendedItems = await Promise.all(
-      recommended.map(
-        (item, index) => applicationCompletionItem(targetPath, item, index, "recommended", 4e3)
-      )
+    const recommendedItems = recommended.map(
+      (item, index) => applicationCompletionItem(targetPath, item, index, "recommended", 4e3)
     );
-    const appItems = await Promise.all(
-      rest.slice(0, Math.max(0, limit - recommendedItems.length - 1)).map(
-        (item, index) => applicationCompletionItem(targetPath, item, index, "applications", 1e3)
-      )
+    const appItems = rest.slice(0, Math.max(0, limit - recommendedItems.length - 1)).map(
+      (item, index) => applicationCompletionItem(targetPath, item, index, "applications", 1e3)
     );
     const defaultItem = {
       id: `path-default:${targetPath}`,
@@ -22283,24 +21822,18 @@ async function completePath(query, limit = 50) {
       score: 2e3
     };
     if (appTerm.trim()) {
-      return [
-        ...recommendedItems,
-        ...appItems,
-        defaultItem
-      ];
+      return [...recommendedItems, ...appItems, defaultItem];
     }
-    return [
-      ...recommendedItems,
-      defaultItem,
-      ...appItems
-    ];
+    return [...recommendedItems, defaultItem, ...appItems];
   }
   const { directory, prefix } = pathCompletionBase(targetPath);
   const normalizedPrefix = prefix.toLowerCase();
   try {
-    const entries = (0, import_node_fs19.readdirSync)(directory, { withFileTypes: true });
-    return entries.filter((entry) => !entry.name.startsWith(".")).filter((entry) => !normalizedPrefix || entry.name.toLowerCase().includes(normalizedPrefix)).map((entry) => {
-      const absolute = (0, import_node_path19.join)(directory, entry.name);
+    const entries = (0, import_node_fs21.readdirSync)(directory, { withFileTypes: true });
+    const recommended = query.trim() === "/" ? recommendedDirectories() : [];
+    const recommendedPaths = new Set(recommended.map((item) => item.path));
+    const regular = entries.filter((entry) => !entry.name.startsWith(".")).filter((entry) => !normalizedPrefix || entry.name.toLowerCase().includes(normalizedPrefix)).map((entry) => {
+      const absolute = (0, import_node_path22.join)(directory, entry.name);
       const isDirectory = entry.isDirectory();
       const isFile = entry.isFile();
       if (!isDirectory && !isFile) return null;
@@ -22313,12 +21846,14 @@ async function completePath(query, limit = 50) {
         kind,
         value: isDirectory ? `${absolute}/` : absolute,
         path: absolute,
+        iconDataUrl: isDirectory ? folderIconDataUrl : fileIconDataUrl(absolute),
         score: (isDirectory ? 1e3 : 500) + (lowerName === normalizedPrefix ? 1e3 : lowerName.startsWith(normalizedPrefix) ? 100 : 0)
       };
-    }).filter(isPresent).sort((a, b) => {
+    }).filter(isPresent).filter((item) => !recommendedPaths.has(item.path)).sort((a, b) => {
       if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
       return b.score - a.score || a.title.localeCompare(b.title);
-    }).slice(0, limit);
+    }).slice(0, Math.max(0, limit - recommended.length));
+    return [...recommended, ...regular];
   } catch {
     return [];
   }
@@ -22391,13 +21926,13 @@ function buildEmojiPickerSearchResult(query) {
 }
 async function listOpenPorts() {
   try {
-    const { stdout } = await execFileAsync9("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
+    const { stdout } = await execFileAsync11("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
     const processNames = await readProcessNameMap();
     return parseOpenPortProcesses(stdout, processNames);
   } catch (error) {
     console.error("[OpenPorts] Failed to list listening ports:", error);
     try {
-      const { stdout } = await execFileAsync9("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
+      const { stdout } = await execFileAsync11("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
       return parseOpenPortProcesses(stdout);
     } catch (fallbackError) {
       console.error("[OpenPorts] Fallback listing failed:", fallbackError);
@@ -22408,7 +21943,7 @@ async function listOpenPorts() {
 async function executeActionInner(action) {
   switch (action.type) {
     case "open-app": {
-      await execFileAsync9("open", ["-a", action.appName]);
+      await execFileAsync11("open", ["-a", action.appName]);
       return { ok: true, message: `Opened ${action.appName}` };
     }
     case "open-file": {
@@ -22420,7 +21955,7 @@ async function executeActionInner(action) {
     }
     case "open-with-app": {
       if (action.appName) {
-        await execFileAsync9("open", ["-a", action.appName, action.path]);
+        await execFileAsync11("open", ["-a", action.appName, action.path]);
         recordOpenWithUsage(action.path, action.appName);
         return { ok: true, message: `Opened with ${action.appName}` };
       }
@@ -22439,7 +21974,7 @@ async function executeActionInner(action) {
       await new Promise((resolve4) => setTimeout(resolve4, 120));
       app.hide();
       await new Promise((resolve4) => setTimeout(resolve4, 50));
-      await execFileAsync9("osascript", [
+      await execFileAsync11("osascript", [
         "-e",
         'tell application "System Events" to keystroke "v" using {command down}'
       ]);
@@ -22494,7 +22029,7 @@ async function executeActionInner(action) {
       if (!validation.ok) {
         return { ok: false, message: validation.message };
       }
-      const { stdout } = await execFileAsync9("bash", ["-lc", command]);
+      const { stdout } = await execFileAsync11("bash", ["-lc", command]);
       const message = stdout.trim();
       return { ok: true, message: message || "Command completed" };
     }
@@ -22622,18 +22157,18 @@ async function fetchFrankfurterLatest(from) {
 }
 
 // src/main/portManager/namedPortsStore.ts
-var import_node_crypto7 = require("node:crypto");
-var import_node_fs20 = require("node:fs");
-var import_node_path20 = require("node:path");
+var import_node_crypto8 = require("node:crypto");
+var import_node_fs22 = require("node:fs");
+var import_node_path23 = require("node:path");
 init_electron_shim();
 function storePath() {
   return `${app.getPath("userData")}/named-ports.json`;
 }
 function readAll() {
-  const path6 = storePath();
-  if (!(0, import_node_fs20.existsSync)(path6)) return [];
+  const path7 = storePath();
+  if (!(0, import_node_fs22.existsSync)(path7)) return [];
   try {
-    const raw = (0, import_node_fs20.readFileSync)(path6, "utf8");
+    const raw = (0, import_node_fs22.readFileSync)(path7, "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.map((row) => {
@@ -22650,9 +22185,9 @@ function readAll() {
   }
 }
 function writeAll(entries) {
-  const path6 = storePath();
-  (0, import_node_fs20.mkdirSync)((0, import_node_path20.dirname)(path6), { recursive: true });
-  (0, import_node_fs20.writeFileSync)(path6, `${JSON.stringify(entries, null, 2)}
+  const path7 = storePath();
+  (0, import_node_fs22.mkdirSync)((0, import_node_path23.dirname)(path7), { recursive: true });
+  (0, import_node_fs22.writeFileSync)(path7, `${JSON.stringify(entries, null, 2)}
 `, "utf8");
 }
 function listNamedPorts() {
@@ -22662,7 +22197,7 @@ function addNamedPort(name, port) {
   const trimmed = name.trim();
   if (!trimmed || port < 1 || port > 65535) return null;
   const entries = readAll();
-  const next = { id: (0, import_node_crypto7.randomUUID)(), name: trimmed, port };
+  const next = { id: (0, import_node_crypto8.randomUUID)(), name: trimmed, port };
   entries.push(next);
   writeAll(entries);
   return next;
@@ -22676,6 +22211,7 @@ function removeNamedPort(id) {
 }
 
 // src/main/llm/actionMode.ts
+init_registry();
 function redactContext(input) {
   return input.replace(/(sk-[A-Za-z0-9]{12,})/g, "[REDACTED_API_KEY]").replace(/(gh[pousr]_[A-Za-z0-9_]{12,})/g, "[REDACTED_TOKEN]").replace(/(password\s*[=:]\s*[^\s]+)/gi, "password=[REDACTED]");
 }
@@ -22713,19 +22249,20 @@ ${appContext}` : "App context: (none)"
 
 // src/main/voice/service.ts
 init_electron_shim();
-var import_node_child_process11 = require("node:child_process");
-var import_node_fs21 = require("node:fs");
-var import_node_fs22 = require("node:fs");
-var import_node_path21 = require("node:path");
+var import_node_child_process13 = require("node:child_process");
+var import_node_fs23 = require("node:fs");
+var import_node_fs24 = require("node:fs");
+var import_node_path24 = require("node:path");
 var import_node_events2 = require("node:events");
-var import_node_util10 = require("node:util");
-var execFileAsync10 = (0, import_node_util10.promisify)(import_node_child_process11.execFile);
+var import_node_util12 = require("node:util");
+init_configStore();
+var execFileAsync12 = (0, import_node_util12.promisify)(import_node_child_process13.execFile);
 var activeSpeech = null;
 var cachedLoginPath = null;
 async function getLoginPath() {
   if (cachedLoginPath !== null) return cachedLoginPath;
   try {
-    const { stdout } = await execFileAsync10("bash", ["-lc", 'echo -n "$PATH"']);
+    const { stdout } = await execFileAsync12("bash", ["-lc", 'echo -n "$PATH"']);
     const fromShell = stdout.trim();
     cachedLoginPath = fromShell || process.env["PATH"] || "";
   } catch {
@@ -22739,10 +22276,10 @@ async function getLoginPath() {
   return cachedLoginPath;
 }
 async function execWithUserPath(file, args, options = {}) {
-  const path6 = await getLoginPath();
-  return execFileAsync10(file, args, {
+  const path7 = await getLoginPath();
+  return execFileAsync12(file, args, {
     maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
-    env: { ...process.env, PATH: path6 }
+    env: { ...process.env, PATH: path7 }
   });
 }
 var MODEL_CATALOG = [
@@ -22803,15 +22340,15 @@ var MODEL_CATALOG = [
 var activeDownloads = /* @__PURE__ */ new Map();
 var VOICE_MODEL_CONFIG_KEY = "voiceSttModelId";
 function voiceModelsRootDir() {
-  const dir = (0, import_node_path21.join)(app.getPath("userData"), "voice-models");
-  (0, import_node_fs21.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_node_path24.join)(app.getPath("userData"), "voice-models");
+  (0, import_node_fs23.mkdirSync)(dir, { recursive: true });
   return dir;
 }
 function modelDir(modelId) {
-  return (0, import_node_path21.join)(voiceModelsRootDir(), modelId);
+  return (0, import_node_path24.join)(voiceModelsRootDir(), modelId);
 }
 function modelAssetPath(modelId, fileName) {
-  return (0, import_node_path21.join)(modelDir(modelId), fileName);
+  return (0, import_node_path24.join)(modelDir(modelId), fileName);
 }
 function findModel(modelId) {
   const model = MODEL_CATALOG.find((entry) => entry.id === modelId);
@@ -22828,9 +22365,9 @@ function readSelectedModelId() {
   }
   return "moonshine-base-en";
 }
-function fileSizeOrZero(path6) {
+function fileSizeOrZero(path7) {
   try {
-    return (0, import_node_fs21.statSync)(path6).size;
+    return (0, import_node_fs23.statSync)(path7).size;
   } catch {
     return 0;
   }
@@ -22840,8 +22377,8 @@ function modelDownloadedBytes(model) {
 }
 function isModelFullyDownloaded(model) {
   return model.assets.every((asset) => {
-    const path6 = modelAssetPath(model.id, asset.fileName);
-    return (0, import_node_fs21.existsSync)(path6) && fileSizeOrZero(path6) > 0;
+    const path7 = modelAssetPath(model.id, asset.fileName);
+    return (0, import_node_fs23.existsSync)(path7) && fileSizeOrZero(path7) > 0;
   });
 }
 async function probeRuntime(kind) {
@@ -22870,12 +22407,12 @@ async function probeRuntime(kind) {
   };
 }
 async function runLoginShell(command) {
-  const path6 = await getLoginPath();
-  const { stdout, stderr } = await execFileAsync10("bash", ["-lc", command], {
+  const path7 = await getLoginPath();
+  const { stdout, stderr } = await execFileAsync12("bash", ["-lc", command], {
     maxBuffer: 32 * 1024 * 1024,
     env: {
       ...process.env,
-      PATH: path6,
+      PATH: path7,
       HOMEBREW_NO_AUTO_UPDATE: "1",
       HOMEBREW_NO_ANALYTICS: "1",
       HOMEBREW_NO_INSTALL_CLEANUP: "1",
@@ -23005,11 +22542,11 @@ async function downloadAssetWithProgress(url, destinationPath, onProgress) {
   if (!response.ok || !response.body) {
     throw new Error(`Download failed (${response.status}): ${url}`);
   }
-  await import_node_fs22.promises.mkdir((0, import_node_path21.dirname)(destinationPath), { recursive: true });
+  await import_node_fs24.promises.mkdir((0, import_node_path24.dirname)(destinationPath), { recursive: true });
   const tempPath = `${destinationPath}.part`;
   const total = Number(response.headers.get("content-length") ?? "");
   const totalBytes = Number.isFinite(total) && total > 0 ? total : null;
-  const writer = (0, import_node_fs21.createWriteStream)(tempPath);
+  const writer = (0, import_node_fs23.createWriteStream)(tempPath);
   const reader = response.body.getReader();
   let downloaded = 0;
   try {
@@ -23025,20 +22562,20 @@ async function downloadAssetWithProgress(url, destinationPath, onProgress) {
     }
     writer.end();
     await (0, import_node_events2.once)(writer, "finish");
-    await import_node_fs22.promises.rename(tempPath, destinationPath);
+    await import_node_fs24.promises.rename(tempPath, destinationPath);
   } catch (error) {
     writer.destroy();
-    await import_node_fs22.promises.rm(tempPath, { force: true });
+    await import_node_fs24.promises.rm(tempPath, { force: true });
     throw error;
   }
 }
 async function runModelDownload(modelId) {
   const model = findModel(modelId);
   const destinationRoot = modelDir(modelId);
-  await import_node_fs22.promises.mkdir(destinationRoot, { recursive: true });
+  await import_node_fs24.promises.mkdir(destinationRoot, { recursive: true });
   let baselineBytes = modelDownloadedBytes(model);
   const runtimeNeeded = !(await probeRuntime(model.runtime)).ready;
-  const missingAssets = model.assets.filter((asset) => !(0, import_node_fs21.existsSync)(modelAssetPath(modelId, asset.fileName)));
+  const missingAssets = model.assets.filter((asset) => !(0, import_node_fs23.existsSync)(modelAssetPath(modelId, asset.fileName)));
   if (!runtimeNeeded && missingAssets.length === 0) {
     activeDownloads.delete(modelId);
     return;
@@ -23163,8 +22700,8 @@ async function cleanupStaleVoiceModelAssets() {
         if (currentAssets.has(fileName)) continue;
         const fullPath = modelAssetPath(model.id, fileName);
         try {
-          await import_node_fs22.promises.stat(fullPath);
-          await import_node_fs22.promises.rm(fullPath, { force: true });
+          await import_node_fs24.promises.stat(fullPath);
+          await import_node_fs24.promises.rm(fullPath, { force: true });
           console.log("[stt][main] removed stale voice model asset:", fullPath);
         } catch {
         }
@@ -23193,7 +22730,7 @@ async function speakText(text) {
   const trimmed = text.trim();
   if (!trimmed) return;
   stopSpeaking();
-  activeSpeech = (0, import_node_child_process11.spawn)("say", [trimmed], {
+  activeSpeech = (0, import_node_child_process13.spawn)("say", [trimmed], {
     stdio: "ignore"
   });
   activeSpeech.on("exit", () => {
@@ -23207,9 +22744,9 @@ function stopSpeaking() {
 }
 async function hasBinary(binary) {
   try {
-    const path6 = await getLoginPath();
-    await execFileAsync10("bash", ["-lc", `command -v ${binary}`], {
-      env: { ...process.env, PATH: path6 }
+    const path7 = await getLoginPath();
+    await execFileAsync12("bash", ["-lc", `command -v ${binary}`], {
+      env: { ...process.env, PATH: path7 }
     });
     return true;
   } catch {
@@ -23252,7 +22789,7 @@ function preferredMoonshineModelPath() {
   throw new Error("Moonshine model files are not downloaded yet. Download Moonshine Base first.");
 }
 async function convertToWav(inputPath, outputPath) {
-  await execFileAsync10("ffmpeg", [
+  await execFileAsync12("ffmpeg", [
     "-y",
     "-i",
     inputPath,
@@ -23347,14 +22884,14 @@ function extensionFromMime(mime) {
 }
 async function findWhisperCliModel() {
   const envPath = process.env["RAYMES_WHISPER_MODEL"];
-  if (envPath && (0, import_node_fs21.existsSync)(envPath)) return envPath;
+  if (envPath && (0, import_node_fs23.existsSync)(envPath)) return envPath;
   const selected = readSelectedModelId();
   const preferredDirs = selected === "whisper-base" || selected === "whisper-small" ? [modelDir(selected), modelDir(selected === "whisper-base" ? "whisper-small" : "whisper-base")] : [modelDir("whisper-base"), modelDir("whisper-small")];
   for (const dir of preferredDirs) {
     try {
-      const inner = await import_node_fs22.promises.readdir(dir);
+      const inner = await import_node_fs24.promises.readdir(dir);
       const match = inner.find((f) => f.startsWith("ggml-") && f.endsWith(".bin"));
-      if (match) return (0, import_node_path21.join)(dir, match);
+      if (match) return (0, import_node_path24.join)(dir, match);
     } catch {
     }
   }
@@ -23365,7 +22902,7 @@ async function findWhisperCliModel() {
     "/usr/local/share/whisper-cpp/ggml-base.bin"
   ];
   for (const c of candidates) {
-    if ((0, import_node_fs21.existsSync)(c)) return c;
+    if ((0, import_node_fs23.existsSync)(c)) return c;
   }
   return null;
 }
@@ -23380,8 +22917,8 @@ async function runWhisperCli(wavPath, language) {
     const { stderr } = await execWithUserPath(binary, args);
     if (stderr.trim()) console.info("[stt][main] whisper-cli stderr:\n" + stderr.trim());
     const txtPath = wavPath.replace(/\.wav$/, ".txt");
-    const text = await import_node_fs22.promises.readFile(txtPath, "utf-8").catch(() => "");
-    await import_node_fs22.promises.rm(txtPath, { force: true }).catch(() => void 0);
+    const text = await import_node_fs24.promises.readFile(txtPath, "utf-8").catch(() => "");
+    await import_node_fs24.promises.rm(txtPath, { force: true }).catch(() => void 0);
     return text.trim();
   } catch (err) {
     const e = err;
@@ -23410,14 +22947,14 @@ async function probeEngineBinaries() {
   return cachedEngineProbe;
 }
 async function transcribeAudio(req) {
-  const tempRoot = (0, import_node_path21.join)(app.getPath("temp"), "tezbar-voice");
-  await import_node_fs22.promises.mkdir(tempRoot, { recursive: true });
+  const tempRoot = (0, import_node_path24.join)(app.getPath("temp"), "tezbar-voice");
+  await import_node_fs24.promises.mkdir(tempRoot, { recursive: true });
   const token = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const ext = extensionFromMime(req.mimeType);
-  const sourcePath = (0, import_node_path21.join)(tempRoot, `input-${token}.${ext}`);
-  const wavPath = ext === "wav" ? sourcePath : (0, import_node_path21.join)(tempRoot, `input-${token}.wav`);
+  const sourcePath = (0, import_node_path24.join)(tempRoot, `input-${token}.${ext}`);
+  const wavPath = ext === "wav" ? sourcePath : (0, import_node_path24.join)(tempRoot, `input-${token}.wav`);
   try {
-    await import_node_fs22.promises.writeFile(sourcePath, Buffer.from(req.audioBytes));
+    await import_node_fs24.promises.writeFile(sourcePath, Buffer.from(req.audioBytes));
     console.info(
       "[stt][main] received audio",
       JSON.stringify({
@@ -23494,9 +23031,9 @@ async function transcribeAudio(req) {
     console.error("[stt][main] transcription pipeline error:", message);
     return { ok: false, error: message };
   } finally {
-    await import_node_fs22.promises.rm(sourcePath, { force: true }).catch(() => void 0);
+    await import_node_fs24.promises.rm(sourcePath, { force: true }).catch(() => void 0);
     if (wavPath !== sourcePath) {
-      await import_node_fs22.promises.rm(wavPath, { force: true }).catch(() => void 0);
+      await import_node_fs24.promises.rm(wavPath, { force: true }).catch(() => void 0);
     }
   }
 }
@@ -23636,11 +23173,11 @@ async function requestPermission(id) {
 }
 
 // src/main/terminal/service.ts
-var import_node_fs23 = require("node:fs");
-var import_node_os11 = require("node:os");
-var import_node_path22 = require("node:path");
-var import_node_crypto8 = require("node:crypto");
-var import_node_child_process12 = require("node:child_process");
+var import_node_fs25 = require("node:fs");
+var import_node_os12 = require("node:os");
+var import_node_path25 = require("node:path");
+var import_node_crypto9 = require("node:crypto");
+var import_node_child_process14 = require("node:child_process");
 var import_node_module3 = require("node:module");
 
 // src/shared/terminal.ts
@@ -23656,8 +23193,66 @@ var TERMINAL_IPC = {
 
 // src/main/terminal/service.ts
 var requireNative = (0, import_node_module3.createRequire)(__filename);
+function spawnBunPipeTerminal(shell2, args, cwd, env, cols, rows) {
+  const bun = globalThis.Bun;
+  if (!bun) return spawnPipeTerminal(shell2, args, cwd, env, cols, rows);
+  const child = bun.spawn([shell2, ...args], {
+    cwd,
+    env,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe"
+  });
+  const dataListeners = /* @__PURE__ */ new Set();
+  const pump = async (stream) => {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
+        if (text) dataListeners.forEach((listener) => listener(text));
+      }
+    } catch {
+    } finally {
+      reader.releaseLock();
+    }
+  };
+  void pump(child.stdout);
+  void pump(child.stderr);
+  return {
+    pid: child.pid,
+    process: shell2,
+    cols,
+    rows,
+    handleFlowControl: false,
+    onData: (listener) => {
+      dataListeners.add(listener);
+      return { dispose: () => dataListeners.delete(listener) };
+    },
+    onExit: (listener) => {
+      let active2 = true;
+      void child.exited.then((exitCode) => {
+        if (active2) listener({ exitCode, signal: 0 });
+      });
+      return { dispose: () => {
+        active2 = false;
+      } };
+    },
+    write: (data) => {
+      child.stdin.write(data);
+      void child.stdin.flush?.();
+    },
+    resize: () => void 0,
+    clear: () => void 0,
+    pause: () => void 0,
+    resume: () => void 0,
+    kill: () => child.kill()
+  };
+}
 function spawnPipeTerminal(shell2, args, cwd, env, cols, rows) {
-  const child = (0, import_node_child_process12.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+  const child = (0, import_node_child_process14.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
   return {
     pid: child.pid ?? -1,
     process: shell2,
@@ -23699,16 +23294,18 @@ function clampDimension(value, min, max) {
   return Math.min(Math.max(Math.floor(value), min), max);
 }
 function resolveWorkingDirectory(raw) {
-  const candidate = raw?.trim() ? (0, import_node_path22.resolve)(raw) : (0, import_node_os11.homedir)();
+  const requested = raw?.trim();
+  const expanded = requested === "~" ? (0, import_node_os12.homedir)() : requested?.startsWith("~/") ? (0, import_node_path25.join)((0, import_node_os12.homedir)(), requested.slice(2)) : requested;
+  const candidate = expanded ? (0, import_node_path25.resolve)(expanded) : (0, import_node_os12.homedir)();
   try {
-    return (0, import_node_fs23.existsSync)(candidate) && (0, import_node_fs23.statSync)(candidate).isDirectory() ? candidate : (0, import_node_os11.homedir)();
+    return (0, import_node_fs25.existsSync)(candidate) && (0, import_node_fs25.statSync)(candidate).isDirectory() ? candidate : (0, import_node_os12.homedir)();
   } catch {
-    return (0, import_node_os11.homedir)();
+    return (0, import_node_os12.homedir)();
   }
 }
 function resolveShell() {
   const configured = process.env.SHELL?.trim();
-  if (configured && configured.startsWith("/") && (0, import_node_fs23.existsSync)(configured)) return configured;
+  if (configured && configured.startsWith("/") && (0, import_node_fs25.existsSync)(configured)) return configured;
   return process.platform === "win32" ? "powershell.exe" : "/bin/zsh";
 }
 function terminalEnvironment() {
@@ -23735,22 +23332,32 @@ function sessionForOwner(sessionId, ownerId) {
   const session2 = sessions2.get(sessionId);
   return session2?.ownerId === ownerId ? session2 : null;
 }
+function pipeInputEcho(data) {
+  if (data === "\x7F") return "\b \b";
+  if (data.startsWith("\x1B")) return "";
+  return data.replace(/\r/g, "\r\n").replace(/[^\x20-\x7e\r\n\b\t]/g, "");
+}
 function createTerminalSession(sender, request) {
-  const sessionId = (0, import_node_crypto8.randomUUID)();
+  const sessionId = (0, import_node_crypto9.randomUUID)();
   const cwd = resolveWorkingDirectory(request.cwd);
   const shell2 = resolveShell();
   const cols = clampDimension(request.cols, 2, 500);
   const rows = clampDimension(request.rows, 2, 300);
   const args = process.platform === "win32" ? [] : ["-l"];
   const env = terminalEnvironment();
-  const ptyProcess = process.versions.bun ? spawnPipeTerminal(shell2, args, cwd, env, cols, rows) : requireNative("node-pty").spawn(shell2, args, {
+  const ptyProcess = process.versions.bun ? spawnBunPipeTerminal(shell2, args, cwd, env, cols, rows) : requireNative("node-pty").spawn(shell2, args, {
     name: "xterm-256color",
     cols,
     rows,
     cwd,
     env
   });
-  sessions2.set(sessionId, { ownerId: sender.id, process: ptyProcess });
+  sessions2.set(sessionId, {
+    ownerId: sender.id,
+    sender,
+    process: ptyProcess,
+    pipeMode: Boolean(process.versions.bun)
+  });
   if (!ownerCleanupRegistered.has(sender.id)) {
     ownerCleanupRegistered.add(sender.id);
     sender.once("destroyed", () => {
@@ -23770,15 +23377,20 @@ function createTerminalSession(sender, request) {
     }
   });
   if (request.initialCommand) {
-    ptyProcess.write(`${request.initialCommand}
-`);
+    ptyProcess.write(`${request.initialCommand}${process.versions.bun ? "\n" : "\r"}`);
   }
   return { sessionId, shell: shell2, cwd };
 }
 function writeTerminalSession(ownerId, sessionId, data) {
   const session2 = sessionForOwner(sessionId, ownerId);
   if (!session2 || data.length === 0 || data.length > 64 * 1024) return false;
-  session2.process.write(data);
+  if (session2.pipeMode) {
+    const echo = pipeInputEcho(data);
+    if (echo && !session2.sender.isDestroyed()) {
+      session2.sender.send(TERMINAL_IPC.DATA, { sessionId, data: echo });
+    }
+  }
+  session2.process.write(session2.pipeMode ? data.replace(/\r/g, "\n") : data);
   return true;
 }
 function resizeTerminalSession(ownerId, sessionId, cols, rows) {
@@ -23798,8 +23410,8 @@ function killTerminalSession(ownerId, sessionId) {
   return true;
 }
 function getTerminalPromptInfo() {
-  const user = (0, import_node_os11.userInfo)().username;
-  const host = (0, import_node_os11.hostname)().split(".")[0];
+  const user = (0, import_node_os12.userInfo)().username;
+  const host = (0, import_node_os12.hostname)().split(".")[0];
   const dir = "~";
   return { user, host, dir };
 }
@@ -23815,25 +23427,25 @@ function shutdownTerminalSessions() {
 
 // src/main/storage/service.ts
 init_electron_shim();
-var import_promises2 = require("node:fs/promises");
-var import_node_path23 = require("node:path");
+var import_promises3 = require("node:fs/promises");
+var import_node_path26 = require("node:path");
 async function dirSize(root) {
   let total = 0;
   const pending = [root];
   while (pending.length > 0) {
-    const path6 = pending.pop();
-    if (!path6) continue;
+    const path7 = pending.pop();
+    if (!path7) continue;
     try {
-      const stats = await (0, import_promises2.lstat)(path6);
+      const stats = await (0, import_promises3.lstat)(path7);
       if (stats.isSymbolicLink()) continue;
       if (stats.isFile()) {
         total += stats.size;
         continue;
       }
       if (stats.isDirectory()) {
-        const entries = await (0, import_promises2.readdir)(path6, { withFileTypes: true });
+        const entries = await (0, import_promises3.readdir)(path7, { withFileTypes: true });
         for (const entry of entries) {
-          pending.push((0, import_node_path23.join)(path6, entry.name));
+          pending.push((0, import_node_path26.join)(path7, entry.name));
         }
       }
     } catch {
@@ -23841,15 +23453,15 @@ async function dirSize(root) {
   }
   return total;
 }
-async function fileSize(path6) {
+async function fileSize(path7) {
   try {
-    return (await (0, import_promises2.stat)(path6)).size;
+    return (await (0, import_promises3.stat)(path7)).size;
   } catch {
     return 0;
   }
 }
 function userData(...segments) {
-  return (0, import_node_path23.join)(app.getPath("userData"), ...segments);
+  return (0, import_node_path26.join)(app.getPath("userData"), ...segments);
 }
 async function getStorageBreakdown() {
   const searchDir = getClipboardStoreDir();
@@ -23871,10 +23483,10 @@ async function getStorageBreakdown() {
     cacheDirBytes,
     codeCacheBytes
   ] = await Promise.all([
-    fileSize((0, import_node_path23.join)(searchDir, "index.sqlite3")),
-    fileSize((0, import_node_path23.join)(searchDir, "index.sqlite3-wal")),
-    fileSize((0, import_node_path23.join)(searchDir, "index.sqlite3-shm")),
-    fileSize((0, import_node_path23.join)(searchDir, "clipboard.json")),
+    fileSize((0, import_node_path26.join)(searchDir, "index.sqlite3")),
+    fileSize((0, import_node_path26.join)(searchDir, "index.sqlite3-wal")),
+    fileSize((0, import_node_path26.join)(searchDir, "index.sqlite3-shm")),
+    fileSize((0, import_node_path26.join)(searchDir, "clipboard.json")),
     dirSize(clipboardImagesDir),
     dirSize(voiceModelsDir),
     dirSize(bunDir),
@@ -23929,13 +23541,13 @@ async function clearChromiumCache() {
   await defaultSession.clearStorageData({ storages: ["shadercache"] });
   await Promise.all(
     ["Code Cache", "GPUCache", "DawnCache", "GrShaderCache", "ShaderCache"].map(
-      (name) => (0, import_promises2.rm)(userData(name), { recursive: true, force: true })
+      (name) => (0, import_promises3.rm)(userData(name), { recursive: true, force: true })
     )
   );
 }
 async function vacuumSearchDatabase() {
   const searchDir = getClipboardStoreDir();
-  const walPath = (0, import_node_path23.join)(searchDir, "index.sqlite3-wal");
+  const walPath = (0, import_node_path26.join)(searchDir, "index.sqlite3-wal");
   const beforeBytes = await fileSize(walPath);
   try {
     const db = getInstance();
@@ -23955,6 +23567,7 @@ var LLM_DEFAULTS = {
 var answerAbort = null;
 var agentAbort = null;
 var agentRunId = null;
+var pendingAgentApprovals = /* @__PURE__ */ new Map();
 var quitConfirmationOpen = false;
 var quitConfirmed = false;
 function quitRaymesNow() {
@@ -24012,37 +23625,144 @@ var CHAT_SYSTEM_PROMPT = "You are Tezbar, a helpful assistant. Answer clearly an
 function sendAgentEvent(sender, event) {
   if (!sender.isDestroyed()) sender.send(AGENT_IPC.EVENT, event);
 }
-function startAgentRun(sender, task) {
+var PERSISTABLE_READ_COMMANDS = /* @__PURE__ */ new Set(["grep", "rg"]);
+var SAFE_PIPELINE_COMMANDS = /* @__PURE__ */ new Set(["ps", "head", "tail", "wc"]);
+function commandName(part) {
+  const token = part.trim().split(/\s+/, 1)[0] ?? "";
+  return token.slice(token.lastIndexOf("/") + 1).toLowerCase();
+}
+function suggestedApprovalRule(command) {
+  if (/[;<>`\n]/.test(command) || command.includes("$(") || command.includes("||")) {
+    return void 0;
+  }
+  const names = command.split(/\s*(?:&&|\|)\s*/).map(commandName).filter((name) => name && name !== "cd" && !SAFE_PIPELINE_COMMANDS.has(name));
+  return names.find((name) => PERSISTABLE_READ_COMMANDS.has(name));
+}
+function cancelPendingAgentApprovals(runId) {
+  for (const [approvalId, approval] of pendingAgentApprovals) {
+    if (runId && approval.runId !== runId) continue;
+    pendingAgentApprovals.delete(approvalId);
+    approval.settle(false);
+  }
+}
+function requestAgentApproval(sender, runId, signal, request) {
+  const approvalId = `approval-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const suggestedRule = suggestedApprovalRule(request.command);
+  return new Promise((resolve4) => {
+    let settled = false;
+    const timeout = setTimeout(() => settle(false), 5 * 6e4);
+    const settle = (approved) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      pendingAgentApprovals.delete(approvalId);
+      resolve4(approved);
+    };
+    pendingAgentApprovals.set(approvalId, { runId, suggestedRule, settle });
+    signal.addEventListener("abort", () => settle(false), { once: true });
+    sendAgentEvent(sender, {
+      type: "approval",
+      runId,
+      approvalId,
+      title: request.title,
+      command: request.command,
+      suggestedRule
+    });
+  });
+}
+function waitForRetry(ms, signal) {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve4) => {
+    const timer = setTimeout(resolve4, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve4();
+      },
+      { once: true }
+    );
+  });
+}
+function canRetryRun(error, signal) {
+  if (signal.aborted) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return !/aborted|cancelled|task is empty|invalid base64|unsupported agent image/i.test(message);
+}
+function startAgentRun(sender, task, images = []) {
+  cancelPendingAgentApprovals();
   agentAbort?.abort();
   agentAbort = new AbortController();
   const ac = agentAbort;
   const runId = agentRunId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const bridge = getSharedBridge();
   const piProvider = getSelectedPiProviderBridge();
+  let emittedOutput = false;
   sendAgentEvent(sender, { type: "start", runId, task });
-  const onStage = (stage) => sendAgentEvent(sender, { type: "stage", runId, stage });
-  const onMessageDelta = (delta) => sendAgentEvent(sender, { type: "message", runId, delta });
-  const onAnswer = (text) => sendAgentEvent(sender, { type: "answer", runId, text });
+  const onStage = (stage) => {
+    emittedOutput = true;
+    sendAgentEvent(sender, { type: "stage", runId, stage });
+  };
+  const onMessageDelta = (delta) => {
+    emittedOutput = true;
+    sendAgentEvent(sender, { type: "message", runId, delta });
+  };
+  const onAnswer = (text) => {
+    emittedOutput = true;
+    sendAgentEvent(sender, { type: "answer", runId, text });
+  };
   const onStderrLine = (line) => {
     sendAgentEvent(sender, { type: "log", runId, source: "stderr", line });
   };
   console.log("[tezbar:agent] run", { runId, taskPreview: task.slice(0, 120) });
-  void bridge.run(task, {
-    runId,
-    model: piProvider?.modelPattern ?? getSelectedPiModelPattern(),
-    raymesProviderJson: piProvider?.providerJson,
-    signal: ac.signal,
-    onStage,
-    onMessageDelta,
-    onAnswer,
-    onStderrLine
-  }).then(() => {
+  void (async () => {
+    let runTask = task;
+    let runImages = images;
+    if (images.length > 0 && piProvider && !piProvider.acceptsImages) {
+      onStderrLine("The selected model is text-only. Extracting screen text locally...");
+      const extractedText = await extractTextFromAgentImages(images);
+      if (!extractedText) {
+        throw new Error(
+          "The selected model cannot read images, and no text could be extracted from the attached screen. Choose a vision model or remove the attachment."
+        );
+      }
+      runTask = `${task}
+
+Text extracted locally from the attached screen:
+
+${extractedText}`;
+      runImages = [];
+    }
+    const options = {
+      runId,
+      model: piProvider?.modelPattern ?? getSelectedPiModelPattern(),
+      raymesProviderJson: piProvider?.providerJson,
+      raymesAlwaysAllowJson: JSON.stringify(getAgentAlwaysAllowedCommands()),
+      requestApproval: (request) => requestAgentApproval(sender, runId, ac.signal, request),
+      signal: ac.signal,
+      onStage,
+      onMessageDelta,
+      onAnswer,
+      onStderrLine,
+      images: runImages
+    };
+    try {
+      await bridge.run(runTask, options);
+    } catch (error) {
+      if (emittedOutput || !canRetryRun(error, ac.signal)) throw error;
+      onStderrLine("Pi did not start cleanly. Retrying once...");
+      await waitForRetry(350, ac.signal);
+      if (ac.signal.aborted) throw error;
+      await bridge.run(runTask, options);
+    }
+  })().then(() => {
     sendAgentEvent(sender, { type: "done", runId });
   }).catch((err) => {
     const message = err instanceof Error ? err.message : String(err);
     sendAgentEvent(sender, { type: "error", runId, message });
     sendAgentEvent(sender, { type: "done", runId });
   }).finally(() => {
+    cancelPendingAgentApprovals(runId);
     if (agentAbort === ac) agentAbort = null;
     if (agentRunId === runId) agentRunId = null;
   });
@@ -24066,6 +23786,25 @@ function normalizeChatTurns(raw) {
   }
   return turns;
 }
+function normalizeChatAttachments(raw) {
+  if (!Array.isArray(raw)) return void 0;
+  const attachments = [];
+  for (const item of raw.slice(0, 4)) {
+    if (!item || typeof item !== "object") continue;
+    const attachment = item;
+    if (attachment.kind !== "image" || typeof attachment.name !== "string" || attachment.mimeType !== "image/png" && attachment.mimeType !== "image/jpeg" && attachment.mimeType !== "image/webp") {
+      continue;
+    }
+    attachments.push({
+      kind: "image",
+      name: attachment.name.slice(0, 120),
+      mimeType: attachment.mimeType,
+      width: typeof attachment.width === "number" ? attachment.width : void 0,
+      height: typeof attachment.height === "number" ? attachment.height : void 0
+    });
+  }
+  return attachments.length > 0 ? attachments : void 0;
+}
 function startChatRun(sender, turns) {
   agentAbort?.abort();
   agentAbort = new AbortController();
@@ -24080,15 +23819,29 @@ function startChatRun(sender, turns) {
   void (async () => {
     let fullText = "";
     try {
-      const provider = getProviderForTask("chat");
-      const stream = await provider.chat(messages, void 0, { signal: ac.signal });
-      for await (const delta of stream) {
-        if (ac.signal.aborted) return;
-        if (delta.text) {
-          fullText += delta.text;
-          sendAgentEvent(sender, { type: "message", runId, delta: delta.text });
+      let lastError;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const provider = getProviderForTask("chat");
+          const stream = await provider.chat(messages, void 0, { signal: ac.signal });
+          for await (const delta of stream) {
+            if (ac.signal.aborted) return;
+            if (delta.text) {
+              fullText += delta.text;
+              sendAgentEvent(sender, { type: "message", runId, delta: delta.text });
+            }
+          }
+          lastError = void 0;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (fullText || attempt > 0 || !canRetryRun(error, ac.signal)) throw error;
+          await waitForRetry(350, ac.signal);
         }
       }
+      if (lastError) throw lastError;
+      if (!fullText.trim())
+        throw new Error("The model returned an empty response. Please try again.");
       sendAgentEvent(sender, { type: "answer", runId, text: fullText });
     } catch (err) {
       if (!ac.signal.aborted) {
@@ -24108,6 +23861,7 @@ function startChatRun(sender, turns) {
 }
 function shutdownIpcHandlers() {
   answerAbort?.abort();
+  cancelPendingAgentApprovals();
   agentAbort?.abort();
   clearAllExtensionSessions();
   disposeSharedBridge();
@@ -24231,6 +23985,25 @@ function registerIpcHandlers(getWindow, controls) {
     const appPath = typeof raw === "string" ? raw.trim() : "";
     if (!appPath.endsWith(".app")) return null;
     return await appIconDataUrl(appPath) ?? null;
+  });
+  ipcMain.handle("asset-icon:data-url", async (_event, raw) => {
+    if (!raw || typeof raw !== "object") return null;
+    const payload = raw;
+    const kind = payload.kind;
+    const path7 = typeof payload.path === "string" ? payload.path.trim() : "";
+    if (!path7) return null;
+    if (kind === "application") {
+      if (!path7.endsWith(".app")) return null;
+      return await appIconDataUrl(path7) ?? null;
+    }
+    if (kind === "extension") {
+      if (/^https?:\/\//i.test(path7)) return path7;
+      return imageFileDataUrl(path7) ?? null;
+    }
+    if (kind === "file") {
+      return await nativeFileIconDataUrl(path7) ?? null;
+    }
+    return null;
   });
   ipcMain.handle("snippets:list", async () => listSnippetsForUi());
   ipcMain.handle("snippets:copy", async (_event, id) => {
@@ -24381,15 +24154,74 @@ function registerIpcHandlers(getWindow, controls) {
     agentAbort?.abort();
   });
   ipcMain.handle(AGENT_IPC.RUN, async (event, raw) => {
-    const task = typeof raw === "string" ? raw : String(raw ?? "");
+    const request = typeof raw === "string" ? { task: raw } : raw && typeof raw === "object" ? raw : { task: "" };
+    const task = typeof request.task === "string" ? request.task : "";
     if (!task.trim()) {
       return { ok: false, error: "Task is empty" };
     }
-    const runId = startAgentRun(event.sender, task);
+    const images = Array.isArray(request.images) ? request.images : [];
+    const runId = startAgentRun(event.sender, task, images);
     return { ok: true, runId };
   });
+  ipcMain.handle(AGENT_IPC.CAPTURE_ACTIVE_SCREEN, async (event) => {
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const maxWidth = 1600;
+    const scale = Math.min(1, maxWidth / Math.max(1, display.size.width));
+    const thumbnailSize = {
+      width: Math.max(1, Math.round(display.size.width * scale)),
+      height: Math.max(1, Math.round(display.size.height * scale))
+    };
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+    const originalOpacity = sourceWindow?.getOpacity() ?? 1;
+    try {
+      sourceWindow?.setContentProtection(true);
+      sourceWindow?.setOpacity(0);
+      await new Promise((resolve4) => setTimeout(resolve4, 120));
+      const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize });
+      const source = sources.find((candidate) => candidate.display_id === String(display.id)) ?? sources[0];
+      if (!source || source.thumbnail.isEmpty()) {
+        throw new Error(
+          "The active screen could not be captured. Check Screen Recording permission."
+        );
+      }
+      const size = source.thumbnail.getSize();
+      return {
+        type: "image",
+        data: source.thumbnail.toPNG().toString("base64"),
+        mimeType: "image/png",
+        width: size.width,
+        height: size.height
+      };
+    } finally {
+      if (sourceWindow && !sourceWindow.isDestroyed()) {
+        sourceWindow.setOpacity(originalOpacity);
+        sourceWindow.setContentProtection(false);
+      }
+    }
+  });
   ipcMain.handle(AGENT_IPC.CANCEL, async () => {
+    cancelPendingAgentApprovals(agentRunId ?? void 0);
     agentAbort?.abort();
+    return { ok: true };
+  });
+  ipcMain.handle(AGENT_IPC.APPROVE, async (_event, raw) => {
+    if (!raw || typeof raw !== "object") return { ok: false, error: "Invalid approval" };
+    const response = raw;
+    const decision = response.decision;
+    if (typeof response.runId !== "string" || typeof response.approvalId !== "string" || decision !== "deny" && decision !== "once" && decision !== "always") {
+      return { ok: false, error: "Invalid approval" };
+    }
+    const pending = pendingAgentApprovals.get(response.approvalId);
+    if (!pending || pending.runId !== response.runId) {
+      return { ok: false, error: "This approval is no longer active" };
+    }
+    if (decision === "always") {
+      if (!pending.suggestedRule) {
+        return { ok: false, error: "This command cannot be permanently allowed" };
+      }
+      addAgentAlwaysAllowedCommand(pending.suggestedRule);
+    }
+    pending.settle(decision !== "deny");
     return { ok: true };
   });
   ipcMain.handle(CHAT_IPC.RUN, async (event, rawTurns) => {
@@ -24422,18 +24254,19 @@ function registerIpcHandlers(getWindow, controls) {
       return { ok: false, error: "Invalid turn" };
     }
     try {
-      upsertChatSession({
+      await upsertChatSession({
         id: s.id,
         title: s.title,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt
       });
-      appendChatTurn(s.id, {
+      await appendChatTurn(s.id, {
         id: t.id,
         role: t.role,
         text: t.text,
         stages: Array.isArray(t.stages) ? t.stages : void 0,
         error: typeof t.error === "string" ? t.error : void 0,
+        attachments: normalizeChatAttachments(t.attachments),
         createdAt: t.createdAt
       });
       return { ok: true };
@@ -24448,7 +24281,7 @@ function registerIpcHandlers(getWindow, controls) {
       return { ok: false };
     }
     try {
-      updateChatSessionTitle(body.id, body.title);
+      await updateChatSessionTitle(body.id, body.title);
       return { ok: true };
     } catch {
       return { ok: false };
@@ -24456,11 +24289,11 @@ function registerIpcHandlers(getWindow, controls) {
   });
   ipcMain.handle(CHAT_IPC.DELETE, async (_event, id) => {
     if (typeof id !== "string" || !id) return { ok: false };
-    return { ok: deleteChatSession(id) };
+    return { ok: await deleteChatSession(id) };
   });
   ipcMain.handle(CHAT_IPC.CLEAR, async () => {
     try {
-      clearAllChatSessions();
+      await clearAllChatSessions();
       return { ok: true };
     } catch {
       return { ok: false };
@@ -24574,7 +24407,7 @@ function registerIpcHandlers(getWindow, controls) {
     const formValues = body.formValues && typeof body.formValues === "object" ? Object.fromEntries(
       Object.entries(body.formValues).map(([key, value]) => [
         key,
-        typeof value === "string" ? value : String(value ?? "")
+        Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : typeof value === "string" || typeof value === "boolean" || typeof value === "number" ? value : String(value ?? "")
       ])
     ) : void 0;
     return invokeExtensionAction({
@@ -24641,16 +24474,23 @@ function registerIpcHandlers(getWindow, controls) {
     if (!payload || typeof payload !== "object") return {};
     const body = payload;
     if (typeof body.extensionId !== "string" || !body.extensionId.trim()) return {};
-    const commandName = typeof body.commandName === "string" ? body.commandName : void 0;
-    return getExtensionPreferences(body.extensionId, commandName);
+    const commandName2 = typeof body.commandName === "string" ? body.commandName : void 0;
+    return getExtensionPreferences(body.extensionId, commandName2);
+  });
+  ipcMain.handle("preferences:setup", async (_event, payload) => {
+    if (!payload || typeof payload !== "object") return null;
+    const body = payload;
+    if (typeof body.extensionId !== "string" || !body.extensionId.trim()) return null;
+    const commandName2 = typeof body.commandName === "string" ? body.commandName : void 0;
+    return getExtensionPreferenceSetup(body.extensionId, commandName2);
   });
   ipcMain.handle("preferences:set", async (_event, payload) => {
     if (!payload || typeof payload !== "object") return {};
     const body = payload;
     if (typeof body.extensionId !== "string" || !body.extensionId.trim()) return {};
     const values = body.values && typeof body.values === "object" ? body.values : {};
-    const commandName = typeof body.commandName === "string" ? body.commandName : void 0;
-    return saveExtensionPreferences(body.extensionId, values, commandName);
+    const commandName2 = typeof body.commandName === "string" ? body.commandName : void 0;
+    return saveExtensionPreferences(body.extensionId, values, commandName2);
   });
   ipcMain.handle(IPC_CHANNELS.SEARCH_ALL, async (_event, query) => {
     const q = typeof query === "string" ? query : "";
@@ -24659,6 +24499,9 @@ function registerIpcHandlers(getWindow, controls) {
   ipcMain.handle(IPC_CHANNELS.PATH_COMPLETE, async (_event, query) => {
     const q = typeof query === "string" ? query : "";
     return completePath(q);
+  });
+  ipcMain.handle(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path7) => {
+    if (typeof path7 === "string") recordDirectoryVisit(path7);
   });
   ipcMain.handle(IPC_CHANNELS.SEARCH_BENCHMARK_RUN, async () => {
     return runSearchBenchmarks();
@@ -24795,144 +24638,20 @@ function registerIpcHandlers(getWindow, controls) {
 }
 
 // src/main/server.ts
+init_configStore();
 init_electron_shim();
-var import_node_readline = __toESM(require("node:readline"));
-var import_node_fs24 = require("node:fs");
-var import_node_path24 = require("node:path");
-var import_node_child_process13 = require("node:child_process");
+var import_node_fs26 = require("node:fs");
+var import_node_path27 = require("node:path");
+var import_node_child_process15 = require("node:child_process");
+var import_node_net = require("node:net");
 function materializePiPolicy() {
   const root = process.env.APPDATA_DIR;
   if (!root || false) return;
   try {
-    const runtimeDir = (0, import_node_path24.join)(root, "runtime");
-    const extensionPath = (0, import_node_path24.join)(runtimeDir, "raymes-pi-policy.ts");
-    (0, import_node_fs24.mkdirSync)(runtimeDir, { recursive: true });
-    (0, import_node_fs24.writeFileSync)(extensionPath, `type ToolCallEvent = {
-  toolName: string
-  input?: {
-    command?: unknown
-  }
-}
-
-type ToolCallResult = {
-  block?: boolean
-  reason?: string
-}
-
-type ExtensionContext = {
-  ui: {
-    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>
-  }
-}
-
-type ExtensionAPI = {
-  on(
-    event: 'tool_call',
-    handler: (event: ToolCallEvent, ctx: ExtensionContext) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>,
-  ): void
-  registerProvider(name: string, config: RaymesPiProviderConfig): void
-}
-
-type RaymesPiProviderConfig = {
-  baseUrl: string
-  apiKey: string
-  api: 'openai-completions' | 'anthropic-messages'
-  authHeader?: boolean
-  models: Array<{
-    id: string
-    name: string
-    reasoning: boolean
-    input: Array<'text' | 'image'>
-    cost: {
-      input: number
-      output: number
-      cacheRead: number
-      cacheWrite: number
-    }
-    contextWindow: number
-    maxTokens: number
-    compat?: Record<string, unknown>
-  }>
-}
-
-function registerRaymesProvider(pi: ExtensionAPI): void {
-  const raw = process.env['RAYMES_PI_PROVIDER_JSON']
-  if (!raw) return
-  try {
-    const parsed = JSON.parse(raw) as RaymesPiProviderConfig
-    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return
-    pi.registerProvider('tezbar', parsed)
-  } catch {
-    /* Ignore malformed bridge env so pi can still start with its own config. */
-  }
-}
-
-function hasUnsafeShellSyntax(command: string): boolean {
-  return /[;|<>\`\\n]/.test(command) || command.includes('$(') || command.includes('||')
-}
-
-function isSimpleCd(command: string): boolean {
-  return /^cd\\s+(?:"[^"]+"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())
-}
-
-function isSafeGitStatus(command: string): boolean {
-  return /^git\\s+status(?:\\s+[^;&|<>\`$()\\n]+)*$/.test(command.trim())
-}
-
-function isSafeGitClone(command: string): boolean {
-  return /^git\\s+clone(?:\\s+[^;&|<>\`$()\\n]+)+$/.test(command.trim())
-}
-
-function isSafeDirectoryRead(command: string): boolean {
-  const trimmed = command.trim()
-  return (
-    trimmed === 'pwd' ||
-    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:"[^"]+"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||
-    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||
-    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||
-    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>\`$()\\n]+)*$/.test(trimmed) ||
-    /^mdfind\\s+[^;&|<>\`$()\\n]+$/.test(trimmed)
-  )
-}
-
-function isAutoAllowedBash(command: string): boolean {
-  const trimmed = command.trim()
-  if (!trimmed || hasUnsafeShellSyntax(trimmed)) return false
-
-  const parts = trimmed.split(/\\s+&&\\s+/).map((part) => part.trim()).filter(Boolean)
-  if (parts.length === 0) return false
-
-  const commandToRun = parts[parts.length - 1]
-  if (
-    !commandToRun ||
-    !(isSafeGitStatus(commandToRun) || isSafeGitClone(commandToRun) || isSafeDirectoryRead(commandToRun))
-  ) {
-    return false
-  }
-
-  return parts.slice(0, -1).every(isSimpleCd)
-}
-
-export default function raymesPiPolicy(pi: ExtensionAPI): void {
-  registerRaymesProvider(pi)
-
-  pi.on('tool_call', async (event, ctx) => {
-    if (event.toolName !== 'bash') return undefined
-
-    const command = event.input?.command
-    if (typeof command !== 'string') {
-      return { block: true, reason: 'Missing bash command.' }
-    }
-
-    if (isAutoAllowedBash(command)) return undefined
-
-    const confirmed = await ctx.ui.confirm('Run bash command?', command)
-    if (confirmed) return undefined
-
-    return { block: true, reason: 'Bash command was not approved.' }
-  })
-}
-`, "utf8");
+    const runtimeDir = (0, import_node_path27.join)(root, "runtime");
+    const extensionPath = (0, import_node_path27.join)(runtimeDir, "raymes-pi-policy.ts");
+    (0, import_node_fs26.mkdirSync)(runtimeDir, { recursive: true });
+    (0, import_node_fs26.writeFileSync)(extensionPath, "type ToolCallEvent = {\n  toolName: string\n  input?: {\n    command?: unknown\n  }\n}\n\ntype ToolCallResult = {\n  block?: boolean\n  reason?: string\n}\n\ntype ExtensionContext = {\n  ui: {\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\n  }\n}\n\ntype ExtensionAPI = {\n  on(\n    event: 'tool_call',\n    handler: (event: ToolCallEvent, ctx: ExtensionContext) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>,\n  ): void\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\n}\n\ntype RaymesPiProviderConfig = {\n  baseUrl: string\n  apiKey: string\n  api: 'openai-completions' | 'anthropic-messages'\n  authHeader?: boolean\n  models: Array<{\n    id: string\n    name: string\n    reasoning: boolean\n    input: Array<'text' | 'image'>\n    cost: {\n      input: number\n      output: number\n      cacheRead: number\n      cacheWrite: number\n    }\n    contextWindow: number\n    maxTokens: number\n    compat?: Record<string, unknown>\n  }>\n}\n\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\n  if (!raw) return\n  try {\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\n    pi.registerProvider('tezbar', parsed)\n  } catch {\n    /* Ignore malformed bridge env so pi can still start with its own config. */\n  }\n}\n\nfunction hasUnsafeShellSyntax(command: string): boolean {\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\n}\n\nfunction persistedAllowedCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter(\n          (entry): entry is string =>\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\n        )\n        .map((entry) => entry.toLowerCase())\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction executableName(command: string): string {\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\n}\n\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\n\nexport function isPersistentlyAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string>\n): boolean {\n  const trimmed = command.trim()\n  if (\n    !trimmed ||\n    /[;<>`\\n]/.test(trimmed) ||\n    trimmed.includes('$(') ||\n    trimmed.includes('||')\n  ) {\n    return false\n  }\n\n  const commands = trimmed\n    .split(/\\s*(?:&&|\\|)\\s*/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (commands.length === 0) return false\n\n  return commands.every((part) => {\n    if (isSimpleCd(part)) return true\n    const executable = executableName(part)\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\n  })\n}\n\nfunction isSimpleCd(command: string): boolean {\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\n}\n\nfunction isSafeGitStatus(command: string): boolean {\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\n}\n\nfunction isSafeGitClone(command: string): boolean {\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\n}\n\nfunction isSafeDirectoryRead(command: string): boolean {\n  const trimmed = command.trim()\n  return (\n    trimmed === 'pwd' ||\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\n  )\n}\n\nexport function isAutoAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands()\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed) return false\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\n  if (hasUnsafeShellSyntax(trimmed)) return false\n\n  const parts = trimmed.split(/\\s+&&\\s+/).map((part) => part.trim()).filter(Boolean)\n  if (parts.length === 0) return false\n\n  const commandToRun = parts[parts.length - 1]\n  if (\n    !commandToRun ||\n    !(isSafeGitStatus(commandToRun) || isSafeGitClone(commandToRun) || isSafeDirectoryRead(commandToRun))\n  ) {\n    return false\n  }\n\n  return parts.slice(0, -1).every(isSimpleCd)\n}\n\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\n  registerRaymesProvider(pi)\n\n  pi.on('tool_call', async (event, ctx) => {\n    if (event.toolName !== 'bash') return undefined\n\n    const command = event.input?.command\n    if (typeof command !== 'string') {\n      return { block: true, reason: 'Missing bash command.' }\n    }\n\n    if (isAutoAllowedBash(command)) return undefined\n\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\n    if (confirmed) return undefined\n\n    return { block: true, reason: 'Bash command was not approved.' }\n  })\n}\n", "utf8");
     process.env.RAYMES_PI_EXTENSION = extensionPath;
   } catch (error) {
     console.error("[server] failed to materialize Pi policy:", error);
@@ -24941,7 +24660,7 @@ export default function raymesPiPolicy(pi: ExtensionAPI): void {
 function fixPathSync() {
   if (process.platform === "win32") return;
   try {
-    const stdout = (0, import_node_child_process13.execFileSync)("bash", ["-lc", "echo -n $PATH"], {
+    const stdout = (0, import_node_child_process15.execFileSync)("bash", ["-lc", "echo -n $PATH"], {
       encoding: "utf8",
       timeout: 2e3
     });
@@ -24977,34 +24696,88 @@ registerIpcHandlers(() => mockWin, {
   }
 });
 startClipboardWatcher();
-var rl = import_node_readline.default.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  terminal: false
-});
-rl.on("line", async (line) => {
+function writeReply(payload) {
+  process.stdout.write(`${JSON.stringify(payload)}
+`);
+}
+async function handleLine(line) {
   if (!line.trim()) return;
   try {
     const message = JSON.parse(line);
     if (message.type === "invoke") {
       const { id, channel, payload } = message;
       if (typeof id !== "string" && typeof id !== "number" || typeof channel !== "string") return;
+      const startedAt = Date.now();
       try {
         const args = Array.isArray(payload) ? payload : [payload];
         const result = await tauriIpcMain._invoke(channel, ...args);
-        console.log(JSON.stringify({ type: "reply", id, result }));
+        const elapsedMs2 = Date.now() - startedAt;
+        if (elapsedMs2 >= 1e3) {
+          console.warn(`[server] slow IPC: ${channel} completed in ${elapsedMs2}ms`);
+        }
+        writeReply({ type: "reply", id, result });
       } catch (error) {
-        console.log(JSON.stringify({
+        console.error(`[server] IPC failed: ${channel}`, error);
+        writeReply({
           type: "reply",
           id,
           error: error instanceof Error ? error.message : String(error)
-        }));
+        });
       }
     }
   } catch (error) {
     console.error("[server] error parsing/handling stdin line:", error);
   }
-});
+}
+var stdinBuffer = "";
+function processInputChunk(chunk) {
+  stdinBuffer += chunk;
+  let newlineIndex = stdinBuffer.indexOf("\n");
+  while (newlineIndex >= 0) {
+    const line = stdinBuffer.slice(0, newlineIndex);
+    stdinBuffer = stdinBuffer.slice(newlineIndex + 1);
+    void handleLine(line);
+    newlineIndex = stdinBuffer.indexOf("\n");
+  }
+}
+var bunRuntime = globalThis.Bun;
+var backendIpcPort = Number(process.env.BACKEND_IPC_PORT);
+if (Number.isInteger(backendIpcPort) && backendIpcPort > 0 && backendIpcPort <= 65535) {
+  const socket = (0, import_node_net.createConnection)({ host: "127.0.0.1", port: backendIpcPort }, () => {
+    console.error(`[server] Connected to Tauri IPC on localhost:${backendIpcPort}`);
+  });
+  socket.setEncoding("utf8");
+  socket.on("data", processInputChunk);
+  socket.on("end", cleanup);
+  socket.on("error", (error) => {
+    console.error("[server] Tauri IPC socket failed:", error);
+    cleanup();
+  });
+} else if (bunRuntime) {
+  void (async () => {
+    const reader = bunRuntime.stdin.stream().getReader();
+    const decoder = new TextDecoder();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        processInputChunk(decoder.decode(value, { stream: true }));
+      }
+      processInputChunk(decoder.decode());
+    } finally {
+      reader.releaseLock();
+    }
+    cleanup();
+  })().catch((error) => {
+    console.error("[server] native Bun stdin reader failed:", error);
+    cleanup();
+  });
+} else {
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", processInputChunk);
+  process.stdin.on("end", cleanup);
+  process.stdin.resume();
+}
 function cleanup() {
   try {
     stopClipboardWatcher();
@@ -25017,6 +24790,5 @@ function cleanup() {
 }
 process.on("SIGINT", cleanup);
 process.on("SIGTERM", cleanup);
-rl.on("close", cleanup);
 console.error("[server] Raymes TS background runner started successfully via stdin/stdout IPC.");
 //# sourceMappingURL=main.js.map

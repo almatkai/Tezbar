@@ -28,8 +28,8 @@ import { getSafetyDryRun } from '../llm/configStore'
 import { confirmSafetyAction } from '../safety/confirm'
 import { recordSafetyEntry } from '../safety/log'
 import { getSafetyDescriptor } from '../safety/registry'
+import { fileIconDataUrl, folderIconDataUrl } from '../pathIcons'
 import { commandBus } from './commandBus'
-import { appIconDataUrl } from '../appIcon'
 // Fix imports from indexDb
 import { getInstance, readBenchmarkHistory, runOfflineBenchmarks } from './indexDb'
 import { appsProvider, listApplications } from './providers/appsProvider'
@@ -46,6 +46,7 @@ import { quickLinksProvider } from './providers/quickLinksProvider'
 import { snippetsProvider } from './providers/snippetsProvider'
 import type { IndexedDocument, SearchProvider } from './providers/types'
 import { computeWeightedScore, shouldPreferRecent } from './ranker'
+import { rankDirectoryRecommendations, type DirectoryVisit } from './directoryRecommendations'
 
 const execFileAsync = promisify(execFile)
 const MAX_RESULTS = 80
@@ -67,7 +68,7 @@ function validateShellCommand(command: string): { ok: true } | { ok: false; mess
 }
 
 function safetyForAction(
-  action: SearchAction,
+  action: SearchAction
 ): { id: SafetyActionId; context: Record<string, unknown> } | null {
   if (action.type === 'run-shell') {
     return { id: 'shell.run', context: { command: action.command } }
@@ -93,7 +94,7 @@ function safetyForAction(
 async function runWithSafety(
   safetyId: SafetyActionId,
   context: Record<string, unknown>,
-  run: () => Promise<SearchExecuteResult>,
+  run: () => Promise<SearchExecuteResult>
 ): Promise<SearchExecuteResult> {
   const descriptor = getSafetyDescriptor(safetyId)
   if (!descriptor) {
@@ -162,6 +163,11 @@ type OpenWithUsageStore = {
   aliases?: Record<string, Record<string, OpenWithUsageEntry>>
 }
 
+type DirectoryVisitStore = {
+  version: 1
+  visits: Record<string, DirectoryVisit>
+}
+
 function isPresent<T>(value: T | null | undefined): value is T {
   return value !== null && value !== undefined
 }
@@ -175,6 +181,16 @@ function uniqById(items: SearchResult[]): SearchResult[] {
     out.push(item)
   }
   return out
+}
+
+function attachSearchResultIcons(items: SearchResult[]): SearchResult[] {
+  // App and extension icons require filesystem scans, image conversion, and large
+  // IPC payloads. Keep that work out of the search request so results render at once.
+  return items.map((item) =>
+    item.action.type === 'open-file'
+      ? { ...item, iconDataUrl: fileIconDataUrl(item.action.path) }
+      : item
+  )
 }
 
 function actionIdFromResult(action: SearchAction, resultId?: string): string {
@@ -240,10 +256,21 @@ async function refreshAllProviders(): Promise<void> {
     upsertProvider(notesProvider),
     upsertProvider(snippetsProvider),
     upsertProvider(quickLinksProvider),
-    upsertProvider(extensionsProvider),
     upsertProvider(appsProvider),
   ])
   indexDb.clearSearchCache()
+
+  // Extension discovery can take tens of seconds on the Tauri/Bun backend.
+  // Do not hold the launcher's first results hostage while every installed
+  // extension is inspected; core commands and applications are useful now.
+  void upsertProvider(extensionsProvider)
+    .then(() => {
+      lastExtensionRefreshAt = Date.now()
+      indexDb.clearSearchCache()
+    })
+    .catch((error: unknown) => {
+      console.warn('[Search] Failed to build extension index:', error)
+    })
 }
 
 async function refreshVolatileProviders(): Promise<void> {
@@ -369,7 +396,7 @@ function internalSurfaceBoost(
   category: SearchResult['category'],
   title: string,
   query: string,
-  subtitle?: string,
+  subtitle?: string
 ): number {
   const hit =
     category === 'native-command' ||
@@ -405,20 +432,21 @@ function internalSurfaceBoost(
     if (extName) {
       const slugName = extName.replace(/\s+/g, '')
       if (extName === normalizedQuery || slugName === normalizedQuery) boost = Math.max(boost, 1200)
-      else if (extName.startsWith(normalizedQuery) || slugName.startsWith(normalizedQuery)) boost = Math.max(boost, 800)
-      else if (extName.includes(normalizedQuery) || slugName.includes(normalizedQuery)) boost = Math.max(boost, 400)
+      else if (extName.startsWith(normalizedQuery) || slugName.startsWith(normalizedQuery))
+        boost = Math.max(boost, 800)
+      else if (extName.includes(normalizedQuery) || slugName.includes(normalizedQuery))
+        boost = Math.max(boost, 400)
     }
   }
 
   return boost
 }
 
-
 /** Keep recently touched quick notes near the top for a short window. */
 function recentQuickNoteBoost(
   category: SearchResult['category'],
   updatedAt: number,
-  now: number,
+  now: number
 ): number {
   if (category !== 'quick-notes') return 0
   const ageMs = now - updatedAt
@@ -436,7 +464,7 @@ function exactRecentQuickNoteBoost(
   title: string,
   query: string,
   updatedAt: number,
-  now: number,
+  now: number
 ): number {
   if (category !== 'quick-notes') return 0
   const ageMs = now - updatedAt
@@ -452,7 +480,10 @@ function exactRecentQuickNoteBoost(
   return 0
 }
 
-function rankRows(query: string, docs: Array<{ doc: IndexedDocument; lexical: number; fuzzyDistance?: number }>): Array<SearchResult & { updatedAt: number }> {
+function rankRows(
+  query: string,
+  docs: Array<{ doc: IndexedDocument; lexical: number; fuzzyDistance?: number }>
+): Array<SearchResult & { updatedAt: number }> {
   const now = Date.now()
   const stats = indexDb?.getActionStats(docs.map((entry) => entry.doc.id)) ?? new Map()
 
@@ -462,7 +493,10 @@ function rankRows(query: string, docs: Array<{ doc: IndexedDocument; lexical: nu
     const totalCount = actionStat?.totalCount ?? 0
     const successCount = actionStat?.successCount ?? 0
     const successRate = totalCount > 0 ? successCount / totalCount : 0
-    const activityAt = actionStat?.lastUsedAt && actionStat.lastUsedAt > 0 ? actionStat.lastUsedAt : entry.doc.updatedAt
+    const activityAt =
+      actionStat?.lastUsedAt && actionStat.lastUsedAt > 0
+        ? actionStat.lastUsedAt
+        : entry.doc.updatedAt
 
     const score =
       computeWeightedScore({
@@ -476,7 +510,13 @@ function rankRows(query: string, docs: Array<{ doc: IndexedDocument; lexical: nu
       }) +
       internalSurfaceBoost(entry.doc.category, entry.doc.title, query, entry.doc.subtitle) +
       recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) +
-      exactRecentQuickNoteBoost(entry.doc.category, entry.doc.title, query, entry.doc.updatedAt, now) +
+      exactRecentQuickNoteBoost(
+        entry.doc.category,
+        entry.doc.title,
+        query,
+        entry.doc.updatedAt,
+        now
+      ) +
       (() => {
         // Quick note add row should stay competitive with strong file hits
         const q = query.trim().toLowerCase()
@@ -502,14 +542,14 @@ function rankRows(query: string, docs: Array<{ doc: IndexedDocument; lexical: nu
         left.score,
         now - left.updatedAt,
         right.score,
-        now - right.updatedAt,
+        now - right.updatedAt
       )
       if (preferRecent) return -1
       const reversePreferRecent = shouldPreferRecent(
         right.score,
         now - right.updatedAt,
         left.score,
-        now - left.updatedAt,
+        now - left.updatedAt
       )
       if (reversePreferRecent) return 1
       return right.score - left.score
@@ -593,8 +633,7 @@ function buildRecommendations(): SearchResult[] {
           frequency: seed.frequency,
           successRate: seed.successRate,
           category: seed.category,
-        }) +
-        recommendationBoost(seed.id)
+        }) + recommendationBoost(seed.id)
 
       return {
         id: seed.id,
@@ -611,7 +650,7 @@ function buildRecommendations(): SearchResult[] {
 
 function decodeLsofCommandName(value: string): string {
   return value.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex: string) =>
-    String.fromCharCode(Number.parseInt(hex, 16)),
+    String.fromCharCode(Number.parseInt(hex, 16))
   )
 }
 
@@ -646,7 +685,10 @@ async function readProcessNameMap(): Promise<Map<string, string>> {
   }
 }
 
-function parseOpenPortProcesses(stdout: string, processNames: Map<string, string> = new Map()): OpenPortProcess[] {
+function parseOpenPortProcesses(
+  stdout: string,
+  processNames: Map<string, string> = new Map()
+): OpenPortProcess[] {
   const lines = stdout
     .split('\n')
     .map((line) => line.trim())
@@ -703,32 +745,32 @@ function parseOpenPortProcesses(stdout: string, processNames: Map<string, string
     .sort((a, b) => a.process.localeCompare(b.process) || a.pid.localeCompare(b.pid))
 }
 
-
-
 export async function searchEverything(query: string): Promise<SearchResult[]> {
   await bootstrapSearchIndex()
   refreshVolatileProvidersIfStale()
 
   const trimmed = query.trim()
   if (!trimmed) {
-    return buildRecommendations()
+    return attachSearchResultIcons(buildRecommendations())
   }
 
   const rows = indexDb.getSearch(trimmed, MAX_RESULTS)
-  const docs: Array<{ doc: IndexedDocument; lexical: number; fuzzyDistance?: number }> = rows.map((row) => ({
-    doc: {
-      id: row.id,
-      category: row.category,
-      title: row.title,
-      subtitle: row.subtitle,
-      tokens: `${row.title} ${row.subtitle}`,
-      action: indexDb.parseAction(row.actionJson),
-      updatedAt: row.updatedAt,
-      popularity: row.popularity,
-    },
-    lexical: row.lexical,
-    fuzzyDistance: row.fuzzyDistance,
-  }))
+  const docs: Array<{ doc: IndexedDocument; lexical: number; fuzzyDistance?: number }> = rows.map(
+    (row) => ({
+      doc: {
+        id: row.id,
+        category: row.category,
+        title: row.title,
+        subtitle: row.subtitle,
+        tokens: `${row.title} ${row.subtitle}`,
+        action: indexDb.parseAction(row.actionJson),
+        updatedAt: row.updatedAt,
+        popularity: row.popularity,
+      },
+      lexical: row.lexical,
+      fuzzyDistance: row.fuzzyDistance,
+    })
+  )
 
   const ranked = rankRows(trimmed, docs)
   const asResults = ranked.map((item) => ({
@@ -763,18 +805,18 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
 
   const noteAdd = trimmed
     ? [
-      {
-        id: `note-add:${trimmed}`,
-        title: `Add quick note: ${trimmed.slice(0, 64)}`,
-        subtitle: 'Quick notes',
-        category: 'quick-notes' as const,
-        score: quickNoteAddScore(trimmed),
-        action: { type: 'add-note', text: trimmed },
-      } satisfies SearchResult,
-    ]
+        {
+          id: `note-add:${trimmed}`,
+          title: `Add quick note: ${trimmed.slice(0, 64)}`,
+          subtitle: 'Quick notes',
+          category: 'quick-notes' as const,
+          score: quickNoteAddScore(trimmed),
+          action: { type: 'add-note', text: trimmed },
+        } satisfies SearchResult,
+      ]
     : []
 
-  return uniqById([
+  const results = uniqById([
     ...resultsWithoutFiles,
     ...emojiPickerResult,
     ...fileResults,
@@ -784,6 +826,7 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
   ])
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_RESULTS)
+  return attachSearchResultIcons(results)
 }
 
 function expandUserPath(input: string): string {
@@ -795,7 +838,15 @@ function expandUserPath(input: string): string {
 function resolveSlashPathInput(input: string): string {
   if (!input.startsWith('/')) return expandUserPath(input)
 
-  const absolutePrefixes = ['/Users/', '/Volumes/', '/private/', '/tmp/', '/var/', '/System/', '/Library/']
+  const absolutePrefixes = [
+    '/Users/',
+    '/Volumes/',
+    '/private/',
+    '/tmp/',
+    '/var/',
+    '/System/',
+    '/Library/',
+  ]
   if (absolutePrefixes.some((prefix) => input.startsWith(prefix))) {
     return input
   }
@@ -876,6 +927,68 @@ function pathCompletionBase(targetPath: string): { directory: string; prefix: st
   return { directory: dirname(targetPath), prefix: basename(targetPath) }
 }
 
+function directoryVisitStorePath(): string {
+  return join(app.getPath('userData'), 'directory-visits.json')
+}
+
+function readDirectoryVisitStore(): DirectoryVisitStore {
+  try {
+    const parsed = JSON.parse(readFileSync(directoryVisitStorePath(), 'utf8'))
+    if (!parsed || parsed.version !== 1 || typeof parsed.visits !== 'object') {
+      return { version: 1, visits: {} }
+    }
+    return parsed as DirectoryVisitStore
+  } catch {
+    return { version: 1, visits: {} }
+  }
+}
+
+export function recordDirectoryVisit(path: string): void {
+  try {
+    const normalized = resolve(path)
+    if (!statSync(normalized).isDirectory()) return
+
+    const store = readDirectoryVisitStore()
+    const existing = store.visits[normalized]
+    store.visits[normalized] = {
+      count: (existing?.count ?? 0) + 1,
+      lastVisitedAt: Date.now(),
+    }
+    const storePath = directoryVisitStorePath()
+    mkdirSync(dirname(storePath), { recursive: true })
+    writeFileSync(storePath, JSON.stringify(store), 'utf8')
+  } catch (error) {
+    console.warn('[Search] Failed to record directory visit:', error)
+  }
+}
+
+function recommendedDirectories(): PathCompletionItem[] {
+  return rankDirectoryRecommendations(readDirectoryVisitStore().visits, {
+    limit: 50,
+    excludedPaths: [homedir()],
+  })
+    .filter((item) => {
+      try {
+        return statSync(item.path).isDirectory()
+      } catch {
+        return false
+      }
+    })
+    .slice(0, 5)
+    .map((item, index) => ({
+      id: `path-recommended:${item.path}`,
+      title: basename(item.path),
+      subtitle: displayUserPath(item.path),
+      kind: 'directory' as const,
+      section: 'recommended' as const,
+      badge: 'Recommended',
+      iconDataUrl: folderIconDataUrl,
+      value: `${item.path}/`,
+      path: item.path,
+      score: 5_000 - index,
+    }))
+}
+
 function openWithUsageStorePath(): string {
   return join(app.getPath('userData'), 'open-with-usage.json')
 }
@@ -883,7 +996,12 @@ function openWithUsageStorePath(): string {
 function readOpenWithUsageStore(): OpenWithUsageStore {
   try {
     const parsed = JSON.parse(readFileSync(openWithUsageStorePath(), 'utf8'))
-    if (!parsed || typeof parsed !== 'object' || parsed.version !== 1 || typeof parsed.keys !== 'object') {
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      parsed.version !== 1 ||
+      typeof parsed.keys !== 'object'
+    ) {
       return { version: 1, keys: {} }
     }
     if (!parsed.aliases || typeof parsed.aliases !== 'object') {
@@ -967,14 +1085,22 @@ function builtInAppAliases(appName: string): string[] {
   return []
 }
 
-function appMatchesTerm(appName: string, term: string, learnedAliases?: Record<string, OpenWithUsageEntry>): boolean {
+function appMatchesTerm(
+  appName: string,
+  term: string,
+  learnedAliases?: Record<string, OpenWithUsageEntry>
+): boolean {
   const normalizedTerm = normalizeAppSearchTerm(term)
   if (!normalizedTerm) return true
 
   const normalizedName = normalizeAppSearchTerm(appName)
   if (normalizedName.includes(normalizedTerm)) return true
   if (appAcronym(appName).includes(normalizedTerm)) return true
-  if (builtInAppAliases(appName).some((alias) => normalizeAppSearchTerm(alias).includes(normalizedTerm))) {
+  if (
+    builtInAppAliases(appName).some((alias) =>
+      normalizeAppSearchTerm(alias).includes(normalizedTerm)
+    )
+  ) {
     return true
   }
   return Boolean(learnedAliases?.[appName])
@@ -1059,13 +1185,13 @@ function inferredDefaultAppName(targetPath: string): string {
   return 'Default App'
 }
 
-async function applicationCompletionItem(
+function applicationCompletionItem(
   targetPath: string,
   appInfo: { name: string; path: string },
   index: number,
   section: 'recommended' | 'applications',
-  score: number,
-): Promise<PathCompletionItem> {
+  score: number
+): PathCompletionItem {
   return {
     id: `path-app:${section}:${appInfo.path}`,
     title: appInfo.name,
@@ -1075,17 +1201,17 @@ async function applicationCompletionItem(
     badge: section === 'recommended' ? 'Recommended' : 'Open With',
     value: `${targetPath} ${appInfo.name}`,
     path: targetPath,
+    appPath: appInfo.path,
     appName: appInfo.name,
     applicationAction: 'open-with',
-    iconDataUrl: await appIconDataUrl(appInfo.path),
     score: score - index,
   }
 }
 
-async function installedApplicationItem(
+function installedApplicationItem(
   appInfo: { name: string; path: string },
-  index: number,
-): Promise<PathCompletionItem> {
+  index: number
+): PathCompletionItem {
   return {
     id: `path-installed-app:${appInfo.path}`,
     title: appInfo.name,
@@ -1094,9 +1220,9 @@ async function installedApplicationItem(
     badge: 'Application',
     value: appInfo.path,
     path: appInfo.path,
+    appPath: appInfo.path,
     appName: appInfo.name,
     applicationAction: 'open',
-    iconDataUrl: await appIconDataUrl(appInfo.path),
     score: 2_000 - index,
   }
 }
@@ -1108,7 +1234,8 @@ export async function completePath(query: string, limit = 50): Promise<PathCompl
     const apps = listApplications()
       .filter((item) => appMatchesTerm(item.name, appTerm))
       .sort((a, b) => a.name.localeCompare(b.name))
-    return Promise.all(apps.map((item, index) => installedApplicationItem(item, index)))
+      .slice(0, limit)
+    return apps.map((item, index) => installedApplicationItem(item, index))
   }
 
   const { targetPath, appTerm, appMode } = splitPathCompletionQuery(query)
@@ -1117,7 +1244,7 @@ export async function completePath(query: string, limit = 50): Promise<PathCompl
     const apps = listApplications()
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, limit)
-    return Promise.all(apps.map((item, index) => installedApplicationItem(item, index)))
+    return apps.map((item, index) => installedApplicationItem(item, index))
   }
 
   if (appMode) {
@@ -1134,21 +1261,21 @@ export async function completePath(query: string, limit = 50): Promise<PathCompl
       .map((item) => appsByName.get(item.appName))
       .filter(isPresent)
     const recommended = [...learnedRecommended, ...usageRecommended]
-      .filter((item, index, items) => items.findIndex((other) => other.name === item.name) === index)
+      .filter(
+        (item, index, items) => items.findIndex((other) => other.name === item.name) === index
+      )
       .slice(0, 5)
     const recommendedNames = new Set(recommended.map((item) => item.name))
     const rest = allApps.filter((item) => !recommendedNames.has(item.name)).slice(0, limit)
 
-    const recommendedItems = await Promise.all(
-      recommended.map((item, index) =>
-        applicationCompletionItem(targetPath, item, index, 'recommended', 4_000),
-      ),
+    const recommendedItems = recommended.map((item, index) =>
+      applicationCompletionItem(targetPath, item, index, 'recommended', 4_000)
     )
-    const appItems = await Promise.all(
-      rest.slice(0, Math.max(0, limit - recommendedItems.length - 1)).map((item, index) =>
-        applicationCompletionItem(targetPath, item, index, 'applications', 1_000),
-      ),
-    )
+    const appItems = rest
+      .slice(0, Math.max(0, limit - recommendedItems.length - 1))
+      .map((item, index) =>
+        applicationCompletionItem(targetPath, item, index, 'applications', 1_000)
+      )
     const defaultItem = {
       id: `path-default:${targetPath}`,
       title: `Open in ${inferredDefaultAppName(targetPath)}`,
@@ -1163,18 +1290,10 @@ export async function completePath(query: string, limit = 50): Promise<PathCompl
     }
 
     if (appTerm.trim()) {
-      return [
-        ...recommendedItems,
-        ...appItems,
-        defaultItem,
-      ]
+      return [...recommendedItems, ...appItems, defaultItem]
     }
 
-    return [
-      ...recommendedItems,
-      defaultItem,
-      ...appItems,
-    ]
+    return [...recommendedItems, defaultItem, ...appItems]
   }
 
   const { directory, prefix } = pathCompletionBase(targetPath)
@@ -1182,7 +1301,9 @@ export async function completePath(query: string, limit = 50): Promise<PathCompl
 
   try {
     const entries = readdirSync(directory, { withFileTypes: true })
-    return entries
+    const recommended = query.trim() === '/' ? recommendedDirectories() : []
+    const recommendedPaths = new Set(recommended.map((item) => item.path))
+    const regular = entries
       .filter((entry) => !entry.name.startsWith('.'))
       .filter((entry) => !normalizedPrefix || entry.name.toLowerCase().includes(normalizedPrefix))
       .map<PathCompletionItem | null>((entry) => {
@@ -1199,17 +1320,24 @@ export async function completePath(query: string, limit = 50): Promise<PathCompl
           kind,
           value: isDirectory ? `${absolute}/` : absolute,
           path: absolute,
+          iconDataUrl: isDirectory ? folderIconDataUrl : fileIconDataUrl(absolute),
           score:
             (isDirectory ? 1_000 : 500) +
-            (lowerName === normalizedPrefix ? 1_000 : lowerName.startsWith(normalizedPrefix) ? 100 : 0),
+            (lowerName === normalizedPrefix
+              ? 1_000
+              : lowerName.startsWith(normalizedPrefix)
+                ? 100
+                : 0),
         }
       })
       .filter(isPresent)
+      .filter((item) => !recommendedPaths.has(item.path))
       .sort((a, b) => {
         if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
         return b.score - a.score || a.title.localeCompare(b.title)
       })
-      .slice(0, limit)
+      .slice(0, Math.max(0, limit - recommended.length))
+    return [...recommended, ...regular]
   } catch {
     return []
   }
@@ -1258,7 +1386,7 @@ async function searchPortManagerOpenPorts(query: string): Promise<SearchResult[]
             argumentValues: { port: String(port) },
           },
         }
-      }),
+      })
     )
     .filter(isPresent)
     .sort((a, b) => b.score - a.score)
@@ -1268,7 +1396,9 @@ async function searchPortManagerOpenPorts(query: string): Promise<SearchResult[]
 function buildEmojiPickerSearchResult(query: string): SearchResult[] {
   const n = query.trim().toLowerCase()
   if (!n) return []
-  const emojiActionStats = indexDb.getActionStats(['native:open-emoji-picker']).get('native:open-emoji-picker')
+  const emojiActionStats = indexDb
+    .getActionStats(['native:open-emoji-picker'])
+    .get('native:open-emoji-picker')
   const recentUseBoost = (() => {
     if (!emojiActionStats?.lastUsedAt) return 0
     const ageMs = Date.now() - emojiActionStats.lastUsedAt
@@ -1277,7 +1407,8 @@ function buildEmojiPickerSearchResult(query: string): SearchResult[] {
     if (ageMs < 24 * 60 * 60 * 1000) return 180
     return 0
   })()
-  const shortPrefixBoost = n === 'e' ? 920 : n.startsWith('em') ? 760 : n.startsWith('emo') ? 920 : 0
+  const shortPrefixBoost =
+    n === 'e' ? 920 : n.startsWith('em') ? 760 : n.startsWith('emo') ? 920 : 0
   const shouldShow =
     n.includes('emoji') ||
     n.startsWith('emo') ||
@@ -1396,7 +1527,7 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
         const result = await executeExtensionCommandRuntime(
           action.extensionId,
           action.commandName,
-          argumentValues,
+          argumentValues
         )
         return result
       } catch (error) {
@@ -1460,7 +1591,7 @@ export async function getSearchBenchmarkHistory(): Promise<SearchBenchmarkReport
 
 export async function executeSearchAction(
   action: SearchAction,
-  context?: SearchExecuteContext,
+  context?: SearchExecuteContext
 ): Promise<SearchExecuteResult> {
   let result: SearchExecuteResult
 
@@ -1486,7 +1617,7 @@ export async function executeSearchAction(
     }
   }
 
-  if (context?.query && typeof context.rank === "number" && Number.isFinite(context.rank)) {
+  if (context?.query && typeof context.rank === 'number' && Number.isFinite(context.rank)) {
     indexDb.recordClick(context.query, actionId, context.rank, result.ok)
   }
 

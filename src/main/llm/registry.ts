@@ -42,6 +42,7 @@ export type OpenRayLLMConfig = {
 type PiProviderBridge = {
   modelPattern: string
   providerJson: string
+  acceptsImages: boolean
 }
 
 const DEFAULT_OLLAMA_BASE = 'http://localhost:11434'
@@ -401,6 +402,12 @@ export function getSelectedPiProviderBridge(): PiProviderBridge | undefined {
 
   const modelId = stripProviderPrefix(model, cfg.provider)
   if (!modelId) return undefined
+  const selectedModel = cfg.providerModels?.[cfg.provider]?.find(
+    (candidate) => stripProviderPrefix(candidate.id, cfg.provider) === modelId
+  )
+  const modelInput: Array<'text' | 'image'> = selectedModel?.capabilities.includes('vision')
+    ? ['text', 'image']
+    : ['text']
 
   const isAnthropic = cfg.provider === 'anthropic'
   const baseUrl = isAnthropic ? cfg.baseURL ?? 'https://api.anthropic.com' : openAiCompatBaseUrl(cfg)
@@ -417,7 +424,7 @@ export function getSelectedPiProviderBridge(): PiProviderBridge | undefined {
         id: modelId,
         name: `Tezbar ${cfg.provider} ${modelId}`,
         reasoning: /reason|think|r1|o\d|gpt-5|claude|deepseek/i.test(modelId),
-        input: ['text'],
+        input: modelInput,
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 128000,
         maxTokens: 8192,
@@ -428,5 +435,6 @@ export function getSelectedPiProviderBridge(): PiProviderBridge | undefined {
   return {
     modelPattern: `tezbar/${modelId}`,
     providerJson,
+    acceptsImages: modelInput.includes('image'),
   }
 }

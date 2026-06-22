@@ -41,13 +41,15 @@ import {
   TextField,
 } from './ui/primitives'
 import { CurrencySettings } from './CurrencySettings'
+import ExtensionsView from './ExtensionsView'
 
-type SettingsTab = 'general' | 'ai' | 'voice' | 'permissions' | 'storage' | 'advanced'
+type SettingsTab = 'general' | 'ai' | 'voice' | 'extensions' | 'permissions' | 'storage' | 'advanced'
 
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'general', label: 'General', icon: 'gear' },
   { id: 'ai', label: 'AI', icon: 'spark' },
   { id: 'voice', label: 'Voice', icon: 'mic' },
+  { id: 'extensions', label: 'Extensions', icon: 'puzzle' },
   { id: 'permissions', label: 'Permissions', icon: 'lock' },
   { id: 'storage', label: 'Storage', icon: 'database' },
   { id: 'advanced', label: 'Advanced', icon: 'tool' },
@@ -187,6 +189,13 @@ function SettingsIcon({ name, className }: { name: string; className?: string })
         <ellipse cx="12" cy="6" rx="9" ry="3" />
         <path d="M3 6v12c0 1.7 4 3 9 3s9-1.3 9-3V6" />
         <path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3" />
+      </svg>
+    )
+  }
+  if (name === 'puzzle') {
+    return (
+      <svg {...common}>
+        <path d="M8 3h3a2 2 0 1 1 4 0h3v5a2 2 0 1 1 0 4v5h-5a2 2 0 1 1-4 0H4v-5a2 2 0 1 1 0-4V3h4Z" />
       </svg>
     )
   }
@@ -1364,6 +1373,10 @@ export default function SettingsView({
                 </div>
               </SettingsRow>
             </div>
+          ) : null}
+
+          {activeTab === 'extensions' ? (
+            <ExtensionsView embedded onBack={() => setActiveTab('general')} />
           ) : null}
 
           {activeTab === 'storage' ? (

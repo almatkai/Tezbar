@@ -42,6 +42,14 @@ export type ExtensionRuntimeAction = {
   kind?: 'action' | 'copy' | 'open' | 'push' | 'pop' | 'submit-form' | 'show-in-finder'
 }
 
+export type ExtensionRuntimeEffect = {
+  kind: 'clipboard' | 'open' | 'show-in-finder' | 'toast' | 'hud' | 'apple-script'
+  value?: string
+  style?: string
+  title?: string
+  message?: string
+}
+
 export type ExtensionRuntimeNode = {
   type: string
   props?: Record<string, unknown>
@@ -60,6 +68,7 @@ export type ExtensionRunCommandResult =
       ok: true
       mode: 'no-view'
       message: string
+      effects?: ExtensionRuntimeEffect[]
     }
   | {
       ok: true
@@ -71,6 +80,7 @@ export type ExtensionRunCommandResult =
       title: string
       root: ExtensionRuntimeNode
       actions: ExtensionRuntimeAction[]
+      effects?: ExtensionRuntimeEffect[]
     }
   | {
       ok: false
@@ -80,7 +90,7 @@ export type ExtensionRunCommandResult =
 export type ExtensionInvokeActionRequest = {
   sessionId: string
   actionId: string
-  formValues?: Record<string, string>
+  formValues?: Record<string, unknown>
 }
 
 export type ExtensionInvokeActionResult =
@@ -88,6 +98,7 @@ export type ExtensionInvokeActionResult =
       ok: true
       mode: 'no-view'
       message: string
+      effects?: ExtensionRuntimeEffect[]
     }
   | {
       ok: true
@@ -99,6 +110,7 @@ export type ExtensionInvokeActionResult =
       title: string
       root: ExtensionRuntimeNode
       actions: ExtensionRuntimeAction[]
+      effects?: ExtensionRuntimeEffect[]
     }
   | {
       ok: false
@@ -134,6 +146,7 @@ export type ExtensionSearchTextChangedResult =
       ok: true
       mode: 'no-view'
       message: string
+      effects?: ExtensionRuntimeEffect[]
     }
   | {
       ok: true
@@ -145,6 +158,7 @@ export type ExtensionSearchTextChangedResult =
       title: string
       root: ExtensionRuntimeNode
       actions: ExtensionRuntimeAction[]
+      effects?: ExtensionRuntimeEffect[]
     }
   | {
       ok: false

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 import type { Stage } from '../../shared/agent'
 import type {
+  ChatAttachment,
   ChatRole,
   ChatSession,
   ChatSessionSummary,
@@ -24,6 +25,7 @@ type TurnRow = {
   role: string
   text: string
   stages_json: string | null
+  attachments_json: string | null
   error: string | null
   created_at: number
 }
@@ -43,6 +45,28 @@ function safeParseStages(raw: string | null): Stage[] | undefined {
       )
     })
     return stages.length > 0 ? stages : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function safeParseAttachments(raw: string | null): ChatAttachment[] | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return undefined
+    const attachments = parsed.filter((item): item is ChatAttachment => {
+      if (!item || typeof item !== 'object') return false
+      const attachment = item as Partial<ChatAttachment>
+      return (
+        attachment.kind === 'image' &&
+        typeof attachment.name === 'string' &&
+        (attachment.mimeType === 'image/png' ||
+          attachment.mimeType === 'image/jpeg' ||
+          attachment.mimeType === 'image/webp')
+      )
+    })
+    return attachments.length > 0 ? attachments : undefined
   } catch {
     return undefined
   }
@@ -97,6 +121,7 @@ class ChatSessionDatabase {
         role TEXT NOT NULL,
         text TEXT NOT NULL,
         stages_json TEXT,
+        attachments_json TEXT,
         error TEXT,
         created_at INTEGER NOT NULL,
         FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
@@ -104,6 +129,11 @@ class ChatSessionDatabase {
       CREATE INDEX IF NOT EXISTS idx_chat_turns_session ON chat_turns(session_id);
       CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
     `)
+    try {
+      this.db.exec(`ALTER TABLE chat_turns ADD COLUMN attachments_json TEXT;`)
+    } catch {
+      // Existing and newly-created databases already have the column.
+    }
   }
 
   listSessions(limit = 100): ChatSessionSummary[] {
@@ -140,7 +170,7 @@ class ChatSessionDatabase {
     if (!sessionRow) return null
     const turnRows = this.db
       .prepare(
-        `SELECT id, session_id, role, text, stages_json, error, created_at
+        `SELECT id, session_id, role, text, stages_json, attachments_json, error, created_at
          FROM chat_turns WHERE session_id = ? ORDER BY created_at ASC`,
       )
       .all(id) as TurnRow[]
@@ -154,6 +184,7 @@ class ChatSessionDatabase {
         role: (t.role === 'assistant' ? 'assistant' : 'user') as ChatRole,
         text: t.text,
         stages: safeParseStages(t.stages_json),
+        attachments: safeParseAttachments(t.attachments_json),
         error: t.error ?? undefined,
         createdAt: t.created_at,
       })),
@@ -177,11 +208,12 @@ class ChatSessionDatabase {
   appendTurn(sessionId: string, turn: ChatTurn): void {
     this.db
       .prepare(
-        `INSERT INTO chat_turns(id, session_id, role, text, stages_json, error, created_at)
-         VALUES(?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO chat_turns(id, session_id, role, text, stages_json, attachments_json, error, created_at)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            text = excluded.text,
            stages_json = excluded.stages_json,
+           attachments_json = excluded.attachments_json,
            error = excluded.error`,
       )
       .run(
@@ -190,6 +222,15 @@ class ChatSessionDatabase {
         turn.role,
         turn.text,
         turn.stages ? JSON.stringify(turn.stages) : null,
+        turn.attachments
+          ? JSON.stringify(
+              turn.attachments.map((attachment) => {
+                const metadata = { ...attachment }
+                delete metadata.data
+                return metadata
+              }),
+            )
+          : null,
         turn.error ?? null,
         turn.createdAt,
       )

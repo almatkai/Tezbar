@@ -655,7 +655,6 @@ function createWindow(): void {
       sandbox: true,
     },
   })
-
   if (process.platform === 'darwin') {
     mainWindow.setAlwaysOnTop(true, 'floating')
   }
@@ -765,7 +764,6 @@ function openSettingsWindow(): void {
       sandbox: true,
     },
   })
-
   settingsWindow.on('closed', () => {
     settingsWindow = null
   })

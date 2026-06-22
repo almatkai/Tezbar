@@ -1,8 +1,28 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, shell } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  desktopCapturer,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  screen,
+  shell,
+} from 'electron'
 import { setSuppressBlurHide } from './windowState'
-import { AGENT_IPC, type AgentRunEvent, type Stage } from '../shared/agent'
+import {
+  AGENT_IPC,
+  type AgentApprovalDecision,
+  type AgentApprovalResponse,
+  type AgentInputImage,
+  type AgentRunEvent,
+  type AgentRunRequest,
+  type Stage,
+} from '../shared/agent'
 import { CHAT_CONTEXT_MAX_TURNS, CHAT_IPC, type ChatSession, type ChatTurn } from '../shared/chat'
+import type { ChatAttachment } from '../shared/chat'
 import { disposeSharedBridge, getSharedBridge } from './agent/bridge'
+import { extractTextFromAgentImages } from './agent/imageContext'
 import {
   appendChatTurn,
   clearAllChatSessions,
@@ -20,12 +40,15 @@ import {
   parseVoiceSpeakRequest,
   parseVoiceTranscribeRequest,
 } from '../shared/ipc'
-import type { SearchAction } from '../shared/search'
+import type { IconAssetKind, SearchAction } from '../shared/search'
 import type { Message } from './llm/provider'
 import { appIconDataUrl } from './appIcon'
+import { imageFileDataUrl, nativeFileIconDataUrl } from './pathIcons'
 import { streamAnswerToRenderer } from './llm/answerStream'
 import { setLauncherContentHeight } from './windowBounds'
 import {
+  addAgentAlwaysAllowedCommand,
+  getAgentAlwaysAllowedCommands,
   getSafetyDryRun,
   getUiStateRetentionMs,
   readRawConfig,
@@ -60,6 +83,7 @@ import {
 } from './extensions/service'
 import {
   extensionRegistryEvents,
+  getExtensionPreferenceSetup,
   getExtensionPreferences as getRegistryExtensionPreferences,
   installRegistryExtension,
   listInstalledRegistryExtensions,
@@ -78,6 +102,7 @@ import {
 import {
   executeSearchAction,
   completePath,
+  recordDirectoryVisit,
   getSearchBenchmarkHistory,
   listOpenPorts,
   reindexExtensions,
@@ -153,6 +178,14 @@ const LLM_DEFAULTS = {
 let answerAbort: AbortController | null = null
 let agentAbort: AbortController | null = null
 let agentRunId: string | null = null
+const pendingAgentApprovals = new Map<
+  string,
+  {
+    runId: string
+    suggestedRule?: string
+    settle: (approved: boolean) => void
+  }
+>()
 let quitConfirmationOpen = false
 let quitConfirmed = false
 
@@ -184,25 +217,25 @@ async function confirmQuitRaymes(getWindow: () => BrowserWindow | null): Promise
     const result =
       win && !win.isDestroyed()
         ? await dialog.showMessageBox(win, {
-          type: 'question',
-          buttons: ['Cancel', 'Quit'],
-          defaultId: 1,
-          cancelId: 0,
-          title: 'Quit Tezbar',
-          message: 'Quit Tezbar?',
-          detail: 'Are you sure you want to quit Tezbar and terminate all background processes?',
-          noLink: true,
-        })
+            type: 'question',
+            buttons: ['Cancel', 'Quit'],
+            defaultId: 1,
+            cancelId: 0,
+            title: 'Quit Tezbar',
+            message: 'Quit Tezbar?',
+            detail: 'Are you sure you want to quit Tezbar and terminate all background processes?',
+            noLink: true,
+          })
         : await dialog.showMessageBox({
-          type: 'question',
-          buttons: ['Cancel', 'Quit'],
-          defaultId: 1,
-          cancelId: 0,
-          title: 'Quit Tezbar',
-          message: 'Quit Tezbar?',
-          detail: 'Are you sure you want to quit Tezbar and terminate all background processes?',
-          noLink: true,
-        })
+            type: 'question',
+            buttons: ['Cancel', 'Quit'],
+            defaultId: 1,
+            cancelId: 0,
+            title: 'Quit Tezbar',
+            message: 'Quit Tezbar?',
+            detail: 'Are you sure you want to quit Tezbar and terminate all background processes?',
+            noLink: true,
+          })
 
     quitConfirmed = result.response === 1
     return quitConfirmed
@@ -231,7 +264,92 @@ function sendAgentEvent(sender: Electron.WebContents, event: AgentRunEvent): voi
   if (!sender.isDestroyed()) sender.send(AGENT_IPC.EVENT, event)
 }
 
-function startAgentRun(sender: Electron.WebContents, task: string): string {
+const PERSISTABLE_READ_COMMANDS = new Set(['grep', 'rg'])
+const SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])
+
+function commandName(part: string): string {
+  const token = part.trim().split(/\s+/, 1)[0] ?? ''
+  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()
+}
+
+function suggestedApprovalRule(command: string): string | undefined {
+  if (/[;<>`\n]/.test(command) || command.includes('$(') || command.includes('||')) {
+    return undefined
+  }
+  const names = command
+    .split(/\s*(?:&&|\|)\s*/)
+    .map(commandName)
+    .filter((name) => name && name !== 'cd' && !SAFE_PIPELINE_COMMANDS.has(name))
+  return names.find((name) => PERSISTABLE_READ_COMMANDS.has(name))
+}
+
+function cancelPendingAgentApprovals(runId?: string): void {
+  for (const [approvalId, approval] of pendingAgentApprovals) {
+    if (runId && approval.runId !== runId) continue
+    pendingAgentApprovals.delete(approvalId)
+    approval.settle(false)
+  }
+}
+
+function requestAgentApproval(
+  sender: Electron.WebContents,
+  runId: string,
+  signal: AbortSignal,
+  request: { title: string; command: string }
+): Promise<boolean> {
+  const approvalId = `approval-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  const suggestedRule = suggestedApprovalRule(request.command)
+
+  return new Promise((resolve) => {
+    let settled = false
+    const timeout = setTimeout(() => settle(false), 5 * 60_000)
+    const settle = (approved: boolean): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      pendingAgentApprovals.delete(approvalId)
+      resolve(approved)
+    }
+    pendingAgentApprovals.set(approvalId, { runId, suggestedRule, settle })
+    signal.addEventListener('abort', () => settle(false), { once: true })
+    sendAgentEvent(sender, {
+      type: 'approval',
+      runId,
+      approvalId,
+      title: request.title,
+      command: request.command,
+      suggestedRule,
+    })
+  })
+}
+
+function waitForRetry(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve()
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer)
+        resolve()
+      },
+      { once: true }
+    )
+  })
+}
+
+function canRetryRun(error: unknown, signal: AbortSignal): boolean {
+  if (signal.aborted) return false
+  const message = error instanceof Error ? error.message : String(error)
+  return !/aborted|cancelled|task is empty|invalid base64|unsupported agent image/i.test(message)
+}
+
+function startAgentRun(
+  sender: Electron.WebContents,
+  task: string,
+  images: readonly AgentInputImage[] = []
+): string {
+  cancelPendingAgentApprovals()
   agentAbort?.abort()
   agentAbort = new AbortController()
   const ac = agentAbort
@@ -239,13 +357,22 @@ function startAgentRun(sender: Electron.WebContents, task: string): string {
     (agentRunId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
   const bridge = getSharedBridge()
   const piProvider = getSelectedPiProviderBridge()
+  let emittedOutput = false
 
   sendAgentEvent(sender, { type: 'start', runId, task })
 
-  const onStage = (stage: Stage): void => sendAgentEvent(sender, { type: 'stage', runId, stage })
-  const onMessageDelta = (delta: string): void =>
+  const onStage = (stage: Stage): void => {
+    emittedOutput = true
+    sendAgentEvent(sender, { type: 'stage', runId, stage })
+  }
+  const onMessageDelta = (delta: string): void => {
+    emittedOutput = true
     sendAgentEvent(sender, { type: 'message', runId, delta })
-  const onAnswer = (text: string): void => sendAgentEvent(sender, { type: 'answer', runId, text })
+  }
+  const onAnswer = (text: string): void => {
+    emittedOutput = true
+    sendAgentEvent(sender, { type: 'answer', runId, text })
+  }
 
   const onStderrLine = (line: string): void => {
     sendAgentEvent(sender, { type: 'log', runId, source: 'stderr', line })
@@ -253,17 +380,46 @@ function startAgentRun(sender: Electron.WebContents, task: string): string {
 
   console.log('[tezbar:agent] run', { runId, taskPreview: task.slice(0, 120) })
 
-  void bridge
-    .run(task, {
+  void (async () => {
+    let runTask = task
+    let runImages = images
+    if (images.length > 0 && piProvider && !piProvider.acceptsImages) {
+      onStderrLine('The selected model is text-only. Extracting screen text locally...')
+      const extractedText = await extractTextFromAgentImages(images)
+      if (!extractedText) {
+        throw new Error(
+          'The selected model cannot read images, and no text could be extracted from the attached screen. Choose a vision model or remove the attachment.'
+        )
+      }
+      runTask = `${task}\n\nText extracted locally from the attached screen:\n\n${extractedText}`
+      runImages = []
+    }
+
+    const options = {
       runId,
       model: piProvider?.modelPattern ?? getSelectedPiModelPattern(),
       raymesProviderJson: piProvider?.providerJson,
+      raymesAlwaysAllowJson: JSON.stringify(getAgentAlwaysAllowedCommands()),
+      requestApproval: (request: { title: string; command: string }) =>
+        requestAgentApproval(sender, runId, ac.signal, request),
       signal: ac.signal,
       onStage,
       onMessageDelta,
       onAnswer,
       onStderrLine,
-    })
+      images: runImages,
+    }
+
+    try {
+      await bridge.run(runTask, options)
+    } catch (error) {
+      if (emittedOutput || !canRetryRun(error, ac.signal)) throw error
+      onStderrLine('Pi did not start cleanly. Retrying once...')
+      await waitForRetry(350, ac.signal)
+      if (ac.signal.aborted) throw error
+      await bridge.run(runTask, options)
+    }
+  })()
     .then(() => {
       sendAgentEvent(sender, { type: 'done', runId })
     })
@@ -273,6 +429,7 @@ function startAgentRun(sender: Electron.WebContents, task: string): string {
       sendAgentEvent(sender, { type: 'done', runId })
     })
     .finally(() => {
+      cancelPendingAgentApprovals(runId)
       if (agentAbort === ac) agentAbort = null
       if (agentRunId === runId) agentRunId = null
     })
@@ -304,6 +461,32 @@ function normalizeChatTurns(raw: unknown): ChatTurn[] | null {
   return turns
 }
 
+function normalizeChatAttachments(raw: unknown): ChatAttachment[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const attachments: ChatAttachment[] = []
+  for (const item of raw.slice(0, 4)) {
+    if (!item || typeof item !== 'object') continue
+    const attachment = item as Partial<ChatAttachment>
+    if (
+      attachment.kind !== 'image' ||
+      typeof attachment.name !== 'string' ||
+      (attachment.mimeType !== 'image/png' &&
+        attachment.mimeType !== 'image/jpeg' &&
+        attachment.mimeType !== 'image/webp')
+    ) {
+      continue
+    }
+    attachments.push({
+      kind: 'image',
+      name: attachment.name.slice(0, 120),
+      mimeType: attachment.mimeType,
+      width: typeof attachment.width === 'number' ? attachment.width : undefined,
+      height: typeof attachment.height === 'number' ? attachment.height : undefined,
+    })
+  }
+  return attachments.length > 0 ? attachments : undefined
+}
+
 function startChatRun(sender: Electron.WebContents, turns: ChatTurn[]): string {
   agentAbort?.abort()
   agentAbort = new AbortController()
@@ -321,15 +504,29 @@ function startChatRun(sender: Electron.WebContents, turns: ChatTurn[]): string {
   void (async () => {
     let fullText = ''
     try {
-      const provider = getProviderForTask('chat')
-      const stream = await provider.chat(messages, undefined, { signal: ac.signal })
-      for await (const delta of stream) {
-        if (ac.signal.aborted) return
-        if (delta.text) {
-          fullText += delta.text
-          sendAgentEvent(sender, { type: 'message', runId, delta: delta.text })
+      let lastError: unknown
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const provider = getProviderForTask('chat')
+          const stream = await provider.chat(messages, undefined, { signal: ac.signal })
+          for await (const delta of stream) {
+            if (ac.signal.aborted) return
+            if (delta.text) {
+              fullText += delta.text
+              sendAgentEvent(sender, { type: 'message', runId, delta: delta.text })
+            }
+          }
+          lastError = undefined
+          break
+        } catch (error) {
+          lastError = error
+          if (fullText || attempt > 0 || !canRetryRun(error, ac.signal)) throw error
+          await waitForRetry(350, ac.signal)
         }
       }
+      if (lastError) throw lastError
+      if (!fullText.trim())
+        throw new Error('The model returned an empty response. Please try again.')
       sendAgentEvent(sender, { type: 'answer', runId, text: fullText })
     } catch (err) {
       if (!ac.signal.aborted) {
@@ -352,6 +549,7 @@ function startChatRun(sender: Electron.WebContents, turns: ChatTurn[]): string {
 /** Called from `main/index.ts` on `will-quit` to flush subprocesses. */
 export function shutdownIpcHandlers(): void {
   answerAbort?.abort()
+  cancelPendingAgentApprovals()
   agentAbort?.abort()
   clearAllExtensionSessions()
   disposeSharedBridge()
@@ -422,7 +620,8 @@ export function registerIpcHandlers(
   ipcMain.handle('llm-list-models', async (_event, providerId: unknown) => {
     const id = providerId as ProviderId
     const customProvider =
-      typeof id === 'string' && readLLMConfig().customProviders?.some((provider) => provider.id === id)
+      typeof id === 'string' &&
+      readLLMConfig().customProviders?.some((provider) => provider.id === id)
     if (
       id !== 'openai' &&
       id !== 'openai-compatible' &&
@@ -519,6 +718,27 @@ export function registerIpcHandlers(
     const appPath = typeof raw === 'string' ? raw.trim() : ''
     if (!appPath.endsWith('.app')) return null
     return (await appIconDataUrl(appPath)) ?? null
+  })
+
+  ipcMain.handle('asset-icon:data-url', async (_event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return null
+    const payload = raw as { kind?: unknown; path?: unknown }
+    const kind = payload.kind as IconAssetKind
+    const path = typeof payload.path === 'string' ? payload.path.trim() : ''
+    if (!path) return null
+
+    if (kind === 'application') {
+      if (!path.endsWith('.app')) return null
+      return (await appIconDataUrl(path)) ?? null
+    }
+    if (kind === 'extension') {
+      if (/^https?:\/\//i.test(path)) return path
+      return imageFileDataUrl(path) ?? null
+    }
+    if (kind === 'file') {
+      return (await nativeFileIconDataUrl(path)) ?? null
+    }
+    return null
   })
 
   ipcMain.handle('snippets:list', async () => listSnippetsForUi())
@@ -694,16 +914,89 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle(AGENT_IPC.RUN, async (event, raw: unknown) => {
-    const task = typeof raw === 'string' ? raw : String(raw ?? '')
+    const request: AgentRunRequest =
+      typeof raw === 'string'
+        ? { task: raw }
+        : raw && typeof raw === 'object'
+          ? (raw as AgentRunRequest)
+          : { task: '' }
+    const task = typeof request.task === 'string' ? request.task : ''
     if (!task.trim()) {
       return { ok: false, error: 'Task is empty' }
     }
-    const runId = startAgentRun(event.sender, task)
+    const images = Array.isArray(request.images) ? request.images : []
+    const runId = startAgentRun(event.sender, task, images)
     return { ok: true, runId }
   })
 
+  ipcMain.handle(AGENT_IPC.CAPTURE_ACTIVE_SCREEN, async (event) => {
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    const maxWidth = 1600
+    const scale = Math.min(1, maxWidth / Math.max(1, display.size.width))
+    const thumbnailSize = {
+      width: Math.max(1, Math.round(display.size.width * scale)),
+      height: Math.max(1, Math.round(display.size.height * scale)),
+    }
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender)
+    const originalOpacity = sourceWindow?.getOpacity() ?? 1
+
+    try {
+      sourceWindow?.setContentProtection(true)
+      sourceWindow?.setOpacity(0)
+      await new Promise((resolve) => setTimeout(resolve, 120))
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize })
+      const source =
+        sources.find((candidate) => candidate.display_id === String(display.id)) ?? sources[0]
+      if (!source || source.thumbnail.isEmpty()) {
+        throw new Error(
+          'The active screen could not be captured. Check Screen Recording permission.'
+        )
+      }
+      const size = source.thumbnail.getSize()
+      return {
+        type: 'image' as const,
+        data: source.thumbnail.toPNG().toString('base64'),
+        mimeType: 'image/png' as const,
+        width: size.width,
+        height: size.height,
+      }
+    } finally {
+      if (sourceWindow && !sourceWindow.isDestroyed()) {
+        sourceWindow.setOpacity(originalOpacity)
+        sourceWindow.setContentProtection(false)
+      }
+    }
+  })
+
   ipcMain.handle(AGENT_IPC.CANCEL, async () => {
+    cancelPendingAgentApprovals(agentRunId ?? undefined)
     agentAbort?.abort()
+    return { ok: true }
+  })
+
+  ipcMain.handle(AGENT_IPC.APPROVE, async (_event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return { ok: false, error: 'Invalid approval' }
+    const response = raw as Partial<AgentApprovalResponse>
+    const decision = response.decision as AgentApprovalDecision | undefined
+    if (
+      typeof response.runId !== 'string' ||
+      typeof response.approvalId !== 'string' ||
+      (decision !== 'deny' && decision !== 'once' && decision !== 'always')
+    ) {
+      return { ok: false, error: 'Invalid approval' }
+    }
+
+    const pending = pendingAgentApprovals.get(response.approvalId)
+    if (!pending || pending.runId !== response.runId) {
+      return { ok: false, error: 'This approval is no longer active' }
+    }
+    if (decision === 'always') {
+      if (!pending.suggestedRule) {
+        return { ok: false, error: 'This command cannot be permanently allowed' }
+      }
+      addAgentAlwaysAllowedCommand(pending.suggestedRule)
+    }
+    pending.settle(decision !== 'deny')
     return { ok: true }
   })
 
@@ -762,18 +1055,19 @@ export function registerIpcHandlers(
       return { ok: false, error: 'Invalid turn' }
     }
     try {
-      upsertChatSession({
+      await upsertChatSession({
         id: s.id,
         title: s.title,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
       })
-      appendChatTurn(s.id, {
+      await appendChatTurn(s.id, {
         id: t.id,
         role: t.role,
         text: t.text,
         stages: Array.isArray(t.stages) ? (t.stages as Stage[]) : undefined,
         error: typeof t.error === 'string' ? t.error : undefined,
+        attachments: normalizeChatAttachments(t.attachments),
         createdAt: t.createdAt,
       })
       return { ok: true }
@@ -789,7 +1083,7 @@ export function registerIpcHandlers(
       return { ok: false }
     }
     try {
-      updateChatSessionTitle(body.id, body.title)
+      await updateChatSessionTitle(body.id, body.title)
       return { ok: true }
     } catch {
       return { ok: false }
@@ -798,12 +1092,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle(CHAT_IPC.DELETE, async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id) return { ok: false }
-    return { ok: deleteChatSession(id) }
+    return { ok: await deleteChatSession(id) }
   })
 
   ipcMain.handle(CHAT_IPC.CLEAR, async () => {
     try {
-      clearAllChatSessions()
+      await clearAllChatSessions()
       return { ok: true }
     } catch {
       return { ok: false }
@@ -922,11 +1216,11 @@ export function registerIpcHandlers(
     const argumentValues =
       body.argumentValues && typeof body.argumentValues === 'object'
         ? Object.fromEntries(
-          Object.entries(body.argumentValues as Record<string, unknown>).map(([key, value]) => [
-            key,
-            typeof value === 'string' ? value : String(value ?? ''),
-          ])
-        )
+            Object.entries(body.argumentValues as Record<string, unknown>).map(([key, value]) => [
+              key,
+              typeof value === 'string' ? value : String(value ?? ''),
+            ])
+          )
         : undefined
 
     return runExtensionCommand({
@@ -954,11 +1248,17 @@ export function registerIpcHandlers(
     const formValues =
       body.formValues && typeof body.formValues === 'object'
         ? Object.fromEntries(
-          Object.entries(body.formValues as Record<string, unknown>).map(([key, value]) => [
-            key,
-            typeof value === 'string' ? value : String(value ?? ''),
-          ])
-        )
+            Object.entries(body.formValues as Record<string, unknown>).map(([key, value]) => [
+              key,
+              Array.isArray(value)
+                ? value.filter((entry): entry is string => typeof entry === 'string')
+                : typeof value === 'string' ||
+                    typeof value === 'boolean' ||
+                    typeof value === 'number'
+                  ? value
+                  : String(value ?? ''),
+            ])
+          )
         : undefined
 
     return invokeExtensionAction({
@@ -1047,6 +1347,14 @@ export function registerIpcHandlers(
     return getRegistryExtensionPreferences(body.extensionId, commandName)
   })
 
+  ipcMain.handle('preferences:setup', async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') return null
+    const body = payload as { extensionId?: unknown; commandName?: unknown }
+    if (typeof body.extensionId !== 'string' || !body.extensionId.trim()) return null
+    const commandName = typeof body.commandName === 'string' ? body.commandName : undefined
+    return getExtensionPreferenceSetup(body.extensionId, commandName)
+  })
+
   ipcMain.handle('preferences:set', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') return {}
     const body = payload as {
@@ -1069,6 +1377,10 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.PATH_COMPLETE, async (_event, query: unknown) => {
     const q = typeof query === 'string' ? query : ''
     return completePath(q)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path: unknown) => {
+    if (typeof path === 'string') recordDirectoryVisit(path)
   })
 
   ipcMain.handle(IPC_CHANNELS.SEARCH_BENCHMARK_RUN, async () => {
@@ -1218,7 +1530,8 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle('storage:clipboard-config:set', async (_event, payload: unknown) => {
-    const patch = typeof payload === 'object' && payload !== null ? (payload as Partial<ClipboardConfig>) : {}
+    const patch =
+      typeof payload === 'object' && payload !== null ? (payload as Partial<ClipboardConfig>) : {}
     setClipboardStorageConfig(patch)
     return getClipboardStorageConfig()
   })

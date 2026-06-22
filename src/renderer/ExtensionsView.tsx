@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ExtensionManifest, InstalledExtension } from '../shared/extensions'
+import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import type { ExtensionManifest } from '../shared/extensions'
 import {
   Button,
   Hint,
@@ -11,10 +11,14 @@ import {
   cx,
 } from './ui/primitives'
 import { GlideList } from './ui/GlideList'
+import { ExtensionPreferencesEditor } from './ExtensionPreferencesEditor'
+import {
+  extensionCatalogReducer,
+  INITIAL_EXTENSION_CATALOG_STATE,
+} from './extensionCatalogState'
 
 type StoreExtension = ExtensionManifest
 type ImageVariant = 'icon' | 'avatar' | 'screenshot'
-
 const EXTENSION_IMAGE_CACHE = 'tezbar-extension-images-v1'
 
 const imageObjectUrls = new Map<string, string>()
@@ -95,7 +99,7 @@ function CachedImage({
   alt?: string
   className?: string
   variant: ImageVariant
-}): JSX.Element {
+}): ReactNode {
   const normalized = imageSrcFromPathOrUrl(src)
   const [resolvedSrc, setResolvedSrc] = useState(normalized)
 
@@ -191,41 +195,40 @@ function AuthorAvatar({ ext }: { ext: StoreExtension }): JSX.Element {
   )
 }
 
-export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.Element {
-  const [query, setQuery] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [installing, setInstalling] = useState<Record<string, number>>({})
-  const [store, setStore] = useState<StoreExtension[]>([])
-  const [installed, setInstalled] = useState<InstalledExtension[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [followSelection, setFollowSelection] = useState(true)
-  const [msg, setMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
+export default function ExtensionsView({
+  onBack,
+  embedded = false,
+}: {
+  onBack: () => void
+  embedded?: boolean
+}): JSX.Element {
+  const [catalog, dispatchCatalog] = useReducer(
+    extensionCatalogReducer,
+    INITIAL_EXTENSION_CATALOG_STATE,
+  )
+  const { query, loading, installing, store, installed, selectedId, followSelection } = catalog
+  const msg = catalog.message
   const rootRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const showMessage = useCallback((message: { tone: 'success' | 'error'; text: string }) => {
+    dispatchCatalog({ type: 'message', message })
+  }, [])
 
   useEffect(() => {
     const cleanup = window.tezbar.onExtensionInstallProgress((payload) => {
-      setInstalling((prev) => ({ ...prev, [payload.id]: payload.progress }))
-      if (payload.progress >= 100) {
-        setInstalling((prev) => {
-          const next = { ...prev }
-          delete next[payload.id]
-          return next
-        })
-      }
+      dispatchCatalog({ type: 'install-progress', ...payload })
     })
     return cleanup
   }, [])
 
   const reload = useCallback(async () => {
-    setLoading(true)
+    dispatchCatalog({ type: 'load-started' })
     try {
       const [installedList, storeList] = await Promise.all([
         window.tezbar.extensionList(),
         window.tezbar.extensionSearchStore(query),
       ])
-      setInstalled(
-        installedList.map((entry) => ({
+      const normalizedInstalled = installedList.map((entry) => ({
           id: entry.id,
           name: entry.name,
           description: entry.description,
@@ -236,11 +239,17 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
           installedAt: entry.installedAt,
           iconUrl: entry.iconPath,
           authorIconUrl: entry.authorIconUrl,
-        })),
-      )
-      setStore(storeList)
-    } finally {
-      setLoading(false)
+        }))
+      dispatchCatalog({
+        type: 'load-succeeded',
+        installed: normalizedInstalled,
+        store: storeList,
+      })
+    } catch (error) {
+      dispatchCatalog({
+        type: 'load-failed',
+        message: error instanceof Error ? error.message : 'Could not load extensions',
+      })
     }
   }, [query])
 
@@ -254,11 +263,11 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
 
   useEffect(() => {
     if (store.length === 0) {
-      setSelectedId(null)
+      dispatchCatalog({ type: 'selected', id: null, follow: true })
       return
     }
     if (!selectedId || !store.some((ext) => ext.id === selectedId)) {
-      setSelectedId(store[0]?.id ?? null)
+      dispatchCatalog({ type: 'selected', id: store[0]?.id ?? null, follow: true })
     }
   }, [selectedId, store])
 
@@ -276,28 +285,32 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
     (ext: StoreExtension): void => {
       const isInstalled = installedIds.has(ext.id)
       if (!isInstalled) {
-        setInstalling((prev) => ({ ...prev, [ext.id]: 1 }))
+        dispatchCatalog({ type: 'install-started', id: ext.id })
       }
       const action = isInstalled
         ? window.tezbar.extensionUninstall(ext.id)
         : window.tezbar.extensionInstall(ext.id)
       void action
         .then(() => {
-          setInstalling((prev) => {
-            const next = { ...prev }
-            delete next[ext.id]
-            return next
+          dispatchCatalog({
+            type: 'install-finished',
+            id: ext.id,
+            message: {
+              tone: 'success',
+              text: `${isInstalled ? 'Removed' : 'Installed'} ${ext.name}`,
+            },
           })
-          setMsg({ tone: 'success', text: `${isInstalled ? 'Removed' : 'Installed'} ${ext.name}` })
           return reload()
         })
         .catch((error: unknown) => {
-          setInstalling((prev) => {
-            const next = { ...prev }
-            delete next[ext.id]
-            return next
+          dispatchCatalog({
+            type: 'install-finished',
+            id: ext.id,
+            message: {
+              tone: 'error',
+              text: error instanceof Error ? error.message : 'Action failed',
+            },
           })
-          setMsg({ tone: 'error', text: error instanceof Error ? error.message : 'Action failed' })
         })
     },
     [installedIds, reload],
@@ -320,15 +333,13 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
       if (event.key === 'ArrowDown') {
         event.preventDefault()
         const next = Math.min(selectedIndex + 1, store.length - 1)
-        setFollowSelection(true)
-        setSelectedId(store[next]?.id ?? null)
+        dispatchCatalog({ type: 'selected', id: store[next]?.id ?? null, follow: true })
         return
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault()
         const next = Math.max(selectedIndex - 1, 0)
-        setFollowSelection(true)
-        setSelectedId(store[next]?.id ?? null)
+        dispatchCatalog({ type: 'selected', id: store[next]?.id ?? null, follow: true })
         return
       }
       if (event.key === 'Enter' && selected) {
@@ -351,9 +362,12 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
       tabIndex={-1}
       role="application"
       aria-label="Extensions"
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className={cx(
+        'flex h-full min-h-0 w-full flex-col outline-none animate-tezbar-scale-in',
+        embedded ? 'gap-0' : 'gap-2',
+      )}
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
+      {!embedded ? <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
           title="Extensions"
           onBack={onBack}
@@ -367,12 +381,12 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
           <TextField
             ref={searchRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => dispatchCatalog({ type: 'query', query: event.target.value })}
             placeholder="Search extension store"
             autoFocus
           />
         </div>
-      </div>
+      </div> : null}
 
       <section className="grid min-h-0 flex-1 grid-cols-[224px_minmax(0,1fr)] gap-2 animate-tezbar-scale-in">
         <aside className="glass-card flex min-h-0 flex-col overflow-hidden px-1.5 py-2">
@@ -403,13 +417,11 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
                     <button
                       type="button"
                       onMouseEnter={() => {
-                        setFollowSelection(false)
-                        setSelectedId(ext.id)
+                        dispatchCatalog({ type: 'selected', id: ext.id, follow: false })
                       }}
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => {
-                        setFollowSelection(true)
-                        setSelectedId(ext.id)
+                        dispatchCatalog({ type: 'selected', id: ext.id, follow: true })
                       }}
                       className={cx(
                         'relative flex w-full items-center gap-2 rounded-tezbar-row px-1.5 py-1.5 text-left transition',
@@ -536,6 +548,14 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
                         </div>
                       </div>
                     </div>
+                    {selectedInstalled ? (
+                      <ExtensionPreferencesEditor
+                        extensionId={selected.id}
+                        extensionName={selected.name}
+                        commands={selected.commands ?? []}
+                        onMessage={showMessage}
+                      />
+                    ) : null}
                   </div>
 
                   <aside className="border-l border-white/10 px-5 py-6">
@@ -613,14 +633,14 @@ export default function ExtensionsView({ onBack }: { onBack: () => void }): JSX.
         </div>
       ) : null}
 
-      <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
+      {!embedded ? <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
         <HintBar>
           <Hint label="Search" keys={<Kbd>/</Kbd>} />
           <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
           <Hint label="Install / Remove" keys={<Kbd>↵</Kbd>} />
           <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
         </HintBar>
-      </div>
+      </div> : null}
     </div>
   )
 }

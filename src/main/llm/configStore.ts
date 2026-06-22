@@ -71,6 +71,28 @@ export function setSafetyDryRun(value: boolean): void {
   writeConfigPatch({ safetyDryRun: value })
 }
 
+export function getAgentAlwaysAllowedCommands(): string[] {
+  const value = readRawConfig().agentAlwaysAllowedCommands
+  if (!Array.isArray(value)) return []
+  return Array.from(
+    new Set(
+      value.filter(
+        (entry): entry is string =>
+          typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)
+      )
+    )
+  )
+}
+
+export function addAgentAlwaysAllowedCommand(command: string): void {
+  if (!/^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(command)) return
+  writeConfigPatch({
+    agentAlwaysAllowedCommands: Array.from(
+      new Set([...getAgentAlwaysAllowedCommands(), command.toLowerCase()])
+    ),
+  })
+}
+
 export function getPersistedWindowPosition(): { x: number; y: number } | null {
   const raw = readRawConfig()
   const pos = raw.windowPosition as { x: number; y: number } | undefined

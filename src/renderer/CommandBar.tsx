@@ -1,11 +1,16 @@
-import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
-import type { Intent } from '../shared/intent'
 import {
-  defaultModels,
-  normalizeProviderModelList,
-} from '../shared/aiProviders'
+  type DragEvent,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import type { Intent } from '../shared/intent'
+import { defaultModels, normalizeProviderModelList } from '../shared/aiProviders'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
-import type { PathCompletionItem, SearchResult } from '../shared/search'
+import type { IconAssetKind, PathCompletionItem, SearchResult } from '../shared/search'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
 import { Hint, HintBar, Kbd, Message, SelectField, TextField, cx } from './ui/primitives'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
@@ -19,7 +24,7 @@ import { parseCurrencyQuery } from './currency/parseCurrencyQuery'
 import type { ChatSessionSummary } from '../shared/chat'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
-import type { TerminalPromptInfo } from '../shared/terminal'
+import { compactTerminalPath, type TerminalPromptInfo } from '../shared/terminal'
 import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 import { ModelPicker } from './ModelPicker'
@@ -28,11 +33,12 @@ const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
 const PINNED_COMMANDS_KEY = 'tezbar:pinned-commands'
 const MAX_PINNED_COMMANDS = 9
+const COMMAND_HINT = { shortcut: '>', label: 'Open terminal' } as const
 const COMMAND_HINTS = [
   { shortcut: '/directory', label: 'Search files and folders' },
   { shortcut: '`', label: 'Browse applications' },
   { shortcut: 'SPACE', label: 'Enter AI Space' },
-  { shortcut: '>', label: 'Open terminal' },
+  COMMAND_HINT,
 ] as const
 const PIN_ICON_CHOICES = [
   '📌',
@@ -116,7 +122,7 @@ function readRecentExtensionCommands(): string[] {
 function writeRecentExtensionCommands(next: string[]): void {
   window.localStorage.setItem(
     RECENT_EXTENSION_COMMANDS_KEY,
-    JSON.stringify(next.slice(0, RECENT_EXTENSION_COMMANDS_LIMIT)),
+    JSON.stringify(next.slice(0, RECENT_EXTENSION_COMMANDS_LIMIT))
   )
 }
 
@@ -138,7 +144,9 @@ function readPinnedCommands(): PinnedCommand[] {
 
         const hasValidIcon = PIN_ICON_CHOICES.includes(icon)
         const hasValidAction =
-          typeof action === 'object' && action !== null && typeof (action as { type?: unknown }).type === 'string'
+          typeof action === 'object' &&
+          action !== null &&
+          typeof (action as { type?: unknown }).type === 'string'
 
         if (!id || !title || typeof category !== 'string' || !hasValidAction || !hasValidIcon) {
           return null
@@ -146,7 +154,9 @@ function readPinnedCommands(): PinnedCommand[] {
 
         const rawSlot = item?.slot
         const slotNum =
-          typeof rawSlot === 'number' && rawSlot >= 1 && rawSlot <= 9 ? Math.floor(rawSlot) : undefined
+          typeof rawSlot === 'number' && rawSlot >= 1 && rawSlot <= 9
+            ? Math.floor(rawSlot)
+            : undefined
 
         return {
           id,
@@ -168,7 +178,10 @@ function readPinnedCommands(): PinnedCommand[] {
 }
 
 function writePinnedCommands(next: PinnedCommand[]): void {
-  window.localStorage.setItem(PINNED_COMMANDS_KEY, JSON.stringify(next.slice(0, MAX_PINNED_COMMANDS)))
+  window.localStorage.setItem(
+    PINNED_COMMANDS_KEY,
+    JSON.stringify(next.slice(0, MAX_PINNED_COMMANDS))
+  )
 }
 
 function parseDigitIndex(key: string): number | null {
@@ -221,7 +234,11 @@ function nextFreePinSlot(pins: PinnedCommand[]): number {
   return 1
 }
 
-function reorderPinnedByDrop(pins: PinnedCommand[], draggedId: string, targetId: string): PinnedCommand[] {
+function reorderPinnedByDrop(
+  pins: PinnedCommand[],
+  draggedId: string,
+  targetId: string
+): PinnedCommand[] {
   const from = pins.findIndex((p) => p.id === draggedId)
   const to = pins.findIndex((p) => p.id === targetId)
   if (from < 0 || to < 0 || from === to) return pins
@@ -263,9 +280,204 @@ function TerminalIcon(): JSX.Element {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
       <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M4 5.5L6.5 7L4 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M4 5.5L6.5 7L4 8.5"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       <path d="M8 9.5H10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
+  )
+}
+
+type ListItemIconKind = PathCompletionItem['kind'] | SearchResult['category']
+
+const resolvedAssetIconCache = new Map<string, string | null>()
+const pendingAssetIconCache = new Map<string, Promise<string | null>>()
+
+function loadAssetIcon(kind: IconAssetKind, path: string): Promise<string | null> {
+  const key = `${kind}:${path}`
+  if (resolvedAssetIconCache.has(key)) {
+    return Promise.resolve(resolvedAssetIconCache.get(key) ?? null)
+  }
+  const pending = pendingAssetIconCache.get(key)
+  if (pending) return pending
+
+  const request = window.tezbar
+    .getAssetIconDataUrl(kind, path)
+    .then((icon) => {
+      resolvedAssetIconCache.set(key, icon)
+      return icon
+    })
+    .catch(() => {
+      resolvedAssetIconCache.set(key, null)
+      return null
+    })
+    .finally(() => pendingAssetIconCache.delete(key))
+  pendingAssetIconCache.set(key, request)
+  return request
+}
+
+function ListItemIcon({
+  kind,
+  iconDataUrl,
+  assetKind,
+  assetPath,
+}: {
+  kind: ListItemIconKind
+  iconDataUrl?: string
+  assetKind?: IconAssetKind
+  assetPath?: string
+}): ReactNode {
+  const iconContainerRef = useRef<HTMLSpanElement>(null)
+  const [loadedAssetIcon, setLoadedAssetIcon] = useState<{
+    key: string
+    icon: string
+  } | null>(null)
+  const assetKey = assetKind && assetPath ? `${assetKind}:${assetPath}` : null
+  const resolvedIconDataUrl =
+    (loadedAssetIcon && loadedAssetIcon.key === assetKey ? loadedAssetIcon.icon : undefined) ??
+    iconDataUrl
+
+  useEffect(() => {
+    if (!assetKind || !assetPath) return
+
+    let cancelled = false
+    const load = (): void => {
+      void loadAssetIcon(assetKind, assetPath).then((icon) => {
+        if (!cancelled && icon) setLoadedAssetIcon({ key: `${assetKind}:${assetPath}`, icon })
+      })
+    }
+    const element = iconContainerRef.current
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      load()
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        observer.disconnect()
+        load()
+      },
+      { rootMargin: '80px' }
+    )
+    observer.observe(element)
+    return () => {
+      cancelled = true
+      observer.disconnect()
+    }
+  }, [assetKind, assetPath])
+
+  const tone =
+    kind === 'directory'
+      ? 'border-sky-400/20 bg-sky-400/10 text-sky-300'
+      : kind === 'application' || kind === 'applications'
+        ? 'border-violet-400/20 bg-violet-400/10 text-violet-300'
+        : kind === 'extensions' || kind === 'store'
+          ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
+          : kind === 'clipboard'
+            ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+            : 'border-white/10 bg-white/[0.04] text-ink-3'
+
+  const glyph = (() => {
+    if (kind === 'directory') {
+      return <path d="M2 4.5h3l1 1h6v5.75a.75.75 0 0 1-.75.75h-8.5a.75.75 0 0 1-.75-.75V4.5Z" />
+    }
+    if (kind === 'application' || kind === 'applications') {
+      return (
+        <>
+          <rect x="2" y="2" width="4" height="4" rx="1" />
+          <rect x="8" y="2" width="4" height="4" rx="1" />
+          <rect x="2" y="8" width="4" height="4" rx="1" />
+          <rect x="8" y="8" width="4" height="4" rx="1" />
+        </>
+      )
+    }
+    if (kind === 'extensions' || kind === 'store') {
+      return <path d="M5.25 2.25h3.5v2h2.75v3.5h-2v3.5H6v-2H2.5v-3.5h2.75v-3.5Z" />
+    }
+    if (kind === 'clipboard') {
+      return (
+        <>
+          <rect x="3" y="3.5" width="8" height="8.5" rx="1.25" />
+          <path d="M5.25 4V2.75h3.5V4M5 7h4M5 9.5h3" />
+        </>
+      )
+    }
+    if (kind === 'quick-notes' || kind === 'snippets') {
+      return (
+        <>
+          <path d="M3 2h8v10H3zM5 5h4M5 7.5h4" />
+          <path d="M8 12v-2h3" />
+        </>
+      )
+    }
+    if (kind === 'quick-links') {
+      return (
+        <>
+          <path d="M5.75 8.25 8.25 5.75" />
+          <path d="M4.75 9.75H4a2.25 2.25 0 0 1 0-4.5h2M9.25 4.25H10a2.25 2.25 0 0 1 0 4.5H8" />
+        </>
+      )
+    }
+    if (kind === 'native-command' || kind === 'commands' || kind === 'mac-cli') {
+      return (
+        <>
+          <rect x="1.75" y="2.25" width="10.5" height="9.5" rx="1.5" />
+          <path d="m4 5 2 2-2 2M7.5 9h2.5" />
+        </>
+      )
+    }
+    return (
+      <>
+        <path d="M3 1.75h5l3 3V12H3z" />
+        <path d="M8 1.75v3h3" />
+      </>
+    )
+  })()
+
+  return (
+    <span
+      ref={iconContainerRef}
+      aria-hidden
+      className={cx(
+        'relative grid h-7 w-7 shrink-0 place-items-center',
+        resolvedIconDataUrl
+          ? 'overflow-visible border border-transparent bg-transparent'
+          : cx('overflow-hidden rounded-[7px] border', tone)
+      )}
+    >
+      {!resolvedIconDataUrl ? (
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.15"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          {glyph}
+        </svg>
+      ) : null}
+      {resolvedIconDataUrl ? (
+        <img
+          src={resolvedIconDataUrl}
+          alt=""
+          className="absolute inset-0 h-full w-full object-contain"
+          draggable={false}
+          onError={(event) => {
+            event.currentTarget.style.display = 'none'
+          }}
+        />
+      ) : null}
+    </span>
   )
 }
 
@@ -273,6 +485,38 @@ function pathCompletionSectionLabel(section: PathCompletionItem['section']): str
   if (section === 'recommended') return 'Recommended'
   if (section === 'default') return 'Default'
   if (section === 'applications') return 'All Applications'
+  return null
+}
+
+function completionIconAsset(item: PathCompletionItem): {
+  kind: IconAssetKind
+  path: string
+} | null {
+  if (item.kind === 'application') {
+    const appPath = item.appPath ?? (item.applicationAction === 'open' ? item.path : undefined)
+    return appPath ? { kind: 'application', path: appPath } : null
+  }
+  if (item.kind === 'file' && item.path) return { kind: 'file', path: item.path }
+  return null
+}
+
+function searchResultIconAsset(item: SearchResult): {
+  kind: IconAssetKind
+  path: string
+} | null {
+  if (item.category === 'applications' && item.subtitle.endsWith('.app')) {
+    return { kind: 'application', path: item.subtitle }
+  }
+  if (item.category === 'files' && item.action.type === 'open-file') {
+    return { kind: 'file', path: item.action.path }
+  }
+  if (
+    item.category === 'extensions' &&
+    item.action.type === 'run-extension-command' &&
+    item.action.iconPath
+  ) {
+    return { kind: 'extension', path: item.action.iconPath }
+  }
   return null
 }
 
@@ -303,7 +547,7 @@ export default function CommandBar({
   onOpenSnippetsPage: () => void
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
   onOpenEmojiPicker: () => void
-  onOpenTerminal: (initialCommand?: string) => void
+  onOpenTerminal: (initialCommand?: string, workingDirectory?: string) => void
 }): JSX.Element {
   const [value, setValue] = useState(initialValue)
   const [lastIntent, setLastIntent] = useState<Intent | null>(null)
@@ -350,21 +594,19 @@ export default function CommandBar({
   const isAiMode = value.startsWith(' ') || value.endsWith('  ')
   const agentTask = isAiMode ? value.trim() : ''
 
-  const [pendingAction, setPendingAction] = useState<
-    | {
-      extensionId: string
-      commandName: string
-      title: string
-      commandArgumentDefinitions: PendingExtensionArgument[]
-    }
-    | null
-  >(null)
+  const [pendingAction, setPendingAction] = useState<{
+    extensionId: string
+    commandName: string
+    title: string
+    commandArgumentDefinitions: PendingExtensionArgument[]
+  } | null>(null)
   const [argumentValues, setArgumentValues] = useState<Record<string, string>>({})
   const [killPortMode, setKillPortMode] = useState(false)
   const [killPortQuery, setKillPortQuery] = useState('')
   const [killPortValue, setKillPortValue] = useState('')
   const [terminalMode, setTerminalMode] = useState(false)
   const [terminalPrompt, setTerminalPrompt] = useState('')
+  const terminalWorkingDirectoryRef = useRef<string | undefined>()
   const argInputRefs = useRef<Array<HTMLInputElement | HTMLSelectElement | null>>([])
   const gotAnyTokenRef = useRef(false)
   const pinPickerOpenRef = useRef(false)
@@ -401,7 +643,8 @@ export default function CommandBar({
     }
     void window.tezbar.getTerminalPromptInfo().then((info: TerminalPromptInfo) => {
       if (info) {
-        const prompt = `${info.user}@${info.host} ${info.dir} %`
+        const directory = compactTerminalPath(terminalWorkingDirectoryRef.current || info.dir)
+        const prompt = `${info.user}@${info.host} ${directory} %`
         setTerminalPrompt(prompt)
       }
     })
@@ -600,18 +843,23 @@ export default function CommandBar({
 
   const visibleSearchResults = useMemo(() => {
     if (killPortMode) {
-      const killProcessResult = searchResults.find((item) => item.id === 'extcmd:raycast.kill-process:index')
+      const killProcessResult = searchResults.find(
+        (item) => item.id === 'extcmd:raycast.kill-process:index'
+      )
       return [
         ...(killPortCommandResult ? [killPortCommandResult] : []),
         ...(killProcessResult ? [killProcessResult] : []),
       ]
     }
     const withoutDuplicatePort = killPortCommandResult
-      ? searchResults.filter((item) => item.id !== 'extcmd:raycast.port-manager:kill-listening-process')
+      ? searchResults.filter(
+          (item) => item.id !== 'extcmd:raycast.port-manager:kill-listening-process'
+        )
       : searchResults
-    const withoutDuplicateColorRows = colorConversionRows.length > 0
-      ? withoutDuplicatePort.filter((item) => item.category !== 'color-converter')
-      : withoutDuplicatePort
+    const withoutDuplicateColorRows =
+      colorConversionRows.length > 0
+        ? withoutDuplicatePort.filter((item) => item.category !== 'color-converter')
+        : withoutDuplicatePort
     const base = [
       ...(killPortCommandResult ? [killPortCommandResult] : []),
       ...colorConversionRows,
@@ -638,7 +886,7 @@ export default function CommandBar({
 
   const suggestions = useMemo(
     () => (isCompletionInput ? pathCompletions : []),
-    [isCompletionInput, pathCompletions],
+    [isCompletionInput, pathCompletions]
   )
 
   useEffect(() => {
@@ -667,11 +915,21 @@ export default function CommandBar({
         setSearchResults([])
         return
       }
-      void window.tezbar.searchAll(value).then((items) => {
-        if (!cancelled && requestId === lastSearchRequestId.current) {
-          setSearchResults(items)
-        }
-      })
+      void window.tezbar
+        .searchAll(value)
+        .then((items) => {
+          if (!cancelled && requestId === lastSearchRequestId.current) {
+            setSearchResults(items)
+            setError(null)
+          }
+        })
+        .catch((searchError: unknown) => {
+          if (!cancelled && requestId === lastSearchRequestId.current) {
+            setSearchResults([])
+            const detail = searchError instanceof Error ? searchError.message : String(searchError)
+            setError(`Search unavailable: ${detail}`)
+          }
+        })
     }, 120)
     return () => {
       cancelled = true
@@ -680,7 +938,8 @@ export default function CommandBar({
   }, [isAiMode, isCompletionInput, terminalMode, value])
 
   useEffect(() => {
-    if (isCompletionInput || searchResults.length === 0 || recentExtensionCommands.length === 0) return
+    if (isCompletionInput || searchResults.length === 0 || recentExtensionCommands.length === 0)
+      return
     // When the calc row is present it owns index 0 and should stay
     // selected — typing `2+2` should not jump to a recent app.
     if (calcResultRow) return
@@ -689,7 +948,14 @@ export default function CommandBar({
     if (idx >= 0 && idx < visibleSearchCount) {
       setSelectedSearch(idx)
     }
-  }, [isCompletionInput, recentExtensionCommands, searchResults, visibleSearchResults, visibleSearchCount, calcResultRow])
+  }, [
+    isCompletionInput,
+    recentExtensionCommands,
+    searchResults,
+    visibleSearchResults,
+    visibleSearchCount,
+    calcResultRow,
+  ])
 
   // Keep the selection inside the rendered range whenever the result set
   // changes (e.g. user starts typing a narrower query).
@@ -708,7 +974,10 @@ export default function CommandBar({
   useEffect(() => {
     if (suggestions.length === 0) return
     const firstAppIndex = suggestions.findIndex(
-      (item) => item.kind === 'application' && item.applicationAction === 'open-with' && item.section !== 'default',
+      (item) =>
+        item.kind === 'application' &&
+        item.applicationAction === 'open-with' &&
+        item.section !== 'default'
     )
     if (firstAppIndex >= 0) {
       setSelectedSuggestion(firstAppIndex)
@@ -719,7 +988,10 @@ export default function CommandBar({
 
   const trackExtensionCommand = (extensionId: string, commandName: string): void => {
     const id = buildRecentExtensionCommandId(extensionId, commandName)
-    const next = [id, ...recentExtensionCommands.filter((v) => v !== id)].slice(0, RECENT_EXTENSION_COMMANDS_LIMIT)
+    const next = [id, ...recentExtensionCommands.filter((v) => v !== id)].slice(
+      0,
+      RECENT_EXTENSION_COMMANDS_LIMIT
+    )
     setRecentExtensionCommands(next)
     writeRecentExtensionCommands(next)
   }
@@ -948,7 +1220,10 @@ export default function CommandBar({
     })
   }
 
-  async function runSelectedSearchResult(result: SearchResult, rank = selectedSearch + 1): Promise<void> {
+  async function runSelectedSearchResult(
+    result: SearchResult,
+    rank = selectedSearch + 1
+  ): Promise<void> {
     if (result.action.type === 'invoke-command') {
       clearPendingAction()
       showActionMsg(null)
@@ -999,7 +1274,8 @@ export default function CommandBar({
     if (
       result.action.type === 'run-extension-command' &&
       result.action.extensionId === 'raycast.port-manager' &&
-      (result.action.commandName === 'open-ports' || result.action.commandName === 'open-ports-menu-bar')
+      (result.action.commandName === 'open-ports' ||
+        result.action.commandName === 'open-ports-menu-bar')
     ) {
       clearPendingAction()
       showActionMsg(null)
@@ -1078,10 +1354,7 @@ export default function CommandBar({
       return
     }
 
-    if (
-      result.action.type === 'run-native-command' &&
-      result.action.commandId === 'quit-tezbar'
-    ) {
+    if (result.action.type === 'run-native-command' && result.action.commandId === 'quit-tezbar') {
       clearPendingAction()
       showActionMsg(null)
       await window.tezbar.appQuit()
@@ -1112,18 +1385,19 @@ export default function CommandBar({
       }
 
       const defs =
-        Array.isArray(result.action.commandArgumentDefinitions) && result.action.commandArgumentDefinitions.length > 0
+        Array.isArray(result.action.commandArgumentDefinitions) &&
+        result.action.commandArgumentDefinitions.length > 0
           ? result.action.commandArgumentDefinitions
           : result.action.argumentName
             ? [
-              {
-                name: 'argument',
-                title: result.action.argumentName,
-                placeholder: result.action.argumentName,
-                required: true,
-                type: 'text',
-              } satisfies PendingExtensionArgument,
-            ]
+                {
+                  name: 'argument',
+                  title: result.action.argumentName,
+                  placeholder: result.action.argumentName,
+                  required: true,
+                  type: 'text',
+                } satisfies PendingExtensionArgument,
+              ]
             : []
 
       const requiredDefs = defs.filter((def) => def.required)
@@ -1134,7 +1408,7 @@ export default function CommandBar({
             acc[def.name] = ''
             return acc
           },
-          {} as Record<string, string>,
+          {} as Record<string, string>
         )
 
         setPendingAction({
@@ -1207,6 +1481,7 @@ export default function CommandBar({
       void openPathCompletion(item)
       return
     }
+    if (item.path) void window.tezbar.recordDirectoryVisit(item.path)
     setValue(item.value)
     setSelectedSuggestion(0)
     requestAnimationFrame(() => focusCommandInput())
@@ -1254,6 +1529,7 @@ export default function CommandBar({
         setValue('')
         setTerminalMode(false)
         setTerminalPrompt('')
+        terminalWorkingDirectoryRef.current = undefined
         focusCommandInput()
         return true
       }
@@ -1419,10 +1695,11 @@ export default function CommandBar({
 
     if (terminalMode) {
       const initialCommand = value.trim() || undefined
-      onOpenTerminal(initialCommand)
+      onOpenTerminal(initialCommand, terminalWorkingDirectoryRef.current)
       setValue('')
       setTerminalMode(false)
       setTerminalPrompt('')
+      terminalWorkingDirectoryRef.current = undefined
       return
     }
 
@@ -1446,7 +1723,7 @@ export default function CommandBar({
     if (isSlashInput && value.trim()) {
       await window.tezbar.executeSearchAction(
         { type: 'open-file', path: value.trim() },
-        { query: value.trim(), resultId: `path-direct:${value.trim()}` },
+        { query: value.trim(), resultId: `path-direct:${value.trim()}` }
       )
       setValue('')
       setPathCompletions([])
@@ -1492,6 +1769,12 @@ export default function CommandBar({
     !isCompletionInput && !isAiMode && !terminalMode && visibleSearchCount > 0
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (isAiMode && (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault()
+      onOpenAiChat({ kind: 'screen' })
+      return
+    }
+
     if (pinPickerTarget) {
       // While pin picker is open, global key handling owns navigation.
       return
@@ -1515,11 +1798,39 @@ export default function CommandBar({
       e.preventDefault()
       setTerminalMode(false)
       setTerminalPrompt('')
+      terminalWorkingDirectoryRef.current = undefined
       return
     }
 
-    if (e.key === '>' && !terminalMode && !value && !isAiMode && !killPortMode && !pendingAction && !pinPickerTarget) {
+    if (
+      isSlashInput &&
+      (e.key === ' ' || e.code === 'Space') &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      value === value.trimEnd()
+    ) {
+      // Treat the first space after a slash path as an explicit mode switch.
+      // Relying on the input event to preserve trailing whitespace proved
+      // unreliable in the Tauri webview.
       e.preventDefault()
+      setValue(`${value} `)
+      setSelectedSuggestion(0)
+      return
+    }
+
+    if (
+      e.key === '>' &&
+      !terminalMode &&
+      (!value || isSlashInput) &&
+      !isAiMode &&
+      !killPortMode &&
+      !pendingAction &&
+      !pinPickerTarget
+    ) {
+      e.preventDefault()
+      terminalWorkingDirectoryRef.current = isSlashInput ? value.trim() : undefined
+      setValue('')
       setTerminalMode(true)
       return
     }
@@ -1642,7 +1953,11 @@ export default function CommandBar({
       <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
           <div className="flex items-center gap-3">
-            <span className={cx(isAiMode ? 'text-violet-300' : terminalMode ? 'text-emerald-300' : 'text-ink-3')}>
+            <span
+              className={cx(
+                isAiMode ? 'text-violet-300' : terminalMode ? 'text-emerald-300' : 'text-ink-3'
+              )}
+            >
               {isAiMode ? <AiIcon /> : terminalMode ? <TerminalIcon /> : <SearchIcon />}
             </span>
             {isAiMode ? (
@@ -1652,15 +1967,6 @@ export default function CommandBar({
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
                 AI
-              </span>
-            ) : null}
-            {terminalMode ? (
-              <span
-                aria-label="Terminal mode"
-                className="inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200"
-              >
-                <span className="font-mono text-[11px] leading-none">&gt;_</span>
-                Terminal
               </span>
             ) : null}
             {killPortMode ? (
@@ -1693,7 +1999,16 @@ export default function CommandBar({
                   {terminalPrompt}
                 </span>
               ) : null}
-              {!killPortMode && !isAiMode && !terminalMode && !value ? <RollingText items={COMMAND_HINTS} /> : null}
+              {!killPortMode && !isAiMode && !terminalMode && !value ? (
+                <RollingText items={COMMAND_HINTS} />
+              ) : null}
+              {isSlashInput && !isAiMode ? (
+                <span className="path-command-hint" aria-hidden>
+                  <span className="path-command-hint__value">{value}</span>
+                  <span className="rolling-command-hint__shortcut">{COMMAND_HINT.shortcut}</span>
+                  <span className="rolling-command-hint__label">{COMMAND_HINT.label}</span>
+                </span>
+              ) : null}
               <input
                 id="command-input"
                 type="text"
@@ -1708,15 +2023,18 @@ export default function CommandBar({
                     showActionMsg(null)
                   }
                   let newValue = e.target.value
-                  if (!terminalMode && newValue.startsWith('>')) {
-                    setTerminalMode(true)
-                    newValue = newValue.slice(1)
+                  if (!terminalMode) {
+                    const separator = newValue.indexOf('>')
+                    const pathPrefix = separator > 0 ? newValue.slice(0, separator).trim() : ''
+                    if (separator === 0 || (separator > 0 && pathPrefix.startsWith('/'))) {
+                      terminalWorkingDirectoryRef.current = pathPrefix || undefined
+                      setTerminalMode(true)
+                      newValue = newValue.slice(separator + 1)
+                    }
                   }
                   setValue(newValue)
                   setSelectedSuggestion(0)
-                  setSelectedSearch(
-                    newValue.startsWith(' ') || newValue.endsWith('  ') ? -1 : 0
-                  )
+                  setSelectedSearch(newValue.startsWith(' ') || newValue.endsWith('  ') ? -1 : 0)
                 }}
                 onKeyDown={handleInputKeyDown}
                 aria-label="Search Tezbar or use a shortcut"
@@ -1744,7 +2062,7 @@ export default function CommandBar({
                 triggerClassName="font-mono leading-none tabular-nums tracking-normal"
               />
             ) : null}
-            {dictationSupported ? (
+            {dictationSupported && !terminalMode ? (
               <button
                 type="button"
                 className={cx(
@@ -1753,7 +2071,7 @@ export default function CommandBar({
                     ? 'border-rose-400/40 bg-rose-500/20 text-rose-200'
                     : isTranscribing
                       ? 'border-amber-400/40 bg-amber-500/15 text-amber-200'
-                      : 'border-white/10 bg-white/[0.03] text-ink-3 hover:text-ink-2',
+                      : 'border-white/10 bg-white/[0.03] text-ink-3 hover:text-ink-2'
                 )}
                 disabled={isTranscribing}
                 onMouseDown={(event) => {
@@ -1769,7 +2087,11 @@ export default function CommandBar({
                 onTouchEnd={stopDictation}
                 title="Hold to speak — or keep Option+Space held after opening Tezbar (macOS)"
               >
-                {isDictating ? 'Listening' : isTranscribing ? 'Transcribing…' : (
+                {isDictating ? (
+                  'Listening'
+                ) : isTranscribing ? (
+                  'Transcribing…'
+                ) : (
                   <span className="group">
                     <span className="group-hover:hidden">Hold to speak</span>
                     <span className="hidden group-hover:inline">hold cmd+space</span>
@@ -1817,7 +2139,9 @@ export default function CommandBar({
                   }}
                   className={cx(
                     'relative flex shrink-0 cursor-grab flex-col items-center gap-1 rounded-tezbar-row border border-white/10 bg-white/[0.03] px-1.5 py-1.5 transition active:cursor-grabbing',
-                    draggingPinId === pin.id ? 'opacity-45' : 'hover:border-white/20 hover:bg-white/[0.07]',
+                    draggingPinId === pin.id
+                      ? 'opacity-45'
+                      : 'hover:border-white/20 hover:bg-white/[0.07]'
                   )}
                 >
                   <button
@@ -1865,7 +2189,7 @@ export default function CommandBar({
                     'grid h-8 w-full place-items-center rounded-tezbar-chip border text-[14px] transition',
                     PIN_ICON_CHOICES[pinPickerIconIndex] === icon
                       ? 'border-accent/60 bg-accent/15 text-ink-1'
-                      : 'border-white/10 bg-white/[0.03] text-ink-2 hover:border-white/20 hover:text-ink-1',
+                      : 'border-white/10 bg-white/[0.03] text-ink-2 hover:border-white/20 hover:text-ink-1'
                   )}
                   title={`Icon ${index + 1}`}
                   onClick={() => {
@@ -1900,6 +2224,7 @@ export default function CommandBar({
               className="min-h-0 flex-1 overflow-y-auto"
             >
               {suggestions.map((item, i) => {
+                const iconAsset = completionIconAsset(item)
                 const sectionLabel =
                   i === 0 || suggestions[i - 1]?.section !== item.section
                     ? pathCompletionSectionLabel(item.section)
@@ -1922,18 +2247,12 @@ export default function CommandBar({
                       onClick={() => completePathInput(item)}
                     >
                       <span className="flex min-w-0 flex-1 items-center gap-3">
-                        {item.iconDataUrl ? (
-                          <img
-                            src={item.iconDataUrl}
-                            alt=""
-                            className="h-7 w-7 shrink-0 rounded-[7px]"
-                            draggable={false}
-                          />
-                        ) : item.kind === 'application' ? (
-                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] border border-white/10 bg-white/[0.04] text-[11px] font-semibold text-ink-3">
-                            {item.title.slice(0, 1).toUpperCase()}
-                          </span>
-                        ) : null}
+                        <ListItemIcon
+                          kind={item.kind}
+                          iconDataUrl={item.iconDataUrl}
+                          assetKind={iconAsset?.kind}
+                          assetPath={iconAsset?.path}
+                        />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate font-mono text-[12.5px] tracking-tight text-ink-1">
                             {item.title}
@@ -1988,7 +2307,9 @@ export default function CommandBar({
                 const placeholder = arg.placeholder || arg.title || arg.name
                 const currentValue = argumentValues[arg.name] ?? ''
 
-                const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>): void => {
+                const onKeyDown = (
+                  e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>
+                ): void => {
                   if (e.key === 'Escape') {
                     e.preventDefault()
                     cancelPendingAction()
@@ -1997,7 +2318,10 @@ export default function CommandBar({
                   if (e.key === 'Tab') {
                     e.preventDefault()
                     const nextIndex = e.shiftKey ? index - 1 : index + 1
-                    if (nextIndex >= 0 && nextIndex < pendingAction.commandArgumentDefinitions.length) {
+                    if (
+                      nextIndex >= 0 &&
+                      nextIndex < pendingAction.commandArgumentDefinitions.length
+                    ) {
                       argInputRefs.current[nextIndex]?.focus()
                     } else {
                       focusCommandInput()
@@ -2153,19 +2477,22 @@ export default function CommandBar({
                 className="min-h-0 flex-1 overflow-y-auto"
               >
                 {visibleSearchResults.map((item, i) => {
+                  const iconAsset = searchResultIconAsset(item)
                   const pinnedMeta = pinnedMetaById.get(item.id)
                   const isCalc = item.category === 'calculator'
                   const isColorConversion = item.category === 'color-converter'
                   const isCurrencyRow = isCalc && item.id.startsWith('currency:')
                   const colorSwatch =
-                    isColorConversion && item.action.type === 'copy-text' ? item.action.text : item.title
+                    isColorConversion && item.action.type === 'copy-text'
+                      ? item.action.text
+                      : item.title
                   return (
                     <li key={item.id} className="relative z-[1]">
                       <button
                         type="button"
                         className={cx(
                           'relative flex w-full items-center justify-between gap-3 rounded-tezbar-row text-left transition',
-                          isCalc || isColorConversion ? 'px-3 py-2.5' : 'px-3 py-2',
+                          isCalc || isColorConversion ? 'px-3 py-2.5' : 'px-3 py-2'
                         )}
                         onMouseEnter={() => {
                           setFollowSearchSelection(false)
@@ -2222,7 +2549,14 @@ export default function CommandBar({
                                       stroke="currentColor"
                                       strokeWidth="1.1"
                                     />
-                                    <rect x="4.25" y="3.25" width="5.5" height="2" rx="0.4" fill="currentColor" />
+                                    <rect
+                                      x="4.25"
+                                      y="3.25"
+                                      width="5.5"
+                                      height="2"
+                                      rx="0.4"
+                                      fill="currentColor"
+                                    />
                                     <circle cx="5" cy="7.5" r="0.6" fill="currentColor" />
                                     <circle cx="7" cy="7.5" r="0.6" fill="currentColor" />
                                     <circle cx="9" cy="7.5" r="0.6" fill="currentColor" />
@@ -2238,7 +2572,11 @@ export default function CommandBar({
                                 </span>
                                 <span className="mt-0.5 block truncate text-[11px] text-ink-3">
                                   <span className="text-ink-4">
-                                    {isColorConversion ? 'Color' : isCurrencyRow ? 'Currency' : 'Calculator'}
+                                    {isColorConversion
+                                      ? 'Color'
+                                      : isCurrencyRow
+                                        ? 'Currency'
+                                        : 'Calculator'}
                                   </span>
                                   <span className="mx-1.5 text-ink-4">·</span>
                                   <span className="font-mono">{item.subtitle}</span>
@@ -2252,18 +2590,32 @@ export default function CommandBar({
                           </>
                         ) : (
                           <>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[13px] font-medium text-ink-1">{item.title}</span>
-                              <span className="mt-0.5 block truncate text-[11px] text-ink-3">
-                                <span className="text-ink-4">{item.category}</span>
-                                {item.subtitle ? <span className="mx-1.5 text-ink-4">·</span> : null}
-                                {item.subtitle}
+                            <span className="flex min-w-0 flex-1 items-center gap-3">
+                              <ListItemIcon
+                                kind={item.category}
+                                iconDataUrl={item.iconDataUrl}
+                                assetKind={iconAsset?.kind}
+                                assetPath={iconAsset?.path}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[13px] font-medium text-ink-1">
+                                  {item.title}
+                                </span>
+                                <span className="mt-0.5 block truncate text-[11px] text-ink-3">
+                                  <span className="text-ink-4">{item.category}</span>
+                                  {item.subtitle ? (
+                                    <span className="mx-1.5 text-ink-4">·</span>
+                                  ) : null}
+                                  {item.subtitle}
+                                </span>
                               </span>
                             </span>
                             <span className="shrink-0 flex items-center gap-1.5">
                               {pinnedMeta ? (
                                 <span className="inline-flex items-center gap-1 rounded-tezbar-chip border border-amber-300/30 bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-100/95">
-                                  <span className="text-[11px] leading-none">{pinnedMeta.icon}</span>
+                                  <span className="text-[11px] leading-none">
+                                    {pinnedMeta.icon}
+                                  </span>
                                   <Kbd>⌥</Kbd>
                                   <Kbd>{pinnedMeta.slot}</Kbd>
                                 </span>
@@ -2337,7 +2689,9 @@ export default function CommandBar({
             {lastIntent && !error ? (
               <Message tone="info">
                 {lastIntent.type}
-                {lastIntent.type === 'extension' && 'name' in lastIntent ? ` · ${lastIntent.name}` : ''}
+                {lastIntent.type === 'extension' && 'name' in lastIntent
+                  ? ` · ${lastIntent.name}`
+                  : ''}
               </Message>
             ) : null}
             {actionMsg ? <Message>{actionMsg}</Message> : null}
@@ -2349,17 +2703,43 @@ export default function CommandBar({
       <div
         className={cx(
           'glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in',
-          showSearchResults || showSuggestions || showAnswer ? 'opacity-60' : '',
+          showSearchResults || showSuggestions || showAnswer ? 'opacity-60' : ''
         )}
       >
         <HintBar>
           {isAiMode ? (
             <>
               <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
+              <Hint
+                label="Attach screen"
+                keys={
+                  <>
+                    <Kbd>⌘</Kbd>
+                    <Kbd>⇧</Kbd>
+                    <Kbd>S</Kbd>
+                  </>
+                }
+              />
               <Hint label="Open chat" keys={<Kbd>↵</Kbd>} />
-              <Hint label="New chat" keys={<><Kbd>⌘</Kbd><Kbd>N</Kbd></>} />
+              <Hint
+                label="New chat"
+                keys={
+                  <>
+                    <Kbd>⌘</Kbd>
+                    <Kbd>N</Kbd>
+                  </>
+                }
+              />
               <Hint label="Exit AI" keys={<Kbd>Esc</Kbd>} />
-              <Hint label="Close window" keys={<><Kbd>Esc</Kbd><Kbd>⌘</Kbd></>} />
+              <Hint
+                label="Close window"
+                keys={
+                  <>
+                    <Kbd>Esc</Kbd>
+                    <Kbd>⌘</Kbd>
+                  </>
+                }
+              />
             </>
           ) : (
             <>
@@ -2368,16 +2748,56 @@ export default function CommandBar({
               ) : isSlashInput ? (
                 <>
                   <Hint label="Complete" keys={<Kbd>↵</Kbd>} />
-                  <Hint label="Open" keys={<><Kbd>⌘</Kbd><Kbd>↵</Kbd></>} />
+                  <Hint
+                    label="Open"
+                    keys={
+                      <>
+                        <Kbd>⌘</Kbd>
+                        <Kbd>↵</Kbd>
+                      </>
+                    }
+                  />
                 </>
               ) : (
                 <>
-                  <Hint label="Pin / Unpin" keys={<><Kbd>⌘</Kbd><Kbd>P</Kbd></>} />
-                  <Hint label="Pinned" keys={<><Kbd>⌥</Kbd><Kbd>1-9</Kbd></>} />
-                  <Hint label="Save note" keys={<><Kbd>⌘</Kbd><Kbd>N</Kbd></>} />
+                  <Hint
+                    label="Pin / Unpin"
+                    keys={
+                      <>
+                        <Kbd>⌘</Kbd>
+                        <Kbd>P</Kbd>
+                      </>
+                    }
+                  />
+                  <Hint
+                    label="Pinned"
+                    keys={
+                      <>
+                        <Kbd>⌥</Kbd>
+                        <Kbd>1-9</Kbd>
+                      </>
+                    }
+                  />
+                  <Hint
+                    label="Save note"
+                    keys={
+                      <>
+                        <Kbd>⌘</Kbd>
+                        <Kbd>N</Kbd>
+                      </>
+                    }
+                  />
                 </>
               )}
-              <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
+              <Hint
+                label="Navigate"
+                keys={
+                  <>
+                    <Kbd>↑</Kbd>
+                    <Kbd>↓</Kbd>
+                  </>
+                }
+              />
               {!isCompletionInput ? <Hint label="Run" keys={<Kbd>↵</Kbd>} /> : null}
               <Hint
                 label={pinPickerTarget ? 'Cancel picker' : 'Close'}

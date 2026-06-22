@@ -170,85 +170,112 @@ function PreferenceSetupView({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 overflow-hidden rounded-[24px] border border-white/10 bg-[#101114] text-ink-1 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(66,133,244,0.18),transparent_38%),linear-gradient(135deg,rgba(52,168,83,0.08),transparent_34%,rgba(251,188,5,0.07)_62%,rgba(234,67,53,0.08))]" />
-      <button
-        type="button"
-        onClick={onBack}
-        className="absolute left-5 top-5 z-10 grid h-11 w-11 place-items-center rounded-[14px] border border-white/10 bg-white/[0.08] text-ink-1 transition hover:bg-white/[0.13]"
-        aria-label="Back"
-      >
-        <span className="text-2xl leading-none">‹</span>
-      </button>
+  <div className="relative flex h-full min-h-0 flex-col items-center justify-center overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#0E0E10] text-white shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
 
-      <div className="relative z-0 grid h-full w-full grid-cols-[minmax(320px,0.95fr)_minmax(420px,1.35fr)]">
-        <section className="flex min-h-0 flex-col justify-between border-r border-white/10 px-12 py-12">
-          <div className="mt-16">
-            <div className="mb-7 flex items-center gap-3">
-              {iconPath ? <img src={fileUrl(iconPath)} alt="" className="h-12 w-12 rounded-[13px]" /> : null}
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-1">Setup</p>
-                <h1 className="mt-1 text-[34px] font-bold leading-tight text-ink-1">{title}</h1>
-              </div>
+    {/* Ambient purple glow */}
+    <div className="pointer-events-none absolute left-1/2 top-0 h-[280px] w-[500px] -translate-x-1/2 rounded-full bg-[#7C5CFC] opacity-[0.08] blur-[90px]" />
+
+    {/* Back button */}
+    <button
+      type="button"
+      onClick={onBack}
+      className="absolute left-5 top-5 z-10 grid h-9 w-9 place-items-center rounded-[10px] border border-white/[0.08] bg-white/[0.05] text-white/40 transition hover:bg-white/[0.09] hover:text-white/70"
+      aria-label="Back"
+    >
+      <span className="text-lg leading-none">‹</span>
+    </button>
+
+    {/* Scrollable content centered */}
+    <div className="relative z-0 flex w-full flex-1 flex-col items-center overflow-y-auto px-6 py-10">
+      <div className="w-full max-w-[520px]">
+
+        {/* Header */}
+        <div className="mb-8 flex flex-col items-center text-center">
+          {iconPath ? (
+            <div className="relative mb-5">
+              <img
+                src={fileUrl(iconPath)}
+                alt=""
+                className="h-[72px] w-[72px] rounded-[18px] ring-1 ring-white/10"
+              />
+              <div className="absolute inset-0 rounded-[18px] bg-gradient-to-b from-white/[0.06] to-transparent" />
             </div>
-            <p className="max-w-[430px] text-[15px] leading-7 text-ink-3">
-              Choose your translation defaults once. Tezbar will save them locally and launch the command immediately.
-            </p>
-          </div>
+          ) : null}
+          <p className="mb-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7C5CFC]">
+            Extension setup
+          </p>
+          <h1 className="mb-3 text-[24px] font-bold leading-tight tracking-[-0.4px] text-white">
+            {title}
+          </h1>
+          <p className="max-w-[380px] text-[13.5px] leading-[1.7] text-white/35">
+            Configure your credentials once — Tezbar saves them locally and runs commands immediately.
+          </p>
+        </div>
 
-          <div className="rounded-[18px] border border-white/10 bg-black/20 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-4">Connection</p>
-            <p className="mt-2 text-[13px] leading-6 text-ink-3">
-              This extension uses Google Translate directly. A key can be stored for future API-backed builds, but it is optional here.
-            </p>
-          </div>
-        </section>
+        {/* Divider */}
+        <div className="mb-6 h-px bg-white/[0.06]" />
 
-        <section className="min-h-0 overflow-y-auto px-12 py-12">
-          <div className="mx-auto flex min-h-full max-w-[720px] flex-col justify-center gap-7">
-            {includeApiKey ? (
-              <label className="block rounded-[20px] border border-accent-1/25 bg-accent-1/[0.08] p-5 shadow-[0_18px_60px_rgba(66,133,244,0.08)]">
-                <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.16em] text-accent-1">API Key</span>
-                <input
-                  type="password"
-                  value={formValues.apiKey ?? ''}
-                  onChange={(event) => setValue('apiKey', event.target.value)}
-                  placeholder="Optional Google API key"
-                  className="h-12 w-full rounded-[14px] border border-white/12 bg-black/30 px-4 text-[14px] text-ink-1 outline-none transition placeholder:text-ink-5 focus:border-accent-1/70"
-                />
-              </label>
-            ) : null}
+        {/* Fields */}
+        <div className="flex flex-col gap-5">
+          {includeApiKey ? (
+            <label className="block">
+              <span className="mb-2 block font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-white/30">
+                API Key
+              </span>
+              <input
+                type="password"
+                value={formValues.apiKey ?? ''}
+                onChange={(event) => setValue('apiKey', event.target.value)}
+                placeholder="sk-••••••••••••••••••••"
+                className="h-11 w-full rounded-[12px] border border-white/[0.08] bg-white/[0.04] px-4 text-[13.5px] text-white outline-none transition placeholder:text-white/20 focus:border-[#7C5CFC]/50 focus:bg-[#7C5CFC]/[0.05] focus:shadow-[0_0_0_3px_rgba(124,92,252,0.1)]"
+              />
+            </label>
+          ) : null}
 
-            <div className="grid gap-5 md:grid-cols-2">
+          {primaryPreferences.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2">
               {primaryPreferences.map(renderPreference)}
             </div>
+          ) : null}
 
-            {secondaryPreferences.length > 0 ? (
-              <div className="grid gap-4">
-                {secondaryPreferences.map(renderPreference)}
-              </div>
-            ) : null}
-
-            {localError ? <Message tone="error">{localError}</Message> : null}
-
-            <div className="flex items-center justify-end gap-3 border-t border-white/10 pt-5">
-              <button type="button" className="btn btn-ghost" onClick={onBack}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void save()}
-                disabled={saving}
-                className="rounded-[14px] bg-ink-1 px-5 py-3 text-[13px] font-bold text-black transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? 'Saving...' : 'Save and Continue'}
-              </button>
+          {secondaryPreferences.length > 0 ? (
+            <div className="grid gap-3">
+              {secondaryPreferences.map(renderPreference)}
             </div>
+          ) : null}
+
+          {localError ? <Message tone="error">{localError}</Message> : null}
+        </div>
+
+        {/* Actions */}
+        <div className="mt-8 flex items-center justify-between border-t border-white/[0.06] pt-5">
+          <span className="flex items-center gap-2 text-[11.5px] text-white/20">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/60" />
+            Stored locally · never shared
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="text-[13px] font-medium text-white/30 transition hover:text-white/60"
+              onClick={onBack}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving}
+              className="rounded-[11px] bg-[#7C5CFC] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#6D4EE8] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {saving ? 'Saving…' : 'Save and continue →'}
+            </button>
           </div>
-        </section>
+        </div>
+
       </div>
     </div>
-  )
+  </div>
+) 
 }
 
 export default function ExtensionRuntimeView({

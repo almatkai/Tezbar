@@ -1,6 +1,6 @@
 {
   "name": "tezbar",
-  "version": "0.0.3",
+  "version": "v0.2.0-beta.1",
   "private": true,
   "description": "Tezbar",
   "main": "out/main/index.js",
@@ -15,7 +15,8 @@
     "test": "vitest run",
     "build:native:input": "./native/input/build-universal.sh",
     "build:native:axhelper": "./native/axhelper/build.sh",
-    "build:native": "pnpm build:native:input && pnpm build:native:axhelper",
+    "build:native:screenocr": "./native/screenocr/build.sh",
+    "build:native": "pnpm build:native:input && pnpm build:native:axhelper && pnpm build:native:screenocr",
     "dist": "pnpm build && pnpm build:native && electron-builder",
     "tauri": "tauri",
     "build:backend": "pnpm exec tsx scripts/build-backend.ts",
@@ -32,6 +33,7 @@
       "out/**/*",
       "native/input/index.node",
       "native/axhelper/axhelper",
+      "native/screenocr/screenocr-helper",
       "node_modules/esbuild/**/*",
       "node_modules/@esbuild/**/*",
       "package.json",
@@ -73,6 +75,7 @@
     "asarUnpack": [
       "native/input/index.node",
       "native/axhelper/axhelper",
+      "native/screenocr/screenocr-helper",
       "node_modules/node-pty/build/Release/*.node",
       "node_modules/better-sqlite3/build/Release/*.node"
     ],

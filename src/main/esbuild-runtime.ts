@@ -3,9 +3,10 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 export function configurePackagedEsbuildBinary(): void {
-  if (!app.isPackaged || process.env.ESBUILD_BINARY_PATH || process.platform !== 'darwin') {
+  if (!app?.isPackaged || process.env.ESBUILD_BINARY_PATH || process.platform !== 'darwin') {
     return
   }
+  if (typeof process.resourcesPath !== 'string' || !process.resourcesPath) return
 
   const packageArch = process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64'
   const binaryPath = join(
@@ -15,7 +16,7 @@ export function configurePackagedEsbuildBinary(): void {
     '@esbuild',
     packageArch,
     'bin',
-    'esbuild',
+    'esbuild'
   )
 
   if (existsSync(binaryPath)) {

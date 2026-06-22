@@ -29,11 +29,12 @@ import { once } from 'node:events'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { app, dialog } from 'electron'
+import { app } from 'electron'
 
 import { createLoopDriver, type PiEvent } from './loop'
-import type { Stage } from '../../shared/agent'
+import type { AgentInputImage, Stage } from '../../shared/agent'
 import { observe, type Observation } from './observer'
+import { buildPromptCommand } from './prompt'
 
 const PI_BIN_CANDIDATES = [
   // Where pnpm installs global bins for this user (matches `which pi`
@@ -43,17 +44,27 @@ const PI_BIN_CANDIDATES = [
   path.join(homedir(), '.local', 'share', 'pnpm', 'pi'),
 ]
 
-const OPENCODE_PI_EXTENSION = path.join(homedir(), '.pi', 'agent', 'extensions', 'opencode', 'index.ts')
+const OPENCODE_PI_EXTENSION = path.join(
+  homedir(),
+  '.pi',
+  'agent',
+  'extensions',
+  'opencode',
+  'index.ts'
+)
 
 function resolveRaymesPiExtension(): string | undefined {
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
   const candidates = [
     process.env['RAYMES_PI_EXTENSION'],
     path.join(process.cwd(), 'src', 'main', 'agent', 'raymes-pi-policy.ts'),
-    ...(app.isPackaged
-      ? [path.join(process.resourcesPath, 'agent', 'raymes-pi-policy.ts')]
+    ...(app.isPackaged && resourcesPath
+      ? [path.join(resourcesPath, 'agent', 'raymes-pi-policy.ts')]
       : []),
   ]
-  return candidates.find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)))
+  return candidates.find((candidate): candidate is string =>
+    Boolean(candidate && existsSync(candidate))
+  )
 }
 
 function resolvePiBinary(override?: string): string {
@@ -75,6 +86,10 @@ export interface BridgeRunOptions {
   model?: string
   /** Tezbar-owned pi provider definition, passed through the child env. */
   raymesProviderJson?: string
+  /** Persisted command families that the Tezbar policy may run without prompting. */
+  raymesAlwaysAllowJson?: string
+  /** Resolve a Pi extension confirmation inside the active chat surface. */
+  requestApproval?: (request: { title: string; command: string }) => Promise<boolean>
   /** Additional pi CLI args (advanced). */
   extraArgs?: readonly string[]
   /** If set, pi runs with `--no-session`. Default: true (ephemeral runs). */
@@ -91,6 +106,10 @@ export interface BridgeRunOptions {
   piBin?: string
   /** Each stderr line from pi (diagnostics; not JSONL protocol traffic). */
   onStderrLine?: (line: string) => void
+  /** Images included with the initial Pi RPC prompt. */
+  images?: readonly AgentInputImage[]
+  /** Prevent a stuck provider or tool call from keeping the run alive forever. */
+  timeoutMs?: number
 }
 
 export interface BridgeRunResult {
@@ -103,8 +122,8 @@ export interface Bridge {
   run(task: string, options?: BridgeRunOptions): Promise<BridgeRunResult>
   /** Low-level helper — mostly for observer.ts and tests. */
   query<T = unknown>(
-    command: { type: string;[k: string]: unknown },
-    options?: { signal?: AbortSignal; piBin?: string; cwd?: string; timeoutMs?: number },
+    command: { type: string; [k: string]: unknown },
+    options?: { signal?: AbortSignal; piBin?: string; cwd?: string; timeoutMs?: number }
   ): Promise<T>
   observe(options?: { cwd?: string; piBin?: string }): Promise<Observation>
   dispose(): void
@@ -121,6 +140,7 @@ interface RpcSessionHandle {
   onEvent: (event: PiEvent) => void
   stderrBuffer: string[]
   closed: boolean
+  requestApproval?: BridgeRunOptions['requestApproval']
 }
 
 function makeId(): string {
@@ -138,6 +158,7 @@ function spawnRpc(options: {
   ephemeral: boolean
   model?: string
   raymesProviderJson?: string
+  raymesAlwaysAllowJson?: string
   extraArgs: readonly string[]
 }): ChildProcessWithoutNullStreams {
   const args: string[] = ['--mode', 'rpc']
@@ -156,7 +177,12 @@ function spawnRpc(options: {
     cwd: options.cwd,
     env: {
       ...process.env,
-      ...(options.raymesProviderJson ? { RAYMES_PI_PROVIDER_JSON: options.raymesProviderJson } : {}),
+      ...(options.raymesProviderJson
+        ? { RAYMES_PI_PROVIDER_JSON: options.raymesProviderJson }
+        : {}),
+      ...(options.raymesAlwaysAllowJson
+        ? { RAYMES_PI_ALWAYS_ALLOW_JSON: options.raymesAlwaysAllowJson }
+        : {}),
     },
     stdio: ['pipe', 'pipe', 'pipe'],
   }) as ChildProcessWithoutNullStreams
@@ -168,7 +194,9 @@ function spawnRpc(options: {
 }
 
 function shouldSuppressPiStderr(line: string): boolean {
-  return /^Warning: No models match pattern "opencode\/opencode\/[^"]+"$/.test(line.trim())
+  return /^Warning: No models match pattern "(?:kiro-cli\/|opencode\/opencode\/)[^"]+"$/.test(
+    line.trim()
+  )
 }
 
 async function handleExtensionUiRequest(
@@ -181,28 +209,24 @@ async function handleExtensionUiRequest(
     options?: string[]
     placeholder?: string
     prefill?: string
-  },
+  }
 ): Promise<void> {
   const id = msg.id
   if (typeof id !== 'string') return
 
   if (msg.method === 'confirm') {
     const title = msg.title || 'Allow command?'
-    const detail = msg.message || ''
-    const result = await dialog.showMessageBox({
-      type: 'warning',
-      title,
-      message: title,
-      detail,
-      buttons: ['Cancel', 'Allow'],
-      cancelId: 0,
-      defaultId: 0,
-      noLink: true,
-    })
+    const command = msg.message || ''
+    let confirmed = false
+    try {
+      confirmed = (await handle.requestApproval?.({ title, command })) ?? false
+    } catch {
+      confirmed = false
+    }
     writeCommand(handle.child, {
       type: 'extension_ui_response',
       id,
-      confirmed: result.response === 1,
+      confirmed,
     })
     return
   }
@@ -215,10 +239,7 @@ async function handleExtensionUiRequest(
  * correctly. Pi's RPC docs explicitly ban Node's `readline` because it
  * splits on U+2028/U+2029, which are legal inside JSON strings.
  */
-function attachLineReader(
-  stream: NodeJS.ReadableStream,
-  onLine: (line: string) => void,
-): void {
+function attachLineReader(stream: NodeJS.ReadableStream, onLine: (line: string) => void): void {
   let buffer = ''
   stream.on('data', (chunk: Buffer | string) => {
     buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
@@ -242,7 +263,13 @@ function attachHandlers(handle: RpcSessionHandle, onStderrLine?: (line: string) 
       return
     }
     if (!parsed || typeof parsed !== 'object') return
-    const msg = parsed as { type?: string; id?: string; success?: boolean; error?: string; data?: unknown }
+    const msg = parsed as {
+      type?: string
+      id?: string
+      success?: boolean
+      error?: string
+      data?: unknown
+    }
     if (msg.type === 'response' && typeof msg.id === 'string') {
       const pending = handle.pending.get(msg.id)
       if (!pending) return
@@ -294,8 +321,8 @@ function attachHandlers(handle: RpcSessionHandle, onStderrLine?: (line: string) 
 
 async function sendAndAwait<T>(
   handle: RpcSessionHandle,
-  command: { type: string;[k: string]: unknown },
-  timeoutMs: number,
+  command: { type: string; [k: string]: unknown },
+  timeoutMs: number
 ): Promise<T> {
   if (handle.closed) throw new Error('pi rpc session already closed')
   const id = makeId()
@@ -370,6 +397,7 @@ export function createBridge(): Bridge {
         ephemeral,
         model: options.model,
         raymesProviderJson: options.raymesProviderJson,
+        raymesAlwaysAllowJson: options.raymesAlwaysAllowJson,
         extraArgs: options.extraArgs ?? [],
       })
       trackChild(child)
@@ -397,6 +425,7 @@ export function createBridge(): Bridge {
         pending: new Map(),
         stderrBuffer: [],
         closed: false,
+        requestApproval: options.requestApproval,
         onEvent: (event) => {
           driver(event)
           if (event.type === 'agent_end') agentEnded()
@@ -419,12 +448,26 @@ export function createBridge(): Bridge {
       options.signal?.addEventListener('abort', onAbort, { once: true })
 
       try {
-        const promptId = makeId()
-        writeCommand(child, { id: promptId, type: 'prompt', message: task })
-        await Promise.race([
-          agentEndPromise,
-          once(child, 'close').then(() => undefined),
-        ])
+        await sendAndAwait(handle, buildPromptCommand(task, options.images), 15_000)
+
+        let runTimeout: NodeJS.Timeout | undefined
+        try {
+          await Promise.race([
+            agentEndPromise,
+            once(child, 'close').then(() => undefined),
+            new Promise<never>((_resolve, reject) => {
+              runTimeout = setTimeout(
+                () =>
+                  reject(
+                    new Error(`Agent run timed out after ${options.timeoutMs ?? 15 * 60_000}ms`)
+                  ),
+                options.timeoutMs ?? 15 * 60_000
+              )
+            }),
+          ])
+        } finally {
+          if (runTimeout) clearTimeout(runTimeout)
+        }
 
         if (options.signal?.aborted) {
           throw new Error('Agent run aborted')
@@ -433,9 +476,17 @@ export function createBridge(): Bridge {
         if (handle.closed && !agentEndResolved) {
           const tail = handle.stderrBuffer.slice(-8).join('\n').trim()
           throw new Error(
-            tail ? `pi exited before finishing:\n${tail}` : 'pi exited before finishing',
+            tail ? `pi exited before finishing:\n${tail}` : 'pi exited before finishing'
           )
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        const tail = handle.stderrBuffer
+          .filter((line) => !message.includes(line))
+          .slice(-6)
+          .join('\n')
+          .trim()
+        throw new Error(tail ? `${message}\n${tail}` : message)
       } finally {
         options.signal?.removeEventListener('abort', onAbort)
         if (!handle.closed) {
@@ -468,6 +519,7 @@ export function createBridge(): Bridge {
         pending: new Map(),
         stderrBuffer: [],
         closed: false,
+        requestApproval: undefined,
         onEvent: () => undefined,
       }
       attachHandlers(handle)

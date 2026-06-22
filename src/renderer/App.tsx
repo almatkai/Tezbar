@@ -5,7 +5,7 @@ import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_AI_NEW_CHAT_EVENT, RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
-import type { TerminalPromptInfo } from '../shared/terminal'
+import { compactTerminalPath, type TerminalPromptInfo } from '../shared/terminal'
 import { Hint, HintBar, Kbd } from './ui/primitives'
 
 const AgentChatView = React.lazy(() => import('./AgentChatView'))
@@ -38,12 +38,12 @@ type Surface =
   | 'emoji-picker'
   | 'terminal'
 
-type SettingsTab = 'general' | 'ai' | 'voice' | 'permissions' | 'storage' | 'advanced'
+type SettingsTab = 'general' | 'ai' | 'voice' | 'extensions' | 'permissions' | 'storage' | 'advanced'
 
 const SETTINGS_TAB_STORAGE_KEY = 'tezbar:settings-tab'
 
 function normalizeSettingsTab(tab: unknown): SettingsTab {
-  return tab === 'ai' || tab === 'voice' || tab === 'permissions' || tab === 'storage' || tab === 'advanced'
+  return tab === 'ai' || tab === 'voice' || tab === 'extensions' || tab === 'permissions' || tab === 'storage' || tab === 'advanced'
     ? tab
     : 'general'
 }
@@ -131,7 +131,7 @@ function LauncherApp(): JSX.Element {
     active: false,
   })
   const [surface, setSurface] = useState<Surface>('command')
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'ai' | 'voice' | 'permissions' | 'advanced'>('general')
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   const [openPortsInitialTab, setOpenPortsInitialTab] = useState<'listen' | 'named'>('listen')
   const [notesInitialSelectedId, setNotesInitialSelectedId] = useState<number | null>(null)
   const [commandInitialValue, setCommandInitialValue] = useState('')
@@ -139,6 +139,7 @@ function LauncherApp(): JSX.Element {
     null
   )
   const [terminalInitialCommand, setTerminalInitialCommand] = useState<string | undefined>()
+  const [terminalWorkingDirectory, setTerminalWorkingDirectory] = useState<string | undefined>()
   const [terminalPromptInfo, setTerminalPromptInfo] = useState<TerminalPromptInfo | null>(null)
   const [aiChatBoot, setAiChatBoot] = useState<AiChatBoot>({ kind: 'panel' })
   const [aiChatKey, setAiChatKey] = useState(0)
@@ -428,12 +429,10 @@ function LauncherApp(): JSX.Element {
                       <path d="M8 9.5H10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
                     </svg>
                   </span>
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
-                    <span className="font-mono text-[11px] leading-none">&gt;_</span>
-                    Terminal
-                  </span>
                   <span className="shrink-0 font-mono text-[13px] text-emerald-300/80">
-                    {terminalPromptInfo ? `${terminalPromptInfo.user}@${terminalPromptInfo.host} ${terminalPromptInfo.dir} %` : ''}
+                    {terminalPromptInfo
+                      ? `${terminalPromptInfo.user}@${terminalPromptInfo.host} ${compactTerminalPath(terminalWorkingDirectory || terminalPromptInfo.dir)} %`
+                      : ''}
                   </span>
                   <span className="font-mono text-[15px] text-ink-1">
                     {terminalInitialCommand}
@@ -443,8 +442,10 @@ function LauncherApp(): JSX.Element {
               <TerminalView
                 embedded
                 initialCommand={terminalInitialCommand}
+                workingDirectory={terminalWorkingDirectory}
                 onBack={() => {
                   setTerminalInitialCommand(undefined)
+                  setTerminalWorkingDirectory(undefined)
                   setTerminalPromptInfo(null)
                   setCommandInitialValue('')
                   setSurface('command')
@@ -497,8 +498,9 @@ function LauncherApp(): JSX.Element {
                 setSurface('notes')
               }}
               onOpenEmojiPicker={() => setSurface('emoji-picker')}
-              onOpenTerminal={(initialCommand) => {
+              onOpenTerminal={(initialCommand, workingDirectory) => {
                 setTerminalInitialCommand(initialCommand)
+                setTerminalWorkingDirectory(workingDirectory)
                 setCommandInitialValue('')
                 setSurface('terminal')
               }}

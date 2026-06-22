@@ -118,7 +118,6 @@
    Component classes
    ========================================================================= */
 @layer components {
-
   /* ---- Window chrome ----
      The launcher is frameless, so the OS only lets the user move the
      window through regions that opt in via -webkit-app-region. The
@@ -231,8 +230,27 @@
     white-space: nowrap;
   }
 
-  .glass-card>*,
-  .glass-panel>* {
+  .path-command-hint {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+    font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    white-space: pre;
+  }
+
+  .path-command-hint__value {
+    flex-shrink: 0;
+    visibility: hidden;
+  }
+
+  .glass-card > *,
+  .glass-panel > * {
     -webkit-app-region: no-drag;
   }
 
@@ -244,6 +262,37 @@
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.06),
       0 22px 52px rgba(0, 0, 0, 0.72);
+  }
+
+  .agent-chat-shell {
+    -webkit-app-region: drag;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: var(--r-card);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.026), transparent 28%), rgba(13, 14, 18, 0.9);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.045),
+      0 18px 55px rgba(0, 0, 0, 0.2);
+  }
+
+  .agent-chat-shell > * {
+    -webkit-app-region: no-drag;
+  }
+
+  .agent-chat-thread > * {
+    width: 100%;
+    max-width: 780px;
+    margin-inline: auto;
+  }
+
+  .agent-composer {
+    backdrop-filter: blur(18px) saturate(130%);
+    -webkit-backdrop-filter: blur(18px) saturate(130%);
+  }
+
+  .agent-composer textarea::-webkit-scrollbar {
+    width: 5px;
   }
 
   .tezbar-settings-window {
@@ -259,7 +308,7 @@
       0 22px 60px rgba(0, 0, 0, 0.26);
   }
 
-  .tezbar-settings-window>* {
+  .tezbar-settings-window > * {
     -webkit-app-region: no-drag;
   }
 
@@ -552,7 +601,7 @@
     gap: 3px;
   }
 
-  .status-dots>span {
+  .status-dots > span {
     width: 5px;
     height: 5px;
     border-radius: 9999px;
@@ -560,22 +609,24 @@
     animation: tezbar-conn-pulse 1.2s ease-in-out infinite;
   }
 
-  .status-dots>span:nth-child(2) {
+  .status-dots > span:nth-child(2) {
     animation-delay: 0.2s;
   }
 
-  .status-dots>span:nth-child(3) {
+  .status-dots > span:nth-child(3) {
     animation-delay: 0.4s;
   }
 
   /* ---- Divider ---- */
   .hairline {
     height: 1px;
-    background: linear-gradient(90deg,
-        transparent,
-        rgba(255, 255, 255, 0.08) 12%,
-        rgba(255, 255, 255, 0.08) 88%,
-        transparent);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.08) 12%,
+      rgba(255, 255, 255, 0.08) 88%,
+      transparent
+    );
   }
 }
 
@@ -583,7 +634,6 @@
    Animations
    ========================================================================= */
 @keyframes tezbar-conn-pulse {
-
   0%,
   100% {
     opacity: 0.35;
@@ -597,7 +647,6 @@
 }
 
 @keyframes tezbar-thinking {
-
   0%,
   100% {
     opacity: 0.4;
@@ -640,44 +689,44 @@
 }
 
 /* Stagger helpers — applied to list items for on-mount cascade */
-.stagger>* {
+.stagger > * {
   opacity: 0;
   animation: tezbar-fade-up 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.stagger>*:nth-child(1) {
+.stagger > *:nth-child(1) {
   animation-delay: 20ms;
 }
 
-.stagger>*:nth-child(2) {
+.stagger > *:nth-child(2) {
   animation-delay: 40ms;
 }
 
-.stagger>*:nth-child(3) {
+.stagger > *:nth-child(3) {
   animation-delay: 60ms;
 }
 
-.stagger>*:nth-child(4) {
+.stagger > *:nth-child(4) {
   animation-delay: 80ms;
 }
 
-.stagger>*:nth-child(5) {
+.stagger > *:nth-child(5) {
   animation-delay: 100ms;
 }
 
-.stagger>*:nth-child(6) {
+.stagger > *:nth-child(6) {
   animation-delay: 120ms;
 }
 
-.stagger>*:nth-child(7) {
+.stagger > *:nth-child(7) {
   animation-delay: 140ms;
 }
 
-.stagger>*:nth-child(8) {
+.stagger > *:nth-child(8) {
   animation-delay: 160ms;
 }
 
-.stagger>*:nth-child(n + 9) {
+.stagger > *:nth-child(n + 9) {
   animation-delay: 180ms;
 }
 
@@ -706,11 +755,11 @@
   word-break: break-word;
 }
 
-.tezbar-md>*:first-child {
+.tezbar-md > *:first-child {
   margin-top: 0;
 }
 
-.tezbar-md>*:last-child {
+.tezbar-md > *:last-child {
   margin-bottom: 0;
 }
 
@@ -794,7 +843,7 @@
   margin: 0.2em 0;
 }
 
-.tezbar-md li>p {
+.tezbar-md li > p {
   margin: 0.15em 0;
 }
 
@@ -840,11 +889,11 @@
   color: var(--ink-2, #d9d3ee);
 }
 
-.tezbar-md blockquote>*:first-child {
+.tezbar-md blockquote > *:first-child {
   margin-top: 0;
 }
 
-.tezbar-md blockquote>*:last-child {
+.tezbar-md blockquote > *:last-child {
   margin-bottom: 0;
 }
 

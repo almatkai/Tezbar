@@ -62,6 +62,59 @@ function hasUnsafeShellSyntax(command: string): boolean {
   return /[;|<>`\n]/.test(command) || command.includes('$(') || command.includes('||')
 }
 
+function persistedAllowedCommands(): Set<string> {
+  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']
+  if (!raw) return new Set()
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(
+      parsed
+        .filter(
+          (entry): entry is string =>
+            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)
+        )
+        .map((entry) => entry.toLowerCase())
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+function executableName(command: string): string {
+  const token = command.trim().split(/\s+/, 1)[0] ?? ''
+  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()
+}
+
+const SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])
+
+export function isPersistentlyAllowedBash(
+  command: string,
+  allowedCommands: ReadonlySet<string>
+): boolean {
+  const trimmed = command.trim()
+  if (
+    !trimmed ||
+    /[;<>`\n]/.test(trimmed) ||
+    trimmed.includes('$(') ||
+    trimmed.includes('||')
+  ) {
+    return false
+  }
+
+  const commands = trimmed
+    .split(/\s*(?:&&|\|)\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (commands.length === 0) return false
+
+  return commands.every((part) => {
+    if (isSimpleCd(part)) return true
+    const executable = executableName(part)
+    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)
+  })
+}
+
 function isSimpleCd(command: string): boolean {
   return /^cd\s+(?:"[^"]+"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())
 }
@@ -86,9 +139,14 @@ function isSafeDirectoryRead(command: string): boolean {
   )
 }
 
-function isAutoAllowedBash(command: string): boolean {
+export function isAutoAllowedBash(
+  command: string,
+  allowedCommands: ReadonlySet<string> = persistedAllowedCommands()
+): boolean {
   const trimmed = command.trim()
-  if (!trimmed || hasUnsafeShellSyntax(trimmed)) return false
+  if (!trimmed) return false
+  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true
+  if (hasUnsafeShellSyntax(trimmed)) return false
 
   const parts = trimmed.split(/\s+&&\s+/).map((part) => part.trim()).filter(Boolean)
   if (parts.length === 0) return false

@@ -69,6 +69,10 @@ export const DEFAULT_PROVIDER_MODELS: Record<BuiltInProviderId, AiProviderModel[
   ],
   opencode: [
     { id: 'opencode/big-pickle', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
+    { id: 'opencode/deepseek-v4-flash-free', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
+    { id: 'opencode/mimo-v2.5-free', capabilities: ['tools'], contextWindow: 128000 },
+    { id: 'opencode/nemotron-3-ultra-free', capabilities: ['tools'], contextWindow: 128000 },
+    { id: 'opencode/north-mini-code-free', capabilities: ['tools'], contextWindow: 128000 },
   ],
 }
 

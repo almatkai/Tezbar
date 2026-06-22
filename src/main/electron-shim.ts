@@ -13,7 +13,9 @@ const backendWebContents = {
   send(channel: string, payload: unknown): void {
     process.stdout.write(`${JSON.stringify({ type: 'event', channel, payload })}\n`)
   },
-  isDestroyed(): boolean { return false },
+  isDestroyed(): boolean {
+    return false
+  },
   once(): void {},
 }
 
@@ -62,17 +64,27 @@ export const app = {
   getName(): string {
     return 'Tezbar'
   },
-  getAppPath(): string { return process.cwd() },
+  getAppPath(): string {
+    return process.cwd()
+  },
   focus(): void {},
-  hide(): void {},
-  show(): void {},
+  hide(): void {
+    if (process.env.IS_TAURI === 'true') {
+      process.stdout.write(`${JSON.stringify({ type: 'app_visibility', visible: false })}\n`)
+    }
+  },
+  show(): void {
+    if (process.env.IS_TAURI === 'true') {
+      process.stdout.write(`${JSON.stringify({ type: 'app_visibility', visible: true })}\n`)
+    }
+  },
   once(): void {},
   quit(): void {
     process.stdout.write(`${JSON.stringify({ type: 'app_quit' })}\n`)
   },
   exit(): void {
     process.stdout.write(`${JSON.stringify({ type: 'app_quit' })}\n`)
-  }
+  },
 }
 
 export const shell = {
@@ -111,7 +123,8 @@ function makeNativeImage(sourcePath?: string): {
     setTemplateImage: () => undefined,
     getSize: () => ({ width: 0, height: 0 }),
     resize: () => image,
-    toPNG: () => sourcePath && existsSync(sourcePath) ? readFileSync(sourcePath) : Buffer.alloc(0),
+    toPNG: () =>
+      sourcePath && existsSync(sourcePath) ? readFileSync(sourcePath) : Buffer.alloc(0),
   }
   return image
 }
@@ -131,28 +144,44 @@ export const clipboard = {
       child.stdin.end()
     } catch {}
   },
-  availableFormats(): string[] { return this.readText() ? ['text/plain'] : [] },
-  read(): string { return '' },
-  readImage(): ShimNativeImage { return makeNativeImage() },
+  availableFormats(): string[] {
+    return this.readText() ? ['text/plain'] : []
+  },
+  read(): string {
+    return ''
+  },
+  readImage(): ShimNativeImage {
+    return makeNativeImage()
+  },
   writeImage(image: ShimNativeImage): void {
     if (!image.sourcePath || process.platform !== 'darwin') return
     const escaped = image.sourcePath.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-    void execFileAsync('osascript', ['-e', `set the clipboard to (read POSIX file "${escaped}" as PNG picture)`])
+    void execFileAsync('osascript', [
+      '-e',
+      `set the clipboard to (read POSIX file "${escaped}" as PNG picture)`,
+    ])
   },
-  write(payload: { text?: string }): void { if (payload.text) this.writeText(payload.text) },
-  clear(): void { this.writeText('') },
+  write(payload: { text?: string }): void {
+    if (payload.text) this.writeText(payload.text)
+  },
+  clear(): void {
+    this.writeText('')
+  },
 }
 
 export const dialog = {
   async showMessageBox(windowOrOptions: any, maybeOptions?: any): Promise<{ response: number }> {
     const options = maybeOptions ?? windowOrOptions ?? {}
-    const buttons: string[] = Array.isArray(options.buttons) && options.buttons.length > 0
-      ? options.buttons.map(String)
-      : ['OK']
+    const buttons: string[] =
+      Array.isArray(options.buttons) && options.buttons.length > 0
+        ? options.buttons.map(String)
+        : ['OK']
     if (process.platform !== 'darwin') return { response: options.cancelId ?? 0 }
 
     const escapeAppleScript = (value: unknown): string =>
-      String(value ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      String(value ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
     const buttonList = buttons.map((button) => `"${escapeAppleScript(button)}"`).join(', ')
     const defaultIndex = Math.min(Math.max(Number(options.defaultId) || 0, 0), buttons.length - 1)
     const cancelIndex = Math.min(Math.max(Number(options.cancelId) || 0, 0), buttons.length - 1)
@@ -168,7 +197,7 @@ export const dialog = {
     } finally {
       process.stdout.write(`${JSON.stringify({ type: 'window_suppress_blur', value: false })}\n`)
     }
-  }
+  },
 }
 
 export const session = {
@@ -177,65 +206,129 @@ export const session = {
     async clearStorageData(): Promise<void> {},
     setPermissionRequestHandler(): void {},
     setPermissionCheckHandler(): void {},
-  }
+  },
 }
 
 export const screen = {
   getDisplayNearestPoint(): any {
-    return { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1080 } }
+    return {
+      id: 1,
+      size: { width: 1920, height: 1080 },
+      bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+      workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+    }
   },
   getCursorScreenPoint(): any {
     return { x: 0, y: 0 }
   },
   getAllDisplays(): any[] {
-    return [{ id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1080 } }]
-  }
+    return [this.getDisplayNearestPoint()]
+  },
+}
+
+export const desktopCapturer = {
+  async getSources(): Promise<[]> {
+    // Tauri captures through its Rust command in tauri-bridge.ts. Keeping the
+    // backend contract empty makes accidental calls fail with the IPC handler's
+    // actionable Screen Recording error instead of a missing-export crash.
+    return []
+  },
 }
 
 export const nativeImage = {
-  createFromPath(path: string): ShimNativeImage { return makeNativeImage(path) },
-  createFromDataURL(): ShimNativeImage { return makeNativeImage() },
+  createFromPath(path: string): ShimNativeImage {
+    return makeNativeImage(path)
+  },
+  createFromDataURL(): ShimNativeImage {
+    return makeNativeImage()
+  },
 }
 
 export const Menu = {
-  buildFromTemplate(): any { return {} },
-  setApplicationMenu(): void {}
+  buildFromTemplate(): any {
+    return {}
+  },
+  setApplicationMenu(): void {},
 }
 
 export const globalShortcut = {
-  register(): boolean { return true },
+  register(): boolean {
+    return true
+  },
   unregister(): void {},
-  unregisterAll(): void {}
+  unregisterAll(): void {},
 }
 
 export class BrowserWindow {
   static windows: BrowserWindow[] = []
-  static getAllWindows(): BrowserWindow[] { return [...BrowserWindow.windows] }
-  static getFocusedWindow(): BrowserWindow | null { return BrowserWindow.windows[0] ?? null }
-  static fromWebContents(): BrowserWindow | null { return BrowserWindow.windows[0] ?? null }
+  static getAllWindows(): BrowserWindow[] {
+    return [...BrowserWindow.windows]
+  }
+  static getFocusedWindow(): BrowserWindow | null {
+    return BrowserWindow.windows[0] ?? null
+  }
+  static fromWebContents(): BrowserWindow | null {
+    return BrowserWindow.windows[0] ?? null
+  }
 
   webContents = backendWebContents
   private visible = true
+  private opacity = 1
   private contentSize: [number, number] = [760, 640]
-  constructor() { BrowserWindow.windows.push(this) }
-  isDestroyed(): boolean { return false }
-  isVisible(): boolean { return this.visible }
-  destroy(): void { BrowserWindow.windows = BrowserWindow.windows.filter((window) => window !== this) }
-  close(): void { this.destroy() }
+  constructor() {
+    BrowserWindow.windows.push(this)
+  }
+  isDestroyed(): boolean {
+    return false
+  }
+  isVisible(): boolean {
+    return this.visible
+  }
+  destroy(): void {
+    BrowserWindow.windows = BrowserWindow.windows.filter((window) => window !== this)
+  }
+  close(): void {
+    this.destroy()
+  }
   focus(): void {}
-  show(): void { this.visible = true }
-  hide(): void { this.visible = false }
-  getContentSize(): [number, number] { return this.contentSize }
-  setContentSize(width: number, height: number): void { this.contentSize = [width, height] }
+  show(): void {
+    this.visible = true
+  }
+  hide(): void {
+    this.visible = false
+  }
+  getContentSize(): [number, number] {
+    return this.contentSize
+  }
+  setContentSize(width: number, height: number): void {
+    this.contentSize = [width, height]
+  }
+  getOpacity(): number {
+    return this.opacity
+  }
+  setOpacity(value: number): void {
+    this.opacity = value
+  }
+  setContentProtection(enabled: boolean): void {
+    void enabled
+  }
   setMaximumSize(): void {}
 }
 
 export const webFrame = {
-  getZoomFactor(): number { return 1 }
+  getZoomFactor(): number {
+    return 1
+  },
 }
 
 export const systemPreferences = {
-  isTrusted(): boolean { return true },
-  isTrustedAccessibilityClient(): boolean { return false },
-  async askForMediaAccess(): Promise<boolean> { return false },
+  isTrusted(): boolean {
+    return true
+  },
+  isTrustedAccessibilityClient(): boolean {
+    return false
+  },
+  async askForMediaAccess(): Promise<boolean> {
+    return false
+  },
 }

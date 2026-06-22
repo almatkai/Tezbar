@@ -1,7 +1,7 @@
 import type { WebContents } from 'electron'
 import { existsSync, statSync } from 'node:fs'
 import { homedir, hostname, userInfo } from 'node:os'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { spawn as spawnChild } from 'node:child_process'
 import { createRequire } from 'node:module'
@@ -17,7 +17,99 @@ const requireNative = createRequire(__filename)
 
 type TerminalSession = {
   ownerId: number
+  sender: WebContents
   process: IPty
+  pipeMode: boolean
+}
+
+type BunPipeProcess = {
+  pid: number
+  stdin: { write(data: string): number; flush?: () => number | Promise<number> }
+  stdout: ReadableStream<Uint8Array>
+  stderr: ReadableStream<Uint8Array>
+  exited: Promise<number>
+  kill(): void
+}
+
+type BunRuntime = {
+  spawn(
+    command: string[],
+    options: {
+      cwd: string
+      env: Record<string, string>
+      stdin: 'pipe'
+      stdout: 'pipe'
+      stderr: 'pipe'
+    },
+  ): BunPipeProcess
+}
+
+function spawnBunPipeTerminal(
+  shell: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string>,
+  cols: number,
+  rows: number,
+): IPty {
+  const bun = (globalThis as typeof globalThis & { Bun?: BunRuntime }).Bun
+  if (!bun) return spawnPipeTerminal(shell, args, cwd, env, cols, rows)
+
+  const child = bun.spawn([shell, ...args], {
+    cwd,
+    env,
+    stdin: 'pipe',
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  const dataListeners = new Set<(data: string) => void>()
+
+  const pump = async (stream: ReadableStream<Uint8Array>): Promise<void> => {
+    const reader = stream.getReader()
+    const decoder = new TextDecoder()
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const text = decoder.decode(value, { stream: true })
+        if (text) dataListeners.forEach((listener) => listener(text))
+      }
+    } catch {
+      // Stream closure races with process termination.
+    } finally {
+      reader.releaseLock()
+    }
+  }
+  void pump(child.stdout)
+  void pump(child.stderr)
+
+  return {
+    pid: child.pid,
+    process: shell,
+    cols,
+    rows,
+    handleFlowControl: false,
+    onData: (listener: (data: string) => void) => {
+      dataListeners.add(listener)
+      return { dispose: () => dataListeners.delete(listener) }
+    },
+    onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => {
+      let active = true
+      void child.exited.then((exitCode) => {
+        if (active) listener({ exitCode, signal: 0 })
+      })
+      return { dispose: () => { active = false } }
+    },
+    write: (data: string) => {
+      child.stdin.write(data)
+      void child.stdin.flush?.()
+    },
+    resize: () => undefined,
+    clear: () => undefined,
+    pause: () => undefined,
+    resume: () => undefined,
+    kill: () => child.kill(),
+  } as IPty
 }
 
 function spawnPipeTerminal(
@@ -69,7 +161,13 @@ function clampDimension(value: number, min: number, max: number): number {
 }
 
 function resolveWorkingDirectory(raw?: string): string {
-  const candidate = raw?.trim() ? resolve(raw) : homedir()
+  const requested = raw?.trim()
+  const expanded = requested === '~'
+    ? homedir()
+    : requested?.startsWith('~/')
+      ? join(homedir(), requested.slice(2))
+      : requested
+  const candidate = expanded ? resolve(expanded) : homedir()
   try {
     return existsSync(candidate) && statSync(candidate).isDirectory() ? candidate : homedir()
   } catch {
@@ -111,6 +209,12 @@ function sessionForOwner(sessionId: string, ownerId: number): TerminalSession | 
   return session?.ownerId === ownerId ? session : null
 }
 
+function pipeInputEcho(data: string): string {
+  if (data === '\x7f') return '\b \b'
+  if (data.startsWith('\x1b')) return ''
+  return data.replace(/\r/g, '\r\n').replace(/[^\x20-\x7e\r\n\b\t]/g, '')
+}
+
 export function createTerminalSession(
   sender: WebContents,
   request: TerminalCreateRequest,
@@ -120,10 +224,12 @@ export function createTerminalSession(
   const shell = resolveShell()
   const cols = clampDimension(request.cols, 2, 500)
   const rows = clampDimension(request.rows, 2, 300)
+  // Interactive zsh reopens /dev/tty under Bun and bypasses the JSONL pipes.
+  // Electron uses node-pty below, while the Tauri sidecar stays pipe-safe.
   const args = process.platform === 'win32' ? [] : ['-l']
   const env = terminalEnvironment()
   const ptyProcess = process.versions.bun
-    ? spawnPipeTerminal(shell, args, cwd, env, cols, rows)
+    ? spawnBunPipeTerminal(shell, args, cwd, env, cols, rows)
     : (requireNative('node-pty') as typeof import('node-pty')).spawn(shell, args, {
       name: 'xterm-256color',
       cols,
@@ -132,7 +238,12 @@ export function createTerminalSession(
       env,
     })
 
-  sessions.set(sessionId, { ownerId: sender.id, process: ptyProcess })
+  sessions.set(sessionId, {
+    ownerId: sender.id,
+    sender,
+    process: ptyProcess,
+    pipeMode: Boolean(process.versions.bun),
+  })
 
   if (!ownerCleanupRegistered.has(sender.id)) {
     ownerCleanupRegistered.add(sender.id)
@@ -156,7 +267,7 @@ export function createTerminalSession(
   })
 
   if (request.initialCommand) {
-    ptyProcess.write(`${request.initialCommand}\n`)
+    ptyProcess.write(`${request.initialCommand}${process.versions.bun ? '\n' : '\r'}`)
   }
 
   return { sessionId, shell, cwd }
@@ -165,7 +276,13 @@ export function createTerminalSession(
 export function writeTerminalSession(ownerId: number, sessionId: string, data: string): boolean {
   const session = sessionForOwner(sessionId, ownerId)
   if (!session || data.length === 0 || data.length > 64 * 1024) return false
-  session.process.write(data)
+  if (session.pipeMode) {
+    const echo = pipeInputEcho(data)
+    if (echo && !session.sender.isDestroyed()) {
+      session.sender.send(TERMINAL_IPC.DATA, { sessionId, data: echo })
+    }
+  }
+  session.process.write(session.pipeMode ? data.replace(/\r/g, '\n') : data)
   return true
 }
 

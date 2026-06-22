@@ -23,11 +23,41 @@ export interface Stage {
   detail?: string
 }
 
+export interface AgentInputImage {
+  type: 'image'
+  /** Raw base64 bytes. Data-URL prefixes are accepted and stripped before RPC. */
+  data: string
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp'
+  width?: number
+  height?: number
+}
+
+export interface AgentRunRequest {
+  task: string
+  images?: AgentInputImage[]
+}
+
+export type AgentApprovalDecision = 'deny' | 'once' | 'always'
+
+export interface AgentApprovalResponse {
+  runId: string
+  approvalId: string
+  decision: AgentApprovalDecision
+}
+
 export type AgentRunEvent =
   | { type: 'start'; runId: string; task: string }
   | { type: 'stage'; runId: string; stage: Stage }
   | { type: 'message'; runId: string; delta: string }
   | { type: 'answer'; runId: string; text: string }
+  | {
+      type: 'approval'
+      runId: string
+      approvalId: string
+      title: string
+      command: string
+      suggestedRule?: string
+    }
   | { type: 'done'; runId: string }
   | { type: 'error'; runId: string; message: string }
   /** One line from the pi subprocess stderr (config, auth, model errors, …). */
@@ -38,4 +68,6 @@ export const AGENT_IPC = {
   RUN: 'agent:run',
   CANCEL: 'agent:cancel',
   EVENT: 'agent:event',
+  APPROVE: 'agent:approve',
+  CAPTURE_ACTIVE_SCREEN: 'agent:capture-active-screen',
 } as const

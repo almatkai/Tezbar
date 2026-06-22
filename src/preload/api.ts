@@ -1,4 +1,9 @@
-import type { AgentRunEvent } from '../shared/agent'
+import type {
+  AgentApprovalResponse,
+  AgentInputImage,
+  AgentRunEvent,
+  AgentRunRequest,
+} from '../shared/agent'
 import type { ChatSession, ChatSessionSummary, ChatTurn } from '../shared/chat'
 import type { Intent } from '../shared/intent'
 import type { ClipboardEntry, ClipboardImagePayload } from '../shared/clipboard'
@@ -89,7 +94,7 @@ export type RaymesApi = {
   extensionInvokeAction: (payload: {
     sessionId: string
     actionId: string
-    formValues?: Record<string, string>
+    formValues?: Record<string, unknown>
   }) => Promise<ExtensionInvokeActionResult>
   extensionSearchTextChanged: (payload: {
     sessionId: string
@@ -98,9 +103,7 @@ export type RaymesApi = {
   extensionRefreshSession: (
     payload: ExtensionRefreshSessionRequest
   ) => Promise<ExtensionRefreshSessionResult>
-  extensionDisposeSession: (
-    payload: ExtensionDisposeSessionRequest
-  ) => Promise<boolean>
+  extensionDisposeSession: (payload: ExtensionDisposeSessionRequest) => Promise<boolean>
   extensionLoadMore: (
     payload: ExtensionLoadMoreSessionRequest
   ) => Promise<ExtensionRefreshSessionResult>
@@ -108,10 +111,32 @@ export type RaymesApi = {
   clipboardWriteText: (text: string) => Promise<{ ok: boolean }>
   shellOpen: (target: string) => Promise<{ ok: boolean }>
   getAppIconDataUrl: (appPath: string) => Promise<string | null>
+  getAssetIconDataUrl: (
+    kind: import('../shared/search').IconAssetKind,
+    path: string
+  ) => Promise<string | null>
   getExtensionPreferences: (payload: {
     extensionId: string
     commandName?: string
   }) => Promise<Record<string, unknown>>
+  getExtensionPreferenceSetup: (payload: { extensionId: string; commandName?: string }) => Promise<{
+    extensionId: string
+    commandName?: string
+    title: string
+    preferences: Array<{
+      name?: string
+      title?: string
+      description?: string
+      type?: string
+      required?: boolean
+      default?: unknown
+      data?: Array<{ title?: string; value?: string }>
+      commandName?: string
+      commandTitle?: string
+    }>
+    values: Record<string, unknown>
+    hasSavedPreferences: boolean
+  } | null>
   saveExtensionPreferences: (payload: {
     extensionId: string
     commandName?: string
@@ -119,6 +144,7 @@ export type RaymesApi = {
   }) => Promise<Record<string, unknown>>
   searchAll: (query: string) => Promise<SearchResult[]>
   completePath: (query: string) => Promise<PathCompletionItem[]>
+  recordDirectoryVisit: (path: string) => Promise<void>
   runSearchBenchmark: () => Promise<SearchBenchmarkReport>
   getSearchBenchmarkHistory: () => Promise<SearchBenchmarkReport[]>
   listOpenPorts: () => Promise<OpenPortProcess[]>
@@ -245,9 +271,15 @@ export type RaymesApi = {
     listener: (surface: 'command' | 'settings' | 'clipboard') => void
   ) => () => void
   /** Kick off a pi-backed agent run. Events stream via `onAgentEvent`. */
-  agentRun: (task: string) => Promise<{ ok: boolean; runId?: string; error?: string }>
+  agentRun: (
+    request: string | AgentRunRequest
+  ) => Promise<{ ok: boolean; runId?: string; error?: string }>
+  /** Capture the display under the pointer while temporarily hiding the Raymes window. */
+  captureActiveScreen: () => Promise<AgentInputImage>
   /** Abort the currently running agent task, if any. */
   agentCancel: () => Promise<{ ok: boolean }>
+  /** Resolve an in-chat command approval prompt. */
+  agentApprove: (response: AgentApprovalResponse) => Promise<{ ok: boolean; error?: string }>
   /** Subscribe to agent run events (stages, message deltas, answers, errors). */
   onAgentEvent: (listener: (event: AgentRunEvent) => void) => () => void
   /** Subscribe to extension install progress updates (0-100). */

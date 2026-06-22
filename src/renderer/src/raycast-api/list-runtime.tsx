@@ -389,7 +389,7 @@ export function ListRuntime({
   root: ExtensionRuntimeNode
   title: string
   onBack: () => void
-  onRunPrimaryAction: (actionId?: string, formValues?: Record<string, string>) => void
+  onRunPrimaryAction: (actionId?: string, formValues?: Record<string, unknown>) => void
   actions: ExtensionRuntimeAction[]
   onOpenActions: () => void
   onSearchTextChanged: (searchText: string) => Promise<void> | void
@@ -443,7 +443,6 @@ export function ListRuntime({
   }, [root.props?.searchText])
 
   useEffect(() => {
-    if (!hasServerSearch) return
     if (query === lastSentQuery.current) return
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current)
@@ -457,7 +456,7 @@ export function ListRuntime({
         clearTimeout(debounceTimer.current)
       }
     }
-  }, [query, hasServerSearch, onSearchTextChanged])
+  }, [query, onSearchTextChanged])
 
   const filteredRows = useMemo(() => {
     if (hasServerSearch) return rows
@@ -479,6 +478,12 @@ export function ListRuntime({
       loadingMoreRef.current = false
       setLoadingMore(false)
     }
+  }
+
+  const onListScroll = (event: React.UIEvent<HTMLDivElement>): void => {
+    const { clientHeight, scrollHeight, scrollTop } = event.currentTarget
+    const remaining = scrollHeight - scrollTop - clientHeight
+    if (remaining <= Math.max(120, clientHeight * 0.25)) void requestMore()
   }
 
   useEffect(() => {
@@ -615,7 +620,10 @@ export function ListRuntime({
           </div>
         ) : (
           <>
-            <div className={hasDetails ? 'min-h-0 overflow-y-auto pr-2' : 'min-h-0 flex-1 overflow-y-auto pr-0.5'}>
+            <div
+              onScroll={onListScroll}
+              className={hasDetails ? 'min-h-0 overflow-y-auto pr-2' : 'min-h-0 flex-1 overflow-y-auto pr-0.5'}
+            >
               {groupedSections.map((group, groupIdx) => (
                 <div key={groupIdx} className="mb-1">
                   {group.section ? (

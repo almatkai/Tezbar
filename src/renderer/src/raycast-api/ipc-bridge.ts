@@ -14,7 +14,7 @@ export async function runExtensionCommand(payload: {
 export async function invokeExtensionAction(payload: {
   sessionId: string
   actionId: string
-  formValues?: Record<string, string>
+  formValues?: Record<string, unknown>
 }): Promise<ExtensionInvokeActionResult> {
   return window.tezbar.extensionInvokeAction(payload)
 }

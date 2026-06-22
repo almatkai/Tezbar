@@ -1,15 +1,18 @@
 import {
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
   useRef,
   useState,
 } from 'react'
-import type { AgentRunEvent, Stage } from '../shared/agent'
-import {
-  defaultModels,
-  normalizeProviderModelList,
-} from '../shared/aiProviders'
+import type {
+  AgentApprovalDecision,
+  AgentInputImage,
+  AgentRunEvent,
+  Stage,
+} from '../shared/agent'
+import { defaultModels, inferCapabilities, normalizeProviderModelList } from '../shared/aiProviders'
 import {
   CHAT_CONTINUATION_WINDOW_MS,
   type ChatSession,
@@ -25,14 +28,16 @@ import { Markdown } from './ui/Markdown'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { AgentStageList } from './agentChat/shared'
 import { ModelPicker } from './ModelPicker'
-import {
-  buildAgentPromptFromChat,
-  makeChatId,
-  summarizeChatTitle,
-} from './agentChat/model'
+import { buildAgentPromptFromChat, makeChatId, summarizeChatTitle } from './agentChat/model'
 
 function focusChatInput(): void {
   document.getElementById('ai-chat-input')?.focus()
+}
+
+function submitComposerOnEnter(event: ReactKeyboardEvent<HTMLTextAreaElement>): void {
+  if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+  event.preventDefault()
+  event.currentTarget.form?.requestSubmit()
 }
 
 const QUESTION_PREFIX_RE = /^(what|why|how|who|when|is|are|can|does)\b/i
@@ -41,6 +46,19 @@ const AGENT_TASK_RE =
 const LOCAL_PATH_RE = /(?:~\/|\.{1,2}\/|\/Users\/|\bdesktop\/|\bdesktop\\|\bcode\/|\bcode\\)/i
 const MACHINE_QUERY_RE =
   /\b(i have|my mac|my computer|my system|installed|applications?|apps?|code editors?|editors?|on this machine|on my machine)\b/i
+const ATTACH_SCREEN_KEYS = (
+  <>
+    <Kbd>⌘</Kbd>
+    <Kbd>⇧</Kbd>
+    <Kbd>S</Kbd>
+  </>
+)
+const NEW_CHAT_KEYS = (
+  <>
+    <Kbd>⌘</Kbd>
+    <Kbd>N</Kbd>
+  </>
+)
 
 function shouldRunAgent(message: string): boolean {
   const trimmed = message.trim()
@@ -59,6 +77,8 @@ function modelsForProvider(cfg: LlmConfigRecord, provider: ProviderId): AiProvid
   )
 }
 
+type PendingApproval = Extract<AgentRunEvent, { type: 'approval' }>
+
 export default function AgentChatView({
   boot,
   onBack,
@@ -76,6 +96,10 @@ export default function AgentChatView({
   const [logsOpen, setLogsOpen] = useState(false)
   const [llmConfig, setLlmConfig] = useState<LlmConfigRecord>({})
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
+  const [screenAttachment, setScreenAttachment] = useState<AgentInputImage | null>(null)
+  const [screenCapturePending, setScreenCapturePending] = useState(false)
+  const [screenCaptureError, setScreenCaptureError] = useState<string | null>(null)
+  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null)
 
   const chatThreadRef = useRef<HTMLDivElement>(null)
   const historyOpenRef = useRef(false)
@@ -89,23 +113,56 @@ export default function AgentChatView({
   const agentStatusRef = useRef<'idle' | 'running' | 'done' | 'error'>('idle')
   const agentErrorRef = useRef<string | null>(null)
   const currentAgentRunIdRef = useRef<string | null>(null)
+  const pendingApprovalRef = useRef<PendingApproval | null>(null)
+  const ignoredRunIdsRef = useRef<Set<string> | null>(null)
   const submittedBootRef = useRef<string | null>(null)
   const completedRunIdsRef = useRef(new Set<string>())
 
   const [agentStages, setAgentStages] = useState<Stage[]>([])
   const [agentStreamText, setAgentStreamText] = useState('')
-  const [agentStatus, setAgentStatus] = useState<
-    'idle' | 'running' | 'done' | 'error'
-  >('idle')
+  const [agentStatus, setAgentStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [agentError, setAgentError] = useState<string | null>(null)
 
   useEffect(() => {
     chatSessionRef.current = chatSession
   }, [chatSession])
   useEffect(() => {
-    void window.tezbar.getLlmConfig().then((config) => setLlmConfig(config)).catch(() => {
-      /* ignore */
-    })
+    void window.tezbar
+      .getLlmConfig()
+      .then(async (config) => {
+        setLlmConfig(config)
+        // Auto-discover models for CLI-based providers (open models, ollama)
+        const provider = config.provider ?? 'ollama'
+        const needsDiscovery =
+          provider === 'opencode' ||
+          provider === 'ollama'
+        if (!needsDiscovery) return
+        try {
+          const discovered = await window.tezbar.listLlmModels(provider)
+          if (discovered.length > 0) {
+            const existing = config.providerModels?.[provider] ?? []
+            const existingIds = new Set(existing.map((m) => m.id))
+            const newModels: AiProviderModel[] = discovered
+              .filter((id) => !existingIds.has(id))
+              .map((id) => ({ id, capabilities: inferCapabilities(id) }))
+            if (newModels.length > 0) {
+              const updated = normalizeProviderModelList(provider, [...existing, ...newModels])
+              await window.tezbar.setLlmConfig({
+                providerModels: { ...config.providerModels, [provider]: updated },
+              } as LlmConfigRecord)
+              setLlmConfig((prev) => ({
+                ...prev,
+                providerModels: { ...prev.providerModels, [provider]: updated },
+              }))
+            }
+          }
+        } catch {
+          /* discovery is best-effort */
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      })
   }, [])
   useEffect(() => {
     agentStreamTextRef.current = agentStreamText
@@ -131,16 +188,21 @@ export default function AgentChatView({
 
   const stopRun = useCallback((): void => {
     if (!currentAgentRunIdRef.current) return
+    const ignoredRuns = ignoredRunIdsRef.current ?? new Set<string>()
+    ignoredRuns.add(currentAgentRunIdRef.current)
+    ignoredRunIdsRef.current = ignoredRuns
     void window.tezbar.agentCancel()
     currentAgentRunIdRef.current = null
     agentStatusRef.current = 'idle'
     agentErrorRef.current = null
     agentStreamTextRef.current = ''
     agentStagesRef.current = []
+    pendingApprovalRef.current = null
     setAgentStatus('idle')
     setAgentError(null)
     setAgentStreamText('')
     setAgentStages([])
+    setPendingApproval(null)
     focusChatInput()
   }, [])
 
@@ -157,28 +219,56 @@ export default function AgentChatView({
     setHistoryOpen(false)
     setRunLogs([])
     setLogsOpen(false)
+    setPendingApproval(null)
+    pendingApprovalRef.current = null
     focusChatInput()
   }, [stopRun])
 
-  const loadChatSession = useCallback(async (id: string): Promise<void> => {
+  const resolveApproval = useCallback(async (decision: AgentApprovalDecision): Promise<void> => {
+    const approval = pendingApprovalRef.current
+    if (!approval) return
+    pendingApprovalRef.current = null
+    setPendingApproval(null)
     try {
-      const full = await window.tezbar.chatGet(id)
-      if (!full) return
-      stopRun()
-      setChatSession(full)
-      chatSessionRef.current = full
-      setAgentStages([])
-      setAgentStreamText('')
-      setAgentError(null)
-      setAgentStatus('idle')
-      setHistoryOpen(false)
-      setRunLogs([])
-      setLogsOpen(false)
-      focusChatInput()
-    } catch {
-      /* ignore */
+      const result = await window.tezbar.agentApprove({
+        runId: approval.runId,
+        approvalId: approval.approvalId,
+        decision,
+      })
+      if (!result.ok && currentAgentRunIdRef.current === approval.runId) {
+        agentErrorRef.current = result.error ?? 'Could not resolve command approval'
+        setAgentError(agentErrorRef.current)
+      }
+    } catch (error) {
+      if (currentAgentRunIdRef.current === approval.runId) {
+        agentErrorRef.current = error instanceof Error ? error.message : String(error)
+        setAgentError(agentErrorRef.current)
+      }
     }
-  }, [stopRun])
+  }, [])
+
+  const loadChatSession = useCallback(
+    async (id: string): Promise<void> => {
+      try {
+        const full = await window.tezbar.chatGet(id)
+        if (!full) return
+        stopRun()
+        setChatSession(full)
+        chatSessionRef.current = full
+        setAgentStages([])
+        setAgentStreamText('')
+        setAgentError(null)
+        setAgentStatus('idle')
+        setHistoryOpen(false)
+        setRunLogs([])
+        setLogsOpen(false)
+        focusChatInput()
+      } catch {
+        /* ignore */
+      }
+    },
+    [stopRun]
+  )
 
   const deleteChatFromHistory = useCallback(
     async (id: string): Promise<void> => {
@@ -197,11 +287,11 @@ export default function AgentChatView({
         /* ignore */
       }
     },
-    [refreshChatHistory],
+    [refreshChatHistory]
   )
 
   const commitUserTurnAndRun = useCallback(
-    async (task: string): Promise<void> => {
+    async (task: string, image?: AgentInputImage | null): Promise<void> => {
       const trimmed = task.trim()
       if (!trimmed || agentStatusRef.current === 'running') return
       agentStatusRef.current = 'running'
@@ -211,17 +301,29 @@ export default function AgentChatView({
       const session: ChatSession = existing
         ? existing
         : {
-          id: makeChatId(),
-          title: summarizeChatTitle(trimmed),
-          createdAt: now,
-          updatedAt: now,
-          turns: [],
-        }
+            id: makeChatId(),
+            title: summarizeChatTitle(trimmed),
+            createdAt: now,
+            updatedAt: now,
+            turns: [],
+          }
 
       const userTurn: ChatTurn = {
         id: makeChatId(),
         role: 'user',
         text: trimmed,
+        attachments: image
+          ? [
+              {
+                kind: 'image',
+                name: 'Active screen',
+                mimeType: image.mimeType,
+                data: image.data,
+                width: image.width,
+                height: image.height,
+              },
+            ]
+          : undefined,
         createdAt: now,
       }
       const nextSession: ChatSession = {
@@ -252,15 +354,23 @@ export default function AgentChatView({
       setLogsOpen(false)
 
       try {
-        const result = shouldRunAgent(trimmed)
-          ? await window.tezbar.agentRun(buildAgentPromptFromChat(nextSession, trimmed))
-          : await window.tezbar.chatRun(nextSession.turns)
+        const result =
+          shouldRunAgent(trimmed) || image
+            ? await window.tezbar.agentRun({
+                task: buildAgentPromptFromChat(nextSession, trimmed),
+                images: image ? [image] : undefined,
+              })
+            : await window.tezbar.chatRun(nextSession.turns)
         if (!result.ok) {
           const error = formatLlmErrorMessage(result.error || 'Run failed to start')
           agentErrorRef.current = error
           agentStatusRef.current = 'error'
           setAgentError(error)
           setAgentStatus('error')
+        } else {
+          if (result.runId && !currentAgentRunIdRef.current) {
+            currentAgentRunIdRef.current = result.runId
+          }
         }
       } catch (err) {
         const error = formatLlmErrorMessage(
@@ -272,7 +382,7 @@ export default function AgentChatView({
         setAgentStatus('error')
       }
     },
-    [refreshChatHistory],
+    [refreshChatHistory]
   )
 
   const bootKey =
@@ -282,7 +392,7 @@ export default function AgentChatView({
         ? `resume:${boot.sessionId}`
         : boot.kind === 'panel'
           ? 'panel'
-          : 'newChat'
+          : boot.kind
 
   // First paint: honour boot + hydrate history.
   useEffect(() => {
@@ -297,6 +407,12 @@ export default function AgentChatView({
           return
         }
 
+        if (boot.kind === 'screen') {
+          startNewChat()
+          await attachActiveScreen()
+          return
+        }
+
         if (boot.kind === 'resume') {
           await loadChatSession(boot.sessionId)
           return
@@ -308,10 +424,7 @@ export default function AgentChatView({
 
         if (boot.kind === 'panel') {
           const mostRecent = rows[0]
-          if (
-            mostRecent &&
-            Date.now() - mostRecent.updatedAt < CHAT_CONTINUATION_WINDOW_MS
-          ) {
+          if (mostRecent && Date.now() - mostRecent.updatedAt < CHAT_CONTINUATION_WINDOW_MS) {
             const full = await window.tezbar.chatGet(mostRecent.id)
             if (!cancelled && full) {
               setChatSession(full)
@@ -324,10 +437,7 @@ export default function AgentChatView({
         if (boot.kind === 'submit') {
           let session: ChatSession | null = null
           const mostRecent = rows[0]
-          if (
-            mostRecent &&
-            Date.now() - mostRecent.updatedAt < CHAT_CONTINUATION_WINDOW_MS
-          ) {
+          if (mostRecent && Date.now() - mostRecent.updatedAt < CHAT_CONTINUATION_WINDOW_MS) {
             session = await window.tezbar.chatGet(mostRecent.id)
           }
           if (cancelled) return
@@ -358,17 +468,23 @@ export default function AgentChatView({
 
   useEffect(() => {
     return window.tezbar.onAgentEvent((event: AgentRunEvent) => {
-      if (
-        event.type !== 'start' &&
-        currentAgentRunIdRef.current !== null &&
-        event.runId !== currentAgentRunIdRef.current
-      ) {
+      if (ignoredRunIdsRef.current?.has(event.runId)) {
+        return
+      }
+
+      if (event.type === 'start') {
+        if (agentStatusRef.current !== 'running') return
+        if (currentAgentRunIdRef.current && currentAgentRunIdRef.current !== event.runId) {
+          return
+        }
+      } else if (event.runId !== currentAgentRunIdRef.current) {
         return
       }
 
       switch (event.type) {
         case 'start':
           currentAgentRunIdRef.current = event.runId
+          pendingApprovalRef.current = null
           agentStagesRef.current = []
           agentStreamTextRef.current = ''
           agentErrorRef.current = null
@@ -378,7 +494,12 @@ export default function AgentChatView({
           setAgentStages([])
           setAgentStreamText('')
           setAgentError(null)
+          setPendingApproval(null)
           setAgentStatus('running')
+          return
+        case 'approval':
+          pendingApprovalRef.current = event
+          setPendingApproval(event)
           return
         case 'log':
           if (event.source === 'stderr') {
@@ -405,6 +526,8 @@ export default function AgentChatView({
           setAgentStreamText(event.text)
           return
         case 'error':
+          pendingApprovalRef.current = null
+          setPendingApproval(null)
           agentErrorRef.current = formatLlmErrorMessage(event.message)
           agentStatusRef.current = 'error'
           setAgentError(agentErrorRef.current)
@@ -416,17 +539,18 @@ export default function AgentChatView({
           const finalText = agentStreamTextRef.current
           const finalStages = agentStagesRef.current.slice()
           const activeSession = chatSessionRef.current
-          const hadError =
-            agentStatusRef.current === 'error' || agentErrorRef.current !== null
+          const hadError = agentStatusRef.current === 'error' || agentErrorRef.current !== null
           const nextStatus: 'done' | 'error' = hadError ? 'error' : 'done'
           agentStatusRef.current = nextStatus
           setAgentStatus(nextStatus)
           currentAgentRunIdRef.current = null
+          pendingApprovalRef.current = null
+          setPendingApproval(null)
 
           if (activeSession) {
             const hasPayload = finalText.trim() || finalStages.length > 0 || hadError
             const errorText = hadError
-              ? agentErrorRef.current ?? 'Agent finished without a response.'
+              ? (agentErrorRef.current ?? 'Agent finished without a response.')
               : undefined
             const fallbackError = hasPayload ? errorText : 'Agent finished without a response.'
             const turn: ChatTurn = {
@@ -480,7 +604,30 @@ export default function AgentChatView({
   }, [startNewChat])
 
   useEffect(() => {
+    const onApprovalKeyDown = (event: KeyboardEvent): void => {
+      const approval = pendingApprovalRef.current
+      if (!approval || event.repeat) return
+      let decision: AgentApprovalDecision | null = null
+      if (event.key === 'Escape') decision = 'deny'
+      if (event.key === 'Enter') {
+        decision =
+          (event.metaKey || event.ctrlKey) && approval.suggestedRule ? 'always' : 'once'
+      }
+      if (!decision) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      void resolveApproval(decision)
+    }
+    window.addEventListener('keydown', onApprovalKeyDown, true)
+    return () => window.removeEventListener('keydown', onApprovalKeyDown, true)
+  }, [resolveApproval])
+
+  useEffect(() => {
     setCommandSurfaceEscapeConsumer(() => {
+      if (pendingApprovalRef.current) {
+        void resolveApproval('deny')
+        return true
+      }
       if (currentAgentRunIdRef.current) {
         stopRun()
         return true
@@ -495,7 +642,7 @@ export default function AgentChatView({
     return () => {
       setCommandSurfaceEscapeConsumer(null)
     }
-  }, [stopRun])
+  }, [resolveApproval, stopRun])
 
   useEffect(() => {
     requestAnimationFrame(() => focusChatInput())
@@ -505,9 +652,37 @@ export default function AgentChatView({
     e.preventDefault()
     const text = draft.trim()
     if (!text) return
+    const attachment = screenAttachment
     setDraft('')
-    await commitUserTurnAndRun(text)
+    setScreenAttachment(null)
+    await commitUserTurnAndRun(text, attachment)
   }
+
+  const attachActiveScreen = useCallback(async (): Promise<void> => {
+    if (screenCapturePending || agentStatus === 'running') return
+    setScreenCapturePending(true)
+    setScreenCaptureError(null)
+    try {
+      setScreenAttachment(await window.tezbar.captureActiveScreen())
+      requestAnimationFrame(() => focusChatInput())
+    } catch (error) {
+      setScreenCaptureError(error instanceof Error ? error.message : 'Screen capture failed')
+    } finally {
+      setScreenCapturePending(false)
+    }
+  }, [agentStatus, screenCapturePending])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 's') {
+        event.preventDefault()
+        event.stopPropagation()
+        void attachActiveScreen()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [attachActiveScreen])
 
   async function selectProviderModel(provider: ProviderId, modelId: string): Promise<void> {
     const models = modelsForProvider(llmConfig, provider)
@@ -538,21 +713,32 @@ export default function AgentChatView({
     <div
       aria-label="AI Chat"
       tabIndex={-1}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none"
+      className="flex h-full min-h-0 w-full flex-col outline-none"
     >
-      <div className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 animate-tezbar-scale-in">
-        <div className="relative mb-3 flex shrink-0 items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-200">
-              AI Chat
-            </p>
-            {chatSession ? (
-              <p className="truncate text-[12.5px] text-ink-1">{chatSession.title}</p>
-            ) : (
-              <p className="text-[12.5px] text-ink-3">Ask anything</p>
-            )}
+      <div className="agent-chat-shell flex min-h-0 flex-1 flex-col overflow-hidden animate-tezbar-scale-in">
+        <div className="relative flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/[0.065] px-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.045] text-ink-2">
+              <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
+                <path
+                  d="M4 5.5h10M4 9h6M4 12.5h8"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="1.35"
+                />
+              </svg>
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11.5px] font-semibold text-ink-1">Agent</p>
+              {chatSession ? (
+                <p className="truncate text-[10px] text-ink-4">{chatSession.title}</p>
+              ) : (
+                <p className="text-[10px] text-ink-4">New conversation</p>
+              )}
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             <ModelPicker
               config={llmConfig}
               open={modelPickerOpen}
@@ -564,7 +750,7 @@ export default function AgentChatView({
             {agentStatus === 'running' ? (
               <button
                 type="button"
-                className="inline-flex h-6 items-center rounded-tezbar-chip border border-rose-400/35 bg-rose-500/10 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-200 transition hover:border-rose-300/60 hover:bg-rose-500/16 hover:text-rose-100"
+                className="inline-flex h-7 items-center rounded-lg border border-rose-400/25 bg-rose-500/10 px-2 text-[10px] font-medium text-rose-200 transition hover:bg-rose-500/15"
                 onClick={() => {
                   stopRun()
                 }}
@@ -574,7 +760,9 @@ export default function AgentChatView({
             ) : null}
             <button
               type="button"
-              className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
+              aria-label="Chat history"
+              title="Chat history"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-4 transition hover:bg-white/[0.06] hover:text-ink-1"
               onClick={() => {
                 setModelPickerOpen(false)
                 setHistoryOpen((v) => !v)
@@ -582,30 +770,67 @@ export default function AgentChatView({
               }}
               aria-expanded={historyOpen}
             >
-              History
+              <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
+                <path
+                  d="M9 4.2a4.8 4.8 0 1 1-4.3 2.7M4.7 3.9v3h3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.35"
+                />
+                <path
+                  d="M9 6.2v3l2 1.2"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="1.35"
+                />
+              </svg>
             </button>
             <button
               type="button"
-              className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
+              aria-label="New chat"
+              title="New chat"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-4 transition hover:bg-white/[0.06] hover:text-ink-1"
               onClick={() => {
                 startNewChat()
               }}
             >
-              New
+              <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
+                <path
+                  d="M9 3.5v11M3.5 9h11"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="1.35"
+                />
+              </svg>
             </button>
             <button
               type="button"
-              className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-1"
+              aria-label="Back"
+              title="Back"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-4 transition hover:bg-white/[0.06] hover:text-ink-1"
               onClick={() => {
                 void onBack()
               }}
             >
-              Back
+              <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
+                <path
+                  d="m10.8 4.5-4.5 4.5 4.5 4.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.35"
+                />
+              </svg>
             </button>
           </div>
 
           {historyOpen ? (
-            <div className="glass-card absolute right-6 top-[72px] z-20 w-[320px] overflow-hidden py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
+            <div className="tezbar-popover absolute right-3 top-11 z-40 w-[320px] overflow-hidden p-1.5">
               <div className="flex items-center justify-between px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-4">
                 <span>Past chats</span>
                 {chatHistory.length > 0 ? (
@@ -637,7 +862,7 @@ export default function AgentChatView({
                             'flex w-full items-start justify-between gap-3 px-3 py-2 text-left transition',
                             isActive
                               ? 'bg-violet-500/10 text-ink-1'
-                              : 'hover:bg-white/[0.04] text-ink-2 hover:text-ink-1',
+                              : 'hover:bg-white/[0.04] text-ink-2 hover:text-ink-1'
                           )}
                           onClick={() => {
                             void loadChatSession(row.id)
@@ -677,34 +902,52 @@ export default function AgentChatView({
 
         <div
           ref={chatThreadRef}
-          className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2"
+          className="agent-chat-thread flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-5"
         >
           {chatSession && chatSession.turns.length > 0
             ? chatSession.turns.map((turn) =>
-              turn.role === 'user' ? (
-                <div key={turn.id} className="flex justify-end">
-                  <div className="max-w-[88%] rounded-tezbar-row border border-violet-400/30 bg-violet-500/12 px-3 py-2 text-[13.5px] leading-[1.5] text-ink-1">
-                    {turn.text}
+                turn.role === 'user' ? (
+                  <div key={turn.id} className="flex justify-end">
+                    <div className="max-w-[88%] overflow-hidden rounded-tezbar-row border border-white/10 bg-white/[0.055] text-[13.5px] leading-[1.5] text-ink-1">
+                      {turn.attachments?.map((attachment, index) =>
+                        attachment.data ? (
+                          <img
+                            key={`${attachment.name}-${index}`}
+                            src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                            alt={attachment.name}
+                            className="max-h-44 w-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            key={`${attachment.name}-${index}`}
+                            className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-2 text-[11px] text-ink-3"
+                          >
+                            <span className="h-2 w-2 rounded-sm bg-sky-300/80" />
+                            {attachment.name}
+                          </div>
+                        )
+                      )}
+                      <p className="px-3 py-2">{turn.text}</p>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div key={turn.id} className="flex flex-col gap-1.5">
-                  {turn.stages && turn.stages.length > 0 ? (
-                    <AgentStageList stages={turn.stages} compact />
-                  ) : null}
-                  {turn.text ? (
-                    <Markdown text={turn.text} />
-                  ) : turn.error ? null : (
-                    <p className="text-[12.5px] italic text-ink-4">(no text response)</p>
-                  )}
-                  {turn.error ? (
-                    <p className="text-[11.5px] text-rose-300" role="alert">
-                      {formatLlmErrorMessage(turn.error)}
-                    </p>
-                  ) : null}
-                </div>
-              ),
-            )
+                ) : (
+                  <div key={turn.id} className="flex flex-col gap-1.5">
+                    {turn.stages && turn.stages.length > 0 ? (
+                      <AgentStageList stages={turn.stages} compact />
+                    ) : null}
+                    {turn.text ? (
+                      <Markdown text={turn.text} />
+                    ) : turn.error ? null : (
+                      <p className="text-[12.5px] italic text-ink-4">(no text response)</p>
+                    )}
+                    {turn.error ? (
+                      <p className="text-[11.5px] text-rose-300" role="alert">
+                        {formatLlmErrorMessage(turn.error)}
+                      </p>
+                    ) : null}
+                  </div>
+                )
+              )
             : null}
 
           {agentStatus === 'running' || agentStages.length > 0 || agentStreamText ? (
@@ -719,16 +962,20 @@ export default function AgentChatView({
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:120ms]" />
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:240ms]" />
                   </span>
-                  Planning
+                  Working
                 </p>
               ) : null}
             </div>
           ) : null}
 
           {agentError ? (
-            <p className="text-[11.5px] text-rose-300" role="alert">
-              {agentError}
-            </p>
+            <div
+              className="flex items-start gap-2 rounded-xl border border-rose-400/15 bg-rose-500/[0.055] px-3 py-2 text-[11.5px] text-rose-200"
+              role="alert"
+            >
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-300" />
+              <span className="min-w-0 flex-1 whitespace-pre-wrap">{agentError}</span>
+            </div>
           ) : null}
 
           {runLogs.length > 0 ? (
@@ -752,39 +999,201 @@ export default function AgentChatView({
 
           {!chatSession || chatSession.turns.length === 0 ? (
             agentStatus === 'idle' && !agentStreamText ? (
-              <div className="flex flex-1 items-center justify-center px-4 py-6 text-center">
+              <div className="flex flex-1 items-center justify-center px-4 py-10 text-center">
                 <div className="max-w-[440px] space-y-2 text-ink-3">
-                  <p className="text-[13px] text-ink-2">AI chat</p>
-                  <p className="text-[12px] text-ink-4">
-                    Type below and press Enter.
-                  </p>
+                  <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-ink-3">
+                    <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
+                      <path
+                        d="M4 5.5h10M4 9h6M4 12.5h8"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeWidth="1.35"
+                      />
+                    </svg>
+                  </span>
+                  <p className="pt-1 text-[13px] font-medium text-ink-2">What are we working on?</p>
+                  <p className="text-[11px] text-ink-4">Ask a question or hand the agent a task.</p>
                 </div>
               </div>
             ) : null
           ) : null}
         </div>
 
-        <form
-          className="shrink-0 border-t border-white/[0.06] pt-3"
-          onSubmit={(ev) => void onSubmitMessage(ev)}
-        >
-          <input
-            id="ai-chat-input"
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Message the agent…"
-            autoComplete="off"
-            spellCheck={false}
-            className="w-full rounded-tezbar-row border border-white/10 bg-white/[0.04] px-3 py-2 font-display text-[14px] text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:border-violet-400/40"
-          />
+        {pendingApproval ? (
+          <div className="shrink-0 px-4 pb-1.5">
+            <div className="mx-auto max-w-[780px] overflow-hidden rounded-2xl border border-amber-300/20 bg-amber-200/[0.055] shadow-[0_12px_36px_rgba(0,0,0,0.22)]">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-amber-200/15 bg-amber-200/[0.07] text-amber-100/80">
+                  <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
+                    <path
+                      d="m5 6 3 3-3 3m5.5 0H14"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.4"
+                    />
+                  </svg>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[10px] font-medium uppercase tracking-[0.12em] text-amber-100/55">
+                    {pendingApproval.title || 'Run command'}
+                  </span>
+                  <code className="mt-0.5 block truncate font-mono text-[12px] text-ink-1">
+                    {pendingApproval.command}
+                  </code>
+                </span>
+                <button
+                  type="button"
+                  className="hidden shrink-0 items-center gap-2 rounded-xl bg-ink-1 px-3 py-2 text-[11px] font-semibold text-glass-shell transition hover:bg-white sm:inline-flex"
+                  onClick={() => void resolveApproval('once')}
+                >
+                  Run once
+                  <span className="font-mono text-[10px] opacity-60">↵</span>
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 border-t border-white/[0.06] px-3 py-2">
+                <button
+                  type="button"
+                  className="rounded-lg px-2 py-1.5 text-[10.5px] text-ink-3 transition hover:bg-white/[0.055] hover:text-ink-1"
+                  onClick={() => void resolveApproval('deny')}
+                >
+                  Deny <span className="ml-1 font-mono text-[9px] text-ink-4">esc</span>
+                </button>
+                {pendingApproval.suggestedRule ? (
+                  <button
+                    type="button"
+                    className="rounded-lg px-2 py-1.5 text-[10.5px] text-ink-3 transition hover:bg-white/[0.055] hover:text-ink-1"
+                    onClick={() => void resolveApproval('always')}
+                  >
+                    Always allow {pendingApproval.suggestedRule}
+                    <span className="ml-1.5 font-mono text-[9px] text-ink-4">⌘↵</span>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="ml-auto rounded-lg bg-ink-1 px-2.5 py-1.5 text-[10.5px] font-semibold text-glass-shell sm:hidden"
+                  onClick={() => void resolveApproval('once')}
+                >
+                  Run once ↵
+                </button>
+                <span className="ml-auto hidden text-[10px] text-ink-4 sm:block">
+                  Press <span className="font-mono text-ink-2">Enter</span> to run
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <form className="shrink-0 px-4 pb-3 pt-2" onSubmit={(ev) => void onSubmitMessage(ev)}>
+          <div className="agent-composer mx-auto max-w-[780px] overflow-hidden rounded-2xl border border-white/[0.11] bg-white/[0.045] shadow-[0_12px_35px_rgba(0,0,0,0.2)] transition focus-within:border-white/[0.2] focus-within:bg-white/[0.055]">
+            {screenAttachment ? (
+              <div className="flex items-center gap-3 border-b border-white/[0.07] p-2.5 pr-3">
+                <div className="relative shrink-0 overflow-hidden rounded-lg border border-white/10">
+                  <img
+                    src={`data:${screenAttachment.mimeType};base64,${screenAttachment.data}`}
+                    alt="Attached active screen"
+                    className="h-12 w-20 object-cover"
+                  />
+                  <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 py-0.5 text-[8px] font-medium text-white/80">
+                    SCREEN
+                  </span>
+                </div>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11.5px] font-medium text-ink-1">Active screen</span>
+                  <span className="mt-0.5 block text-[9.5px] text-ink-4">
+                    Attached to your next message
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  aria-label="Remove attached screen"
+                  title="Remove attachment"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-4 transition hover:bg-white/[0.06] hover:text-rose-200"
+                  onClick={() => setScreenAttachment(null)}
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5">
+                    <path
+                      d="m4 4 8 8m0-8-8 8"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeWidth="1.35"
+                    />
+                  </svg>
+                </button>
+              </div>
+            ) : null}
+            {screenCaptureError ? (
+              <p
+                className="border-b border-rose-400/10 px-3 py-2 text-[10.5px] text-rose-300"
+                role="alert"
+              >
+                {screenCaptureError}
+              </p>
+            ) : null}
+            <div className="flex items-end gap-1.5 p-2">
+              <button
+                type="button"
+                aria-label="Attach active screen"
+                title="Attach active screen (⌘⇧S)"
+                disabled={screenCapturePending || agentStatus === 'running'}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-4 transition hover:bg-white/[0.065] hover:text-ink-1 disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => void attachActiveScreen()}
+              >
+                {screenCapturePending ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border border-white/20 border-t-white/70" />
+                ) : (
+                  <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
+                    <path
+                      d="M5.2 9.5 9 5.7a2.3 2.3 0 0 1 3.2 3.2l-4.5 4.5a3.2 3.2 0 0 1-4.5-4.5l4.7-4.7"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeWidth="1.35"
+                    />
+                  </svg>
+                )}
+              </button>
+              <textarea
+                id="ai-chat-input"
+                aria-label="Message Agent"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={submitComposerOnEnter}
+                placeholder="Message Agent"
+                autoComplete="off"
+                spellCheck={false}
+                rows={1}
+                className="max-h-28 min-h-8 min-w-0 flex-1 resize-none bg-transparent px-1.5 py-1.5 text-[13px] leading-5 text-ink-1 outline-none placeholder:text-ink-4"
+              />
+              <button
+                type="submit"
+                aria-label={agentStatus === 'running' ? 'Agent is working' : 'Send message'}
+                disabled={!draft.trim() || agentStatus === 'running'}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink-1 text-glass-shell transition hover:bg-white disabled:cursor-not-allowed disabled:bg-white/[0.07] disabled:text-ink-4"
+              >
+                <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
+                  <path
+                    d="M9 13.5v-9m-3.5 3L9 4l3.5 3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.45"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
         </form>
       </div>
 
-      <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
+      <div className="shrink-0 px-4 py-2 animate-tezbar-scale-in">
         <HintBar>
           <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
-          <Hint label="New chat" keys={<><Kbd>⌘</Kbd><Kbd>N</Kbd></>} />
+          <Hint label="Attach screen" keys={ATTACH_SCREEN_KEYS} />
+          <Hint label="New chat" keys={NEW_CHAT_KEYS} />
           {agentStatus === 'running' ? (
             <Hint label="Stop" keys={<Kbd>Esc</Kbd>} />
           ) : (

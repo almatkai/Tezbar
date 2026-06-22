@@ -7,6 +7,7 @@ export type AiChatBoot =
   | { kind: 'submit'; prompt: string }
   | { kind: 'panel' }
   | { kind: 'newChat' }
+  | { kind: 'screen' }
   | { kind: 'resume'; sessionId: string }
 
 /** Dispatched from App when ⌘N fires on the command surface (quick note). */

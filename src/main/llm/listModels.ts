@@ -190,7 +190,7 @@ export async function listModelsForProvider(id: ProviderId, signal?: AbortSignal
           .replace(/\x1b\[[0-9;]*m/g, '')
           .split('\n')
           .map((line) => line.trim())
-          .filter((line) => line.startsWith('opencode/'))
+          .filter((line) => line.startsWith('opencode/') || line.startsWith('opencode-go/'))
         return models.length > 0 ? models : ['opencode/big-pickle']
       } catch {
         return ['opencode/big-pickle']

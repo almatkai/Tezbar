@@ -10,9 +10,19 @@
  * `chat:*` IPC channels below.
  */
 
-import type { Stage } from './agent'
+import type { AgentInputImage, Stage } from './agent'
 
 export type ChatRole = 'user' | 'assistant'
+
+export interface ChatAttachment {
+  kind: 'image'
+  name: string
+  mimeType: AgentInputImage['mimeType']
+  /** Present only in the live renderer session; history stores metadata. */
+  data?: string
+  width?: number
+  height?: number
+}
 
 export interface ChatTurn {
   id: string
@@ -22,6 +32,7 @@ export interface ChatTurn {
   stages?: Stage[]
   /** Optional error string if the assistant turn failed. */
   error?: string
+  attachments?: ChatAttachment[]
   createdAt: number
 }
 

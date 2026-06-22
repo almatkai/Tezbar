@@ -3,10 +3,10 @@ import { registerIpcHandlers, shutdownIpcHandlers } from './ipc'
 import { startClipboardWatcher, stopClipboardWatcher } from './search/providers/clipboardProvider'
 import { flushConfig, writeConfigPatch } from './llm/configStore'
 import { BrowserWindow, ipcMain } from 'electron'
-import readline from 'node:readline'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { createConnection } from 'node:net'
 
 declare const __RAYMES_PI_POLICY_SOURCE__: string
 
@@ -70,13 +70,11 @@ registerIpcHandlers(() => mockWin, {
 
 startClipboardWatcher()
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  terminal: false
-})
+function writeReply(payload: Record<string, unknown>): void {
+  process.stdout.write(`${JSON.stringify(payload)}\n`)
+}
 
-rl.on('line', async (line) => {
+async function handleLine(line: string): Promise<void> {
   if (!line.trim()) return
   try {
     const message = JSON.parse(line) as {
@@ -88,22 +86,83 @@ rl.on('line', async (line) => {
     if (message.type === 'invoke') {
       const { id, channel, payload } = message
       if ((typeof id !== 'string' && typeof id !== 'number') || typeof channel !== 'string') return
+      const startedAt = Date.now()
       try {
         const args = Array.isArray(payload) ? payload : [payload]
         const result = await tauriIpcMain._invoke(channel, ...args)
-        console.log(JSON.stringify({ type: 'reply', id, result }))
+        const elapsedMs = Date.now() - startedAt
+        if (elapsedMs >= 1_000) {
+          console.warn(`[server] slow IPC: ${channel} completed in ${elapsedMs}ms`)
+        }
+        writeReply({ type: 'reply', id, result })
       } catch (error: unknown) {
-        console.log(JSON.stringify({
+        console.error(`[server] IPC failed: ${channel}`, error)
+        writeReply({
           type: 'reply',
           id,
           error: error instanceof Error ? error.message : String(error),
-        }))
+        })
       }
     }
   } catch (error: unknown) {
     console.error('[server] error parsing/handling stdin line:', error)
   }
-})
+}
+
+let stdinBuffer = ''
+function processInputChunk(chunk: string): void {
+  stdinBuffer += chunk
+  let newlineIndex = stdinBuffer.indexOf('\n')
+  while (newlineIndex >= 0) {
+    const line = stdinBuffer.slice(0, newlineIndex)
+    stdinBuffer = stdinBuffer.slice(newlineIndex + 1)
+    void handleLine(line)
+    newlineIndex = stdinBuffer.indexOf('\n')
+  }
+}
+
+type BunStdinRuntime = {
+  stdin: { stream: () => ReadableStream<Uint8Array> }
+}
+
+const bunRuntime = (globalThis as typeof globalThis & { Bun?: BunStdinRuntime }).Bun
+const backendIpcPort = Number(process.env.BACKEND_IPC_PORT)
+if (Number.isInteger(backendIpcPort) && backendIpcPort > 0 && backendIpcPort <= 65_535) {
+  const socket = createConnection({ host: '127.0.0.1', port: backendIpcPort }, () => {
+    console.error(`[server] Connected to Tauri IPC on localhost:${backendIpcPort}`)
+  })
+  socket.setEncoding('utf8')
+  socket.on('data', processInputChunk)
+  socket.on('end', cleanup)
+  socket.on('error', (error) => {
+    console.error('[server] Tauri IPC socket failed:', error)
+    cleanup()
+  })
+} else if (bunRuntime) {
+  void (async () => {
+    const reader = bunRuntime.stdin.stream().getReader()
+    const decoder = new TextDecoder()
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        processInputChunk(decoder.decode(value, { stream: true }))
+      }
+      processInputChunk(decoder.decode())
+    } finally {
+      reader.releaseLock()
+    }
+    cleanup()
+  })().catch((error: unknown) => {
+    console.error('[server] native Bun stdin reader failed:', error)
+    cleanup()
+  })
+} else {
+  process.stdin.setEncoding('utf8')
+  process.stdin.on('data', processInputChunk)
+  process.stdin.on('end', cleanup)
+  process.stdin.resume()
+}
 
 function cleanup(): void {
   try {
@@ -118,6 +177,5 @@ function cleanup(): void {
 
 process.on('SIGINT', cleanup)
 process.on('SIGTERM', cleanup)
-rl.on('close', cleanup)
 
 console.error('[server] Raymes TS background runner started successfully via stdin/stdout IPC.')

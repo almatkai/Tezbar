@@ -23,6 +23,7 @@ async function runBuild(): Promise<void> {
       'better-sqlite3': join(root, 'src/main/better-sqlite3-shim.ts')
     },
     external: [
+      'esbuild',
       'node-pty',
       'fsevents',
       'bun:sqlite'

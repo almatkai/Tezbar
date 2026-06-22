@@ -3,14 +3,20 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { cx } from './ui/primitives'
-import type { TerminalDataEvent, TerminalExitEvent } from '../shared/terminal'
+import {
+  compactTerminalPath,
+  type TerminalDataEvent,
+  type TerminalExitEvent,
+} from '../shared/terminal'
 
 export default function TerminalView({
   initialCommand,
+  workingDirectory,
   onBack,
   embedded = false,
 }: {
   initialCommand?: string
+  workingDirectory?: string
   onBack: () => void
   embedded?: boolean
 }): JSX.Element {
@@ -30,7 +36,7 @@ export default function TerminalView({
     const terminal = new Terminal({
       cursorBlink: true,
       cursorStyle: 'bar',
-      convertEol: false,
+      convertEol: true,
       fontFamily: '"SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, monospace',
       fontSize: 12,
       lineHeight: 1.22,
@@ -66,7 +72,6 @@ export default function TerminalView({
     let sessionId: string | null = null
     let disposed = false
     let resizeFrame = 0
-    let initialCommandSent = false
     const pendingData: TerminalDataEvent[] = []
     const pendingExits: TerminalExitEvent[] = []
 
@@ -109,14 +114,6 @@ export default function TerminalView({
       }
       if (event.sessionId === sessionId) {
         terminal.write(event.data)
-        if (!initialCommandSent && initialCommand) {
-          initialCommandSent = true
-          setTimeout(() => {
-            if (sessionId) {
-              void window.tezbar.terminalWrite(sessionId, `${initialCommand}\r`)
-            }
-          }, 150)
-        }
       }
     })
     const offExit = window.tezbar.onTerminalExit((event) => {
@@ -144,6 +141,8 @@ export default function TerminalView({
     fit()
     void window.tezbar
       .terminalCreate({
+        cwd: workingDirectory,
+        initialCommand,
         cols: Math.max(terminal.cols, 80),
         rows: Math.max(terminal.rows, 24),
       })
@@ -179,7 +178,7 @@ export default function TerminalView({
       terminal.dispose()
       if (sessionId) void window.tezbar.terminalKill(sessionId)
     }
-  }, [initialCommand])
+  }, [initialCommand, workingDirectory])
 
   return (
     <section
@@ -203,7 +202,7 @@ export default function TerminalView({
             Direct shell
           </span>
           <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-ink-4" title={cwd}>
-            {shellName}{cwd ? ` · ${cwd}` : ''}
+            {shellName}{cwd ? ` · ${compactTerminalPath(cwd)}` : ''}
           </span>
           <span className="shrink-0 font-mono text-[9px] text-ink-4">⌘[ back</span>
         </header>

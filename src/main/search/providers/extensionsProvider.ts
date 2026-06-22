@@ -1,6 +1,4 @@
-import {
-  listInstalledRegistryExtensions,
-} from '../../extension-registry'
+import { listInstalledRegistryExtensions } from '../../extension-registry'
 import type { IndexedDocument, SearchProvider } from './types'
 
 export const extensionsProvider: SearchProvider = {
@@ -23,6 +21,7 @@ export const extensionsProvider: SearchProvider = {
             extensionId: ext.id,
             commandName: cmd.name,
             title: cmd.title,
+            iconPath: ext.iconPath,
             commandArgumentDefinitions: cmd.argumentDefinitions,
           },
           updatedAt: ext.installedAt,

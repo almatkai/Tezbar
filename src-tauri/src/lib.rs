@@ -1,19 +1,21 @@
 // src-tauri/src/lib.rs
 mod native_input;
+mod native_terminal;
 
 use serde_json::json;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
 use std::process::{Command, Stdio};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, WebviewWindow};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tokio::sync::oneshot;
 
 struct BackendState {
-    tx: Arc<Mutex<Option<std::sync::mpsc::Sender<String>>>>,
+    writer: Arc<Mutex<Option<TcpStream>>>,
     pending_requests: Arc<Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>>,
     request_counter: Arc<Mutex<u64>>,
 }
@@ -21,6 +23,32 @@ struct BackendState {
 #[derive(Default)]
 struct WindowBehaviorState {
     suppress_blur_hide: Mutex<bool>,
+    backend_hidden_windows: Mutex<Vec<String>>,
+}
+
+fn set_backend_app_visibility(app: &AppHandle, visible: bool) {
+    let state = app.state::<WindowBehaviorState>();
+    if visible {
+        let labels = {
+            let mut hidden = state.backend_hidden_windows.lock().unwrap();
+            std::mem::take(&mut *hidden)
+        };
+        for label in labels {
+            if let Some(window) = app.get_webview_window(&label) {
+                let _ = window.show();
+            }
+        }
+        return;
+    }
+
+    let mut hidden = state.backend_hidden_windows.lock().unwrap();
+    hidden.clear();
+    for (label, window) in app.webview_windows() {
+        if window.is_visible().unwrap_or(false) {
+            hidden.push(label);
+            let _ = window.hide();
+        }
+    }
 }
 
 fn place_window(window: &WebviewWindow) -> Result<(), String> {
@@ -174,6 +202,7 @@ async fn call_backend(
     channel: String,
     payload: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
+    let started_at = Instant::now();
     let id = {
         let mut counter = state.request_counter.lock().unwrap();
         *counter += 1;
@@ -195,12 +224,14 @@ async fn call_backend(
     .to_string();
 
     {
-        let tx_stdin = state.tx.lock().unwrap();
-        if let Some(ref sender) = *tx_stdin {
-            if sender.send(msg).is_err() {
+        let mut backend_writer = state.writer.lock().unwrap();
+        if let Some(writer) = backend_writer.as_mut() {
+            if writeln!(writer, "{}", msg).is_err() || writer.flush().is_err() {
                 state.pending_requests.lock().unwrap().remove(&id);
-                return Err("Failed to send message to backend runner process".to_string());
+                *backend_writer = None;
+                return Err("Failed to write to backend runner process".to_string());
             }
+            log::debug!("wrote backend request: id={} channel={}", id, channel);
         } else {
             state.pending_requests.lock().unwrap().remove(&id);
             return Err("Backend runner process is not running".to_string());
@@ -210,34 +241,52 @@ async fn call_backend(
     match tokio::time::timeout(Duration::from_secs(30), rx).await {
         Ok(Ok(res)) => {
             if let Some(err) = res.get("error") {
-                Err(err.as_str().unwrap_or("Unknown backend error").to_string())
+                let message = err.as_str().unwrap_or("Unknown backend error").to_string();
+                log::error!(
+                    "backend request failed: id={} channel={} elapsed_ms={} error={}",
+                    id,
+                    channel,
+                    started_at.elapsed().as_millis(),
+                    message
+                );
+                Err(message)
             } else {
+                log::debug!(
+                    "backend request completed: id={} channel={} elapsed_ms={}",
+                    id,
+                    channel,
+                    started_at.elapsed().as_millis()
+                );
                 Ok(res
                     .get("result")
                     .cloned()
                     .unwrap_or(serde_json::Value::Null))
             }
         }
-        Ok(Err(_)) => Err("Backend runner stopped before replying".to_string()),
+        Ok(Err(_)) => {
+            let message = "Backend runner stopped before replying".to_string();
+            log::error!("{}: id={} channel={}", message, id, channel);
+            Err(message)
+        }
         Err(_) => {
             state.pending_requests.lock().unwrap().remove(&id);
-            Err("Backend request timed out after 30 seconds".to_string())
+            let message = "Backend request timed out after 30 seconds".to_string();
+            log::error!("{}: id={} channel={}", message, id, channel);
+            Err(message)
         }
     }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let (tx_stdin, rx_stdin) = std::sync::mpsc::channel::<String>();
     let pending_requests = Arc::new(Mutex::new(
         HashMap::<u64, oneshot::Sender<serde_json::Value>>::new(),
     ));
     let request_counter = Arc::new(Mutex::new(0));
-    let tx_stdin_app = Arc::new(Mutex::new(Some(tx_stdin)));
+    let backend_writer = Arc::new(Mutex::new(None::<TcpStream>));
 
     let pending_requests_app = pending_requests.clone();
-    let _request_counter_app = request_counter.clone();
-    let tx_stdin_clone = tx_stdin_app.clone();
+    let backend_writer_app = backend_writer.clone();
 
     tauri::Builder::default()
     .plugin(tauri_plugin_log::Builder::default().build())
@@ -252,11 +301,12 @@ pub fn run() {
       .build())
     .plugin(tauri_plugin_shell::init())
         .manage(BackendState {
-      tx: tx_stdin_clone,
+      writer: backend_writer,
       pending_requests,
             request_counter,
         })
         .manage(WindowBehaviorState::default())
+        .manage(native_terminal::NativeTerminalState::default())
         .on_window_event(|window, event| {
             if window.label() != "main" {
                 return;
@@ -288,11 +338,14 @@ pub fn run() {
       native_input::type_text,
       native_input::scroll,
       native_input::screenshot,
-      native_input::is_physical_key_down
+      native_input::is_physical_key_down,
+      native_terminal::native_terminal_create,
+      native_terminal::native_terminal_write,
+      native_terminal::native_terminal_resize,
+      native_terminal::native_terminal_kill
     ])
     .setup(move |app| {
       let handle = app.handle().clone();
-
       // Spawn Background Bun process
       let app_local_data = handle.path().app_local_data_dir().unwrap_or_default();
       let bun_cached_path = app_local_data.join("bun").join("bun");
@@ -322,53 +375,72 @@ pub fn run() {
 
       if let Ok(resource_dir) = handle.path().resource_dir() {
         cmd.env("AXHELPER_PATH", resource_dir.join("native").join("axhelper").join("axhelper"));
+        cmd.env("SCREENOCR_HELPER_PATH", resource_dir.join("native").join("screenocr").join("screenocr-helper"));
         cmd.env("ESBUILD_BINARY_PATH", resource_dir.join("bin").join("esbuild"));
       }
 
-      let mut script_path = std::path::PathBuf::from("dist-backend/main.js");
-      if let Ok(res_dir) = handle.path().resource_dir() {
-        let res_path = res_dir.join("dist-backend").join("main.js");
-        if res_path.exists() {
-          script_path = res_path;
-        }
-      }
-      if !script_path.exists() {
-        let dev_path = std::path::PathBuf::from("dist-backend/main.js");
-        if dev_path.exists() {
-          script_path = dev_path;
-        } else {
-          script_path = std::path::PathBuf::from("../dist-backend/main.js");
-        }
-      }
+      let script_path = if cfg!(debug_assertions) {
+        // Tauri copies resources into target/debug only during a Rust build.
+        // The backend bundler runs independently, so that copy quickly becomes
+        // stale during development. Always execute the live workspace bundle.
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+          .join("../dist-backend/main.js")
+      } else {
+        handle
+          .path()
+          .resource_dir()
+          .map(|dir| dir.join("dist-backend").join("main.js"))
+          .unwrap_or_else(|_| std::path::PathBuf::from("dist-backend/main.js"))
+      };
+      log::info!("launching backend sidecar: {}", script_path.display());
       cmd.arg(script_path);
 
-      cmd.stdin(Stdio::piped())
+      let ipc_listener = TcpListener::bind("127.0.0.1:0")?;
+      let ipc_port = ipc_listener.local_addr()?.port();
+      ipc_listener.set_nonblocking(true)?;
+      cmd.env("BACKEND_IPC_PORT", ipc_port.to_string());
+      cmd.stdin(Stdio::null())
          .stdout(Stdio::piped())
-         .stderr(Stdio::inherit());
+         .stderr(Stdio::piped());
 
       let app_handle_clone = handle.clone();
       let pending_requests_thread = pending_requests_app.clone();
+      let backend_writer_shutdown = backend_writer_app.clone();
+
+      let mut child = cmd
+        .spawn()
+        .map_err(|error| format!("Failed to spawn background runner process: {error}"))?;
+      let stdout = child.stdout.take().ok_or("Failed to open backend stdout")?;
+      let stderr = child.stderr.take().ok_or("Failed to open backend stderr")?;
+
+      let connect_deadline = Instant::now() + Duration::from_secs(5);
+      let backend_stream = loop {
+        match ipc_listener.accept() {
+          Ok((stream, _)) => break stream,
+          Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+            if Instant::now() >= connect_deadline {
+              let _ = child.kill();
+              return Err("Backend runner did not connect to its IPC socket".into());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+          }
+          Err(error) => {
+            let _ = child.kill();
+            return Err(format!("Failed to accept backend IPC connection: {error}").into());
+          }
+        }
+      };
+      *backend_writer_app.lock().unwrap() = Some(backend_stream);
+      log::info!("backend sidecar IPC connected on localhost");
 
       std::thread::spawn(move || {
-        let mut child = match cmd.spawn() {
-          Ok(c) => c,
-          Err(e) => {
-            eprintln!("[Tauri] Failed to spawn background runner process: {}", e);
-            return;
-          }
-        };
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+          log::info!("backend sidecar: {}", line);
+        }
+        log::error!("backend stderr reader stopped");
+      });
 
-        let mut stdin = child.stdin.take().expect("Failed to open stdin");
-        let stdout = child.stdout.take().expect("Failed to open stdout");
-
-        std::thread::spawn(move || {
-          while let Ok(msg) = rx_stdin.recv() {
-            if writeln!(stdin, "{}", msg).is_err() {
-              break;
-            }
-          }
-        });
-
+      std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line_res in reader.lines() {
           let line = match line_res {
@@ -380,6 +452,7 @@ pub fn run() {
           }
 
           if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+            log::debug!("received backend sidecar message");
             if let Some(msg_type) = val.get("type").and_then(|t| t.as_str()) {
               if msg_type == "reply" {
                 if let Some(id) = val.get("id").and_then(|i| i.as_u64()) {
@@ -407,15 +480,23 @@ pub fn run() {
                                     let state = app_handle_clone.state::<WindowBehaviorState>();
                                     *state.suppress_blur_hide.lock().unwrap() = value;
                                 }
-                            }
+                            } else if msg_type == "app_visibility" {
+                                if let Some(value) = val.get("visible").and_then(|value| value.as_bool()) {
+                                    set_backend_app_visibility(&app_handle_clone, value);
+              }
             }
+          } else {
+            log::error!("backend sidecar emitted invalid JSON on stdout: {}", line);
           }
+        }
+        log::error!("backend stdout reader stopped");
         }
 
         let mut pending = pending_requests_thread.lock().unwrap();
         for (_, sender) in pending.drain() {
           let _ = sender.send(json!({ "error": "Backend runner stopped" }));
         }
+        *backend_writer_shutdown.lock().unwrap() = None;
         let _ = child.kill();
       });
 

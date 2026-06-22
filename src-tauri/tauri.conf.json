@@ -6,6 +6,7 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:5174",
+    "additionalWatchFolders": ["../dist-backend"],
     "beforeDevCommand": "pnpm exec tsx scripts/build-backend.ts && pnpm exec vite",
     "beforeBuildCommand": "pnpm exec tsx scripts/build-backend.ts && pnpm exec vite build"
   },
@@ -43,6 +44,7 @@
     "resources": {
       "../dist-backend/main.js": "dist-backend/main.js",
       "../native/axhelper/axhelper": "native/axhelper/axhelper",
+      "../native/screenocr/screenocr-helper": "native/screenocr/screenocr-helper",
       "../node_modules/@esbuild/darwin-arm64/bin/esbuild": "bin/esbuild"
     }
   }

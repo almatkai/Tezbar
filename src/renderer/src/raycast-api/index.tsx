@@ -34,7 +34,7 @@ export type ExtensionRuntimeSurfaceProps = {
   onBack: () => void
   onSearchTextChanged: (searchText: string) => Promise<void> | void
   onLoadMore: () => Promise<void> | void
-  onInvokeAction: (actionId: string, formValues?: Record<string, string>) => Promise<void> | void
+  onInvokeAction: (actionId: string, formValues?: Record<string, unknown>) => Promise<void> | void
 }
 
 function rootKind(root: ExtensionRuntimeNode): 'list' | 'form' | 'grid' | 'detail' {
@@ -93,7 +93,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
     return () => window.removeEventListener('keydown', onKey, true)
   }, [kind, onInvokeAction, primaryAction])
 
-  const onRunPrimaryAction = (actionId?: string, formValues?: Record<string, string>): void => {
+  const onRunPrimaryAction = (actionId?: string, formValues?: Record<string, unknown>): void => {
     const id = actionId || primaryAction?.id
     if (!id) return
     void onInvokeAction(id, formValues)
@@ -104,7 +104,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
     setShowActions(true)
   }
 
-  const onSubmitForm = (values: Record<string, string>): void => {
+  const onSubmitForm = (values: Record<string, unknown>): void => {
     const submitAction = actions.find((action) => action.kind === 'submit-form') || primaryAction
     if (!submitAction) return
     void onInvokeAction(submitAction.id, values)

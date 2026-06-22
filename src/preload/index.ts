@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer, webFrame, type IpcRendererEvent } from 'electron'
 import type { ProviderId } from '../shared/llmConfig'
-import { AGENT_IPC, type AgentRunEvent } from '../shared/agent'
+import {
+  AGENT_IPC,
+  type AgentApprovalResponse,
+  type AgentInputImage,
+  type AgentRunEvent,
+  type AgentRunRequest,
+} from '../shared/agent'
 import { CHAT_IPC, type ChatSession, type ChatTurn } from '../shared/chat'
 import { IPC_CHANNELS } from '../shared/ipc'
 import type { PermissionId } from '../shared/permissions'
@@ -46,7 +52,7 @@ contextBridge.exposeInMainWorld('tezbar', {
   extensionInvokeAction: (payload: {
     sessionId: string
     actionId: string
-    formValues?: Record<string, string>
+    formValues?: Record<string, unknown>
   }) => ipcRenderer.invoke('extension:invoke-action', payload),
   extensionSearchTextChanged: (payload: { sessionId: string; searchText: string }) =>
     ipcRenderer.invoke('extension:search-text-changed', payload),
@@ -60,8 +66,12 @@ contextBridge.exposeInMainWorld('tezbar', {
   clipboardWriteText: (text: string) => ipcRenderer.invoke('clipboard:write', text),
   shellOpen: (target: string) => ipcRenderer.invoke('shell:open', target),
   getAppIconDataUrl: (appPath: string) => ipcRenderer.invoke('app-icon:data-url', appPath),
+  getAssetIconDataUrl: (kind: import('../shared/search').IconAssetKind, path: string) =>
+    ipcRenderer.invoke('asset-icon:data-url', { kind, path }),
   getExtensionPreferences: (payload: { extensionId: string; commandName?: string }) =>
     ipcRenderer.invoke('preferences:get', payload),
+  getExtensionPreferenceSetup: (payload: { extensionId: string; commandName?: string }) =>
+    ipcRenderer.invoke('preferences:setup', payload),
   saveExtensionPreferences: (payload: {
     extensionId: string
     commandName?: string
@@ -69,6 +79,8 @@ contextBridge.exposeInMainWorld('tezbar', {
   }) => ipcRenderer.invoke('preferences:set', payload),
   searchAll: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_ALL, query),
   completePath: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.PATH_COMPLETE, query),
+  recordDirectoryVisit: (path: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, path),
   runSearchBenchmark: () => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_BENCHMARK_RUN),
   getSearchBenchmarkHistory: () => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_BENCHMARK_HISTORY),
   listOpenPorts: () => ipcRenderer.invoke('open-ports:list'),
@@ -209,14 +221,16 @@ contextBridge.exposeInMainWorld('tezbar', {
   terminalKill: (sessionId: string) => ipcRenderer.invoke(TERMINAL_IPC.KILL, { sessionId }),
   getTerminalPromptInfo: () => ipcRenderer.invoke(TERMINAL_IPC.GET_PROMPT_INFO),
   onTerminalData: (listener: (event: TerminalDataEvent) => void) => {
-    const handler = (_event: IpcRendererEvent, payload: TerminalDataEvent): void => listener(payload)
+    const handler = (_event: IpcRendererEvent, payload: TerminalDataEvent): void =>
+      listener(payload)
     ipcRenderer.on(TERMINAL_IPC.DATA, handler)
     return (): void => {
       ipcRenderer.removeListener(TERMINAL_IPC.DATA, handler)
     }
   },
   onTerminalExit: (listener: (event: TerminalExitEvent) => void) => {
-    const handler = (_event: IpcRendererEvent, payload: TerminalExitEvent): void => listener(payload)
+    const handler = (_event: IpcRendererEvent, payload: TerminalExitEvent): void =>
+      listener(payload)
     ipcRenderer.on(TERMINAL_IPC.EXIT, handler)
     return (): void => {
       ipcRenderer.removeListener(TERMINAL_IPC.EXIT, handler)
@@ -224,8 +238,11 @@ contextBridge.exposeInMainWorld('tezbar', {
   },
   getStorageBreakdown: () => ipcRenderer.invoke('storage:breakdown'),
   getClipboardStorageConfig: () => ipcRenderer.invoke('storage:clipboard-config:get'),
-  setClipboardStorageConfig: (patch: { watchEnabled?: boolean; captureImages?: boolean; maxImageMegapixels?: number }) =>
-    ipcRenderer.invoke('storage:clipboard-config:set', patch),
+  setClipboardStorageConfig: (patch: {
+    watchEnabled?: boolean
+    captureImages?: boolean
+    maxImageMegapixels?: number
+  }) => ipcRenderer.invoke('storage:clipboard-config:set', patch),
   clearClipboardImages: () => ipcRenderer.invoke('storage:clear-clipboard-images'),
   vacuumSearchDatabase: () => ipcRenderer.invoke('storage:vacuum-search-db'),
   clearChromiumCache: () => ipcRenderer.invoke('storage:clear-chromium-cache'),
@@ -239,15 +256,9 @@ contextBridge.exposeInMainWorld('tezbar', {
       ipcRenderer.removeListener(channel, handler)
     }
   },
-  onAppSurfaceOpen: (
-    listener: (surface: 'command' | 'settings' | 'clipboard') => void
-  ) => {
+  onAppSurfaceOpen: (listener: (surface: 'command' | 'settings' | 'clipboard') => void) => {
     const handler = (_event: IpcRendererEvent, surface: unknown): void => {
-      if (
-        surface === 'command' ||
-        surface === 'settings' ||
-        surface === 'clipboard'
-      ) {
+      if (surface === 'command' || surface === 'settings' || surface === 'clipboard') {
         listener(surface)
       }
     }
@@ -256,9 +267,16 @@ contextBridge.exposeInMainWorld('tezbar', {
       ipcRenderer.removeListener('app:open-surface', handler)
     }
   },
-  agentRun: (task: string): Promise<{ ok: boolean; runId?: string; error?: string }> =>
-    ipcRenderer.invoke(AGENT_IPC.RUN, task),
+  agentRun: (
+    request: string | AgentRunRequest
+  ): Promise<{ ok: boolean; runId?: string; error?: string }> =>
+    ipcRenderer.invoke(AGENT_IPC.RUN, request),
+  captureActiveScreen: (): Promise<AgentInputImage> =>
+    ipcRenderer.invoke(AGENT_IPC.CAPTURE_ACTIVE_SCREEN),
   agentCancel: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(AGENT_IPC.CANCEL),
+  agentApprove: (
+    response: AgentApprovalResponse
+  ): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(AGENT_IPC.APPROVE, response),
   onAgentEvent: (listener: (event: AgentRunEvent) => void) => {
     const handler = (_event: IpcRendererEvent, payload: AgentRunEvent): void => {
       if (payload && typeof payload === 'object' && typeof payload.type === 'string') {

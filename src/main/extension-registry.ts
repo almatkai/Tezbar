@@ -4,8 +4,8 @@
  *
  * Fetches, caches, installs, and uninstalls community extensions.
  *
- * Strategy: API-based (supercmd-backend) + prebuilt bundles only.
- *   - No git or npm required on the user's machine.
+ * Strategy: API-based (supercmd-backend) + prebuilt bundles first.
+ *   - Git is only a last-resort sparse source fallback after API failure.
  *   - Fast search/discovery via backend API.
  *   - Pre-built bundles downloaded from S3.
  *   - Source-based installs use Bun for dependency installation.
@@ -55,6 +55,7 @@ const GITHUB_API =
   'https://api.github.com/repos/raycast/extensions/contents';
 const GITHUB_TREE_API =
   'https://api.github.com/repos/raycast/extensions/git/trees/main?recursive=1';
+const RAYMES_EXTENSIONS_GIT = 'https://github.com/almatkai/raymes-extensions.git';
 
 type RepoTreeEntry = {
   path: string;
@@ -331,6 +332,30 @@ async function downloadExtensionFromTree(name: string, tmpDir: string): Promise<
 
   console.log(`Downloaded ${fileEntries.length} files for "${name}"`);
   return srcDir;
+}
+
+function downloadExtensionViaSparseGit(name: string, tmpDir: string): string | null {
+  const checkoutDir = path.join(tmpDir, 'raymes-extensions-source');
+  try {
+    execFileSync('git', [
+      'clone',
+      '--depth', '1',
+      '--filter=blob:none',
+      '--sparse',
+      RAYMES_EXTENSIONS_GIT,
+      checkoutDir,
+    ], { stdio: 'ignore', timeout: 180_000 });
+    execFileSync('git', [
+      '-C', checkoutDir,
+      'sparse-checkout', 'set',
+      `extensions/${name}`,
+    ], { stdio: 'ignore', timeout: 120_000 });
+    const extensionDir = path.join(checkoutDir, 'extensions', name);
+    return fs.existsSync(path.join(extensionDir, 'package.json')) ? extensionDir : null;
+  } catch (error) {
+    console.warn(`Sparse git fallback failed for "${name}":`, error);
+    return null;
+  }
 }
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -775,6 +800,15 @@ async function installExtensionFromBundle(name: string): Promise<boolean> {
       throw new Error('Bundle has no .sc-build/ directory — not a pre-built bundle');
     }
 
+    const bundleManifest = JSON.parse(fs.readFileSync(path.join(srcDir, 'package.json'), 'utf8'));
+    const missingCommandBundles = (Array.isArray(bundleManifest.commands) ? bundleManifest.commands : [])
+      .filter((command: any) => command?.name)
+      .filter((command: any) => !fs.existsSync(path.join(srcDir, '.sc-build', `${command.name}.js`)))
+      .map((command: any) => command.name);
+    if (missingCommandBundles.length > 0) {
+      throw new Error(`Bundle is incomplete; missing commands: ${missingCommandBundles.join(', ')}`);
+    }
+
     // Backup existing
     if (hadExistingInstall) {
       fs.renameSync(installPath, backupPath);
@@ -828,7 +862,13 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
     fs.mkdirSync(tmpDir, { recursive: true });
 
     // Download extension source from GitHub raw (no git needed)
-    const srcDir = await downloadExtensionFromTree(name, tmpDir);
+    let srcDir: string | null = null;
+    try {
+      srcDir = await downloadExtensionFromTree(name, tmpDir);
+    } catch (error) {
+      console.warn(`GitHub API source download failed for "${name}"; trying sparse git.`, error);
+    }
+    if (!srcDir) srcDir = downloadExtensionViaSparseGit(name, tmpDir);
     console.log(`  Download: ${Date.now() - t0}ms`);
 
     if (!srcDir || !fs.existsSync(path.join(srcDir, 'package.json'))) {
@@ -871,6 +911,12 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
       console.log(`  Deps: ${t1 - t0}ms. Pre-building commands for "${name}"…`);
       const { buildAllCommands } = require('./extension-builder');
       const builtCount = await buildAllCommands(name);
+      const expectedCount = (Array.isArray(extPkg.commands) ? extPkg.commands : [])
+        .filter((command: any) => command?.name)
+        .length;
+      if (builtCount < expectedCount) {
+        throw new Error(`Built ${builtCount}/${expectedCount} commands for "${name}"`);
+      }
       console.log(`  Build: ${Date.now() - t1}ms. Extension "${name}" installed (${builtCount} commands) in ${Date.now() - t0}ms total`);
     }
 
@@ -1369,10 +1415,17 @@ export function getExtensionPreferenceSetup(extensionId: string, commandName?: s
   const command = Array.isArray(pkg.commands)
     ? pkg.commands.find((cmd: any) => cmd?.name === commandName)
     : null;
-  const preferences = [
-    ...(Array.isArray(pkg.preferences) ? pkg.preferences : []),
-    ...(Array.isArray(command?.preferences) ? command.preferences : []),
-  ];
+  const extensionPreferences = Array.isArray(pkg.preferences)
+    ? pkg.preferences.map((preference: any) => ({ ...preference }))
+    : [];
+  const commandPreferences = Array.isArray(command?.preferences)
+    ? command.preferences.map((preference: any) => ({
+        ...preference,
+        commandName,
+        commandTitle: String(command?.title || commandName),
+      }))
+    : [];
+  const preferences = [...extensionPreferences, ...commandPreferences];
   const preferencesPath = path.join(extensionPath, 'preferences.json');
 
   return {
@@ -1395,6 +1448,20 @@ export function shouldShowExtensionPreferenceSetup(extensionId: string, commandN
     return value === undefined || value === null || String(value).trim() === '';
   });
   if (needsRequiredValue) return true;
+
+  const needsCredentialValue = setup.preferences.some((pref: any) => {
+    if (pref?.type !== 'password' || !pref?.name) return false;
+    const value = setup.values[pref.name];
+    return value === undefined || value === null || String(value).trim() === '';
+  });
+  if (needsCredentialValue) return true;
+
+  // Required fields are onboarding, not optional defaults. Always present
+  // them once before the first command run so credentials are explicitly
+  // confirmed and persisted for every command in the extension.
+  if (!setup.hasSavedPreferences && setup.preferences.some((pref: any) => pref?.required)) {
+    return true;
+  }
 
   // Raycast shows this onboarding once for preference-backed extensions. It
   // matters for Google Translate because users need to confirm language
