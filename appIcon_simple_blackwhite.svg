@@ -1,6 +1,6 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <!-- Move this whole group -->
-  <g id="movable-icon-content" transform="translate(0 0)">
+  <g id="movable-icon-content" transform="translate(-110 -115) scale(1.2)">
     <!-- Speed lines -->
     <g transform="translate(-20 -30)" filter="url(#blueGlow)" stroke="url(#speedBlue)" stroke-width="16" stroke-linecap="round">
       <path d="M130 410 H350" opacity="0.55"/>
@@ -12,7 +12,7 @@
     </g>
 
     <!-- Main Option-like smiling mark -->
-    <g transform="translate(-5 -10)" filter="url(#whiteGlow)" stroke="#FFFFFF" stroke-width="56" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(-5 -10)" filter="url(#whiteGlow)" stroke="#FFFFFF" stroke-width="76" stroke-linecap="round" stroke-linejoin="round">
       <path d="M285 265 H435 C460 265 475 280 484 305 L590 605 C600 635 622 655 655 655 H715"/>
       <path d="M595 265 H765"/>
       <path transform="translate(0 30)" d="M305 695 C425 810 645 825 770 695"/>
