@@ -514,7 +514,7 @@ pub fn run() {
       let tray_icon = {
         let resource_path = handle.path().resource_dir()
           .expect("failed to resolve resource dir")
-          .join("trayIconTemplate.png");
+          .join("trayIconTemplate@2x.png");
         let try_load_png = |path: &std::path::Path| -> Option<tauri::image::Image<'static>> {
           let img = image::open(path).ok()?.into_rgba8();
           let (w, h) = img.dimensions();
@@ -526,7 +526,7 @@ pub fn run() {
           // Fallback: try relative path (dev mode)
           let dev_path = std::env::current_dir()
             .unwrap_or_default()
-            .join("../resources/trayIconTemplate.png");
+            .join("../resources/trayIconTemplate@2x.png");
           try_load_png(&dev_path)
             .unwrap_or_else(|| handle.default_window_icon().unwrap().clone())
         }

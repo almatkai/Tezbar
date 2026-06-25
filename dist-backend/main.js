@@ -454,7 +454,11 @@ var init_aiProviders = __esm({
         { id: "claude-3.5-sonnet", capabilities: ["thinking", "tools"], contextWindow: 2e5 }
       ],
       opencode: [
-        { id: "opencode/big-pickle", capabilities: ["thinking", "tools"], contextWindow: 128e3 }
+        { id: "opencode/big-pickle", capabilities: ["thinking", "tools"], contextWindow: 128e3 },
+        { id: "opencode/deepseek-v4-flash-free", capabilities: ["thinking", "tools"], contextWindow: 128e3 },
+        { id: "opencode/mimo-v2.5-free", capabilities: ["tools"], contextWindow: 128e3 },
+        { id: "opencode/nemotron-3-ultra-free", capabilities: ["tools"], contextWindow: 128e3 },
+        { id: "opencode/north-mini-code-free", capabilities: ["tools"], contextWindow: 128e3 }
       ]
     };
   }
