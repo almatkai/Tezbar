@@ -511,8 +511,29 @@ pub fn run() {
       let menu = Menu::with_items(&handle, &[&show_item, &settings_item, &quit_item])?;
 
       let handle_tray = handle.clone();
+      let tray_icon = {
+        let resource_path = handle.path().resource_dir()
+          .expect("failed to resolve resource dir")
+          .join("trayIconTemplate.png");
+        let try_load_png = |path: &std::path::Path| -> Option<tauri::image::Image<'static>> {
+          let img = image::open(path).ok()?.into_rgba8();
+          let (w, h) = img.dimensions();
+          Some(tauri::image::Image::new_owned(img.into_raw(), w, h))
+        };
+        if let Some(icon) = try_load_png(&resource_path) {
+          icon
+        } else {
+          // Fallback: try relative path (dev mode)
+          let dev_path = std::env::current_dir()
+            .unwrap_or_default()
+            .join("../resources/trayIconTemplate.png");
+          try_load_png(&dev_path)
+            .unwrap_or_else(|| handle.default_window_icon().unwrap().clone())
+        }
+      };
       let _tray = TrayIconBuilder::new()
-        .icon(handle.default_window_icon().unwrap().clone())
+        .icon(tray_icon)
+        .icon_as_template(true)
         .menu(&menu)
         .on_menu_event(move |app, event| {
           match event.id.as_ref() {

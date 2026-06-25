@@ -45,7 +45,9 @@
       "../dist-backend/main.js": "dist-backend/main.js",
       "../native/axhelper/axhelper": "native/axhelper/axhelper",
       "../native/screenocr/screenocr-helper": "native/screenocr/screenocr-helper",
-      "../node_modules/@esbuild/darwin-arm64/bin/esbuild": "bin/esbuild"
+      "../node_modules/@esbuild/darwin-arm64/bin/esbuild": "bin/esbuild",
+      "../resources/trayIconTemplate.png": "trayIconTemplate.png",
+      "../resources/trayIconTemplate@2x.png": "trayIconTemplate@2x.png"
     }
   }
 }
