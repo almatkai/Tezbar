@@ -142,11 +142,17 @@ export function isPhysicalKeyDown(key: string): boolean {
 }
 
 export async function getScreenSnapshot(): Promise<{ elements: AXElement[] }> {
+  if (process.platform !== 'darwin') {
+    throw new Error('UI accessibility snapshots are currently available only on macOS.')
+  }
   const out = (await runAxHelper({ action: 'snapshot' })) as { elements: AXElement[] };
   return out;
 }
 
 export async function findElement(query: string): Promise<{ frame: AXFrame | null }> {
+  if (process.platform !== 'darwin') {
+    throw new Error('UI accessibility lookup is currently available only on macOS.')
+  }
   const out = (await runAxHelper({ action: 'find', query })) as { frame: AXFrame | null };
   return out;
 }

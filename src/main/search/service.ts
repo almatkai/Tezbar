@@ -1522,6 +1522,43 @@ function buildEmojiPickerSearchResult(query: string): SearchResult[] {
 }
 
 export async function listOpenPorts(): Promise<OpenPortProcess[]> {
+  if (process.platform === 'win32') {
+    try {
+      const { stdout } = await execFileAsync('netstat.exe', ['-ano', '-p', 'tcp'])
+      const pids = Array.from(new Set(
+        stdout.split(/\r?\n/).map((line) => line.trim().split(/\s+/).at(-1) ?? '').filter((pid) => /^\d+$/.test(pid))
+      ))
+      const names = new Map<string, string>()
+      await Promise.all(pids.map(async (pid) => {
+        try {
+          const { stdout: task } = await execFileAsync('tasklist.exe', ['/fi', `PID eq ${pid}`, '/fo', 'csv', '/nh'])
+          const match = task.match(/^"([^"]+)"/)
+          if (match) names.set(pid, match[1])
+        } catch { /* Best-effort process names only. */ }
+      }))
+      const grouped = new Map<string, { process: string; pid: string; ports: Set<number> }>()
+      for (const line of stdout.split(/\r?\n/)) {
+        const parts = line.trim().split(/\s+/)
+        if (parts.length < 5 || parts[0]?.toUpperCase() !== 'TCP' || parts[3]?.toUpperCase() !== 'LISTENING') continue
+        const port = Number(parts[1]?.match(/:(\d+)$/)?.[1])
+        const pid = parts[4]
+        if (!Number.isFinite(port) || !pid) continue
+        const key = `${pid}:${names.get(pid) ?? 'unknown'}`
+        const row = grouped.get(key) ?? { process: names.get(pid) ?? 'unknown', pid, ports: new Set<number>() }
+        row.ports.add(port)
+        grouped.set(key, row)
+      }
+      return Array.from(grouped.values()).map((row) => ({
+        process: row.process,
+        user: 'current user',
+        pid: row.pid,
+        ports: Array.from(row.ports).sort((a, b) => a - b),
+      })).sort((a, b) => a.process.localeCompare(b.process) || a.pid.localeCompare(b.pid))
+    } catch (error) {
+      console.error('[OpenPorts] Failed to list Windows listening ports:', error)
+      return []
+    }
+  }
   try {
     const { stdout } = await execFileAsync('/usr/sbin/lsof', ['-nP', '-iTCP', '-sTCP:LISTEN'])
     const processNames = await readProcessNameMap()
@@ -1541,6 +1578,10 @@ export async function listOpenPorts(): Promise<OpenPortProcess[]> {
 async function executeActionInner(action: SearchAction): Promise<SearchExecuteResult> {
   switch (action.type) {
     case 'open-app': {
+      if (process.platform === 'win32' && action.appPath) {
+        const opened = await shell.openPath(action.appPath)
+        return opened ? { ok: false, message: opened } : { ok: true, message: `Opened ${action.appName}` }
+      }
       await execFileAsync('open', ['-a', action.appName])
       return { ok: true, message: `Opened ${action.appName}` }
     }
@@ -1580,10 +1621,14 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
       // hidden Electron window instead of the target input field.
       app.hide()
       await new Promise<void>((resolve) => setTimeout(resolve, 50))
-      await execFileAsync('osascript', [
-        '-e',
-        'tell application "System Events" to keystroke "v" using {command down}',
-      ])
+      if (process.platform === 'win32') {
+        await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '(New-Object -ComObject WScript.Shell).SendKeys("^v")'])
+      } else {
+        await execFileAsync('osascript', [
+          '-e',
+          'tell application "System Events" to keystroke "v" using {command down}',
+        ])
+      }
       return { ok: true, message: 'Pasted emoji' }
     }
 

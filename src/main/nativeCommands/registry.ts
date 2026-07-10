@@ -11,7 +11,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'display',
     strategy: 'applescript',
     keywords: ['dark', 'light', 'appearance', 'theme', 'mode'],
-    macOnly: true,
+    macOnly: false,
   },
   'start-screen-saver': {
     id: 'start-screen-saver',
@@ -20,7 +20,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'display',
     strategy: 'shell',
     keywords: ['screensaver', 'screen', 'saver', 'lock'],
-    macOnly: true,
+    macOnly: false,
   },
   'sleep-display': {
     id: 'sleep-display',
@@ -29,7 +29,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'power',
     strategy: 'shell',
     keywords: ['sleep', 'display', 'screen', 'off'],
-    macOnly: true,
+    macOnly: false,
   },
 
   'toggle-mute': {
@@ -39,7 +39,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'audio',
     strategy: 'applescript',
     keywords: ['mute', 'unmute', 'sound', 'audio', 'volume'],
-    macOnly: true,
+    macOnly: false,
   },
   'volume-up': {
     id: 'volume-up',
@@ -48,7 +48,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'audio',
     strategy: 'applescript',
     keywords: ['volume', 'louder', 'up'],
-    macOnly: true,
+    macOnly: false,
   },
   'volume-down': {
     id: 'volume-down',
@@ -57,7 +57,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'audio',
     strategy: 'applescript',
     keywords: ['volume', 'quieter', 'down'],
-    macOnly: true,
+    macOnly: false,
   },
 
   'toggle-hide-desktop-icons': {
@@ -123,7 +123,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     strategy: 'shell',
     keywords: ['keep', 'awake', 'caffeinate', 'no', 'sleep'],
     restoreId: 'stop-keep-awake',
-    macOnly: true,
+    macOnly: false,
   },
   'stop-keep-awake': {
     id: 'stop-keep-awake',
@@ -132,7 +132,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'power',
     strategy: 'shell',
     keywords: ['stop', 'awake', 'caffeinate', 'sleep'],
-    macOnly: true,
+    macOnly: false,
   },
   'sleep-system': {
     id: 'sleep-system',
@@ -141,7 +141,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'power',
     strategy: 'applescript',
     keywords: ['sleep', 'mac', 'suspend', 'idle'],
-    macOnly: true,
+    macOnly: false,
   },
 
   'toggle-bluetooth': {
@@ -160,7 +160,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'network',
     strategy: 'shell',
     keywords: ['wifi', 'wireless', 'network', 'toggle'],
-    macOnly: true,
+    macOnly: false,
   },
   'show-network-info': {
     id: 'show-network-info',
@@ -169,7 +169,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'network',
     strategy: 'shell',
     keywords: ['network', 'ip', 'wifi', 'ssid', 'info'],
-    macOnly: true,
+    macOnly: false,
   },
   'show-public-ip': {
     id: 'show-public-ip',
@@ -216,16 +216,16 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'system',
     strategy: 'applescript',
     keywords: ['lock', 'screen', 'session', 'away'],
-    macOnly: true,
+    macOnly: false,
   },
   'open-downloads': {
     id: 'open-downloads',
     title: 'Open Downloads Folder',
-    subtitle: 'Reveal ~/Downloads in Finder.',
+    subtitle: 'Open the Downloads folder.',
     category: 'files',
     strategy: 'shell',
-    keywords: ['downloads', 'folder', 'finder'],
-    macOnly: true,
+    keywords: ['downloads', 'folder', 'finder', 'explorer'],
+    macOnly: false,
   },
   'open-applications': {
     id: 'open-applications',
@@ -280,7 +280,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'dev',
     strategy: 'shell',
     keywords: ['cpu', 'processor', 'cores', 'load'],
-    macOnly: true,
+    macOnly: false,
   },
   'show-memory-info': {
     id: 'show-memory-info',
@@ -289,7 +289,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'dev',
     strategy: 'shell',
     keywords: ['memory', 'ram', 'pressure', 'free'],
-    macOnly: true,
+    macOnly: false,
   },
   'show-disk-usage': {
     id: 'show-disk-usage',
@@ -298,7 +298,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'dev',
     strategy: 'shell',
     keywords: ['disk', 'storage', 'free', 'usage'],
-    macOnly: true,
+    macOnly: false,
   },
   'show-battery-status': {
     id: 'show-battery-status',
@@ -307,7 +307,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'dev',
     strategy: 'shell',
     keywords: ['battery', 'charge', 'power', 'percent'],
-    macOnly: true,
+    macOnly: false,
   },
   'list-listening-ports': {
     id: 'list-listening-ports',
@@ -316,7 +316,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     category: 'dev',
     strategy: 'shell',
     keywords: ['ports', 'lsof', 'listen', 'listening', 'tcp', 'dev', 'port manager'],
-    macOnly: true,
+    macOnly: false,
   },
   'git-root': {
     id: 'git-root',

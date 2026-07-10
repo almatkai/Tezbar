@@ -89,11 +89,11 @@ export const app = {
 
 export const shell = {
   async openExternal(url: string): Promise<void> {
-    const command = process.platform === 'darwin' ? 'open' : 'xdg-open'
+    const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer.exe' : 'xdg-open'
     await execFileAsync(command, [url])
   },
   async openPath(target: string): Promise<string> {
-    const command = process.platform === 'darwin' ? 'open' : 'xdg-open'
+    const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer.exe' : 'xdg-open'
     try {
       await execFileAsync(command, [target])
       return ''
@@ -103,6 +103,7 @@ export const shell = {
   },
   showItemInFolder(target: string): void {
     if (process.platform === 'darwin') void execFileAsync('open', ['-R', target])
+    else if (process.platform === 'win32') void execFileAsync('explorer.exe', ['/select,', target])
     else void execFileAsync('xdg-open', [join(target, '..')])
   },
 }
@@ -132,6 +133,9 @@ function makeNativeImage(sourcePath?: string): {
 export const clipboard = {
   readText(): string {
     try {
+      if (process.platform === 'win32') {
+        return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw'], { encoding: 'utf8' })
+      }
       return execFileSync('pbpaste', [], { encoding: 'utf8' })
     } catch {
       return ''
@@ -139,6 +143,12 @@ export const clipboard = {
   },
   writeText(text: string): void {
     try {
+      if (process.platform === 'win32') {
+        const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Set-Clipboard -Value ([Console]::In.ReadToEnd())'])
+        child.stdin.write(text)
+        child.stdin.end()
+        return
+      }
       const child = spawn('pbcopy')
       child.stdin.write(text)
       child.stdin.end()

@@ -25,7 +25,7 @@ export type ExtensionCommandArgument = {
 export type IconAssetKind = 'application' | 'extension' | 'file'
 
 export type SearchAction =
-  | { type: 'open-app'; appName: string }
+  | { type: 'open-app'; appName: string; appPath?: string }
   | { type: 'open-file'; path: string }
   | { type: 'open-with-app'; path: string; appName?: string }
   | { type: 'copy-text'; text: string }
