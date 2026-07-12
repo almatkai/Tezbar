@@ -8,7 +8,8 @@ import {
   ipcMain,
   screen,
   shell,
-} from 'electron'
+} from '@tezbar/desktop-runtime'
+import type { WebContents } from '@tezbar/desktop-runtime'
 import { setSuppressBlurHide } from './windowState'
 import {
   AGENT_IPC,
@@ -27,6 +28,7 @@ import {
   appendChatTurn,
   clearAllChatSessions,
   deleteChatSession,
+  deleteChatTurn,
   getChatSession,
   listChatSessions,
   updateChatSessionTitle,
@@ -130,6 +132,7 @@ import { addNamedPort, listNamedPorts, removeNamedPort } from './portManager/nam
 import { runAiActionMode } from './llm/actionMode'
 import {
   downloadVoiceModel,
+  deleteVoiceModel,
   getSelectedVoiceModelId,
   listSttModes,
   listVoiceModels,
@@ -162,14 +165,27 @@ import {
   updateUserSnippet,
 } from './search/providers/snippetsProvider'
 import {
+  attachTerminalSession,
   createTerminalSession,
+  deleteTerminalSession,
+  detachTerminalSession,
   getTerminalPromptInfo,
   killTerminalSession,
+  listTerminalSessions,
+  markNativeTerminalSessionAttached,
+  markNativeTerminalSessionExited,
+  recordNativeTerminalSession,
   resizeTerminalSession,
   shutdownTerminalSessions,
+  updateTerminalSession,
   writeTerminalSession,
 } from './terminal/service'
-import { TERMINAL_IPC, type TerminalCreateRequest } from '../shared/terminal'
+import {
+  TERMINAL_IPC,
+  type TerminalAttachRequest,
+  type TerminalCreateRequest,
+  type TerminalUpdateRequest,
+} from '../shared/terminal'
 import {
   clearChromiumCache,
   clearClipboardImages,
@@ -261,19 +277,24 @@ const CHAT_SYSTEM_PROMPT =
 type IpcControls = {
   startWindowDragMonitoring: (win: BrowserWindow) => void
   stopWindowDragMonitoring: (win: BrowserWindow) => void
+  showCommandBar?: () => void
+  hideCommandBar?: () => void
   updateRaymesHotkey?: (accelerator: string) => {
     ok: boolean
     accelerator: string
     error?: string
   }
-  updateCommandHotkey?: (commandId: string, hotkey: string) => {
+  updateCommandHotkey?: (
+    commandId: string,
+    hotkey: string
+  ) => {
     ok: boolean
     error?: string
   }
   openAppSurface?: (surface: any) => void
 }
 
-function sendAgentEvent(sender: Electron.WebContents, event: AgentRunEvent): void {
+function sendAgentEvent(sender: WebContents, event: AgentRunEvent): void {
   if (!sender.isDestroyed()) sender.send(AGENT_IPC.EVENT, event)
 }
 
@@ -305,7 +326,7 @@ function cancelPendingAgentApprovals(runId?: string): void {
 }
 
 function requestAgentApproval(
-  sender: Electron.WebContents,
+  sender: WebContents,
   runId: string,
   signal: AbortSignal,
   request: { title: string; command: string }
@@ -358,7 +379,7 @@ function canRetryRun(error: unknown, signal: AbortSignal): boolean {
 }
 
 function startAgentRun(
-  sender: Electron.WebContents,
+  sender: WebContents,
   task: string,
   images: readonly AgentInputImage[] = []
 ): string {
@@ -369,7 +390,7 @@ function startAgentRun(
   const runId =
     (agentRunId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
   const bridge = getSharedBridge()
-  const piProvider = getSelectedPiProviderBridge()
+  const piProvider = getSelectedPiProviderBridge('chat')
   let emittedOutput = false
 
   sendAgentEvent(sender, { type: 'start', runId, task })
@@ -410,7 +431,7 @@ function startAgentRun(
 
     const options = {
       runId,
-      model: piProvider?.modelPattern ?? getSelectedPiModelPattern(),
+      model: piProvider?.modelPattern ?? getSelectedPiModelPattern('chat'),
       raymesProviderJson: piProvider?.providerJson,
       raymesAlwaysAllowJson: JSON.stringify(getAgentAlwaysAllowedCommands()),
       requestApproval: (request: { title: string; command: string }) =>
@@ -500,7 +521,7 @@ function normalizeChatAttachments(raw: unknown): ChatAttachment[] | undefined {
   return attachments.length > 0 ? attachments : undefined
 }
 
-function startChatRun(sender: Electron.WebContents, turns: ChatTurn[]): string {
+function startChatRun(sender: WebContents, turns: ChatTurn[]): string {
   agentAbort?.abort()
   agentAbort = new AbortController()
   const ac = agentAbort
@@ -830,10 +851,119 @@ export function registerIpcHandlers(
     if (body.initialCommand !== undefined && typeof body.initialCommand !== 'string') {
       throw new Error('Invalid initial terminal command')
     }
+    if (body.name !== undefined && typeof body.name !== 'string') {
+      throw new Error('Invalid terminal session name')
+    }
     if ((body.initialCommand?.length ?? 0) > 16 * 1024) {
       throw new Error('Initial terminal command is too long')
     }
     return createTerminalSession(event.sender, body as TerminalCreateRequest)
+  })
+
+  ipcMain.handle(TERMINAL_IPC.ATTACH, async (event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return null
+    const body = raw as Partial<TerminalAttachRequest>
+    if (
+      typeof body.sessionId !== 'string' ||
+      typeof body.cols !== 'number' ||
+      typeof body.rows !== 'number'
+    ) {
+      return null
+    }
+    return attachTerminalSession(event.sender, body as TerminalAttachRequest)
+  })
+
+  ipcMain.handle(TERMINAL_IPC.DETACH, async (event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return false
+    const body = raw as { sessionId?: unknown }
+    if (typeof body.sessionId !== 'string') return false
+    return detachTerminalSession(event.sender.id, body.sessionId)
+  })
+
+  ipcMain.handle(TERMINAL_IPC.LIST, async (event) => {
+    return listTerminalSessions(event.sender.id)
+  })
+
+  ipcMain.handle(TERMINAL_IPC.UPDATE, async (event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return null
+    const body = raw as Partial<TerminalUpdateRequest>
+    if (typeof body.sessionId !== 'string') return null
+    if (body.name !== undefined && typeof body.name !== 'string') return null
+    if (body.cwd !== undefined && typeof body.cwd !== 'string') return null
+    if (body.lastCommand !== undefined && typeof body.lastCommand !== 'string') return null
+    if ((body.lastCommand?.length ?? 0) > 16 * 1024) return null
+    return updateTerminalSession(event.sender.id, body as TerminalUpdateRequest)
+  })
+
+  ipcMain.handle('terminal:native-create', async (_event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return null
+    const body = raw as {
+      sessionId?: unknown
+      shell?: unknown
+      cwd?: unknown
+      initialCommand?: unknown
+      name?: unknown
+      saveFor?: unknown
+      keepAliveFor?: unknown
+    }
+    if (
+      typeof body.sessionId !== 'string' ||
+      typeof body.shell !== 'string' ||
+      typeof body.cwd !== 'string'
+    ) {
+      return null
+    }
+    if (body.initialCommand !== undefined && typeof body.initialCommand !== 'string') return null
+    if (body.name !== undefined && typeof body.name !== 'string') return null
+    const initialCommand =
+      typeof body.initialCommand === 'string' ? body.initialCommand : undefined
+    const name = typeof body.name === 'string' ? body.name : undefined
+    const saveFor =
+      body.saveFor === 'day' ||
+      body.saveFor === 'week' ||
+      body.saveFor === 'month' ||
+      body.saveFor === 'forever'
+        ? body.saveFor
+        : undefined
+    const keepAliveFor =
+      body.keepAliveFor === '3h' ||
+      body.keepAliveFor === '8h' ||
+      body.keepAliveFor === 'day' ||
+      body.keepAliveFor === 'until-stop'
+        ? body.keepAliveFor
+        : undefined
+    if ((initialCommand?.length ?? 0) > 16 * 1024) return null
+    return recordNativeTerminalSession({
+      sessionId: body.sessionId,
+      shell: body.shell,
+      cwd: body.cwd,
+      initialCommand,
+      name,
+      saveFor,
+      keepAliveFor,
+    })
+  })
+
+  ipcMain.handle('terminal:native-attach', async (_event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return null
+    const body = raw as { sessionId?: unknown }
+    if (typeof body.sessionId !== 'string') return null
+    return markNativeTerminalSessionAttached(body.sessionId)
+  })
+
+  ipcMain.handle('terminal:native-exit', async (_event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return null
+    const body = raw as { sessionId?: unknown; exitCode?: unknown; signal?: unknown }
+    if (typeof body.sessionId !== 'string') return null
+    const exitCode =
+      typeof body.exitCode === 'number' && Number.isFinite(body.exitCode)
+        ? Math.max(0, Math.round(body.exitCode))
+        : 1
+    const signal =
+      typeof body.signal === 'number' && Number.isFinite(body.signal)
+        ? Math.max(0, Math.round(body.signal))
+        : undefined
+    return markNativeTerminalSessionExited(body.sessionId, exitCode, signal)
   })
 
   ipcMain.handle(TERMINAL_IPC.WRITE, async (event, raw: unknown) => {
@@ -861,6 +991,13 @@ export function registerIpcHandlers(
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return false
     return killTerminalSession(event.sender.id, body.sessionId)
+  })
+
+  ipcMain.handle(TERMINAL_IPC.DELETE, async (event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return false
+    const body = raw as { sessionId?: unknown }
+    if (typeof body.sessionId !== 'string') return false
+    return deleteTerminalSession(event.sender.id, body.sessionId)
   })
 
   ipcMain.handle(TERMINAL_IPC.GET_PROMPT_INFO, async () => {
@@ -1075,12 +1212,42 @@ export function registerIpcHandlers(
         id: t.id,
         role: t.role,
         text: t.text,
+        responseMeta:
+          t.responseMeta &&
+          typeof t.responseMeta.provider === 'string' &&
+          typeof t.responseMeta.providerTitle === 'string' &&
+          typeof t.responseMeta.model === 'string'
+            ? {
+                provider: t.responseMeta.provider,
+                providerTitle: t.responseMeta.providerTitle,
+                model: t.responseMeta.model,
+                tokenCount:
+                  typeof t.responseMeta.tokenCount === 'number'
+                    ? Math.max(0, Math.round(t.responseMeta.tokenCount))
+                    : undefined,
+              }
+            : undefined,
         stages: Array.isArray(t.stages) ? (t.stages as Stage[]) : undefined,
         error: typeof t.error === 'string' ? t.error : undefined,
         attachments: normalizeChatAttachments(t.attachments),
         createdAt: t.createdAt,
       })
       return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle(CHAT_IPC.DELETE_TURN, async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') {
+      return { ok: false, error: 'Invalid chat turn delete payload' }
+    }
+    const body = payload as { sessionId?: unknown; turnId?: unknown }
+    if (typeof body.sessionId !== 'string' || typeof body.turnId !== 'string') {
+      return { ok: false, error: 'Invalid chat turn delete payload' }
+    }
+    try {
+      return { ok: await deleteChatTurn(body.sessionId, body.turnId) }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -1545,6 +1712,11 @@ export function registerIpcHandlers(
     return downloadVoiceModel(req.modelId as VoiceModelId)
   })
 
+  ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_DELETE, async (_event, payload: unknown) => {
+    const req = parseVoiceModelRequest(payload)
+    return { modelId: await deleteVoiceModel(req.modelId as VoiceModelId) }
+  })
+
   ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_GET_SELECTED, async () => {
     return { modelId: getSelectedVoiceModelId() }
   })
@@ -1555,6 +1727,10 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle('window:show', async () => {
+    if (controls?.showCommandBar) {
+      controls.showCommandBar()
+      return
+    }
     const win = getWindow()
     if (win) {
       win.show()
@@ -1563,8 +1739,15 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle('window:hide', async () => {
+    if (controls?.hideCommandBar) {
+      controls.hideCommandBar()
+      return
+    }
     const win = getWindow()
-    if (win) win.hide()
+    if (win) {
+      controls?.stopWindowDragMonitoring(win)
+      win.hide()
+    }
   })
 
   ipcMain.handle('window:close-current', async (event) => {

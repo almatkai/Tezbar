@@ -1,25 +1,53 @@
-import type { WebContents } from 'electron'
+import type { WebContents } from '@tezbar/desktop-runtime'
 import { existsSync, statSync } from 'node:fs'
 import { homedir, hostname, userInfo } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { spawn as spawnChild } from 'node:child_process'
-import { createRequire } from 'node:module'
-import type { IPty } from 'node-pty'
 import {
   TERMINAL_IPC,
+  compactTerminalPath,
+  type TerminalAttachRequest,
+  type TerminalAttachResult,
   type TerminalCreateRequest,
   type TerminalCreateResult,
+  type TerminalKeepAliveFor,
   type TerminalPromptInfo,
+  type TerminalSaveFor,
+  type TerminalSessionSummary,
+  type TerminalUpdateRequest,
 } from '../../shared/terminal'
+import { readRawConfig, writeConfigPatch } from '../llm/configStore'
 
-const requireNative = createRequire(__filename)
+type TerminalProcess = {
+  pid: number
+  process: string
+  cols: number
+  rows: number
+  handleFlowControl: boolean
+  onData: (listener: (data: string) => void) => { dispose: () => void }
+  onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => {
+    dispose: () => void
+  }
+  write: (data: string) => void
+  resize: (cols: number, rows: number) => void
+  clear: () => void
+  pause: () => void
+  resume: () => void
+  kill: () => void
+}
 
 type TerminalSession = {
   ownerId: number
-  sender: WebContents
-  process: IPty
+  attachedSenders: Map<number, WebContents>
+  process: TerminalProcess
   pipeMode: boolean
+  shell: string
+  cwd: string
+  summary: TerminalSessionSummary
+  outputChunks: string[]
+  outputBytes: number
+  backgroundTimer: ReturnType<typeof setTimeout> | null
 }
 
 type BunPipeProcess = {
@@ -51,7 +79,7 @@ function spawnBunPipeTerminal(
   env: Record<string, string>,
   cols: number,
   rows: number,
-): IPty {
+): TerminalProcess {
   const bun = (globalThis as typeof globalThis & { Bun?: BunRuntime }).Bun
   if (!bun) return spawnPipeTerminal(shell, args, cwd, env, cols, rows)
 
@@ -109,7 +137,7 @@ function spawnBunPipeTerminal(
     pause: () => undefined,
     resume: () => undefined,
     kill: () => child.kill(),
-  } as IPty
+  }
 }
 
 function spawnPipeTerminal(
@@ -119,7 +147,7 @@ function spawnPipeTerminal(
   env: Record<string, string>,
   cols: number,
   rows: number,
-): IPty {
+): TerminalProcess {
   const child = spawnChild(shell, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
   return {
     pid: child.pid ?? -1,
@@ -149,11 +177,27 @@ function spawnPipeTerminal(
     pause: () => child.stdout.pause(),
     resume: () => child.stdout.resume(),
     kill: () => { child.kill() },
-  } as IPty
+  }
 }
 
 const sessions = new Map<string, TerminalSession>()
 const ownerCleanupRegistered = new Set<number>()
+const persistedSummaries = new Map<string, TerminalSessionSummary>()
+let persistedLoaded = false
+const OUTPUT_REPLAY_LIMIT_BYTES = 512 * 1024
+const TERMINAL_CONFIG_KEY = 'terminalSessions'
+
+const SAVE_FOR_MS: Record<Exclude<TerminalSaveFor, 'forever'>, number> = {
+  day: 24 * 60 * 60 * 1000,
+  week: 7 * 24 * 60 * 60 * 1000,
+  month: 30 * 24 * 60 * 60 * 1000,
+}
+
+const KEEP_ALIVE_MS: Record<Exclude<TerminalKeepAliveFor, 'until-stop'>, number> = {
+  '3h': 3 * 60 * 60 * 1000,
+  '8h': 8 * 60 * 60 * 1000,
+  day: 24 * 60 * 60 * 1000,
+}
 
 function clampDimension(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min
@@ -175,6 +219,203 @@ function resolveWorkingDirectory(raw?: string): string {
   }
 }
 
+function resolveExistingWorkingDirectory(raw: string): string | null {
+  const requested = raw.trim()
+  if (!requested) return null
+  const expanded = requested === '~'
+    ? homedir()
+    : requested.startsWith('~/')
+      ? join(homedir(), requested.slice(2))
+      : requested
+  const candidate = resolve(expanded)
+  try {
+    return existsSync(candidate) && statSync(candidate).isDirectory() ? candidate : null
+  } catch {
+    return null
+  }
+}
+
+function normalizeLastCommand(raw: string): string | undefined {
+  const command = raw.trim().replace(/\s+/g, ' ')
+  return command ? command.slice(0, 4_096) : undefined
+}
+
+function isSaveFor(value: unknown): value is TerminalSaveFor {
+  return value === 'day' || value === 'week' || value === 'month' || value === 'forever'
+}
+
+function isKeepAliveFor(value: unknown): value is TerminalKeepAliveFor {
+  return value === '3h' || value === '8h' || value === 'day' || value === 'until-stop'
+}
+
+function saveUntil(saveFor: TerminalSaveFor, from: number): number | undefined {
+  return saveFor === 'forever' ? undefined : from + SAVE_FOR_MS[saveFor]
+}
+
+function keepAliveUntil(keepAliveFor: TerminalKeepAliveFor, from: number): number | undefined {
+  return keepAliveFor === 'until-stop' ? undefined : from + KEEP_ALIVE_MS[keepAliveFor]
+}
+
+function defaultSessionName(cwd: string, initialCommand?: string): string {
+  const command = initialCommand?.split('\n')[0]?.trim()
+  const parts = cwd.split('/').filter(Boolean)
+  const codeIndex = parts.lastIndexOf('code')
+  const compactPath =
+    codeIndex >= 0 && parts[codeIndex + 1]
+      ? `code/${parts[codeIndex + 1]}`
+      : basename(cwd) || compactTerminalPath(cwd)
+  return command ? `${compactPath} ${command}` : compactPath
+}
+
+function normalizeSessionName(raw: unknown, cwd: string, initialCommand?: string): string {
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim().replace(/\s+/g, ' ')
+    if (trimmed) return trimmed.slice(0, 120)
+  }
+  return defaultSessionName(cwd, initialCommand)
+}
+
+function isTerminalSummary(value: unknown): value is TerminalSessionSummary {
+  if (!value || typeof value !== 'object') return false
+  const row = value as Partial<TerminalSessionSummary>
+  return (
+    typeof row.sessionId === 'string' &&
+    typeof row.name === 'string' &&
+    typeof row.cwd === 'string' &&
+    typeof row.shell === 'string' &&
+    typeof row.createdAt === 'number' &&
+    typeof row.updatedAt === 'number' &&
+    typeof row.lastActiveAt === 'number' &&
+    isSaveFor(row.saveFor) &&
+    isKeepAliveFor(row.keepAliveFor) &&
+    (row.status === 'running' || row.status === 'exited')
+  )
+}
+
+function loadPersistedSummaries(): void {
+  if (persistedLoaded) return
+  persistedLoaded = true
+  const raw = readRawConfig()[TERMINAL_CONFIG_KEY]
+  if (!Array.isArray(raw)) return
+  for (const item of raw) {
+    if (!isTerminalSummary(item)) continue
+    persistedSummaries.set(item.sessionId, {
+      ...item,
+      status: sessions.has(item.sessionId) ? item.status : 'exited',
+      pid: sessions.has(item.sessionId) ? item.pid : undefined,
+      keepAliveUntil: sessions.has(item.sessionId) ? item.keepAliveUntil : undefined,
+    })
+  }
+}
+
+function writePersistedSummaries(): void {
+  loadPersistedSummaries()
+  writeConfigPatch({ [TERMINAL_CONFIG_KEY]: Array.from(persistedSummaries.values()) })
+}
+
+function prunePersistedSummaries(now = Date.now()): void {
+  loadPersistedSummaries()
+  let changed = false
+  for (const [sessionId, summary] of persistedSummaries) {
+    if (sessions.has(sessionId)) continue
+    if (summary.saveUntil !== undefined && summary.saveUntil <= now) {
+      persistedSummaries.delete(sessionId)
+      changed = true
+    }
+  }
+  if (changed) writePersistedSummaries()
+}
+
+function persistSessionSummary(summary: TerminalSessionSummary): void {
+  loadPersistedSummaries()
+  persistedSummaries.set(summary.sessionId, { ...summary })
+  writePersistedSummaries()
+}
+
+function appendOutput(session: TerminalSession, data: string): void {
+  session.outputChunks.push(data)
+  session.outputBytes += Buffer.byteLength(data, 'utf8')
+  while (session.outputBytes > OUTPUT_REPLAY_LIMIT_BYTES && session.outputChunks.length > 1) {
+    const removed = session.outputChunks.shift() ?? ''
+    session.outputBytes -= Buffer.byteLength(removed, 'utf8')
+  }
+}
+
+function sendToAttached(session: TerminalSession, channel: string, payload: unknown): void {
+  for (const [senderId, sender] of session.attachedSenders) {
+    if (sender.isDestroyed()) {
+      session.attachedSenders.delete(senderId)
+      continue
+    }
+    sender.send(channel, payload)
+  }
+}
+
+function clearBackgroundTimer(session: TerminalSession): void {
+  if (!session.backgroundTimer) return
+  clearTimeout(session.backgroundTimer)
+  session.backgroundTimer = null
+}
+
+function markSessionActive(session: TerminalSession, now = Date.now()): void {
+  session.summary.updatedAt = now
+  session.summary.lastActiveAt = now
+  session.summary.status = 'running'
+  session.summary.exitCode = undefined
+  session.summary.signal = undefined
+}
+
+function markSessionExited(
+  session: TerminalSession,
+  exitCode: number,
+  signal?: number,
+  now = Date.now(),
+): void {
+  clearBackgroundTimer(session)
+  sessions.delete(session.summary.sessionId)
+  session.summary.status = 'exited'
+  session.summary.exitCode = exitCode
+  session.summary.signal = signal
+  session.summary.pid = undefined
+  session.summary.updatedAt = now
+  session.summary.lastActiveAt = now
+  session.summary.keepAliveUntil = undefined
+  session.summary.saveUntil = saveUntil(session.summary.saveFor, now)
+  persistSessionSummary(session.summary)
+  sendToAttached(session, TERMINAL_IPC.EXIT, {
+    sessionId: session.summary.sessionId,
+    exitCode,
+    signal,
+  })
+}
+
+function scheduleBackgroundKill(session: TerminalSession): void {
+  clearBackgroundTimer(session)
+  if (session.attachedSenders.size > 0 || session.summary.status !== 'running') return
+  const now = Date.now()
+  session.summary.keepAliveUntil = keepAliveUntil(session.summary.keepAliveFor, now)
+  persistSessionSummary(session.summary)
+  if (session.summary.keepAliveUntil === undefined) return
+  const delay = Math.max(0, session.summary.keepAliveUntil - now)
+  session.backgroundTimer = setTimeout(() => {
+    if (session.attachedSenders.size > 0 || session.summary.status !== 'running') return
+    try {
+      session.process.kill()
+    } catch {
+      markSessionExited(session, 1)
+    }
+  }, delay)
+}
+
+function registerOwnerCleanup(sender: WebContents): void {
+  if (ownerCleanupRegistered.has(sender.id)) return
+  ownerCleanupRegistered.add(sender.id)
+  sender.once('destroyed', () => {
+    ownerCleanupRegistered.delete(sender.id)
+    detachOwnerSessions(sender.id)
+  })
+}
+
 function resolveShell(): string {
   const configured = process.env.SHELL?.trim()
   if (configured && configured.startsWith('/') && existsSync(configured)) return configured
@@ -192,15 +433,11 @@ function terminalEnvironment(): Record<string, string> {
   return env
 }
 
-function killOwnerSessions(ownerId: number): void {
-  for (const [sessionId, session] of sessions) {
+function detachOwnerSessions(ownerId: number): void {
+  for (const session of sessions.values()) {
     if (session.ownerId !== ownerId) continue
-    sessions.delete(sessionId)
-    try {
-      session.process.kill()
-    } catch {
-      // The shell may already have exited.
-    }
+    session.attachedSenders.delete(ownerId)
+    scheduleBackgroundKill(session)
   }
 }
 
@@ -219,58 +456,239 @@ export function createTerminalSession(
   sender: WebContents,
   request: TerminalCreateRequest,
 ): TerminalCreateResult {
+  loadPersistedSummaries()
   const sessionId = randomUUID()
   const cwd = resolveWorkingDirectory(request.cwd)
   const shell = resolveShell()
   const cols = clampDimension(request.cols, 2, 500)
   const rows = clampDimension(request.rows, 2, 300)
-  // Interactive zsh reopens /dev/tty under Bun and bypasses the JSONL pipes.
-  // Electron uses node-pty below, while the Tauri sidecar stays pipe-safe.
+  const now = Date.now()
+  const saveFor = isSaveFor(request.saveFor) ? request.saveFor : 'week'
+  const keepAliveFor = isKeepAliveFor(request.keepAliveFor) ? request.keepAliveFor : '3h'
+  // Interactive zsh reopens /dev/tty under Bun and bypasses the JSONL pipes,
+  // so the Tauri sidecar uses a login shell over explicit pipes.
   const args = process.platform === 'win32' ? [] : ['-l']
   const env = terminalEnvironment()
-  const ptyProcess = process.versions.bun
-    ? spawnBunPipeTerminal(shell, args, cwd, env, cols, rows)
-    : (requireNative('node-pty') as typeof import('node-pty')).spawn(shell, args, {
-      name: 'xterm-256color',
-      cols,
-      rows,
-      cwd,
-      env,
-    })
+  const ptyProcess = spawnBunPipeTerminal(shell, args, cwd, env, cols, rows)
 
-  sessions.set(sessionId, {
+  const summary: TerminalSessionSummary = {
+    sessionId,
+    name: normalizeSessionName(request.name, cwd, request.initialCommand),
+    cwd,
+    shell,
+    initialCommand: request.initialCommand?.trim() || undefined,
+    lastCommand: request.initialCommand ? normalizeLastCommand(request.initialCommand) : undefined,
+    createdAt: now,
+    updatedAt: now,
+    lastActiveAt: now,
+    saveFor,
+    keepAliveFor,
+    saveUntil: saveUntil(saveFor, now),
+    status: 'running',
+    pid: ptyProcess.pid,
+  }
+  const session: TerminalSession = {
     ownerId: sender.id,
-    sender,
+    attachedSenders: new Map([[sender.id, sender]]),
     process: ptyProcess,
     pipeMode: Boolean(process.versions.bun),
-  })
+    shell,
+    cwd,
+    summary,
+    outputChunks: [],
+    outputBytes: 0,
+    backgroundTimer: null,
+  }
+  sessions.set(sessionId, session)
+  persistSessionSummary(summary)
+  registerOwnerCleanup(sender)
 
-  if (!ownerCleanupRegistered.has(sender.id)) {
-    ownerCleanupRegistered.add(sender.id)
-    sender.once('destroyed', () => {
-      ownerCleanupRegistered.delete(sender.id)
-      killOwnerSessions(sender.id)
-    })
+  const initialCommand = request.initialCommand
+  let initialCommandWritten = false
+  const writeInitialCommand = (): void => {
+    if (!initialCommand || initialCommandWritten) return
+    initialCommandWritten = true
+    ptyProcess.write(`${initialCommand}${process.versions.bun ? '\n' : '\r'}`)
   }
 
   ptyProcess.onData((data) => {
-    if (!sender.isDestroyed()) {
-      sender.send(TERMINAL_IPC.DATA, { sessionId, data })
-    }
+    const current = sessions.get(sessionId)
+    if (!current) return
+    markSessionActive(current)
+    appendOutput(current, data)
+    sendToAttached(current, TERMINAL_IPC.DATA, { sessionId, data })
+    if (!process.versions.bun) writeInitialCommand()
   })
 
   ptyProcess.onExit(({ exitCode, signal }) => {
-    sessions.delete(sessionId)
-    if (!sender.isDestroyed()) {
-      sender.send(TERMINAL_IPC.EXIT, { sessionId, exitCode, signal })
-    }
+    const current = sessions.get(sessionId)
+    if (!current) return
+    markSessionExited(current, exitCode, signal)
   })
 
-  if (request.initialCommand) {
-    ptyProcess.write(`${request.initialCommand}${process.versions.bun ? '\n' : '\r'}`)
-  }
+  if (process.versions.bun) writeInitialCommand()
 
-  return { sessionId, shell, cwd }
+  return { sessionId, shell, cwd, summary }
+}
+
+export function attachTerminalSession(
+  sender: WebContents,
+  request: TerminalAttachRequest,
+): TerminalAttachResult | null {
+  const session = sessionForOwner(request.sessionId, sender.id)
+  if (!session || session.summary.status !== 'running') return null
+  registerOwnerCleanup(sender)
+  session.attachedSenders.set(sender.id, sender)
+  clearBackgroundTimer(session)
+  session.summary.keepAliveUntil = undefined
+  session.process.resize(clampDimension(request.cols, 2, 500), clampDimension(request.rows, 2, 300))
+  markSessionActive(session)
+  persistSessionSummary(session.summary)
+  return {
+    sessionId: request.sessionId,
+    shell: session.shell,
+    cwd: session.cwd,
+    recentOutput: session.outputChunks.join(''),
+    summary: { ...session.summary },
+  }
+}
+
+export function detachTerminalSession(ownerId: number, sessionId: string): boolean {
+  const session = sessionForOwner(sessionId, ownerId)
+  if (!session) return false
+  session.attachedSenders.delete(ownerId)
+  scheduleBackgroundKill(session)
+  return true
+}
+
+export function listTerminalSessions(ownerId: number): TerminalSessionSummary[] {
+  prunePersistedSummaries()
+  const byId = new Map<string, TerminalSessionSummary>()
+  for (const summary of persistedSummaries.values()) {
+    byId.set(summary.sessionId, { ...summary })
+  }
+  for (const session of sessions.values()) {
+    if (session.ownerId !== ownerId) continue
+    byId.set(session.summary.sessionId, { ...session.summary })
+  }
+  return Array.from(byId.values()).sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'running' ? -1 : 1
+    return b.updatedAt - a.updatedAt
+  })
+}
+
+export function updateTerminalSession(
+  ownerId: number,
+  request: TerminalUpdateRequest,
+): TerminalSessionSummary | null {
+  loadPersistedSummaries()
+  if (!request.sessionId) return null
+  const session = sessionForOwner(request.sessionId, ownerId)
+  const existing = session?.summary ?? persistedSummaries.get(request.sessionId)
+  if (!existing) return null
+  const now = Date.now()
+  if (request.name !== undefined) {
+    existing.name = normalizeSessionName(request.name, existing.cwd, existing.initialCommand)
+  }
+  if (request.cwd !== undefined) {
+    const cwd = resolveExistingWorkingDirectory(request.cwd)
+    if (cwd) {
+      existing.cwd = cwd
+      if (session) session.cwd = cwd
+    }
+  }
+  if (request.lastCommand !== undefined) {
+    existing.lastCommand = normalizeLastCommand(request.lastCommand)
+  }
+  if (request.saveFor !== undefined && isSaveFor(request.saveFor)) {
+    existing.saveFor = request.saveFor
+    existing.saveUntil = saveUntil(request.saveFor, now)
+  }
+  if (request.keepAliveFor !== undefined && isKeepAliveFor(request.keepAliveFor)) {
+    existing.keepAliveFor = request.keepAliveFor
+    if (session && session.attachedSenders.size === 0) {
+      existing.keepAliveUntil = keepAliveUntil(request.keepAliveFor, now)
+    }
+  }
+  existing.updatedAt = now
+  existing.lastActiveAt = Math.max(existing.lastActiveAt, now)
+  persistSessionSummary(existing)
+  if (session) scheduleBackgroundKill(session)
+  return { ...existing }
+}
+
+export function recordNativeTerminalSession(request: {
+  sessionId: string
+  shell: string
+  cwd: string
+  initialCommand?: string
+  name?: string
+  saveFor?: TerminalSaveFor
+  keepAliveFor?: TerminalKeepAliveFor
+}): TerminalSessionSummary {
+  loadPersistedSummaries()
+  const now = Date.now()
+  const cwd = resolveWorkingDirectory(request.cwd)
+  const saveFor = isSaveFor(request.saveFor) ? request.saveFor : 'week'
+  const keepAliveFor = isKeepAliveFor(request.keepAliveFor) ? request.keepAliveFor : '3h'
+  const initialCommand = request.initialCommand?.trim() || undefined
+  const summary: TerminalSessionSummary = {
+    sessionId: request.sessionId,
+    name: normalizeSessionName(request.name, cwd, initialCommand),
+    cwd,
+    shell: request.shell,
+    initialCommand,
+    lastCommand: initialCommand ? normalizeLastCommand(initialCommand) : undefined,
+    createdAt: now,
+    updatedAt: now,
+    lastActiveAt: now,
+    saveFor,
+    keepAliveFor,
+    saveUntil: saveUntil(saveFor, now),
+    keepAliveUntil: undefined,
+    status: 'running',
+    pid: undefined,
+  }
+  persistSessionSummary(summary)
+  return { ...summary }
+}
+
+export function markNativeTerminalSessionAttached(
+  sessionId: string,
+): TerminalSessionSummary | null {
+  loadPersistedSummaries()
+  const summary = persistedSummaries.get(sessionId)
+  if (!summary) return null
+  const now = Date.now()
+  summary.updatedAt = now
+  summary.lastActiveAt = now
+  summary.status = 'running'
+  summary.exitCode = undefined
+  summary.signal = undefined
+  summary.keepAliveUntil = undefined
+  persistSessionSummary(summary)
+  return { ...summary }
+}
+
+export function markNativeTerminalSessionExited(
+  sessionId: string,
+  exitCode: number,
+  signal?: number,
+): TerminalSessionSummary | null {
+  loadPersistedSummaries()
+  const summary = persistedSummaries.get(sessionId)
+  if (!summary) return null
+  const now = Date.now()
+  summary.updatedAt = now
+  summary.lastActiveAt = now
+  summary.status = 'exited'
+  summary.exitCode = exitCode
+  summary.signal = signal
+  summary.pid = undefined
+  summary.keepAliveUntil = undefined
+  summary.saveUntil = saveUntil(summary.saveFor, now)
+  persistSessionSummary(summary)
+  return { ...summary }
 }
 
 export function writeTerminalSession(ownerId: number, sessionId: string, data: string): boolean {
@@ -278,10 +696,12 @@ export function writeTerminalSession(ownerId: number, sessionId: string, data: s
   if (!session || data.length === 0 || data.length > 64 * 1024) return false
   if (session.pipeMode) {
     const echo = pipeInputEcho(data)
-    if (echo && !session.sender.isDestroyed()) {
-      session.sender.send(TERMINAL_IPC.DATA, { sessionId, data: echo })
+    if (echo) {
+      appendOutput(session, echo)
+      sendToAttached(session, TERMINAL_IPC.DATA, { sessionId, data: echo })
     }
   }
+  markSessionActive(session)
   session.process.write(session.pipeMode ? data.replace(/\r/g, '\n') : data)
   return true
 }
@@ -300,14 +720,27 @@ export function resizeTerminalSession(
 
 export function killTerminalSession(ownerId: number, sessionId: string): boolean {
   const session = sessionForOwner(sessionId, ownerId)
-  if (!session) return false
-  sessions.delete(sessionId)
+  if (!session) {
+    loadPersistedSummaries()
+    const deleted = persistedSummaries.delete(sessionId)
+    if (deleted) writePersistedSummaries()
+    return deleted
+  }
   try {
     session.process.kill()
   } catch {
-    // The shell may already have exited.
+    markSessionExited(session, 1)
   }
   return true
+}
+
+export function deleteTerminalSession(ownerId: number, sessionId: string): boolean {
+  const session = sessionForOwner(sessionId, ownerId)
+  if (session) return false
+  loadPersistedSummaries()
+  const deleted = persistedSummaries.delete(sessionId)
+  if (deleted) writePersistedSummaries()
+  return deleted
 }
 
 export function getTerminalPromptInfo(): TerminalPromptInfo {
@@ -324,6 +757,13 @@ export function shutdownTerminalSessions(): void {
     } catch {
       // Best-effort shutdown during application quit.
     }
+    session.summary.status = 'exited'
+    session.summary.pid = undefined
+    session.summary.keepAliveUntil = undefined
+    session.summary.updatedAt = Date.now()
+    session.summary.lastActiveAt = session.summary.updatedAt
+    session.summary.saveUntil = saveUntil(session.summary.saveFor, session.summary.updatedAt)
+    persistSessionSummary(session.summary)
   }
   sessions.clear()
 }

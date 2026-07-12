@@ -1,4 +1,5 @@
-import { app, clipboard, nativeImage, shell } from 'electron'
+import { app, clipboard, nativeImage, shell } from '@tezbar/desktop-runtime'
+import type { NativeImage } from '@tezbar/desktop-runtime'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
@@ -240,7 +241,7 @@ function captureFileEntry(paths: string[], now: number): ClipboardEntry | null {
   }
 }
 
-function resizeToMegapixels(image: Electron.NativeImage, maxMegapixels: number): Electron.NativeImage {
+function resizeToMegapixels(image: NativeImage, maxMegapixels: number): NativeImage {
   if (maxMegapixels <= 0) return image
   const { width, height } = image.getSize()
   const megapixels = (width * height) / 1_000_000

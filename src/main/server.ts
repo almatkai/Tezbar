@@ -2,7 +2,7 @@
 import { registerIpcHandlers, shutdownIpcHandlers } from './ipc'
 import { startClipboardWatcher, stopClipboardWatcher } from './search/providers/clipboardProvider'
 import { flushConfig, writeConfigPatch } from './llm/configStore'
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from '@tezbar/desktop-runtime'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -54,6 +54,13 @@ function fixPathSync(): void {
 fixPathSync()
 materializePiPolicy()
 
+// A rejected fire-and-forget integration must not take down every backend
+// feature. Individual operations should still catch their own errors; this is
+// the final containment boundary for extension and OS integration promises.
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('[server] contained unhandled promise rejection:', reason)
+})
+
 const mockWin = new BrowserWindow()
 const tauriIpcMain = ipcMain as typeof ipcMain & {
   _invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
@@ -65,7 +72,7 @@ registerIpcHandlers(() => mockWin, {
   updateRaymesHotkey: (h: string) => {
     writeConfigPatch({ raymesHotkey: h })
     return { ok: true, accelerator: h }
-  }
+  },
 })
 
 startClipboardWatcher()

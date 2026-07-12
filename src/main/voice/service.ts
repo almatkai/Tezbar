@@ -1,12 +1,13 @@
-import { app } from 'electron'
+import { app } from '@tezbar/desktop-runtime'
 import { execFile, spawn } from 'node:child_process'
 import { createWriteStream, existsSync, mkdirSync, statSync } from 'node:fs'
 import { promises as fs } from 'node:fs'
+import { cpus } from 'node:os'
 import { dirname, join } from 'node:path'
 import { once } from 'node:events'
 import { promisify } from 'node:util'
 import { readRawConfig, writeConfigPatch } from '../llm/configStore'
-import type { VoiceModel, VoiceModelId } from '../../shared/voice'
+import { VOICE_MODEL_IDS, type VoiceModel, type VoiceModelId, type VoiceModelLanguage, type VoiceModelTier } from '../../shared/voice'
 import type { VoiceTranscribeRequest } from '../../shared/ipc'
 
 const execFileAsync = promisify(execFile)
@@ -74,6 +75,9 @@ type VoiceModelCatalogEntry = {
   family: 'moonshine' | 'whisper'
   description: string
   homepageUrl: string
+  sizeLabel: string
+  language: VoiceModelLanguage
+  tier: VoiceModelTier
   estimatedSizeMb: number
   runtime: RuntimeKind
   assets: ModelAsset[]
@@ -99,6 +103,9 @@ const MODEL_CATALOG: VoiceModelCatalogEntry[] = [
     family: 'moonshine',
     description: 'Low-latency Moonshine STT model from Moonshine AI.',
     homepageUrl: 'https://github.com/moonshine-ai/moonshine',
+    sizeLabel: '~140 MB',
+    language: 'en',
+    tier: 'balanced',
     estimatedSizeMb: 140,
     runtime: 'moonshine-python',
     assets: [
@@ -117,32 +124,136 @@ const MODEL_CATALOG: VoiceModelCatalogEntry[] = [
     ],
   },
   {
-    id: 'whisper-base',
-    name: 'Whisper Base (English, whisper.cpp)',
+    id: 'moonshine-tiny-en',
+    name: 'Moonshine Tiny (English)',
+    family: 'moonshine',
+    description: 'Smallest Moonshine STT model for very low-latency English dictation.',
+    homepageUrl: 'https://github.com/moonshine-ai/moonshine',
+    sizeLabel: '~60 MB',
+    language: 'en',
+    tier: 'fast',
+    estimatedSizeMb: 60,
+    runtime: 'moonshine-python',
+    assets: [
+      {
+        fileName: 'encoder_model.ort',
+        url: 'https://download.moonshine.ai/model/tiny-en/quantized/tiny-en/encoder_model.ort',
+      },
+      {
+        fileName: 'decoder_model_merged.ort',
+        url: 'https://download.moonshine.ai/model/tiny-en/quantized/tiny-en/decoder_model_merged.ort',
+      },
+      {
+        fileName: 'tokenizer.bin',
+        url: 'https://download.moonshine.ai/model/tiny-en/quantized/tiny-en/tokenizer.bin',
+      },
+    ],
+  },
+  {
+    id: 'whisper-tiny-en',
+    name: 'Whisper Tiny (English, whisper.cpp)',
     family: 'whisper',
-    description: 'Fast whisper.cpp ggml model — good for quick dictation.',
+    description: 'Small English-only whisper.cpp ggml model for quick dictation.',
     homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~78 MB',
+    language: 'en',
+    tier: 'fast',
+    estimatedSizeMb: 78,
+    runtime: 'whisper-cpp',
+    assets: [
+      {
+        fileName: 'ggml-tiny.en.bin',
+        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin',
+      },
+    ],
+  },
+  {
+    id: 'whisper-tiny',
+    name: 'Whisper Tiny (Multilingual, whisper.cpp)',
+    family: 'whisper',
+    description: 'Small multilingual whisper.cpp ggml model for fast local transcription.',
+    homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~78 MB',
+    language: 'multilingual',
+    tier: 'fast',
+    estimatedSizeMb: 78,
+    runtime: 'whisper-cpp',
+    assets: [
+      {
+        fileName: 'ggml-tiny.bin',
+        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
+      },
+    ],
+  },
+  {
+    id: 'whisper-base',
+    name: 'Whisper Base (Multilingual, whisper.cpp)',
+    family: 'whisper',
+    description: 'Balanced multilingual whisper.cpp ggml model for local transcription.',
+    homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~150 MB',
+    language: 'multilingual',
+    tier: 'balanced',
     estimatedSizeMb: 150,
     runtime: 'whisper-cpp',
     assets: [
       {
-        fileName: 'ggml-base.en.bin',
-        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin',
+        fileName: 'ggml-base.bin',
+        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
       },
     ],
   },
   {
     id: 'whisper-small',
-    name: 'Whisper Small (English, whisper.cpp)',
+    name: 'Whisper Small (Multilingual, whisper.cpp)',
     family: 'whisper',
-    description: 'Higher-accuracy whisper.cpp ggml model — a bit slower, noticeably better.',
+    description: 'Higher-accuracy multilingual whisper.cpp ggml model.',
     homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~490 MB',
+    language: 'multilingual',
+    tier: 'balanced',
     estimatedSizeMb: 490,
     runtime: 'whisper-cpp',
     assets: [
       {
-        fileName: 'ggml-small.en.bin',
-        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin',
+        fileName: 'ggml-small.bin',
+        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+      },
+    ],
+  },
+  {
+    id: 'whisper-medium-en',
+    name: 'Whisper Medium (English, whisper.cpp)',
+    family: 'whisper',
+    description: 'Accurate English-only whisper.cpp ggml model for local transcription.',
+    homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~1.5 GB',
+    language: 'en',
+    tier: 'accurate',
+    estimatedSizeMb: 1530,
+    runtime: 'whisper-cpp',
+    assets: [
+      {
+        fileName: 'ggml-medium.en.bin',
+        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin',
+      },
+    ],
+  },
+  {
+    id: 'whisper-large-v3-turbo',
+    name: 'Whisper Large v3 Turbo (Multilingual, whisper.cpp)',
+    family: 'whisper',
+    description: 'Accurate multilingual whisper.cpp turbo model for local transcription.',
+    homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~574 MB-1.6 GB',
+    language: 'multilingual',
+    tier: 'accurate',
+    estimatedSizeMb: 1620,
+    runtime: 'whisper-cpp',
+    assets: [
+      {
+        fileName: 'ggml-large-v3-turbo.bin',
+        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin',
       },
     ],
   },
@@ -173,10 +284,14 @@ function findModel(modelId: VoiceModelId): VoiceModelCatalogEntry {
   return model
 }
 
+function isVoiceModelId(raw: unknown): raw is VoiceModelId {
+  return typeof raw === 'string' && VOICE_MODEL_IDS.includes(raw as VoiceModelId)
+}
+
 function readSelectedModelId(): VoiceModelId {
   const config = readRawConfig()
   const raw = config[VOICE_MODEL_CONFIG_KEY]
-  if (raw === 'moonshine-base-en' || raw === 'whisper-base' || raw === 'whisper-small') {
+  if (isVoiceModelId(raw)) {
     return raw
   }
   return 'moonshine-base-en'
@@ -356,6 +471,9 @@ async function toVoiceModelView(
       family: model.family,
       description: model.description,
       homepageUrl: model.homepageUrl,
+      sizeLabel: model.sizeLabel,
+      language: model.language,
+      tier: model.tier,
       estimatedSizeMb: model.estimatedSizeMb,
       status: 'downloaded',
       stage: 'idle',
@@ -374,6 +492,9 @@ async function toVoiceModelView(
       family: model.family,
       description: model.description,
       homepageUrl: model.homepageUrl,
+      sizeLabel: model.sizeLabel,
+      language: model.language,
+      tier: model.tier,
       estimatedSizeMb: model.estimatedSizeMb,
       status: active.status,
       stage: active.stage,
@@ -392,6 +513,9 @@ async function toVoiceModelView(
     family: model.family,
     description: model.description,
     homepageUrl: model.homepageUrl,
+    sizeLabel: model.sizeLabel,
+    language: model.language,
+    tier: model.tier,
     estimatedSizeMb: model.estimatedSizeMb,
     status: 'not-downloaded',
     stage: 'idle',
@@ -566,6 +690,9 @@ export async function listVoiceModels(): Promise<VoiceModel[]> {
       family: model.family,
       description: model.description,
       homepageUrl: model.homepageUrl,
+      sizeLabel: model.sizeLabel,
+      language: model.language,
+      tier: model.tier,
       estimatedSizeMb: model.estimatedSizeMb,
       status: 'not-downloaded' as const,
       stage: 'idle' as const,
@@ -631,6 +758,28 @@ export async function downloadVoiceModel(modelId: VoiceModelId): Promise<VoiceMo
 
   const selected = readSelectedModelId()
   return toVoiceModelView(model, selected)
+}
+
+/** Remove only this model's downloaded weights. Runtimes are shared by several
+ * models, so deleting one model must not uninstall whisper.cpp or Moonshine. */
+export async function deleteVoiceModel(modelId: VoiceModelId): Promise<VoiceModelId> {
+  findModel(modelId)
+  if (activeDownloads.get(modelId)?.status === 'downloading') {
+    throw new Error('Wait for this model download to finish before deleting it.')
+  }
+
+  await fs.rm(modelDir(modelId), { recursive: true, force: true })
+  activeDownloads.delete(modelId)
+
+  const selectedId = readSelectedModelId()
+  if (selectedId !== modelId) return selectedId
+
+  const nextSelected =
+    MODEL_CATALOG.find((model) => model.id !== modelId && isModelFullyDownloaded(model))?.id ??
+    MODEL_CATALOG.find((model) => model.id !== modelId)?.id ??
+    modelId
+  writeConfigPatch({ [VOICE_MODEL_CONFIG_KEY]: nextSelected })
+  return nextSelected
 }
 
 export async function speakText(text: string): Promise<void> {
@@ -702,16 +851,17 @@ async function hasMoonshinePython(): Promise<boolean> {
 
 function preferredMoonshineModelPath(): string {
   const selected = readSelectedModelId()
-  if (selected === 'moonshine-base-en' && isModelFullyDownloaded(findModel(selected))) {
+  const selectedModel = findModel(selected)
+  if (selectedModel.family === 'moonshine' && isModelFullyDownloaded(selectedModel)) {
     return modelDir(selected)
   }
 
-  const fallback = findModel('moonshine-base-en')
-  if (isModelFullyDownloaded(fallback)) {
-    return modelDir('moonshine-base-en')
+  const fallback = MODEL_CATALOG.find((model) => model.family === 'moonshine' && isModelFullyDownloaded(model))
+  if (fallback) {
+    return modelDir(fallback.id)
   }
 
-  throw new Error('Moonshine model files are not downloaded yet. Download Moonshine Base first.')
+  throw new Error('Moonshine model files are not downloaded yet. Download a Moonshine model first.')
 }
 
 async function convertToWav(inputPath: string, outputPath: string): Promise<void> {
@@ -844,22 +994,20 @@ async function findWhisperCliModel(): Promise<string | null> {
   const envPath = process.env['RAYMES_WHISPER_MODEL']
   if (envPath && existsSync(envPath)) return envPath
 
-  // Prefer the currently-selected whisper model so downgrading from
-  // `whisper-small` to `whisper-base` in Settings takes effect
-  // immediately without requiring a restart.
   const selected = readSelectedModelId()
-  const preferredDirs =
-    selected === 'whisper-base' || selected === 'whisper-small'
-      ? [modelDir(selected), modelDir(selected === 'whisper-base' ? 'whisper-small' : 'whisper-base')]
-      : [modelDir('whisper-base'), modelDir('whisper-small')]
+  const selectedModel = findModel(selected)
+  const whisperModels = MODEL_CATALOG.filter((model) => model.family === 'whisper')
+  const preferredModels =
+    selectedModel.family === 'whisper'
+      ? [selectedModel, ...whisperModels.filter((model) => model.id !== selectedModel.id)]
+      : whisperModels
 
-  for (const dir of preferredDirs) {
-    try {
-      const inner = await fs.readdir(dir)
-      const match = inner.find((f) => f.startsWith('ggml-') && f.endsWith('.bin'))
-      if (match) return join(dir, match)
-    } catch {
-      // directory may not exist yet — keep looking
+  for (const model of preferredModels) {
+    for (const asset of model.assets) {
+      const assetPath = modelAssetPath(model.id, asset.fileName)
+      if (existsSync(assetPath)) {
+        return assetPath
+      }
     }
   }
 
@@ -875,6 +1023,17 @@ async function findWhisperCliModel(): Promise<string | null> {
   return null
 }
 
+function envPositiveInt(name: string): number | null {
+  const raw = process.env[name]
+  if (!raw) return null
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+function whisperThreadCount(): number {
+  return envPositiveInt('RAYMES_WHISPER_THREADS') ?? Math.max(4, Math.min(cpus().length, 12))
+}
+
 async function runWhisperCli(wavPath: string, language: string | undefined): Promise<string | null> {
   const binary = (await hasBinary('whisper-cli')) ? 'whisper-cli' : (await hasBinary('whisper-cpp')) ? 'whisper-cpp' : null
   if (!binary) return null
@@ -882,7 +1041,22 @@ async function runWhisperCli(wavPath: string, language: string | undefined): Pro
   const model = await findWhisperCliModel()
   if (!model) return null
 
-  const args = ['-m', model, '-f', wavPath, '-l', language?.trim() || 'en', '-otxt', '-of', wavPath.replace(/\.wav$/, '')]
+  const selectedModel = findModel(readSelectedModelId())
+  const defaultLanguage = selectedModel.family === 'whisper' && selectedModel.language === 'multilingual' ? 'auto' : 'en'
+  const args = [
+    '-m', model,
+    '-f', wavPath,
+    '-l', language?.trim() || defaultLanguage,
+    '-t', String(whisperThreadCount()),
+    '-bo', '1',
+    '-bs', '1',
+    '-nt',
+    '-np',
+    '-nf',
+    '-sns',
+    '-otxt',
+    '-of', wavPath.replace(/\.wav$/, ''),
+  ]
   console.info('[stt][main] whisper-cli:', binary, args.join(' '))
   try {
     const { stderr } = await execWithUserPath(binary, args)

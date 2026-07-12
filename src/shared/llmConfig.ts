@@ -1,3 +1,5 @@
+import type { VoiceModelId } from './voice'
+
 export type BuiltInProviderId = 'openai' | 'openai-compatible' | 'anthropic' | 'ollama' | 'copilot' | 'gemini' | 'opencode' | 'deepseek'
 
 export type ProviderId = BuiltInProviderId | `custom:${string}`
@@ -49,7 +51,7 @@ export type LlmConfigRecord = {
   memoryIncludePrivate?: boolean
   aiActionRequirePermission?: boolean
   aiActionRedactionEnabled?: boolean
-  voiceSttModelId?: 'moonshine-base-en' | 'whisper-base' | 'whisper-small'
+  voiceSttModelId?: VoiceModelId
   raymesHotkey?: string
   /** Milliseconds to remember palette UI (e.g. Providers) after hide. Default 60000. Use 0 to always reset. */
   uiStateRetentionMs?: number

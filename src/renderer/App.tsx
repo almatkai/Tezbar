@@ -5,8 +5,8 @@ import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_AI_NEW_CHAT_EVENT, RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
-import { compactTerminalPath, type TerminalPromptInfo } from '../shared/terminal'
-import { Hint, HintBar, Kbd } from './ui/primitives'
+import type { TerminalSessionsAction } from '../shared/terminal'
+import type { TerminalDefaults } from './terminalPreferences'
 
 const AgentChatView = React.lazy(() => import('./AgentChatView'))
 const SettingsView = React.lazy(() => import('./SettingsView'))
@@ -19,6 +19,7 @@ const NotesView = React.lazy(() => import('./NotesView'))
 const SnippetsView = React.lazy(() => import('./SnippetsView'))
 const EmojiPickerView = React.lazy(() => import('./EmojiPickerView'))
 const TerminalView = React.lazy(() => import('./TerminalView'))
+const TerminalSessionsWindow = React.lazy(() => import('./TerminalSessionsWindow'))
 
 const SurfaceFallback = (): JSX.Element => (
   <div className="flex h-full w-full items-center justify-center text-[12px] text-ink-3">Loading…</div>
@@ -75,7 +76,17 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
 const OUTER_PADDING_PX = 16
 
 function isSettingsWindow(): boolean {
-  return new URLSearchParams(window.location.search).get('window') === 'settings'
+  return (
+    new URLSearchParams(window.location.search).get('window') === 'settings' ||
+    window.__TEZBAR_WINDOW_LABEL__ === 'settings'
+  )
+}
+
+function isTerminalSessionsWindow(): boolean {
+  return (
+    new URLSearchParams(window.location.search).get('window') === 'terminal-sessions' ||
+    window.__TEZBAR_WINDOW_LABEL__ === 'terminal-sessions'
+  )
 }
 
 function SettingsWindowApp(): JSX.Element {
@@ -84,9 +95,15 @@ function SettingsWindowApp(): JSX.Element {
 
   useEffect(() => {
     let cancelled = false
-    void window.tezbar.getLlmConfig().then((config) => {
-      if (!cancelled) setSettingsTab(normalizeSettingsTab(config.settingsInitialTab))
-    })
+    void window.tezbar
+      .getLlmConfig()
+      .then((config) => {
+        if (!cancelled) setSettingsTab(normalizeSettingsTab(config.settingsInitialTab))
+      })
+      .catch((error: unknown) => {
+        console.warn('[SettingsWindow] Failed to load initial settings tab:', error)
+        if (!cancelled) setSettingsTab('general')
+      })
 
     const onStorage = (event: StorageEvent): void => {
       if (event.key !== SETTINGS_TAB_STORAGE_KEY) return
@@ -144,8 +161,9 @@ function LauncherApp(): JSX.Element {
     null
   )
   const [terminalInitialCommand, setTerminalInitialCommand] = useState<string | undefined>()
+  const [terminalInitialSessionId, setTerminalInitialSessionId] = useState<string | undefined>()
   const [terminalWorkingDirectory, setTerminalWorkingDirectory] = useState<string | undefined>()
-  const [terminalPromptInfo, setTerminalPromptInfo] = useState<TerminalPromptInfo | null>(null)
+  const [terminalDefaults, setTerminalDefaults] = useState<TerminalDefaults | undefined>()
   const [aiChatBoot, setAiChatBoot] = useState<AiChatBoot>({ kind: 'panel' })
   const [aiChatKey, setAiChatKey] = useState(0)
   const [extensionRuntimeInitial, setExtensionRuntimeInitial] = useState<Extract<
@@ -189,12 +207,6 @@ function LauncherApp(): JSX.Element {
   }, [surface])
 
   useEffect(() => {
-    if (surface === 'terminal') {
-      void window.tezbar.getTerminalPromptInfo().then(setTerminalPromptInfo)
-    }
-  }, [surface])
-
-  useEffect(() => {
     const off = window.tezbar.onWindowSnapGuides((payload) => {
       setSnapGuides(payload)
     })
@@ -224,6 +236,19 @@ function LauncherApp(): JSX.Element {
           }
         })
     })
+  }, [])
+
+  useEffect(() => {
+    const openTerminalFromSessions = (action: TerminalSessionsAction): void => {
+      void window.tezbar.terminalSessionsHide()
+      setTerminalInitialCommand(undefined)
+      setTerminalWorkingDirectory(undefined)
+      setTerminalInitialSessionId(action.type === 'select' ? action.sessionId : undefined)
+      setCommandInitialValue('')
+      setSurface('terminal')
+    }
+
+    return window.tezbar.onTerminalSessionsAction(openTerminalFromSessions)
   }, [])
 
   useEffect(() => {
@@ -315,8 +340,16 @@ function LauncherApp(): JSX.Element {
       if (e.key === 'Escape') {
         e.preventDefault()
         if (surface === 'ai-chat') {
-          if (tryConsumeCommandSurfaceEscape()) return
+          if (tryConsumeCommandSurfaceEscape()) {
+            e.stopPropagation()
+            return
+          }
           setCommandInitialValue(' ')
+          setSurface('command')
+          return
+        }
+        if (surface === 'terminal') {
+          setCommandInitialValue('>')
           setSurface('command')
           return
         }
@@ -325,6 +358,7 @@ function LauncherApp(): JSX.Element {
           return
         }
         if (tryConsumeCommandSurfaceEscape()) {
+          e.stopPropagation()
           return
         }
         void window.tezbar.hide()
@@ -368,7 +402,14 @@ function LauncherApp(): JSX.Element {
   }, [surface])
 
   return (
-    <div className="glass-shell drag-region flex h-screen w-full p-2">
+    <div
+      className={[
+        'glass-shell drag-region flex h-screen w-full p-2',
+        surface === 'terminal' ? 'glass-shell--terminal' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div
         aria-hidden
         className={[
@@ -439,45 +480,20 @@ function LauncherApp(): JSX.Element {
               }}
             />
           ) : surface === 'terminal' ? (
-            <div className="flex h-full w-full flex-col gap-2">
-              <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-tezbar-scale-in">
-                <div className="flex items-center gap-3">
-                  <span className="text-emerald-300">
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-                      <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
-                      <path d="M4 5.5L6.5 7L4 8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M8 9.5H10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-                    </svg>
-                  </span>
-                  <span className="shrink-0 font-mono text-[13px] text-emerald-300/80">
-                    {terminalPromptInfo
-                      ? `${terminalPromptInfo.user}@${terminalPromptInfo.host} ${compactTerminalPath(terminalWorkingDirectory || terminalPromptInfo.dir)} %`
-                      : ''}
-                  </span>
-                  <span className="font-mono text-[15px] text-ink-1">
-                    {terminalInitialCommand}
-                  </span>
-                </div>
-              </div>
-              <TerminalView
-                embedded
-                initialCommand={terminalInitialCommand}
-                workingDirectory={terminalWorkingDirectory}
-                onBack={() => {
-                  setTerminalInitialCommand(undefined)
-                  setTerminalWorkingDirectory(undefined)
-                  setTerminalPromptInfo(null)
-                  setCommandInitialValue('')
-                  setSurface('command')
-                }}
-              />
-              <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
-                <HintBar>
-                  <Hint label="Close" keys={<Kbd>Esc</Kbd>} />
-                  <Hint label="Hide window" keys={<><Kbd>Esc</Kbd><Kbd>⌘</Kbd></>} />
-                </HintBar>
-              </div>
-            </div>
+            <TerminalView
+              embedded
+              initialCommand={terminalInitialCommand}
+              initialSessionId={terminalInitialSessionId}
+              workingDirectory={terminalWorkingDirectory}
+              defaults={terminalDefaults}
+              onBack={() => {
+                setTerminalInitialCommand(undefined)
+                setTerminalInitialSessionId(undefined)
+                setTerminalWorkingDirectory(undefined)
+                setCommandInitialValue('>')
+                setSurface('command')
+              }}
+            />
           ) : (
             <CommandBar
               initialValue={commandInitialValue}
@@ -522,9 +538,11 @@ function LauncherApp(): JSX.Element {
                 setSurface('notes')
               }}
               onOpenEmojiPicker={() => setSurface('emoji-picker')}
-              onOpenTerminal={(initialCommand, workingDirectory) => {
+              onOpenTerminal={(initialCommand, workingDirectory, sessionId, defaults) => {
                 setTerminalInitialCommand(initialCommand)
+                setTerminalInitialSessionId(sessionId)
                 setTerminalWorkingDirectory(workingDirectory)
+                setTerminalDefaults(defaults)
                 setCommandInitialValue('')
                 setSurface('terminal')
               }}
@@ -537,5 +555,12 @@ function LauncherApp(): JSX.Element {
 }
 
 export default function App(): JSX.Element {
+  if (isTerminalSessionsWindow()) {
+    return (
+      <Suspense fallback={<SurfaceFallback />}>
+        <TerminalSessionsWindow />
+      </Suspense>
+    )
+  }
   return isSettingsWindow() ? <SettingsWindowApp /> : <LauncherApp />
 }

@@ -266,6 +266,17 @@ export function buildProviderForId(id: ProviderId, cfg: OpenRayLLMConfig): LLMPr
   return buildProvider(configForProvider(cfg, id))
 }
 
+export function configForTask(cfg: OpenRayLLMConfig, task: LlmTask): OpenRayLLMConfig {
+  const providerOverride = cfg.taskProviderOverrides?.[task]
+  const modelOverride = cfg.taskModelOverrides?.[task]
+  const targetProvider = providerOverride ?? cfg.provider
+  const targetConfig = configForProvider(cfg, targetProvider)
+  return {
+    ...targetConfig,
+    model: modelOverride ?? targetConfig.model,
+  }
+}
+
 function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
   if (isCustomProvider(cfg.provider)) {
     return new OpenAIProvider(
@@ -340,19 +351,12 @@ export function getProvider(): LLMProvider {
 
 export function getProviderForTask(task: LlmTask): LLMProvider {
   const cfg = readLLMConfig()
-  const providerOverride = cfg.taskProviderOverrides?.[task]
-  const modelOverride = cfg.taskModelOverrides?.[task]
-  const targetProvider = providerOverride ?? cfg.provider
-  const targetConfig = configForProvider(cfg, targetProvider)
-  const merged: OpenRayLLMConfig = {
-    ...targetConfig,
-    model: modelOverride ?? targetConfig.model,
-  }
-  return buildProvider(merged)
+  return buildProvider(configForTask(cfg, task))
 }
 
-export function getSelectedPiModelPattern(): string | undefined {
-  const cfg = readLLMConfig()
+export function getSelectedPiModelPattern(task?: LlmTask): string | undefined {
+  const baseConfig = readLLMConfig()
+  const cfg = task ? configForTask(baseConfig, task) : baseConfig
   const model = cfg.model?.trim()
   if (!model) return undefined
 
@@ -395,8 +399,9 @@ function piApiKey(cfg: OpenRayLLMConfig): string | undefined {
   return cfg.apiKey
 }
 
-export function getSelectedPiProviderBridge(): PiProviderBridge | undefined {
-  const cfg = readLLMConfig()
+export function getSelectedPiProviderBridge(task?: LlmTask): PiProviderBridge | undefined {
+  const baseConfig = readLLMConfig()
+  const cfg = task ? configForTask(baseConfig, task) : baseConfig
   const model = cfg.model?.trim()
   if (!model) return undefined
 

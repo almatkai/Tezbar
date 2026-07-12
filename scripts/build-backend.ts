@@ -19,12 +19,11 @@ async function runBuild(): Promise<void> {
       ),
     },
     alias: {
-      electron: join(root, 'src/main/electron-shim.ts'),
+      '@tezbar/desktop-runtime': join(root, 'src/main/desktop-runtime.ts'),
       'better-sqlite3': join(root, 'src/main/better-sqlite3-shim.ts')
     },
     external: [
       'esbuild',
-      'node-pty',
       'fsevents',
       'bun:sqlite'
     ],

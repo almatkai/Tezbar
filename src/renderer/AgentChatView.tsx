@@ -1,20 +1,22 @@
 import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useRef,
   useState,
 } from 'react'
-import type {
-  AgentApprovalDecision,
-  AgentInputImage,
-  AgentRunEvent,
-  Stage,
-} from '../shared/agent'
-import { defaultModels, inferCapabilities, normalizeProviderModelList } from '../shared/aiProviders'
+import type { AgentApprovalDecision, AgentInputImage, AgentRunEvent, Stage } from '../shared/agent'
+import {
+  defaultModels,
+  inferCapabilities,
+  normalizeProviderModelList,
+  providerTitle,
+} from '../shared/aiProviders'
 import {
   CHAT_CONTINUATION_WINDOW_MS,
+  type ChatResponseMeta,
   type ChatSession,
   type ChatSessionSummary,
   type ChatTurn,
@@ -77,6 +79,77 @@ function modelsForProvider(cfg: LlmConfigRecord, provider: ProviderId): AiProvid
   )
 }
 
+function estimateTokenCount(text: string): number {
+  const trimmed = text.trim()
+  if (!trimmed) return 0
+  const wordEstimate = trimmed.split(/\s+/).length
+  const charEstimate = Math.ceil(trimmed.length / 4)
+  return Math.max(1, Math.round((wordEstimate + charEstimate) / 2))
+}
+
+function chatResponseMetaForConfig(config: LlmConfigRecord): ChatResponseMeta {
+  const provider = (config.taskProviderOverrides?.chat ?? config.provider ?? 'ollama') as ProviderId
+  const model =
+    config.taskModelOverrides?.chat ??
+    config.providerSelectedModels?.[provider] ??
+    config.model ??
+    'default'
+  return {
+    provider,
+    providerTitle: providerTitle(provider, config),
+    model,
+  }
+}
+
+function formatTokenCount(count: number): string {
+  if (count >= 1000) return `~${(count / 1000).toFixed(count >= 10_000 ? 0 : 1)}k tokens`
+  return `~${count} tokens`
+}
+
+function ResponseToolbar({
+  meta,
+  text,
+  onCopy,
+  onDelete,
+}: {
+  meta?: ChatResponseMeta
+  text: string
+  onCopy: () => void
+  onDelete?: () => void
+}): ReactNode {
+  const tokenCount = meta?.tokenCount ?? estimateTokenCount(text)
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10.5px] text-ink-4">
+      <span className="rounded-md border border-white/[0.07] bg-white/[0.025] px-1.5 py-0.5 text-ink-3">
+        {meta?.providerTitle ?? 'Provider'}
+      </span>
+      <span className="max-w-[260px] truncate rounded-md border border-white/[0.07] bg-white/[0.025] px-1.5 py-0.5 font-mono text-ink-3">
+        {meta?.model ?? 'model'}
+      </span>
+      <span className="rounded-md border border-white/[0.07] bg-white/[0.025] px-1.5 py-0.5">
+        {formatTokenCount(tokenCount)}
+      </span>
+      <button
+        type="button"
+        disabled={!text.trim()}
+        className="rounded-md border border-white/[0.08] px-1.5 py-0.5 text-ink-3 transition hover:border-white/[0.16] hover:text-ink-1 disabled:cursor-not-allowed disabled:opacity-40"
+        onClick={onCopy}
+      >
+        Copy
+      </button>
+      {onDelete ? (
+        <button
+          type="button"
+          className="rounded-md border border-rose-300/15 px-1.5 py-0.5 text-rose-200/85 transition hover:border-rose-300/30 hover:text-rose-100"
+          onClick={onDelete}
+        >
+          Delete
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 type PendingApproval = Extract<AgentRunEvent, { type: 'approval' }>
 
 export default function AgentChatView({
@@ -108,34 +181,38 @@ export default function AgentChatView({
   }, [historyOpen])
 
   const chatSessionRef = useRef<ChatSession | null>(null)
+  const llmConfigRef = useRef<LlmConfigRecord>({})
   const agentStreamTextRef = useRef('')
   const agentStagesRef = useRef<Stage[]>([])
   const agentStatusRef = useRef<'idle' | 'running' | 'done' | 'error'>('idle')
   const agentErrorRef = useRef<string | null>(null)
+  const responseMetaRef = useRef<ChatResponseMeta | null>(null)
   const currentAgentRunIdRef = useRef<string | null>(null)
   const pendingApprovalRef = useRef<PendingApproval | null>(null)
   const ignoredRunIdsRef = useRef<Set<string> | null>(null)
   const submittedBootRef = useRef<string | null>(null)
   const completedRunIdsRef = useRef(new Set<string>())
+  const modelSelectionSaveRef = useRef<Promise<void> | null>(null)
 
   const [agentStages, setAgentStages] = useState<Stage[]>([])
   const [agentStreamText, setAgentStreamText] = useState('')
   const [agentStatus, setAgentStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [agentError, setAgentError] = useState<string | null>(null)
-
   useEffect(() => {
     chatSessionRef.current = chatSession
   }, [chatSession])
   useEffect(() => {
+    llmConfigRef.current = llmConfig
+  }, [llmConfig])
+  useEffect(() => {
     void window.tezbar
       .getLlmConfig()
       .then(async (config) => {
+        llmConfigRef.current = config
         setLlmConfig(config)
         // Auto-discover models for CLI-based providers (open models, ollama)
         const provider = config.provider ?? 'ollama'
-        const needsDiscovery =
-          provider === 'opencode' ||
-          provider === 'ollama'
+        const needsDiscovery = provider === 'opencode' || provider === 'ollama'
         if (!needsDiscovery) return
         try {
           const discovered = await window.tezbar.listLlmModels(provider)
@@ -150,6 +227,10 @@ export default function AgentChatView({
               await window.tezbar.setLlmConfig({
                 providerModels: { ...config.providerModels, [provider]: updated },
               } as LlmConfigRecord)
+              llmConfigRef.current = {
+                ...llmConfigRef.current,
+                providerModels: { ...llmConfigRef.current.providerModels, [provider]: updated },
+              }
               setLlmConfig((prev) => ({
                 ...prev,
                 providerModels: { ...prev.providerModels, [provider]: updated },
@@ -197,6 +278,7 @@ export default function AgentChatView({
     agentErrorRef.current = null
     agentStreamTextRef.current = ''
     agentStagesRef.current = []
+    responseMetaRef.current = null
     pendingApprovalRef.current = null
     setAgentStatus('idle')
     setAgentError(null)
@@ -216,6 +298,7 @@ export default function AgentChatView({
     setAgentStreamText('')
     setAgentError(null)
     setAgentStatus('idle')
+    responseMetaRef.current = null
     setHistoryOpen(false)
     setRunLogs([])
     setLogsOpen(false)
@@ -259,6 +342,7 @@ export default function AgentChatView({
         setAgentStreamText('')
         setAgentError(null)
         setAgentStatus('idle')
+        responseMetaRef.current = null
         setHistoryOpen(false)
         setRunLogs([])
         setLogsOpen(false)
@@ -281,10 +365,43 @@ export default function AgentChatView({
           setAgentStreamText('')
           setAgentError(null)
           setAgentStatus('idle')
+          responseMetaRef.current = null
         }
         void refreshChatHistory()
       } catch {
         /* ignore */
+      }
+    },
+    [refreshChatHistory]
+  )
+
+  const copyAssistantResponse = useCallback(async (text: string): Promise<void> => {
+    if (!text.trim()) return
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const deleteAssistantResponse = useCallback(
+    async (turnId: string): Promise<void> => {
+      const session = chatSessionRef.current
+      if (!session) return
+      const nextSession: ChatSession = {
+        ...session,
+        updatedAt: Date.now(),
+        turns: session.turns.filter((turn) => turn.id !== turnId),
+      }
+      chatSessionRef.current = nextSession
+      setChatSession(nextSession)
+      try {
+        const result = await window.tezbar.chatDeleteTurn(session.id, turnId)
+        if (!result.ok) throw new Error(result.error ?? 'Could not delete response')
+        void refreshChatHistory()
+      } catch {
+        chatSessionRef.current = session
+        setChatSession(session)
       }
     },
     [refreshChatHistory]
@@ -295,6 +412,17 @@ export default function AgentChatView({
       const trimmed = task.trim()
       if (!trimmed || agentStatusRef.current === 'running') return
       agentStatusRef.current = 'running'
+      await modelSelectionSaveRef.current
+      let runConfig = llmConfigRef.current
+      try {
+        runConfig = await window.tezbar.getLlmConfig()
+        llmConfigRef.current = runConfig
+        setLlmConfig(runConfig)
+      } catch {
+        /* Keep the optimistic renderer config if the refresh fails. */
+      }
+      const nextResponseMeta = chatResponseMetaForConfig(runConfig)
+      responseMetaRef.current = nextResponseMeta
       const now = Date.now()
       const existing = chatSessionRef.current
 
@@ -365,6 +493,7 @@ export default function AgentChatView({
           const error = formatLlmErrorMessage(result.error || 'Run failed to start')
           agentErrorRef.current = error
           agentStatusRef.current = 'error'
+          responseMetaRef.current = null
           setAgentError(error)
           setAgentStatus('error')
         } else {
@@ -378,6 +507,7 @@ export default function AgentChatView({
         )
         agentErrorRef.current = error
         agentStatusRef.current = 'error'
+        responseMetaRef.current = null
         setAgentError(error)
         setAgentStatus('error')
       }
@@ -489,6 +619,10 @@ export default function AgentChatView({
           agentStreamTextRef.current = ''
           agentErrorRef.current = null
           agentStatusRef.current = 'running'
+          if (!responseMetaRef.current) {
+            const fallbackMeta = chatResponseMetaForConfig(llmConfigRef.current)
+            responseMetaRef.current = fallbackMeta
+          }
           setRunLogs([])
           setLogsOpen(false)
           setAgentStages([])
@@ -553,10 +687,17 @@ export default function AgentChatView({
               ? (agentErrorRef.current ?? 'Agent finished without a response.')
               : undefined
             const fallbackError = hasPayload ? errorText : 'Agent finished without a response.'
+            const finalResponseMeta = responseMetaRef.current
+              ? {
+                  ...responseMetaRef.current,
+                  tokenCount: estimateTokenCount(finalText),
+                }
+              : undefined
             const turn: ChatTurn = {
               id: makeChatId(),
               role: 'assistant',
               text: finalText,
+              responseMeta: finalResponseMeta,
               stages: finalStages.length > 0 ? finalStages : undefined,
               error: fallbackError,
               createdAt: Date.now(),
@@ -582,9 +723,13 @@ export default function AgentChatView({
             agentStreamTextRef.current = ''
             agentStagesRef.current = []
             agentErrorRef.current = null
+            responseMetaRef.current = null
             setAgentStreamText('')
             setAgentStages([])
             setAgentError(null)
+          }
+          if (!activeSession) {
+            responseMetaRef.current = null
           }
           return
         }
@@ -610,8 +755,7 @@ export default function AgentChatView({
       let decision: AgentApprovalDecision | null = null
       if (event.key === 'Escape') decision = 'deny'
       if (event.key === 'Enter') {
-        decision =
-          (event.metaKey || event.ctrlKey) && approval.suggestedRule ? 'always' : 'once'
+        decision = (event.metaKey || event.ctrlKey) && approval.suggestedRule ? 'always' : 'once'
       }
       if (!decision) return
       event.preventDefault()
@@ -702,11 +846,22 @@ export default function AgentChatView({
       taskProviderOverrides: { ...llmConfig.taskProviderOverrides, chat: provider },
       taskModelOverrides: { ...llmConfig.taskModelOverrides, chat: modelId },
     }
+    llmConfigRef.current = { ...llmConfigRef.current, ...patch }
     setLlmConfig((prev) => ({ ...prev, ...patch }))
     setModelPickerOpen(false)
-    await window.tezbar.setLlmConfig(patch)
-    const next = await window.tezbar.getLlmConfig()
-    setLlmConfig(next)
+    const save = (async () => {
+      await window.tezbar.setLlmConfig(patch)
+      const next = await window.tezbar.getLlmConfig()
+      llmConfigRef.current = next
+      setLlmConfig(next)
+    })().catch((error) => {
+      console.error('Failed to save selected model:', error)
+    })
+    modelSelectionSaveRef.current = save
+    await save
+    if (modelSelectionSaveRef.current === save) {
+      modelSelectionSaveRef.current = null
+    }
   }
 
   return (
@@ -945,6 +1100,16 @@ export default function AgentChatView({
                         {formatLlmErrorMessage(turn.error)}
                       </p>
                     ) : null}
+                    <ResponseToolbar
+                      meta={turn.responseMeta}
+                      text={turn.text}
+                      onCopy={() => {
+                        void copyAssistantResponse(turn.text)
+                      }}
+                      onDelete={() => {
+                        void deleteAssistantResponse(turn.id)
+                      }}
+                    />
                   </div>
                 )
               )
@@ -964,6 +1129,18 @@ export default function AgentChatView({
                   </span>
                   Working
                 </p>
+              ) : null}
+              {responseMetaRef.current ? (
+                <ResponseToolbar
+                  meta={{
+                    ...responseMetaRef.current,
+                    tokenCount: estimateTokenCount(agentStreamText),
+                  }}
+                  text={agentStreamText}
+                  onCopy={() => {
+                    void copyAssistantResponse(agentStreamText)
+                  }}
+                />
               ) : null}
             </div>
           ) : null}

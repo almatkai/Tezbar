@@ -162,6 +162,29 @@
     transition: height 180ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  .glass-shell.overflow-visible {
+    overflow: visible;
+  }
+
+  .glass-shell.glass-shell--terminal {
+    border-radius: var(--r-window);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 40%),
+      rgba(12, 13, 17, 0.92);
+    backdrop-filter: blur(48px) saturate(180%);
+    -webkit-backdrop-filter: blur(48px) saturate(180%);
+    box-shadow: none;
+  }
+
+  /* xterm ships an opaque black viewport fallback. Keep its rendering layers
+     transparent so the terminal uses the surrounding glass card surface. */
+  .terminal-host .xterm,
+  .terminal-host .xterm-viewport,
+  .terminal-host .xterm-screen,
+  .terminal-host .xterm-scrollable-element {
+    background-color: transparent !important;
+  }
+
   /* Mid-level glass panel — for view chrome inside the shell */
   .glass-panel {
     -webkit-app-region: drag;
@@ -186,6 +209,15 @@
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.06),
       inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  .tezbar-pin-rail {
+    animation: tezbar-pin-rail-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    scrollbar-width: none;
+  }
+
+  .tezbar-pin-rail::-webkit-scrollbar {
+    display: none;
   }
 
   .rolling-command-hint {
@@ -316,6 +348,29 @@
     border-radius: 0;
     border: 0;
     box-shadow: none;
+  }
+
+  /* ---- CleanMyMac-style sidebar ---- */
+  .cleanmymac-sidebar {
+    -webkit-app-region: no-drag;
+    border-top-left-radius: var(--r-window);
+    border-bottom-left-radius: var(--r-window);
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    scrollbar-width: none;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(255, 255, 255, 0) 30%),
+      rgba(8, 9, 14, 0.55);
+    backdrop-filter: blur(36px) saturate(180%);
+    -webkit-backdrop-filter: blur(36px) saturate(180%);
+  }
+
+  .cleanmymac-sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cleanmymac-sidebar > * {
+    -webkit-app-region: no-drag;
   }
 
   .window-snap-guides {
@@ -739,6 +794,18 @@
   100% {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes tezbar-pin-rail-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 

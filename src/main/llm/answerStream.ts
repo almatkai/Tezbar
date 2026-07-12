@@ -1,4 +1,4 @@
-import type { WebContents } from 'electron'
+import type { WebContents } from '@tezbar/desktop-runtime'
 import type { Message } from './provider'
 import { retrieveMemories, rememberMemory } from './memoryStore'
 import { readLLMConfig, getProviderForTask } from './registry'

@@ -247,6 +247,9 @@ const FALLBACK_VOICE_MODELS: VoiceModel[] = [
     family: 'moonshine',
     description: 'Low-latency Moonshine STT model from Moonshine AI.',
     homepageUrl: 'https://github.com/moonshine-ai/moonshine',
+    sizeLabel: '~140 MB',
+    language: 'en',
+    tier: 'balanced',
     estimatedSizeMb: 140,
     status: 'not-downloaded',
     stage: 'idle',
@@ -261,11 +264,80 @@ const FALLBACK_VOICE_MODELS: VoiceModel[] = [
     },
   },
   {
-    id: 'whisper-base',
-    name: 'Whisper Base (English, whisper.cpp)',
+    id: 'moonshine-tiny-en',
+    name: 'Moonshine Tiny (English)',
+    family: 'moonshine',
+    description: 'Smallest Moonshine STT model for very low-latency English dictation.',
+    homepageUrl: 'https://github.com/moonshine-ai/moonshine',
+    sizeLabel: '~60 MB',
+    language: 'en',
+    tier: 'fast',
+    estimatedSizeMb: 60,
+    status: 'not-downloaded',
+    stage: 'idle',
+    progress: 0,
+    downloadedBytes: 0,
+    totalBytes: null,
+    selected: false,
+    runtime: {
+      label: 'Moonshine (Python)',
+      ready: false,
+      installCommand: 'pip install moonshine-voice',
+    },
+  },
+  {
+    id: 'whisper-tiny-en',
+    name: 'Whisper Tiny (English, whisper.cpp)',
     family: 'whisper',
-    description: 'Fast whisper.cpp ggml model — good for quick dictation.',
+    description: 'Small English-only whisper.cpp ggml model for quick dictation.',
     homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~78 MB',
+    language: 'en',
+    tier: 'fast',
+    estimatedSizeMb: 78,
+    status: 'not-downloaded',
+    stage: 'idle',
+    progress: 0,
+    downloadedBytes: 0,
+    totalBytes: null,
+    selected: false,
+    runtime: {
+      label: 'whisper.cpp',
+      ready: false,
+      installCommand: 'brew install whisper-cpp',
+    },
+  },
+  {
+    id: 'whisper-tiny',
+    name: 'Whisper Tiny (Multilingual, whisper.cpp)',
+    family: 'whisper',
+    description: 'Small multilingual whisper.cpp ggml model for fast local transcription.',
+    homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~78 MB',
+    language: 'multilingual',
+    tier: 'fast',
+    estimatedSizeMb: 78,
+    status: 'not-downloaded',
+    stage: 'idle',
+    progress: 0,
+    downloadedBytes: 0,
+    totalBytes: null,
+    selected: false,
+    runtime: {
+      label: 'whisper.cpp',
+      ready: false,
+      installCommand: 'brew install whisper-cpp',
+    },
+  },
+  {
+    id: 'whisper-base',
+    name: 'Whisper Base (Multilingual, whisper.cpp)',
+    family: 'whisper',
+    description: 'Balanced multilingual whisper.cpp ggml model for local transcription.',
+    homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~150 MB',
+    language: 'multilingual',
+    tier: 'balanced',
     estimatedSizeMb: 150,
     status: 'not-downloaded',
     stage: 'idle',
@@ -281,11 +353,58 @@ const FALLBACK_VOICE_MODELS: VoiceModel[] = [
   },
   {
     id: 'whisper-small',
-    name: 'Whisper Small (English, whisper.cpp)',
+    name: 'Whisper Small (Multilingual, whisper.cpp)',
     family: 'whisper',
-    description: 'Higher-accuracy whisper.cpp ggml model — a bit slower, noticeably better.',
+    description: 'Higher-accuracy multilingual whisper.cpp ggml model.',
     homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~490 MB',
+    language: 'multilingual',
+    tier: 'balanced',
     estimatedSizeMb: 490,
+    status: 'not-downloaded',
+    stage: 'idle',
+    progress: 0,
+    downloadedBytes: 0,
+    totalBytes: null,
+    selected: false,
+    runtime: {
+      label: 'whisper.cpp',
+      ready: false,
+      installCommand: 'brew install whisper-cpp',
+    },
+  },
+  {
+    id: 'whisper-medium-en',
+    name: 'Whisper Medium (English, whisper.cpp)',
+    family: 'whisper',
+    description: 'Accurate English-only whisper.cpp ggml model for local transcription.',
+    homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~1.5 GB',
+    language: 'en',
+    tier: 'accurate',
+    estimatedSizeMb: 1530,
+    status: 'not-downloaded',
+    stage: 'idle',
+    progress: 0,
+    downloadedBytes: 0,
+    totalBytes: null,
+    selected: false,
+    runtime: {
+      label: 'whisper.cpp',
+      ready: false,
+      installCommand: 'brew install whisper-cpp',
+    },
+  },
+  {
+    id: 'whisper-large-v3-turbo',
+    name: 'Whisper Large v3 Turbo (Multilingual, whisper.cpp)',
+    family: 'whisper',
+    description: 'Accurate multilingual whisper.cpp turbo model for local transcription.',
+    homepageUrl: 'https://huggingface.co/ggerganov/whisper.cpp',
+    sizeLabel: '~574 MB-1.6 GB',
+    language: 'multilingual',
+    tier: 'accurate',
+    estimatedSizeMb: 1620,
     status: 'not-downloaded',
     stage: 'idle',
     progress: 0,
@@ -424,6 +543,7 @@ export default function SettingsView({
   const [safetyDryRun, setSafetyDryRunState] = useState(false)
   const [voiceModes, setVoiceModes] = useState<string[]>([])
   const [voiceModels, setVoiceModels] = useState<VoiceModel[]>([])
+  const [deletingVoiceModelId, setDeletingVoiceModelId] = useState<VoiceModelId | null>(null)
   const [selectedVoiceModelId, setSelectedVoiceModelId] =
     useState<VoiceModelId>('moonshine-base-en')
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
@@ -919,7 +1039,7 @@ export default function SettingsView({
               <div className="min-w-0">
                 <p className="truncate text-[12.5px] font-medium text-ink-1">{model.name}</p>
                 <p className="mt-0.5 truncate text-[11px] text-ink-3">
-                  {model.family} · ~{model.estimatedSizeMb} MB
+                  {model.family} · {model.language === 'multilingual' ? 'multilingual' : 'English'} · {model.tier} · {model.sizeLabel}
                   {weightsOnDisk ? ` · ${formatBytes(model.downloadedBytes)} on disk` : ''}
                 </p>
               </div>
@@ -929,6 +1049,33 @@ export default function SettingsView({
                   <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-300">
                     Ready
                   </span>
+                ) : null}
+                {weightsOnDisk && !inProgress ? (
+                  <Button
+                    variant="danger"
+                    disabled={deletingVoiceModelId === model.id}
+                    aria-label={`Delete ${model.name}`}
+                    onClick={() => {
+                      setDeletingVoiceModelId(model.id)
+                      setMsg(null)
+                      void window.tezbar
+                        .deleteVoiceModel(model.id)
+                        .then(({ modelId }) => {
+                          setSelectedVoiceModelId(modelId)
+                          setMsg({ tone: 'success', text: `${model.name} deleted.` })
+                          return refreshVoiceModels()
+                        })
+                        .catch((error: unknown) => {
+                          setMsg({
+                            tone: 'error',
+                            text: error instanceof Error ? error.message : 'Could not delete model',
+                          })
+                        })
+                        .finally(() => setDeletingVoiceModelId(null))
+                    }}
+                  >
+                    {deletingVoiceModelId === model.id ? 'Deleting…' : 'Delete'}
+                  </Button>
                 ) : null}
                 {canDownload ? (
                   <Button
@@ -1557,6 +1704,20 @@ export default function SettingsView({
 
           {activeTab === 'voice' ? (
             <div className="mx-auto max-w-[610px]">
+              <SettingsRow
+                label="Push to Talk"
+                detail="Tap to open Tezbar. Keep the same shortcut held to start dictation."
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.05] px-2.5 py-1 font-mono text-[12px] font-semibold text-ink-1">
+                    {hotkeyDisplay(raymesHotkey)}
+                  </span>
+                  <Button variant="quiet" onClick={() => setActiveTab('general')}>
+                    Change shortcut
+                  </Button>
+                </div>
+              </SettingsRow>
+              <Divider />
               <SettingsRow label="Detected Modes">
                 <p className="text-[12.5px] text-ink-2">
                   {voiceModes.length > 0 ? voiceModes.join(', ') : 'none'}
@@ -1589,6 +1750,7 @@ export default function SettingsView({
               </SettingsRow>
               <Divider />
               <div className="py-3">{renderVoiceModels()}</div>
+              {msg ? <Message tone={msg.tone}>{msg.text}</Message> : null}
               <p className="text-[12px] text-ink-3">
                 Downloading a model also installs its runtime so Hold-to-Speak works locally.
               </p>

@@ -1,6 +1,6 @@
 import {
-  type DragEvent,
   type FormEvent,
+  type PointerEvent,
   type ReactNode,
   useEffect,
   useMemo,
@@ -25,15 +25,28 @@ import { parseCurrencyQuery } from './currency/parseCurrencyQuery'
 import type { ChatSessionSummary } from '../shared/chat'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
-import { compactTerminalPath, type TerminalPromptInfo } from '../shared/terminal'
+import {
+  compactTerminalPath,
+  type TerminalKeepAliveFor,
+  type TerminalPromptInfo,
+  type TerminalSaveFor,
+  type TerminalSessionSummary,
+} from '../shared/terminal'
+import {
+  readTerminalDefaults,
+  writeTerminalDefaults,
+  type TerminalDefaults,
+} from './terminalPreferences'
 import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 import { ModelPicker } from './ModelPicker'
+import { formatShortcutForDisplay } from './HotkeyRecorder'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
 const PINNED_COMMANDS_KEY = 'tezbar:pinned-commands'
-const MAX_PINNED_COMMANDS = 9
+const MAX_PINNED_COMMANDS = 12
+const SEARCH_RESULT_PIN_DRAG_THRESHOLD = 6
 const COMMAND_HINT = { shortcut: '>', label: 'Open terminal' } as const
 const COMMAND_HINTS = [
   { shortcut: '/directory', label: 'Search files and folders' },
@@ -41,34 +54,44 @@ const COMMAND_HINTS = [
   { shortcut: 'SPACE', label: 'Enter AI Space' },
   COMMAND_HINT,
 ] as const
-const PIN_ICON_CHOICES = [
-  '📌',
-  '⭐',
-  '🔥',
-  '⚡',
-  '🧠',
-  '🛠️',
-  '🚀',
-  '🎯',
-  '🧩',
-  '📎',
-  '🗂️',
-  '🔧',
-  '💡',
-  '🧭',
-  '🔒',
-  '🧪',
-  '🖥️',
-  '📦',
-  '📝',
-  '🔖',
-  '📁',
-  '🧰',
-  '🕹️',
-  '🔍',
-] as const
 
-type PinIcon = (typeof PIN_ICON_CHOICES)[number]
+// Columns used by the Launchpad-style applications grid (shown when typing `).
+const APPLICATIONS_GRID_COLUMNS = 7
+
+const TERMINAL_PINNED_SESSIONS_KEY = 'tezbar:terminal-pinned-sessions'
+
+function readPinnedTerminalSessionIds(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(TERMINAL_PINNED_SESSIONS_KEY) ?? '[]')
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function writePinnedTerminalSessionIds(ids: string[]): void {
+  try {
+    localStorage.setItem(TERMINAL_PINNED_SESSIONS_KEY, JSON.stringify(ids))
+  } catch {
+    // Storage can be unavailable in private/webview contexts.
+  }
+}
+
+function terminalSessionSubtitle(session: TerminalSessionSummary): string {
+  const command = session.lastCommand ?? session.initialCommand
+  const commandSuffix = command ? ` · ${command}` : ''
+  return `${compactTerminalPath(session.cwd)}${commandSuffix}`
+}
+
+function terminalSessionAge(ts: number): string {
+  const delta = Math.max(0, Date.now() - ts)
+  const minutes = Math.floor(delta / 60_000)
+  if (minutes < 1) return 'now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
 
 type PinnedCommand = {
   id: string
@@ -76,8 +99,8 @@ type PinnedCommand = {
   subtitle: string
   category: SearchResult['category']
   action: SearchResult['action']
-  icon: PinIcon
-  /** ⌥+digit hotkey; unique among pins, 1–9 */
+  iconDataUrl?: string
+  /** ⌥+slot hotkey derived from the pin's current order, 1–12 */
   slot: number
 }
 
@@ -92,10 +115,7 @@ type PendingExtensionArgument = {
 
 type ExtensionRuntimeViewPayload = Extract<ExtensionRunCommandResult, { ok: true; mode: 'view' }>
 
-function isPendingColorConversionAction(action: {
-  commandName: string
-  title: string
-}): boolean {
+function isPendingColorConversionAction(action: { commandName: string; title: string }): boolean {
   const haystack = `${action.title} ${action.commandName}`.toLowerCase()
   return haystack.includes('convert') && haystack.includes('color')
 }
@@ -149,22 +169,23 @@ function readPinnedCommands(): PinnedCommand[] {
         const subtitle = String(item?.subtitle ?? '').trim()
         const category = item?.category
         const action = item?.action
-        const icon = String(item?.icon ?? '') as PinIcon
-
-        const hasValidIcon = PIN_ICON_CHOICES.includes(icon)
         const hasValidAction =
           typeof action === 'object' &&
           action !== null &&
           typeof (action as { type?: unknown }).type === 'string'
 
-        if (!id || !title || typeof category !== 'string' || !hasValidAction || !hasValidIcon) {
+        if (!id || !title || typeof category !== 'string' || !hasValidAction) {
           return null
         }
 
         const rawSlot = item?.slot
         const slotNum =
-          typeof rawSlot === 'number' && rawSlot >= 1 && rawSlot <= 9
+          typeof rawSlot === 'number' && rawSlot >= 1 && rawSlot <= MAX_PINNED_COMMANDS
             ? Math.floor(rawSlot)
+            : undefined
+        const iconDataUrl =
+          typeof item?.iconDataUrl === 'string' && item.iconDataUrl.trim()
+            ? item.iconDataUrl
             : undefined
 
         return {
@@ -173,7 +194,7 @@ function readPinnedCommands(): PinnedCommand[] {
           subtitle,
           category: category as SearchResult['category'],
           action: action as SearchResult['action'],
-          icon,
+          ...(iconDataUrl ? { iconDataUrl } : {}),
           ...(slotNum !== undefined ? { slot: slotNum } : {}),
         } satisfies PinnedCommandDraft
       })
@@ -193,69 +214,41 @@ function writePinnedCommands(next: PinnedCommand[]): void {
   )
 }
 
-function parseDigitIndex(key: string): number | null {
-  if (!/^[1-9]$/.test(key)) return null
-  return Number(key) - 1
-}
-
-const PIN_DRAG_MIME = 'application/x-tezbar-pin-id'
-
 function parsePinnedSlotFromKeyEvent(event: KeyboardEvent): number | null {
-  const fromCode = /^Digit([1-9])$/.exec(event.code)?.[1]
-  if (fromCode) return Number(fromCode)
+  const fromCode = /^Digit([0-9])$/.exec(event.code)?.[1]
+  if (fromCode) return fromCode === '0' ? 10 : Number(fromCode)
+  if (event.code === 'Minus') return 11
+  if (event.code === 'Equal') return 12
   if (/^[1-9]$/.test(event.key)) return Number(event.key)
+  if (event.key === '0') return 10
   return null
 }
 
 type PinnedCommandDraft = Omit<PinnedCommand, 'slot'> & { slot?: number }
 
-/** Ensure every pin has a valid unique slot in 1…9 (stable order). */
+function isPinnableSearchResult(result: SearchResult): boolean {
+  return result.category !== 'calculator' && result.category !== 'color-converter'
+}
+
+/** Keep shortcuts aligned with the current pin order. */
 function normalizePinnedSlots(pins: PinnedCommandDraft[]): PinnedCommand[] {
-  if (pins.length === 0) return []
-  const claimed = new Set<number>()
-  const first = pins.map((pin) => {
-    const raw = pin.slot
-    const n = typeof raw === 'number' && raw >= 1 && raw <= 9 ? Math.floor(raw) : null
-    if (n !== null && !claimed.has(n)) {
-      claimed.add(n)
-      return { ...pin, slot: n } satisfies PinnedCommand
-    }
-    return { ...pin, slot: -1 }
-  })
-  for (const pin of first) {
-    if (pin.slot !== -1) continue
-    for (let d = 1; d <= 9; d++) {
-      if (!claimed.has(d)) {
-        pin.slot = d
-        claimed.add(d)
-        break
-      }
-    }
-  }
-  return first as PinnedCommand[]
+  return pins.slice(0, MAX_PINNED_COMMANDS).map((pin, index) => ({ ...pin, slot: index + 1 }))
 }
 
-function nextFreePinSlot(pins: PinnedCommand[]): number {
-  const used = new Set(pins.map((p) => p.slot))
-  for (let d = 1; d <= 9; d++) {
-    if (!used.has(d)) return d
-  }
-  return 1
-}
-
-function reorderPinnedByDrop(
+function reorderPinnedByInsertIndex(
   pins: PinnedCommand[],
   draggedId: string,
-  targetId: string
+  insertIndex: number
 ): PinnedCommand[] {
   const from = pins.findIndex((p) => p.id === draggedId)
-  const to = pins.findIndex((p) => p.id === targetId)
-  if (from < 0 || to < 0 || from === to) return pins
+  if (from < 0) return pins
+  let to = Math.max(0, Math.min(insertIndex, pins.length))
   const next = [...pins]
   const [item] = next.splice(from, 1)
   if (!item) return pins
-  const toAdj = from < to ? to - 1 : to
-  next.splice(toAdj, 0, item)
+  if (from < to) to -= 1
+  if (from === to) return pins
+  next.splice(to, 0, item)
   return next
 }
 
@@ -266,6 +259,152 @@ function SearchIcon(): JSX.Element {
       <circle cx="6" cy="6" r="4.1" stroke="currentColor" strokeWidth="1.3" />
       <path d="m9.3 9.3 2.4 2.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
+  )
+}
+
+/* App Store-style icon ("A" on a blue rounded square) used in the applications
+   (Launchpad) mode in place of the magnifying glass. */
+function AppStoreIcon(): JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <defs>
+        <linearGradient id="appstore-grad" x1="1" y1="1" x2="13" y2="13" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#2aa9ff" />
+          <stop offset="1" stopColor="#1466ff" />
+        </linearGradient>
+      </defs>
+      <rect x="1" y="1" width="12" height="12" rx="3" fill="url(#appstore-grad)" />
+      <path
+        d="M7 3.4 10.7 11h-1.5L8.45 9.05H5.55L5.05 11H3.5L7 3.4Zm-.55 3.85h1.1L7 5.95 6.45 7.25Z"
+        fill="#fff"
+      />
+    </svg>
+  )
+}
+
+/* Large rounded app tile used inside the Launchpad-style applications grid. */
+function AppGridIcon({ item }: { item: PathCompletionItem }): JSX.Element {
+  const iconAsset = completionIconAsset(item)
+  const containerRef = useRef<HTMLSpanElement>(null)
+  const [dataUrl, setDataUrl] = useState<string | undefined>(item.iconDataUrl)
+  const key = iconAsset ? `${iconAsset.kind}:${iconAsset.path}` : null
+
+  useEffect(() => {
+    if (item.iconDataUrl) {
+      setDataUrl(item.iconDataUrl)
+      return
+    }
+    if (!iconAsset) return
+    let cancelled = false
+    const load = (): void => {
+      void loadAssetIcon(iconAsset.kind, iconAsset.path).then((icon) => {
+        if (!cancelled && icon) setDataUrl(icon)
+      })
+    }
+    const element = containerRef.current
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      load()
+      return () => {
+        cancelled = true
+      }
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        observer.disconnect()
+        load()
+      },
+      { rootMargin: '120px' }
+    )
+    observer.observe(element)
+    return () => {
+      cancelled = true
+      observer.disconnect()
+    }
+  }, [item.iconDataUrl, iconAsset, key])
+
+  return (
+    <span
+      ref={containerRef}
+      aria-hidden
+      className="grid h-full w-full place-items-center overflow-hidden rounded-[14px] bg-white/[0.06] shadow-md shadow-black/30 ring-1 ring-black/10"
+    >
+      {dataUrl ? (
+        <img src={dataUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+      ) : (
+        <span className="text-[18px] font-semibold text-ink-3">
+          {item.title.charAt(0).toUpperCase()}
+        </span>
+      )}
+    </span>
+  )
+}
+
+/* Launchpad-style grid of application tiles shown when browsing apps (typing `). */
+function ApplicationGrid({
+  items,
+  selectedIndex,
+  columns,
+  onHover,
+  onActivate,
+}: {
+  items: PathCompletionItem[]
+  selectedIndex: number
+  columns: number
+  onHover: (index: number) => void
+  onActivate: (item: PathCompletionItem) => void
+}): JSX.Element {
+  return (
+    <div
+      className="grid min-h-0 flex-1 content-start gap-x-1 gap-y-4 overflow-y-auto px-3 py-3"
+      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    >
+      {items.map((item, i) => {
+        const active = i === selectedIndex
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onMouseMove={() => onHover(i)}
+            onMouseDown={(ev) => ev.preventDefault()}
+            onClick={() => onActivate(item)}
+            className={cx(
+              'group flex flex-col items-center gap-1.5 rounded-xl px-1 py-1.5 text-center transition',
+              active ? 'bg-white/10 ring-1 ring-white/25' : 'hover:bg-white/[0.06]'
+            )}
+          >
+            <span className="h-12 w-12 sm:h-14 sm:w-14">
+              <AppGridIcon item={item} />
+            </span>
+            <span className="w-full truncate px-0.5 text-[10.5px] font-medium leading-tight text-ink-3 group-hover:text-ink-1">
+              {item.title}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function PortArgumentChip(): ReactNode {
+  return (
+    <span
+      aria-hidden
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
+    >
+      <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-emerald-400/25 text-emerald-100">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
+          <path
+            d="M2.5 8.8 8.8 2.5M4.5 9.5H2v-2.5M7.5 2H10v2.5"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      Port
+    </span>
   )
 }
 
@@ -472,10 +611,10 @@ function CommandIconGlyph({ kind }: { kind: CommandIconKind }): ReactNode {
   switch (kind) {
     case 'settings':
       return (
-        <>
-          <circle cx="7" cy="7" r="2" />
-          <path d="M7 1.75v1.5M7 10.75v1.5M2.45 4.38l1.3.75M10.25 8.87l1.3.75M2.45 9.62l1.3-.75M10.25 5.13l1.3-.75" />
-        </>
+        <g fill="currentColor" stroke="none" transform="scale(0.583333)">
+          <path d="M12 4a1 1 0 0 0-1 1c0 1.692-2.046 2.54-3.243 1.343a1 1 0 1 0-1.414 1.414C7.54 8.954 6.693 11 5 11a1 1 0 1 0 0 2c1.692 0 2.54 2.046 1.343 3.243a1 1 0 0 0 1.414 1.414C8.954 16.46 11 17.307 11 19a1 1 0 1 0 2 0c0-1.692 2.046-2.54 3.243-1.343a1 1 0 1 0 1.414-1.414C16.46 15.046 17.307 13 19 13a1 1 0 1 0 0-2c-1.692 0-2.54-2.046-1.343-3.243a1 1 0 0 0-1.414-1.414C15.046 7.54 13 6.693 13 5a1 1 0 0 0-1-1zm-2.992.777a3 3 0 0 1 5.984 0 3 3 0 0 1 4.23 4.231 3 3 0 0 1 .001 5.984 3 3 0 0 1-4.231 4.23 3 3 0 0 1-5.984 0 3 3 0 0 1-4.231-4.23 3 3 0 0 1 0-5.984 3 3 0 0 1 4.231-4.231z" />
+          <path d="M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-2.828-.828a4 4 0 1 1 5.656 5.656 4 4 0 0 1-5.656-5.656z" />
+        </g>
       )
     case 'extensions':
       return <path d="M5.25 2.25h3.5v2h2.75v3.5h-2v3.5H6v-2H2.5v-3.5h2.75v-3.5Z" />
@@ -508,7 +647,7 @@ function CommandIconGlyph({ kind }: { kind: CommandIconKind }): ReactNode {
         </>
       )
     case 'moon':
-      return <path d="M10.9 8.65A4.65 4.65 0 0 1 5.35 3.1 4.9 4.9 0 1 0 10.9 8.65Z" />
+      return <path d="M11.55 8.45A4.65 4.65 0 1 1 5.95 2.85 3.55 3.55 0 0 0 11.55 8.45Z" />
     case 'display':
       return (
         <>
@@ -575,9 +714,17 @@ function CommandIconGlyph({ kind }: { kind: CommandIconKind }): ReactNode {
         </>
       )
     case 'sleep':
-      return <path d="M3.25 8.75h2.9L3.25 11h2.9M7.25 4.75h3.5L7.25 7.5h3.5M4.5 2.25h4.75L4.5 5.75h4.75" />
+      return (
+        <path d="M3.25 8.75h2.9L3.25 11h2.9M7.25 4.75h3.5L7.25 7.5h3.5M4.5 2.25h4.75L4.5 5.75h4.75" />
+      )
     case 'bluetooth':
-      return <path d="M5.5 2.25 10 6 5.5 9.75v-7.5ZM5.5 2.25v9.5L10 8 4 4M10 6 4 10" />
+      return (
+        <>
+          <path d="M7 7V1.75l2.92 2.63Z" />
+          <path d="m9.92 9.63L7 7v5.25Z" />
+          <path d="M7 7 5.25 8.75M7 7 5.25 5.25" />
+        </>
+      )
     case 'wifi':
       return (
         <>
@@ -811,10 +958,9 @@ function ListItemIcon({
     }
   }, [assetKind, assetPath])
 
-  const tone =
-    commandIcon
-      ? commandIconTone(commandIcon)
-      : kind === 'directory'
+  const tone = commandIcon
+    ? commandIconTone(commandIcon)
+    : kind === 'directory'
       ? 'border-sky-400/20 bg-sky-400/10 text-sky-300'
       : kind === 'application' || kind === 'applications'
         ? 'border-violet-400/20 bg-violet-400/10 text-violet-300'
@@ -992,9 +1138,16 @@ export default function CommandBar({
   onOpenSnippetsPage: () => void
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
   onOpenEmojiPicker: () => void
-  onOpenTerminal: (initialCommand?: string, workingDirectory?: string) => void
+  onOpenTerminal: (
+    initialCommand?: string,
+    workingDirectory?: string,
+    sessionId?: string,
+    defaults?: TerminalDefaults,
+  ) => void
 }): JSX.Element {
-  const [value, setValue] = useState(initialValue)
+  const normalizedInitialValue = initialValue.startsWith('>') ? initialValue.slice(1) : initialValue
+  const [value, setValue] = useState(normalizedInitialValue)
+  const [prevInitialValue, setPrevInitialValue] = useState(initialValue)
   const [lastIntent, setLastIntent] = useState<Intent | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [streamText, setStreamText] = useState('')
@@ -1008,8 +1161,9 @@ export default function CommandBar({
   const [pinnedCommands, setPinnedCommands] = useState<PinnedCommand[]>([])
   const [chatHistory, setChatHistory] = useState<ChatSessionSummary[]>([])
   const [draggingPinId, setDraggingPinId] = useState<string | null>(null)
-  const [pinPickerTarget, setPinPickerTarget] = useState<SearchResult | null>(null)
-  const [pinPickerIconIndex, setPinPickerIconIndex] = useState(0)
+  const [draggingSearchResultId, setDraggingSearchResultId] = useState<string | null>(null)
+  const [pinDropIndex, setPinDropIndex] = useState<number | null>(null)
+  const [pinUnpinDropActive, setPinUnpinDropActive] = useState(false)
   const [selectedSuggestion, setSelectedSuggestion] = useState(0)
   const [followSuggestionSelection, setFollowSuggestionSelection] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
@@ -1049,18 +1203,39 @@ export default function CommandBar({
   const [killPortMode, setKillPortMode] = useState(false)
   const [killPortQuery, setKillPortQuery] = useState('')
   const [killPortValue, setKillPortValue] = useState('')
-  const [terminalMode, setTerminalMode] = useState(false)
+  const [killPortArgumentDismissed, setKillPortArgumentDismissed] = useState(false)
+  const [terminalMode, setTerminalMode] = useState(() => initialValue.startsWith('>'))
   const [terminalPrompt, setTerminalPrompt] = useState('')
+  const [terminalSessions, setTerminalSessions] = useState<TerminalSessionSummary[]>([])
+  const [pinnedTerminalSessionIds, setPinnedTerminalSessionIds] = useState<string[]>([])
+  const [terminalSettingsOpen, setTerminalSettingsOpen] = useState(false)
+  const [terminalSettingsDraft, setTerminalSettingsDraft] = useState<TerminalDefaults>(() =>
+    readTerminalDefaults(),
+  )
   const terminalWorkingDirectoryRef = useRef<string | undefined>()
   const argInputRefs = useRef<Array<HTMLInputElement | HTMLSelectElement | null>>([])
   const gotAnyTokenRef = useRef(false)
-  const pinPickerOpenRef = useRef(false)
   const pendingOpenRef = useRef(false)
+  const modelSelectionSaveRef = useRef<Promise<void> | null>(null)
   const modelMenuOpenRef = useRef(false)
   const valueRef = useRef(value)
   const killPortModeRef = useRef(killPortMode)
+  const killPortValueRef = useRef(killPortValue)
   const terminalModeRef = useRef(terminalMode)
+  const terminalSettingsOpenRef = useRef(terminalSettingsOpen)
   const lastSearchRequestId = useRef(0)
+  const draggingPinIdRef = useRef<string | null>(null)
+  const pinDropIndexRef = useRef<number | null>(null)
+  const pinRailRef = useRef<HTMLDivElement | null>(null)
+  const pinPointerActiveRef = useRef(false)
+  const pinPointerStartYRef = useRef(0)
+  const pinUnpinDropActiveRef = useRef(false)
+  const suppressNextPinClickRef = useRef(false)
+  const resultPointerActiveRef = useRef(false)
+  const resultPointerDraggedRef = useRef(false)
+  const resultPointerStartRef = useRef({ x: 0, y: 0 })
+  const draggingSearchResultRef = useRef<SearchResult | null>(null)
+  const suppressNextSearchResultClickRef = useRef(false)
 
   useEffect(() => {
     valueRef.current = value
@@ -1071,15 +1246,46 @@ export default function CommandBar({
   }, [killPortMode])
 
   useEffect(() => {
+    killPortValueRef.current = killPortValue
+  }, [killPortValue])
+
+  useEffect(() => {
+    const handleKillPortEscape = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || !killPortModeRef.current) return
+
+      event.preventDefault()
+      event.stopImmediatePropagation()
+
+      if (killPortValueRef.current) {
+        killPortValueRef.current = ''
+        setKillPortValue('')
+      } else {
+        setKillPortArgumentDismissed(true)
+        killPortModeRef.current = false
+        setKillPortMode(false)
+      }
+
+      showActionMsg(null)
+      requestAnimationFrame(() => document.getElementById('command-input')?.focus())
+    }
+
+    window.addEventListener('keydown', handleKillPortEscape, true)
+    return () => window.removeEventListener('keydown', handleKillPortEscape, true)
+  }, [])
+
+  useEffect(() => {
     terminalModeRef.current = terminalMode
   }, [terminalMode])
 
   useEffect(() => {
-    if (initialValue.startsWith('>')) {
-      setTerminalMode(true)
-      setValue(initialValue.slice(1))
-    }
-  }, [initialValue])
+    terminalSettingsOpenRef.current = terminalSettingsOpen
+  }, [terminalSettingsOpen])
+
+  if (initialValue !== prevInitialValue) {
+    setPrevInitialValue(initialValue)
+    setTerminalMode(initialValue.startsWith('>'))
+    setValue(normalizedInitialValue)
+  }
 
   useEffect(() => {
     if (!terminalMode) {
@@ -1096,8 +1302,33 @@ export default function CommandBar({
   }, [terminalMode])
 
   useEffect(() => {
+    if (!terminalMode) {
+      setTerminalSessions([])
+      return
+    }
+    let cancelled = false
+    const load = async (): Promise<void> => {
+      try {
+        const sessions = await window.tezbar.terminalList()
+        if (!cancelled) setTerminalSessions(sessions)
+      } catch {
+        if (!cancelled) setTerminalSessions([])
+      }
+    }
+    void load()
+    const interval = window.setInterval(() => {
+      void load()
+    }, 2500)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [terminalMode])
+
+  useEffect(() => {
     setRecentExtensionCommands(readRecentExtensionCommands())
     setPinnedCommands(readPinnedCommands())
+    setPinnedTerminalSessionIds(readPinnedTerminalSessionIds())
     void window.tezbar.chatList(40).then(setChatHistory)
   }, [])
 
@@ -1215,6 +1446,26 @@ export default function CommandBar({
   }, [chatHistory, chatHistoryQuery])
   const showChatHistory = isAiMode && filteredChatHistory.length > 0
 
+  const filteredTerminalSessions = useMemo(() => {
+    if (!terminalMode) return []
+    const q = value.trim().toLowerCase()
+    if (!q) return terminalSessions
+    const terms = q.split(/\s+/).filter(Boolean)
+    return terminalSessions.filter((session) => {
+      const haystack = `${session.name} ${session.cwd} ${session.lastCommand ?? session.initialCommand ?? ''}`.toLowerCase()
+      return terms.every((term) => haystack.includes(term))
+    })
+  }, [terminalMode, terminalSessions, value])
+  const orderedTerminalSessions = useMemo(() => {
+    const pinned = new Set(pinnedTerminalSessionIds)
+    return [...filteredTerminalSessions].sort((a, b) => {
+      const pinnedDelta = Number(pinned.has(b.sessionId)) - Number(pinned.has(a.sessionId))
+      return pinnedDelta || b.updatedAt - a.updatedAt
+    })
+  }, [filteredTerminalSessions, pinnedTerminalSessionIds])
+  const terminalSessionCount = orderedTerminalSessions.length
+  const showTerminalSessions = terminalMode
+
   // Live calculator: we evaluate on every keystroke in the renderer so
   // there's no IPC latency. Only when the buffer is not a slash command —
   // `/providers` shouldn't trigger math.js.
@@ -1258,7 +1509,9 @@ export default function CommandBar({
   }, [isCompletionInput, value])
   const pendingColorArgumentName = useMemo(() => {
     if (!pendingAction || !isPendingColorConversionAction(pendingAction)) return null
-    const textArgument = pendingAction.commandArgumentDefinitions.find((def) => def.type !== 'dropdown')
+    const textArgument = pendingAction.commandArgumentDefinitions.find(
+      (def) => def.type !== 'dropdown'
+    )
     return textArgument?.name ?? null
   }, [pendingAction])
   const pendingColorConversionRows = useMemo<SearchResult[]>(() => {
@@ -1276,24 +1529,31 @@ export default function CommandBar({
   const killPortCommandResult = useMemo<SearchResult | null>(() => {
     if (!shouldOfferKillPortCommand) return null
     const port = killPortValue.trim()
+    const indexedResult = searchResults.find(
+      (item) => item.id === 'extcmd:raycast.port-manager:kill-listening-process'
+    )
+    const indexedAction =
+      indexedResult?.action.type === 'run-extension-command' ? indexedResult.action : null
     return {
+      ...indexedResult,
       id: 'extcmd:raycast.port-manager:kill-listening-process',
       title: 'Kill Process Listening On',
       subtitle: 'Port Manager',
       category: 'extensions',
       score: 20_000,
       action: {
+        ...indexedAction,
         type: 'run-extension-command',
         extensionId: 'raycast.port-manager',
         commandName: 'kill-listening-process',
         title: 'Kill Process Listening On',
         argumentValues: port ? { port } : undefined,
-        commandArgumentDefinitions: [
+        commandArgumentDefinitions: indexedAction?.commandArgumentDefinitions ?? [
           { name: 'port', title: 'Port', placeholder: 'Port', required: true, type: 'text' },
         ],
       },
     }
-  }, [killPortValue, shouldOfferKillPortCommand])
+  }, [killPortValue, searchResults, shouldOfferKillPortCommand])
 
   const visibleSearchResults = useMemo(() => {
     if (killPortMode) {
@@ -1334,17 +1594,22 @@ export default function CommandBar({
   ])
   const visibleSearchCount = visibleSearchResults.length
   const topResult = visibleSearchResults[0] ?? null
+  const activeSearchResult = visibleSearchResults[selectedSearch] ?? topResult
+  const isKillPortCommandActive =
+    activeSearchResult?.id === 'extcmd:raycast.port-manager:kill-listening-process'
+  const densePinRail = pinnedCommands.length >= 10
   const canEnterKillPortMode =
     !killPortMode &&
     !pendingAction &&
     !isCompletionInput &&
     !isAiMode &&
     !terminalMode &&
-    topResult?.id === 'extcmd:raycast.kill-process:index'
+    !killPortArgumentDismissed &&
+    isKillPortCommandActive
   const pinnedMetaById = useMemo(() => {
-    const out = new Map<string, { slot: number; icon: PinIcon }>()
+    const out = new Map<string, { slot: number }>()
     pinnedCommands.forEach((pin) => {
-      out.set(pin.id, { slot: pin.slot, icon: pin.icon })
+      out.set(pin.id, { slot: pin.slot })
     })
     return out
   }, [pinnedCommands])
@@ -1440,6 +1705,11 @@ export default function CommandBar({
   // keep it in range so Enter always targets a real row.
   useEffect(() => {
     if (suggestions.length === 0) return
+    if (isApplicationInput) {
+      // Launchpad grid: always keep a tile highlighted so Enter launches it.
+      setSelectedSuggestion((i) => (i < 0 ? 0 : Math.min(i, suggestions.length - 1)))
+      return
+    }
     const firstAppIndex = suggestions.findIndex(
       (item) =>
         item.kind === 'application' &&
@@ -1451,7 +1721,7 @@ export default function CommandBar({
       return
     }
     setSelectedSuggestion((i) => Math.min(Math.max(-1, i), suggestions.length - 1))
-  }, [suggestions])
+  }, [suggestions, isApplicationInput])
 
   const trackExtensionCommand = (extensionId: string, commandName: string): void => {
     const id = buildRecentExtensionCommandId(extensionId, commandName)
@@ -1480,50 +1750,44 @@ export default function CommandBar({
     showActionMsg(`Unpinned: ${target.title}`)
   }
 
-  const openPinPicker = (result: SearchResult): void => {
+  const pinCommand = (result: SearchResult, insertIndex = 0): void => {
+    if (!isPinnableSearchResult(result)) {
+      showActionMsg('Temporary results can’t be pinned')
+      return
+    }
+
     const alreadyPinned = pinnedCommands.some((pin) => pin.id === result.id)
     if (alreadyPinned) {
-      showActionMsg('Already pinned. Press ⌘P to unpin.')
+      showActionMsg('Already pinned. Drag its rail icon to reorder.')
       return
     }
 
-    setPinPickerTarget(result)
-    setPinPickerIconIndex(0)
-    showActionMsg('Choose an emoji, then press Enter to pin')
-  }
-
-  const confirmPin = (iconOverride?: PinIcon): void => {
-    if (!pinPickerTarget) return
-
-    if (pinnedCommands.some((pin) => pin.id === pinPickerTarget.id)) {
-      setPinPickerTarget(null)
-      showActionMsg('Already pinned. Press ⌘P to unpin.')
-      focusCommandInput()
+    if (pinnedCommands.length >= MAX_PINNED_COMMANDS) {
+      showActionMsg(`Pin limit reached (${MAX_PINNED_COMMANDS})`)
       return
     }
 
-    const icon = iconOverride ?? PIN_ICON_CHOICES[pinPickerIconIndex]
-    if (!icon) return
-
-    const slot = nextFreePinSlot(pinnedCommands)
+    const to = Math.max(0, Math.min(insertIndex, pinnedCommands.length))
     const next: PinnedCommand[] = [
+      ...pinnedCommands.slice(0, to),
       {
-        id: pinPickerTarget.id,
-        title: pinPickerTarget.title,
-        subtitle: pinPickerTarget.subtitle,
-        category: pinPickerTarget.category,
-        action: pinPickerTarget.action,
-        icon,
-        slot,
+        id: result.id,
+        title: result.title,
+        subtitle: result.subtitle,
+        category: result.category,
+        action: result.action,
+        ...(result.iconDataUrl ? { iconDataUrl: result.iconDataUrl } : {}),
+        slot: 1,
       },
-      ...pinnedCommands.filter((pin) => pin.id !== pinPickerTarget.id),
+      ...pinnedCommands.slice(to),
     ].slice(0, MAX_PINNED_COMMANDS)
 
     persistPinnedCommands(next)
-    setPinPickerTarget(null)
-    showActionMsg(`Pinned: ${pinPickerTarget.title}`)
+    showActionMsg(`Pinned: ${result.title}`)
     focusCommandInput()
   }
+
+  const openPinPicker = pinCommand
 
   const runPinnedCommand = async (pin: PinnedCommand, listIndex: number): Promise<void> => {
     const pinnedResult: SearchResult = {
@@ -1533,23 +1797,228 @@ export default function CommandBar({
       category: pin.category,
       score: 1000 - listIndex,
       action: pin.action,
+      iconDataUrl: pin.iconDataUrl,
     }
     await runSelectedSearchResult(pinnedResult, listIndex + 1)
   }
 
-  const cyclePinShortcutSlot = (pinId: string): void => {
-    const pin = pinnedCommands.find((p) => p.id === pinId)
-    if (!pin) return
-    const taken = new Set(pinnedCommands.filter((p) => p.id !== pinId).map((p) => p.slot))
-    let d = pin.slot
-    for (let step = 0; step < 9; step++) {
-      d = d >= 9 ? 1 : d + 1
-      if (!taken.has(d)) {
-        persistPinnedCommands(pinnedCommands.map((p) => (p.id === pinId ? { ...p, slot: d } : p)))
-        showActionMsg(`Pinned shortcut: ⌥${d}`)
-        return
-      }
+  const unpinCommandByIdRef = useRef(unpinCommandById)
+  const openPinPickerRef = useRef(openPinPicker)
+  const runPinnedCommandRef = useRef(runPinnedCommand)
+  unpinCommandByIdRef.current = unpinCommandById
+  openPinPickerRef.current = openPinPicker
+  runPinnedCommandRef.current = runPinnedCommand
+
+  const updateDraggingPin = (id: string | null): void => {
+    draggingPinIdRef.current = id
+    setDraggingPinId(id)
+  }
+
+  const updatePinDropIndex = (index: number | null): void => {
+    pinDropIndexRef.current = index
+    setPinDropIndex(index)
+  }
+
+  const updatePinUnpinDropActive = (active: boolean): void => {
+    pinUnpinDropActiveRef.current = active
+    setPinUnpinDropActive(active)
+  }
+
+  const updateDraggingSearchResult = (result: SearchResult | null): void => {
+    draggingSearchResultRef.current = result
+    setDraggingSearchResultId(result?.id ?? null)
+  }
+
+  const unpinCommandFromDrag = (id: string): void => {
+    const target = pinnedCommands.find((pin) => pin.id === id)
+    if (!target) return
+    persistPinnedCommands(pinnedCommands.filter((pin) => pin.id !== id))
+    showActionMsg(`Unpinned: ${target.title}`)
+  }
+
+  const commitPinDrop = (insertIndex = pinDropIndexRef.current): void => {
+    const fromId = draggingPinIdRef.current
+    const shouldUnpin = pinUnpinDropActiveRef.current
+    updateDraggingPin(null)
+    updatePinDropIndex(null)
+    updatePinUnpinDropActive(false)
+    if (!fromId) return
+    if (shouldUnpin) {
+      unpinCommandFromDrag(fromId)
+      return
     }
+    if (insertIndex === null) return
+
+    const next = reorderPinnedByInsertIndex(pinnedCommands, fromId, insertIndex)
+    if (next === pinnedCommands) return
+    persistPinnedCommands(next)
+  }
+
+  const pinSearchResultFromDrag = (result: SearchResult, insertIndex: number): void => {
+    const existingIndex = pinnedCommands.findIndex((pin) => pin.id === result.id)
+    if (existingIndex >= 0) {
+      const next = reorderPinnedByInsertIndex(pinnedCommands, result.id, insertIndex)
+      if (next !== pinnedCommands) {
+        persistPinnedCommands(next)
+        showActionMsg(`Moved pin: ${result.title}`)
+      }
+      return
+    }
+
+    pinCommand(result, insertIndex)
+  }
+
+  const pinDropIndexFromPointer = (clientY: number): number => {
+    const rail = pinRailRef.current
+    if (!rail) return pinnedCommands.length
+    const items = Array.from(rail.querySelectorAll<HTMLElement>('[data-pin-index]'))
+    for (const item of items) {
+      const index = Number(item.dataset.pinIndex)
+      if (!Number.isFinite(index)) continue
+      const rect = item.getBoundingClientRect()
+      if (clientY < rect.top + rect.height / 2) return index
+    }
+    return pinnedCommands.length
+  }
+
+  const pinUnpinDropFromPointer = (clientX: number, clientY: number): boolean => {
+    if (!isPointerInsidePinRail(clientX, clientY)) return false
+    const rail = pinRailRef.current
+    if (!rail) return false
+    const items = Array.from(rail.querySelectorAll<HTMLElement>('[data-pin-index]'))
+    const last = items.at(-1)
+    if (!last) return false
+    const lastRect = last.getBoundingClientRect()
+    return clientY > lastRect.bottom + 8
+  }
+
+  const isPointerInsidePinRail = (clientX: number, clientY: number): boolean => {
+    const rail = pinRailRef.current
+    if (!rail) return false
+    const rect = rail.getBoundingClientRect()
+    return (
+      clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+    )
+  }
+
+  const beginSearchResultPointerDrag = (
+    event: PointerEvent<HTMLElement>,
+    result: SearchResult
+  ): void => {
+    if (event.button !== 0) return
+    if (!isPinnableSearchResult(result)) return
+
+    resultPointerActiveRef.current = true
+    resultPointerDraggedRef.current = false
+    resultPointerStartRef.current = { x: event.clientX, y: event.clientY }
+    draggingSearchResultRef.current = result
+    suppressNextSearchResultClickRef.current = false
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const moveSearchResultPointerDrag = (event: PointerEvent<HTMLElement>): void => {
+    if (!resultPointerActiveRef.current || !draggingSearchResultRef.current) return
+
+    const start = resultPointerStartRef.current
+    const delta = Math.hypot(event.clientX - start.x, event.clientY - start.y)
+    if (!resultPointerDraggedRef.current && delta < SEARCH_RESULT_PIN_DRAG_THRESHOLD) return
+
+    resultPointerDraggedRef.current = true
+    suppressNextSearchResultClickRef.current = true
+    if (!draggingSearchResultId) {
+      setDraggingSearchResultId(draggingSearchResultRef.current.id)
+    }
+
+    if (isPointerInsidePinRail(event.clientX, event.clientY)) {
+      updatePinDropIndex(pinDropIndexFromPointer(event.clientY))
+    } else {
+      updatePinDropIndex(null)
+    }
+  }
+
+  const endSearchResultPointerDrag = (event: PointerEvent<HTMLElement>): void => {
+    const result = draggingSearchResultRef.current
+    const wasDragged = resultPointerDraggedRef.current
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+
+    resultPointerActiveRef.current = false
+    resultPointerDraggedRef.current = false
+    updateDraggingSearchResult(null)
+    updatePinDropIndex(null)
+
+    if (!wasDragged || !result) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (isPointerInsidePinRail(event.clientX, event.clientY)) {
+      pinSearchResultFromDrag(result, pinDropIndexFromPointer(event.clientY))
+    }
+  }
+
+  const cancelSearchResultPointerDrag = (event: PointerEvent<HTMLElement>): void => {
+    resultPointerActiveRef.current = false
+    resultPointerDraggedRef.current = false
+    draggingSearchResultRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    updateDraggingSearchResult(null)
+    updatePinDropIndex(null)
+  }
+
+  const beginPinPointerDrag = (
+    event: PointerEvent<HTMLElement>,
+    pinId: string,
+    index: number
+  ): void => {
+    if (event.button !== 0) return
+    pinPointerActiveRef.current = true
+    pinPointerStartYRef.current = event.clientY
+    suppressNextPinClickRef.current = false
+    updatePinUnpinDropActive(false)
+    updateDraggingPin(pinId)
+    updatePinDropIndex(index)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const movePinPointerDrag = (event: PointerEvent<HTMLElement>): void => {
+    if (!pinPointerActiveRef.current || !draggingPinIdRef.current) return
+    if (Math.abs(event.clientY - pinPointerStartYRef.current) > 3) {
+      suppressNextPinClickRef.current = true
+    }
+    const shouldUnpin = pinUnpinDropFromPointer(event.clientX, event.clientY)
+    updatePinUnpinDropActive(shouldUnpin)
+    if (shouldUnpin) {
+      updatePinDropIndex(null)
+      return
+    }
+    if (isPointerInsidePinRail(event.clientX, event.clientY)) {
+      updatePinDropIndex(pinDropIndexFromPointer(event.clientY))
+    } else {
+      updatePinDropIndex(null)
+    }
+  }
+
+  const endPinPointerDrag = (event: PointerEvent<HTMLElement>): void => {
+    if (!pinPointerActiveRef.current) return
+    pinPointerActiveRef.current = false
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    commitPinDrop(pinDropIndexRef.current)
+  }
+
+  const cancelPinPointerDrag = (event: PointerEvent<HTMLElement>): void => {
+    pinPointerActiveRef.current = false
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    updateDraggingPin(null)
+    updatePinDropIndex(null)
+    updatePinUnpinDropActive(false)
   }
 
   const isDictating = holdToSpeak.state.kind === 'recording'
@@ -1557,6 +2026,7 @@ export default function CommandBar({
   const dictationSupported = holdToSpeak.supported
   const startDictation = holdToSpeak.press
   const stopDictation = holdToSpeak.release
+  const pushToTalkShortcut = formatShortcutForDisplay(cfg.raymesHotkey ?? 'Alt+Space')
 
   useEffect(() => {
     if (!dictationSupported) return undefined
@@ -1584,15 +2054,23 @@ export default function CommandBar({
   }
 
   const enterKillPortMode = (): void => {
+    setKillPortArgumentDismissed(false)
     setKillPortQuery(value.trim() || 'kill process')
+    killPortValueRef.current = ''
     setKillPortValue('')
+    killPortModeRef.current = true
     setKillPortMode(true)
+    setSelectedSearch(0)
+    setFollowSearchSelection(true)
     showActionMsg('Type a port, then press Enter')
     requestAnimationFrame(() => focusCommandInput())
   }
 
   const exitKillPortMode = (): void => {
+    setKillPortArgumentDismissed(true)
+    killPortModeRef.current = false
     setKillPortMode(false)
+    killPortValueRef.current = ''
     setKillPortValue('')
     showActionMsg(null)
     requestAnimationFrame(() => focusCommandInput())
@@ -1620,7 +2098,9 @@ export default function CommandBar({
       argumentValues: { port },
     })
     if (ok) {
+      killPortModeRef.current = false
       setKillPortMode(false)
+      killPortValueRef.current = ''
       setKillPortValue('')
       setKillPortQuery('')
     }
@@ -1875,7 +2355,9 @@ export default function CommandBar({
         }
         clearPendingAction()
         setKillPortQuery(value.trim() || 'kill port')
+        killPortValueRef.current = ''
         setKillPortValue('')
+        killPortModeRef.current = true
         setKillPortMode(true)
         showActionMsg('Type a port, then press Enter')
         requestAnimationFrame(() => focusCommandInput())
@@ -1949,6 +2431,63 @@ export default function CommandBar({
     document.getElementById('command-input')?.focus()
   }
 
+  const openTerminalSession = (session: TerminalSessionSummary): void => {
+    onOpenTerminal(undefined, session.cwd, session.sessionId)
+    setValue('')
+    setTerminalMode(false)
+    setTerminalPrompt('')
+    setTerminalSessions([])
+    terminalWorkingDirectoryRef.current = undefined
+  }
+
+  const selectedTerminalSession = (): TerminalSessionSummary | null => {
+    return orderedTerminalSessions[selectedSearch] ?? orderedTerminalSessions[0] ?? null
+  }
+
+  const toggleTerminalSessionPin = (): void => {
+    const session = selectedTerminalSession()
+    if (!session) return
+    const next = pinnedTerminalSessionIds.includes(session.sessionId)
+      ? pinnedTerminalSessionIds.filter((id) => id !== session.sessionId)
+      : [session.sessionId, ...pinnedTerminalSessionIds]
+    setPinnedTerminalSessionIds(next)
+    writePinnedTerminalSessionIds(next)
+    showActionMsg(next.includes(session.sessionId) ? 'Session pinned' : 'Session unpinned')
+  }
+
+  const stopSelectedTerminalSession = async (): Promise<void> => {
+    const session = selectedTerminalSession()
+    if (!session || session.status !== 'running') return
+    await window.tezbar.terminalKill(session.sessionId)
+    const next = await window.tezbar.terminalList()
+    setTerminalSessions(next)
+    showActionMsg('Terminal session stopped')
+  }
+
+  const deleteSelectedTerminalSession = async (): Promise<void> => {
+    const session = selectedTerminalSession()
+    if (!session) return
+    const deleted = await window.tezbar.terminalDelete(session.sessionId)
+    if (!deleted) return
+    const nextPins = pinnedTerminalSessionIds.filter((id) => id !== session.sessionId)
+    setPinnedTerminalSessionIds(nextPins)
+    writePinnedTerminalSessionIds(nextPins)
+    setTerminalSessions((current) => current.filter((item) => item.sessionId !== session.sessionId))
+    setSelectedSearch((current) => Math.max(0, current - 1))
+    showActionMsg('Terminal session deleted')
+  }
+
+  const openTerminalSettings = (): void => {
+    setTerminalSettingsDraft(readTerminalDefaults())
+    setTerminalSettingsOpen(true)
+  }
+
+  const saveTerminalSettings = (): void => {
+    writeTerminalDefaults(terminalSettingsDraft)
+    setTerminalSettingsOpen(false)
+    showActionMsg('Terminal defaults saved')
+  }
+
   async function openPathCompletion(item: PathCompletionItem): Promise<void> {
     if (!item.path) {
       setValue(item.value)
@@ -1985,7 +2524,6 @@ export default function CommandBar({
     requestAnimationFrame(() => focusCommandInput())
   }
 
-  pinPickerOpenRef.current = pinPickerTarget !== null
   pendingOpenRef.current = pendingAction !== null
   modelMenuOpenRef.current = modelMenuOpen
 
@@ -1993,12 +2531,6 @@ export default function CommandBar({
     setCommandSurfaceEscapeConsumer(() => {
       if (modelMenuOpenRef.current) {
         setModelMenuOpen(false)
-        focusCommandInput()
-        return true
-      }
-      if (pinPickerOpenRef.current) {
-        setPinPickerTarget(null)
-        showActionMsg(null)
         focusCommandInput()
         return true
       }
@@ -2010,8 +2542,14 @@ export default function CommandBar({
         return true
       }
       if (killPortModeRef.current) {
-        setKillPortMode(false)
-        setKillPortValue('')
+        if (killPortValueRef.current) {
+          killPortValueRef.current = ''
+          setKillPortValue('')
+        } else {
+          setKillPortArgumentDismissed(true)
+          killPortModeRef.current = false
+          setKillPortMode(false)
+        }
         showActionMsg(null)
         focusCommandInput()
         return true
@@ -2020,6 +2558,12 @@ export default function CommandBar({
         // Space prefix = AI mode. Escape first clears a typed prompt, then
         // a second Escape removes the prefix and returns to normal command search.
         setValue(valueRef.current.trim() ? ' ' : '')
+        focusCommandInput()
+        return true
+      }
+      if (terminalSettingsOpenRef.current) {
+        terminalSettingsOpenRef.current = false
+        setTerminalSettingsOpen(false)
         focusCommandInput()
         return true
       }
@@ -2045,58 +2589,37 @@ export default function CommandBar({
 
   useEffect(() => {
     const onGlobalKeyDown = (event: KeyboardEvent): void => {
-      if (pinPickerTarget) {
-        if (event.key === 'Escape') {
-          event.preventDefault()
-          setPinPickerTarget(null)
-          showActionMsg(null)
-          focusCommandInput()
-          return
-        }
-
-        if (event.key === 'Tab') {
-          event.preventDefault()
-          // Tab and Shift+Tab both cancel — same as Esc, and matches the hint copy.
-          setPinPickerTarget(null)
-          showActionMsg(null)
-          focusCommandInput()
-          return
-        }
-
-        const cols = 8
-        if (event.key === 'ArrowRight') {
-          event.preventDefault()
-          setPinPickerIconIndex((i) => Math.min(i + 1, PIN_ICON_CHOICES.length - 1))
-        } else if (event.key === 'ArrowLeft') {
-          event.preventDefault()
-          setPinPickerIconIndex((i) => Math.max(i - 1, 0))
-        } else if (event.key === 'ArrowDown') {
-          event.preventDefault()
-          setPinPickerIconIndex((i) => Math.min(i + cols, PIN_ICON_CHOICES.length - 1))
-        } else if (event.key === 'ArrowUp') {
-          event.preventDefault()
-          setPinPickerIconIndex((i) => Math.max(i - cols, 0))
-        }
-
-        const iconDigit = parseDigitIndex(event.key)
-        if (iconDigit !== null && iconDigit < PIN_ICON_CHOICES.length) {
-          event.preventDefault()
-          const icon = PIN_ICON_CHOICES[iconDigit]
-          if (!icon) return
-          confirmPin(icon)
-          return
-        }
-
-        if (event.key === 'Enter') {
-          event.preventDefault()
-          confirmPin()
-          return
-        }
-
-        return
-      }
-
       const hasCommandMod = event.metaKey || event.ctrlKey
+      if (terminalSettingsOpenRef.current) return
+      if (terminalModeRef.current && hasCommandMod) {
+        const key = event.key.toLowerCase()
+        if (key === 'k') {
+          event.preventDefault()
+          openTerminalSettings()
+          return
+        }
+        if (key === 'o') {
+          event.preventDefault()
+          const session = selectedTerminalSession()
+          if (session) openTerminalSession(session)
+          return
+        }
+        if (key === 'x') {
+          event.preventDefault()
+          void stopSelectedTerminalSession()
+          return
+        }
+        if (key === 'p') {
+          event.preventDefault()
+          toggleTerminalSessionPin()
+          return
+        }
+        if (key === 'backspace' || key === 'delete') {
+          event.preventDefault()
+          void deleteSelectedTerminalSession()
+          return
+        }
+      }
       if (hasCommandMod) {
         if (event.key.toLowerCase() === 'p' && !event.shiftKey) {
           event.preventDefault()
@@ -2115,9 +2638,9 @@ export default function CommandBar({
           }
           const isPinned = pinnedCommands.some((pin) => pin.id === selected.id)
           if (isPinned) {
-            unpinCommandById(selected.id)
+            unpinCommandByIdRef.current(selected.id)
           } else {
-            openPinPicker(selected)
+            openPinPickerRef.current(selected)
           }
           return
         }
@@ -2130,7 +2653,7 @@ export default function CommandBar({
           if (pinIndex >= 0) {
             event.preventDefault()
             const pin = pinnedCommands[pinIndex]
-            if (pin) void runPinnedCommand(pin, pinIndex)
+            if (pin) void runPinnedCommandRef.current(pin, pinIndex)
           }
         }
       }
@@ -2138,18 +2661,7 @@ export default function CommandBar({
 
     window.addEventListener('keydown', onGlobalKeyDown)
     return () => window.removeEventListener('keydown', onGlobalKeyDown)
-  }, [
-    confirmPin,
-    isAiMode,
-    openPinPicker,
-    pinPickerIconIndex,
-    pinPickerTarget,
-    pinnedCommands,
-    runPinnedCommand,
-    selectedSearch,
-    unpinCommandById,
-    visibleSearchResults,
-  ])
+  }, [isAiMode, pinnedCommands, selectedSearch, visibleSearchResults])
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault()
@@ -2194,17 +2706,26 @@ export default function CommandBar({
       }
       const task = agentTask.trim()
       if (!task) return
+      await modelSelectionSaveRef.current
       onOpenAiChat({ kind: 'submit', prompt: task })
       setValue('  ')
       return
     }
 
     if (terminalMode) {
+      const selectedSession =
+        (selectedSearch >= 0 ? orderedTerminalSessions[selectedSearch] : undefined) ??
+        orderedTerminalSessions[0]
+      if (selectedSession) {
+        openTerminalSession(selectedSession)
+        return
+      }
       const initialCommand = value.trim() || undefined
-      onOpenTerminal(initialCommand, terminalWorkingDirectoryRef.current)
+      onOpenTerminal(initialCommand, terminalWorkingDirectoryRef.current, undefined, terminalSettingsDraft)
       setValue('')
       setTerminalMode(false)
       setTerminalPrompt('')
+      setTerminalSessions([])
       terminalWorkingDirectoryRef.current = undefined
       return
     }
@@ -2273,6 +2794,8 @@ export default function CommandBar({
   const showSuggestions = isCompletionInput && suggestions.length > 0
   const showSearchResults =
     !isCompletionInput && !isAiMode && !terminalMode && visibleSearchCount > 0
+  const terminalSelectedIndex =
+    terminalSessionCount === 0 ? -1 : Math.min(Math.max(0, selectedSearch), terminalSessionCount - 1)
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (isAiMode && (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
@@ -2281,20 +2804,21 @@ export default function CommandBar({
       return
     }
 
-    if (pinPickerTarget) {
-      // While pin picker is open, global key handling owns navigation.
-      return
-    }
-
     if (killPortMode) {
       if (e.key === 'Escape') {
         e.preventDefault()
-        exitKillPortMode()
+        e.stopPropagation()
+        if (killPortValue) {
+          killPortValueRef.current = ''
+          setKillPortValue('')
+        } else {
+          exitKillPortMode()
+        }
         return
       }
       if (e.key === 'Tab') {
         e.preventDefault()
-        exitKillPortMode()
+        if (e.shiftKey) exitKillPortMode()
         return
       }
       return
@@ -2331,8 +2855,7 @@ export default function CommandBar({
       (!value || isSlashInput) &&
       !isAiMode &&
       !killPortMode &&
-      !pendingAction &&
-      !pinPickerTarget
+      !pendingAction
     ) {
       e.preventDefault()
       terminalWorkingDirectoryRef.current = isSlashInput ? value.trim() : undefined
@@ -2342,15 +2865,39 @@ export default function CommandBar({
     }
 
     if (isCompletionInput && suggestions.length) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setFollowSuggestionSelection(true)
-        setSelectedSuggestion((i) => Math.min(i + 1, suggestions.length - 1))
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setFollowSuggestionSelection(true)
-        setSelectedSuggestion((i) => Math.max(i - 1, 0))
+      if (isApplicationInput) {
+        // Grid navigation: left/right by one, up/down by a full row.
+        if (e.key === 'ArrowRight') {
+          e.preventDefault()
+          setFollowSuggestionSelection(true)
+          setSelectedSuggestion((i) => Math.min(i + 1, suggestions.length - 1))
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault()
+          setFollowSuggestionSelection(true)
+          setSelectedSuggestion((i) => Math.max(i - 1, 0))
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          setFollowSuggestionSelection(true)
+          setSelectedSuggestion((i) => Math.min(i + APPLICATIONS_GRID_COLUMNS, suggestions.length - 1))
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          setFollowSuggestionSelection(true)
+          setSelectedSuggestion((i) => Math.max(i - APPLICATIONS_GRID_COLUMNS, 0))
+        }
+      } else {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          setFollowSuggestionSelection(true)
+          setSelectedSuggestion((i) => Math.min(i + 1, suggestions.length - 1))
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          setFollowSuggestionSelection(true)
+          setSelectedSuggestion((i) => Math.max(i - 1, 0))
+        }
       }
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
@@ -2369,6 +2916,17 @@ export default function CommandBar({
         e.preventDefault()
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.max(i - 1, -1))
+      }
+    } else if (terminalMode && terminalSessionCount > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setFollowSearchSelection(true)
+        setSelectedSearch((i) => Math.min(i + 1, terminalSessionCount - 1))
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setFollowSearchSelection(true)
+        setSelectedSearch((i) => Math.max(i - 1, 0))
       }
     } else if (visibleSearchCount) {
       if (e.key === 'ArrowDown') {
@@ -2394,10 +2952,6 @@ export default function CommandBar({
         argInputRefs.current[0]?.focus()
         return
       }
-      if (pinPickerTarget) {
-        // Just let it stay there or switch logic. But globally we handle it.
-        return
-      }
       if (isCompletionInput) {
         const item = suggestions[selectedSuggestion]
         if (item) completePathInput(item)
@@ -2414,10 +2968,14 @@ export default function CommandBar({
         enterKillPortMode()
         return
       }
-      // If we are in results, and hit tab, we go to emoji
+      // Tab on a result mirrors Cmd+P for quick pinning.
       if (showSearchResults) {
         const selected = visibleSearchResults[selectedSearch] ?? visibleSearchResults[0]
-        if (selected && selected.category !== 'calculator') {
+        if (
+          selected &&
+          selected.category !== 'calculator' &&
+          selected.category !== 'color-converter'
+        ) {
           openPinPicker(selected)
         }
       }
@@ -2448,9 +3006,18 @@ export default function CommandBar({
     }
     setCfg((current) => ({ ...current, ...patch }))
     setModelMenuOpen(false)
-    await window.tezbar.setLlmConfig(patch)
-    const next = await window.tezbar.getLlmConfig()
-    setCfg(next as LlmConfigRecord)
+    const save = (async () => {
+      await window.tezbar.setLlmConfig(patch)
+      const next = await window.tezbar.getLlmConfig()
+      setCfg(next as LlmConfigRecord)
+    })().catch((error) => {
+      console.error('Failed to save selected model:', error)
+    })
+    modelSelectionSaveRef.current = save
+    await save
+    if (modelSelectionSaveRef.current === save) {
+      modelSelectionSaveRef.current = null
+    }
   }
 
   return (
@@ -2458,13 +3025,21 @@ export default function CommandBar({
       {/* Primary glass card: icon + input */}
       <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
-          <div className="flex items-center gap-3">
+          <div className="flex h-7 items-center gap-3">
             <span
               className={cx(
                 isAiMode ? 'text-violet-300' : terminalMode ? 'text-emerald-300' : 'text-ink-3'
               )}
             >
-              {isAiMode ? <AiIcon /> : terminalMode ? <TerminalIcon /> : <SearchIcon />}
+              {isAiMode ? (
+                <AiIcon />
+              ) : terminalMode ? (
+                <TerminalIcon />
+              ) : isApplicationInput ? (
+                <AppStoreIcon />
+              ) : (
+                <SearchIcon />
+              )}
             </span>
             {isAiMode ? (
               <span
@@ -2480,23 +3055,7 @@ export default function CommandBar({
                 <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1">
                   {killPortQuery}
                 </span>
-                <span
-                  aria-label="Port mode"
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
-                >
-                  <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-emerald-400/25 text-emerald-100">
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
-                      <path
-                        d="M2.5 8.8 8.8 2.5M4.5 9.5H2v-2.5M7.5 2H10v2.5"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  Port
-                </span>
+                <PortArgumentChip />
               </>
             ) : null}
             <div className="relative min-w-0 flex-1 flex items-center">
@@ -2521,7 +3080,9 @@ export default function CommandBar({
                 value={killPortMode ? killPortValue : value}
                 onChange={(e) => {
                   if (killPortMode) {
-                    setKillPortValue(e.target.value.replace(/[^\d]/g, '').slice(0, 5))
+                    const nextPort = e.target.value.replace(/[^\d]/g, '').slice(0, 5)
+                    killPortValueRef.current = nextPort
+                    setKillPortValue(nextPort)
                     return
                   }
                   if (pendingAction) {
@@ -2538,6 +3099,7 @@ export default function CommandBar({
                       newValue = newValue.slice(separator + 1)
                     }
                   }
+                  setKillPortArgumentDismissed(false)
                   setValue(newValue)
                   setFollowSuggestionSelection(true)
                   setSelectedSuggestion(0)
@@ -2560,6 +3122,20 @@ export default function CommandBar({
                 className="w-full min-w-0 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0"
               />
             </div>
+            {canEnterKillPortMode ? (
+              <button
+                type="button"
+                aria-label="Enter port number"
+                className="group inline-flex h-7 shrink-0 items-center gap-2 rounded-tezbar-chip px-1 text-left transition hover:bg-white/[0.035]"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={enterKillPortMode}
+              >
+                <PortArgumentChip />
+                <span className="min-w-[42px] font-display text-[15px] text-ink-4 transition group-hover:text-ink-3">
+                  Port
+                </span>
+              </button>
+            ) : null}
             {isAiMode ? (
               <ModelPicker
                 config={cfg}
@@ -2593,7 +3169,7 @@ export default function CommandBar({
                   startDictation()
                 }}
                 onTouchEnd={stopDictation}
-                title="Hold to speak — or keep Option+Space held after opening Tezbar (macOS)"
+                title={`Hold to speak — or keep ${pushToTalkShortcut} held after opening Tezbar`}
               >
                 {isDictating ? (
                   'Listening'
@@ -2602,7 +3178,7 @@ export default function CommandBar({
                 ) : (
                   <span className="group">
                     <span className="group-hover:hidden">Hold to speak</span>
-                    <span className="hidden group-hover:inline">hold cmd+space</span>
+                    <span className="hidden group-hover:inline">hold {pushToTalkShortcut}</span>
                   </span>
                 )}
               </button>
@@ -2611,612 +3187,804 @@ export default function CommandBar({
         </form>
       </div>
 
-      {/* Middle column: flex-1 so the search list can grow to the footer; inner
-          panels scroll (GlideList, answer, …) instead of this outer region. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-[var(--s-2)] overflow-hidden pr-0.5">
-        {/* Pinned commands */}
-        {pinnedCommands.length > 0 && !isCompletionInput && !isAiMode ? (
-          <div className="glass-card animate-tezbar-scale-in px-2 py-2">
-            <div className="flex items-center gap-1.5 overflow-x-auto">
-              {pinnedCommands.map((pin, index) => (
-                <div
-                  key={`pin:${pin.id}`}
-                  draggable
-                  title="Drag to reorder · Click icon to run · Click number to change shortcut · Right-click to unpin"
-                  onDragStart={(e: DragEvent) => {
-                    e.dataTransfer.setData(PIN_DRAG_MIME, pin.id)
-                    e.dataTransfer.effectAllowed = 'move'
-                    setDraggingPinId(pin.id)
-                  }}
-                  onDragEnd={() => {
-                    setDraggingPinId(null)
-                  }}
-                  onDragOver={(e: DragEvent) => {
-                    e.preventDefault()
-                    e.dataTransfer.dropEffect = 'move'
-                  }}
-                  onDrop={(e: DragEvent) => {
-                    e.preventDefault()
-                    const fromId = e.dataTransfer.getData(PIN_DRAG_MIME)
-                    if (!fromId || fromId === pin.id) return
-                    persistPinnedCommands(reorderPinnedByDrop(pinnedCommands, fromId, pin.id))
-                  }}
-                  onContextMenu={(event) => {
-                    event.preventDefault()
-                    unpinCommandById(pin.id)
-                  }}
-                  className={cx(
-                    'relative flex shrink-0 cursor-grab flex-col items-center gap-1 rounded-tezbar-row border border-white/10 bg-white/[0.03] px-1.5 py-1.5 transition active:cursor-grabbing',
-                    draggingPinId === pin.id
-                      ? 'opacity-45'
-                      : 'hover:border-white/20 hover:bg-white/[0.07]'
-                  )}
-                >
-                  <button
-                    type="button"
-                    draggable={false}
-                    title={pin.title}
-                    className="group grid h-7 w-7 shrink-0 place-items-center rounded-tezbar-chip border border-white/12 bg-white/[0.05] text-[14px] text-ink-1 transition hover:border-white/20 hover:bg-white/[0.08]"
-                    onClick={() => {
-                      void runPinnedCommand(pin, index)
-                    }}
-                  >
-                    {pin.icon}
-                  </button>
-                  <button
-                    type="button"
-                    draggable={false}
-                    title="Change ⌥ shortcut"
-                    className="font-mono text-[9px] text-ink-4 transition hover:text-ink-2"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      cyclePinShortcutSlot(pin.id)
-                    }}
-                  >
-                    <Kbd>⌥</Kbd>
-                    <Kbd>{pin.slot}</Kbd>
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Pin icon picker */}
-        {pinPickerTarget ? (
-          <div className="glass-card animate-tezbar-scale-in px-3 py-2.5">
-            <p className="text-[11px] font-semibold tracking-tight text-ink-2">
-              Pin icon for <span className="text-ink-1">{pinPickerTarget.title}</span>
-            </p>
-            <div className="mt-2 grid grid-cols-8 gap-1">
-              {PIN_ICON_CHOICES.map((icon, index) => (
-                <button
-                  key={`pin-icon:${icon}`}
-                  type="button"
-                  className={cx(
-                    'grid h-8 w-full place-items-center rounded-tezbar-chip border text-[14px] transition',
-                    PIN_ICON_CHOICES[pinPickerIconIndex] === icon
-                      ? 'border-accent/60 bg-accent/15 text-ink-1'
-                      : 'border-white/10 bg-white/[0.03] text-ink-2 hover:border-white/20 hover:text-ink-1'
-                  )}
-                  title={`Icon ${index + 1}`}
-                  onClick={() => {
-                    setPinPickerIconIndex(index)
-                    confirmPin(icon)
-                  }}
-                >
-                  {icon}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[10.5px] text-ink-4">
-              Pick an emoji, then press Enter to confirm. Esc or Tab to cancel.
-            </p>
-          </div>
-        ) : null}
-
-        {/* File and application completion suggestions */}
-        {showSuggestions ? (
+      {/* Middle column: the pin rail sits on the left; inner panels scroll
+          (GlideList, answer, …) instead of this outer region. */}
+      <div className="flex min-h-0 flex-1 gap-[var(--s-2)] overflow-hidden pr-0.5">
+        {(pinnedCommands.length > 0 || draggingSearchResultId) &&
+        !isCompletionInput &&
+        !isAiMode &&
+        !terminalMode ? (
           <div
-            className="glass-card animate-tezbar-scale-in flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2"
-            onWheelCapture={() => setFollowSuggestionSelection(false)}
-            onMouseLeave={() => {
-              setFollowSuggestionSelection(false)
-              setSelectedSuggestion(-1)
-            }}
+            ref={pinRailRef}
+            className={cx(
+              'tezbar-pin-rail glass-card flex shrink-0 flex-col items-center overflow-hidden',
+              densePinRail ? 'w-[50px] p-1.5' : 'w-[50px] px-1.5 py-2',
+              draggingPinId ? 'pb-1' : '',
+              pinUnpinDropActive ? 'border-rose-300/35 bg-rose-400/[0.04]' : '',
+              draggingSearchResultId ? 'border-accent/40 bg-accent/[0.035]' : ''
+            )}
           >
-            <GlideList
-              selectedIndex={selectedSuggestion}
-              itemCount={suggestions.length}
-              followSelected={followSuggestionSelection}
-              className="min-h-0 flex-1 overflow-y-auto"
+            <div
+              className={cx(
+                'flex min-h-0 flex-col items-center',
+                densePinRail ? 'gap-[5px]' : 'gap-2'
+              )}
             >
-              {suggestions.map((item, i) => {
-                const iconAsset = completionIconAsset(item)
-                const sectionLabel =
-                  i === 0 || suggestions[i - 1]?.section !== item.section
-                    ? pathCompletionSectionLabel(item.section)
-                    : null
+              {pinnedCommands.length === 0 && draggingSearchResultId ? (
+                <div
+                  aria-hidden
+                  className="grid h-9 w-9 place-items-center rounded-tezbar-row border border-dashed border-accent/60 bg-accent/[0.08] font-mono text-[15px] text-accent"
+                >
+                  +
+                </div>
+              ) : null}
+              {pinnedCommands.map((pin, index) => {
+                const pinnedResult: SearchResult = {
+                  id: pin.id,
+                  title: pin.title,
+                  subtitle: pin.subtitle,
+                  category: pin.category,
+                  score: 1000 - index,
+                  action: pin.action,
+                  iconDataUrl: pin.iconDataUrl,
+                }
+                const iconAsset = searchResultIconAsset(pinnedResult)
+                const commandIcon = commandIconForResult(pinnedResult)
                 return (
-                  <li key={item.id} className="relative z-[1]">
-                    {sectionLabel ? (
-                      <div className="px-3 pb-1 pt-2 text-[9.5px] font-bold uppercase tracking-[0.16em] text-ink-4">
-                        {sectionLabel}
-                      </div>
+                  <div
+                    key={`pin:${pin.id}`}
+                    data-pin-index={index}
+                    title="Drag to reorder · Click icon to run · ⌥ shortcut follows order · Right-click to unpin"
+                    onPointerDown={(event) => {
+                      beginPinPointerDrag(event, pin.id, index)
+                    }}
+                    onPointerMove={movePinPointerDrag}
+                    onPointerUp={endPinPointerDrag}
+                    onPointerCancel={cancelPinPointerDrag}
+                    onLostPointerCapture={() => {
+                      if (!pinPointerActiveRef.current) return
+                      commitPinDrop(pinDropIndexRef.current)
+                      pinPointerActiveRef.current = false
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault()
+                      unpinCommandById(pin.id)
+                    }}
+                    className={cx(
+                      'group relative flex cursor-grab items-center justify-center rounded-tezbar-row transition active:cursor-grabbing',
+                      draggingPinId === pin.id ? 'opacity-45' : 'hover:bg-white/[0.06]'
+                    )}
+                  >
+                    {pinDropIndex === index ? (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute -top-[5px] left-1 right-1 h-0.5 rounded-full bg-accent shadow-[0_0_10px_rgba(139,141,247,0.65)]"
+                      />
+                    ) : null}
+                    {index === pinnedCommands.length - 1 &&
+                    pinDropIndex === pinnedCommands.length ? (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute -bottom-[5px] left-1 right-1 h-0.5 rounded-full bg-accent shadow-[0_0_10px_rgba(139,141,247,0.65)]"
+                      />
                     ) : null}
                     <button
                       type="button"
-                      className="relative flex w-full items-center justify-between gap-3 rounded-tezbar-row px-3 py-2 text-left text-[13px] text-ink-2 transition hover:text-ink-1"
-                      onMouseMove={() => {
-                        setFollowSuggestionSelection(false)
-                        setSelectedSuggestion(i)
+                      draggable={false}
+                      aria-label={`Run pinned command: ${pin.title}`}
+                      title={pin.title}
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-tezbar-row border border-white/10 bg-white/[0.035] transition hover:border-white/20 hover:bg-white/[0.08]"
+                      onClick={(event) => {
+                        if (suppressNextPinClickRef.current) {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          suppressNextPinClickRef.current = false
+                          return
+                        }
+                        void runPinnedCommand(pin, index)
                       }}
-                      onMouseDown={(ev) => ev.preventDefault()}
-                      onClick={() => completePathInput(item)}
                     >
-                      <span className="flex min-w-0 flex-1 items-center gap-3">
-                        <ListItemIcon
-                          kind={item.kind}
-                          iconDataUrl={item.iconDataUrl}
-                          assetKind={iconAsset?.kind}
-                          assetPath={iconAsset?.path}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-mono text-[12.5px] tracking-tight text-ink-1">
-                            {item.title}
-                          </span>
-                          <span className="mt-0.5 block truncate text-[10.5px] text-ink-4">
-                            {item.subtitle}
-                          </span>
-                        </span>
-                      </span>
-                      <span className="ml-3 shrink-0 text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-4">
-                        {item.badge ??
-                          (item.kind === 'directory'
-                            ? 'Folder'
-                            : item.kind === 'application'
-                              ? 'Open With'
-                              : 'File')}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </GlideList>
-          </div>
-        ) : null}
-
-        {/* Pending extension action form */}
-        {pendingAction ? (
-          <form
-            onSubmit={(ev) => {
-              ev.preventDefault()
-              void submitPendingAction()
-            }}
-            className="glass-card animate-tezbar-scale-in px-3 py-2.5"
-            style={{
-              boxShadow:
-                'inset 0 1px 0 rgba(52, 211, 153, 0.12), inset 0 0 0 1px rgba(52, 211, 153, 0.25)',
-            }}
-          >
-            <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-tight text-emerald-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              {pendingAction.title}
-              <span className="text-ink-4">·</span>
-              <span className="font-normal text-ink-3">
-                {pendingAction.commandArgumentDefinitions.length} field
-                {pendingAction.commandArgumentDefinitions.length === 1 ? '' : 's'}
-              </span>
-            </p>
-            <div className="space-y-2">
-              {pendingAction.commandArgumentDefinitions.map((arg, index) => {
-                const fieldType = arg.type === 'dropdown' ? 'dropdown' : 'text'
-                const label = arg.title || arg.name
-                const placeholder = arg.placeholder || arg.title || arg.name
-                const currentValue = argumentValues[arg.name] ?? ''
-
-                const onKeyDown = (
-                  e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>
-                ): void => {
-                  if (e.key === 'Escape') {
-                    e.preventDefault()
-                    cancelPendingAction()
-                    return
-                  }
-                  if (e.key === 'Tab') {
-                    e.preventDefault()
-                    const nextIndex = e.shiftKey ? index - 1 : index + 1
-                    if (
-                      nextIndex >= 0 &&
-                      nextIndex < pendingAction.commandArgumentDefinitions.length
-                    ) {
-                      argInputRefs.current[nextIndex]?.focus()
-                    } else {
-                      focusCommandInput()
-                    }
-                    return
-                  }
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    if (pendingColorConversionRows.length > 0) {
-                      const selected =
-                        pendingColorConversionRows[selectedSearch] ?? pendingColorConversionRows[0]
-                      if (selected) {
-                        void runSelectedSearchResult(selected, selectedSearch + 1)
-                        return
-                      }
-                    }
-                    void submitPendingAction()
-                  }
-                }
-
-                return (
-                  <div
-                    key={`${pendingAction.commandName}:${arg.name}`}
-                    className="flex items-center gap-3"
-                  >
-                    <span className="w-[88px] shrink-0 text-[11px] font-medium text-ink-3">
-                      {label}
-                      {arg.required ? <span className="text-emerald-400/80"> *</span> : null}
-                    </span>
-                    {fieldType === 'dropdown' ? (
-                      <SelectField
-                        ref={(el) => {
-                          argInputRefs.current[index] = el
-                        }}
-                        value={currentValue}
-                        onChange={(e) => {
-                          const next = e.target.value
-                          setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
-                          if (arg.name === pendingColorArgumentName) setSelectedSearch(0)
-                        }}
-                        onKeyDown={onKeyDown}
-                        className="min-w-0 flex-1"
-                      >
-                        <option value="">Select…</option>
-                        {(arg.data || []).map((option) => {
-                          const optionValue = String(option?.value ?? '')
-                          const optionTitle = option?.title || optionValue
-                          return (
-                            <option key={`${arg.name}:${optionValue}`} value={optionValue}>
-                              {optionTitle}
-                            </option>
-                          )
-                        })}
-                      </SelectField>
-                    ) : (
-                      <TextField
-                        ref={(el) => {
-                          argInputRefs.current[index] = el
-                        }}
-                        type={fieldType}
-                        value={currentValue}
-                        onChange={(e) => {
-                          const next = e.target.value
-                          setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
-                          if (arg.name === pendingColorArgumentName) setSelectedSearch(0)
-                        }}
-                        onKeyDown={onKeyDown}
-                        placeholder={placeholder}
-                        autoComplete="off"
-                        spellCheck={false}
-                        className="min-w-0 flex-1"
+                      <ListItemIcon
+                        kind={pin.category}
+                        iconDataUrl={pin.iconDataUrl}
+                        assetKind={iconAsset?.kind}
+                        assetPath={iconAsset?.path}
+                        commandIcon={commandIcon}
                       />
-                    )}
+                    </button>
+                    <span
+                      title={`Shortcut: ⌥${pin.slot}`}
+                      className={cx(
+                        'absolute bottom-0 right-0 grid place-items-center rounded-[5px] border border-white/10 bg-[#14161c] px-1 font-mono leading-none text-ink-3 transition hover:text-ink-1',
+                        densePinRail
+                          ? 'h-[15px] min-w-[17px] text-[9px]'
+                          : 'h-[15px] min-w-[15px] text-[9px]'
+                      )}
+                    >
+                      {pin.slot}
+                    </span>
                   </div>
                 )
               })}
             </div>
-          </form>
-        ) : null}
-
-        {/* AI mode chat history */}
-        {showChatHistory ? (
-          <div
-            className="flex min-h-0 flex-1 flex-col"
-            onWheelCapture={() => setFollowSearchSelection(false)}
-            onMouseLeave={() => {
-              setFollowSearchSelection(false)
-              setSelectedSearch(-1)
-            }}
-          >
-            <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
-              <div className="mb-2 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-300">
-                Recent Chats
-              </div>
-              <GlideList
-                selectedIndex={selectedSearch}
-                itemCount={filteredChatHistory.length}
-                followSelected={followSearchSelection}
+            {draggingPinId ? (
+              <div
+                aria-hidden
+                className={cx(
+                  'pointer-events-none absolute bottom-1 left-1 right-1 grid h-8 place-items-center rounded-tezbar-row border border-dashed transition',
+                  pinUnpinDropActive
+                    ? 'border-rose-300/55 bg-rose-400/15 text-rose-200 shadow-[0_0_14px_rgba(251,113,133,0.18)]'
+                    : 'border-white/10 bg-white/[0.025] text-ink-4/70'
+                )}
               >
-                {filteredChatHistory.map((chat, i) => (
-                  <li key={chat.id} className="relative z-[1]">
-                    <button
-                      type="button"
-                      className="group relative flex w-full items-center gap-3 rounded-tezbar-row px-3 py-2 text-left transition"
-                      onMouseMove={() => {
-                        setFollowSearchSelection(false)
-                        setSelectedSearch(i)
-                      }}
-                      onMouseDown={(ev) => ev.preventDefault()}
-                      onClick={() => {
-                        onOpenAiChat({ kind: 'resume', sessionId: chat.id })
-                        setValue('  ')
-                      }}
-                    >
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-300 group-hover:bg-violet-500/20">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                          <path
-                            d="M7 11.5c2.485 0 4.5-2.015 4.5-4.5S9.485 2.5 7 2.5 2.5 4.515 2.5 7c0 1.05.36 2.015.964 2.783L3 11l1.217-.464c.768.604 1.733.964 2.783.964z"
-                            stroke="currentColor"
-                            strokeWidth="1.2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </div>
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate text-[13px] font-medium text-ink-1">
-                          {chat.title || 'Untitled Chat'}
-                        </span>
-                        <span className="truncate text-[11px] text-ink-3">
-                          {chat.preview || 'No preview available'}
-                        </span>
-                      </div>
-                      <div className="shrink-0 text-[10px] font-medium text-ink-4">
-                        {new Date(chat.updatedAt).toLocaleDateString([], {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </GlideList>
-            </div>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path
+                    d="M3.25 4.25h7.5M5.25 4.25V3h3.5v1.25M4.25 4.25l.5 7h4.5l.5-7M6 6.25v3M8 6.25v3"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
-        {/* Search results — grows to fill space below pinned / other chrome */}
-        {showSearchResults ? (
-          <div
-            className="flex min-h-0 flex-1 flex-col"
-            onWheelCapture={() => setFollowSearchSelection(false)}
-            onMouseLeave={() => {
-              setFollowSearchSelection(false)
-              setSelectedSearch(-1)
-            }}
-          >
-            <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
-              <GlideList
-                selectedIndex={selectedSearch}
-                itemCount={visibleSearchCount}
-                followSelected={followSearchSelection}
-                className="min-h-0 flex-1 overflow-y-auto"
-              >
-                {visibleSearchResults.map((item, i) => {
-                  const iconAsset = searchResultIconAsset(item)
-                  const commandIcon = commandIconForResult(item)
-                  const pinnedMeta = pinnedMetaById.get(item.id)
-                  const isCalc = item.category === 'calculator'
-                  const isColorConversion = item.category === 'color-converter'
-                  const isCurrencyRow = isCalc && item.id.startsWith('currency:')
-                  const colorSwatch =
-                    isColorConversion && item.action.type === 'copy-text'
-                      ? item.action.text
-                      : item.title
+        <div className="flex min-h-0 flex-1 flex-col gap-[var(--s-2)] overflow-hidden">
+          {/* File and application completion suggestions */}
+          {showSuggestions ? (
+            <div
+              className="glass-card animate-tezbar-scale-in flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2"
+              onWheelCapture={() => setFollowSuggestionSelection(false)}
+              onMouseLeave={() => {
+                setFollowSuggestionSelection(false)
+                setSelectedSuggestion(-1)
+              }}
+            >
+              {isApplicationInput ? (
+                <ApplicationGrid
+                  items={suggestions}
+                  selectedIndex={selectedSuggestion}
+                  columns={APPLICATIONS_GRID_COLUMNS}
+                  onHover={(i) => {
+                    setFollowSuggestionSelection(false)
+                    setSelectedSuggestion(i)
+                  }}
+                  onActivate={(item) => completePathInput(item)}
+                />
+              ) : (
+                <GlideList
+                  selectedIndex={selectedSuggestion}
+                  itemCount={suggestions.length}
+                  followSelected={followSuggestionSelection}
+                  className="min-h-0 flex-1 overflow-y-auto"
+                >
+                  {suggestions.map((item, i) => {
+                    const iconAsset = completionIconAsset(item)
+                    const sectionLabel =
+                      i === 0 || suggestions[i - 1]?.section !== item.section
+                        ? pathCompletionSectionLabel(item.section)
+                        : null
+                    return (
+                      <li key={item.id} className="relative z-[1]">
+                        {sectionLabel ? (
+                          <div className="px-3 pb-1 pt-2 text-[9.5px] font-bold uppercase tracking-[0.16em] text-ink-4">
+                            {sectionLabel}
+                          </div>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="relative flex w-full items-center justify-between gap-3 rounded-tezbar-row px-3 py-2 text-left text-[13px] text-ink-2 transition hover:text-ink-1"
+                          onMouseMove={() => {
+                            setFollowSuggestionSelection(false)
+                            setSelectedSuggestion(i)
+                          }}
+                          onMouseDown={(ev) => ev.preventDefault()}
+                          onClick={() => completePathInput(item)}
+                        >
+                          <span className="flex min-w-0 flex-1 items-center gap-3">
+                            <ListItemIcon
+                              kind={item.kind}
+                              iconDataUrl={item.iconDataUrl}
+                              assetKind={iconAsset?.kind}
+                              assetPath={iconAsset?.path}
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-mono text-[12.5px] tracking-tight text-ink-1">
+                                {item.title}
+                              </span>
+                              <span className="mt-0.5 block truncate text-[10.5px] text-ink-4">
+                                {item.subtitle}
+                              </span>
+                            </span>
+                          </span>
+                          <span className="ml-3 shrink-0 text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-4">
+                            {item.badge ??
+                              (item.kind === 'directory'
+                                ? 'Folder'
+                                : item.kind === 'application'
+                                  ? 'Open With'
+                                  : 'File')}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </GlideList>
+              )}
+            </div>
+          ) : null}
+
+          {/* Pending extension action form */}
+          {pendingAction ? (
+            <form
+              onSubmit={(ev) => {
+                ev.preventDefault()
+                void submitPendingAction()
+              }}
+              className="glass-card animate-tezbar-scale-in px-3 py-2.5"
+              style={{
+                boxShadow:
+                  'inset 0 1px 0 rgba(52, 211, 153, 0.12), inset 0 0 0 1px rgba(52, 211, 153, 0.25)',
+              }}
+            >
+              <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-tight text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                {pendingAction.title}
+                <span className="text-ink-4">·</span>
+                <span className="font-normal text-ink-3">
+                  {pendingAction.commandArgumentDefinitions.length} field
+                  {pendingAction.commandArgumentDefinitions.length === 1 ? '' : 's'}
+                </span>
+              </p>
+              <div className="space-y-2">
+                {pendingAction.commandArgumentDefinitions.map((arg, index) => {
+                  const fieldType = arg.type === 'dropdown' ? 'dropdown' : 'text'
+                  const label = arg.title || arg.name
+                  const placeholder = arg.placeholder || arg.title || arg.name
+                  const currentValue = argumentValues[arg.name] ?? ''
+
+                  const onKeyDown = (
+                    e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>
+                  ): void => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault()
+                      cancelPendingAction()
+                      return
+                    }
+                    if (e.key === 'Tab') {
+                      e.preventDefault()
+                      const nextIndex = e.shiftKey ? index - 1 : index + 1
+                      if (
+                        nextIndex >= 0 &&
+                        nextIndex < pendingAction.commandArgumentDefinitions.length
+                      ) {
+                        argInputRefs.current[nextIndex]?.focus()
+                      } else {
+                        focusCommandInput()
+                      }
+                      return
+                    }
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      if (pendingColorConversionRows.length > 0) {
+                        const selected =
+                          pendingColorConversionRows[selectedSearch] ??
+                          pendingColorConversionRows[0]
+                        if (selected) {
+                          void runSelectedSearchResult(selected, selectedSearch + 1)
+                          return
+                        }
+                      }
+                      void submitPendingAction()
+                    }
+                  }
+
                   return (
-                    <li key={item.id} className="relative z-[1]">
+                    <div
+                      key={`${pendingAction.commandName}:${arg.name}`}
+                      className="flex items-center gap-3"
+                    >
+                      <span className="w-[88px] shrink-0 text-[11px] font-medium text-ink-3">
+                        {label}
+                        {arg.required ? <span className="text-emerald-400/80"> *</span> : null}
+                      </span>
+                      {fieldType === 'dropdown' ? (
+                        <SelectField
+                          ref={(el) => {
+                            argInputRefs.current[index] = el
+                          }}
+                          value={currentValue}
+                          onChange={(e) => {
+                            const next = e.target.value
+                            setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
+                            if (arg.name === pendingColorArgumentName) setSelectedSearch(0)
+                          }}
+                          onKeyDown={onKeyDown}
+                          className="min-w-0 flex-1"
+                        >
+                          <option value="">Select…</option>
+                          {(arg.data || []).map((option) => {
+                            const optionValue = String(option?.value ?? '')
+                            const optionTitle = option?.title || optionValue
+                            return (
+                              <option key={`${arg.name}:${optionValue}`} value={optionValue}>
+                                {optionTitle}
+                              </option>
+                            )
+                          })}
+                        </SelectField>
+                      ) : (
+                        <TextField
+                          ref={(el) => {
+                            argInputRefs.current[index] = el
+                          }}
+                          type={fieldType}
+                          value={currentValue}
+                          onChange={(e) => {
+                            const next = e.target.value
+                            setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
+                            if (arg.name === pendingColorArgumentName) setSelectedSearch(0)
+                          }}
+                          onKeyDown={onKeyDown}
+                          placeholder={placeholder}
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="min-w-0 flex-1"
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </form>
+          ) : null}
+
+          {/* AI mode chat history */}
+          {showChatHistory ? (
+            <div
+              className="flex min-h-0 flex-1 flex-col"
+              onWheelCapture={() => setFollowSearchSelection(false)}
+              onMouseLeave={() => {
+                setFollowSearchSelection(false)
+              }}
+            >
+              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+                <div className="mb-2 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-300">
+                  Recent Chats
+                </div>
+                <GlideList
+                  selectedIndex={selectedSearch}
+                  itemCount={filteredChatHistory.length}
+                  followSelected={followSearchSelection}
+                >
+                  {filteredChatHistory.map((chat, i) => (
+                    <li key={chat.id} className="relative z-[1]">
                       <button
                         type="button"
-                        className={cx(
-                          'relative flex w-full items-center justify-between gap-3 rounded-tezbar-row text-left transition',
-                          isCalc || isColorConversion ? 'px-3 py-2.5' : 'px-3 py-2'
-                        )}
+                        className="group relative flex w-full items-center gap-3 rounded-tezbar-row px-3 py-2 text-left transition"
                         onMouseMove={() => {
                           setFollowSearchSelection(false)
                           setSelectedSearch(i)
                         }}
                         onMouseDown={(ev) => ev.preventDefault()}
                         onClick={() => {
-                          setSelectedSearch(i)
-                          void runSelectedSearchResult(item, i + 1)
+                          onOpenAiChat({ kind: 'resume', sessionId: chat.id })
+                          setValue('  ')
                         }}
                       >
-                        {isCalc || isColorConversion ? (
-                          <>
-                            <span className="flex min-w-0 flex-1 items-center gap-2.5">
-                              <span
-                                aria-hidden
-                                className="grid h-7 w-7 shrink-0 place-items-center rounded-tezbar-chip border border-white/10 bg-white/[0.04] text-ink-3"
-                              >
-                                {isColorConversion ? (
-                                  <span
-                                    className="h-[18px] w-[18px] rounded-full border border-white/30 shadow-[0_0_14px_rgba(255,255,255,0.18)]"
-                                    style={{ background: colorSwatch }}
-                                  />
-                                ) : isCurrencyRow ? (
-                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                    <circle
-                                      cx="7"
-                                      cy="7"
-                                      r="5.25"
-                                      stroke="currentColor"
-                                      strokeWidth="1.1"
-                                    />
-                                    <path
-                                      d="M9 5.25c-.4-.55-1.1-.95-2-.95-1.1 0-2 .55-2 1.4 0 2 4 1 4 3 0 .85-.9 1.4-2 1.4-.9 0-1.6-.4-2-.95"
-                                      stroke="currentColor"
-                                      strokeWidth="1.1"
-                                      strokeLinecap="round"
-                                    />
-                                    <path
-                                      d="M7 3.25v7.5"
-                                      stroke="currentColor"
-                                      strokeWidth="1.1"
-                                      strokeLinecap="round"
-                                    />
-                                  </svg>
-                                ) : (
-                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                    <rect
-                                      x="2.5"
-                                      y="1.5"
-                                      width="9"
-                                      height="11"
-                                      rx="1.5"
-                                      stroke="currentColor"
-                                      strokeWidth="1.1"
-                                    />
-                                    <rect
-                                      x="4.25"
-                                      y="3.25"
-                                      width="5.5"
-                                      height="2"
-                                      rx="0.4"
-                                      fill="currentColor"
-                                    />
-                                    <circle cx="5" cy="7.5" r="0.6" fill="currentColor" />
-                                    <circle cx="7" cy="7.5" r="0.6" fill="currentColor" />
-                                    <circle cx="9" cy="7.5" r="0.6" fill="currentColor" />
-                                    <circle cx="5" cy="9.75" r="0.6" fill="currentColor" />
-                                    <circle cx="7" cy="9.75" r="0.6" fill="currentColor" />
-                                    <circle cx="9" cy="9.75" r="0.6" fill="currentColor" />
-                                  </svg>
-                                )}
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate font-mono text-[15px] font-semibold tabular-nums text-ink-1">
-                                  {item.title}
-                                </span>
-                                <span className="mt-0.5 block truncate text-[11px] text-ink-3">
-                                  <span className="text-ink-4">
-                                    {isColorConversion
-                                      ? 'Color'
-                                      : isCurrencyRow
-                                        ? 'Currency'
-                                        : 'Calculator'}
-                                  </span>
-                                  <span className="mx-1.5 text-ink-4">·</span>
-                                  <span className="font-mono">{item.subtitle}</span>
-                                </span>
-                              </span>
-                            </span>
-                            <span className="shrink-0 flex items-center gap-1.5 text-[10px] font-mono text-ink-3">
-                              <Kbd>↵</Kbd>
-                              <span>copy</span>
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="flex min-w-0 flex-1 items-center gap-3">
-                              <ListItemIcon
-                                kind={item.category}
-                                iconDataUrl={item.iconDataUrl}
-                                assetKind={iconAsset?.kind}
-                                assetPath={iconAsset?.path}
-                                commandIcon={commandIcon}
-                              />
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-[13px] font-medium text-ink-1">
-                                  {item.title}
-                                </span>
-                                <span className="mt-0.5 block truncate text-[11px] text-ink-3">
-                                  <span className="text-ink-4">{item.category}</span>
-                                  {item.subtitle ? (
-                                    <span className="mx-1.5 text-ink-4">·</span>
-                                  ) : null}
-                                  {item.subtitle}
-                                </span>
-                              </span>
-                            </span>
-                            <span className="shrink-0 flex items-center gap-1.5">
-                              {pinnedMeta ? (
-                                <span className="inline-flex items-center gap-1 rounded-tezbar-chip border border-amber-300/30 bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-100/95">
-                                  <span className="text-[11px] leading-none">
-                                    {pinnedMeta.icon}
-                                  </span>
-                                  <Kbd>⌥</Kbd>
-                                  <Kbd>{pinnedMeta.slot}</Kbd>
-                                </span>
-                              ) : null}
-                              {i === selectedSearch ? (
-                                <span className="text-[10px] font-mono text-ink-3">
-                                  <Kbd>↵</Kbd>
-                                </span>
-                              ) : null}
-                            </span>
-                          </>
-                        )}
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-300 group-hover:bg-violet-500/20">
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                            <path
+                              d="M7 11.5c2.485 0 4.5-2.015 4.5-4.5S9.485 2.5 7 2.5 2.5 4.515 2.5 7c0 1.05.36 2.015.964 2.783L3 11l1.217-.464c.768.604 1.733.964 2.783.964z"
+                              stroke="currentColor"
+                              strokeWidth="1.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate text-[13px] font-medium text-ink-1">
+                            {chat.title || 'Untitled Chat'}
+                          </span>
+                          <span className="truncate text-[11px] text-ink-3">
+                            {chat.preview || 'No preview available'}
+                          </span>
+                        </div>
+                        <div className="shrink-0 text-[10px] font-medium text-ink-4">
+                          {new Date(chat.updatedAt).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </div>
                       </button>
                     </li>
-                  )
-                })}
-              </GlideList>
+                  ))}
+                </GlideList>
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {/* Answer stream */}
-        {showAnswer ? (
-          <div className="glass-card animate-tezbar-scale-in px-4 py-3">
-            {!isStreaming && streamText ? (
-              <div className="mb-2 flex justify-end">
-                <button
-                  type="button"
-                  className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-2"
-                  onClick={() => {
-                    void speakAnswerText()
-                  }}
+          {/* Terminal sessions */}
+          {showTerminalSessions ? (
+            <div
+              className="flex min-h-0 flex-1 flex-col"
+              onWheelCapture={() => setFollowSearchSelection(false)}
+              onMouseLeave={() => {
+                setFollowSearchSelection(false)
+                setSelectedSearch(-1)
+              }}
+            >
+              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+                <div className="mb-2 flex items-center justify-between px-3 pt-1">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">
+                      Terminal Sessions
+                    </div>
+                    <div className="mt-0.5 text-[10.5px] text-ink-4">
+                      {terminalSessions.filter((session) => session.status === 'running').length} running
+                    </div>
+                  </div>
+                  <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-ink-4">
+                    Enter restores · type to filter
+                  </span>
+                </div>
+                <GlideList
+                  selectedIndex={terminalSelectedIndex}
+                  itemCount={terminalSessionCount === 0 ? 1 : terminalSessionCount}
+                  followSelected={followSearchSelection}
+                  className="min-h-0 flex-1 overflow-y-auto"
                 >
-                  Read aloud
-                </button>
+                  {terminalSessionCount === 0 ? (
+                    <li className="relative z-[1]">
+                      <div className="mx-1 rounded-tezbar-row border border-white/[0.06] bg-white/[0.03] px-3 py-3 text-[12px] text-ink-4">
+                        No saved terminal sessions yet. Press Enter to start a new terminal.
+                      </div>
+                    </li>
+                  ) : null}
+                  {orderedTerminalSessions.map((session, i) => {
+                    const running = session.status === 'running'
+                    return (
+                      <li key={session.sessionId} className="relative z-[1]">
+                        <button
+                          type="button"
+                          className={cx(
+                            'relative flex w-full items-center justify-between gap-3 rounded-tezbar-row px-3 py-2.5 text-left transition',
+                            i === terminalSelectedIndex
+                              ? 'bg-emerald-400/[0.08] text-ink-1'
+                              : 'text-ink-3 hover:bg-white/[0.05] hover:text-ink-1',
+                          )}
+                          onMouseMove={() => {
+                            setFollowSearchSelection(false)
+                            setSelectedSearch(i)
+                          }}
+                          onMouseDown={(ev) => ev.preventDefault()}
+                          onClick={() => openTerminalSession(session)}
+                        >
+                          <span className="flex min-w-0 flex-1 items-center gap-3">
+                            <span
+                              className={cx(
+                                'grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border',
+                                running
+                                  ? 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200'
+                                  : 'border-white/10 bg-white/[0.035] text-ink-4',
+                              )}
+                            >
+                              <TerminalIcon />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className={cx(
+                                    'h-1.5 w-1.5 shrink-0 rounded-full',
+                                    running
+                                      ? 'bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]'
+                                      : 'bg-white/25',
+                                  )}
+                                />
+                                <span className="truncate text-[13px] font-semibold text-ink-1">
+                                  {session.name}
+                                </span>
+                                {pinnedTerminalSessionIds.includes(session.sessionId) ? (
+                                  <span className="shrink-0 text-[10px] text-amber-200" aria-label="Pinned">
+                                    ★
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="mt-0.5 block truncate font-mono text-[10.5px] text-ink-4">
+                                {terminalSessionSubtitle(session)}
+                              </span>
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-right">
+                            <span
+                              className={cx(
+                                'block text-[10px] font-semibold uppercase tracking-[0.12em]',
+                                running ? 'text-emerald-300' : 'text-ink-4',
+                              )}
+                            >
+                              {running ? 'Running' : 'Saved'}
+                            </span>
+                            <span className="mt-1 block font-mono text-[10px] text-ink-4">
+                              {terminalSessionAge(session.updatedAt)}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </GlideList>
               </div>
-            ) : null}
-            {isStreaming && !streamText ? (
-              <p className="tezbar-thinking flex items-center gap-2 text-[12px] text-ink-3">
-                <span className="inline-flex gap-1">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:120ms]" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:240ms]" />
-                </span>
-                Thinking
-              </p>
-            ) : (
-              <div className="max-h-48 overflow-y-auto">
-                {streamText ? (
-                  <Markdown text={streamText} streaming={isStreaming} />
-                ) : emptyAnswer ? (
-                  <p className="text-[13.5px] leading-[1.55] text-ink-1">
-                    No response from the selected provider. Check your provider settings and try
-                    again.
-                  </p>
-                ) : null}
-              </div>
-            )}
-            {streamError ? (
-              <p className="mt-2 text-[11.5px] text-rose-300" role="alert">
-                {streamError}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
+            </div>
+          ) : null}
 
-        {/* Inline status line (errors, intent, action msg) */}
-        {error || lastIntent || actionMsg ? (
-          <div className="px-1">
-            {error ? <Message tone="error">{error}</Message> : null}
-            {lastIntent && !error ? (
-              <Message tone="info">
-                {lastIntent.type}
-                {lastIntent.type === 'extension' && 'name' in lastIntent
-                  ? ` · ${lastIntent.name}`
-                  : ''}
-              </Message>
-            ) : null}
-            {actionMsg ? <Message>{actionMsg}</Message> : null}
-          </div>
-        ) : null}
+          {/* Search results — grows to fill space below pinned / other chrome */}
+          {showSearchResults ? (
+            <div
+              className="flex min-h-0 flex-1 flex-col"
+              onWheelCapture={() => setFollowSearchSelection(false)}
+              onMouseLeave={() => {
+                setFollowSearchSelection(false)
+                setSelectedSearch(-1)
+              }}
+            >
+              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+                <GlideList
+                  selectedIndex={selectedSearch}
+                  itemCount={visibleSearchCount}
+                  followSelected={followSearchSelection}
+                  className="min-h-0 flex-1 overflow-y-auto"
+                >
+                  {visibleSearchResults.map((item, i) => {
+                    const iconAsset = searchResultIconAsset(item)
+                    const commandIcon = commandIconForResult(item)
+                    const pinnedMeta = pinnedMetaById.get(item.id)
+                    const canPinResult = isPinnableSearchResult(item)
+                    const isCalc = item.category === 'calculator'
+                    const isColorConversion = item.category === 'color-converter'
+                    const isCurrencyRow = isCalc && item.id.startsWith('currency:')
+                    const colorSwatch =
+                      isColorConversion && item.action.type === 'copy-text'
+                        ? item.action.text
+                        : item.title
+                    return (
+                      <li key={item.id} className="relative z-[1]">
+                        <button
+                          type="button"
+                          className={cx(
+                            'relative flex w-full items-center justify-between gap-3 rounded-tezbar-row text-left transition',
+                            isCalc || isColorConversion ? 'px-3 py-2.5' : 'px-3 py-2',
+                            canPinResult ? 'cursor-grab active:cursor-grabbing' : ''
+                          )}
+                          onPointerDown={(event) => {
+                            beginSearchResultPointerDrag(event, item)
+                          }}
+                          onPointerMove={moveSearchResultPointerDrag}
+                          onPointerUp={endSearchResultPointerDrag}
+                          onPointerCancel={cancelSearchResultPointerDrag}
+                          onLostPointerCapture={() => {
+                            if (!resultPointerActiveRef.current) return
+                            resultPointerActiveRef.current = false
+                            resultPointerDraggedRef.current = false
+                            updateDraggingSearchResult(null)
+                            updatePinDropIndex(null)
+                          }}
+                          onMouseMove={() => {
+                            setFollowSearchSelection(false)
+                            setSelectedSearch(i)
+                          }}
+                          onMouseDown={(ev) => ev.preventDefault()}
+                          onClick={(event) => {
+                            if (suppressNextSearchResultClickRef.current) {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              suppressNextSearchResultClickRef.current = false
+                              return
+                            }
+                            setSelectedSearch(i)
+                            void runSelectedSearchResult(item, i + 1)
+                          }}
+                        >
+                          {pinnedMeta ? (
+                            <span
+                              aria-hidden
+                              className="absolute bottom-2 left-0 top-2 w-[3px] rounded-full bg-amber-300/80 shadow-[0_0_12px_rgba(252,211,77,0.35)]"
+                            />
+                          ) : null}
+                          {isCalc || isColorConversion ? (
+                            <>
+                              <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                                <span
+                                  aria-hidden
+                                  className="grid h-7 w-7 shrink-0 place-items-center rounded-tezbar-chip border border-white/10 bg-white/[0.04] text-ink-3"
+                                >
+                                  {isColorConversion ? (
+                                    <span
+                                      className="h-[18px] w-[18px] rounded-full border border-white/30 shadow-[0_0_14px_rgba(255,255,255,0.18)]"
+                                      style={{ background: colorSwatch }}
+                                    />
+                                  ) : isCurrencyRow ? (
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                      <circle
+                                        cx="7"
+                                        cy="7"
+                                        r="5.25"
+                                        stroke="currentColor"
+                                        strokeWidth="1.1"
+                                      />
+                                      <path
+                                        d="M9 5.25c-.4-.55-1.1-.95-2-.95-1.1 0-2 .55-2 1.4 0 2 4 1 4 3 0 .85-.9 1.4-2 1.4-.9 0-1.6-.4-2-.95"
+                                        stroke="currentColor"
+                                        strokeWidth="1.1"
+                                        strokeLinecap="round"
+                                      />
+                                      <path
+                                        d="M7 3.25v7.5"
+                                        stroke="currentColor"
+                                        strokeWidth="1.1"
+                                        strokeLinecap="round"
+                                      />
+                                    </svg>
+                                  ) : (
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                      <rect
+                                        x="2.5"
+                                        y="1.5"
+                                        width="9"
+                                        height="11"
+                                        rx="1.5"
+                                        stroke="currentColor"
+                                        strokeWidth="1.1"
+                                      />
+                                      <rect
+                                        x="4.25"
+                                        y="3.25"
+                                        width="5.5"
+                                        height="2"
+                                        rx="0.4"
+                                        fill="currentColor"
+                                      />
+                                      <circle cx="5" cy="7.5" r="0.6" fill="currentColor" />
+                                      <circle cx="7" cy="7.5" r="0.6" fill="currentColor" />
+                                      <circle cx="9" cy="7.5" r="0.6" fill="currentColor" />
+                                      <circle cx="5" cy="9.75" r="0.6" fill="currentColor" />
+                                      <circle cx="7" cy="9.75" r="0.6" fill="currentColor" />
+                                      <circle cx="9" cy="9.75" r="0.6" fill="currentColor" />
+                                    </svg>
+                                  )}
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate font-mono text-[15px] font-semibold tabular-nums text-ink-1">
+                                    {item.title}
+                                  </span>
+                                  <span className="mt-0.5 block truncate text-[11px] text-ink-3">
+                                    <span className="text-ink-4">
+                                      {isColorConversion
+                                        ? 'Color'
+                                        : isCurrencyRow
+                                          ? 'Currency'
+                                          : 'Calculator'}
+                                    </span>
+                                    <span className="mx-1.5 text-ink-4">·</span>
+                                    <span className="font-mono">{item.subtitle}</span>
+                                  </span>
+                                </span>
+                              </span>
+                              <span className="shrink-0 flex items-center gap-1.5 text-[10px] font-mono text-ink-3">
+                                <Kbd>↵</Kbd>
+                                <span>copy</span>
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="flex min-w-0 flex-1 items-center gap-3">
+                                <ListItemIcon
+                                  kind={item.category}
+                                  iconDataUrl={item.iconDataUrl}
+                                  assetKind={iconAsset?.kind}
+                                  assetPath={iconAsset?.path}
+                                  commandIcon={commandIcon}
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-[13px] font-medium text-ink-1">
+                                    {item.title}
+                                  </span>
+                                  <span className="mt-0.5 block truncate text-[11px] text-ink-3">
+                                    <span className="text-ink-4">{item.category}</span>
+                                    {item.subtitle ? (
+                                      <span className="mx-1.5 text-ink-4">·</span>
+                                    ) : null}
+                                    {item.subtitle}
+                                  </span>
+                                </span>
+                              </span>
+                              <span className="shrink-0 flex items-center gap-1.5">
+                                {pinnedMeta ? (
+                                  <span className="inline-flex items-center gap-1 rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-ink-3">
+                                    <Kbd>⌥</Kbd>
+                                    <Kbd>{pinnedMeta.slot}</Kbd>
+                                  </span>
+                                ) : null}
+                                {i === selectedSearch ? (
+                                  <span className="text-[10px] font-mono text-ink-3">
+                                    <Kbd>↵</Kbd>
+                                  </span>
+                                ) : null}
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </GlideList>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Answer stream */}
+          {showAnswer ? (
+            <div className="glass-card animate-tezbar-scale-in px-4 py-3">
+              {!isStreaming && streamText ? (
+                <div className="mb-2 flex justify-end">
+                  <button
+                    type="button"
+                    className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-2"
+                    onClick={() => {
+                      void speakAnswerText()
+                    }}
+                  >
+                    Read aloud
+                  </button>
+                </div>
+              ) : null}
+              {isStreaming && !streamText ? (
+                <p className="tezbar-thinking flex items-center gap-2 text-[12px] text-ink-3">
+                  <span className="inline-flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:120ms]" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:240ms]" />
+                  </span>
+                  Thinking
+                </p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto">
+                  {streamText ? (
+                    <Markdown text={streamText} streaming={isStreaming} />
+                  ) : emptyAnswer ? (
+                    <p className="text-[13.5px] leading-[1.55] text-ink-1">
+                      No response from the selected provider. Check your provider settings and try
+                      again.
+                    </p>
+                  ) : null}
+                </div>
+              )}
+              {streamError ? (
+                <p className="mt-2 text-[11.5px] text-rose-300" role="alert">
+                  {streamError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Inline status line (errors, intent, action msg) */}
+          {error || lastIntent || actionMsg ? (
+            <div className="px-1">
+              {error ? <Message tone="error">{error}</Message> : null}
+              {lastIntent && !error ? (
+                <Message tone="info">
+                  {lastIntent.type}
+                  {lastIntent.type === 'extension' && 'name' in lastIntent
+                    ? ` · ${lastIntent.name}`
+                    : ''}
+                </Message>
+              ) : null}
+              {actionMsg ? <Message>{actionMsg}</Message> : null}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* Footer hint bar — same glass-card shell as Clipboard / other views */}
@@ -3227,7 +3995,18 @@ export default function CommandBar({
         )}
       >
         <HintBar>
-          {isAiMode ? (
+          {terminalMode ? (
+            <>
+              <Hint label="Open" keys={<><Kbd>⌘</Kbd><Kbd>O</Kbd></>} />
+              <Hint label="Stop" keys={<><Kbd>⌘</Kbd><Kbd>X</Kbd></>} />
+              <Hint label="Delete" keys={<><Kbd>⌘</Kbd><Kbd>⌫</Kbd></>} />
+              <Hint label="Pin / Unpin" keys={<><Kbd>⌘</Kbd><Kbd>P</Kbd></>} />
+              <Hint label="Settings" keys={<><Kbd>⌘</Kbd><Kbd>K</Kbd></>} />
+              <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
+              <Hint label="Open / New" keys={<Kbd>↵</Kbd>} />
+              <Hint label="Close" keys={<Kbd>Esc</Kbd>} />
+            </>
+          ) : isAiMode ? (
             <>
               <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
               <Hint
@@ -3294,7 +4073,7 @@ export default function CommandBar({
                     keys={
                       <>
                         <Kbd>⌥</Kbd>
-                        <Kbd>1-9</Kbd>
+                        <Kbd>1-12</Kbd>
                       </>
                     }
                   />
@@ -3319,24 +4098,101 @@ export default function CommandBar({
                 }
               />
               {!isCompletionInput ? <Hint label="Run" keys={<Kbd>↵</Kbd>} /> : null}
-              <Hint
-                label={pinPickerTarget ? 'Cancel picker' : 'Close'}
-                keys={
-                  pinPickerTarget ? (
-                    <>
-                      <Kbd>Esc</Kbd>
-                      <span className="text-ink-4">·</span>
-                      <Kbd>Tab</Kbd>
-                    </>
-                  ) : (
-                    <Kbd>Esc</Kbd>
-                  )
-                }
-              />
+              <Hint label="Close" keys={<Kbd>Esc</Kbd>} />
             </>
           )}
         </HintBar>
       </div>
+
+      {terminalSettingsOpen ? (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/35 p-6 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setTerminalSettingsOpen(false)
+          }}
+        >
+          <form
+            className="w-full max-w-[440px] rounded-[18px] border border-white/[0.1] bg-[#10131d]/96 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.5)]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="terminal-defaults-title"
+            onSubmit={(event) => {
+              event.preventDefault()
+              saveTerminalSettings()
+            }}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 id="terminal-defaults-title" className="text-[14px] font-semibold text-ink-1">
+                  Terminal defaults
+                </h2>
+                <p className="mt-1 text-[11px] leading-4 text-ink-4">
+                  New sessions use these defaults. A long-running service can stay alive until you stop it.
+                </p>
+              </div>
+              <Kbd>Esc</Kbd>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block" htmlFor="terminal-default-save-for">
+                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+                  Keep session history
+                </span>
+                <SelectField
+                  id="terminal-default-save-for"
+                  value={terminalSettingsDraft.saveFor}
+                  onChange={(event) =>
+                    setTerminalSettingsDraft((current) => ({
+                      ...current,
+                      saveFor: event.target.value as TerminalSaveFor,
+                    }))
+                  }
+                >
+                  <option value="day">1 day</option>
+                  <option value="week">1 week</option>
+                  <option value="month">1 month</option>
+                  <option value="forever">Forever</option>
+                </SelectField>
+              </label>
+              <label className="block" htmlFor="terminal-default-keep-alive">
+                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+                  Keep process running
+                </span>
+                <SelectField
+                  id="terminal-default-keep-alive"
+                  value={terminalSettingsDraft.keepAliveFor}
+                  onChange={(event) =>
+                    setTerminalSettingsDraft((current) => ({
+                      ...current,
+                      keepAliveFor: event.target.value as TerminalKeepAliveFor,
+                    }))
+                  }
+                >
+                  <option value="3h">3 hours</option>
+                  <option value="8h">8 hours</option>
+                  <option value="day">1 day</option>
+                  <option value="until-stop">Until stopped</option>
+                </SelectField>
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-tezbar-chip border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1"
+                onClick={() => setTerminalSettingsOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="rounded-tezbar-chip border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-400/20"
+              >
+                Save defaults
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   )
 }

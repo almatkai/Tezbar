@@ -286,19 +286,6 @@ export default function ExtensionsSettingsTab({ onBrowseStore }: ExtensionsSetti
           setSelected((prev) => prev || { extName: firstSchema.extName })
         }
       }
-      // Expand all extensions by default
-      const expanded: Record<string, boolean> = {}
-      for (const schema of mergedSchemas) expanded[schema.extName] = true
-      setExpandedExtensions((prev) => {
-        const next = { ...expanded }
-        for (const key of Object.keys(prev)) {
-          const val = prev[key]
-          if (next[key] === undefined && val !== undefined) {
-            next[key] = val
-          }
-        }
-        return next
-      })
     } finally {
       setIsLoading(false)
     }
@@ -620,6 +607,8 @@ export default function ExtensionsSettingsTab({ onBrowseStore }: ExtensionsSetti
               <div key={schema.extName}>
                 {/* Extension header */}
                 <button
+                  type="button"
+                  aria-expanded={!!expandedExtensions[schema.extName]}
                   onClick={() => {
                     setSelected({ extName: schema.extName })
                     toggleExtensionExpanded(schema.extName)

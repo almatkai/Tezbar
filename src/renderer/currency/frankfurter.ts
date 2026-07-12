@@ -1,4 +1,4 @@
-import type { FrankfurterLatestResponse } from '../../preload/api'
+import type { FrankfurterLatestResponse } from '../../shared/desktop-api'
 
 /**
  * Reads ECB-backed rates from the main process (Node fetch, no CORS).

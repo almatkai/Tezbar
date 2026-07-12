@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, clipboard, nativeImage, shell } from '@tezbar/desktop-runtime'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { open as openFile, rm as removePath, writeFile } from 'node:fs/promises'
 import { execFile, spawn as nodeSpawn } from 'node:child_process'
@@ -2947,14 +2947,20 @@ function walkRuntimeNodes(
     return []
   }
 
-  if (typeName === 'List.Item' && options.listItemsSeen && options.listItemLimit) {
+  if (
+    (typeName === 'List.Item' || typeName === 'Grid.Item') &&
+    options.listItemsSeen &&
+    options.listItemLimit
+  ) {
     if (options.listItemsSeen.count >= options.listItemLimit) {
       return []
     }
     options.listItemsSeen.count += 1
   }
 
-  if (typeName === 'List' && typeof props.onSearchTextChange === 'function') {
+  const hasSearchTextChangeHandler =
+    (typeName === 'List' || typeName === 'Grid') && typeof props.onSearchTextChange === 'function'
+  if (hasSearchTextChangeHandler) {
     session.searchTextChangeHandler = props.onSearchTextChange as (text: string) => void
   }
 
@@ -3008,10 +3014,10 @@ function walkRuntimeNodes(
       )
     })
   }
-  if (typeName === 'List' && session.searchTextChangeHandler && sanitizedProps) {
+  if (hasSearchTextChangeHandler && sanitizedProps) {
     sanitizedProps.__hasServerSearch = true
   }
-  if (typeName === 'List' && props.pagination && typeof props.pagination === 'object') {
+  if ((typeName === 'List' || typeName === 'Grid') && props.pagination && typeof props.pagination === 'object') {
     const pagination = props.pagination as {
       hasMore?: unknown
       onLoadMore?: unknown
@@ -3021,16 +3027,17 @@ function walkRuntimeNodes(
       session.serverHasMore = pagination.hasMore === true
     }
   }
-  const listItemsTruncated = typeName === 'List' ? { value: false } : options.listItemsTruncated
+  const isSearchCollection = typeName === 'List' || typeName === 'Grid'
+  const listItemsTruncated = isSearchCollection ? { value: false } : options.listItemsTruncated
   const childOptions =
-    typeName === 'List'
+    isSearchCollection
       ? {
           ...options,
           listItemsSeen: { count: 0 },
           listItemLimit: session.listItemLimit,
           listItemsTruncated,
         }
-      : typeName === 'List.Section'
+      : typeName === 'List.Section' || typeName === 'Grid.Section'
         ? {
             ...options,
             listItemsSeen: options.listItemsSeen ?? { count: 0 },
@@ -3038,7 +3045,7 @@ function walkRuntimeNodes(
           }
         : options
   const children = walkRuntimeNodes(props.children, session, depth + 1, budget, childOptions)
-  if (typeName === 'List' && sanitizedProps && listItemsTruncated) {
+  if (isSearchCollection && sanitizedProps && listItemsTruncated) {
     sanitizedProps.__hasMore =
       session.serverHasMore ||
       (listItemsTruncated.value && session.listItemLimit < RUNTIME_COMPONENT_LIMIT)
@@ -3235,7 +3242,7 @@ export async function updateSearchText(
   }
 
   session.searchText = searchText
-  // Lists without an onSearchTextChange handler are filtered by the renderer.
+  // Lists and grids without an onSearchTextChange handler are filtered by the renderer.
   // Expose their complete dataset while searching so matches beyond the first
   // page are included without requiring the user to paginate manually.
   session.listItemLimit =
@@ -3831,6 +3838,10 @@ async function runCommandFromPackagePath(
   options?: { effectMode?: 'system' | 'record' }
 ): Promise<ExtensionRunCommandResult> {
   const packageRoot = dirname(packageJsonPath)
+  // Raycast guarantees that environment.supportPath exists before extension
+  // code runs. Some extensions initialize their backing files synchronously
+  // during module evaluation, so create it before bundling/executing the entry.
+  mkdirSync(join(packageRoot, '.tezbar-support'), { recursive: true })
   const pkg = parsePackageJson(packageJsonPath)
   const command = findCommandInManifest(pkg, commandName)
 

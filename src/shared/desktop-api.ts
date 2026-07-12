@@ -3,15 +3,15 @@ import type {
   AgentInputImage,
   AgentRunEvent,
   AgentRunRequest,
-} from '../shared/agent'
-import type { ChatSession, ChatSessionSummary, ChatTurn } from '../shared/chat'
-import type { Intent } from '../shared/intent'
-import type { ClipboardEntry, ClipboardImagePayload } from '../shared/clipboard'
+} from './agent'
+import type { ChatSession, ChatSessionSummary, ChatTurn } from './chat'
+import type { Intent } from './intent'
+import type { ClipboardEntry, ClipboardImagePayload } from './clipboard'
 import type {
   ExtensionIntegrityReport,
   ExtensionManifest,
   InstalledExtension,
-} from '../shared/extensions'
+} from './extensions'
 import type {
   ExtensionDisposeSessionRequest,
   ExtensionInvokeActionResult,
@@ -21,14 +21,14 @@ import type {
   ExtensionRunCommandResult,
   ExtensionSearchTextChangedResult,
   InstalledRegistryExtension,
-} from '../shared/extensionRuntime'
-import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
-import type { NativeCommandDescriptor } from '../shared/nativeCommands'
-import type { PermissionId, PermissionStatus, PermissionsSnapshot } from '../shared/permissions'
-import type { SafetyDescriptor, SafetyLogEntry } from '../shared/safety'
-import type { NamedPortEntry } from '../shared/portManager'
-import type { QuickNoteEntry } from '../shared/quickNotes'
-import type { SnippetListRow, SnippetWritePayload } from '../shared/snippets'
+} from './extensionRuntime'
+import type { LlmConfigRecord, ProviderId } from './llmConfig'
+import type { NativeCommandDescriptor } from './nativeCommands'
+import type { PermissionId, PermissionStatus, PermissionsSnapshot } from './permissions'
+import type { SafetyDescriptor, SafetyLogEntry } from './safety'
+import type { NamedPortEntry } from './portManager'
+import type { QuickNoteEntry } from './quickNotes'
+import type { SnippetListRow, SnippetWritePayload } from './snippets'
 import type {
   OpenPortProcess,
   PathCompletionItem,
@@ -37,15 +37,20 @@ import type {
   SearchExecuteContext,
   SearchExecuteResult,
   SearchResult,
-} from '../shared/search'
-import type { VoiceModel, VoiceModelId } from '../shared/voice'
+} from './search'
+import type { VoiceModel, VoiceModelId } from './voice'
 import type {
+  TerminalAttachRequest,
+  TerminalAttachResult,
   TerminalCreateRequest,
   TerminalCreateResult,
   TerminalDataEvent,
   TerminalExitEvent,
+  TerminalSessionsAction,
+  TerminalSessionSummary,
+  TerminalUpdateRequest,
   TerminalPromptInfo,
-} from '../shared/terminal'
+} from './terminal'
 
 export type ProviderConnectionStatuses = Record<ProviderId, boolean>
 
@@ -55,16 +60,17 @@ export type FrankfurterLatestResponse = {
   rates: Record<string, number>
 }
 
+/** Renderer-to-host API implemented by the Tauri bridge. */
 export type GithubPollResult =
   | { status: 'authorization_pending' }
   | { status: 'slow_down' }
   | {
-    status: 'success'
-    access_token: string
-    refresh_token?: string
-    expires_in?: number
-    client_id: string
-  }
+      status: 'success'
+      access_token: string
+      refresh_token?: string
+      expires_in?: number
+      client_id: string
+    }
   | { status: 'error'; error: string }
 
 export type HotkeyUpdateResult = {
@@ -182,6 +188,7 @@ export type RaymesApi = {
   listVoiceSttModes: () => Promise<string[]>
   listVoiceModels: () => Promise<VoiceModel[]>
   downloadVoiceModel: (modelId: VoiceModelId) => Promise<VoiceModel>
+  deleteVoiceModel: (modelId: VoiceModelId) => Promise<{ modelId: VoiceModelId }>
   getSelectedVoiceModel: () => Promise<{ modelId: VoiceModelId }>
   setSelectedVoiceModel: (modelId: VoiceModelId) => Promise<{ modelId: VoiceModelId }>
   onStreamToken: (listener: (token: string) => void) => () => void
@@ -209,7 +216,7 @@ export type RaymesApi = {
   onWindowSnapGuides: (
     listener: (payload: { visible: boolean; active: boolean }) => void
   ) => () => void
-  /** Alt+Space held after opening the launcher — same pipeline as the Hold to speak control. */
+  /** Configured launcher shortcut held after opening — same pipeline as Hold to speak. */
   onVoiceHotkeyHold: (listener: (payload: { phase: 'press' | 'release' }) => void) => () => void
   getPermissions: () => Promise<PermissionsSnapshot>
   requestPermission: (id: PermissionId) => Promise<PermissionStatus>
@@ -243,10 +250,20 @@ export type RaymesApi = {
   updateQuickNote: (createdAt: number, text: string) => Promise<boolean>
   deleteQuickNote: (createdAt: number) => Promise<boolean>
   terminalCreate: (request: TerminalCreateRequest) => Promise<TerminalCreateResult>
+  terminalAttach: (request: TerminalAttachRequest) => Promise<TerminalAttachResult | null>
+  terminalDetach: (sessionId: string) => Promise<boolean>
+  terminalList: () => Promise<TerminalSessionSummary[]>
+  terminalUpdate: (request: TerminalUpdateRequest) => Promise<TerminalSessionSummary | null>
   terminalWrite: (sessionId: string, data: string) => Promise<boolean>
   terminalResize: (sessionId: string, cols: number, rows: number) => Promise<boolean>
   terminalKill: (sessionId: string) => Promise<boolean>
+  terminalDelete: (sessionId: string) => Promise<boolean>
   getTerminalPromptInfo: () => Promise<TerminalPromptInfo>
+  terminalSessionsShow: () => Promise<void>
+  terminalSessionsHide: () => Promise<void>
+  terminalSessionsSync: () => Promise<void>
+  terminalSessionsAction: (action: TerminalSessionsAction) => Promise<void>
+  onTerminalSessionsAction: (listener: (action: TerminalSessionsAction) => void) => () => void
   onTerminalData: (listener: (event: TerminalDataEvent) => void) => () => void
   onTerminalExit: (listener: (event: TerminalExitEvent) => void) => () => void
   getStorageBreakdown: () => Promise<{
@@ -302,6 +319,7 @@ export type RaymesApi = {
     turn: ChatTurn
   }) => Promise<{ ok: boolean; error?: string }>
   chatUpdateTitle: (id: string, title: string) => Promise<{ ok: boolean }>
+  chatDeleteTurn: (sessionId: string, turnId: string) => Promise<{ ok: boolean; error?: string }>
   chatDelete: (id: string) => Promise<{ ok: boolean }>
   chatClear: () => Promise<{ ok: boolean }>
   /** Open extensions store surface in the main window. */
@@ -362,9 +380,7 @@ export type RaymesApi = {
     disabledCommands: Record<string, boolean>
   }>
   /** Save settings patch (aliases, etc.). */
-  saveSettings: (patch: {
-    commandAliases?: Record<string, string>
-  }) => Promise<{ ok: boolean }>
+  saveSettings: (patch: { commandAliases?: Record<string, string> }) => Promise<{ ok: boolean }>
   /** Fired when a command is triggered via its global hotkey (view mode only). */
   onRunExtensionCommandFromHotkey: (
     listener: (payload: { extensionId: string; commandName: string }) => void

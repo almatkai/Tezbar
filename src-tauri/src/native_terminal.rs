@@ -1,11 +1,14 @@
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
+
+const OUTPUT_REPLAY_LIMIT_BYTES: usize = 512 * 1024;
 
 pub struct NativeTerminalState {
     sessions: Mutex<HashMap<String, NativeTerminalSession>>,
@@ -25,6 +28,10 @@ struct NativeTerminalSession {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     killer: Box<dyn ChildKiller + Send + Sync>,
+    shell: String,
+    cwd: String,
+    output_chunks: VecDeque<String>,
+    output_bytes: usize,
 }
 
 #[derive(Deserialize)]
@@ -42,6 +49,23 @@ pub struct TerminalCreateResult {
     session_id: String,
     shell: String,
     cwd: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalAttachRequest {
+    session_id: String,
+    cols: u16,
+    rows: u16,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalAttachResult {
+    session_id: String,
+    shell: String,
+    cwd: String,
+    recent_output: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -96,6 +120,27 @@ fn pty_size(cols: u16, rows: u16) -> PtySize {
     }
 }
 
+fn now_millis() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0)
+}
+
+fn append_output(session: &mut NativeTerminalSession, data: String) {
+    session.output_bytes += data.len();
+    session.output_chunks.push_back(data);
+    while session.output_bytes > OUTPUT_REPLAY_LIMIT_BYTES && session.output_chunks.len() > 1 {
+        if let Some(removed) = session.output_chunks.pop_front() {
+            session.output_bytes = session.output_bytes.saturating_sub(removed.len());
+        }
+    }
+}
+
+fn recent_output(session: &NativeTerminalSession) -> String {
+    session.output_chunks.iter().cloned().collect()
+}
+
 #[tauri::command]
 pub fn native_terminal_create(
     app: AppHandle,
@@ -111,7 +156,7 @@ pub fn native_terminal_create(
         .master
         .try_clone_reader()
         .map_err(|error| format!("failed to open terminal output: {error}"))?;
-    let mut writer = pair
+    let writer = pair
         .master
         .take_writer()
         .map_err(|error| format!("failed to open terminal input: {error}"))?;
@@ -130,18 +175,11 @@ pub fn native_terminal_create(
         .map_err(|error| format!("failed to start shell: {error}"))?;
     drop(pair.slave);
 
-    if let Some(initial_command) = request.initial_command.filter(|value| !value.is_empty()) {
-        if let Err(error) = writer
-            .write_all(format!("{initial_command}\r").as_bytes())
-            .and_then(|_| writer.flush())
-        {
-            let _ = child.kill();
-            return Err(format!("failed to run initial command: {error}"));
-        }
-    }
+    let initial_command = request.initial_command.filter(|v| !v.is_empty());
 
     let session_id = format!(
-        "native-terminal-{}",
+        "native-terminal-{}-{}",
+        now_millis(),
         state.next_id.fetch_add(1, Ordering::Relaxed)
     );
     let killer = child.clone_killer();
@@ -151,6 +189,10 @@ pub fn native_terminal_create(
             master: pair.master,
             writer,
             killer,
+            shell: shell.clone(),
+            cwd: cwd.to_string_lossy().into_owned(),
+            output_chunks: VecDeque::new(),
+            output_bytes: 0,
         },
     );
 
@@ -158,15 +200,47 @@ pub fn native_terminal_create(
     let output_session_id = session_id.clone();
     std::thread::spawn(move || {
         let mut buffer = [0_u8; 16 * 1024];
+        let mut first_chunk = true;
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) | Err(_) => break,
                 Ok(count) => {
+                    // On the very first chunk of output the shell prompt is ready.
+                    // Write the initial command now so it is not swallowed by
+                    // shell initialisation (.zshrc / .zprofile loading).
+                    if first_chunk {
+                        first_chunk = false;
+                        if let Some(ref cmd) = initial_command {
+                            if let Some(session) = output_app
+                                .state::<NativeTerminalState>()
+                                .sessions
+                                .lock()
+                                .unwrap()
+                                .get_mut(&output_session_id)
+                            {
+                                let _ = session
+                                    .writer
+                                    .write_all(format!("{cmd}\r").as_bytes())
+                                    .and_then(|_| session.writer.flush());
+                            }
+                        }
+                    }
+
+                    let data = String::from_utf8_lossy(&buffer[..count]).into_owned();
+                    if let Some(session) = output_app
+                        .state::<NativeTerminalState>()
+                        .sessions
+                        .lock()
+                        .unwrap()
+                        .get_mut(&output_session_id)
+                    {
+                        append_output(session, data.clone());
+                    }
                     let _ = output_app.emit(
                         "terminal:data",
                         TerminalDataEvent {
                             session_id: output_session_id.clone(),
-                            data: String::from_utf8_lossy(&buffer[..count]).into_owned(),
+                            data,
                         },
                     );
                 }
@@ -202,6 +276,35 @@ pub fn native_terminal_create(
         shell,
         cwd: cwd.to_string_lossy().into_owned(),
     })
+}
+
+#[tauri::command]
+pub fn native_terminal_attach(
+    state: State<'_, NativeTerminalState>,
+    request: TerminalAttachRequest,
+) -> Result<Option<TerminalAttachResult>, String> {
+    let sessions = state.sessions.lock().unwrap();
+    let Some(session) = sessions.get(&request.session_id) else {
+        return Ok(None);
+    };
+    session
+        .master
+        .resize(pty_size(request.cols, request.rows))
+        .map_err(|error| format!("failed to resize terminal: {error}"))?;
+    Ok(Some(TerminalAttachResult {
+        session_id: request.session_id,
+        shell: session.shell.clone(),
+        cwd: session.cwd.clone(),
+        recent_output: recent_output(session),
+    }))
+}
+
+#[tauri::command]
+pub fn native_terminal_detach(
+    state: State<'_, NativeTerminalState>,
+    session_id: String,
+) -> Result<bool, String> {
+    Ok(state.sessions.lock().unwrap().contains_key(&session_id))
 }
 
 #[tauri::command]

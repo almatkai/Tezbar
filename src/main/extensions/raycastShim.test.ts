@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  *  process. Stub the surfaces the shim touches with plain objects so the
  *  shim's runtime behavior (not the Electron bindings) is what we test. */
 const clipboardState = { text: '' }
-vi.mock('electron', () => ({
+vi.mock('@tezbar/desktop-runtime', () => ({
   app: {
     isPackaged: false,
   },

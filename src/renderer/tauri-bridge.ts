@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-function-type */
 // src/renderer/tauri-bridge.ts
 import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
-import type { RaymesApi } from '../preload/api'
+import { emitTo, listen } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import type { RaymesApi } from '../shared/desktop-api'
+import type { TerminalSessionsAction } from '../shared/terminal'
 
 type TauriRaymesApi = RaymesApi & {
   moveMouse: (x: number, y: number) => Promise<unknown>
@@ -21,6 +23,8 @@ export async function initTauriBridge(): Promise<void> {
     return
   }
 
+  window.__TEZBAR_WINDOW_LABEL__ = getCurrentWindow().label
+
   const errorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message
     if (typeof error === 'string' && error.trim()) return error
@@ -38,16 +42,30 @@ export async function initTauriBridge(): Promise<void> {
     })
   }
 
+  const recordNativeTerminalExit = (payload: any): void => {
+    if (!payload || typeof payload.sessionId !== 'string') return
+    void callBackend('terminal:native-exit', {
+      sessionId: payload.sessionId,
+      exitCode: typeof payload.exitCode === 'number' ? payload.exitCode : undefined,
+      signal: typeof payload.signal === 'number' ? payload.signal : undefined,
+    }).catch((error: unknown) => {
+      console.error('[Tauri bridge] terminal:native-exit failed:', error)
+    })
+  }
+
   const listenersMap = new Map<string, Set<Function>>()
   const eventListeners = new Map<string, Promise<any>>()
   const eventBacklog = new Map<string, unknown[]>()
-  const persistentChannels = new Set(['agent:event'])
+  const persistentChannels = new Set(['agent:event', 'terminal:exit'])
 
   const ensureEventListener = (channel: string): Promise<any> => {
     const existing = eventListeners.get(channel)
     if (existing) return existing
 
     const listenPromise = listen(channel, (event: any) => {
+      if (channel === 'terminal:exit') {
+        recordNativeTerminalExit(event.payload)
+      }
       const listeners = listenersMap.get(channel)
       if (listeners?.size) {
         listeners.forEach((listener) => listener(event.payload))
@@ -92,6 +110,7 @@ export async function initTauriBridge(): Promise<void> {
   // Agent runs can begin during the first React effect. Listen before rendering
   // and replay any early events when the chat surface subscribes.
   await ensureEventListener('agent:event')
+  await ensureEventListener('terminal:exit')
 
   const tezbar: TauriRaymesApi = {
     hide: () => invoke('hide_window'),
@@ -156,6 +175,7 @@ export async function initTauriBridge(): Promise<void> {
     listVoiceSttModes: () => callBackend('voice:stt:modes'),
     listVoiceModels: () => callBackend('voice:models:list'),
     downloadVoiceModel: (modelId: any) => callBackend('voice:model:download', { modelId }),
+    deleteVoiceModel: (modelId: any) => callBackend('voice:model:delete', { modelId }),
     getSelectedVoiceModel: () => callBackend('voice:model:get-selected'),
     setSelectedVoiceModel: (modelId: any) => callBackend('voice:model:set-selected', { modelId }),
 
@@ -222,14 +242,86 @@ export async function initTauriBridge(): Promise<void> {
       // Tauri listener registration is asynchronous. Starting the shell before
       // these promises settle drops its prompt and fast initial-command output.
       await Promise.all([eventListeners.get('terminal:data'), eventListeners.get('terminal:exit')])
-      return invoke('native_terminal_create', { request })
+      const created = (await invoke('native_terminal_create', { request })) as any
+      // Persisting the session summary goes through the backend sidecar. If that
+      // process is down, the native PTY still works — don't fail the open.
+      let summary: any = null
+      try {
+        summary = await callBackend('terminal:native-create', {
+          sessionId: created.sessionId,
+          shell: created.shell,
+          cwd: created.cwd,
+          initialCommand: request?.initialCommand,
+          name: request?.name,
+          saveFor: request?.saveFor,
+          keepAliveFor: request?.keepAliveFor,
+        })
+      } catch (error: unknown) {
+        console.warn('[Tauri bridge] terminal:native-create failed (backend down?):', error)
+      }
+      return { ...created, summary }
     },
+    terminalAttach: async (request: any) => {
+      const attached = (await invoke('native_terminal_attach', { request })) as any
+      if (!attached) {
+        if (typeof request?.sessionId === 'string') {
+          await callBackend('terminal:native-exit', {
+            sessionId: request.sessionId,
+            exitCode: 1,
+          }).catch((error: unknown) => {
+            console.error('[Tauri bridge] terminal:native-exit failed:', error)
+          })
+        }
+        return null
+      }
+      let summary: any = null
+      try {
+        summary = await callBackend('terminal:native-attach', {
+          sessionId: attached.sessionId,
+        })
+      } catch (error: unknown) {
+        console.warn('[Tauri bridge] terminal:native-attach failed (backend down?):', error)
+      }
+      return { ...attached, summary }
+    },
+    terminalDetach: async (sessionId: string) =>
+      Boolean(await invoke('native_terminal_detach', { sessionId })),
+    terminalList: () => callBackend('terminal:list'),
+    terminalUpdate: (request: any) => callBackend('terminal:update', request),
     terminalWrite: (sessionId: string, data: string) =>
       invoke('native_terminal_write', { sessionId, data }),
     terminalResize: (sessionId: string, cols: number, rows: number) =>
       invoke('native_terminal_resize', { sessionId, cols, rows }),
-    terminalKill: (sessionId: string) => invoke('native_terminal_kill', { sessionId }),
+    terminalKill: async (sessionId: string) => {
+      const killed = Boolean(await invoke('native_terminal_kill', { sessionId }))
+      if (killed) {
+        await callBackend('terminal:native-exit', { sessionId, exitCode: 0 }).catch(
+          (error: unknown) => {
+            console.error('[Tauri bridge] terminal:native-exit failed:', error)
+          },
+        )
+      }
+      return killed
+    },
+    terminalDelete: async (sessionId: string) => {
+      const killed = Boolean(await invoke('native_terminal_kill', { sessionId }))
+      if (killed) {
+        await callBackend('terminal:native-exit', { sessionId, exitCode: 0 }).catch(
+          (error: unknown) => {
+            console.error('[Tauri bridge] terminal:native-exit failed:', error)
+          },
+        )
+      }
+      return Boolean(await callBackend('terminal:delete', { sessionId }))
+    },
     getTerminalPromptInfo: () => callBackend('terminal:get-prompt-info'),
+    terminalSessionsShow: () => invoke('terminal_sessions_show'),
+    terminalSessionsHide: () => invoke('terminal_sessions_hide'),
+    terminalSessionsSync: () => invoke('terminal_sessions_sync'),
+    terminalSessionsAction: (action: TerminalSessionsAction) =>
+      emitTo('main', 'terminal-sessions:action', action),
+    onTerminalSessionsAction: (listener: (action: TerminalSessionsAction) => void) =>
+      setupEventListener('terminal-sessions:action', listener),
 
     getStorageBreakdown: () => callBackend('storage:breakdown'),
     getClipboardStorageConfig: () => callBackend('storage:clipboard-config:get'),
@@ -260,6 +352,8 @@ export async function initTauriBridge(): Promise<void> {
     chatGet: (id: string) => callBackend('chat:get', id),
     chatAppend: (payload: any) => callBackend('chat:append', payload),
     chatUpdateTitle: (id: string, title: string) => callBackend('chat:update-title', { id, title }),
+    chatDeleteTurn: (sessionId: string, turnId: string) =>
+      callBackend('chat:delete-turn', { sessionId, turnId }),
     chatDelete: (id: string) => callBackend('chat:delete', id),
     chatClear: () => callBackend('chat:clear'),
 
@@ -287,8 +381,7 @@ export async function initTauriBridge(): Promise<void> {
       setupEventListener('notes:quick-save-shortcut', listener),
     onAppSurfaceOpen: (
       listener: (surface: 'command' | 'settings' | 'clipboard' | 'extensions') => void
-    ) =>
-      setupEventListener('app:open-surface', listener),
+    ) => setupEventListener('app:open-surface', listener),
     onAgentEvent: (listener: (event: any) => void) => setupEventListener('agent:event', listener),
     onExtensionInstallProgress: (listener: (payload: any) => void) =>
       setupEventListener('extension:install-progress', listener),

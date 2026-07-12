@@ -29,12 +29,20 @@ use tokio::sync::oneshot;
 
 const WINDOW_WIDTH: f64 = 760.0;
 const WINDOW_MIN_HEIGHT: f64 = 120.0;
-const WINDOW_MAX_HEIGHT: f64 = 640.0;
-const WINDOW_TOP_FACTOR: f64 = 0.12;
+const WINDOW_MAX_HEIGHT: f64 = 700.0;
+const TERMINAL_SESSIONS_LABEL: &str = "terminal-sessions";
+const TERMINAL_SESSIONS_WIDTH: f64 = 300.0;
+// The sessions sidebar sits to the LEFT of the main window. A positive overhang
+// means the sidebar extends that many logical pixels beyond the left edge of main.
+const TERMINAL_SESSIONS_LEFT_OVERHANG: f64 = 266.0;
+const TERMINAL_SESSIONS_TOP_OFFSET: f64 = 96.0;
+const TERMINAL_SESSIONS_BOTTOM_OFFSET: f64 = 86.0;
+const TERMINAL_SESSIONS_MIN_HEIGHT: f64 = 260.0;
 const TAURI_WINDOW_POSITION_KEY: &str = "tauriWindowPosition";
 const TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "tauriWindowPositionsByDisplay";
 const LEGACY_WINDOW_POSITION_KEY: &str = "windowPosition";
 const LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "windowPositionsByDisplay";
+const SHORTCUT_HOLD_THRESHOLD: Duration = Duration::from_millis(100);
 
 struct BackendState {
     writer: Arc<Mutex<Option<TcpStream>>>,
@@ -42,10 +50,25 @@ struct BackendState {
     request_counter: Arc<Mutex<u64>>,
 }
 
+#[derive(Clone)]
+struct BackendLaunchConfig {
+    executable: PathBuf,
+    script_path: PathBuf,
+    env: Vec<(String, String)>,
+}
+
 #[derive(Default)]
 struct WindowBehaviorState {
     suppress_blur_hide: Mutex<bool>,
     backend_hidden_windows: Mutex<Vec<String>>,
+}
+
+#[derive(Default)]
+struct ShortcutGestureState {
+    pressed_at: Option<Instant>,
+    generation: u64,
+    dictation_armed: bool,
+    was_visible_and_focused: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -76,6 +99,175 @@ fn set_backend_app_visibility(app: &AppHandle, visible: bool) {
             hidden.push(label);
             let _ = window.hide();
         }
+    }
+}
+
+fn handle_backend_message(
+    app: &AppHandle,
+    pending_requests: &Arc<Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>>,
+    line: &str,
+) {
+    let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
+        log::error!("backend sidecar emitted invalid JSON on stdout: {}", line);
+        return;
+    };
+
+    log::debug!("received backend sidecar message");
+    let Some(msg_type) = val.get("type").and_then(|value| value.as_str()) else {
+        return;
+    };
+    match msg_type {
+        "reply" => {
+            let Some(id) = val.get("id").and_then(|value| value.as_u64()) else {
+                return;
+            };
+            let mut pending = pending_requests.lock().unwrap();
+            if let Some(tx) = pending.remove(&id) {
+                let reply = if let Some(error) = val.get("error") {
+                    json!({ "error": error })
+                } else {
+                    json!({ "result": val.get("result").unwrap_or(&serde_json::Value::Null) })
+                };
+                let _ = tx.send(reply);
+            }
+        }
+        "event" => {
+            if let Some(channel) = val.get("channel").and_then(|value| value.as_str()) {
+                let payload = val.get("payload").unwrap_or(&serde_json::Value::Null);
+                let _ = app.emit(channel, payload);
+            }
+        }
+        "dialog" => println!("[Tauri Dialog] Dialog options: {:?}", val.get("options")),
+        "app_quit" => app.exit(0),
+        "window_suppress_blur" => {
+            if let Some(value) = val.get("value").and_then(|value| value.as_bool()) {
+                let state = app.state::<WindowBehaviorState>();
+                *state.suppress_blur_hide.lock().unwrap() = value;
+            }
+        }
+        "app_visibility" => {
+            if let Some(value) = val.get("visible").and_then(|value| value.as_bool()) {
+                set_backend_app_visibility(app, value);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn run_backend_generation(
+    app: &AppHandle,
+    config: &BackendLaunchConfig,
+    writer: &Arc<Mutex<Option<TcpStream>>>,
+    pending_requests: &Arc<Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>>,
+) -> Result<Duration, String> {
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| error.to_string())?;
+    let ipc_port = listener
+        .local_addr()
+        .map_err(|error| error.to_string())?
+        .port();
+    listener
+        .set_nonblocking(true)
+        .map_err(|error| error.to_string())?;
+
+    let mut command = Command::new(&config.executable);
+    command
+        .arg(&config.script_path)
+        .envs(config.env.iter().map(|(key, value)| (key, value)))
+        .env("BACKEND_IPC_PORT", ipc_port.to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    log::info!(
+        "launching backend sidecar: {}",
+        config.script_path.display()
+    );
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Failed to spawn background runner process: {error}"))?;
+    let stdout = child.stdout.take().ok_or("Failed to open backend stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to open backend stderr")?;
+
+    let connect_deadline = Instant::now() + Duration::from_secs(5);
+    let backend_stream = loop {
+        match listener.accept() {
+            Ok((stream, _)) => break stream,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                if Instant::now() >= connect_deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("Backend runner did not connect to its IPC socket".to_string());
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("Failed to accept backend IPC connection: {error}"));
+            }
+        }
+    };
+    *writer.lock().unwrap() = Some(backend_stream);
+    let connected_at = Instant::now();
+    log::info!("backend sidecar IPC connected on localhost");
+
+    let stderr_thread = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            log::info!("backend sidecar: {}", line);
+        }
+        log::info!("backend stderr reader stopped");
+    });
+
+    for line_result in BufReader::new(stdout).lines() {
+        match line_result {
+            Ok(line) if !line.trim().is_empty() => {
+                handle_backend_message(app, pending_requests, &line)
+            }
+            Ok(_) => {}
+            Err(error) => {
+                log::error!("failed reading backend stdout: {}", error);
+                break;
+            }
+        }
+    }
+
+    *writer.lock().unwrap() = None;
+    let mut pending = pending_requests.lock().unwrap();
+    for (_, sender) in pending.drain() {
+        let _ = sender.send(json!({ "error": "Backend runner stopped; restarting" }));
+    }
+    drop(pending);
+
+    if child.try_wait().ok().flatten().is_none() {
+        let _ = child.kill();
+    }
+    let status = child.wait().ok();
+    let _ = stderr_thread.join();
+    log::error!("backend sidecar stopped with status {:?}", status);
+    Ok(connected_at.elapsed())
+}
+
+fn supervise_backend(
+    app: AppHandle,
+    config: BackendLaunchConfig,
+    writer: Arc<Mutex<Option<TcpStream>>>,
+    pending_requests: Arc<Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>>,
+) {
+    let mut consecutive_failures = 0_u32;
+    loop {
+        match run_backend_generation(&app, &config, &writer, &pending_requests) {
+            Ok(uptime) if uptime >= Duration::from_secs(30) => consecutive_failures = 0,
+            Ok(_) => consecutive_failures = consecutive_failures.saturating_add(1),
+            Err(error) => {
+                consecutive_failures = consecutive_failures.saturating_add(1);
+                log::error!("backend sidecar launch failed: {}", error);
+            }
+        }
+
+        let exponent = consecutive_failures.min(5);
+        let delay_ms = (250_u64 * (1_u64 << exponent)).min(8_000);
+        log::info!("restarting backend sidecar in {}ms", delay_ms);
+        std::thread::sleep(Duration::from_millis(delay_ms));
     }
 }
 
@@ -138,24 +330,38 @@ fn persisted_window_position(monitor: &Monitor) -> Option<PersistedWindowPositio
     })
 }
 
-fn persisted_window_position_for_monitor(
+fn position_from_config_object_key(
+    config: &serde_json::Value,
+    object_key: &str,
     monitor_key: &str,
+) -> Option<PersistedWindowPosition> {
+    position_from_config_value(config.get(object_key)?.get(monitor_key))
+}
+
+fn persisted_window_position_for_monitor(
+    monitor_keys: &[String],
     monitor: &Monitor,
 ) -> Option<PersistedWindowPosition> {
     let config = read_openray_config();
-    position_from_config_value(
-        config
-            .get(TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY)?
-            .get(monitor_key),
-    )
-    .or_else(|| {
-        position_from_config_value(
-            config
-                .get(LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY)?
-                .get(monitor_key),
-        )
-        .map(|position| legacy_logical_to_physical_position(position, monitor))
-    })
+    for monitor_key in monitor_keys {
+        if let Some(position) = position_from_config_object_key(
+            &config,
+            TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY,
+            monitor_key,
+        ) {
+            return Some(position);
+        }
+    }
+    for monitor_key in monitor_keys {
+        if let Some(position) = position_from_config_object_key(
+            &config,
+            LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY,
+            monitor_key,
+        ) {
+            return Some(legacy_logical_to_physical_position(position, monitor));
+        }
+    }
+    None
 }
 
 fn set_position_in_object(
@@ -173,11 +379,7 @@ fn set_position_in_object(
     }
 }
 
-fn set_persisted_window_position_for_monitor(
-    monitor_key: &str,
-    monitor: &Monitor,
-    position: PersistedWindowPosition,
-) {
+fn set_persisted_window_position_for_monitor(monitor: &Monitor, position: PersistedWindowPosition) {
     let Some(path) = openray_config_path() else {
         return;
     };
@@ -192,18 +394,20 @@ fn set_persisted_window_position_for_monitor(
         LEGACY_WINDOW_POSITION_KEY.to_string(),
         json!(legacy_position),
     );
-    set_position_in_object(
-        config_object,
-        TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY,
-        monitor_key,
-        position,
-    );
-    set_position_in_object(
-        config_object,
-        LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY,
-        monitor_key,
-        legacy_position,
-    );
+    for monitor_key in monitor_storage_keys(monitor) {
+        set_position_in_object(
+            config_object,
+            TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY,
+            &monitor_key,
+            position,
+        );
+        set_position_in_object(
+            config_object,
+            LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY,
+            &monitor_key,
+            legacy_position,
+        );
+    }
 
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
@@ -225,6 +429,26 @@ fn monitor_storage_key(monitor: &Monitor) -> String {
         size.height,
         monitor.scale_factor()
     )
+}
+
+fn legacy_monitor_storage_key(monitor: &Monitor) -> String {
+    let size = monitor.size();
+    let name = monitor.name().map(String::as_str).unwrap_or("unknown");
+    format!(
+        "{name}:{}:{}:{}",
+        size.width,
+        size.height,
+        monitor.scale_factor()
+    )
+}
+
+fn monitor_storage_keys(monitor: &Monitor) -> Vec<String> {
+    let mut keys = vec![
+        monitor_storage_key(monitor),
+        legacy_monitor_storage_key(monitor),
+    ];
+    keys.dedup();
+    keys
 }
 
 fn physical_monitor_work_area(monitor: &Monitor) -> (f64, f64, f64, f64) {
@@ -407,22 +631,30 @@ fn position_is_on_monitor(position: PersistedWindowPosition, monitor: &Monitor) 
     position.x >= x && position.x < x + width && position.y >= y && position.y < y + height
 }
 
+fn persist_window_position_at(window: &WebviewWindow, position: PersistedWindowPosition) {
+    let Ok(size) = window.outer_size() else {
+        return;
+    };
+    let monitor = window
+        .monitor_from_point(
+            position.x + size.width as f64 / 2.0,
+            position.y + size.height as f64 / 2.0,
+        )
+        .ok()
+        .flatten()
+        .or_else(|| window.current_monitor().ok().flatten());
+    let Some(monitor) = monitor else {
+        return;
+    };
+    set_persisted_window_position_for_monitor(&monitor, position);
+}
+
 fn persist_current_window_position(window: &WebviewWindow) {
     let Ok(position) = window.outer_position() else {
         return;
     };
-    let Ok(size) = window.outer_size() else {
-        return;
-    };
-    let Ok(Some(monitor)) = window.monitor_from_point(
-        position.x as f64 + size.width as f64 / 2.0,
-        position.y as f64 + size.height as f64 / 2.0,
-    ) else {
-        return;
-    };
-    set_persisted_window_position_for_monitor(
-        &monitor_storage_key(&monitor),
-        &monitor,
+    persist_window_position_at(
+        window,
         PersistedWindowPosition {
             x: position.x as f64,
             y: position.y as f64,
@@ -430,44 +662,81 @@ fn persist_current_window_position(window: &WebviewWindow) {
     );
 }
 
+fn monitor_for_position(
+    window: &WebviewWindow,
+    position: PersistedWindowPosition,
+) -> Option<Monitor> {
+    if let Ok(monitors) = window.available_monitors() {
+        if let Some(monitor) = monitors
+            .into_iter()
+            .find(|monitor| position_is_on_monitor(position, monitor))
+        {
+            return Some(monitor);
+        }
+    }
+
+    window
+        .monitor_from_point(position.x, position.y)
+        .ok()
+        .flatten()
+}
+
+fn set_window_position(
+    window: &WebviewWindow,
+    position: PersistedWindowPosition,
+) -> Result<(), String> {
+    window
+        .set_position(PhysicalPosition::new(
+            position.x.round() as i32,
+            position.y.round() as i32,
+        ))
+        .map_err(|e| e.to_string())
+}
+
 fn place_window(window: &WebviewWindow) -> Result<(), String> {
     let monitor = active_monitor(window)?;
     let (window_width, window_height) = window_size_for_monitor(window, &monitor);
-    let monitor_key = monitor_storage_key(&monitor);
+    let monitor_keys = monitor_storage_keys(&monitor);
 
-    if let Some(position) = persisted_window_position_for_monitor(&monitor_key, &monitor) {
+    if let Some(position) = persisted_window_position_for_monitor(&monitor_keys, &monitor) {
         let position = clamp_position_to_monitor(position, &monitor, window_width, window_height);
-        window
-            .set_position(PhysicalPosition::new(
-                position.x.round() as i32,
-                position.y.round() as i32,
-            ))
-            .map_err(|e| e.to_string())?;
+        set_window_position(window, position)?;
         return Ok(());
     }
 
     if let Some(position) = persisted_window_position(&monitor) {
-        if position_is_on_monitor(position, &monitor) {
-            let position =
-                clamp_position_to_monitor(position, &monitor, window_width, window_height);
-            window
-                .set_position(PhysicalPosition::new(
-                    position.x.round() as i32,
-                    position.y.round() as i32,
-                ))
-                .map_err(|e| e.to_string())?;
-            return Ok(());
-        }
+        let position_monitor =
+            monitor_for_position(window, position).unwrap_or_else(|| monitor.clone());
+        let (position_window_width, position_window_height) =
+            window_size_for_monitor(window, &position_monitor);
+        let position = clamp_position_to_monitor(
+            position,
+            &position_monitor,
+            position_window_width,
+            position_window_height,
+        );
+        set_window_position(window, position)?;
+        return Ok(());
     }
 
     let (work_x, work_y, work_width, work_height) = physical_monitor_work_area(&monitor);
     let x = work_x + ((work_width - window_width) / 2.0).max(0.0);
-    let y = work_y + work_height * WINDOW_TOP_FACTOR;
+    let y = work_y + ((work_height - window_height) / 2.0).max(0.0);
 
-    window
-        .set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32))
-        .map_err(|e| e.to_string())?;
+    set_window_position(window, PersistedWindowPosition { x, y })?;
     Ok(())
+}
+
+fn schedule_drag_position_persistence(window: WebviewWindow) {
+    tauri::async_runtime::spawn(async move {
+        for _ in 0..12 {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            if !window.is_visible().unwrap_or(false) {
+                break;
+            }
+            persist_current_window_position(&window);
+        }
+    });
 }
 
 fn open_settings_window(app: AppHandle) -> Result<(), String> {
@@ -480,7 +749,7 @@ fn open_settings_window(app: AppHandle) -> Result<(), String> {
     let _settings = tauri::WebviewWindowBuilder::new(
         &app,
         "settings",
-        tauri::WebviewUrl::App("index.html?window=settings".into()),
+        tauri::WebviewUrl::App("index.html".into()),
     )
     .title("Tezbar Settings")
     .inner_size(920.0, 680.0)
@@ -492,9 +761,101 @@ fn open_settings_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn terminal_sessions_layout(main_window: &WebviewWindow) -> Result<(PersistedWindowPosition, f64), String> {
+    let position = main_window.outer_position().map_err(|e| e.to_string())?;
+    let size = main_window.outer_size().map_err(|e| e.to_string())?;
+    let scale_factor = main_window
+        .current_monitor()
+        .map_err(|e| e.to_string())?
+        .map(|monitor| monitor.scale_factor())
+        .unwrap_or(1.0);
+
+    let main_height = size.height as f64 / scale_factor;
+    let sidebar_height = (main_height - TERMINAL_SESSIONS_TOP_OFFSET - TERMINAL_SESSIONS_BOTTOM_OFFSET)
+        .max(TERMINAL_SESSIONS_MIN_HEIGHT);
+    let x = position.x as f64 - TERMINAL_SESSIONS_LEFT_OVERHANG * scale_factor;
+    let y = position.y as f64 + TERMINAL_SESSIONS_TOP_OFFSET * scale_factor;
+
+    Ok((PersistedWindowPosition { x, y }, sidebar_height))
+}
+
+fn ensure_terminal_sessions_window(app: &AppHandle) -> Result<WebviewWindow, String> {
+    if let Some(window) = app.get_webview_window(TERMINAL_SESSIONS_LABEL) {
+        return Ok(window);
+    }
+
+    let mut builder = tauri::WebviewWindowBuilder::new(
+        app,
+        TERMINAL_SESSIONS_LABEL,
+        tauri::WebviewUrl::App("index.html?window=terminal-sessions".into()),
+    )
+    .title("Terminal Sessions")
+    .inner_size(TERMINAL_SESSIONS_WIDTH, TERMINAL_SESSIONS_MIN_HEIGHT)
+    .resizable(false)
+    .decorations(false)
+    .always_on_top(true)
+    .transparent(true)
+    .skip_taskbar(true)
+    .visible(false)
+    .shadow(false);
+
+    if let Some(main_window) = app.get_webview_window("main") {
+        builder = builder.parent(&main_window).map_err(|e| e.to_string())?;
+    }
+
+    let sidebar = builder.build().map_err(|e| e.to_string())?;
+    Ok(sidebar)
+}
+
+fn sync_terminal_sessions_window(app: &AppHandle) -> Result<(), String> {
+    let Some(main_window) = app.get_webview_window("main") else {
+        return Ok(());
+    };
+    let Some(sidebar) = app.get_webview_window(TERMINAL_SESSIONS_LABEL) else {
+        return Ok(());
+    };
+    let (position, height) = terminal_sessions_layout(&main_window)?;
+    sidebar
+        .set_size(LogicalSize::new(TERMINAL_SESSIONS_WIDTH, height))
+        .map_err(|e| e.to_string())?;
+    set_window_position(&sidebar, position)
+}
+
+fn hide_terminal_sessions(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(TERMINAL_SESSIONS_LABEL) {
+        let _ = window.hide();
+    }
+}
+
 #[tauri::command]
 fn open_settings_window_cmd(app: AppHandle) -> Result<(), String> {
     open_settings_window(app)
+}
+
+#[tauri::command]
+fn terminal_sessions_show(app: AppHandle) -> Result<(), String> {
+    let main_window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window not found".to_string())?;
+    let sidebar = ensure_terminal_sessions_window(&app)?;
+    let (position, height) = terminal_sessions_layout(&main_window)?;
+    sidebar
+        .set_size(LogicalSize::new(TERMINAL_SESSIONS_WIDTH, height))
+        .map_err(|e| e.to_string())?;
+    set_window_position(&sidebar, position)?;
+    sidebar.show().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn terminal_sessions_hide(app: AppHandle) -> Result<(), String> {
+    hide_terminal_sessions(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn terminal_sessions_sync(app: AppHandle) -> Result<(), String> {
+    sync_terminal_sessions_window(&app)
 }
 
 #[tauri::command]
@@ -527,6 +888,7 @@ fn toggle_window(window: WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 fn hide_window(window: WebviewWindow) -> Result<(), String> {
     persist_current_window_position(&window);
+    hide_terminal_sessions(window.app_handle());
     window.hide().map_err(|e| e.to_string())
 }
 
@@ -564,6 +926,7 @@ fn start_window_snap_drag(
         *state.suppress_blur_hide.lock().unwrap() = false;
         return Err(error.to_string());
     }
+    schedule_drag_position_persistence(window);
     Ok(())
 }
 
@@ -584,16 +947,20 @@ fn window_set_content_height(
     height: f64,
     zoom_factor: f64,
 ) -> Result<(), String> {
-    let actual_height = height * zoom_factor;
-    let clamped_height = actual_height.clamp(120.0, 640.0);
+    // `height` is already in physical pixels (css_height * zoom_factor computed
+    // on the JS side). Convert back to logical pixels by dividing once.
+    let zoom = if zoom_factor > 0.0 { zoom_factor } else { 1.0 };
+    let logical_height = height / zoom;
+    let clamped_height = logical_height.clamp(WINDOW_MIN_HEIGHT, WINDOW_MAX_HEIGHT);
     window
-        .set_size(LogicalSize::new(760.0, clamped_height))
-        .map_err(|e| e.to_string())
+        .set_size(LogicalSize::new(WINDOW_WIDTH, clamped_height))
+        .map_err(|e| e.to_string())?;
+    let _ = sync_terminal_sessions_window(window.app_handle());
+    Ok(())
 }
 
 #[tauri::command]
 fn update_raymes_shortcut(app: AppHandle, shortcut_str: String) -> Result<(), String> {
-    let _ = app.global_shortcut().unregister_all();
     let clean_shortcut = shortcut_str
         .replace("Option", "Alt")
         .replace("CommandOrControl", "Super")
@@ -601,6 +968,7 @@ fn update_raymes_shortcut(app: AppHandle, shortcut_str: String) -> Result<(), St
         .replace("Cmd", "Super");
     let shortcut = Shortcut::from_str(&clean_shortcut)
         .map_err(|e| format!("Invalid shortcut format: {:?}", e))?;
+    let _ = app.global_shortcut().unregister_all();
     app.global_shortcut()
         .register(shortcut)
         .map_err(|e| format!("Failed to register shortcut: {:?}", e))?;
@@ -621,10 +989,7 @@ async fn call_backend(
     };
 
     let (tx, rx) = oneshot::channel();
-    {
-        let mut pending = state.pending_requests.lock().unwrap();
-        pending.insert(id, tx);
-    }
+    let mut response_sender = Some(tx);
 
     let msg = json!({
       "type": "invoke",
@@ -634,18 +999,45 @@ async fn call_backend(
     })
     .to_string();
 
-    {
-        let mut backend_writer = state.writer.lock().unwrap();
-        if let Some(writer) = backend_writer.as_mut() {
-            if writeln!(writer, "{}", msg).is_err() || writer.flush().is_err() {
-                state.pending_requests.lock().unwrap().remove(&id);
-                *backend_writer = None;
-                return Err("Failed to write to backend runner process".to_string());
+    // Startup and crash recovery briefly leave the writer empty. Give the
+    // supervisor a chance to reconnect instead of immediately surfacing a
+    // permanent-looking error to every feature that uses the backend.
+    let writer_deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let write_result = {
+            let mut backend_writer = state.writer.lock().unwrap();
+            backend_writer.as_mut().map(|writer| {
+                // Register only after a live generation is available. This
+                // prevents the previous generation's shutdown drain from
+                // consuming requests that are waiting for the replacement.
+                state
+                    .pending_requests
+                    .lock()
+                    .unwrap()
+                    .insert(id, response_sender.take().unwrap());
+                writeln!(writer, "{}", msg).and_then(|_| writer.flush())
+            })
+        };
+
+        match write_result {
+            Some(Ok(())) => {
+                log::debug!("wrote backend request: id={} channel={}", id, channel);
+                break;
             }
-            log::debug!("wrote backend request: id={} channel={}", id, channel);
-        } else {
-            state.pending_requests.lock().unwrap().remove(&id);
-            return Err("Backend runner process is not running".to_string());
+            Some(Err(_)) => {
+                state.pending_requests.lock().unwrap().remove(&id);
+                *state.writer.lock().unwrap() = None;
+                return Err(
+                    "Failed to write to backend runner process; recovery is in progress"
+                        .to_string(),
+                );
+            }
+            None if Instant::now() < writer_deadline => {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            None => {
+                return Err("Backend runner is still recovering".to_string());
+            }
         }
     }
 
@@ -698,14 +1090,78 @@ pub fn run() {
 
     let pending_requests_app = pending_requests.clone();
     let backend_writer_app = backend_writer.clone();
+    let shortcut_gesture = Arc::new(Mutex::new(ShortcutGestureState::default()));
+    let shortcut_gesture_handler = shortcut_gesture.clone();
 
     tauri::Builder::default()
     .plugin(tauri_plugin_log::Builder::default().build())
     .plugin(tauri_plugin_global_shortcut::Builder::new()
       .with_handler(move |app, _shortcut, event| {
-        if event.state() == ShortcutState::Pressed {
-          if let Some(win) = app.get_webview_window("main") {
-            let _ = toggle_window(win);
+        let Some(win) = app.get_webview_window("main") else {
+          return;
+        };
+
+        match event.state() {
+          ShortcutState::Pressed => {
+            let was_visible_and_focused = win.is_visible().unwrap_or(false)
+              && win.is_focused().unwrap_or(false);
+            let generation = {
+              let mut gesture = shortcut_gesture_handler.lock().unwrap();
+              // Ignore keyboard auto-repeat while the chord remains held.
+              if gesture.pressed_at.is_some() {
+                return;
+              }
+              gesture.generation = gesture.generation.wrapping_add(1);
+              gesture.pressed_at = Some(Instant::now());
+              gesture.dictation_armed = false;
+              gesture.was_visible_and_focused = was_visible_and_focused;
+              gesture.generation
+            };
+
+            // A tap from outside Tezbar opens it immediately. A tap while the
+            // focused palette is open is classified on release, so it no longer
+            // disappears before a possible push-to-talk hold can begin.
+            if !was_visible_and_focused {
+              let _ = show_window(win.clone());
+            }
+
+            let app = app.clone();
+            let gesture_state = shortcut_gesture_handler.clone();
+            std::thread::spawn(move || {
+              std::thread::sleep(SHORTCUT_HOLD_THRESHOLD);
+              {
+                let mut gesture = gesture_state.lock().unwrap();
+                if gesture.generation != generation || gesture.pressed_at.is_none() {
+                  return;
+                }
+                gesture.dictation_armed = true;
+              }
+              if let Some(window) = app.get_webview_window("main") {
+                if !window.is_visible().unwrap_or(false) || !window.is_focused().unwrap_or(false) {
+                  let _ = show_window(window.clone());
+                }
+                let _ = window.emit("voice:hotkey-hold", json!({ "phase": "press" }));
+              }
+            });
+          }
+          ShortcutState::Released => {
+            let (dictation_armed, was_visible_and_focused) = {
+              let mut gesture = shortcut_gesture_handler.lock().unwrap();
+              if gesture.pressed_at.take().is_none() {
+                return;
+              }
+              gesture.generation = gesture.generation.wrapping_add(1);
+              let result = (gesture.dictation_armed, gesture.was_visible_and_focused);
+              gesture.dictation_armed = false;
+              gesture.was_visible_and_focused = false;
+              result
+            };
+
+            if dictation_armed {
+              let _ = win.emit("voice:hotkey-hold", json!({ "phase": "release" }));
+            } else if was_visible_and_focused {
+              let _ = hide_window(win);
+            }
           }
         }
       })
@@ -719,21 +1175,61 @@ pub fn run() {
         .manage(WindowBehaviorState::default())
         .manage(native_terminal::NativeTerminalState::default())
         .on_window_event(|window, event| {
+            if window.label() == TERMINAL_SESSIONS_LABEL {
+                if let tauri::WindowEvent::Focused(false) = event {
+                    // Delay the check so the main window has time to receive focus
+                    // before we decide whether to hide everything. Without this
+                    // small grace period, clicking from the sessions sidebar back
+                    // into the main terminal view hides both windows because the
+                    // sidebar loses focus a few ms before main gains it.
+                    let app = window.app_handle().clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(80));
+                        if let Some(main_window) = app.get_webview_window("main") {
+                            let main_focused = main_window.is_focused().unwrap_or(false);
+                            let sidebar_focused = app
+                                .get_webview_window(TERMINAL_SESSIONS_LABEL)
+                                .map(|w| w.is_focused().unwrap_or(false))
+                                .unwrap_or(false);
+                            if !main_focused && !sidebar_focused {
+                                persist_current_window_position(&main_window);
+                                hide_terminal_sessions(&app);
+                                let _ = main_window.hide();
+                            }
+                        }
+                    });
+                }
+                return;
+            }
+
             if window.label() != "main" {
                 return;
             }
             match event {
-                tauri::WindowEvent::Moved(_) => {
+                tauri::WindowEvent::Moved(position) => {
                     if let Some(main_window) = window.app_handle().get_webview_window("main") {
-                        persist_current_window_position(&main_window);
+                        persist_window_position_at(
+                            &main_window,
+                            PersistedWindowPosition {
+                                x: position.x as f64,
+                                y: position.y as f64,
+                            },
+                        );
+                        let _ = sync_terminal_sessions_window(window.app_handle());
                     }
                 }
                 tauri::WindowEvent::Focused(false) => {
+                    if let Some(sidebar) = window.app_handle().get_webview_window(TERMINAL_SESSIONS_LABEL) {
+                        if sidebar.is_focused().unwrap_or(false) {
+                            return;
+                        }
+                    }
                     let state = window.state::<WindowBehaviorState>();
                     if !*state.suppress_blur_hide.lock().unwrap() {
                         if let Some(main_window) = window.app_handle().get_webview_window("main") {
                             persist_current_window_position(&main_window);
                         }
+                        hide_terminal_sessions(window.app_handle());
                         let _ = window.hide();
                     }
                 }
@@ -743,13 +1239,16 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       call_backend,
       open_settings_window_cmd,
+      terminal_sessions_show,
+      terminal_sessions_hide,
+      terminal_sessions_sync,
       open_extensions_window,
       toggle_window,
       hide_window,
       show_window,
       close_current_window,
       quit_app,
-            start_window_snap_drag,
+      start_window_snap_drag,
             end_window_snap_drag,
             set_suppress_blur_hide,
       window_set_content_height,
@@ -763,6 +1262,8 @@ pub fn run() {
       native_input::screenshot,
       native_input::is_physical_key_down,
       native_terminal::native_terminal_create,
+      native_terminal::native_terminal_attach,
+      native_terminal::native_terminal_detach,
       native_terminal::native_terminal_write,
       native_terminal::native_terminal_resize,
       native_terminal::native_terminal_kill
@@ -789,18 +1290,35 @@ pub fn run() {
       let Some(bun_command) = bun_command else {
         return Err("Bun is required to run the Tauri backend. Install Bun or place it in the app data bun directory.".into());
       };
-      let mut cmd = Command::new(bun_command);
-
-      cmd.env("APPDATA_DIR", app_local_data.to_string_lossy().to_string());
-      cmd.env("TEMP_DIR", handle.path().temp_dir().unwrap_or_default().to_string_lossy().to_string());
-      cmd.env("APP_VERSION", handle.package_info().version.to_string());
-      cmd.env("IS_TAURI", "true");
+      let mut backend_env = vec![
+        ("APPDATA_DIR".to_string(), app_local_data.to_string_lossy().into_owned()),
+        (
+          "TEMP_DIR".to_string(),
+          handle.path().temp_dir().unwrap_or_default().to_string_lossy().into_owned(),
+        ),
+        ("APP_VERSION".to_string(), handle.package_info().version.to_string()),
+        ("IS_TAURI".to_string(), "true".to_string()),
+      ];
 
       if let Ok(resource_dir) = handle.path().resource_dir() {
-        cmd.env("AXHELPER_PATH", resource_dir.join("native").join("axhelper").join("axhelper"));
-        cmd.env("SCREENOCR_HELPER_PATH", resource_dir.join("native").join("screenocr").join("screenocr-helper"));
-        cmd.env("COLOR_PICKER_HELPER_PATH", resource_dir.join("native").join("color-picker").join("color-picker-helper"));
-        cmd.env("ESBUILD_BINARY_PATH", resource_dir.join("bin").join("esbuild"));
+        backend_env.extend([
+          (
+            "AXHELPER_PATH".to_string(),
+            resource_dir.join("native").join("axhelper").join("axhelper").to_string_lossy().into_owned(),
+          ),
+          (
+            "SCREENOCR_HELPER_PATH".to_string(),
+            resource_dir.join("native").join("screenocr").join("screenocr-helper").to_string_lossy().into_owned(),
+          ),
+          (
+            "COLOR_PICKER_HELPER_PATH".to_string(),
+            resource_dir.join("native").join("color-picker").join("color-picker-helper").to_string_lossy().into_owned(),
+          ),
+          (
+            "ESBUILD_BINARY_PATH".to_string(),
+            resource_dir.join("bin").join("esbuild").to_string_lossy().into_owned(),
+          ),
+        ]);
       }
 
       let script_path = if cfg!(debug_assertions) {
@@ -816,112 +1334,21 @@ pub fn run() {
           .map(|dir| dir.join("dist-backend").join("main.js"))
           .unwrap_or_else(|_| std::path::PathBuf::from("dist-backend/main.js"))
       };
-      log::info!("launching backend sidecar: {}", script_path.display());
-      cmd.arg(script_path);
-
-      let ipc_listener = TcpListener::bind("127.0.0.1:0")?;
-      let ipc_port = ipc_listener.local_addr()?.port();
-      ipc_listener.set_nonblocking(true)?;
-      cmd.env("BACKEND_IPC_PORT", ipc_port.to_string());
-      cmd.stdin(Stdio::null())
-         .stdout(Stdio::piped())
-         .stderr(Stdio::piped());
-
-      let app_handle_clone = handle.clone();
-      let pending_requests_thread = pending_requests_app.clone();
-      let backend_writer_shutdown = backend_writer_app.clone();
-
-      let mut child = cmd
-        .spawn()
-        .map_err(|error| format!("Failed to spawn background runner process: {error}"))?;
-      let stdout = child.stdout.take().ok_or("Failed to open backend stdout")?;
-      let stderr = child.stderr.take().ok_or("Failed to open backend stderr")?;
-
-      let connect_deadline = Instant::now() + Duration::from_secs(5);
-      let backend_stream = loop {
-        match ipc_listener.accept() {
-          Ok((stream, _)) => break stream,
-          Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-            if Instant::now() >= connect_deadline {
-              let _ = child.kill();
-              return Err("Backend runner did not connect to its IPC socket".into());
-            }
-            std::thread::sleep(Duration::from_millis(10));
-          }
-          Err(error) => {
-            let _ = child.kill();
-            return Err(format!("Failed to accept backend IPC connection: {error}").into());
-          }
-        }
+      let backend_config = BackendLaunchConfig {
+        executable: bun_command,
+        script_path,
+        env: backend_env,
       };
-      *backend_writer_app.lock().unwrap() = Some(backend_stream);
-      log::info!("backend sidecar IPC connected on localhost");
-
+      let supervisor_handle = handle.clone();
+      let supervisor_pending = pending_requests_app.clone();
+      let supervisor_writer = backend_writer_app.clone();
       std::thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-          log::info!("backend sidecar: {}", line);
-        }
-        log::error!("backend stderr reader stopped");
-      });
-
-      std::thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for line_res in reader.lines() {
-          let line = match line_res {
-            Ok(l) => l,
-            Err(_) => break,
-          };
-          if line.trim().is_empty() {
-            continue;
-          }
-
-          if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
-            log::debug!("received backend sidecar message");
-            if let Some(msg_type) = val.get("type").and_then(|t| t.as_str()) {
-              if msg_type == "reply" {
-                if let Some(id) = val.get("id").and_then(|i| i.as_u64()) {
-                  let mut pending = pending_requests_thread.lock().unwrap();
-                  if let Some(tx) = pending.remove(&id) {
-                    let reply_val = if let Some(err) = val.get("error") {
-                      json!({ "error": err })
-                    } else {
-                      json!({ "result": val.get("result").unwrap_or(&serde_json::Value::Null) })
-                    };
-                    let _ = tx.send(reply_val);
-                  }
-                }
-              } else if msg_type == "event" {
-                if let Some(channel) = val.get("channel").and_then(|c| c.as_str()) {
-                  let payload = val.get("payload").unwrap_or(&serde_json::Value::Null);
-                  let _ = app_handle_clone.emit(channel, payload);
-                }
-              } else if msg_type == "dialog" {
-                println!("[Tauri Dialog] Dialog options: {:?}", val.get("options"));
-                            } else if msg_type == "app_quit" {
-                                app_handle_clone.exit(0);
-                            } else if msg_type == "window_suppress_blur" {
-                                if let Some(value) = val.get("value").and_then(|value| value.as_bool()) {
-                                    let state = app_handle_clone.state::<WindowBehaviorState>();
-                                    *state.suppress_blur_hide.lock().unwrap() = value;
-                                }
-                            } else if msg_type == "app_visibility" {
-                                if let Some(value) = val.get("visible").and_then(|value| value.as_bool()) {
-                                    set_backend_app_visibility(&app_handle_clone, value);
-              }
-            }
-          } else {
-            log::error!("backend sidecar emitted invalid JSON on stdout: {}", line);
-          }
-        }
-        log::error!("backend stdout reader stopped");
-        }
-
-        let mut pending = pending_requests_thread.lock().unwrap();
-        for (_, sender) in pending.drain() {
-          let _ = sender.send(json!({ "error": "Backend runner stopped" }));
-        }
-        *backend_writer_shutdown.lock().unwrap() = None;
-        let _ = child.kill();
+        supervise_backend(
+          supervisor_handle,
+          backend_config,
+          supervisor_writer,
+          supervisor_pending,
+        );
       });
 
       // System Tray Menu Setup

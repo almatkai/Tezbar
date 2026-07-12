@@ -15,7 +15,7 @@
  *  rejects view/menu-bar modes before eval, so users still see a clear
  *  "not supported yet" message via `executeExtensionCommandRuntime`. */
 
-import { app, clipboard, nativeImage, shell } from 'electron'
+import { app, clipboard, nativeImage, shell } from '@tezbar/desktop-runtime'
 import { execFile } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'

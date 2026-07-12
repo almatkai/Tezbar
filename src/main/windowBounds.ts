@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow } from '@tezbar/desktop-runtime'
 
 /** Launcher dimensions. Width is a hard constant. Height floats inside the
  *  allowed range; the renderer drives it via IPC. The OS cannot drag the
@@ -14,7 +14,6 @@ export const WINDOW_WIDTH = 760
  */
 export const WINDOW_MAX_HEIGHT = 640
 export const WINDOW_MIN_HEIGHT = 120
-export const WINDOW_TOP_FACTOR = 0.2
 
 export function clampLauncherHeight(height: number): number {
   if (!Number.isFinite(height)) return WINDOW_MAX_HEIGHT

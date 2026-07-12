@@ -16,6 +16,7 @@ export const IPC_CHANNELS = {
   VOICE_STT_TRANSCRIBE: 'voice:stt:transcribe',
   VOICE_MODELS_LIST: 'voice:models:list',
   VOICE_MODEL_DOWNLOAD: 'voice:model:download',
+  VOICE_MODEL_DELETE: 'voice:model:delete',
   VOICE_MODEL_GET_SELECTED: 'voice:model:get-selected',
   VOICE_MODEL_SET_SELECTED: 'voice:model:set-selected',
 } as const

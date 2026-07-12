@@ -1,4 +1,4 @@
-import { app, session } from 'electron'
+import { app, session } from '@tezbar/desktop-runtime'
 import { lstat, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getInstance } from '../search/indexDb'

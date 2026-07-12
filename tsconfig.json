@@ -5,6 +5,10 @@
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@tezbar/desktop-runtime": ["src/main/desktop-runtime.ts"]
+    },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
@@ -18,11 +22,9 @@
     "types": ["node"]
   },
   "include": [
-    "electron.vite.config.ts",
     "vitest.config.ts",
     "src/renderer/**/*.ts",
     "src/renderer/**/*.tsx",
-    "src/preload/**/*.ts",
     "src/shared/**/*.ts"
   ]
 }

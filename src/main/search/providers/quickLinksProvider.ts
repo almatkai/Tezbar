@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app } from '@tezbar/desktop-runtime'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { IndexedDocument, SearchProvider } from './types'

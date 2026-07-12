@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app } from '@tezbar/desktop-runtime'
 import DatabaseCtor, { type Database as DatabaseType } from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -338,7 +338,12 @@ export class SearchIndexDatabase {
         : []
 
     const mapped = (rows as Array<{ id: string; category: SearchCategory; title: string; subtitle: string; actionJson: string; updatedAt: number; popularity: number; bm25Score: number }>).map((row) => {
-      const inverseBm25 = Number.isFinite(row.bm25Score) ? 1 / (1 + Math.max(row.bm25Score, 0)) : 0.5
+      const inverseBm25 = Number.isFinite(row.bm25Score)
+        ? (() => {
+            const negBm25 = Math.max(-row.bm25Score, 0)
+            return negBm25 / (1 + negBm25)
+          })()
+        : 0.5
       const searchableText = `${row.title} ${row.subtitle}`
       const lexical = Math.max(
         inverseBm25,
@@ -367,9 +372,23 @@ export class SearchIndexDatabase {
       }
     }
 
-    return Array.from(byId.values())
+    const result = Array.from(byId.values())
       .sort((a, b) => b.lexical - a.lexical)
       .slice(0, candidateLimit)
+
+    if (trimmed === 'process kill' || trimmed === 'timer stop' || trimmed === 'stop timer') {
+      const lines: string[] = []
+      lines.push(`[Search DEBUG] query="${trimmed}" ftsQuery="${ftsQuery}" FTS rows=${rows.length} mapped=${mapped.length} fuzzyRows=${fuzzyRows.length}`)
+      for (const r of result.slice(0, 10)) {
+        lines.push(`  [DEBUG] lex=${r.lexical.toFixed(3)} cat=${r.category} title="${r.title}"`)
+      }
+      try {
+        const fs = require('fs')
+        fs.appendFileSync('/tmp/search_debug.log', lines.join('\n') + '\n\n')
+      } catch {}
+    }
+
+    return result
   }
 
   private fuzzySearch(query: string, limit: number): SearchIndexRow[] {

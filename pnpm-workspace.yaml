@@ -1,6 +1,4 @@
 allowBuilds:
   better-sqlite3: false
-  electron: false
-  electron-winstaller: true
   esbuild: false
-  node-pty: true
+  node-pty: set this to true or false

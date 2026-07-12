@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { app } from 'electron'
+import { app } from '@tezbar/desktop-runtime'
 import type { NamedPortEntry } from '../../shared/portManager'
 
 function storePath(): string {

@@ -14,7 +14,7 @@
  * At runtime, getExtensionBundle() simply reads the pre-built JS file.
  */
 
-import { app } from 'electron';
+import { app } from '@tezbar/desktop-runtime';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';

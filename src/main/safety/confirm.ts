@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog } from 'electron'
+import { BrowserWindow, dialog } from '@tezbar/desktop-runtime'
+import type { MessageBoxOptions } from '@tezbar/desktop-runtime'
 import type { SafetyConfirmResult, SafetyDescriptor } from '../../shared/safety'
 import { getSafetyDescriptor } from './registry'
 
@@ -42,7 +43,7 @@ export async function confirmSafetyAction(
 
   const primaryLabel = options?.dryRun ? `Preview: ${descriptor.title}` : descriptor.title
 
-  const opts: Electron.MessageBoxOptions = {
+  const opts: MessageBoxOptions = {
     type: descriptor.risk === 'high' && !options?.dryRun ? 'warning' : 'question',
     buttons: ['Cancel', primaryLabel],
     defaultId: 0,

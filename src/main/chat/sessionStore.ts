@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app } from '@tezbar/desktop-runtime'
 import Database from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import type { Stage } from '../../shared/agent'
 import type {
   ChatAttachment,
+  ChatResponseMeta,
   ChatRole,
   ChatSession,
   ChatSessionSummary,
@@ -24,10 +25,38 @@ type TurnRow = {
   session_id: string
   role: string
   text: string
+  response_meta_json: string | null
   stages_json: string | null
   attachments_json: string | null
   error: string | null
   created_at: number
+}
+
+function safeParseResponseMeta(raw: string | null): ChatResponseMeta | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') return undefined
+    const meta = parsed as Partial<ChatResponseMeta>
+    if (
+      typeof meta.provider !== 'string' ||
+      typeof meta.providerTitle !== 'string' ||
+      typeof meta.model !== 'string'
+    ) {
+      return undefined
+    }
+    return {
+      provider: meta.provider.slice(0, 80),
+      providerTitle: meta.providerTitle.slice(0, 120),
+      model: meta.model.slice(0, 160),
+      tokenCount:
+        typeof meta.tokenCount === 'number' && Number.isFinite(meta.tokenCount)
+          ? Math.max(0, Math.round(meta.tokenCount))
+          : undefined,
+    }
+  } catch {
+    return undefined
+  }
 }
 
 function safeParseStages(raw: string | null): Stage[] | undefined {
@@ -120,6 +149,7 @@ class ChatSessionDatabase {
         session_id TEXT NOT NULL,
         role TEXT NOT NULL,
         text TEXT NOT NULL,
+        response_meta_json TEXT,
         stages_json TEXT,
         attachments_json TEXT,
         error TEXT,
@@ -131,6 +161,11 @@ class ChatSessionDatabase {
     `)
     try {
       this.db.exec(`ALTER TABLE chat_turns ADD COLUMN attachments_json TEXT;`)
+    } catch {
+      // Existing and newly-created databases already have the column.
+    }
+    try {
+      this.db.exec(`ALTER TABLE chat_turns ADD COLUMN response_meta_json TEXT;`)
     } catch {
       // Existing and newly-created databases already have the column.
     }
@@ -146,11 +181,9 @@ class ChatSessionDatabase {
                    ORDER BY t.created_at DESC LIMIT 1) AS preview
          FROM chat_sessions s
          ORDER BY s.updated_at DESC
-         LIMIT ?`,
+         LIMIT ?`
       )
-      .all(limit) as Array<
-      SessionRow & { turn_count: number | bigint; preview: string | null }
-    >
+      .all(limit) as Array<SessionRow & { turn_count: number | bigint; preview: string | null }>
     return rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -163,15 +196,13 @@ class ChatSessionDatabase {
 
   getSession(id: string): ChatSession | null {
     const sessionRow = this.db
-      .prepare(
-        `SELECT id, title, created_at, updated_at FROM chat_sessions WHERE id = ?`,
-      )
+      .prepare(`SELECT id, title, created_at, updated_at FROM chat_sessions WHERE id = ?`)
       .get(id) as SessionRow | undefined
     if (!sessionRow) return null
     const turnRows = this.db
       .prepare(
-        `SELECT id, session_id, role, text, stages_json, attachments_json, error, created_at
-         FROM chat_turns WHERE session_id = ? ORDER BY created_at ASC`,
+        `SELECT id, session_id, role, text, response_meta_json, stages_json, attachments_json, error, created_at
+         FROM chat_turns WHERE session_id = ? ORDER BY created_at ASC`
       )
       .all(id) as TurnRow[]
     return {
@@ -183,6 +214,7 @@ class ChatSessionDatabase {
         id: t.id,
         role: (t.role === 'assistant' ? 'assistant' : 'user') as ChatRole,
         text: t.text,
+        responseMeta: safeParseResponseMeta(t.response_meta_json),
         stages: safeParseStages(t.stages_json),
         attachments: safeParseAttachments(t.attachments_json),
         error: t.error ?? undefined,
@@ -191,16 +223,14 @@ class ChatSessionDatabase {
     }
   }
 
-  upsertSession(
-    session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt'>,
-  ): void {
+  upsertSession(session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt'>): void {
     this.db
       .prepare(
         `INSERT INTO chat_sessions(id, title, created_at, updated_at)
          VALUES(?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            title = excluded.title,
-           updated_at = excluded.updated_at`,
+           updated_at = excluded.updated_at`
       )
       .run(session.id, session.title, session.createdAt, session.updatedAt)
   }
@@ -208,19 +238,21 @@ class ChatSessionDatabase {
   appendTurn(sessionId: string, turn: ChatTurn): void {
     this.db
       .prepare(
-        `INSERT INTO chat_turns(id, session_id, role, text, stages_json, attachments_json, error, created_at)
-         VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO chat_turns(id, session_id, role, text, response_meta_json, stages_json, attachments_json, error, created_at)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            text = excluded.text,
+           response_meta_json = excluded.response_meta_json,
            stages_json = excluded.stages_json,
            attachments_json = excluded.attachments_json,
-           error = excluded.error`,
+           error = excluded.error`
       )
       .run(
         turn.id,
         sessionId,
         turn.role,
         turn.text,
+        turn.responseMeta ? JSON.stringify(turn.responseMeta) : null,
         turn.stages ? JSON.stringify(turn.stages) : null,
         turn.attachments
           ? JSON.stringify(
@@ -228,11 +260,11 @@ class ChatSessionDatabase {
                 const metadata = { ...attachment }
                 delete metadata.data
                 return metadata
-              }),
+              })
             )
           : null,
         turn.error ?? null,
-        turn.createdAt,
+        turn.createdAt
       )
     this.db
       .prepare(`UPDATE chat_sessions SET updated_at = ? WHERE id = ?`)
@@ -243,6 +275,18 @@ class ChatSessionDatabase {
     this.db
       .prepare(`UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?`)
       .run(title, Date.now(), sessionId)
+  }
+
+  deleteTurn(sessionId: string, turnId: string): boolean {
+    const info = this.db
+      .prepare(`DELETE FROM chat_turns WHERE session_id = ? AND id = ?`)
+      .run(sessionId, turnId)
+    if (info.changes > 0) {
+      this.db
+        .prepare(`UPDATE chat_sessions SET updated_at = ? WHERE id = ?`)
+        .run(Date.now(), sessionId)
+    }
+    return info.changes > 0
   }
 
   deleteSession(id: string): boolean {
@@ -273,7 +317,7 @@ export async function getChatSession(id: string): Promise<ChatSession | null> {
 }
 
 export async function upsertChatSession(
-  session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt'>,
+  session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt'>
 ): Promise<void> {
   await store().ensureInitialized()
   store().upsertSession(session)
@@ -287,6 +331,11 @@ export async function appendChatTurn(sessionId: string, turn: ChatTurn): Promise
 export async function updateChatSessionTitle(sessionId: string, title: string): Promise<void> {
   await store().ensureInitialized()
   store().updateTitle(sessionId, title)
+}
+
+export async function deleteChatTurn(sessionId: string, turnId: string): Promise<boolean> {
+  await store().ensureInitialized()
+  return store().deleteTurn(sessionId, turnId)
 }
 
 export async function deleteChatSession(id: string): Promise<boolean> {

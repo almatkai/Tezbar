@@ -3,97 +3,30 @@
   "version": "v0.2.0-beta.1",
   "private": true,
   "description": "Tezbar",
-  "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "postinstall": "node scripts/fix-node-pty-permissions.mjs",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
+    "dev": "tauri dev",
+    "build": "pnpm build:native && tauri build",
+    "build:frontend": "vite build",
+    "preview": "vite preview --config vite.config.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
     "test": "vitest run",
-    "build:native:input": "./native/input/build-universal.sh",
     "build:native:axhelper": "./native/axhelper/build.sh",
     "build:native:screenocr": "./native/screenocr/build.sh",
     "build:native:color-picker": "./native/color-picker/build.sh",
-    "build:native": "pnpm build:native:input && pnpm build:native:axhelper && pnpm build:native:screenocr && pnpm build:native:color-picker",
-    "dist": "pnpm build && pnpm build:native && electron-builder",
-    "dist:win": "pnpm build && electron-builder --win nsis portable",
+    "build:native": "pnpm build:native:axhelper && pnpm build:native:screenocr && pnpm build:native:color-picker",
+    "dist": "pnpm build",
     "tauri": "tauri",
     "build:backend": "pnpm exec tsx scripts/build-backend.ts",
-    "tauri:dev": "pnpm build:backend && tauri dev",
-    "tauri:build": "pnpm build:backend && tauri build"
-  },
-  "build": {
-    "appId": "com.tezbar.app",
-    "productName": "Tezbar",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "out/**/*",
-      "native/input/index.node",
-      "native/axhelper/axhelper",
-      "native/screenocr/screenocr-helper",
-      "native/color-picker/color-picker-helper",
-      "node_modules/esbuild/**/*",
-      "node_modules/@esbuild/**/*",
-      "package.json",
-      "!node_modules/better-sqlite3/deps",
-      "!node_modules/better-sqlite3/deps/**/*",
-      "!node_modules/better-sqlite3/src",
-      "!node_modules/better-sqlite3/src/**/*",
-      "!node_modules/better-sqlite3/build/Release/obj",
-      "!node_modules/better-sqlite3/build/Release/obj/**/*",
-      "!node_modules/better-sqlite3/binding.gyp",
-      "!node_modules/node-pty/deps",
-      "!node_modules/node-pty/deps/**/*",
-      "!node_modules/node-pty/scripts",
-      "!node_modules/node-pty/scripts/**/*",
-      "!node_modules/node-pty/src",
-      "!node_modules/node-pty/src/**/*",
-      "!node_modules/node-pty/prebuilds/win32-arm64",
-      "!node_modules/node-pty/prebuilds/win32-arm64/**/*",
-      "!node_modules/node-pty/prebuilds/win32-x64",
-      "!node_modules/node-pty/prebuilds/win32-x64/**/*",
-      "!node_modules/node-pty/lib/**/*.test.js",
-      "!node_modules/node-pty/lib/**/*.test.js.map",
-      "!node_modules/node-pty/lib/**/*.js.map"
-    ],
-    "extraResources": [
-      {
-        "from": "src/main/agent/raymes-pi-policy.ts",
-        "to": "agent/raymes-pi-policy.ts"
-      },
-      {
-        "from": "resources/trayIconTemplate.png",
-        "to": "trayIconTemplate.png"
-      },
-      {
-        "from": "resources/trayIconTemplate@2x.png",
-        "to": "trayIconTemplate@2x.png"
-      }
-    ],
-    "asarUnpack": [
-      "native/input/index.node",
-      "native/axhelper/axhelper",
-      "native/screenocr/screenocr-helper",
-      "native/color-picker/color-picker-helper",
-      "node_modules/node-pty/build/Release/*.node",
-      "node_modules/better-sqlite3/build/Release/*.node"
-    ],
-    "mac": {
-      "target": "dmg",
-      "category": "public.app-category.utilities"
-    }
+    "tauri:dev": "tauri dev",
+    "tauri:build": "pnpm build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
     "better-sqlite3": "^12.9.0",
     "esbuild": "^0.28.0",
-    "fuse.js": "^7.3.0",
-    "node-pty": "^1.1.0"
+    "fuse.js": "^7.3.0"
   },
   "optionalDependencies": {
     "@esbuild/darwin-arm64": "0.28.0",
@@ -115,9 +48,6 @@
     "@xterm/xterm": "^6.0.0",
     "autoprefixer": "^10.4.21",
     "dompurify": "^3.4.0",
-    "electron": "^33.4.8",
-    "electron-builder": "^26.8.1",
-    "electron-vite": "^3.1.0",
     "eslint": "^9.25.0",
     "eslint-config-prettier": "^10.1.2",
     "eslint-plugin-react-hooks": "^5.2.0",
@@ -136,5 +66,5 @@
     "vite": "^6.3.3",
     "vitest": "^3.1.2"
   },
-  "packageManager": "pnpm@11.1.3"
+  "packageManager": "pnpm@11.11.0"
 }

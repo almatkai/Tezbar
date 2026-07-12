@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app } from '@tezbar/desktop-runtime'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'

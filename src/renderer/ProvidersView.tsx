@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
-import type { ProviderConnectionStatuses } from '../preload/api'
+import type { ProviderConnectionStatuses } from '../shared/desktop-api'
 import { recommendedModel } from '../shared/aiProviders'
 import {
   Button,

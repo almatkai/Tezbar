@@ -11,7 +11,7 @@
  * - `bun install` is ~25x faster than `npm install`
  */
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow } from '@tezbar/desktop-runtime';
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';

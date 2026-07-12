@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { readRawConfig } from './configStore'
-import { configForProvider, readLLMConfig, type OpenRayLLMConfig } from './registry'
+import {
+  configForProvider,
+  getSelectedPiModelPattern,
+  getSelectedPiProviderBridge,
+  readLLMConfig,
+  type OpenRayLLMConfig,
+} from './registry'
 
 vi.mock('./configStore', () => ({
   readRawConfig: vi.fn(),
@@ -76,5 +82,25 @@ describe('configForProvider', () => {
       apiKey: undefined,
       geminiApiKey: undefined,
     })
+  })
+
+  it('uses chat task overrides when building Pi model settings', () => {
+    vi.mocked(readRawConfig).mockReturnValue({
+      provider: 'copilot',
+      model: 'gpt-4o',
+      providerConfigs: {
+        copilot: { copilotGithubToken: 'copilot-token' },
+        deepseek: { baseURL: 'https://api.deepseek.com', apiKey: 'deepseek-key' },
+      },
+      providerSelectedModels: {
+        copilot: 'gpt-4o',
+        deepseek: 'deepseek-v4-flash',
+      },
+      taskProviderOverrides: { chat: 'deepseek' },
+      taskModelOverrides: { chat: 'deepseek-v4-flash' },
+    })
+
+    expect(getSelectedPiModelPattern('chat')).toBe('deepseek/deepseek-v4-flash')
+    expect(getSelectedPiProviderBridge('chat')?.providerJson).toContain('https://api.deepseek.com')
   })
 })

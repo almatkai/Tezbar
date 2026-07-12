@@ -1,4 +1,19 @@
-export type VoiceModelId = 'moonshine-base-en' | 'whisper-base' | 'whisper-small'
+export const VOICE_MODEL_IDS = [
+  'moonshine-base-en',
+  'moonshine-tiny-en',
+  'whisper-tiny-en',
+  'whisper-tiny',
+  'whisper-base',
+  'whisper-small',
+  'whisper-medium-en',
+  'whisper-large-v3-turbo',
+] as const
+
+export type VoiceModelId = (typeof VOICE_MODEL_IDS)[number]
+
+export type VoiceModelLanguage = 'en' | 'multilingual'
+
+export type VoiceModelTier = 'fast' | 'balanced' | 'accurate'
 
 export type VoiceModelStatus = 'not-downloaded' | 'downloading' | 'downloaded' | 'error'
 
@@ -25,6 +40,9 @@ export type VoiceModel = {
   family: 'moonshine' | 'whisper'
   description: string
   homepageUrl: string
+  sizeLabel: string
+  language: VoiceModelLanguage
+  tier: VoiceModelTier
   estimatedSizeMb: number
   status: VoiceModelStatus
   stage: VoiceModelStage

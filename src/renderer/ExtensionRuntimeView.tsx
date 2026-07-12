@@ -28,6 +28,21 @@ type RuntimeViewState = {
   message?: string
 }
 
+type ActionNotice = {
+  message: string
+  tone: 'success' | 'error'
+}
+
+function fallbackActionNotice(action: ExtensionRuntimeAction | undefined): string | null {
+  if (!action) return null
+  if (action.kind === 'copy' || /copy (?:gif|image|link|markdown)/i.test(action.title)) {
+    return 'Copied to clipboard'
+  }
+  if (/add to favou?rites?/i.test(action.title)) return 'Added to Favorites'
+  if (/remove from favou?rites?/i.test(action.title)) return 'Removed from Favorites'
+  return null
+}
+
 function fromRunResult(
   result: Extract<ExtensionRunCommandResult, { ok: true; mode: 'view' }>
 ): RuntimeViewState {
@@ -310,13 +325,36 @@ export default function ExtensionRuntimeView({
 }): JSX.Element {
   const [state, setState] = useState<RuntimeViewState>(() => fromRunResult(initial))
   const [error, setError] = useState<string | null>(null)
+  const [actionNotice, setActionNotice] = useState<ActionNotice | null>(null)
   const searchRequestSeq = useRef(0)
   const disposeTimerRef = useRef<number | null>(null)
+  const actionNoticeTimerRef = useRef<number | null>(null)
+
+  const showActionNotice = useCallback((message: string): void => {
+    if (actionNoticeTimerRef.current !== null) {
+      window.clearTimeout(actionNoticeTimerRef.current)
+    }
+    const tone = /could not|failed|failure|error/i.test(message) ? 'error' : 'success'
+    setActionNotice({ message, tone })
+    actionNoticeTimerRef.current = window.setTimeout(() => {
+      actionNoticeTimerRef.current = null
+      setActionNotice(null)
+    }, 2400)
+  }, [])
 
   useEffect(() => {
     setState(fromRunResult(initial))
     setError(null)
   }, [initial])
+
+  useEffect(
+    () => () => {
+      if (actionNoticeTimerRef.current !== null) {
+        window.clearTimeout(actionNoticeTimerRef.current)
+      }
+    },
+    []
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -463,11 +501,13 @@ export default function ExtensionRuntimeView({
             commandName={state.commandName}
             root={state.root}
             actions={state.actions}
+            actionNotice={actionNotice}
             onBack={onBack}
             onSearchTextChanged={handleSearchTextChanged}
             onLoadMore={handleLoadMore}
             onInvokeAction={async (actionId, formValues) => {
               setError(null)
+              const invokedAction = state.actions.find((action) => action.id === actionId)
               const result = await window.tezbar.extensionInvokeAction({
                 sessionId: state.sessionId,
                 actionId,
@@ -479,8 +519,11 @@ export default function ExtensionRuntimeView({
                 return
               }
 
+              const notice = result.message?.trim() || fallbackActionNotice(invokedAction)
+              if (notice) showActionNotice(notice)
+
               if (result.mode === 'no-view') {
-                setState((prev) => ({ ...prev, message: result.message }))
+                setState((prev) => ({ ...prev, message: undefined }))
                 return
               }
 
@@ -491,7 +534,7 @@ export default function ExtensionRuntimeView({
                 title: result.title,
                 root: result.root,
                 actions: result.actions,
-                message: result.message,
+                message: undefined,
               })
             }}
           />

@@ -1,8 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import type {
-  ExtensionRuntimeAction,
-  ExtensionRuntimeNode,
-} from '../../../shared/extensionRuntime'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import type { ExtensionRuntimeAction, ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
 import { Action, ActionPanel, ActionPanelOverlay } from './action-runtime'
 import { ActionRegistryContext } from './action-runtime-registry'
 import { DetailRuntime } from './detail-runtime'
@@ -31,6 +28,7 @@ export type ExtensionRuntimeSurfaceProps = {
   commandName: string
   root: ExtensionRuntimeNode
   actions: ExtensionRuntimeAction[]
+  actionNotice?: { message: string; tone: 'success' | 'error' } | null
   onBack: () => void
   onSearchTextChanged: (searchText: string) => Promise<void> | void
   onLoadMore: () => Promise<void> | void
@@ -44,8 +42,19 @@ function rootKind(root: ExtensionRuntimeNode): 'list' | 'form' | 'grid' | 'detai
   return 'list'
 }
 
-export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JSX.Element {
-  const { title, extensionId, commandName, root, actions, onBack, onSearchTextChanged, onLoadMore, onInvokeAction } = props
+export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): ReactNode {
+  const {
+    title,
+    extensionId,
+    commandName,
+    root,
+    actions,
+    actionNotice,
+    onBack,
+    onSearchTextChanged,
+    onLoadMore,
+    onInvokeAction,
+  } = props
   const [showActions, setShowActions] = useState(false)
   const [actionFilterIds, setActionFilterIds] = useState<string[] | null>(null)
 
@@ -65,7 +74,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
         void onInvokeAction('__nav_pop__')
       },
     }),
-    [onInvokeAction],
+    [onInvokeAction]
   )
 
   useEffect(() => {
@@ -83,7 +92,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
         return
       }
 
-      if (event.key === 'Enter' && primaryAction && kind !== 'list') {
+      if (event.key === 'Enter' && primaryAction && kind !== 'list' && kind !== 'grid') {
         event.preventDefault()
         void onInvokeAction(primaryAction.id)
       }
@@ -126,9 +135,12 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
             <GridRuntime
               root={root}
               title={title}
+              actions={actions}
+              actionNotice={actionNotice}
               onBack={onBack}
               onRunPrimaryAction={onRunPrimaryAction}
               onOpenActions={openActions}
+              onSearchTextChanged={onSearchTextChanged}
             />
           ) : kind === 'detail' ? (
             <DetailRuntime
@@ -154,7 +166,11 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): JS
 
           {showActions && actions.length > 0 ? (
             <ActionPanelOverlay
-              actions={actionFilterIds ? actions.filter((action) => actionFilterIds.includes(action.id)) : actions}
+              actions={
+                actionFilterIds
+                  ? actions.filter((action) => actionFilterIds.includes(action.id))
+                  : actions
+              }
               onClose={() => {
                 setShowActions(false)
                 setActionFilterIds(null)

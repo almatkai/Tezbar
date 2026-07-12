@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, shell } from 'electron'
+import { app, BrowserWindow, clipboard, shell } from '@tezbar/desktop-runtime'
 import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -522,6 +522,19 @@ function exactRecentQuickNoteBoost(
   return 0
 }
 
+/**
+ * When a document contains every query token in its title/subtitle it is
+ * almost certainly the intended result.  A generous boost prevents recency
+ * from pushing partial-match documents above exact multi-token hits.
+ */
+function fullTokenMatchBoost(query: string, title: string, subtitle: string): number {
+  const tokens = query.trim().toLowerCase().match(/[a-z0-9]+/g) ?? []
+  if (tokens.length < 2) return 0
+  const text = `${title} ${subtitle}`.toLowerCase()
+  const allMatch = tokens.every((t) => text.includes(t))
+  return allMatch ? 200 : 0
+}
+
 function rankRows(
   query: string,
   docs: Array<{ doc: IndexedDocument; lexical: number; fuzzyDistance?: number }>
@@ -582,7 +595,8 @@ function rankRows(
         if (!q) return 120
         if (/\bnotes?\b/.test(q) || q.includes('quick note')) return 780
         return 120
-      })()
+      })() +
+      fullTokenMatchBoost(query, entry.doc.title, entry.doc.subtitle)
 
     return {
       id: entry.doc.id,

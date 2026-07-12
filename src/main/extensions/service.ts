@@ -21,7 +21,7 @@
  *  - OAuth flow, preferences editor UI, background task scheduling,
  *    extension pane navigation. */
 
-import { app } from 'electron'
+import { app } from '@tezbar/desktop-runtime'
 import { createHash } from 'node:crypto'
 import { builtinModules, createRequire } from 'node:module'
 import { dirname, join } from 'node:path'

@@ -13,7 +13,7 @@
  *     and avoid shipping a package manager inside a launcher.
  */
 
-import { app } from 'electron';
+import { app } from '@tezbar/desktop-runtime';
 import { execFileSync } from 'child_process';
 import { EventEmitter } from 'events';
 import * as fs from 'fs';

@@ -29,7 +29,7 @@ import { once } from 'node:events'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { app } from 'electron'
+import { app } from '@tezbar/desktop-runtime'
 
 import { createLoopDriver, type PiEvent } from './loop'
 import type { AgentInputImage, Stage } from '../../shared/agent'

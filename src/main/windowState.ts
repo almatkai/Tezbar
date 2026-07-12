@@ -1,4 +1,4 @@
-import type { Rectangle } from 'electron'
+import type { Rectangle } from '@tezbar/desktop-runtime'
 
 let suppressBlurHide = false
 let windowBounds: Rectangle | null = null

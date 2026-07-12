@@ -1,4 +1,4 @@
-import { app, clipboard } from 'electron'
+import { app, clipboard } from '@tezbar/desktop-runtime'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'

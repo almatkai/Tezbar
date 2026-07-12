@@ -145,7 +145,7 @@ function parseListRows(node: ExtensionRuntimeNode): ListRow[] {
   return rows
 }
 
-function FileIcon({ path, title }: { path: string; title: string }): JSX.Element {
+function FileIcon({ path, title }: { path: string; title: string }): React.ReactNode {
   const [src, setSrc] = useState<string | null>(null)
 
   useEffect(() => {
@@ -174,7 +174,7 @@ function FileIcon({ path, title }: { path: string; title: string }): JSX.Element
   )
 }
 
-function SymbolIcon({ icon, title }: { icon: unknown; title: string }): JSX.Element {
+function SymbolIcon({ icon, title }: { icon: unknown; title: string }): React.ReactNode {
   const token = textValue(icon && typeof icon === 'object' ? (icon as { source?: unknown }).source : icon)
     .replace(/^Icon\./, '')
     .toLowerCase()
@@ -340,7 +340,7 @@ function metadataFromListDetail(detail: ExtensionRuntimeNode | undefined): Exten
   return (detail.children ?? []).find((child) => child.type === 'List.Item.Detail.Metadata')
 }
 
-function InlineMetadata({ root }: { root: ExtensionRuntimeNode }): JSX.Element {
+function InlineMetadata({ root }: { root: ExtensionRuntimeNode }): React.ReactNode {
   return (
     <div className="h-full overflow-y-auto px-4 py-4">
       <div className="max-w-[520px]">
@@ -352,7 +352,7 @@ function InlineMetadata({ root }: { root: ExtensionRuntimeNode }): JSX.Element {
   )
 }
 
-function ListDetailPane({ row }: { row?: ListRow }): JSX.Element {
+function ListDetailPane({ row }: { row?: ListRow }): React.ReactNode {
   const markdown = markdownFromListDetail(row?.detail)
   const metadata = metadataFromListDetail(row?.detail)
 
@@ -439,7 +439,7 @@ export function ListRuntime({
   onOpenActions: () => void
   onSearchTextChanged: (searchText: string) => Promise<void> | void
   onLoadMore: () => Promise<void> | void
-}): JSX.Element {
+}): React.ReactNode {
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -464,8 +464,19 @@ export function ListRuntime({
   const hasMore = root.props?.__hasMore === true
   const isColorConversionSurface = isColorConversionCommand(commandName, title, navigationTitle)
   const hasManySearchOptions = (searchAccessory?.options.length ?? 0) > 4
+  const hasSearchPlaceholder =
+    typeof root.props?.searchBarPlaceholder === 'string' &&
+    root.props.searchBarPlaceholder.trim().length > 0
+  const hasSearchText = typeof root.props?.searchText === 'string'
+  const hasClientSearchableRows = rows.length > 0
   const shouldShowSearch =
-    isColorConversionSurface || hasServerSearch || Boolean(searchAccessory) || !root.props?.navigationTitle
+    isColorConversionSurface ||
+    hasServerSearch ||
+    Boolean(searchAccessory) ||
+    hasSearchPlaceholder ||
+    hasSearchText ||
+    hasClientSearchableRows ||
+    !root.props?.navigationTitle
 
   const [query, setQuery] = useState(
     typeof root.props?.searchText === 'string' ? root.props.searchText : '',

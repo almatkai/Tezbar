@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { app } from 'electron'
+import { app } from '@tezbar/desktop-runtime'
 
 import type { AgentInputImage } from '../../shared/agent'
 

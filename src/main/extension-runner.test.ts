@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 
 const userData = mkdtempSync(join(tmpdir(), 'raymes-runner-user-'))
 
-vi.mock('electron', () => ({
+vi.mock('@tezbar/desktop-runtime', () => ({
   app: {
     isPackaged: false,
     getPath: () => userData,
@@ -106,6 +106,42 @@ describe('extension preference onboarding', () => {
 })
 
 describe('extension runtime API compatibility', () => {
+  it('creates environment.supportPath before extension code runs', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-support-path-extension-'))
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({
+        name: 'support-path-fixture',
+        title: 'Support Path Fixture',
+        commands: [{ name: 'index', title: 'Index', mode: 'view' }],
+      })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'index.js'),
+      `const { existsSync, readFileSync, writeFileSync } = require('node:fs')
+       const React = require('react').default
+       const { Detail, environment } = require('@raycast/api')
+       const dataPath = environment.supportPath + '/customTimers.json'
+       if (!existsSync(dataPath)) writeFileSync(dataPath, '{}')
+       module.exports.default = function Command() {
+         return React.createElement(Detail, { markdown: readFileSync(dataPath, 'utf8') })
+       }`
+    )
+
+    try {
+      const result = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index'
+      )
+      expect(result.ok, JSON.stringify(result)).toBe(true)
+      if (!result.ok || result.mode !== 'view') return
+      expect(result.root.props.markdown).toBe('{}')
+    } finally {
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
   it('renders bundles that use Image.Mask icon masks', async () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-image-mask-extension-'))
     mkdirSync(join(extensionRoot, '.sc-build'))
@@ -458,6 +494,125 @@ describe('extension runtime list pagination', () => {
       if (!cleared.ok || cleared.mode !== 'view') return
       expect(cleared.root.children).toHaveLength(30)
       expect(cleared.root.props.__hasMore).toBe(true)
+    } finally {
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rerenders server-search grids when search text changes', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-grid-search-extension-'))
+    mkdirSync(join(extensionRoot, 'src'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({
+        name: 'grid-search-fixture',
+        title: 'Grid Search Fixture',
+        commands: [{ name: 'index', title: 'Index', mode: 'view' }],
+      })
+    )
+    writeFileSync(
+      join(extensionRoot, 'src', 'index.tsx'),
+      `import React from 'react'
+       import { Grid } from '@raycast/api'
+       export default function Command() {
+         const [query, setQuery] = React.useState('initial')
+         return <Grid searchBarPlaceholder="Search GIFs" onSearchTextChange={setQuery}>
+           <Grid.Item title={'Remote ' + query} content="https://example.com/remote.gif" />
+         </Grid>
+       }`
+    )
+
+    try {
+      const initial = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index'
+      )
+      expect(initial.ok, JSON.stringify(initial)).toBe(true)
+      if (!initial.ok || initial.mode !== 'view') return
+      expect(initial.root.type).toBe('Grid')
+      expect(initial.root.props.__hasServerSearch).toBe(true)
+      expect(initial.root.children[0].props.title).toBe('Remote initial')
+
+      const searched = await updateSearchText({
+        sessionId: initial.sessionId,
+        searchText: 'halland',
+      })
+      expect(searched.ok, JSON.stringify(searched)).toBe(true)
+      if (!searched.ok || searched.mode !== 'view') return
+      expect(searched.root.type).toBe('Grid')
+      expect(searched.root.children[0].props.title).toBe('Remote halland')
+    } finally {
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('refreshes async server-search grid results when search text changes', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-async-grid-search-extension-'))
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({
+        name: 'async-grid-search-fixture',
+        title: 'Async Grid Search Fixture',
+        commands: [{ name: 'index', title: 'Index', mode: 'view' }],
+      })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'index.js'),
+      `const React = require('react').default
+       const { Grid } = require('@raycast/api')
+       const { useCachedPromise } = require('@raycast/utils')
+       module.exports.default = function Command() {
+         const [query, setQuery] = React.useState('')
+         const { data = [], isLoading, pagination } = useCachedPromise(
+           (value) => async ({ page }) => {
+             await new Promise((resolve) => setTimeout(resolve, 15))
+             return { data: value ? ['Remote ' + value] : ['Trending'], hasMore: false }
+           },
+           [query],
+           { keepPreviousData: true }
+         )
+         return React.createElement(Grid, {
+           filtering: false,
+           isLoading,
+           pagination,
+           searchBarPlaceholder: 'Search GIFs',
+           onSearchTextChange: setQuery,
+         }, data.map((title) => React.createElement(Grid.Item, {
+           key: title,
+           title,
+           content: 'https://example.com/remote.gif',
+         })))
+       }`
+    )
+
+    try {
+      const initial = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index'
+      )
+      expect(initial.ok, JSON.stringify(initial)).toBe(true)
+      if (!initial.ok || initial.mode !== 'view') return
+      expect(initial.root.type).toBe('Grid')
+      expect(initial.root.props.__hasServerSearch).toBe(true)
+      expect(initial.root.props.filtering).toBe(false)
+
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      const trending = await refreshExtensionSession({ sessionId: initial.sessionId })
+      expect(trending.ok, JSON.stringify(trending)).toBe(true)
+      if (!trending.ok || trending.mode !== 'view') return
+      expect(trending.root.children.map((child) => child.props.title)).toEqual(['Trending'])
+
+      const searched = await updateSearchText({
+        sessionId: initial.sessionId,
+        searchText: 'halland',
+      })
+      expect(searched.ok, JSON.stringify(searched)).toBe(true)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      const refreshed = await refreshExtensionSession({ sessionId: initial.sessionId })
+      expect(refreshed.ok, JSON.stringify(refreshed)).toBe(true)
+      if (!refreshed.ok || refreshed.mode !== 'view') return
+      expect(refreshed.root.children.map((child) => child.props.title)).toEqual(['Remote halland'])
     } finally {
       rmSync(extensionRoot, { recursive: true, force: true })
     }

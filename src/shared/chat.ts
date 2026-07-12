@@ -24,10 +24,20 @@ export interface ChatAttachment {
   height?: number
 }
 
+export interface ChatResponseMeta {
+  provider: string
+  providerTitle: string
+  model: string
+  /** Estimated output token count when provider usage is not available. */
+  tokenCount?: number
+}
+
 export interface ChatTurn {
   id: string
   role: ChatRole
   text: string
+  /** Provider/model metadata for assistant turns. */
+  responseMeta?: ChatResponseMeta
   /** Stages captured while this assistant turn ran, for replay in history. */
   stages?: Stage[]
   /** Optional error string if the assistant turn failed. */
@@ -74,6 +84,7 @@ export const CHAT_IPC = {
   GET: 'chat:get',
   APPEND: 'chat:append',
   UPDATE_TITLE: 'chat:update-title',
+  DELETE_TURN: 'chat:delete-turn',
   DELETE: 'chat:delete',
   CLEAR: 'chat:clear',
 } as const

@@ -1,4 +1,4 @@
-import { shell, systemPreferences } from 'electron'
+import { shell, systemPreferences } from '@tezbar/desktop-runtime'
 import type {
   PermissionDescriptor,
   PermissionId,

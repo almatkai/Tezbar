@@ -1,14 +1,14 @@
 import type { AiModelCapability, AiProviderModel, BuiltInProviderId, LlmConfigRecord, ProviderId } from './llmConfig'
 
 export const AI_PROVIDER_ROWS: Array<{ id: BuiltInProviderId; title: string; subtitle: string }> = [
-  { id: 'openai', title: 'OpenAI', subtitle: 'Official Chat Completions API' },
-  { id: 'deepseek', title: 'DeepSeek', subtitle: 'DeepSeek V4, V3, and R1' },
+  { id: 'openai', title: 'OpenAI', subtitle: 'Official OpenAI API' },
+  { id: 'deepseek', title: 'DeepSeek', subtitle: 'DeepSeek V4 Flash and Pro' },
   { id: 'openai-compatible', title: 'OpenAI Compatible', subtitle: 'Custom OpenAI-style endpoint' },
   { id: 'gemini', title: 'Gemini', subtitle: 'Google Gemini via OpenAI-compatible API' },
   { id: 'anthropic', title: 'Anthropic', subtitle: 'Claude via the official API' },
   { id: 'ollama', title: 'Ollama', subtitle: 'Local models on this machine' },
   { id: 'copilot', title: 'GitHub Copilot', subtitle: 'Copilot Chat access token' },
-  { id: 'opencode', title: 'OpenCode', subtitle: 'opencode.ai through the CLI' },
+  { id: 'opencode', title: 'OpenCode', subtitle: 'OpenCode Zen through the CLI/API' },
 ]
 
 export const AI_CAPABILITIES: Array<{ id: AiModelCapability; label: string }> = [
@@ -18,13 +18,13 @@ export const AI_CAPABILITIES: Array<{ id: AiModelCapability; label: string }> = 
 ]
 
 export const RECOMMENDED_AI_MODEL: Record<BuiltInProviderId, string> = {
-  openai: 'gpt-4o-mini',
+  openai: 'gpt-5.4-mini',
   deepseek: 'deepseek-v4-flash',
-  'openai-compatible': 'gpt-4o-mini',
-  gemini: 'gemini-2.0-flash',
-  anthropic: 'claude-3-5-haiku-20241022',
+  'openai-compatible': 'gpt-5.4-mini',
+  gemini: 'gemini-3.5-flash',
+  anthropic: 'claude-haiku-4-5-20251001',
   ollama: 'llama3.2',
-  copilot: 'gpt-4o',
+  copilot: 'gpt-5-mini',
   opencode: 'opencode/big-pickle',
 }
 
@@ -39,40 +39,67 @@ export const DEFAULT_BASE_URL: Partial<Record<BuiltInProviderId, string>> = {
 
 export const DEFAULT_PROVIDER_MODELS: Record<BuiltInProviderId, AiProviderModel[]> = {
   openai: [
-    { id: 'gpt-4o-mini', capabilities: ['vision', 'tools'], contextWindow: 128000 },
-    { id: 'gpt-4o', capabilities: ['vision', 'tools'], contextWindow: 128000 },
-    { id: 'o3-mini', capabilities: ['thinking', 'tools'], contextWindow: 200000 },
+    { id: 'gpt-5.5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1050000 },
+    { id: 'gpt-5.4', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1050000 },
+    { id: 'gpt-5.4-mini', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
+    { id: 'gpt-5.4-nano', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
+    { id: 'gpt-5-mini', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
   ],
+
   deepseek: [
-    { id: 'deepseek-v4-flash', capabilities: ['tools'], contextWindow: 128000 },
-    { id: 'deepseek-v4-pro', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
-    { id: 'deepseek-reasoner', capabilities: ['thinking'], contextWindow: 64000 },
+    { id: 'deepseek-v4-flash', capabilities: ['thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'deepseek-v4-pro', capabilities: ['thinking', 'tools'], contextWindow: 1048576 },
   ],
+
   'openai-compatible': [
-    { id: 'gpt-4o-mini', capabilities: ['vision', 'tools'], contextWindow: 128000 },
+    { id: 'gpt-5.4-mini', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
   ],
+
   gemini: [
-    { id: 'gemini-2.0-flash', capabilities: ['vision', 'tools'], contextWindow: 1000000 },
-    { id: 'gemini-1.5-pro', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 2000000 },
+    { id: 'gemini-3.5-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'gemini-3.1-flash-lite', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'gemini-3.1-pro-preview', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'gemini-3-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
   ],
+
   anthropic: [
-    { id: 'claude-3-5-haiku-20241022', capabilities: ['vision', 'tools'], contextWindow: 200000 },
-    { id: 'claude-3-5-sonnet-20241022', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 200000 },
+    { id: 'claude-haiku-4-5-20251001', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 200000 },
+    { id: 'claude-sonnet-5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
+    { id: 'claude-opus-4-8', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
+    { id: 'claude-fable-5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
   ],
+
   ollama: [
     { id: 'llama3.2', capabilities: ['tools'], contextWindow: 128000 },
     { id: 'llava', capabilities: ['vision'], contextWindow: 32000 },
   ],
+
   copilot: [
-    { id: 'gpt-4o', capabilities: ['vision', 'tools'], contextWindow: 128000 },
-    { id: 'claude-3.5-sonnet', capabilities: ['thinking', 'tools'], contextWindow: 200000 },
+    { id: 'gpt-5-mini', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
+    { id: 'gpt-5.3-codex', capabilities: ['thinking', 'tools'], contextWindow: 1000000 },
+    { id: 'gpt-5.4', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
+    { id: 'gpt-5.4-mini', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
+    { id: 'gpt-5.5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
+    { id: 'claude-haiku-4.5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 200000 },
+    { id: 'claude-sonnet-4.6', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
+    { id: 'claude-sonnet-5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
+    { id: 'gemini-3.5-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'gemini-3.1-pro', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'mai-code-1-flash', capabilities: ['thinking', 'tools'], contextWindow: 400000 },
+    { id: 'kimi-k2.7-code', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
   ],
+
   opencode: [
     { id: 'opencode/big-pickle', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
-    { id: 'opencode/deepseek-v4-flash-free', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
-    { id: 'opencode/mimo-v2.5-free', capabilities: ['tools'], contextWindow: 128000 },
+    { id: 'opencode/gpt-5.5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1050000 },
+    { id: 'opencode/gpt-5.4-mini', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
+    { id: 'opencode/deepseek-v4-pro', capabilities: ['thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'opencode/deepseek-v4-flash', capabilities: ['thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'opencode/deepseek-v4-flash-free', capabilities: ['thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'opencode/mimo-v2.5-free', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
     { id: 'opencode/nemotron-3-ultra-free', capabilities: ['tools'], contextWindow: 128000 },
     { id: 'opencode/north-mini-code-free', capabilities: ['tools'], contextWindow: 128000 },
+    { id: 'opencode/kimi-k2.7-code', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
   ],
 }
 
@@ -134,9 +161,23 @@ export function isAiProviderConfigured(config: LlmConfigRecord, provider: Provid
 export function inferCapabilities(modelId: string): AiModelCapability[] {
   const lower = modelId.toLowerCase()
   const caps: AiModelCapability[] = []
-  if (/vision|vl|llava|gpt-4o|gemini|claude/.test(lower)) caps.unshift('vision')
-  if (/reason|think|r1|o\d|sonnet|pro|v4-pro|claude|deepseek/.test(lower)) caps.push('thinking')
-  if (!/embed|whisper|tts/.test(lower)) caps.push('tools')
+
+  if (
+    /vision|vl|llava|gpt-4o|gpt-5|gemini|claude|fable|opus|sonnet|haiku/.test(lower)
+  ) {
+    caps.unshift('vision')
+  }
+
+  if (
+    /reason|think|r1|o\d|gpt-5|codex|sonnet|opus|fable|haiku|pro|v4|claude|deepseek/.test(lower)
+  ) {
+    caps.push('thinking')
+  }
+
+  if (!/embed|embedding|whisper|tts|audio|speech/.test(lower)) {
+    caps.push('tools')
+  }
+
   return Array.from(new Set(caps))
 }
 
