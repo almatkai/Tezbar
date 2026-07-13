@@ -25,12 +25,35 @@ type CommandDefinition = {
   handler: (payload?: Record<string, unknown>) => Promise<CommandResult>
 }
 
-function osascriptCommandHandler(script: string, successMessage: string): CommandDefinition['handler'] {
+function osascriptCommandHandler(
+  script: string,
+  successMessage: string
+): CommandDefinition['handler'] {
   return async () => {
     // Pass the script as an argument rather than through bash -lc to avoid
     // shell interpretation entirely.
     await execFileAsync('/usr/bin/osascript', ['-e', script])
     return { ok: true, message: successMessage }
+  }
+}
+
+function darkModeCommandHandler(enabled: boolean): CommandDefinition['handler'] {
+  if (process.platform !== 'win32') {
+    return osascriptCommandHandler(
+      `tell application "System Events" to tell appearance preferences to set dark mode to ${enabled}`,
+      `Dark mode ${enabled ? 'enabled' : 'disabled'}`
+    )
+  }
+  return async () => {
+    const lightTheme = enabled ? '0' : '1'
+    await execFileAsync('powershell.exe', [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `$path='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'; Set-ItemProperty -Path $path -Name AppsUseLightTheme -Value ${lightTheme}; Set-ItemProperty -Path $path -Name SystemUsesLightTheme -Value ${lightTheme}`,
+    ])
+    return { ok: true, message: `Dark mode ${enabled ? 'enabled' : 'disabled'}` }
   }
 }
 
@@ -52,10 +75,7 @@ export class CommandBus {
       permission: 'system-control',
       confirmation: 'recommended',
       analyticsKey: 'system.dark_mode_on',
-      handler: osascriptCommandHandler(
-        'tell application "System Events" to tell appearance preferences to set dark mode to true',
-        'Dark mode enabled',
-      ),
+      handler: darkModeCommandHandler(true),
     })
 
     this.register({
@@ -64,10 +84,7 @@ export class CommandBus {
       permission: 'system-control',
       confirmation: 'recommended',
       analyticsKey: 'system.dark_mode_off',
-      handler: osascriptCommandHandler(
-        'tell application "System Events" to tell appearance preferences to set dark mode to false',
-        'Dark mode disabled',
-      ),
+      handler: darkModeCommandHandler(false),
     })
 
     this.register({
@@ -81,7 +98,21 @@ export class CommandBus {
         if (!text) {
           return { ok: false, message: 'No text provided for read-aloud' }
         }
-        await execFileAsync('say', [text])
+        if (process.platform === 'win32') {
+          await execFileAsync(
+            'powershell.exe',
+            [
+              '-NoLogo',
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              'Add-Type -AssemblyName System.Speech; $voice=New-Object System.Speech.Synthesis.SpeechSynthesizer; try { $voice.Speak($env:TEZBAR_SPEECH_TEXT) } finally { $voice.Dispose() }',
+            ],
+            { windowsHide: true, env: { ...process.env, TEZBAR_SPEECH_TEXT: text } }
+          )
+        } else {
+          await execFileAsync('say', [text])
+        }
         return { ok: true, message: 'Reading aloud' }
       },
     })

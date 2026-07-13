@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "pnpm build:native && tauri build",
+    "build:windows": "node scripts/build-windows.mjs",
     "build:frontend": "vite build",
     "preview": "vite preview --config vite.config.ts",
     "lint": "eslint .",
@@ -15,7 +16,7 @@
     "build:native:axhelper": "./native/axhelper/build.sh",
     "build:native:screenocr": "./native/screenocr/build.sh",
     "build:native:color-picker": "./native/color-picker/build.sh",
-    "build:native": "pnpm build:native:axhelper && pnpm build:native:screenocr && pnpm build:native:color-picker",
+    "build:native": "node scripts/build-native.mjs",
     "dist": "pnpm build",
     "tauri": "tauri",
     "build:backend": "pnpm exec tsx scripts/build-backend.ts",
@@ -26,11 +27,14 @@
     "@anthropic-ai/sdk": "^0.90.0",
     "better-sqlite3": "^12.9.0",
     "esbuild": "^0.28.0",
-    "fuse.js": "^7.3.0"
+    "fuse.js": "^7.3.0",
+    "sqlite-vec": "0.1.7-alpha.10"
   },
   "optionalDependencies": {
     "@esbuild/darwin-arm64": "0.28.0",
-    "@esbuild/darwin-x64": "0.28.0"
+    "@esbuild/darwin-x64": "0.28.0",
+    "@esbuild/win32-arm64": "0.28.0",
+    "@esbuild/win32-x64": "0.28.0"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

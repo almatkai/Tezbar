@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFtsQuery, fuzzySimilarityScore } from './textMatch'
+import { buildContentFtsQuery, buildFtsQuery, fuzzySimilarityScore } from './textMatch'
 
 describe('buildFtsQuery', () => {
   it('uses only FTS-safe prefix tokens', () => {
@@ -11,11 +11,34 @@ describe('buildFtsQuery', () => {
     expect(buildFtsQuery('*')).toBe('')
     expect(buildFtsQuery('--- ... ___')).toBe('')
   })
+
+  it('keeps Unicode words', () => {
+    expect(buildFtsQuery('Поиск документов')).toBe('поиск* OR документов*')
+  })
+})
+
+describe('buildContentFtsQuery', () => {
+  it('drops dangerously broad partial tokens', () => {
+    expect(buildContentFtsQuery('i')).toBe('')
+    expect(buildContentFtsQuery('in')).toBe('')
+    expect(buildContentFtsQuery('inv')).toBe('inv')
+  })
+
+  it('requires all content terms and only prefixes specific tokens', () => {
+    expect(buildContentFtsQuery('invoice report')).toBe('invoice* AND report*')
+    expect(buildContentFtsQuery('Поиск документов')).toBe('поиск* AND документов*')
+  })
 })
 
 describe('fuzzySimilarityScore', () => {
   it('matches small typos by token similarity', () => {
     expect(fuzzySimilarityScore('Quick Notes', 'quik notes')).toBeGreaterThan(0.75)
+  })
+
+  it('matches Unicode query tokens', () => {
+    expect(
+      fuzzySimilarityScore('Быстрый поиск документов', 'Поиск документов')
+    ).toBeGreaterThan(0.9)
   })
 
   it('does not match unrelated text', () => {

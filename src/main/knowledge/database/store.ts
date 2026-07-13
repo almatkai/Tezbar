@@ -3,9 +3,11 @@ import DatabaseCtor, { type Database as DatabaseType } from 'better-sqlite3'
 import { mkdirSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { createHash } from 'node:crypto'
+import { load as loadSqliteVec } from 'sqlite-vec'
 import type {
   IndexingResult,
   KnowledgeRoot,
+  KnowledgeMetadataHit,
   KnowledgeReadResult,
   KnowledgeSearchHit,
   KnowledgeSettings,
@@ -13,7 +15,7 @@ import type {
   KnowledgeStatus,
   SourceFingerprint,
 } from '../../../shared/knowledge'
-import { buildFtsQuery } from '../../search/textMatch'
+import { buildContentFtsQuery } from '../../search/textMatch'
 import {
   cosineSimilarity,
   embedText,
@@ -42,6 +44,7 @@ type ChunkSearchRow = {
   text: string
   embeddingJson: string | Uint8Array | null
   rank?: number
+  distance?: number
 }
 
 export type PersistedIndexingCandidate = {
@@ -56,6 +59,11 @@ export type IndexingCheckpoint = {
   processedSources: number
   failedSources: number
   candidates: PersistedIndexingCandidate[]
+}
+
+export type VectorBackfillBatch = {
+  processed: number
+  hasMore: boolean
 }
 
 const DEFAULT_STATUS: KnowledgeStatus = {
@@ -96,9 +104,18 @@ function encodeEmbedding(value: readonly number[]): Buffer {
   return buffer
 }
 
-function decodeEmbedding(
-  value: string | Uint8Array | null | undefined,
-): number[] | undefined {
+function encodeBinaryEmbedding(value: readonly number[]): Buffer {
+  const buffer = Buffer.alloc(Math.ceil(value.length / 8))
+  for (let index = 0; index < value.length; index += 1) {
+    if ((value[index] ?? 0) >= 0) {
+      const byteIndex = Math.floor(index / 8)
+      buffer[byteIndex] = (buffer[byteIndex] ?? 0) | (1 << (index % 8))
+    }
+  }
+  return buffer
+}
+
+function decodeEmbedding(value: string | Uint8Array | null | undefined): number[] | undefined {
   if (!value) return undefined
   if (typeof value === 'string') return parseJson<number[] | undefined>(value, undefined)
   const buffer = Buffer.isBuffer(value)
@@ -121,6 +138,7 @@ export function getKnowledgeStore(): KnowledgeStore {
 
 export class KnowledgeStore {
   private database: DatabaseType | null = null
+  private vectorIndexAvailable = false
 
   private get db(): DatabaseType {
     if (!this.database) throw new Error('Knowledge database is not initialized')
@@ -133,6 +151,14 @@ export class KnowledgeStore {
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
+    try {
+      loadSqliteVec(
+        this.db as unknown as { loadExtension(path: string, entrypoint?: string): void }
+      )
+      this.vectorIndexAvailable = true
+    } catch (error) {
+      console.warn('[Knowledge] sqlite-vec unavailable; using compatibility search:', error)
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS knowledge_roots (
         id TEXT PRIMARY KEY,
@@ -160,6 +186,27 @@ export class KnowledgeStore {
         indexed_at INTEGER,
         FOREIGN KEY(root_id) REFERENCES knowledge_roots(id) ON DELETE CASCADE
       );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_sources_fts USING fts5(
+        id UNINDEXED,
+        path,
+        tokenize = 'unicode61'
+      );
+
+      CREATE TRIGGER IF NOT EXISTS knowledge_sources_fts_insert
+      AFTER INSERT ON knowledge_sources BEGIN
+        INSERT INTO knowledge_sources_fts(rowid, id, path) VALUES (new.rowid, new.id, new.path);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS knowledge_sources_fts_delete
+      AFTER DELETE ON knowledge_sources BEGIN
+        DELETE FROM knowledge_sources_fts WHERE rowid = old.rowid;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS knowledge_sources_fts_update
+      AFTER UPDATE OF path ON knowledge_sources BEGIN
+        UPDATE knowledge_sources_fts SET id = new.id, path = new.path WHERE rowid = old.rowid;
+      END;
 
       CREATE TABLE IF NOT EXISTS knowledge_pages (
         source_id TEXT NOT NULL,
@@ -259,6 +306,21 @@ export class KnowledgeStore {
     this.ensureColumn('knowledge_sources', 'indexing_profile', "TEXT NOT NULL DEFAULT ''")
     this.ensureColumn('knowledge_sources', 'total_pages', 'INTEGER')
     this.ensureColumn('knowledge_sources', 'indexed_pages', 'INTEGER NOT NULL DEFAULT 0')
+    const sourceCount = (
+      this.db.prepare('SELECT COUNT(*) AS count FROM knowledge_sources').get() as { count: number }
+    ).count
+    const metadataIndexCount = (
+      this.db.prepare('SELECT COUNT(*) AS count FROM knowledge_sources_fts').get() as {
+        count: number
+      }
+    ).count
+    if (sourceCount !== metadataIndexCount) {
+      this.db.exec(`
+        DELETE FROM knowledge_sources_fts;
+        INSERT INTO knowledge_sources_fts(rowid, id, path)
+        SELECT rowid, id, path FROM knowledge_sources;
+      `)
+    }
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS knowledge_sources_reuse_idx
         ON knowledge_sources(content_hash, indexing_profile, status, indexed_at DESC)
@@ -283,6 +345,110 @@ export class KnowledgeStore {
       )
       .run()
     this.ensureMaterializedStats()
+    this.ensureVectorIndex()
+  }
+
+  private ensureVectorIndex(): void {
+    if (!this.vectorIndexAvailable) return
+    this.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_chunk_vectors_binary USING vec0(
+        embedding bit[${FEATURE_EMBEDDING_MODEL.dimensions}],
+        root_id text
+      );
+    `)
+    const cutoff = this.db
+      .prepare(
+        "SELECT value_json AS valueJson FROM knowledge_metadata WHERE key = 'vector-binary-backfill-max-rowid-v1'"
+      )
+      .get() as { valueJson: string } | undefined
+    if (!cutoff) {
+      const maximumRow = this.db
+        .prepare(
+          'SELECT COALESCE(MAX(rowid), 0) AS maximumRowId FROM knowledge_chunks WHERE embedding_json IS NOT NULL'
+        )
+        .get() as { maximumRowId: number }
+      this.db
+        .prepare(
+          `INSERT INTO knowledge_metadata (key, value_json)
+           VALUES ('vector-binary-backfill-max-rowid-v1', ?)`
+        )
+        .run(JSON.stringify(maximumRow.maximumRowId))
+    }
+  }
+
+  /**
+   * Incrementally migrates embeddings created before the sqlite-vec index was
+   * introduced. Keeping this bounded is critical: large existing libraries
+   * must not delay the backend IPC connection during app startup.
+   */
+  backfillVectorIndexBatch(limit = 128): VectorBackfillBatch {
+    this.ensureInitialized()
+    if (!this.vectorIndexAvailable) return { processed: 0, hasMore: false }
+    const batchSize = Math.max(1, Math.min(1_000, Math.round(limit)))
+    const cursorRow = this.db
+      .prepare(
+        "SELECT value_json AS valueJson FROM knowledge_metadata WHERE key = 'vector-binary-backfill-cursor-v1'"
+      )
+      .get() as { valueJson: string } | undefined
+    const cursor = Math.max(0, parseJson<number>(cursorRow?.valueJson, 0))
+    const cutoffRow = this.db
+      .prepare(
+        "SELECT value_json AS valueJson FROM knowledge_metadata WHERE key = 'vector-binary-backfill-max-rowid-v1'"
+      )
+      .get() as { valueJson: string } | undefined
+    const cutoff = Math.max(cursor, parseJson<number>(cutoffRow?.valueJson, cursor))
+    const rows = this.db
+      .prepare(
+        `
+      SELECT c.rowid AS rowId, c.embedding_json AS embeddingJson, s.root_id AS rootId
+      FROM knowledge_chunks c
+      JOIN knowledge_sources s ON s.id = c.source_id
+      WHERE c.rowid > ? AND c.rowid <= ? AND c.embedding_json IS NOT NULL
+      ORDER BY c.rowid ASC
+      LIMIT ?
+    `
+      )
+      .all(cursor, cutoff, batchSize) as Array<{
+      rowId: number
+      embeddingJson: string | Uint8Array
+      rootId: string
+    }>
+
+    if (rows.length === 0) return { processed: 0, hasMore: false }
+    let processed = 0
+    const migrate = this.db.transaction(() => {
+      const insert = this.db.prepare(
+        `INSERT INTO knowledge_chunk_vectors_binary(rowid, embedding, root_id)
+         VALUES (?, vec_bit(?), ?)`
+      )
+      for (const row of rows) {
+        const embedding = decodeEmbedding(row.embeddingJson)
+        if (embedding?.length !== FEATURE_EMBEDDING_MODEL.dimensions) continue
+        const rowId = BigInt(row.rowId)
+        insert.run(rowId, encodeBinaryEmbedding(embedding), row.rootId)
+        processed += 1
+      }
+      this.db
+        .prepare(
+          `
+        INSERT INTO knowledge_metadata (key, value_json)
+        VALUES ('vector-binary-backfill-cursor-v1', ?)
+        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json
+      `
+        )
+        .run(JSON.stringify(rows.at(-1)?.rowId ?? cursor))
+    })
+    migrate()
+    return { processed, hasMore: true }
+  }
+
+  private deleteVectorsForSource(sourceId: string): void {
+    if (!this.vectorIndexAvailable) return
+    const rows = this.db
+      .prepare('SELECT rowid AS rowId FROM knowledge_chunks WHERE source_id = ?')
+      .all(sourceId) as Array<{ rowId: number }>
+    const remove = this.db.prepare('DELETE FROM knowledge_chunk_vectors_binary WHERE rowid = ?')
+    for (const row of rows) remove.run(BigInt(row.rowId))
   }
 
   /**
@@ -572,6 +738,7 @@ export class KnowledgeStore {
       // lookup through knowledge_chunks_source_idx instead of scanning the
       // entire full-text index for every indexed file.
       deleteFts.run(result.sourceId, result.sourceId)
+      this.deleteVectorsForSource(result.sourceId)
       this.db.prepare('DELETE FROM knowledge_pages WHERE source_id = ?').run(result.sourceId)
       this.db.prepare('DELETE FROM knowledge_chunks WHERE source_id = ?').run(result.sourceId)
       this.db.prepare('DELETE FROM knowledge_images WHERE source_id = ?').run(result.sourceId)
@@ -608,6 +775,12 @@ export class KnowledgeStore {
       const insertChunkFts = this.db.prepare(`
         INSERT INTO knowledge_chunks_fts (rowid, id, source_id, text) VALUES (?, ?, ?, ?)
       `)
+      const insertChunkVector = this.vectorIndexAvailable
+        ? this.db.prepare(
+            `INSERT INTO knowledge_chunk_vectors_binary(rowid, embedding, root_id)
+             VALUES (?, vec_bit(?), ?)`
+          )
+        : null
       for (const chunk of result.chunks) {
         const inserted = insertChunk.run(
           chunk.id,
@@ -619,6 +792,13 @@ export class KnowledgeStore {
           chunk.endOffset ?? null
         )
         insertChunkFts.run(inserted.lastInsertRowid, chunk.id, result.sourceId, chunk.text)
+        if (chunk.embedding?.length === FEATURE_EMBEDDING_MODEL.dimensions) {
+          insertChunkVector?.run(
+            BigInt(inserted.lastInsertRowid),
+            encodeBinaryEmbedding(chunk.embedding),
+            rootId
+          )
+        }
       }
 
       const insertImage = this.db.prepare(`
@@ -788,12 +968,15 @@ export class KnowledgeStore {
   removeSource(sourceId: string): void {
     this.ensureInitialized()
     this.db
-      .prepare(`
+      .prepare(
+        `
         DELETE FROM knowledge_chunks_fts
         WHERE rowid IN (SELECT rowid FROM knowledge_chunks WHERE source_id = ?)
           AND source_id = ?
-      `)
+      `
+      )
       .run(sourceId, sourceId)
+    this.deleteVectorsForSource(sourceId)
     this.db.prepare('DELETE FROM knowledge_pages WHERE source_id = ?').run(sourceId)
     this.db.prepare('DELETE FROM knowledge_chunks WHERE source_id = ?').run(sourceId)
     this.db.prepare('DELETE FROM knowledge_images WHERE source_id = ?').run(sourceId)
@@ -907,6 +1090,38 @@ export class KnowledgeStore {
       offset,
       hasMore: offset + rows.length < total.count,
     }
+  }
+
+  searchMetadata(query: string, limit = 20, rootIds?: string[]): KnowledgeMetadataHit[] {
+    this.ensureInitialized()
+    const trimmed = query.trim()
+    const ftsQuery = buildContentFtsQuery(trimmed)
+    if (!ftsQuery || limit <= 0 || rootIds?.length === 0) return []
+    const rootFilter = rootIds ? `AND r.id IN (${rootIds.map(() => '?').join(', ')})` : ''
+    const rows = this.db
+      .prepare(
+        `
+      SELECT s.id AS sourceId, s.path, bm25(knowledge_sources_fts) AS rank
+      FROM knowledge_sources_fts f
+      JOIN knowledge_sources s ON s.id = f.id
+      JOIN knowledge_roots r ON r.id = s.root_id
+      WHERE knowledge_sources_fts MATCH ? AND r.enabled = 1 ${rootFilter}
+      ORDER BY rank ASC
+      LIMIT ?
+    `
+      )
+      .all(ftsQuery, ...(rootIds ?? []), limit) as Array<{
+      sourceId: string
+      path: string
+      rank: number
+    }>
+
+    return rows.map((row, index) => ({
+      sourceId: row.sourceId,
+      path: row.path,
+      title: basename(row.path),
+      score: Math.max(0.2, 1 - index / Math.max(rows.length, 1)),
+    }))
   }
 
   getPersistedStatus(): KnowledgeStatus {
@@ -1055,7 +1270,7 @@ export class KnowledgeStore {
     const trimmed = query.trim()
     if (!trimmed || limit <= 0 || rootIds?.length === 0) return []
     const rootFilter = rootIds ? `AND r.id IN (${rootIds.map(() => '?').join(', ')})` : ''
-    const ftsQuery = buildFtsQuery(trimmed)
+    const ftsQuery = buildContentFtsQuery(trimmed)
     const lexicalRows = ftsQuery
       ? (this.db
           .prepare(
@@ -1064,44 +1279,68 @@ export class KnowledgeStore {
                  c.text, c.embedding_json AS embeddingJson,
                  bm25(knowledge_chunks_fts, 1.0) AS rank
           FROM knowledge_chunks_fts f
-          JOIN knowledge_chunks c ON c.id = f.id
+          JOIN knowledge_chunks c ON c.rowid = f.rowid
           JOIN knowledge_sources s ON s.id = c.source_id
           JOIN knowledge_roots r ON r.id = s.root_id
           WHERE knowledge_chunks_fts MATCH ? AND r.enabled = 1 ${rootFilter}
-          ORDER BY rank ASC LIMIT ?
+          LIMIT ?
         `
           )
           .all(ftsQuery, ...(rootIds ?? []), Math.max(40, limit * 5)) as ChunkSearchRow[])
       : []
-
-    const semanticRows = this.db
-      .prepare(
-        `
-      SELECT c.id, c.source_id AS sourceId, s.path, c.page_number AS pageNumber,
-             c.text, c.embedding_json AS embeddingJson
-      FROM knowledge_chunks c
-      JOIN knowledge_sources s ON s.id = c.source_id
-      JOIN knowledge_roots r ON r.id = s.root_id
-      WHERE c.embedding_json IS NOT NULL AND s.status = 'indexed' AND r.enabled = 1
-      ${rootFilter}
-      -- Chunks are replaced when a source is re-indexed, so rowid gives us
-      -- the same useful recency bias without sorting the entire chunk table.
-      -- Ordering by sources.indexed_at made every search scan and sort all
-      -- indexed chunks (roughly two seconds on a large knowledge database).
-      ORDER BY c.rowid DESC LIMIT 1200
-    `
-      )
-      .all(...(rootIds ?? [])) as ChunkSearchRow[]
+    lexicalRows.sort((left, right) => (left.rank ?? 0) - (right.rank ?? 0))
 
     const queryEmbedding = embedText(trimmed)
+    const semanticRows = this.vectorIndexAvailable
+      ? (this.db
+          .prepare(
+            `
+          WITH nearest AS (
+            SELECT rowid, distance
+            FROM knowledge_chunk_vectors_binary
+            WHERE embedding MATCH vec_bit(?) AND k = ?
+            ${rootIds ? `AND root_id IN (${rootIds.map(() => '?').join(', ')})` : ''}
+          )
+          SELECT c.id, c.source_id AS sourceId, s.path, c.page_number AS pageNumber,
+                 c.text, c.embedding_json AS embeddingJson, nearest.distance
+          FROM nearest
+          JOIN knowledge_chunks c ON c.rowid = nearest.rowid
+          JOIN knowledge_sources s ON s.id = c.source_id
+          JOIN knowledge_roots r ON r.id = s.root_id
+          WHERE s.status = 'indexed' AND r.enabled = 1
+          ORDER BY nearest.distance ASC
+        `
+          )
+          .all(
+            encodeBinaryEmbedding(queryEmbedding),
+            Math.max(320, limit * 32),
+            ...(rootIds ?? [])
+          ) as ChunkSearchRow[])
+      : (this.db
+          .prepare(
+            `
+          SELECT c.id, c.source_id AS sourceId, s.path, c.page_number AS pageNumber,
+                 c.text, c.embedding_json AS embeddingJson
+          FROM knowledge_chunks c
+          JOIN knowledge_sources s ON s.id = c.source_id
+          JOIN knowledge_roots r ON r.id = s.root_id
+          WHERE c.embedding_json IS NOT NULL AND s.status = 'indexed' AND r.enabled = 1
+          ${rootFilter}
+          ORDER BY c.rowid DESC LIMIT 1200
+        `
+          )
+          .all(...(rootIds ?? [])) as ChunkSearchRow[])
+
     const byId = new Map<string, KnowledgeSearchHit>()
     const lexicalIds = new Set(lexicalRows.map((row) => row.id))
     const candidates = new Map<string, ChunkSearchRow>()
     for (const row of [...lexicalRows, ...semanticRows]) candidates.set(row.id, row)
 
     for (const row of candidates.values()) {
-      const embedding = decodeEmbedding(row.embeddingJson) ?? []
-      const semanticScore = Math.max(0, cosineSimilarity(queryEmbedding, embedding))
+      const semanticScore = Math.max(
+        0,
+        cosineSimilarity(queryEmbedding, decodeEmbedding(row.embeddingJson) ?? [])
+      )
       const lexicalIndex = lexicalRows.findIndex((candidate) => candidate.id === row.id)
       const lexicalScore = lexicalIds.has(row.id)
         ? Math.max(0.15, 1 - lexicalIndex / Math.max(lexicalRows.length, 1))

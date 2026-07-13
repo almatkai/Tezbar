@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ExtensionRunCommandResult,
   ExtensionRuntimeAction,
+  ExtensionRuntimeEffect,
   ExtensionRuntimeNode,
 } from '../shared/extensionRuntime'
 import { Button, Message } from './ui/primitives'
@@ -41,6 +42,32 @@ function fallbackActionNotice(action: ExtensionRuntimeAction | undefined): strin
   if (/add to favou?rites?/i.test(action.title)) return 'Added to Favorites'
   if (/remove from favou?rites?/i.test(action.title)) return 'Removed from Favorites'
   return null
+}
+
+function effectNotice(effects: ExtensionRuntimeEffect[] | undefined): ActionNotice | null {
+  const latest = [...(effects ?? [])]
+    .reverse()
+    .find((effect) => effect.kind === 'toast' || effect.kind === 'hud')
+  if (!latest) return null
+
+  const title = latest.title?.trim()
+  const message = latest.message?.trim()
+  const status =
+    latest.style === 'failure'
+      ? 'Failed'
+      : latest.style === 'success'
+        ? 'Saved'
+        : latest.style === 'animated'
+          ? 'Working'
+          : 'Done'
+  const parts = [status]
+  if (title && title.toLowerCase() !== status.toLowerCase()) parts.push(title)
+  if (message) parts.push(message)
+
+  return {
+    message: parts.join(' · '),
+    tone: latest.style === 'failure' ? 'error' : 'success',
+  }
 }
 
 function fromRunResult(
@@ -402,17 +429,29 @@ export default function ExtensionRuntimeView({
   const disposeTimerRef = useRef<number | null>(null)
   const actionNoticeTimerRef = useRef<number | null>(null)
 
-  const showActionNotice = useCallback((message: string): void => {
+  const showActionNotice = useCallback((message: string, persist = false): void => {
     if (actionNoticeTimerRef.current !== null) {
       window.clearTimeout(actionNoticeTimerRef.current)
+      actionNoticeTimerRef.current = null
     }
     const tone = /could not|failed|failure|error/i.test(message) ? 'error' : 'success'
     setActionNotice({ message, tone })
+    if (persist) return
+
     actionNoticeTimerRef.current = window.setTimeout(() => {
       actionNoticeTimerRef.current = null
       setActionNotice(null)
     }, 2400)
   }, [])
+
+  const isFormSurface = state.root.type.startsWith('Form')
+
+  const showActionFailure = useCallback(
+    (message: string): void => {
+      showActionNotice(`Failed · ${message}`, isFormSurface)
+    },
+    [isFormSurface, showActionNotice]
+  )
 
   useEffect(() => {
     setState(fromRunResult(initial))
@@ -580,6 +619,9 @@ export default function ExtensionRuntimeView({
             onInvokeAction={async (actionId, formValues) => {
               setError(null)
               const invokedAction = state.actions.find((action) => action.id === actionId)
+              if (isFormSurface && invokedAction?.kind === 'submit-form') {
+                showActionNotice(`Working · ${invokedAction.title}…`, true)
+              }
               const result = await window.tezbar.extensionInvokeAction({
                 sessionId: state.sessionId,
                 actionId,
@@ -588,11 +630,25 @@ export default function ExtensionRuntimeView({
 
               if (!result.ok) {
                 setError(result.message)
+                showActionFailure(result.message)
                 return
               }
 
-              const notice = result.message?.trim() || fallbackActionNotice(invokedAction)
-              if (notice) showActionNotice(notice)
+              const effectNoticeValue = effectNotice(result.effects)
+              const messageNotice = result.message?.trim()
+                ? {
+                    message: result.message.trim(),
+                    tone: /could not|failed|failure|error/i.test(result.message)
+                      ? ('error' as const)
+                      : ('success' as const),
+                  }
+                : null
+              const fallbackNotice = fallbackActionNotice(invokedAction)
+              const notice =
+                effectNoticeValue ||
+                messageNotice ||
+                (fallbackNotice ? { message: fallbackNotice, tone: 'success' as const } : null)
+              if (notice) showActionNotice(notice.message, isFormSurface)
 
               if (result.mode === 'no-view') {
                 setState((prev) => ({ ...prev, message: undefined }))

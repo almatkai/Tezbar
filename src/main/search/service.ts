@@ -17,6 +17,12 @@ import type {
 import type { NativeCommandId } from '../../shared/nativeCommands'
 import type { SafetyActionId } from '../../shared/safety'
 import {
+  ACTIVATE_DEEP_SEARCH_COMMAND,
+  DEEP_SEARCH_RESULT_PREFIX,
+  hasGoodMetadataMatch,
+  parseSearchQuery,
+} from '../../shared/searchMode'
+import {
   executeExtensionCommandRuntime,
   getExtensionCommands,
   isUnsupportedRuntimeModeError,
@@ -43,11 +49,7 @@ import { appsProvider, listApplications } from './providers/appsProvider'
 import { captureClipboardSnapshot, clipboardProvider } from './providers/clipboardProvider'
 import { commandsProvider } from './providers/commandsProvider'
 import { extensionsProvider } from './providers/extensionsProvider'
-import {
-  collectInitialFileDocuments,
-  spotlightFallback,
-  startFileWatcher,
-} from './providers/filesProvider'
+import { collectInitialFileDocuments, startFileWatcher } from './providers/filesProvider'
 import { addQuickNote, notesProvider } from './providers/notesProvider'
 import { quickLinksProvider } from './providers/quickLinksProvider'
 import { snippetsProvider } from './providers/snippetsProvider'
@@ -64,7 +66,7 @@ import { rankDirectoryRecommendations, type DirectoryVisit } from './directoryRe
 const execFileAsync = promisify(execFile)
 const MAX_RESULTS = 80
 const PROVIDER_REFRESH_MIN_AGE_MS = 10_000
-const FILE_INDEX_LIMIT = 4000
+const FILE_INDEX_LIMIT = 75_000
 
 type ProcessIdentity = {
   name: string
@@ -902,9 +904,43 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
   await bootstrapSearchIndex()
   refreshVolatileProvidersIfStale()
 
-  const trimmed = query.trim()
-  if (!trimmed) {
+  const parsedQuery = parseSearchQuery(query)
+  const trimmed = parsedQuery.query
+  const isDeepSearch = parsedQuery.mode === 'deep'
+  if (!trimmed && !isDeepSearch) {
     return attachSearchResultIcons(buildRecommendations())
+  }
+  if (!trimmed) {
+    return [
+      {
+        id: `${DEEP_SEARCH_RESULT_PREFIX}prompt`,
+        title: 'Deep Search',
+        subtitle: 'Type after ! to search inside the contents of indexed files',
+        category: 'knowledge',
+        score: 10_000,
+        action: {
+          type: 'invoke-command',
+          commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
+          payload: { query: '' },
+        },
+      },
+    ]
+  }
+  if (isDeepSearch && trimmed.length < 3) {
+    return [
+      {
+        id: `${DEEP_SEARCH_RESULT_PREFIX}keep-typing`,
+        title: 'Keep typing to search file contents',
+        subtitle: 'Deep Search starts after 3 characters',
+        category: 'knowledge',
+        score: 10_000,
+        action: {
+          type: 'invoke-command',
+          commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
+          payload: { query: trimmed },
+        },
+      },
+    ]
   }
 
   const learnedRows = indexDb.getDocumentsByIds(indexDb.listQueryActionIds(trimmed, 20))
@@ -941,39 +977,22 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     return true
   })
   const fileResults = asResults.filter((result) => result.category === 'files')
-  const normalizedQuery = trimmed.toLowerCase()
-  const queryTerms = normalizedQuery.split(/\s+/).filter(Boolean)
-  const hasStrongLocalMatch = resultsWithoutFiles.some((result) => {
-    if (
-      result.category !== 'applications' &&
-      result.category !== 'commands' &&
-      result.category !== 'native-command' &&
-      result.category !== 'extensions' &&
-      result.category !== 'snippets' &&
-      result.category !== 'quick-links'
-    ) {
-      return false
-    }
-
-    const title = result.title.trim().toLowerCase()
-    const titleTerms = title.split(/\s+/).filter(Boolean)
-    return (
-      title === normalizedQuery ||
-      title.startsWith(normalizedQuery) ||
-      queryTerms.every((term) =>
-        titleTerms.some((titleTerm) => titleTerm === term || titleTerm.startsWith(term))
-      )
+  const indexedSourceResults = getKnowledgeService()
+    .searchMetadata(trimmed, 24)
+    .map(
+      (hit, index): SearchResult => ({
+        id: `file:${hit.path}`,
+        title: hit.title,
+        subtitle: hit.path,
+        category: 'files',
+        score: 760 + Math.round(hit.score * 160) - index,
+        action: { type: 'open-file', path: hit.path },
+      })
     )
-  })
+  const allFileResults = uniqById([...fileResults, ...indexedSourceResults])
 
-  let fallbackFiles: SearchResult[] = []
-  if (!hasStrongLocalMatch && trimmed.length > 0 && fileResults.length < 2) {
-    fallbackFiles = await spotlightFallback(trimmed)
-  }
-
-  const openPortResults = await searchPortManagerOpenPorts(trimmed)
-  const knowledgeHits =
-    !hasStrongLocalMatch && trimmed.length >= 2 ? getKnowledgeService().search(trimmed, 10) : []
+  const openPortResults = isDeepSearch ? [] : await searchPortManagerOpenPorts(trimmed)
+  const knowledgeHits = isDeepSearch ? getKnowledgeService().search(trimmed, 16) : []
   const seenKnowledgeSources = new Set<string>()
   const knowledgeResults = knowledgeHits.flatMap((hit): SearchResult[] => {
     if (seenKnowledgeSources.has(hit.sourceId)) return []
@@ -999,27 +1018,57 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     return 120
   }
 
-  const noteAdd = trimmed
+  const noteAdd =
+    trimmed && !isDeepSearch
+      ? [
+          {
+            id: `note-add:${trimmed}`,
+            title: `Add quick note: ${trimmed.slice(0, 64)}`,
+            subtitle: 'Quick notes',
+            category: 'quick-notes' as const,
+            score: quickNoteAddScore(trimmed),
+            action: { type: 'add-note', text: trimmed },
+          } satisfies SearchResult,
+        ]
+      : []
+
+  const deepMatchedPaths = new Set(
+    knowledgeResults.flatMap((result) =>
+      result.action.type === 'open-file' ? [result.action.path] : []
+    )
+  )
+  const metadataFileResults = allFileResults.filter(
+    (result) => result.action.type !== 'open-file' || !deepMatchedPaths.has(result.action.path)
+  )
+  const basicCandidates = [...resultsWithoutFiles, ...allFileResults, ...openPortResults]
+  const shouldRecommendDeepSearch =
+    !isDeepSearch && trimmed.length >= 3 && !hasGoodMetadataMatch(trimmed, basicCandidates)
+  const bestBasicCandidateScore = basicCandidates.reduce(
+    (best, candidate) => Math.max(best, candidate.score),
+    0
+  )
+  const deepSearchRecommendation: SearchResult[] = shouldRecommendDeepSearch
     ? [
         {
-          id: `note-add:${trimmed}`,
-          title: `Add quick note: ${trimmed.slice(0, 64)}`,
-          subtitle: 'Quick notes',
-          category: 'quick-notes' as const,
-          score: quickNoteAddScore(trimmed),
-          action: { type: 'add-note', text: trimmed },
-        } satisfies SearchResult,
+          id: `${DEEP_SEARCH_RESULT_PREFIX}${encodeURIComponent(trimmed.toLowerCase())}`,
+          title: `Deep Search “${trimmed.slice(0, 72)}”`,
+          subtitle: 'No strong metadata match · Search inside indexed file contents',
+          category: 'knowledge',
+          score: Math.max(1_200, bestBasicCandidateScore + 1),
+          action: {
+            type: 'invoke-command',
+            commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
+            payload: { query: trimmed },
+          },
+        },
       ]
     : []
 
-  const results = uniqById([
-    ...resultsWithoutFiles,
-    ...fileResults,
-    ...knowledgeResults,
-    ...fallbackFiles,
-    ...openPortResults,
-    ...noteAdd,
-  ])
+  const results = uniqById(
+    isDeepSearch
+      ? [...knowledgeResults, ...metadataFileResults]
+      : [...deepSearchRecommendation, ...basicCandidates, ...noteAdd]
+  )
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_RESULTS)
   return attachSearchResultIcons(results)
@@ -1378,7 +1427,8 @@ function isApplicationsDirectory(path: string): boolean {
 
 function inferredDefaultAppName(targetPath: string): string {
   try {
-    if (statSync(targetPath).isDirectory()) return 'Finder'
+    if (statSync(targetPath).isDirectory())
+      return process.platform === 'win32' ? 'File Explorer' : 'Finder'
   } catch {
     // Fall through to extension/name heuristics.
   }
@@ -1692,6 +1742,10 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
   switch (action.type) {
     case 'open-app': {
       if (process.platform === 'win32' && action.appPath) {
+        if (action.appPath.startsWith('shell:AppsFolder\\')) {
+          await execFileAsync('explorer.exe', [action.appPath])
+          return { ok: true, message: `Opened ${action.appName}` }
+        }
         const opened = await shell.openPath(action.appPath)
         return opened
           ? { ok: false, message: opened }
@@ -1711,6 +1765,37 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
 
     case 'open-with-app': {
       if (action.appName) {
+        if (process.platform === 'win32') {
+          const application = listApplications().find(
+            (item) => item.name.toLowerCase() === action.appName?.toLowerCase()
+          )
+          if (!application || application.path.startsWith('shell:AppsFolder\\')) {
+            const opened = await shell.openPath(action.path)
+            return opened
+              ? { ok: false, message: opened }
+              : { ok: true, message: 'Opened with the default application' }
+          }
+          await execFileAsync(
+            'powershell.exe',
+            [
+              '-NoLogo',
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              'Start-Process -FilePath $env:TEZBAR_APP_PATH -ArgumentList (, $env:TEZBAR_TARGET_PATH)',
+            ],
+            {
+              windowsHide: true,
+              env: {
+                ...process.env,
+                TEZBAR_APP_PATH: application.path,
+                TEZBAR_TARGET_PATH: action.path,
+              },
+            }
+          )
+          recordOpenWithUsage(action.path, action.appName)
+          return { ok: true, message: `Opened with ${action.appName}` }
+        }
         await execFileAsync('open', ['-a', action.appName, action.path])
         recordOpenWithUsage(action.path, action.appName)
         return { ok: true, message: `Opened with ${action.appName}` }

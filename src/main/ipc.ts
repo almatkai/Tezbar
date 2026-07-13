@@ -756,7 +756,14 @@ export function registerIpcHandlers(
 
   ipcMain.handle('app-icon:data-url', async (_event, raw: unknown) => {
     const appPath = typeof raw === 'string' ? raw.trim() : ''
-    if (!appPath.endsWith('.app')) return null
+    if (
+      !appPath ||
+      (process.platform === 'darwin' && !appPath.endsWith('.app')) ||
+      (process.platform === 'win32' &&
+        !appPath.startsWith('shell:AppsFolder\\') &&
+        !/\.(?:exe|lnk|url)$/i.test(appPath))
+    )
+      return null
     return (await appIconDataUrl(appPath)) ?? null
   })
 
@@ -768,7 +775,13 @@ export function registerIpcHandlers(
     if (!path) return null
 
     if (kind === 'application') {
-      if (!path.endsWith('.app')) return null
+      if (
+        (process.platform === 'darwin' && !path.endsWith('.app')) ||
+        (process.platform === 'win32' &&
+          !path.startsWith('shell:AppsFolder\\') &&
+          !/\.(?:exe|lnk|url)$/i.test(path))
+      )
+        return null
       return (await appIconDataUrl(path)) ?? null
     }
     if (kind === 'extension') {

@@ -1,10 +1,12 @@
+function wordTokens(value: string): string[] {
+  return value
+    .toLocaleLowerCase()
+    .normalize('NFKC')
+    .match(/[\p{L}\p{N}]+/gu) ?? []
+}
+
 export function tokenizeQuery(query: string): string[] {
-  return query
-    .toLowerCase()
-    .trim()
-    .split(/\s+/)
-    .map((token) => token.replace(/[^a-z0-9._-]/g, ''))
-    .filter(Boolean)
+  return wordTokens(query)
 }
 
 export function lexicalScore(text: string, query: string): number {
@@ -26,7 +28,7 @@ export function lexicalScore(text: string, query: string): number {
 }
 
 function searchableTokens(text: string): string[] {
-  return text.toLowerCase().match(/[a-z0-9]+/g) ?? []
+  return wordTokens(text)
 }
 
 export function levenshteinDistance(left: string, right: string): number {
@@ -95,7 +97,20 @@ export function fuzzySimilarityScore(text: string, query: string): number {
 }
 
 export function buildFtsQuery(query: string): string {
-  const tokens = query.toLowerCase().match(/[a-z0-9]+/g) ?? []
+  const tokens = wordTokens(query)
   if (tokens.length === 0) return ''
   return tokens.map((token) => `${token}*`).join(' OR ')
+}
+
+/**
+ * Content indexes are much larger than launcher metadata indexes. Avoid broad
+ * one- and two-character prefixes, and require all meaningful terms so a
+ * partially typed query cannot force FTS5 to rank most of the corpus.
+ */
+export function buildContentFtsQuery(query: string): string {
+  const tokens = wordTokens(query)
+  return tokens
+    .filter((token) => token.length >= 3)
+    .map((token) => (token.length >= 4 ? `${token}*` : token))
+    .join(' AND ')
 }

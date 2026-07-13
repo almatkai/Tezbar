@@ -1,11 +1,18 @@
 // src-tauri/src/lib.rs
 mod native_input;
 mod native_terminal;
+#[cfg(target_os = "macos")]
+mod timer_notifications;
 
+#[cfg(target_os = "macos")]
 use core_foundation::base::{CFType, TCFType};
+#[cfg(target_os = "macos")]
 use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
+#[cfg(target_os = "macos")]
 use core_foundation::number::CFNumber;
+#[cfg(target_os = "macos")]
 use core_foundation::string::{CFString, CFStringRef};
+#[cfg(target_os = "macos")]
 use core_graphics::window::{
     copy_window_info, kCGWindowAlpha, kCGWindowBounds, kCGWindowLayer,
     kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly, kCGWindowOwnerName,
@@ -150,6 +157,14 @@ fn handle_backend_message(
                 set_backend_app_visibility(app, value);
             }
         }
+        #[cfg(target_os = "macos")]
+        "timer_notification" => {
+            let timer_file = val.get("timerFile").and_then(|value| value.as_str());
+            let name = val.get("name").and_then(|value| value.as_str());
+            if let (Some(timer_file), Some(name)) = (timer_file, name) {
+                timer_notifications::deliver(name, timer_file);
+            }
+        }
         _ => {}
     }
 }
@@ -272,7 +287,89 @@ fn supervise_backend(
 }
 
 fn openray_config_path() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".openray").join("config.json"))
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(|home| PathBuf::from(home).join(".openray").join("config.json"))
+}
+
+fn bun_executable_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "bun.exe"
+    } else {
+        "bun"
+    }
+}
+
+fn bun_in_user_profile() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .map(|home| home.join(".bun").join("bin").join(bun_executable_name()))
+}
+
+#[cfg(target_os = "windows")]
+fn install_windows_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
+    let architecture = match std::env::consts::ARCH {
+        "x86_64" => "x64",
+        "aarch64" => "aarch64",
+        other => {
+            return Err(format!(
+                "Bun does not provide a supported Windows build for {other}"
+            ))
+        }
+    };
+    let destination_dir = app_local_data.join("bun");
+    let destination = destination_dir.join("bun.exe");
+    fs::create_dir_all(&destination_dir)
+        .map_err(|error| format!("failed to create Bun runtime directory: {error}"))?;
+    let url = format!(
+        "https://github.com/oven-sh/bun/releases/download/bun-v1.2.5/bun-windows-{architecture}.zip"
+    );
+    let script = r#"$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP ('tezbar-bun-'+[guid]::NewGuid().ToString()+'.zip'); $extract=Join-Path $env:TEMP ('tezbar-bun-'+[guid]::NewGuid().ToString()); try { Invoke-WebRequest -UseBasicParsing -Uri $env:TEZBAR_BUN_URL -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force; $bun=Get-ChildItem -LiteralPath $extract -Filter bun.exe -Recurse | Select-Object -First 1; if (-not $bun) { throw 'bun.exe was not present in the downloaded archive' }; Copy-Item -LiteralPath $bun.FullName -Destination $env:TEZBAR_BUN_DEST -Force } finally { Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue }"#;
+    let status = Command::new("powershell.exe")
+        .args([
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ])
+        .env("TEZBAR_BUN_URL", url)
+        .env("TEZBAR_BUN_DEST", &destination)
+        .status()
+        .map_err(|error| format!("failed to start the Windows Bun installer: {error}"))?;
+    if status.success() && destination.is_file() {
+        Ok(destination)
+    } else {
+        Err("failed to download the Bun runtime required by Tezbar".to_string())
+    }
+}
+
+fn locate_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
+    let cached = app_local_data.join("bun").join(bun_executable_name());
+    if cached.is_file() {
+        return Ok(cached);
+    }
+    if let Some(user_bun) = bun_in_user_profile().filter(|path| path.is_file()) {
+        return Ok(user_bun);
+    }
+    if Command::new(bun_executable_name())
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+    {
+        return Ok(PathBuf::from(bun_executable_name()));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return install_windows_bun(app_local_data);
+    }
+    #[cfg(not(target_os = "windows"))]
+    Err("Bun is required to run the Tauri backend. Install Bun or place it in the app data bun directory.".to_string())
 }
 
 fn read_openray_config() -> serde_json::Value {
@@ -461,14 +558,17 @@ fn physical_monitor_work_area(monitor: &Monitor) -> (f64, f64, f64, f64) {
     )
 }
 
+#[cfg(target_os = "macos")]
 fn cf_type_for_static_key(key: CFStringRef) -> CFType {
     unsafe { CFString::wrap_under_get_rule(key).as_CFType() }
 }
 
+#[cfg(target_os = "macos")]
 fn cf_type_for_string_key(key: &str) -> CFType {
     CFString::new(key).as_CFType()
 }
 
+#[cfg(target_os = "macos")]
 fn dictionary_value_for_key(
     dictionary: &CFDictionary<CFType, CFType>,
     key: &CFType,
@@ -476,6 +576,7 @@ fn dictionary_value_for_key(
     dictionary.find(key).map(|value| (*value).clone())
 }
 
+#[cfg(target_os = "macos")]
 fn dictionary_number_for_key(
     dictionary: &CFDictionary<CFType, CFType>,
     key: &CFType,
@@ -485,6 +586,7 @@ fn dictionary_number_for_key(
         .to_f64()
 }
 
+#[cfg(target_os = "macos")]
 fn dictionary_string_for_key(
     dictionary: &CFDictionary<CFType, CFType>,
     key: &CFType,
@@ -494,6 +596,7 @@ fn dictionary_string_for_key(
         .map(|value| value.to_string())
 }
 
+#[cfg(target_os = "macos")]
 fn dictionary_for_key(
     dictionary: &CFDictionary<CFType, CFType>,
     key: &CFType,
@@ -504,6 +607,7 @@ fn dictionary_for_key(
     })
 }
 
+#[cfg(target_os = "macos")]
 fn frontmost_window_monitor(window: &WebviewWindow) -> Option<Monitor> {
     let window_infos = copy_window_info(
         kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
@@ -562,6 +666,11 @@ fn frontmost_window_monitor(window: &WebviewWindow) -> Option<Monitor> {
             return Some(monitor);
         }
     }
+    None
+}
+
+#[cfg(not(target_os = "macos"))]
+fn frontmost_window_monitor(_window: &WebviewWindow) -> Option<Monitor> {
     None
 }
 
@@ -761,7 +870,9 @@ fn open_settings_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn terminal_sessions_layout(main_window: &WebviewWindow) -> Result<(PersistedWindowPosition, f64), String> {
+fn terminal_sessions_layout(
+    main_window: &WebviewWindow,
+) -> Result<(PersistedWindowPosition, f64), String> {
     let position = main_window.outer_position().map_err(|e| e.to_string())?;
     let size = main_window.outer_size().map_err(|e| e.to_string())?;
     let scale_factor = main_window
@@ -771,8 +882,9 @@ fn terminal_sessions_layout(main_window: &WebviewWindow) -> Result<(PersistedWin
         .unwrap_or(1.0);
 
     let main_height = size.height as f64 / scale_factor;
-    let sidebar_height = (main_height - TERMINAL_SESSIONS_TOP_OFFSET - TERMINAL_SESSIONS_BOTTOM_OFFSET)
-        .max(TERMINAL_SESSIONS_MIN_HEIGHT);
+    let sidebar_height =
+        (main_height - TERMINAL_SESSIONS_TOP_OFFSET - TERMINAL_SESSIONS_BOTTOM_OFFSET)
+            .max(TERMINAL_SESSIONS_MIN_HEIGHT);
     let x = position.x as f64 - TERMINAL_SESSIONS_LEFT_OVERHANG * scale_factor;
     let y = position.y as f64 + TERMINAL_SESSIONS_TOP_OFFSET * scale_factor;
 
@@ -1094,82 +1206,91 @@ pub fn run() {
     let shortcut_gesture_handler = shortcut_gesture.clone();
 
     tauri::Builder::default()
-    .plugin(tauri_plugin_log::Builder::default().build())
-    .plugin(tauri_plugin_global_shortcut::Builder::new()
-      .with_handler(move |app, _shortcut, event| {
-        let Some(win) = app.get_webview_window("main") else {
-          return;
-        };
+        .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(move |app, _shortcut, event| {
+                    let Some(win) = app.get_webview_window("main") else {
+                        return;
+                    };
 
-        match event.state() {
-          ShortcutState::Pressed => {
-            let was_visible_and_focused = win.is_visible().unwrap_or(false)
-              && win.is_focused().unwrap_or(false);
-            let generation = {
-              let mut gesture = shortcut_gesture_handler.lock().unwrap();
-              // Ignore keyboard auto-repeat while the chord remains held.
-              if gesture.pressed_at.is_some() {
-                return;
-              }
-              gesture.generation = gesture.generation.wrapping_add(1);
-              gesture.pressed_at = Some(Instant::now());
-              gesture.dictation_armed = false;
-              gesture.was_visible_and_focused = was_visible_and_focused;
-              gesture.generation
-            };
+                    match event.state() {
+                        ShortcutState::Pressed => {
+                            let was_visible_and_focused = win.is_visible().unwrap_or(false)
+                                && win.is_focused().unwrap_or(false);
+                            let generation = {
+                                let mut gesture = shortcut_gesture_handler.lock().unwrap();
+                                // Ignore keyboard auto-repeat while the chord remains held.
+                                if gesture.pressed_at.is_some() {
+                                    return;
+                                }
+                                gesture.generation = gesture.generation.wrapping_add(1);
+                                gesture.pressed_at = Some(Instant::now());
+                                gesture.dictation_armed = false;
+                                gesture.was_visible_and_focused = was_visible_and_focused;
+                                gesture.generation
+                            };
 
-            // A tap from outside Tezbar opens it immediately. A tap while the
-            // focused palette is open is classified on release, so it no longer
-            // disappears before a possible push-to-talk hold can begin.
-            if !was_visible_and_focused {
-              let _ = show_window(win.clone());
-            }
+                            // A tap from outside Tezbar opens it immediately. A tap while the
+                            // focused palette is open is classified on release, so it no longer
+                            // disappears before a possible push-to-talk hold can begin.
+                            if !was_visible_and_focused {
+                                let _ = show_window(win.clone());
+                            }
 
-            let app = app.clone();
-            let gesture_state = shortcut_gesture_handler.clone();
-            std::thread::spawn(move || {
-              std::thread::sleep(SHORTCUT_HOLD_THRESHOLD);
-              {
-                let mut gesture = gesture_state.lock().unwrap();
-                if gesture.generation != generation || gesture.pressed_at.is_none() {
-                  return;
-                }
-                gesture.dictation_armed = true;
-              }
-              if let Some(window) = app.get_webview_window("main") {
-                if !window.is_visible().unwrap_or(false) || !window.is_focused().unwrap_or(false) {
-                  let _ = show_window(window.clone());
-                }
-                let _ = window.emit("voice:hotkey-hold", json!({ "phase": "press" }));
-              }
-            });
-          }
-          ShortcutState::Released => {
-            let (dictation_armed, was_visible_and_focused) = {
-              let mut gesture = shortcut_gesture_handler.lock().unwrap();
-              if gesture.pressed_at.take().is_none() {
-                return;
-              }
-              gesture.generation = gesture.generation.wrapping_add(1);
-              let result = (gesture.dictation_armed, gesture.was_visible_and_focused);
-              gesture.dictation_armed = false;
-              gesture.was_visible_and_focused = false;
-              result
-            };
+                            let app = app.clone();
+                            let gesture_state = shortcut_gesture_handler.clone();
+                            std::thread::spawn(move || {
+                                std::thread::sleep(SHORTCUT_HOLD_THRESHOLD);
+                                {
+                                    let mut gesture = gesture_state.lock().unwrap();
+                                    if gesture.generation != generation
+                                        || gesture.pressed_at.is_none()
+                                    {
+                                        return;
+                                    }
+                                    gesture.dictation_armed = true;
+                                }
+                                if let Some(window) = app.get_webview_window("main") {
+                                    if !window.is_visible().unwrap_or(false)
+                                        || !window.is_focused().unwrap_or(false)
+                                    {
+                                        let _ = show_window(window.clone());
+                                    }
+                                    let _ = window
+                                        .emit("voice:hotkey-hold", json!({ "phase": "press" }));
+                                }
+                            });
+                        }
+                        ShortcutState::Released => {
+                            let (dictation_armed, was_visible_and_focused) = {
+                                let mut gesture = shortcut_gesture_handler.lock().unwrap();
+                                if gesture.pressed_at.take().is_none() {
+                                    return;
+                                }
+                                gesture.generation = gesture.generation.wrapping_add(1);
+                                let result =
+                                    (gesture.dictation_armed, gesture.was_visible_and_focused);
+                                gesture.dictation_armed = false;
+                                gesture.was_visible_and_focused = false;
+                                result
+                            };
 
-            if dictation_armed {
-              let _ = win.emit("voice:hotkey-hold", json!({ "phase": "release" }));
-            } else if was_visible_and_focused {
-              let _ = hide_window(win);
-            }
-          }
-        }
-      })
-      .build())
-    .plugin(tauri_plugin_shell::init())
+                            if dictation_armed {
+                                let _ =
+                                    win.emit("voice:hotkey-hold", json!({ "phase": "release" }));
+                            } else if was_visible_and_focused {
+                                let _ = hide_window(win);
+                            }
+                        }
+                    }
+                })
+                .build(),
+        )
+        .plugin(tauri_plugin_shell::init())
         .manage(BackendState {
-      writer: backend_writer,
-      pending_requests,
+            writer: backend_writer,
+            pending_requests,
             request_counter,
         })
         .manage(WindowBehaviorState::default())
@@ -1219,7 +1340,10 @@ pub fn run() {
                     }
                 }
                 tauri::WindowEvent::Focused(false) => {
-                    if let Some(sidebar) = window.app_handle().get_webview_window(TERMINAL_SESSIONS_LABEL) {
+                    if let Some(sidebar) = window
+                        .app_handle()
+                        .get_webview_window(TERMINAL_SESSIONS_LABEL)
+                    {
                         if sidebar.is_focused().unwrap_or(false) {
                             return;
                         }
@@ -1236,195 +1360,228 @@ pub fn run() {
                 _ => {}
             }
         })
-    .invoke_handler(tauri::generate_handler![
-      call_backend,
-      open_settings_window_cmd,
-      terminal_sessions_show,
-      terminal_sessions_hide,
-      terminal_sessions_sync,
-      open_extensions_window,
-      toggle_window,
-      hide_window,
-      show_window,
-      close_current_window,
-      quit_app,
-      start_window_snap_drag,
+        .invoke_handler(tauri::generate_handler![
+            call_backend,
+            open_settings_window_cmd,
+            terminal_sessions_show,
+            terminal_sessions_hide,
+            terminal_sessions_sync,
+            open_extensions_window,
+            toggle_window,
+            hide_window,
+            show_window,
+            close_current_window,
+            quit_app,
+            start_window_snap_drag,
             end_window_snap_drag,
             set_suppress_blur_hide,
-      window_set_content_height,
-      update_raymes_shortcut,
-      native_input::move_mouse,
-      native_input::click,
-      native_input::double_click,
-      native_input::press_key,
-      native_input::type_text,
-      native_input::scroll,
-      native_input::screenshot,
-      native_input::is_physical_key_down,
-      native_terminal::native_terminal_create,
-      native_terminal::native_terminal_attach,
-      native_terminal::native_terminal_cwd,
-      native_terminal::native_terminal_detach,
-      native_terminal::native_terminal_write,
-      native_terminal::native_terminal_resize,
-      native_terminal::native_terminal_kill,
-      native_terminal::native_terminal_delete_history,
-      native_terminal::native_terminal_prune_history
-    ])
-    .setup(move |app| {
-      let handle = app.handle().clone();
-      // Spawn Background Bun process
-      let app_local_data = handle.path().app_local_data_dir().unwrap_or_default();
-      let bun_cached_path = app_local_data.join("bun").join("bun");
+            window_set_content_height,
+            update_raymes_shortcut,
+            native_input::move_mouse,
+            native_input::click,
+            native_input::double_click,
+            native_input::press_key,
+            native_input::type_text,
+            native_input::scroll,
+            native_input::screenshot,
+            native_input::is_physical_key_down,
+            native_terminal::native_terminal_create,
+            native_terminal::native_terminal_attach,
+            native_terminal::native_terminal_cwd,
+            native_terminal::native_terminal_detach,
+            native_terminal::native_terminal_write,
+            native_terminal::native_terminal_resize,
+            native_terminal::native_terminal_kill,
+            native_terminal::native_terminal_delete_history,
+            native_terminal::native_terminal_prune_history
+        ])
+        .setup(move |app| {
+            let handle = app.handle().clone();
+            #[cfg(target_os = "macos")]
+            timer_notifications::setup(&handle);
+            // Spawn Background Bun process
+            let app_local_data = handle.path().app_local_data_dir().unwrap_or_default();
+            let bun_command = locate_bun(&app_local_data)?;
+            let mut backend_env = vec![
+                (
+                    "APPDATA_DIR".to_string(),
+                    app_local_data.to_string_lossy().into_owned(),
+                ),
+                (
+                    "TEMP_DIR".to_string(),
+                    handle
+                        .path()
+                        .temp_dir()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
+                (
+                    "APP_VERSION".to_string(),
+                    handle.package_info().version.to_string(),
+                ),
+                ("IS_TAURI".to_string(), "true".to_string()),
+            ];
 
-      let home_bun_path = std::env::var_os("HOME")
-        .map(std::path::PathBuf::from)
-        .map(|home| home.join(".bun").join("bin").join("bun"));
-      let bun_command = if bun_cached_path.exists() {
-        Some(bun_cached_path)
-      } else if home_bun_path.as_ref().is_some_and(|path| path.exists()) {
-        home_bun_path
-      } else if Command::new("bun").arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok() {
-        Some(std::path::PathBuf::from("bun"))
-      } else {
-        None
-      };
-
-      let Some(bun_command) = bun_command else {
-        return Err("Bun is required to run the Tauri backend. Install Bun or place it in the app data bun directory.".into());
-      };
-      let mut backend_env = vec![
-        ("APPDATA_DIR".to_string(), app_local_data.to_string_lossy().into_owned()),
-        (
-          "TEMP_DIR".to_string(),
-          handle.path().temp_dir().unwrap_or_default().to_string_lossy().into_owned(),
-        ),
-        ("APP_VERSION".to_string(), handle.package_info().version.to_string()),
-        ("IS_TAURI".to_string(), "true".to_string()),
-      ];
-
-      if let Ok(resource_dir) = handle.path().resource_dir() {
-        backend_env.extend([
-          (
-            "AXHELPER_PATH".to_string(),
-            resource_dir.join("native").join("axhelper").join("axhelper").to_string_lossy().into_owned(),
-          ),
-          (
-            "SCREENOCR_HELPER_PATH".to_string(),
-            resource_dir.join("native").join("screenocr").join("screenocr-helper").to_string_lossy().into_owned(),
-          ),
-          (
-            "COLOR_PICKER_HELPER_PATH".to_string(),
-            resource_dir.join("native").join("color-picker").join("color-picker-helper").to_string_lossy().into_owned(),
-          ),
-          (
-            "ESBUILD_BINARY_PATH".to_string(),
-            resource_dir.join("bin").join("esbuild").to_string_lossy().into_owned(),
-          ),
-        ]);
-      }
-
-      let script_path = if cfg!(debug_assertions) {
-        // Tauri copies resources into target/debug only during a Rust build.
-        // The backend bundler runs independently, so that copy quickly becomes
-        // stale during development. Always execute the live workspace bundle.
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-          .join("../dist-backend/main.js")
-      } else {
-        handle
-          .path()
-          .resource_dir()
-          .map(|dir| dir.join("dist-backend").join("main.js"))
-          .unwrap_or_else(|_| std::path::PathBuf::from("dist-backend/main.js"))
-      };
-      let backend_config = BackendLaunchConfig {
-        executable: bun_command,
-        script_path,
-        env: backend_env,
-      };
-      let supervisor_handle = handle.clone();
-      let supervisor_pending = pending_requests_app.clone();
-      let supervisor_writer = backend_writer_app.clone();
-      std::thread::spawn(move || {
-        supervise_backend(
-          supervisor_handle,
-          backend_config,
-          supervisor_writer,
-          supervisor_pending,
-        );
-      });
-
-      // System Tray Menu Setup
-      use tauri::menu::{Menu, MenuItem};
-      use tauri::tray::{TrayIconBuilder, TrayIconEvent};
-
-      let show_item = MenuItem::with_id(&handle, "show", "Show Tezbar", true, None::<&str>)?;
-      let settings_item = MenuItem::with_id(&handle, "settings", "Settings", true, None::<&str>)?;
-      let quit_item = MenuItem::with_id(&handle, "quit", "Quit Tezbar", true, None::<&str>)?;
-
-      let menu = Menu::with_items(&handle, &[&show_item, &settings_item, &quit_item])?;
-
-      let handle_tray = handle.clone();
-      let tray_icon = {
-        let resource_path = handle.path().resource_dir()
-          .expect("failed to resolve resource dir")
-          .join("trayIconTemplate@2x.png");
-        let try_load_png = |path: &std::path::Path| -> Option<tauri::image::Image<'static>> {
-          let img = image::open(path).ok()?.into_rgba8();
-          let (w, h) = img.dimensions();
-          Some(tauri::image::Image::new_owned(img.into_raw(), w, h))
-        };
-        if let Some(icon) = try_load_png(&resource_path) {
-          icon
-        } else {
-          // Fallback: try relative path (dev mode)
-          let dev_path = std::env::current_dir()
-            .unwrap_or_default()
-            .join("../resources/trayIconTemplate@2x.png");
-          try_load_png(&dev_path)
-            .unwrap_or_else(|| handle.default_window_icon().unwrap().clone())
-        }
-      };
-      let _tray = TrayIconBuilder::new()
-        .icon(tray_icon)
-        .icon_as_template(true)
-        .menu(&menu)
-        .on_menu_event(move |app, event| {
-          match event.id.as_ref() {
-            "show" => {
-              if let Some(win) = app.get_webview_window("main") {
-                let _ = show_window(win);
-              }
+            if let Ok(resource_dir) = handle.path().resource_dir() {
+                #[cfg(target_os = "macos")]
+                backend_env.extend([
+                    (
+                        "AXHELPER_PATH".to_string(),
+                        resource_dir
+                            .join("native")
+                            .join("axhelper")
+                            .join("axhelper")
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
+                    (
+                        "SCREENOCR_HELPER_PATH".to_string(),
+                        resource_dir
+                            .join("native")
+                            .join("screenocr")
+                            .join("screenocr-helper")
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
+                    (
+                        "COLOR_PICKER_HELPER_PATH".to_string(),
+                        resource_dir
+                            .join("native")
+                            .join("color-picker")
+                            .join("color-picker-helper")
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
+                ]);
+                let esbuild_platform = if cfg!(target_os = "windows") {
+                    if cfg!(target_arch = "aarch64") {
+                        "win32-arm64"
+                    } else {
+                        "win32-x64"
+                    }
+                } else if cfg!(target_arch = "aarch64") {
+                    "darwin-arm64"
+                } else {
+                    "darwin-x64"
+                };
+                let esbuild_relative = if cfg!(target_os = "windows") {
+                    std::path::PathBuf::from("esbuild.exe")
+                } else {
+                    std::path::PathBuf::from("bin").join("esbuild")
+                };
+                backend_env.push((
+                    "ESBUILD_BINARY_PATH".to_string(),
+                    resource_dir
+                        .join("node_modules")
+                        .join("@esbuild")
+                        .join(esbuild_platform)
+                        .join(esbuild_relative)
+                        .to_string_lossy()
+                        .into_owned(),
+                ));
             }
-            "settings" => {
-              let _ = open_settings_window(app.clone());
-            }
-            "quit" => {
-              app.exit(0);
-            }
-            _ => {}
-          }
+
+            let script_path = if cfg!(debug_assertions) {
+                // Tauri copies resources into target/debug only during a Rust build.
+                // The backend bundler runs independently, so that copy quickly becomes
+                // stale during development. Always execute the live workspace bundle.
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist-backend/main.js")
+            } else {
+                handle
+                    .path()
+                    .resource_dir()
+                    .map(|dir| dir.join("dist-backend").join("main.js"))
+                    .unwrap_or_else(|_| std::path::PathBuf::from("dist-backend/main.js"))
+            };
+            let backend_config = BackendLaunchConfig {
+                executable: bun_command,
+                script_path,
+                env: backend_env,
+            };
+            let supervisor_handle = handle.clone();
+            let supervisor_pending = pending_requests_app.clone();
+            let supervisor_writer = backend_writer_app.clone();
+            std::thread::spawn(move || {
+                supervise_backend(
+                    supervisor_handle,
+                    backend_config,
+                    supervisor_writer,
+                    supervisor_pending,
+                );
+            });
+
+            // System Tray Menu Setup
+            use tauri::menu::{Menu, MenuItem};
+            use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+
+            let show_item = MenuItem::with_id(&handle, "show", "Show Tezbar", true, None::<&str>)?;
+            let settings_item =
+                MenuItem::with_id(&handle, "settings", "Settings", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(&handle, "quit", "Quit Tezbar", true, None::<&str>)?;
+
+            let menu = Menu::with_items(&handle, &[&show_item, &settings_item, &quit_item])?;
+
+            let handle_tray = handle.clone();
+            let tray_icon = {
+                let resource_path = handle
+                    .path()
+                    .resource_dir()
+                    .expect("failed to resolve resource dir")
+                    .join("trayIconTemplate@2x.png");
+                let try_load_png =
+                    |path: &std::path::Path| -> Option<tauri::image::Image<'static>> {
+                        let img = image::open(path).ok()?.into_rgba8();
+                        let (w, h) = img.dimensions();
+                        Some(tauri::image::Image::new_owned(img.into_raw(), w, h))
+                    };
+                if let Some(icon) = try_load_png(&resource_path) {
+                    icon
+                } else {
+                    // Fallback: try relative path (dev mode)
+                    let dev_path = std::env::current_dir()
+                        .unwrap_or_default()
+                        .join("../resources/trayIconTemplate@2x.png");
+                    try_load_png(&dev_path)
+                        .unwrap_or_else(|| handle.default_window_icon().unwrap().clone())
+                }
+            };
+            let _tray = TrayIconBuilder::new()
+                .icon(tray_icon)
+                .icon_as_template(true)
+                .menu(&menu)
+                .on_menu_event(move |app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = show_window(win);
+                        }
+                    }
+                    "settings" => {
+                        let _ = open_settings_window(app.clone());
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(move |tray, event| {
+                    if let TrayIconEvent::Click { .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = toggle_window(win);
+                        }
+                    }
+                })
+                .build(&handle_tray)?;
+
+            let default_shortcut = Shortcut::new(
+                Some(tauri_plugin_global_shortcut::Modifiers::ALT),
+                tauri_plugin_global_shortcut::Code::Space,
+            );
+            let _ = handle.global_shortcut().register(default_shortcut);
+
+            Ok(())
         })
-        .on_tray_icon_event(move |tray, event| {
-          if let TrayIconEvent::Click { .. } = event {
-            let app = tray.app_handle();
-            if let Some(win) = app.get_webview_window("main") {
-              let _ = toggle_window(win);
-            }
-          }
-        })
-        .build(&handle_tray)?;
-
-
-
-      let default_shortcut = Shortcut::new(
-        Some(tauri_plugin_global_shortcut::Modifiers::ALT),
-        tauri_plugin_global_shortcut::Code::Space,
-      );
-      let _ = handle.global_shortcut().register(default_shortcut);
-
-      Ok(())
-    })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
+import { clipboard } from '@tezbar/desktop-runtime'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -35,7 +36,9 @@ async function runPowerShell(script: string): Promise<string> {
 /** Network-adapter state is a privileged Windows operation. Use the UAC
  * elevation flow rather than failing silently for a normal desktop user. */
 async function runElevatedPowerShell(script: string): Promise<void> {
-  const encoded = Buffer.from(`$ErrorActionPreference = 'Stop'; ${script}`, 'utf16le').toString('base64')
+  const encoded = Buffer.from(`$ErrorActionPreference = 'Stop'; ${script}`, 'utf16le').toString(
+    'base64'
+  )
   const launcher = `$process = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'); if ($process.ExitCode -ne 0) { exit $process.ExitCode }`
   await execFileAsync('powershell.exe', [
     '-NoLogo',
@@ -51,41 +54,86 @@ async function runElevatedPowerShell(script: string): Promise<void> {
 async function executeWindowsCommand(id: NativeCommandId): Promise<NativeCommandResult | null> {
   switch (id) {
     case 'toggle-dark-mode':
-      await runPowerShell("$p='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'; $v=(Get-ItemPropertyValue -Path $p -Name AppsUseLightTheme -ErrorAction SilentlyContinue); $n=if($v -eq 0){1}else{0}; Set-ItemProperty -Path $p -Name AppsUseLightTheme -Value $n; Set-ItemProperty -Path $p -Name SystemUsesLightTheme -Value $n")
+      await runPowerShell(
+        "$p='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'; $v=(Get-ItemPropertyValue -Path $p -Name AppsUseLightTheme -ErrorAction SilentlyContinue); $n=if($v -eq 0){1}else{0}; Set-ItemProperty -Path $p -Name AppsUseLightTheme -Value $n; Set-ItemProperty -Path $p -Name SystemUsesLightTheme -Value $n"
+      )
       return { ok: true, message: 'Toggled Windows dark mode' }
     case 'start-screen-saver':
       await execFileAsync('rundll32.exe', ['user32.dll,LockWorkStation'])
       return { ok: true, message: 'Screen locked' }
     case 'sleep-display':
-      return { ok: false, message: 'Display sleep is not yet available on Windows.' }
+      await runPowerShell(
+        'Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public static class TezbarDisplay { [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l); }\'; [TezbarDisplay]::SendMessage([IntPtr]0xffff,0x0112,[IntPtr]0xF170,[IntPtr]2) | Out-Null'
+      )
+      return { ok: true, message: 'Display sleeping' }
     case 'toggle-mute':
     case 'volume-up':
     case 'volume-down': {
       // These virtual-key codes are handled by Windows' active audio endpoint,
       // so they honor the user's selected device and volume-step preference.
-      const virtualKey = id === 'toggle-mute' ? 0xAD : id === 'volume-up' ? 0xAF : 0xAE
-      await runPowerShell(`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class TezbarAudio { [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra); }'; [TezbarAudio]::keybd_event(${virtualKey}, 0, 0, [UIntPtr]::Zero); [TezbarAudio]::keybd_event(${virtualKey}, 0, 2, [UIntPtr]::Zero)`)
+      const virtualKey = id === 'toggle-mute' ? 0xad : id === 'volume-up' ? 0xaf : 0xae
+      await runPowerShell(
+        `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class TezbarAudio { [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra); }'; [TezbarAudio]::keybd_event(${virtualKey}, 0, 0, [UIntPtr]::Zero); [TezbarAudio]::keybd_event(${virtualKey}, 0, 2, [UIntPtr]::Zero)`
+      )
       return {
         ok: true,
-        message: id === 'toggle-mute' ? 'Toggled system mute' : id === 'volume-up' ? 'Volume up' : 'Volume down',
+        message:
+          id === 'toggle-mute'
+            ? 'Toggled system mute'
+            : id === 'volume-up'
+              ? 'Volume up'
+              : 'Volume down',
       }
     }
     case 'start-keep-awake':
-      startBackground('keep-awake', 'powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '$wshell=New-Object -ComObject WScript.Shell; while($true){$wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Milliseconds 50; $wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Seconds 240}'])
+      startBackground('keep-awake', 'powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        '$wshell=New-Object -ComObject WScript.Shell; while($true){$wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Milliseconds 50; $wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Seconds 240}',
+      ])
       return { ok: true, message: 'Keep Awake is on.' }
     case 'stop-keep-awake':
-      return { ok: true, message: stopBackground('keep-awake') ? 'Keep Awake turned off.' : 'Keep Awake was not running.' }
+      return {
+        ok: true,
+        message: stopBackground('keep-awake')
+          ? 'Keep Awake turned off.'
+          : 'Keep Awake was not running.',
+      }
     case 'sleep-system':
-      await runPowerShell('Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)')
+      await runPowerShell(
+        'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)'
+      )
       return { ok: true, message: 'System sleeping' }
     case 'show-network-info': {
-      const out = await runPowerShell("Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*'} | Select-Object -First 3 -ExpandProperty IPAddress")
-      return { ok: true, message: out ? `IP: ${out.replace(/\r?\n/g, ', ')}` : 'No network info available' }
+      const out = await runPowerShell(
+        "Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*'} | Select-Object -First 3 -ExpandProperty IPAddress"
+      )
+      return {
+        ok: true,
+        message: out ? `IP: ${out.replace(/\r?\n/g, ', ')}` : 'No network info available',
+      }
     }
+    case 'show-public-ip': {
+      const out = await runPowerShell(
+        "(Invoke-RestMethod -UseBasicParsing -TimeoutSec 5 -Uri 'https://api.ipify.org').Trim()"
+      )
+      return { ok: true, message: `Public IP: ${out}` }
+    }
+    case 'flush-dns-cache':
+      await execFileAsync('ipconfig.exe', ['/flushdns'])
+      return { ok: true, message: 'Flushed DNS cache' }
+    case 'toggle-vpn-menu':
+      await execFileAsync('explorer.exe', ['ms-settings:network-vpn'])
+      return { ok: true, message: 'Opened VPN settings' }
     case 'toggle-wifi': {
-      const adapterState = await runPowerShell("$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; $adapter.AdminStatus")
+      const adapterState = await runPowerShell(
+        "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; $adapter.AdminStatus"
+      )
       const disabling = adapterState === 'Up'
-      await runElevatedPowerShell("$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; if($adapter.AdminStatus -eq 'Up'){Disable-NetAdapter -Name $adapter.Name -Confirm:$false}else{Enable-NetAdapter -Name $adapter.Name -Confirm:$false}")
+      await runElevatedPowerShell(
+        "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; if($adapter.AdminStatus -eq 'Up'){Disable-NetAdapter -Name $adapter.Name -Confirm:$false}else{Enable-NetAdapter -Name $adapter.Name -Confirm:$false}"
+      )
       return { ok: true, message: `Wi-Fi ${disabling ? 'disabled' : 'enabled'}` }
     }
     case 'lock-screen':
@@ -94,15 +142,72 @@ async function executeWindowsCommand(id: NativeCommandId): Promise<NativeCommand
     case 'open-downloads':
       await execFileAsync('explorer.exe', [join(homedir(), 'Downloads')])
       return { ok: true, message: 'Opened Downloads' }
+    case 'open-applications':
+      await execFileAsync('explorer.exe', ['shell:AppsFolder'])
+      return { ok: true, message: 'Opened All Apps' }
+    case 'reveal-library':
+      await execFileAsync('explorer.exe', [
+        process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'),
+      ])
+      return { ok: true, message: 'Opened AppData' }
+    case 'copy-current-path': {
+      const out = await runPowerShell(
+        "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path } | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $path=$window.Document.Folder.Self.Path; Set-Clipboard -Value $path; $path"
+      )
+      return { ok: true, message: `Copied: ${out}` }
+    }
+    case 'empty-trash':
+      await runPowerShell('Clear-RecycleBin -Force -ErrorAction Stop')
+      return { ok: true, message: 'Emptied Recycle Bin' }
+    case 'show-macos-version':
+      return {
+        ok: true,
+        message: await runPowerShell(
+          "$os=Get-CimInstance Win32_OperatingSystem; '{0} — version {1}, build {2}' -f $os.Caption,$os.Version,$os.BuildNumber"
+        ),
+      }
     case 'show-cpu-info':
-      return { ok: true, message: await runPowerShell("Get-CimInstance Win32_Processor | ForEach-Object { \"$($_.Name) — $($_.NumberOfCores) cores\" }") }
+      return {
+        ok: true,
+        message: await runPowerShell(
+          'Get-CimInstance Win32_Processor | ForEach-Object { "$($_.Name) — $($_.NumberOfCores) cores" }'
+        ),
+      }
     case 'show-memory-info':
-      return { ok: true, message: await runPowerShell("$os=Get-CimInstance Win32_OperatingSystem; 'Free: {0:N1} GB / Total: {1:N1} GB' -f ($os.FreePhysicalMemory/1MB),($os.TotalVisibleMemorySize/1MB)") }
+      return {
+        ok: true,
+        message: await runPowerShell(
+          "$os=Get-CimInstance Win32_OperatingSystem; 'Free: {0:N1} GB / Total: {1:N1} GB' -f ($os.FreePhysicalMemory/1MB),($os.TotalVisibleMemorySize/1MB)"
+        ),
+      }
     case 'show-disk-usage':
-      return { ok: true, message: await runPowerShell("Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object { '{0} Free: {1:N1} GB / {2:N1} GB' -f $_.DeviceID,($_.FreeSpace/1GB),($_.Size/1GB) }") }
+      return {
+        ok: true,
+        message: await runPowerShell(
+          "Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object { '{0} Free: {1:N1} GB / {2:N1} GB' -f $_.DeviceID,($_.FreeSpace/1GB),($_.Size/1GB) }"
+        ),
+      }
     case 'show-battery-status': {
-      const out = await runPowerShell("Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | ForEach-Object { 'Battery: {0}%' -f $_.EstimatedChargeRemaining }")
+      const out = await runPowerShell(
+        "Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | ForEach-Object { 'Battery: {0}%' -f $_.EstimatedChargeRemaining }"
+      )
       return { ok: true, message: out || 'No battery detected' }
+    }
+    case 'list-listening-ports':
+      return {
+        ok: true,
+        message: 'Use Port Manager → Open Ports in Tezbar for a structured, filterable list.',
+      }
+    case 'git-root': {
+      const path = await runPowerShell(
+        "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path } | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $window.Document.Folder.Self.Path"
+      )
+      const { stdout } = await execFileAsync('git.exe', ['rev-parse', '--show-toplevel'], {
+        cwd: path,
+      })
+      const root = stdout.trim()
+      clipboard.writeText(root)
+      return { ok: true, message: `Copied repo root: ${root}` }
     }
     default:
       return null
@@ -172,7 +277,9 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
       }
 
       case 'toggle-mute': {
-        await runAppleScript('set volume output muted (not (output muted of (get volume settings)))')
+        await runAppleScript(
+          'set volume output muted (not (output muted of (get volume settings)))'
+        )
         return { ok: true, message: 'Toggled system mute' }
       }
 
@@ -254,7 +361,7 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
         // we pick up the user's own lock-screen settings (login window,
         // password delay, etc.) instead of just sleeping the display.
         await runAppleScript(
-          'tell application "System Events" to keystroke "q" using {command down, control down}',
+          'tell application "System Events" to keystroke "q" using {command down, control down}'
         )
         return { ok: true, message: 'Screen locked' }
       }
@@ -265,12 +372,16 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
       }
 
       case 'volume-up': {
-        await runAppleScript('set volume output volume (output volume of (get volume settings) + 10)')
+        await runAppleScript(
+          'set volume output volume (output volume of (get volume settings) + 10)'
+        )
         return { ok: true, message: 'Volume up' }
       }
 
       case 'volume-down': {
-        await runAppleScript('set volume output volume (output volume of (get volume settings) - 10)')
+        await runAppleScript(
+          'set volume output volume (output volume of (get volume settings) - 10)'
+        )
         return { ok: true, message: 'Volume down' }
       }
 
@@ -329,12 +440,12 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
       case 'copy-current-path': {
         const path = await runAppleScript(
           'tell application "Finder" to try\n' +
-          'set thePath to POSIX path of (target of front Finder window as alias)\n' +
-          'set the clipboard to thePath\n' +
-          'return thePath\n' +
-          'on error\n' +
-          'return ""\n' +
-          'end try',
+            'set thePath to POSIX path of (target of front Finder window as alias)\n' +
+            'set the clipboard to thePath\n' +
+            'return thePath\n' +
+            'on error\n' +
+            'return ""\n' +
+            'end try'
         )
         if (!path) {
           return { ok: false, message: 'No Finder window is open.' }
@@ -349,15 +460,13 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
 
       case 'show-cpu-info': {
         const out = await runShell(
-          "sysctl -n machdep.cpu.brand_string 2>/dev/null; echo \"Cores: $(sysctl -n hw.ncpu)\"; uptime | awk -F'load averages:' '{print \"Load:\"$2}'",
+          'sysctl -n machdep.cpu.brand_string 2>/dev/null; echo "Cores: $(sysctl -n hw.ncpu)"; uptime | awk -F\'load averages:\' \'{print "Load:"$2}\''
         )
         return { ok: true, message: out }
       }
 
       case 'show-memory-info': {
-        const out = await runShell(
-          "memory_pressure | head -n 6; echo; vm_stat | awk 'NR<=6'",
-        )
+        const out = await runShell("memory_pressure | head -n 6; echo; vm_stat | awk 'NR<=6'")
         return { ok: true, message: out }
       }
 
@@ -385,11 +494,11 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
       case 'git-root': {
         const path = await runAppleScript(
           'tell application "Finder" to try\n' +
-          'set thePath to POSIX path of (target of front Finder window as alias)\n' +
-          'return thePath\n' +
-          'on error\n' +
-          'return ""\n' +
-          'end try',
+            'set thePath to POSIX path of (target of front Finder window as alias)\n' +
+            'return thePath\n' +
+            'on error\n' +
+            'return ""\n' +
+            'end try'
         )
         if (!path) {
           return { ok: false, message: 'No Finder window is open.' }
@@ -464,7 +573,10 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
       }
 
       default: {
-        return { ok: false, message: `Command ${descriptor.title} is registered but has no executor yet.` }
+        return {
+          ok: false,
+          message: `Command ${descriptor.title} is registered but has no executor yet.`,
+        }
       }
     }
   } catch (error) {

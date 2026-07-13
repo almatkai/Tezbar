@@ -93,8 +93,10 @@ struct TerminalExitEvent {
 
 fn working_directory(requested: Option<&str>) -> PathBuf {
     let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/"));
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."));
     let Some(requested) = requested.map(str::trim).filter(|value| !value.is_empty()) else {
         return home;
     };
@@ -154,6 +156,14 @@ fn refresh_session_working_directory(session: &mut NativeTerminalSession) -> Str
 }
 
 fn login_shell() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        return std::env::var("TEZBAR_TERMINAL_SHELL")
+            .ok()
+            .filter(|shell| PathBuf::from(shell).is_file())
+            .unwrap_or_else(|| "powershell.exe".to_string());
+    }
+    #[cfg(not(target_os = "windows"))]
     std::env::var("SHELL")
         .ok()
         .filter(|shell| PathBuf::from(shell).is_file())
@@ -587,6 +597,7 @@ mod tests {
         );
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn pty_keeps_follow_up_commands_in_the_same_shell() {
         let pair = native_pty_system().openpty(pty_size(80, 24)).unwrap();

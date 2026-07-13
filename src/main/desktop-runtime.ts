@@ -138,11 +138,21 @@ export const app = {
 
 export const shell = {
   async openExternal(url: string): Promise<void> {
-    const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer.exe' : 'xdg-open'
+    const command =
+      process.platform === 'darwin'
+        ? 'open'
+        : process.platform === 'win32'
+          ? 'explorer.exe'
+          : 'xdg-open'
     await execFileAsync(command, [url])
   },
   async openPath(target: string): Promise<string> {
-    const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer.exe' : 'xdg-open'
+    const command =
+      process.platform === 'darwin'
+        ? 'open'
+        : process.platform === 'win32'
+          ? 'explorer.exe'
+          : 'xdg-open'
     try {
       await execFileAsync(command, [target])
       return ''
@@ -174,7 +184,11 @@ export const clipboard = {
   readText(): string {
     try {
       if (process.platform === 'win32') {
-        return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw'], { encoding: 'utf8' })
+        return execFileSync(
+          'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw'],
+          { encoding: 'utf8' }
+        )
       }
       return execFileSync('pbpaste', [], { encoding: 'utf8' })
     } catch {
@@ -184,7 +198,12 @@ export const clipboard = {
   writeText(text: string): void {
     try {
       if (process.platform === 'win32') {
-        const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Set-Clipboard -Value ([Console]::In.ReadToEnd())'])
+        const child = spawn('powershell.exe', [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          'Set-Clipboard -Value ([Console]::In.ReadToEnd())',
+        ])
         child.stdin.write(text)
         child.stdin.end()
         return
@@ -237,16 +256,58 @@ export const dialog = {
       Array.isArray(options.buttons) && options.buttons.length > 0
         ? options.buttons.map(String)
         : ['OK']
-    if (process.platform !== 'darwin') return { response: options.cancelId ?? 0 }
+    const defaultIndex = Math.min(Math.max(Number(options.defaultId) || 0, 0), buttons.length - 1)
+    const cancelIndex = Math.min(Math.max(Number(options.cancelId) || 0, 0), buttons.length - 1)
+    const message = [options.message, options.detail].filter(Boolean).join('\n\n')
+
+    if (process.platform === 'win32') {
+      const script = String.raw`Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $buttons=$env:TEZBAR_DIALOG_BUTTONS | ConvertFrom-Json; $form=New-Object System.Windows.Forms.Form; $form.Text=$env:TEZBAR_DIALOG_TITLE; $form.StartPosition='CenterScreen'; $form.FormBorderStyle='FixedDialog'; $form.MaximizeBox=$false; $form.MinimizeBox=$false; $form.ShowInTaskbar=$true; $form.Width=540; $form.Height=300; $text=New-Object System.Windows.Forms.TextBox; $text.Multiline=$true; $text.ReadOnly=$true; $text.BorderStyle='None'; $text.BackColor=$form.BackColor; $text.Text=$env:TEZBAR_DIALOG_MESSAGE; $text.Left=24; $text.Top=22; $text.Width=476; $text.Height=180; $text.ScrollBars='Vertical'; $form.Controls.Add($text); $x=500; for($i=$buttons.Count-1;$i-ge 0;$i--){ $button=New-Object System.Windows.Forms.Button; $button.Text=[string]$buttons[$i]; $button.Tag=$i; $button.Width=110; $button.Height=32; $x-=120; $button.Left=$x; $button.Top=216; $button.Add_Click({$form.Tag=[int]$this.Tag; $form.Close()}); $form.Controls.Add($button); if($i-eq [int]$env:TEZBAR_DIALOG_DEFAULT){$form.AcceptButton=$button}; if($i-eq [int]$env:TEZBAR_DIALOG_CANCEL){$form.CancelButton=$button} }; $form.Tag=[int]$env:TEZBAR_DIALOG_CANCEL; $form.Add_Shown({$form.Activate()}); [void]$form.ShowDialog(); [Console]::Out.Write([string]$form.Tag)`
+      process.stdout.write(`${JSON.stringify({ type: 'window_suppress_blur', value: true })}\n`)
+      try {
+        const { stdout } = await execFileAsync(
+          'powershell.exe',
+          [
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            script,
+          ],
+          {
+            windowsHide: true,
+            env: {
+              ...process.env,
+              TEZBAR_DIALOG_BUTTONS: JSON.stringify(buttons),
+              TEZBAR_DIALOG_DEFAULT: String(defaultIndex),
+              TEZBAR_DIALOG_CANCEL: String(cancelIndex),
+              TEZBAR_DIALOG_TITLE: String(options.title ?? 'Tezbar'),
+              TEZBAR_DIALOG_MESSAGE: message,
+            },
+          }
+        )
+        const selected = Number.parseInt(stdout.trim(), 10)
+        return {
+          response:
+            Number.isInteger(selected) && selected >= 0 && selected < buttons.length
+              ? selected
+              : cancelIndex,
+        }
+      } catch {
+        return { response: cancelIndex }
+      } finally {
+        process.stdout.write(`${JSON.stringify({ type: 'window_suppress_blur', value: false })}\n`)
+      }
+    }
+
+    if (process.platform !== 'darwin') return { response: cancelIndex }
 
     const escapeAppleScript = (value: unknown): string =>
       String(value ?? '')
         .replace(/\\/g, '\\\\')
         .replace(/"/g, '\\"')
     const buttonList = buttons.map((button) => `"${escapeAppleScript(button)}"`).join(', ')
-    const defaultIndex = Math.min(Math.max(Number(options.defaultId) || 0, 0), buttons.length - 1)
-    const cancelIndex = Math.min(Math.max(Number(options.cancelId) || 0, 0), buttons.length - 1)
-    const message = [options.message, options.detail].filter(Boolean).join('\n\n')
     const script = `display dialog "${escapeAppleScript(message)}" with title "${escapeAppleScript(options.title ?? 'Tezbar')}" buttons {${buttonList}} default button "${escapeAppleScript(buttons[defaultIndex])}" cancel button "${escapeAppleScript(buttons[cancelIndex])}"`
     process.stdout.write(`${JSON.stringify({ type: 'window_suppress_blur', value: true })}\n`)
     try {

@@ -10,6 +10,7 @@ import type {
   KnowledgeDepth,
   KnowledgeRoot,
   KnowledgeRootDepth,
+  KnowledgeMetadataHit,
   KnowledgeReadResult,
   KnowledgeSearchHit,
   KnowledgeSettings,
@@ -35,6 +36,8 @@ const MAX_SCANNED_FILES = 75_000
 const STATUS_EVENT_INTERVAL_MS = 100
 const STATUS_PERSIST_INTERVAL_MS = 1_000
 const BACKGROUND_FILE_DELAY_MS = 12
+const VECTOR_BACKFILL_BATCH_SIZE = 512
+const VECTOR_BACKFILL_DELAY_MS = 25
 const SKIP_NAMES = new Set([
   '.git',
   '.svn',
@@ -178,6 +181,7 @@ export class KnowledgeService {
   private readonly watchers = new Map<string, FSWatcher>()
   private rescanTimer: NodeJS.Timeout | null = null
   private startupTimer: NodeJS.Timeout | null = null
+  private vectorBackfillTimer: NodeJS.Timeout | null = null
   private rescanRequested = false
   private manuallyPaused = false
   private interactiveUntil = 0
@@ -194,7 +198,7 @@ export class KnowledgeService {
       this.mode === 'coordinator'
         ? new KnowledgeWorkerHost(
             (status) => this.acceptWorkerStatus(status),
-            (exit) => this.handleWorkerExit(exit),
+            (exit) => this.handleWorkerExit(exit)
           )
         : null
   }
@@ -242,6 +246,7 @@ export class KnowledgeService {
     this.refreshCounts()
     this.initialized = true
     if (this.mode !== 'worker') this.syncWatchers()
+    if (this.mode !== 'worker') this.scheduleVectorBackfill(1_000)
     if (this.mode !== 'worker' && !this.manuallyPaused && this.activeRoots().length > 0) {
       this.startupTimer = setTimeout(() => {
         this.startupTimer = null
@@ -372,6 +377,15 @@ export class KnowledgeService {
     )
   }
 
+  searchMetadata(query: string, limit = 20): KnowledgeMetadataHit[] {
+    this.initialize()
+    return this.store.searchMetadata(
+      query,
+      limit,
+      this.activeRoots().map((root) => root.id)
+    )
+  }
+
   read(resultId: string, maxChars = 12_000): KnowledgeReadResult | null {
     this.initialize()
     return this.store.readChunk(
@@ -488,7 +502,7 @@ export class KnowledgeService {
         candidates.push(
           ...scan.paths
             .filter((path) => this.needsIndexing(root, path))
-            .map((path) => ({ root, path })),
+            .map((path) => ({ root, path }))
         )
       }
       if (signal.aborted) return
@@ -850,9 +864,30 @@ export class KnowledgeService {
     this.startupTimer = null
     if (this.rescanTimer) clearTimeout(this.rescanTimer)
     this.rescanTimer = null
+    if (this.vectorBackfillTimer) clearTimeout(this.vectorBackfillTimer)
+    this.vectorBackfillTimer = null
     for (const watcher of this.watchers.values()) watcher.close()
     this.watchers.clear()
     if (this.initialized) this.persistStatus()
+  }
+
+  private scheduleVectorBackfill(delayMs = VECTOR_BACKFILL_DELAY_MS): void {
+    if (this.mode === 'worker' || this.vectorBackfillTimer) return
+    this.vectorBackfillTimer = setTimeout(() => {
+      this.vectorBackfillTimer = null
+      if (Date.now() < this.interactiveUntil) {
+        this.scheduleVectorBackfill(250)
+        return
+      }
+      try {
+        const batch = this.store.backfillVectorIndexBatch(VECTOR_BACKFILL_BATCH_SIZE)
+        if (batch.hasMore) this.scheduleVectorBackfill()
+      } catch (error) {
+        console.warn('[Knowledge] Vector backfill paused after an error:', error)
+        this.scheduleVectorBackfill(2_000)
+      }
+    }, delayMs)
+    this.vectorBackfillTimer.unref()
   }
 
   private scheduleRescan(): void {
@@ -917,9 +952,7 @@ export class KnowledgeService {
     if (exit.expected) return
     const persisted = this.store.getPersistedStatus()
     this.status = persisted
-    if (
-      (this.status.state === 'scanning' || this.status.state === 'indexing')
-    ) {
+    if (this.status.state === 'scanning' || this.status.state === 'indexing') {
       this.updateStatus({
         ...this.status,
         state: 'failed',
@@ -945,9 +978,23 @@ export function getKnowledgeService(): KnowledgeService {
 }
 
 export async function chooseKnowledgeFolder(): Promise<string | null> {
-  if (process.platform !== 'darwin') return null
+  if (process.platform !== 'darwin' && process.platform !== 'win32') return null
   process.stdout.write(`${JSON.stringify({ type: 'window_suppress_blur', value: true })}\n`)
   try {
+    if (process.platform === 'win32') {
+      const { stdout } = await execFileAsync(
+        'powershell.exe',
+        [
+          '-NoLogo',
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          "Add-Type -AssemblyName System.Windows.Forms; $dialog=New-Object System.Windows.Forms.FolderBrowserDialog; $dialog.Description='Choose a folder for Tezbar Knowledge'; $dialog.ShowNewFolderButton=$true; if($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){[Console]::Out.Write($dialog.SelectedPath)}",
+        ],
+        { encoding: 'utf8', windowsHide: true }
+      )
+      return stdout.trim() || null
+    }
     const script =
       'POSIX path of (choose folder with prompt "Choose a folder for Tezbar Knowledge")'
     const { stdout } = await execFileAsync('/usr/bin/osascript', ['-e', script], {

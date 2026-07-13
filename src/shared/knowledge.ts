@@ -172,6 +172,13 @@ export type KnowledgeSearchHit = {
   semanticScore: number
 }
 
+export type KnowledgeMetadataHit = {
+  sourceId: string
+  path: string
+  title: string
+  score: number
+}
+
 export type KnowledgeReadResult = {
   resultId: string
   sourceId: string

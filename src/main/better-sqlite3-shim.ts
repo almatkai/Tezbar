@@ -5,6 +5,26 @@
 
 // @ts-expect-error -- bun:sqlite is only available at runtime under Bun.
 import { Database as BunDatabase } from 'bun:sqlite'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+
+if (process.platform === 'darwin') {
+  const sqliteCandidates = [
+    process.env.TEZBAR_SQLITE_LIBRARY_PATH,
+    join(__dirname, 'libsqlite3.dylib'),
+    '/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib',
+    '/usr/local/opt/sqlite/lib/libsqlite3.dylib',
+    '/usr/local/opt/sqlite3/lib/libsqlite3.dylib',
+  ].filter((path): path is string => Boolean(path && existsSync(path)))
+  const sqliteLibrary = sqliteCandidates[0]
+  if (sqliteLibrary) {
+    try {
+      BunDatabase.setCustomSQLite(sqliteLibrary)
+    } catch (error) {
+      console.warn('[SQLite] Could not enable loadable extensions:', error)
+    }
+  }
+}
 
 type BindValue = string | number | bigint | Buffer | null | undefined
 
@@ -18,6 +38,7 @@ interface DatabaseLike {
   pragma(value: string): void
   exec(sql: string): void
   prepare(sql: string): Statement
+  loadExtension(path: string): void
   transaction<T extends unknown[]>(fn: (...args: T) => void): (...args: T) => void
 }
 
@@ -32,7 +53,7 @@ class StatementShim implements Statement {
     const result = this._stmt.run(...params)
     return {
       changes: result?.changes ?? 0,
-      lastInsertRowid: result?.lastInsertRowid ?? 0
+      lastInsertRowid: result?.lastInsertRowid ?? 0,
     }
   }
 
@@ -64,6 +85,10 @@ class DatabaseShim implements DatabaseLike {
   prepare(sql: string): Statement {
     const stmt = this._db.prepare(sql)
     return new StatementShim(stmt)
+  }
+
+  loadExtension(path: string): void {
+    this._db.loadExtension(path)
   }
 
   transaction<T extends unknown[]>(fn: (...args: T) => void): (...args: T) => void {

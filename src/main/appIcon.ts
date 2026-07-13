@@ -11,6 +11,40 @@ const appIconCache = new Map<string, string | null>()
 export async function appIconDataUrl(appPath: string): Promise<string | undefined> {
   if (appIconCache.has(appPath)) return appIconCache.get(appPath) ?? undefined
   try {
+    if (process.platform === 'win32') {
+      if (appPath.startsWith('shell:AppsFolder\\')) {
+        appIconCache.set(appPath, null)
+        return undefined
+      }
+      const cacheDir = join(app.getPath('userData'), 'icon-cache', 'applications')
+      mkdirSync(cacheDir, { recursive: true })
+      const pngPath = join(cacheDir, `${createHash('sha1').update(appPath).digest('hex')}-64.png`)
+      if (!existsSync(pngPath)) {
+        await execFileAsync(
+          'powershell.exe',
+          [
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Drawing; $icon=[System.Drawing.Icon]::ExtractAssociatedIcon($env:TEZBAR_ICON_SOURCE); if ($null -eq $icon) { exit 2 }; try { $bitmap=$icon.ToBitmap(); try { $bitmap.Save($env:TEZBAR_ICON_DEST,[System.Drawing.Imaging.ImageFormat]::Png) } finally { $bitmap.Dispose() } } finally { $icon.Dispose() }",
+          ],
+          {
+            timeout: 5_000,
+            windowsHide: true,
+            env: {
+              ...process.env,
+              TEZBAR_ICON_SOURCE: appPath,
+              TEZBAR_ICON_DEST: pngPath,
+            },
+          }
+        )
+      }
+      const dataUrl = `data:image/png;base64,${readFileSync(pngPath).toString('base64')}`
+      appIconCache.set(appPath, dataUrl)
+      return dataUrl
+    }
+
     const resourceDir = join(appPath, 'Contents', 'Resources')
     let iconName: string | undefined
     try {

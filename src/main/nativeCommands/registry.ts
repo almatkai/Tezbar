@@ -1,5 +1,7 @@
 import type { NativeCommandDescriptor, NativeCommandId } from '../../shared/nativeCommands'
 
+const WINDOWS = process.platform === 'win32'
+
 /** Typed catalog of native macOS capabilities the palette ships with.
  *  Replaces the old README-scraping strategy with a first-class registry
  *  where every entry has a deterministic implementation strategy. */
@@ -136,8 +138,8 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
   },
   'sleep-system': {
     id: 'sleep-system',
-    title: 'Sleep Mac',
-    subtitle: 'Put the Mac to sleep now.',
+    title: 'Sleep Computer',
+    subtitle: 'Put the computer to sleep now.',
     category: 'power',
     strategy: 'applescript',
     keywords: ['sleep', 'mac', 'suspend', 'idle'],
@@ -183,20 +185,22 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
   'flush-dns-cache': {
     id: 'flush-dns-cache',
     title: 'Flush DNS Cache',
-    subtitle: 'Clear the macOS resolver and mDNSResponder caches.',
+    subtitle: WINDOWS
+      ? 'Clear the Windows DNS resolver cache.'
+      : 'Clear the macOS resolver and mDNSResponder caches.',
     category: 'network',
     strategy: 'shell',
     keywords: ['dns', 'flush', 'cache', 'network', 'resolver'],
-    macOnly: true,
+    macOnly: false,
   },
   'toggle-vpn-menu': {
     id: 'toggle-vpn-menu',
-    title: 'Open VPN Menu',
-    subtitle: 'Open the menu-bar VPN/Network control.',
+    title: 'Open VPN Settings',
+    subtitle: WINDOWS ? 'Open Windows VPN settings.' : 'Open the VPN/Network control.',
     category: 'network',
     strategy: 'shell',
     keywords: ['vpn', 'network', 'menu'],
-    macOnly: true,
+    macOnly: false,
   },
 
   'empty-trash': {
@@ -207,7 +211,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     strategy: 'applescript',
     keywords: ['trash', 'empty', 'delete', 'clean'],
     destructive: true,
-    macOnly: true,
+    macOnly: false,
   },
   'lock-screen': {
     id: 'lock-screen',
@@ -229,30 +233,32 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
   },
   'open-applications': {
     id: 'open-applications',
-    title: 'Open Applications Folder',
-    subtitle: 'Reveal /Applications in Finder.',
+    title: WINDOWS ? 'Open All Apps' : 'Open Applications Folder',
+    subtitle: WINDOWS ? 'Open the Windows Apps folder.' : 'Reveal /Applications in Finder.',
     category: 'files',
     strategy: 'shell',
     keywords: ['applications', 'apps', 'finder'],
-    macOnly: true,
+    macOnly: false,
   },
   'reveal-library': {
     id: 'reveal-library',
-    title: 'Open ~/Library',
-    subtitle: 'Reveal the hidden Library folder in Finder.',
+    title: WINDOWS ? 'Open AppData' : 'Open ~/Library',
+    subtitle: WINDOWS
+      ? 'Open the current user AppData folder in Explorer.'
+      : 'Reveal the hidden Library folder in Finder.',
     category: 'files',
     strategy: 'shell',
     keywords: ['library', 'hidden', 'finder'],
-    macOnly: true,
+    macOnly: false,
   },
   'copy-current-path': {
     id: 'copy-current-path',
-    title: 'Copy Path of Frontmost Finder Window',
-    subtitle: 'Copy the path of the folder open in Finder.',
+    title: `Copy Path of Frontmost ${WINDOWS ? 'Explorer' : 'Finder'} Window`,
+    subtitle: `Copy the path of the folder open in ${WINDOWS ? 'Explorer' : 'Finder'}.`,
     category: 'files',
     strategy: 'applescript',
     keywords: ['path', 'finder', 'copy', 'directory'],
-    macOnly: true,
+    macOnly: false,
   },
   'quit-tezbar': {
     id: 'quit-tezbar',
@@ -266,12 +272,14 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
 
   'show-macos-version': {
     id: 'show-macos-version',
-    title: 'Show macOS Version',
-    subtitle: 'Print kernel, build, and macOS version.',
+    title: WINDOWS ? 'Show Windows Version' : 'Show macOS Version',
+    subtitle: WINDOWS
+      ? 'Print the Windows product name, version, and build.'
+      : 'Print kernel, build, and macOS version.',
     category: 'dev',
     strategy: 'shell',
-    keywords: ['macos', 'version', 'kernel', 'build'],
-    macOnly: true,
+    keywords: ['macos', 'windows', 'version', 'kernel', 'build', 'os'],
+    macOnly: false,
   },
   'show-cpu-info': {
     id: 'show-cpu-info',
@@ -321,11 +329,11 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
   'git-root': {
     id: 'git-root',
     title: 'Git: Copy Repo Root',
-    subtitle: 'Copy the root of the git repo open in Finder.',
+    subtitle: `Copy the root of the git repo open in ${WINDOWS ? 'Explorer' : 'Finder'}.`,
     category: 'dev',
     strategy: 'applescript',
     keywords: ['git', 'root', 'repo', 'copy'],
-    macOnly: true,
+    macOnly: false,
   },
   'brew-outdated': {
     id: 'brew-outdated',
@@ -365,7 +373,16 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     subtitle: 'Browse, copy, and create your own text snippets (dates, UUIDs, templates, …).',
     category: 'productivity',
     strategy: 'native-helper',
-    keywords: ['snippet', 'snippets', 'template', 'templates', 'text', 'boilerplate', 'expander', 'macro'],
+    keywords: [
+      'snippet',
+      'snippets',
+      'template',
+      'templates',
+      'text',
+      'boilerplate',
+      'expander',
+      'macro',
+    ],
     macOnly: false,
   },
   'open-quick-notes': {

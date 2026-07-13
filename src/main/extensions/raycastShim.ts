@@ -21,6 +21,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { listApplications } from '../search/providers/appsProvider'
 
 export type RuntimeFeedback = {
   kind: 'toast' | 'hud'
@@ -263,7 +264,7 @@ export function createRaycastApi(ctx: ShimContext): Record<string, unknown> {
 
     getPreferenceValues: (): Record<string, unknown> => readPreferences(ctx.packageRoot),
     getSelectedText: async (): Promise<string> => '',
-    getApplications: async (): Promise<Array<Record<string, unknown>>> => [],
+    getApplications: async (): Promise<Array<Record<string, unknown>>> => listApplications(),
     runAppleScript,
 
     open: async (target: unknown): Promise<void> => {
@@ -393,7 +394,7 @@ export function createRaycastUtils(ctx: ShimContext): Record<string, unknown> {
         {},
         {
           get: () => ({ value: '', onChange: () => {} }),
-        },
+        }
       ),
       values: {},
       setValue: () => {},

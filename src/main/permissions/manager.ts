@@ -7,19 +7,24 @@ import type {
   PermissionsSnapshot,
 } from '../../shared/permissions'
 
+const WINDOWS = process.platform === 'win32'
+
 /** Catalog of every native capability Tezbar may need. The renderer shows
  *  these in the Permissions view; the main process owns detection and the
  *  guided remediation links. */
 const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
   accessibility: {
     id: 'accessibility',
-    title: 'Accessibility',
+    title: WINDOWS ? 'Input Automation' : 'Accessibility',
     summary: 'Synthesize keystrokes, control windows, automate UI.',
     rationale:
       'Needed to automate the active app: move windows, click through menus, send keystrokes to focused controls.',
-    settingsUrl: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
-    remediation:
-      'Open System Settings → Privacy & Security → Accessibility and enable Tezbar.',
+    settingsUrl: WINDOWS
+      ? 'ms-settings:privacy'
+      : 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+    remediation: WINDOWS
+      ? 'Windows input automation is available automatically for apps running at the same privilege level.'
+      : 'Open System Settings → Privacy & Security → Accessibility and enable Tezbar.',
   },
   automation: {
     id: 'automation',
@@ -37,19 +42,24 @@ const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
     summary: 'Observe keyboard and mouse events globally.',
     rationale:
       'Used for global hotkeys and key-capture flows (e.g. global Alt+Space, keystroke recording).',
-    settingsUrl:
-      'x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent',
-    remediation:
-      'Open System Settings → Privacy & Security → Input Monitoring and enable Tezbar.',
+    settingsUrl: WINDOWS
+      ? 'ms-settings:privacy'
+      : 'x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent',
+    remediation: WINDOWS
+      ? 'Global shortcut and key-state monitoring are available automatically on Windows.'
+      : 'Open System Settings → Privacy & Security → Input Monitoring and enable Tezbar.',
   },
   microphone: {
     id: 'microphone',
     title: 'Microphone',
     summary: 'Capture audio for voice commands.',
     rationale: 'Voice-activated commands and transcription features require microphone access.',
-    settingsUrl: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
-    remediation:
-      'Open System Settings → Privacy & Security → Microphone and enable Tezbar.',
+    settingsUrl: WINDOWS
+      ? 'ms-settings:privacy-microphone'
+      : 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+    remediation: WINDOWS
+      ? 'Open Settings → Privacy & security → Microphone and allow desktop apps to use the microphone.'
+      : 'Open System Settings → Privacy & Security → Microphone and enable Tezbar.',
   },
   calendar: {
     id: 'calendar',
@@ -58,8 +68,7 @@ const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
     rationale:
       'Calendar-related extensions and the built-in "next meeting" command need access to your Calendar database.',
     settingsUrl: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars',
-    remediation:
-      'Open System Settings → Privacy & Security → Calendars and enable Tezbar.',
+    remediation: 'Open System Settings → Privacy & Security → Calendars and enable Tezbar.',
   },
   'screen-recording': {
     id: 'screen-recording',
@@ -68,8 +77,7 @@ const DESCRIPTORS: Record<PermissionId, PermissionDescriptor> = {
     rationale:
       'Needed for screenshot-based flows, window snapshots, and visual automation helpers.',
     settingsUrl: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
-    remediation:
-      'Open System Settings → Privacy & Security → Screen Recording and enable Tezbar.',
+    remediation: 'Open System Settings → Privacy & Security → Screen Recording and enable Tezbar.',
   },
 }
 
@@ -107,15 +115,25 @@ type ExtendedMediaType = 'microphone' | 'camera' | 'calendar' | 'screen'
 function getStatus(type: ExtendedMediaType): PermissionState {
   if (process.platform !== 'darwin') return 'unsupported'
   try {
-    return mapMediaStatus(
-      systemPreferences.getMediaAccessStatus(type as 'microphone' | 'camera'),
-    )
+    return mapMediaStatus(systemPreferences.getMediaAccessStatus(type as 'microphone' | 'camera'))
   } catch {
     return 'not-determined'
   }
 }
 
 function probePermission(id: PermissionId): PermissionState {
+  if (process.platform === 'win32') {
+    switch (id) {
+      case 'accessibility':
+      case 'input-monitoring':
+      case 'screen-recording':
+        return 'granted'
+      case 'microphone':
+        return 'not-determined'
+      default:
+        return 'unsupported'
+    }
+  }
   switch (id) {
     case 'accessibility':
       return probeAccessibility(false)
@@ -156,6 +174,16 @@ export async function requestPermission(id: PermissionId): Promise<PermissionSta
   }
 
   if (process.platform !== 'darwin') {
+    if (process.platform === 'win32') {
+      if (id === 'microphone' && descriptor.settingsUrl) {
+        try {
+          await shell.openExternal(descriptor.settingsUrl)
+        } catch {
+          // Return the current state even when Windows Settings cannot be opened.
+        }
+      }
+      return { descriptor, state: probePermission(id), checkedAt: Date.now() }
+    }
     return { descriptor, state: 'unsupported', checkedAt: Date.now() }
   }
 

@@ -7,7 +7,13 @@ import { dirname, join } from 'node:path'
 import { once } from 'node:events'
 import { promisify } from 'node:util'
 import { readRawConfig, writeConfigPatch } from '../llm/configStore'
-import { VOICE_MODEL_IDS, type VoiceModel, type VoiceModelId, type VoiceModelLanguage, type VoiceModelTier } from '../../shared/voice'
+import {
+  VOICE_MODEL_IDS,
+  type VoiceModel,
+  type VoiceModelId,
+  type VoiceModelLanguage,
+  type VoiceModelTier,
+} from '../../shared/voice'
 import type { VoiceTranscribeRequest } from '../../shared/ipc'
 
 const execFileAsync = promisify(execFile)
@@ -30,6 +36,10 @@ let activeSpeech: ReturnType<typeof spawn> | null = null
 let cachedLoginPath: string | null = null
 async function getLoginPath(): Promise<string> {
   if (cachedLoginPath !== null) return cachedLoginPath
+  if (process.platform === 'win32') {
+    cachedLoginPath = process.env['Path'] || process.env['PATH'] || ''
+    return cachedLoginPath
+  }
   try {
     const { stdout } = await execFileAsync('bash', ['-lc', 'echo -n "$PATH"'])
     const fromShell = stdout.trim()
@@ -50,7 +60,7 @@ async function getLoginPath(): Promise<string> {
 async function execWithUserPath(
   file: string,
   args: string[],
-  options: { maxBuffer?: number } = {},
+  options: { maxBuffer?: number } = {}
 ): Promise<{ stdout: string; stderr: string }> {
   const path = await getLoginPath()
   return execFileAsync(file, args, {
@@ -306,7 +316,10 @@ function fileSizeOrZero(path: string): number {
 }
 
 function modelDownloadedBytes(model: VoiceModelCatalogEntry): number {
-  return model.assets.reduce((acc, asset) => acc + fileSizeOrZero(modelAssetPath(model.id, asset.fileName)), 0)
+  return model.assets.reduce(
+    (acc, asset) => acc + fileSizeOrZero(modelAssetPath(model.id, asset.fileName)),
+    0
+  )
 }
 
 function isModelFullyDownloaded(model: VoiceModelCatalogEntry): boolean {
@@ -384,8 +397,8 @@ async function installRuntime(kind: RuntimeKind): Promise<void> {
     if (!(await hasBinary('brew'))) {
       throw new Error(
         'Homebrew is required to install whisper.cpp automatically.\n' +
-        'Install Homebrew from https://brew.sh and try again, or install whisper.cpp manually:\n' +
-        '  brew install whisper-cpp',
+          'Install Homebrew from https://brew.sh and try again, or install whisper.cpp manually:\n' +
+          '  brew install whisper-cpp'
       )
     }
     console.info('[stt][main] installing whisper-cpp via Homebrew — this can take a few minutes')
@@ -402,13 +415,15 @@ async function installRuntime(kind: RuntimeKind): Promise<void> {
 
   if (!(await hasBinary('python3'))) {
     throw new Error(
-      'python3 was not found. Install Python first (e.g. `brew install python`) and try again.',
+      'python3 was not found. Install Python first (e.g. `brew install python`) and try again.'
     )
   }
-  console.info('[stt][main] installing moonshine-voice via pip (user site) — this can take a minute')
+  console.info(
+    '[stt][main] installing moonshine-voice via pip (user site) — this can take a minute'
+  )
   try {
     const { stdout, stderr } = await runLoginShell(
-      'python3 -m pip install --user --upgrade moonshine-voice onnxruntime',
+      'python3 -m pip install --user --upgrade moonshine-voice onnxruntime'
     )
     console.info('[stt][main] pip stdout:\n' + stdout.trim())
     if (stderr.trim()) console.info('[stt][main] pip stderr:\n' + stderr.trim())
@@ -446,7 +461,7 @@ function invalidateRuntimeCache(kind: RuntimeKind): void {
 
 async function toVoiceModelView(
   model: VoiceModelCatalogEntry,
-  selectedId: VoiceModelId,
+  selectedId: VoiceModelId
 ): Promise<VoiceModel> {
   const active = activeDownloads.get(model.id)
   const weightsDownloaded = isModelFullyDownloaded(model)
@@ -530,7 +545,7 @@ async function toVoiceModelView(
 async function downloadAssetWithProgress(
   url: string,
   destinationPath: string,
-  onProgress: (downloadedBytes: number, totalBytes: number | null) => void,
+  onProgress: (downloadedBytes: number, totalBytes: number | null) => void
 ): Promise<void> {
   const response = await fetch(url, { method: 'GET', redirect: 'follow' })
   if (!response.ok || !response.body) {
@@ -577,7 +592,9 @@ async function runModelDownload(modelId: VoiceModelId): Promise<void> {
   let baselineBytes = modelDownloadedBytes(model)
 
   const runtimeNeeded = !(await probeRuntime(model.runtime)).ready
-  const missingAssets = model.assets.filter((asset) => !existsSync(modelAssetPath(modelId, asset.fileName)))
+  const missingAssets = model.assets.filter(
+    (asset) => !existsSync(modelAssetPath(modelId, asset.fileName))
+  )
 
   if (!runtimeNeeded && missingAssets.length === 0) {
     activeDownloads.delete(modelId)
@@ -605,7 +622,7 @@ async function runModelDownload(modelId: VoiceModelId): Promise<void> {
       if (!reProbe.ready) {
         throw new Error(
           `Installed the runtime but could not detect it afterwards (${reProbe.label}). ` +
-          `Try running manually: ${reProbe.installCommand}`,
+            `Try running manually: ${reProbe.installCommand}`
         )
       }
 
@@ -626,7 +643,8 @@ async function runModelDownload(modelId: VoiceModelId): Promise<void> {
         if (!state || state.status !== 'downloading') return
 
         const downloadedBytes = baselineBytes + assetBytes
-        const progress = assetTotal && assetTotal > 0 ? Math.min(assetBytes / assetTotal, 0.999) : null
+        const progress =
+          assetTotal && assetTotal > 0 ? Math.min(assetBytes / assetTotal, 0.999) : null
 
         activeDownloads.set(modelId, {
           ...state,
@@ -787,9 +805,26 @@ export async function speakText(text: string): Promise<void> {
   if (!trimmed) return
 
   stopSpeaking()
-  activeSpeech = spawn('say', [trimmed], {
-    stdio: 'ignore',
-  })
+  activeSpeech =
+    process.platform === 'win32'
+      ? spawn(
+          'powershell.exe',
+          [
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            'Add-Type -AssemblyName System.Speech; $voice=New-Object System.Speech.Synthesis.SpeechSynthesizer; try { $voice.Speak($env:TEZBAR_SPEECH_TEXT) } finally { $voice.Dispose() }',
+          ],
+          {
+            stdio: 'ignore',
+            windowsHide: true,
+            env: { ...process.env, TEZBAR_SPEECH_TEXT: trimmed },
+          }
+        )
+      : spawn('say', [trimmed], {
+          stdio: 'ignore',
+        })
 
   activeSpeech.on('exit', () => {
     activeSpeech = null
@@ -805,9 +840,15 @@ export function stopSpeaking(): void {
 async function hasBinary(binary: string): Promise<boolean> {
   try {
     const path = await getLoginPath()
-    await execFileAsync('bash', ['-lc', `command -v ${binary}`], {
-      env: { ...process.env, PATH: path },
-    })
+    if (process.platform === 'win32') {
+      await execFileAsync('where.exe', [binary], {
+        env: { ...process.env, Path: path, PATH: path },
+      })
+    } else {
+      await execFileAsync('bash', ['-lc', `command -v ${binary}`], {
+        env: { ...process.env, PATH: path },
+      })
+    }
     return true
   } catch {
     return false
@@ -856,7 +897,9 @@ function preferredMoonshineModelPath(): string {
     return modelDir(selected)
   }
 
-  const fallback = MODEL_CATALOG.find((model) => model.family === 'moonshine' && isModelFullyDownloaded(model))
+  const fallback = MODEL_CATALOG.find(
+    (model) => model.family === 'moonshine' && isModelFullyDownloaded(model)
+  )
   if (fallback) {
     return modelDir(fallback.id)
   }
@@ -891,7 +934,10 @@ async function convertToWav(inputPath: string, outputPath: string): Promise<void
  *      batch).
  *
  *  See https://mintlify.wiki/moonshine-ai/moonshine/guides/transcription */
-async function runMoonshineTranscription(wavPath: string, language: string | undefined): Promise<string> {
+async function runMoonshineTranscription(
+  wavPath: string,
+  language: string | undefined
+): Promise<string> {
   const modelPath = preferredMoonshineModelPath()
   const lang = (language || 'en').trim() || 'en'
 
@@ -956,7 +1002,13 @@ async function runMoonshineTranscription(wavPath: string, language: string | und
   console.info('[stt][main] invoking moonshine-voice, model=', modelPath, 'lang=', lang)
 
   try {
-    const { stdout, stderr } = await execWithUserPath('python3', ['-c', script, wavPath, modelPath, lang])
+    const { stdout, stderr } = await execWithUserPath('python3', [
+      '-c',
+      script,
+      wavPath,
+      modelPath,
+      lang,
+    ])
     if (stderr.trim()) {
       console.info('[stt][main] moonshine stderr:\n' + stderr.trim())
     }
@@ -1034,28 +1086,43 @@ function whisperThreadCount(): number {
   return envPositiveInt('RAYMES_WHISPER_THREADS') ?? Math.max(4, Math.min(cpus().length, 12))
 }
 
-async function runWhisperCli(wavPath: string, language: string | undefined): Promise<string | null> {
-  const binary = (await hasBinary('whisper-cli')) ? 'whisper-cli' : (await hasBinary('whisper-cpp')) ? 'whisper-cpp' : null
+async function runWhisperCli(
+  wavPath: string,
+  language: string | undefined
+): Promise<string | null> {
+  const binary = (await hasBinary('whisper-cli'))
+    ? 'whisper-cli'
+    : (await hasBinary('whisper-cpp'))
+      ? 'whisper-cpp'
+      : null
   if (!binary) return null
 
   const model = await findWhisperCliModel()
   if (!model) return null
 
   const selectedModel = findModel(readSelectedModelId())
-  const defaultLanguage = selectedModel.family === 'whisper' && selectedModel.language === 'multilingual' ? 'auto' : 'en'
+  const defaultLanguage =
+    selectedModel.family === 'whisper' && selectedModel.language === 'multilingual' ? 'auto' : 'en'
   const args = [
-    '-m', model,
-    '-f', wavPath,
-    '-l', language?.trim() || defaultLanguage,
-    '-t', String(whisperThreadCount()),
-    '-bo', '1',
-    '-bs', '1',
+    '-m',
+    model,
+    '-f',
+    wavPath,
+    '-l',
+    language?.trim() || defaultLanguage,
+    '-t',
+    String(whisperThreadCount()),
+    '-bo',
+    '1',
+    '-bs',
+    '1',
     '-nt',
     '-np',
     '-nf',
     '-sns',
     '-otxt',
-    '-of', wavPath.replace(/\.wav$/, ''),
+    '-of',
+    wavPath.replace(/\.wav$/, ''),
   ]
   console.info('[stt][main] whisper-cli:', binary, args.join(' '))
   try {
@@ -1073,15 +1140,17 @@ async function runWhisperCli(wavPath: string, language: string | undefined): Pro
   }
 }
 
-type TranscribeOutcome = {
-  ok: true
-  text: string
-  engine: string
-} | {
-  ok: false
-  error: string
-  hint?: string
-}
+type TranscribeOutcome =
+  | {
+      ok: true
+      text: string
+      engine: string
+    }
+  | {
+      ok: false
+      error: string
+      hint?: string
+    }
 
 /** Transcribe the audio blob coming from the renderer. Strategy:
  *
@@ -1114,7 +1183,10 @@ async function probeEngineBinaries(): Promise<EngineProbe> {
     execWithUserPath('bash', ['-lc', 'command -v whisper-cli || command -v whisper-cpp || true'])
       .then((r) => r.stdout.trim())
       .catch(() => ''),
-    execWithUserPath('python3', ['-c', 'import moonshine_voice, sys; sys.stdout.write(moonshine_voice.__file__)'])
+    execWithUserPath('python3', [
+      '-c',
+      'import moonshine_voice, sys; sys.stdout.write(moonshine_voice.__file__)',
+    ])
       .then((r) => r.stdout.trim())
       .catch(() => ''),
   ])
@@ -1144,7 +1216,7 @@ export async function transcribeAudio(req: VoiceTranscribeRequest): Promise<Tran
         bytes: req.audioBytes.byteLength,
         mime: req.mimeType ?? 'unknown',
         language: req.language ?? 'auto',
-      }),
+      })
     )
 
     // Diagnostic probe — cached for 5 minutes so repeated dictation

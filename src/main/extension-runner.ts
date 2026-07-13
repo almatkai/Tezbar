@@ -19,6 +19,7 @@ import { gunzipSync, gzip } from 'node:zlib'
 import vm from 'node:vm'
 import { configurePackagedEsbuildBinary } from './esbuild-runtime'
 import { askExtensionAI } from './llm/extensionAI'
+import { listApplications } from './search/providers/appsProvider'
 import { setSuppressBlurHide } from './windowState'
 import type {
   ExtensionInvokeActionRequest,
@@ -66,6 +67,51 @@ type RuntimeFeedback = {
 }
 
 type RuntimeActionHandler = (formValues?: Record<string, unknown>) => Promise<void> | void
+
+const TIMER_NOTIFICATION_MARKER = '__TEZBAR_TIMER_NOTIFICATION__:'
+
+type TimerNotificationPayload = {
+  timerFile: string
+  name: string
+}
+
+export function instrumentTimerNotificationCommand(command: string): string {
+  const timerFile = /if \[ -f "([^"]+\.timer)" \]; then/.exec(command)?.[1]
+  const notification =
+    /osascript -e 'display notification "Timer \\"(.*?)\\" complete" with title "Ding!"'/.exec(
+      command
+    )
+  if (!timerFile || !notification) return command
+
+  const payload: TimerNotificationPayload = { timerFile, name: notification[1] }
+  const marker = `${TIMER_NOTIFICATION_MARKER}${Buffer.from(JSON.stringify(payload)).toString('base64url')}`
+  return command.replace(notification[0], `printf '%s\\n' '${marker}'`)
+}
+
+function timerNotificationPayload(line: string): TimerNotificationPayload | null {
+  const markerIndex = line.indexOf(TIMER_NOTIFICATION_MARKER)
+  if (markerIndex < 0) return null
+  const encoded = line.slice(markerIndex + TIMER_NOTIFICATION_MARKER.length).trim()
+  try {
+    const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as {
+      timerFile?: unknown
+      name?: unknown
+    }
+    if (typeof parsed.timerFile !== 'string' || typeof parsed.name !== 'string') return null
+    return { timerFile: parsed.timerFile, name: parsed.name }
+  } catch {
+    return null
+  }
+}
+
+function stripTimerNotificationMarkers(value: string | Buffer): string | Buffer {
+  const stringValue = Buffer.isBuffer(value) ? value.toString('utf8') : value
+  const filtered = stringValue
+    .split(/\r?\n/)
+    .filter((line) => !line.includes(TIMER_NOTIFICATION_MARKER))
+    .join('\n')
+  return Buffer.isBuffer(value) ? Buffer.from(filtered) : filtered
+}
 
 type RuntimeSession = {
   id: string
@@ -1634,6 +1680,28 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     },
     getPreferenceValues: (): Record<string, unknown> => session.preferences,
     getSelectedFinderItems: async (): Promise<Array<{ path: string }>> => {
+      if (process.platform === 'win32') {
+        try {
+          const { stdout } = await execFileAsync(
+            'powershell.exe',
+            [
+              '-NoLogo',
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' } | Select-Object -First 1; if($null-ne $window){$window.Document.SelectedItems() | ForEach-Object {$_.Path}}",
+            ],
+            { timeout: 3_000, windowsHide: true }
+          )
+          return stdout
+            .split(/\r?\n/)
+            .map((value) => value.trim())
+            .filter(Boolean)
+            .map((path) => ({ path }))
+        } catch {
+          return []
+        }
+      }
       if (process.platform !== 'darwin') return []
       try {
         const output = await runAppleScript(`
@@ -1729,6 +1797,9 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       const promise = (async (): Promise<
         Array<{ name: string; path: string; bundleId?: string }>
       > => {
+        if (process.platform === 'win32') {
+          return listApplications().sort((a, b) => a.name.localeCompare(b.name))
+        }
         try {
           const { stdout } = await execFileAsync(
             '/usr/bin/mdfind',
@@ -1777,6 +1848,31 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       path: string
       bundleId?: string
     }> => {
+      if (process.platform === 'win32') {
+        try {
+          const { stdout } = await execFileAsync(
+            'powershell.exe',
+            [
+              '-NoLogo',
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              'Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public static class TezbarForeground { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p); }\'; $pidValue=0; [void][TezbarForeground]::GetWindowThreadProcessId([TezbarForeground]::GetForegroundWindow(),[ref]$pidValue); $process=Get-Process -Id $pidValue -ErrorAction Stop; [pscustomobject]@{name=$process.ProcessName;path=$process.Path} | ConvertTo-Json -Compress',
+            ],
+            { timeout: 3_000, windowsHide: true }
+          )
+          const value = JSON.parse(stdout) as { name?: unknown; path?: unknown }
+          if (typeof value.name === 'string') {
+            return {
+              name: value.name,
+              path: typeof value.path === 'string' ? value.path : '',
+            }
+          }
+        } catch {
+          // Fall through to the Tezbar process identity.
+        }
+        return { name: 'Tezbar', path: process.execPath }
+      }
       try {
         const script =
           'tell application "System Events" to get name of first application process whose frontmost is true'
@@ -3424,8 +3520,63 @@ function runBundle(code: string, packageRoot: string, session: RuntimeSession): 
       return jsxRuntimeShim
     }
     if (specifier === 'child_process' || specifier === 'node:child_process') {
+      const childProcessModule = fileRequire(specifier) as typeof import('node:child_process')
+      const originalExec = childProcessModule.exec
       return {
-        ...fileRequire(specifier),
+        ...childProcessModule,
+        exec: ((command: string, ...args: unknown[]) => {
+          const instrumentedCommand = instrumentTimerNotificationCommand(command)
+          if (instrumentedCommand === command) {
+            return Reflect.apply(originalExec, childProcessModule, [command, ...args])
+          }
+
+          let callbackIndex = -1
+          for (let index = args.length - 1; index >= 0; index -= 1) {
+            if (typeof args[index] === 'function') {
+              callbackIndex = index
+              break
+            }
+          }
+          if (callbackIndex >= 0) {
+            const callback = args[callbackIndex] as (
+              error: Error | null,
+              stdout: string | Buffer,
+              stderr: string | Buffer
+            ) => void
+            args[callbackIndex] = (
+              error: Error | null,
+              stdout: string | Buffer,
+              stderr: string | Buffer
+            ): void =>
+              callback(
+                error,
+                stripTimerNotificationMarkers(stdout),
+                stripTimerNotificationMarkers(stderr)
+              )
+          }
+
+          const child = Reflect.apply(originalExec, childProcessModule, [
+            instrumentedCommand,
+            ...args,
+          ]) as ReturnType<typeof originalExec>
+          let markerBuffer = ''
+          child.stdout?.on('data', (chunk: Buffer | string) => {
+            markerBuffer += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk)
+            let newlineIndex = markerBuffer.indexOf('\n')
+            while (newlineIndex >= 0) {
+              const line = markerBuffer.slice(0, newlineIndex)
+              markerBuffer = markerBuffer.slice(newlineIndex + 1)
+              const payload = timerNotificationPayload(line)
+              if (payload) {
+                process.stdout.write(
+                  `${JSON.stringify({ type: 'timer_notification', ...payload })}\n`
+                )
+              }
+              newlineIndex = markerBuffer.indexOf('\n')
+            }
+          })
+          return child
+        }) as typeof originalExec,
         spawn: (...args: Parameters<typeof nodeSpawn>) => {
           const child = nodeSpawn(...args)
           const stdout = child.stdout as
@@ -3723,7 +3874,7 @@ function runBundle(code: string, packageRoot: string, session: RuntimeSession): 
           // ignore filter errors
         }
 
-        await execFileAsync('/usr/bin/tar', args)
+        await execFileAsync(process.platform === 'win32' ? 'tar.exe' : '/usr/bin/tar', args)
       }
       return {
         extract,
@@ -3737,7 +3888,24 @@ function runBundle(code: string, packageRoot: string, session: RuntimeSession): 
         const dir = options?.dir
         if (!dir) throw new Error('extract-zip requires dir')
         mkdirSync(dir, { recursive: true })
-        await execFileAsync('/usr/bin/unzip', ['-o', file, '-d', dir])
+        if (process.platform === 'win32') {
+          await execFileAsync(
+            'powershell.exe',
+            [
+              '-NoLogo',
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              'Expand-Archive -LiteralPath $env:TEZBAR_ZIP_FILE -DestinationPath $env:TEZBAR_ZIP_DIR -Force',
+            ],
+            {
+              windowsHide: true,
+              env: { ...process.env, TEZBAR_ZIP_FILE: file, TEZBAR_ZIP_DIR: dir },
+            }
+          )
+        } else {
+          await execFileAsync('/usr/bin/unzip', ['-o', file, '-d', dir])
+        }
       }
       return {
         default: extractZip,

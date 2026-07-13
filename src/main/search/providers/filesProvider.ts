@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync, readdirSync, statSync, watch } from 'node:fs'
 import { homedir } from 'node:os'
-import { extname, join, sep } from 'node:path'
+import { basename, extname, join, sep } from 'node:path'
 import { promisify } from 'node:util'
 import type { SearchResult } from '../../../shared/search'
 import type { IndexedDocument } from './types'
@@ -82,10 +82,15 @@ function makeFileDocument(path: string): IndexedDocument | null {
 
 function initialRoots(): string[] {
   const home = homedir()
-  return [join(home, 'Desktop'), join(home, 'Documents'), join(home, 'Downloads')].filter((root) => existsSync(root))
+  return [
+    join(home, 'Desktop'),
+    join(home, 'Documents'),
+    join(home, 'Downloads'),
+    join(home, 'Pictures'),
+  ].filter((root) => existsSync(root))
 }
 
-export async function collectInitialFileDocuments(limit = 4000): Promise<IndexedDocument[]> {
+export async function collectInitialFileDocuments(limit = 75_000): Promise<IndexedDocument[]> {
   const roots = initialRoots()
   if (roots.length === 0) return []
 
@@ -192,16 +197,37 @@ export async function spotlightFallback(query: string, limit = 8): Promise<Searc
   ]
 
   try {
-    const { stdout } = await execFileAsync('mdfind', ['-name', trimmed, '-onlyin', homedir()])
+    const { stdout } =
+      process.platform === 'win32'
+        ? await execFileAsync(
+            'powershell.exe',
+            [
+              '-NoLogo',
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              "$roots=@($env:USERPROFILE+'\\Desktop',$env:USERPROFILE+'\\Documents',$env:USERPROFILE+'\\Downloads'); Get-ChildItem -LiteralPath $roots -Recurse -File -Filter ('*'+$env:TEZBAR_FILE_QUERY+'*') -ErrorAction SilentlyContinue | Select-Object -First ([int]$env:TEZBAR_FILE_LIMIT) -ExpandProperty FullName",
+            ],
+            {
+              windowsHide: true,
+              timeout: 5_000,
+              env: {
+                ...process.env,
+                TEZBAR_FILE_QUERY: trimmed,
+                TEZBAR_FILE_LIMIT: String(limit),
+              },
+            }
+          )
+        : await execFileAsync('mdfind', ['-name', trimmed, '-onlyin', homedir()])
     return stdout
-      .split('\n')
+      .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean)
       .filter((path) => !INTERNAL_PATH_PATTERNS.some((pattern) => path.includes(pattern)))
       .slice(0, limit)
       .map((path, index) => ({
         id: `spotlight:${path}`,
-        title: path.split('/').pop() ?? path,
+        title: basename(path),
         subtitle: path,
         category: 'files' as const,
         score: 150 - index,

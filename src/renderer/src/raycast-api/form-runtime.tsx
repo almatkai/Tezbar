@@ -1,5 +1,15 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import type { ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
+import { Hint, HintBar, Kbd, ViewHeader } from '../../ui/primitives'
 
 type FormField = {
   key: string
@@ -160,31 +170,67 @@ function FormFieldFeedback({ field }: { field: FormField }): ReactNode {
   )
 }
 
-export function FormRuntime({
-  root,
-  title,
-  onBack,
-  onSubmitForm,
-  onChangeField,
-  onOpenActions,
-}: {
+export type FormRuntimeHandle = {
+  getValues: () => Record<string, unknown>
+}
+
+type FormRuntimeProps = {
   root: ExtensionRuntimeNode
   title: string
   onBack: () => void
   onSubmitForm: (values: Record<string, unknown>) => void
   onChangeField: (actionId: string, value: unknown) => Promise<void> | void
   onOpenActions: () => void
-}): ReactNode {
+  actionNotice?: { message: string; tone: 'success' | 'error' } | null
+}
+
+export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(function FormRuntime(
+  { root, title, onBack, onSubmitForm, onChangeField, onOpenActions, actionNotice },
+  ref
+) {
   const items = useMemo(() => collectFormItems(root), [root])
   const fields = useMemo(
     () => items.flatMap((item) => (item.type === 'field' ? [item.field] : [])),
     [items]
   )
   const [values, setValues] = useState<Record<string, unknown>>(() => initialValues(fields))
+  const filePickerOpenRef = useRef(false)
 
   useEffect(() => {
     setValues((previous) => initialValues(fields, previous))
   }, [fields])
+
+  useImperativeHandle(ref, () => ({ getValues: () => values }), [values])
+
+  const releaseFilePickerBlurSuppression = useCallback((): void => {
+    if (!filePickerOpenRef.current) return
+    filePickerOpenRef.current = false
+    void window.tezbar.setSuppressBlurHide(false).catch(() => undefined)
+  }, [])
+
+  const prepareForFilePicker = useCallback((): void => {
+    if (filePickerOpenRef.current) return
+    filePickerOpenRef.current = true
+    void window.tezbar.setSuppressBlurHide(true).catch(() => {
+      filePickerOpenRef.current = false
+    })
+  }, [])
+
+  useEffect(() => {
+    let releaseTimer: number | undefined
+    const releaseAfterDialogCloses = (): void => {
+      if (!filePickerOpenRef.current) return
+      window.clearTimeout(releaseTimer)
+      releaseTimer = window.setTimeout(releaseFilePickerBlurSuppression, 120)
+    }
+
+    window.addEventListener('focus', releaseAfterDialogCloses)
+    return () => {
+      window.removeEventListener('focus', releaseAfterDialogCloses)
+      window.clearTimeout(releaseTimer)
+      releaseFilePickerBlurSuppression()
+    }
+  }, [releaseFilePickerBlurSuppression])
 
   const updateValue = (field: FormField, value: unknown): void => {
     setValues((previous) => ({ ...previous, [field.id]: value }))
@@ -192,22 +238,27 @@ export function FormRuntime({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="glass-card mb-2 shrink-0 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn btn-ghost" onClick={onBack}>
-            Back
-          </button>
-          <div className="text-[12px] font-semibold text-ink-2">{title}</div>
-          <div className="ml-auto flex items-center gap-1">
-            <button type="button" className="btn btn-ghost" onClick={() => onSubmitForm(values)}>
-              Submit
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={onOpenActions}>
-              Cmd+K
-            </button>
-          </div>
-        </div>
+    <form
+      className="flex h-full min-h-0 flex-col"
+      onSubmit={(event) => {
+        event.preventDefault()
+        onSubmitForm(values)
+      }}
+      onKeyDownCapture={(event) => {
+        if (
+          event.key !== 'Enter' ||
+          event.repeat ||
+          event.nativeEvent.isComposing ||
+          event.target instanceof HTMLTextAreaElement
+        ) {
+          return
+        }
+        event.preventDefault()
+        onSubmitForm(values)
+      }}
+    >
+      <div className="glass-card mb-2 shrink-0 px-4 py-3">
+        <ViewHeader title={title} />
       </div>
 
       <div className="glass-card min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
@@ -352,12 +403,15 @@ export function FormRuntime({
                       id={controlId}
                       type="file"
                       multiple={field.allowMultipleSelection}
+                      onPointerDown={prepareForFilePicker}
+                      onClick={prepareForFilePicker}
                       onChange={(event) => {
                         const next = Array.from(event.target.files ?? [], (file) => {
                           const desktopFile = file as File & { path?: string }
                           return desktopFile.path || file.name
                         })
                         updateValue(field, next)
+                        releaseFilePickerBlurSuppression()
                       }}
                       className="glass-field cursor-pointer py-1.5 file:mr-3 file:cursor-pointer file:rounded-tezbar-chip file:border-0 file:bg-white/[0.09] file:px-3 file:py-1 file:text-[11px] file:font-medium file:text-ink-1 hover:file:bg-white/[0.13]"
                     />
@@ -414,6 +468,60 @@ export function FormRuntime({
           ) : null}
         </div>
       </div>
-    </div>
+
+      {actionNotice ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`glass-card mt-2 shrink-0 px-4 py-2 text-[11px] font-medium ${
+            actionNotice.tone === 'error' ? 'text-rose-300' : 'text-emerald-200'
+          }`}
+        >
+          {actionNotice.message}
+        </div>
+      ) : null}
+
+      <div className="glass-card mt-2 flex shrink-0 items-center justify-between gap-3 px-4 py-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-tezbar-chip px-1.5 py-1 transition hover:bg-white/[0.06]"
+          aria-label="Back"
+        >
+          <HintBar>
+            <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+          </HintBar>
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="submit"
+            className="rounded-tezbar-chip px-1.5 py-1 transition hover:bg-white/[0.06]"
+            aria-label="Submit form"
+          >
+            <HintBar>
+              <Hint label="Submit" keys={<Kbd>↵</Kbd>} />
+            </HintBar>
+          </button>
+          <button
+            type="button"
+            onClick={onOpenActions}
+            className="rounded-tezbar-chip px-1.5 py-1 transition hover:bg-white/[0.06]"
+            aria-label="Open actions"
+          >
+            <HintBar>
+              <Hint
+                label="Actions"
+                keys={
+                  <>
+                    <Kbd>⌘</Kbd>
+                    <Kbd>K</Kbd>
+                  </>
+                }
+              />
+            </HintBar>
+          </button>
+        </div>
+      </div>
+    </form>
   )
-}
+})

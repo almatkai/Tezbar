@@ -6,9 +6,9 @@ var import_node_os3 = require("node:os");
 // src/main/knowledge/service.ts
 var import_node_child_process4 = require("node:child_process");
 var import_node_crypto4 = require("node:crypto");
-var import_node_fs5 = require("node:fs");
+var import_node_fs6 = require("node:fs");
 var import_node_os2 = require("node:os");
-var import_node_path5 = require("node:path");
+var import_node_path7 = require("node:path");
 var import_node_util3 = require("node:util");
 
 // src/main/knowledge/backends/local/backend.ts
@@ -671,6 +671,25 @@ var app = {
 
 // src/main/better-sqlite3-shim.ts
 var import_bun_sqlite = require("bun:sqlite");
+var import_node_fs4 = require("node:fs");
+var import_node_path3 = require("node:path");
+if (process.platform === "darwin") {
+  const sqliteCandidates = [
+    process.env.TEZBAR_SQLITE_LIBRARY_PATH,
+    (0, import_node_path3.join)(__dirname, "libsqlite3.dylib"),
+    "/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib",
+    "/usr/local/opt/sqlite/lib/libsqlite3.dylib",
+    "/usr/local/opt/sqlite3/lib/libsqlite3.dylib"
+  ].filter((path) => Boolean(path && (0, import_node_fs4.existsSync)(path)));
+  const sqliteLibrary = sqliteCandidates[0];
+  if (sqliteLibrary) {
+    try {
+      import_bun_sqlite.Database.setCustomSQLite(sqliteLibrary);
+    } catch (error) {
+      console.warn("[SQLite] Could not enable loadable extensions:", error);
+    }
+  }
+}
 var StatementShim = class {
   _stmt;
   constructor(stmt) {
@@ -705,6 +724,9 @@ var DatabaseShim = class {
     const stmt = this._db.prepare(sql);
     return new StatementShim(stmt);
   }
+  loadExtension(path) {
+    this._db.loadExtension(path);
+  }
   transaction(fn) {
     return this._db.transaction(fn);
   }
@@ -712,15 +734,23 @@ var DatabaseShim = class {
 var better_sqlite3_shim_default = DatabaseShim;
 
 // src/main/knowledge/database/store.ts
-var import_node_fs4 = require("node:fs");
-var import_node_path3 = require("node:path");
+var import_node_fs5 = require("node:fs");
+var import_node_path5 = require("node:path");
 var import_node_crypto3 = require("node:crypto");
 
+// src/main/sqlite-vec-bundled.ts
+var import_node_path4 = require("node:path");
+function load(database) {
+  database.loadExtension((0, import_node_path4.join)(__dirname, "vec0"));
+}
+
 // src/main/search/textMatch.ts
-function buildFtsQuery(query) {
-  const tokens = query.toLowerCase().match(/[a-z0-9]+/g) ?? [];
-  if (tokens.length === 0) return "";
-  return tokens.map((token) => `${token}*`).join(" OR ");
+function wordTokens(value) {
+  return value.toLocaleLowerCase().normalize("NFKC").match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+function buildContentFtsQuery(query) {
+  const tokens = wordTokens(query);
+  return tokens.filter((token) => token.length >= 3).map((token) => token.length >= 4 ? `${token}*` : token).join(" AND ");
 }
 
 // src/main/knowledge/depth.ts
@@ -786,9 +816,9 @@ var DEFAULT_STATUS = {
   sourceBytes: 0
 };
 function databasePath() {
-  const directory = (0, import_node_path3.join)(app.getPath("userData"), "knowledge");
-  (0, import_node_fs4.mkdirSync)(directory, { recursive: true });
-  return (0, import_node_path3.join)(directory, "knowledge.sqlite3");
+  const directory = (0, import_node_path5.join)(app.getPath("userData"), "knowledge");
+  (0, import_node_fs5.mkdirSync)(directory, { recursive: true });
+  return (0, import_node_path5.join)(directory, "knowledge.sqlite3");
 }
 function parseJson(value, fallback) {
   if (!value) return fallback;
@@ -802,6 +832,16 @@ function encodeEmbedding(value) {
   const buffer = Buffer.allocUnsafe(value.length * Float32Array.BYTES_PER_ELEMENT);
   for (let index = 0; index < value.length; index += 1) {
     buffer.writeFloatLE(value[index] ?? 0, index * Float32Array.BYTES_PER_ELEMENT);
+  }
+  return buffer;
+}
+function encodeBinaryEmbedding(value) {
+  const buffer = Buffer.alloc(Math.ceil(value.length / 8));
+  for (let index = 0; index < value.length; index += 1) {
+    if ((value[index] ?? 0) >= 0) {
+      const byteIndex = Math.floor(index / 8);
+      buffer[byteIndex] = (buffer[byteIndex] ?? 0) | 1 << index % 8;
+    }
   }
   return buffer;
 }
@@ -823,6 +863,7 @@ function getKnowledgeStore() {
 }
 var KnowledgeStore = class {
   database = null;
+  vectorIndexAvailable = false;
   get db() {
     if (!this.database) throw new Error("Knowledge database is not initialized");
     return this.database;
@@ -833,6 +874,14 @@ var KnowledgeStore = class {
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("synchronous = NORMAL");
     this.db.pragma("busy_timeout = 5000");
+    try {
+      load(
+        this.db
+      );
+      this.vectorIndexAvailable = true;
+    } catch (error) {
+      console.warn("[Knowledge] sqlite-vec unavailable; using compatibility search:", error);
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS knowledge_roots (
         id TEXT PRIMARY KEY,
@@ -860,6 +909,27 @@ var KnowledgeStore = class {
         indexed_at INTEGER,
         FOREIGN KEY(root_id) REFERENCES knowledge_roots(id) ON DELETE CASCADE
       );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_sources_fts USING fts5(
+        id UNINDEXED,
+        path,
+        tokenize = 'unicode61'
+      );
+
+      CREATE TRIGGER IF NOT EXISTS knowledge_sources_fts_insert
+      AFTER INSERT ON knowledge_sources BEGIN
+        INSERT INTO knowledge_sources_fts(rowid, id, path) VALUES (new.rowid, new.id, new.path);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS knowledge_sources_fts_delete
+      AFTER DELETE ON knowledge_sources BEGIN
+        DELETE FROM knowledge_sources_fts WHERE rowid = old.rowid;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS knowledge_sources_fts_update
+      AFTER UPDATE OF path ON knowledge_sources BEGIN
+        UPDATE knowledge_sources_fts SET id = new.id, path = new.path WHERE rowid = old.rowid;
+      END;
 
       CREATE TABLE IF NOT EXISTS knowledge_pages (
         source_id TEXT NOT NULL,
@@ -959,6 +1029,15 @@ var KnowledgeStore = class {
     this.ensureColumn("knowledge_sources", "indexing_profile", "TEXT NOT NULL DEFAULT ''");
     this.ensureColumn("knowledge_sources", "total_pages", "INTEGER");
     this.ensureColumn("knowledge_sources", "indexed_pages", "INTEGER NOT NULL DEFAULT 0");
+    const sourceCount = this.db.prepare("SELECT COUNT(*) AS count FROM knowledge_sources").get().count;
+    const metadataIndexCount = this.db.prepare("SELECT COUNT(*) AS count FROM knowledge_sources_fts").get().count;
+    if (sourceCount !== metadataIndexCount) {
+      this.db.exec(`
+        DELETE FROM knowledge_sources_fts;
+        INSERT INTO knowledge_sources_fts(rowid, id, path)
+        SELECT rowid, id, path FROM knowledge_sources;
+      `);
+    }
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS knowledge_sources_reuse_idx
         ON knowledge_sources(content_hash, indexing_profile, status, indexed_at DESC)
@@ -981,6 +1060,86 @@ var KnowledgeStore = class {
     `
     ).run();
     this.ensureMaterializedStats();
+    this.ensureVectorIndex();
+  }
+  ensureVectorIndex() {
+    if (!this.vectorIndexAvailable) return;
+    this.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_chunk_vectors_binary USING vec0(
+        embedding bit[${FEATURE_EMBEDDING_MODEL.dimensions}],
+        root_id text
+      );
+    `);
+    const cutoff = this.db.prepare(
+      "SELECT value_json AS valueJson FROM knowledge_metadata WHERE key = 'vector-binary-backfill-max-rowid-v1'"
+    ).get();
+    if (!cutoff) {
+      const maximumRow = this.db.prepare(
+        "SELECT COALESCE(MAX(rowid), 0) AS maximumRowId FROM knowledge_chunks WHERE embedding_json IS NOT NULL"
+      ).get();
+      this.db.prepare(
+        `INSERT INTO knowledge_metadata (key, value_json)
+           VALUES ('vector-binary-backfill-max-rowid-v1', ?)`
+      ).run(JSON.stringify(maximumRow.maximumRowId));
+    }
+  }
+  /**
+   * Incrementally migrates embeddings created before the sqlite-vec index was
+   * introduced. Keeping this bounded is critical: large existing libraries
+   * must not delay the backend IPC connection during app startup.
+   */
+  backfillVectorIndexBatch(limit = 128) {
+    this.ensureInitialized();
+    if (!this.vectorIndexAvailable) return { processed: 0, hasMore: false };
+    const batchSize = Math.max(1, Math.min(1e3, Math.round(limit)));
+    const cursorRow = this.db.prepare(
+      "SELECT value_json AS valueJson FROM knowledge_metadata WHERE key = 'vector-binary-backfill-cursor-v1'"
+    ).get();
+    const cursor = Math.max(0, parseJson(cursorRow?.valueJson, 0));
+    const cutoffRow = this.db.prepare(
+      "SELECT value_json AS valueJson FROM knowledge_metadata WHERE key = 'vector-binary-backfill-max-rowid-v1'"
+    ).get();
+    const cutoff = Math.max(cursor, parseJson(cutoffRow?.valueJson, cursor));
+    const rows = this.db.prepare(
+      `
+      SELECT c.rowid AS rowId, c.embedding_json AS embeddingJson, s.root_id AS rootId
+      FROM knowledge_chunks c
+      JOIN knowledge_sources s ON s.id = c.source_id
+      WHERE c.rowid > ? AND c.rowid <= ? AND c.embedding_json IS NOT NULL
+      ORDER BY c.rowid ASC
+      LIMIT ?
+    `
+    ).all(cursor, cutoff, batchSize);
+    if (rows.length === 0) return { processed: 0, hasMore: false };
+    let processed = 0;
+    const migrate = this.db.transaction(() => {
+      const insert = this.db.prepare(
+        `INSERT INTO knowledge_chunk_vectors_binary(rowid, embedding, root_id)
+         VALUES (?, vec_bit(?), ?)`
+      );
+      for (const row of rows) {
+        const embedding = decodeEmbedding(row.embeddingJson);
+        if (embedding?.length !== FEATURE_EMBEDDING_MODEL.dimensions) continue;
+        const rowId = BigInt(row.rowId);
+        insert.run(rowId, encodeBinaryEmbedding(embedding), row.rootId);
+        processed += 1;
+      }
+      this.db.prepare(
+        `
+        INSERT INTO knowledge_metadata (key, value_json)
+        VALUES ('vector-binary-backfill-cursor-v1', ?)
+        ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json
+      `
+      ).run(JSON.stringify(rows.at(-1)?.rowId ?? cursor));
+    });
+    migrate();
+    return { processed, hasMore: true };
+  }
+  deleteVectorsForSource(sourceId) {
+    if (!this.vectorIndexAvailable) return;
+    const rows = this.db.prepare("SELECT rowid AS rowId FROM knowledge_chunks WHERE source_id = ?").all(sourceId);
+    const remove = this.db.prepare("DELETE FROM knowledge_chunk_vectors_binary WHERE rowid = ?");
+    for (const row of rows) remove.run(BigInt(row.rowId));
   }
   /**
    * Keep dashboard counters in one tiny row instead of repeatedly scanning the
@@ -1220,6 +1379,7 @@ var KnowledgeStore = class {
         Date.now()
       );
       deleteFts.run(result.sourceId, result.sourceId);
+      this.deleteVectorsForSource(result.sourceId);
       this.db.prepare("DELETE FROM knowledge_pages WHERE source_id = ?").run(result.sourceId);
       this.db.prepare("DELETE FROM knowledge_chunks WHERE source_id = ?").run(result.sourceId);
       this.db.prepare("DELETE FROM knowledge_images WHERE source_id = ?").run(result.sourceId);
@@ -1255,6 +1415,10 @@ ${page.ocr?.text ?? ""}`.trim();
       const insertChunkFts = this.db.prepare(`
         INSERT INTO knowledge_chunks_fts (rowid, id, source_id, text) VALUES (?, ?, ?, ?)
       `);
+      const insertChunkVector = this.vectorIndexAvailable ? this.db.prepare(
+        `INSERT INTO knowledge_chunk_vectors_binary(rowid, embedding, root_id)
+             VALUES (?, vec_bit(?), ?)`
+      ) : null;
       for (const chunk of result.chunks) {
         const inserted = insertChunk.run(
           chunk.id,
@@ -1266,6 +1430,13 @@ ${page.ocr?.text ?? ""}`.trim();
           chunk.endOffset ?? null
         );
         insertChunkFts.run(inserted.lastInsertRowid, chunk.id, result.sourceId, chunk.text);
+        if (chunk.embedding?.length === FEATURE_EMBEDDING_MODEL.dimensions) {
+          insertChunkVector?.run(
+            BigInt(inserted.lastInsertRowid),
+            encodeBinaryEmbedding(chunk.embedding),
+            rootId
+          );
+        }
       }
       const insertImage = this.db.prepare(`
         INSERT INTO knowledge_images
@@ -1385,11 +1556,14 @@ ${page.ocr?.text ?? ""}`.trim();
   }
   removeSource(sourceId) {
     this.ensureInitialized();
-    this.db.prepare(`
+    this.db.prepare(
+      `
         DELETE FROM knowledge_chunks_fts
         WHERE rowid IN (SELECT rowid FROM knowledge_chunks WHERE source_id = ?)
           AND source_id = ?
-      `).run(sourceId, sourceId);
+      `
+    ).run(sourceId, sourceId);
+    this.deleteVectorsForSource(sourceId);
     this.db.prepare("DELETE FROM knowledge_pages WHERE source_id = ?").run(sourceId);
     this.db.prepare("DELETE FROM knowledge_chunks WHERE source_id = ?").run(sourceId);
     this.db.prepare("DELETE FROM knowledge_images WHERE source_id = ?").run(sourceId);
@@ -1426,7 +1600,7 @@ ${page.ocr?.text ?? ""}`.trim();
     const path = databasePath();
     return [path, `${path}-wal`, `${path}-shm`].reduce((total, candidate) => {
       try {
-        return total + (0, import_node_fs4.statSync)(candidate).size;
+        return total + (0, import_node_fs5.statSync)(candidate).size;
       } catch {
         return total;
       }
@@ -1459,7 +1633,7 @@ ${page.ocr?.text ?? ""}`.trim();
     return {
       sources: rows.map((row) => ({
         ...row,
-        title: (0, import_node_path3.basename)(row.path),
+        title: (0, import_node_path5.basename)(row.path),
         indexedAt: row.indexedAt ?? void 0,
         error: row.error ?? void 0
       })),
@@ -1467,6 +1641,30 @@ ${page.ocr?.text ?? ""}`.trim();
       offset,
       hasMore: offset + rows.length < total.count
     };
+  }
+  searchMetadata(query, limit = 20, rootIds) {
+    this.ensureInitialized();
+    const trimmed = query.trim();
+    const ftsQuery = buildContentFtsQuery(trimmed);
+    if (!ftsQuery || limit <= 0 || rootIds?.length === 0) return [];
+    const rootFilter = rootIds ? `AND r.id IN (${rootIds.map(() => "?").join(", ")})` : "";
+    const rows = this.db.prepare(
+      `
+      SELECT s.id AS sourceId, s.path, bm25(knowledge_sources_fts) AS rank
+      FROM knowledge_sources_fts f
+      JOIN knowledge_sources s ON s.id = f.id
+      JOIN knowledge_roots r ON r.id = s.root_id
+      WHERE knowledge_sources_fts MATCH ? AND r.enabled = 1 ${rootFilter}
+      ORDER BY rank ASC
+      LIMIT ?
+    `
+    ).all(ftsQuery, ...rootIds ?? [], limit);
+    return rows.map((row, index) => ({
+      sourceId: row.sourceId,
+      path: row.path,
+      title: (0, import_node_path5.basename)(row.path),
+      score: Math.max(0.2, 1 - index / Math.max(rows.length, 1))
+    }));
   }
   getPersistedStatus() {
     this.ensureInitialized();
@@ -1581,44 +1779,64 @@ ${page.ocr?.text ?? ""}`.trim();
     const trimmed = query.trim();
     if (!trimmed || limit <= 0 || rootIds?.length === 0) return [];
     const rootFilter = rootIds ? `AND r.id IN (${rootIds.map(() => "?").join(", ")})` : "";
-    const ftsQuery = buildFtsQuery(trimmed);
+    const ftsQuery = buildContentFtsQuery(trimmed);
     const lexicalRows = ftsQuery ? this.db.prepare(
       `
           SELECT c.id, c.source_id AS sourceId, s.path, c.page_number AS pageNumber,
                  c.text, c.embedding_json AS embeddingJson,
                  bm25(knowledge_chunks_fts, 1.0) AS rank
           FROM knowledge_chunks_fts f
-          JOIN knowledge_chunks c ON c.id = f.id
+          JOIN knowledge_chunks c ON c.rowid = f.rowid
           JOIN knowledge_sources s ON s.id = c.source_id
           JOIN knowledge_roots r ON r.id = s.root_id
           WHERE knowledge_chunks_fts MATCH ? AND r.enabled = 1 ${rootFilter}
-          ORDER BY rank ASC LIMIT ?
+          LIMIT ?
         `
     ).all(ftsQuery, ...rootIds ?? [], Math.max(40, limit * 5)) : [];
-    const semanticRows = this.db.prepare(
-      `
-      SELECT c.id, c.source_id AS sourceId, s.path, c.page_number AS pageNumber,
-             c.text, c.embedding_json AS embeddingJson
-      FROM knowledge_chunks c
-      JOIN knowledge_sources s ON s.id = c.source_id
-      JOIN knowledge_roots r ON r.id = s.root_id
-      WHERE c.embedding_json IS NOT NULL AND s.status = 'indexed' AND r.enabled = 1
-      ${rootFilter}
-      -- Chunks are replaced when a source is re-indexed, so rowid gives us
-      -- the same useful recency bias without sorting the entire chunk table.
-      -- Ordering by sources.indexed_at made every search scan and sort all
-      -- indexed chunks (roughly two seconds on a large knowledge database).
-      ORDER BY c.rowid DESC LIMIT 1200
-    `
-    ).all(...rootIds ?? []);
+    lexicalRows.sort((left, right) => (left.rank ?? 0) - (right.rank ?? 0));
     const queryEmbedding = embedText(trimmed);
+    const semanticRows = this.vectorIndexAvailable ? this.db.prepare(
+      `
+          WITH nearest AS (
+            SELECT rowid, distance
+            FROM knowledge_chunk_vectors_binary
+            WHERE embedding MATCH vec_bit(?) AND k = ?
+            ${rootIds ? `AND root_id IN (${rootIds.map(() => "?").join(", ")})` : ""}
+          )
+          SELECT c.id, c.source_id AS sourceId, s.path, c.page_number AS pageNumber,
+                 c.text, c.embedding_json AS embeddingJson, nearest.distance
+          FROM nearest
+          JOIN knowledge_chunks c ON c.rowid = nearest.rowid
+          JOIN knowledge_sources s ON s.id = c.source_id
+          JOIN knowledge_roots r ON r.id = s.root_id
+          WHERE s.status = 'indexed' AND r.enabled = 1
+          ORDER BY nearest.distance ASC
+        `
+    ).all(
+      encodeBinaryEmbedding(queryEmbedding),
+      Math.max(320, limit * 32),
+      ...rootIds ?? []
+    ) : this.db.prepare(
+      `
+          SELECT c.id, c.source_id AS sourceId, s.path, c.page_number AS pageNumber,
+                 c.text, c.embedding_json AS embeddingJson
+          FROM knowledge_chunks c
+          JOIN knowledge_sources s ON s.id = c.source_id
+          JOIN knowledge_roots r ON r.id = s.root_id
+          WHERE c.embedding_json IS NOT NULL AND s.status = 'indexed' AND r.enabled = 1
+          ${rootFilter}
+          ORDER BY c.rowid DESC LIMIT 1200
+        `
+    ).all(...rootIds ?? []);
     const byId = /* @__PURE__ */ new Map();
     const lexicalIds = new Set(lexicalRows.map((row) => row.id));
     const candidates = /* @__PURE__ */ new Map();
     for (const row of [...lexicalRows, ...semanticRows]) candidates.set(row.id, row);
     for (const row of candidates.values()) {
-      const embedding = decodeEmbedding(row.embeddingJson) ?? [];
-      const semanticScore = Math.max(0, cosineSimilarity(queryEmbedding, embedding));
+      const semanticScore = Math.max(
+        0,
+        cosineSimilarity(queryEmbedding, decodeEmbedding(row.embeddingJson) ?? [])
+      );
       const lexicalIndex = lexicalRows.findIndex((candidate) => candidate.id === row.id);
       const lexicalScore = lexicalIds.has(row.id) ? Math.max(0.15, 1 - lexicalIndex / Math.max(lexicalRows.length, 1)) : 0;
       const score = lexicalScore * 0.72 + semanticScore * 0.28;
@@ -1627,7 +1845,7 @@ ${page.ocr?.text ?? ""}`.trim();
         chunkId: row.id,
         sourceId: row.sourceId,
         path: row.path,
-        title: (0, import_node_path3.basename)(row.path),
+        title: (0, import_node_path5.basename)(row.path),
         pageNumber: row.pageNumber ?? void 0,
         text: row.text,
         score,
@@ -1671,7 +1889,7 @@ ${page.ocr?.text ?? ""}`.trim();
       resultId: chunkId,
       sourceId: selected.sourceId,
       path: selected.path,
-      title: (0, import_node_path3.basename)(selected.path),
+      title: (0, import_node_path5.basename)(selected.path),
       pageNumber: selected.pageNumber ?? void 0,
       text
     };
@@ -1680,7 +1898,7 @@ ${page.ocr?.text ?? ""}`.trim();
 
 // src/main/knowledge/workerHost.ts
 var import_node_child_process3 = require("node:child_process");
-var import_node_path4 = require("node:path");
+var import_node_path6 = require("node:path");
 var KnowledgeWorkerHost = class {
   constructor(onStatus, onExit) {
     this.onStatus = onStatus;
@@ -1695,7 +1913,7 @@ var KnowledgeWorkerHost = class {
   }
   start() {
     if (this.child) return;
-    const workerPath = (0, import_node_path4.join)(__dirname, "knowledge-worker.js");
+    const workerPath = (0, import_node_path6.join)(__dirname, "knowledge-worker.js");
     const child = (0, import_node_child_process3.spawn)(process.execPath, [workerPath], {
       env: { ...process.env, TEZBAR_KNOWLEDGE_WORKER: "1" },
       stdio: ["ignore", "pipe", "pipe"],
@@ -1784,6 +2002,8 @@ var MAX_SCANNED_FILES = 75e3;
 var STATUS_EVENT_INTERVAL_MS = 100;
 var STATUS_PERSIST_INTERVAL_MS = 1e3;
 var BACKGROUND_FILE_DELAY_MS = 12;
+var VECTOR_BACKFILL_BATCH_SIZE = 512;
+var VECTOR_BACKFILL_DELAY_MS = 25;
 var SKIP_NAMES = /* @__PURE__ */ new Set([
   ".git",
   ".svn",
@@ -1857,18 +2077,18 @@ function shouldSkipKnowledgeEntry(name, isDirectory) {
   return lower.endsWith(".min.js") || lower.endsWith(".min.css");
 }
 function discoverMajorKnowledgeFolders(home = (0, import_node_os2.homedir)()) {
-  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path5.join)(home, name)).filter((path) => {
+  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path7.join)(home, name)).filter((path) => {
     try {
-      return (0, import_node_fs5.statSync)(path).isDirectory();
+      return (0, import_node_fs6.statSync)(path).isDirectory();
     } catch {
       return false;
     }
   });
 }
 function isKnowledgeCandidatePath(rootPath, path) {
-  const relativePath = (0, import_node_path5.relative)(rootPath, path);
-  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path5.sep}`)) return false;
-  const segments = relativePath.split(import_node_path5.sep).filter(Boolean);
+  const relativePath = (0, import_node_path7.relative)(rootPath, path);
+  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path7.sep}`)) return false;
+  const segments = relativePath.split(import_node_path7.sep).filter(Boolean);
   const fileName = segments.pop();
   if (!fileName || shouldSkipKnowledgeEntry(fileName, false) || !isIndexablePath(path)) return false;
   return segments.every((name) => !shouldSkipKnowledgeEntry(name, true));
@@ -1909,6 +2129,7 @@ var KnowledgeService = class {
   watchers = /* @__PURE__ */ new Map();
   rescanTimer = null;
   startupTimer = null;
+  vectorBackfillTimer = null;
   rescanRequested = false;
   manuallyPaused = false;
   interactiveUntil = 0;
@@ -1966,6 +2187,7 @@ var KnowledgeService = class {
     this.refreshCounts();
     this.initialized = true;
     if (this.mode !== "worker") this.syncWatchers();
+    if (this.mode !== "worker") this.scheduleVectorBackfill(1e3);
     if (this.mode !== "worker" && !this.manuallyPaused && this.activeRoots().length > 0) {
       this.startupTimer = setTimeout(() => {
         this.startupTimer = null;
@@ -1988,8 +2210,8 @@ var KnowledgeService = class {
   }
   addRoot(path) {
     this.initialize();
-    const normalized = (0, import_node_path5.resolve)(path.trim());
-    if (!normalized || !(0, import_node_fs5.existsSync)(normalized) || !(0, import_node_fs5.statSync)(normalized).isDirectory()) {
+    const normalized = (0, import_node_path7.resolve)(path.trim());
+    if (!normalized || !(0, import_node_fs6.existsSync)(normalized) || !(0, import_node_fs6.statSync)(normalized).isDirectory()) {
       throw new Error("Choose an existing folder");
     }
     const current = this.store.listRoots();
@@ -2082,6 +2304,14 @@ var KnowledgeService = class {
   search(query, limit = 12) {
     this.initialize();
     return this.store.search(
+      query,
+      limit,
+      this.activeRoots().map((root) => root.id)
+    );
+  }
+  searchMetadata(query, limit = 20) {
+    this.initialize();
+    return this.store.searchMetadata(
       query,
       limit,
       this.activeRoots().map((root) => root.id)
@@ -2285,7 +2515,7 @@ var KnowledgeService = class {
           completed += 1;
           if (!succeeded) failed += 1;
           this.updateStatus({ ...this.status, processedSources: completed, failedSources: failed });
-          this.updateProgress(completed, total, `Processed ${(0, import_node_path5.basename)(candidate.path)}`);
+          this.updateProgress(completed, total, `Processed ${(0, import_node_path7.basename)(candidate.path)}`);
           if (this.mode === "worker") {
             await new Promise((resolve2) => setTimeout(resolve2, BACKGROUND_FILE_DELAY_MS));
           }
@@ -2316,7 +2546,7 @@ var KnowledgeService = class {
       if (!directory) break;
       let entries;
       try {
-        entries = (0, import_node_fs5.readdirSync)(directory, { withFileTypes: true });
+        entries = (0, import_node_fs6.readdirSync)(directory, { withFileTypes: true });
       } catch {
         complete = false;
         continue;
@@ -2325,14 +2555,14 @@ var KnowledgeService = class {
         if (signal.aborted) break;
         visited += 1;
         if (shouldSkipKnowledgeEntry(entry.name, entry.isDirectory())) continue;
-        const path = (0, import_node_path5.join)(directory, entry.name);
+        const path = (0, import_node_path7.join)(directory, entry.name);
         if (entry.isSymbolicLink()) continue;
         if (entry.isDirectory()) {
           queue.push(path);
         } else if (entry.isFile() && isIndexablePath(path)) {
           try {
-            const fileStat = (0, import_node_fs5.statSync)(path);
-            const isExtensionlessExecutable = !(0, import_node_path5.extname)(path) && (fileStat.mode & 73) !== 0;
+            const fileStat = (0, import_node_fs6.statSync)(path);
+            const isExtensionlessExecutable = !(0, import_node_path7.extname)(path) && (fileStat.mode & 73) !== 0;
             if (!isExtensionlessExecutable && fileStat.size <= maximumIndexableSourceBytes(path)) {
               paths.push(path);
             }
@@ -2353,7 +2583,7 @@ var KnowledgeService = class {
     const sourceId = sourceIdForPath(candidate.path);
     try {
       const existing = this.store.getSourceByPath(candidate.path);
-      const stat = (0, import_node_fs5.statSync)(candidate.path);
+      const stat = (0, import_node_fs6.statSync)(candidate.path);
       if (existing?.status === "indexed" && existing.byteSize === stat.size && Math.round(existing.modifiedAt) === Math.round(stat.mtimeMs) && existing.indexingProfile === profileKey) {
         return true;
       }
@@ -2364,7 +2594,7 @@ var KnowledgeService = class {
         rootId: candidate.root.id,
         path: candidate.path,
         fingerprint,
-        mediaType: (0, import_node_path5.extname)(candidate.path).slice(1).toLowerCase(),
+        mediaType: (0, import_node_path7.extname)(candidate.path).slice(1).toLowerCase(),
         indexingProfile: profileKey
       });
       const reusable = this.store.findReusableResult(fingerprint.contentHash, sourceId, profileKey);
@@ -2396,7 +2626,7 @@ var KnowledgeService = class {
           this.updateStatus({
             ...this.status,
             progress: Math.max(this.status.progress, overall),
-            detail: detail ? `${detail} \xB7 ${(0, import_node_path5.basename)(candidate.path)}` : (0, import_node_path5.basename)(candidate.path)
+            detail: detail ? `${detail} \xB7 ${(0, import_node_path7.basename)(candidate.path)}` : (0, import_node_path7.basename)(candidate.path)
           });
         }
       });
@@ -2415,7 +2645,7 @@ var KnowledgeService = class {
     if (!profile) return false;
     try {
       const existing = this.store.getSourceByPath(path);
-      const fileStat = (0, import_node_fs5.statSync)(path);
+      const fileStat = (0, import_node_fs6.statSync)(path);
       return !(existing?.status === "indexed" && existing.byteSize === fileStat.size && Math.round(existing.modifiedAt) === Math.round(fileStat.mtimeMs) && existing.indexingProfile === indexingProfileKey(profile));
     } catch {
       return false;
@@ -2497,9 +2727,29 @@ var KnowledgeService = class {
     this.startupTimer = null;
     if (this.rescanTimer) clearTimeout(this.rescanTimer);
     this.rescanTimer = null;
+    if (this.vectorBackfillTimer) clearTimeout(this.vectorBackfillTimer);
+    this.vectorBackfillTimer = null;
     for (const watcher of this.watchers.values()) watcher.close();
     this.watchers.clear();
     if (this.initialized) this.persistStatus();
+  }
+  scheduleVectorBackfill(delayMs = VECTOR_BACKFILL_DELAY_MS) {
+    if (this.mode === "worker" || this.vectorBackfillTimer) return;
+    this.vectorBackfillTimer = setTimeout(() => {
+      this.vectorBackfillTimer = null;
+      if (Date.now() < this.interactiveUntil) {
+        this.scheduleVectorBackfill(250);
+        return;
+      }
+      try {
+        const batch = this.store.backfillVectorIndexBatch(VECTOR_BACKFILL_BATCH_SIZE);
+        if (batch.hasMore) this.scheduleVectorBackfill();
+      } catch (error) {
+        console.warn("[Knowledge] Vector backfill paused after an error:", error);
+        this.scheduleVectorBackfill(2e3);
+      }
+    }, delayMs);
+    this.vectorBackfillTimer.unref();
   }
   scheduleRescan() {
     if (this.manuallyPaused) {
@@ -2528,7 +2778,7 @@ var KnowledgeService = class {
     for (const root of enabledRoots.values()) {
       if (this.watchers.has(root.id)) continue;
       try {
-        const watcher = (0, import_node_fs5.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
+        const watcher = (0, import_node_fs6.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
         watcher.on("error", () => {
           watcher.close();
           this.watchers.delete(root.id);

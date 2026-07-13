@@ -1,6 +1,8 @@
 node_modules
 out
 dist
+/dist-backend/vec0
+/dist-backend/libsqlite3.dylib
 .DS_Store
 *.log
 .env

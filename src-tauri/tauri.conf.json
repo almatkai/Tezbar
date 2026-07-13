@@ -44,11 +44,7 @@
     "resources": {
       "../dist-backend/main.js": "dist-backend/main.js",
       "../dist-backend/knowledge-worker.js": "dist-backend/knowledge-worker.js",
-      "../native/axhelper/axhelper": "native/axhelper/axhelper",
-      "../native/screenocr/screenocr-helper": "native/screenocr/screenocr-helper",
-      "../native/color-picker/color-picker-helper": "native/color-picker/color-picker-helper",
-      "../node_modules/@esbuild/darwin-arm64/bin/esbuild": "bin/esbuild",
-      "../resources/trayIconTemplate@2x.png": "trayIconTemplate@2x.png",
+      "../dist-backend/vec0": "dist-backend/vec0",
       "../resources/trayIconTemplate@2x.png": "trayIconTemplate@2x.png"
     }
   }

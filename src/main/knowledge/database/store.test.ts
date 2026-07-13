@@ -59,6 +59,10 @@ describe('knowledge store', () => {
       hasMore: false,
       sources: [expect.objectContaining({ title: 'certificate.txt', byteSize: 42 })],
     })
+    expect(store.searchMetadata('certificate', 5, ['root-1'])).toEqual([
+      expect.objectContaining({ sourceId: 'source-1', title: 'certificate.txt' }),
+    ])
+    expect(store.searchMetadata('expired', 5, ['root-1'])).toHaveLength(0)
     expect(store.readChunk('chunk-1', 2_000, ['root-1'])).toMatchObject({
       path: '/tmp/knowledge/certificate.txt',
       pageNumber: 1,

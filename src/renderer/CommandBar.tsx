@@ -8,7 +8,6 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
-import type { Intent } from '../shared/intent'
 import { defaultModels, normalizeProviderModelList } from '../shared/aiProviders'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { IconAssetKind, PathCompletionItem, SearchResult } from '../shared/search'
@@ -50,6 +49,12 @@ import {
   parseLauncherQueryHistory,
 } from './launcherQueryHistory'
 import { optimisticSearchResults } from './optimisticSearch'
+import {
+  ACTIVATE_DEEP_SEARCH_COMMAND,
+  DEEP_SEARCH_RESULT_PREFIX,
+  deepSearchInput,
+  parseSearchQuery,
+} from '../shared/searchMode'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
@@ -67,6 +72,7 @@ const COMMAND_HINT = { shortcut: '>', label: 'Open terminal' } as const
 const COMMAND_HINTS = [
   { shortcut: '/directory', label: 'Search files and folders' },
   { shortcut: '`', label: 'Browse applications' },
+  { shortcut: '!', label: 'Deep Search file contents' },
   { shortcut: 'SPACE', label: 'Enter AI Space' },
   COMMAND_HINT,
 ] as const
@@ -134,7 +140,7 @@ type PinnedCommand = {
   category: SearchResult['category']
   action: SearchResult['action']
   iconDataUrl?: string
-  /** ⌥+slot hotkey derived from the pin's current order, 1–12 */
+  /** ⌥ + number-row key derived from the pin's current order (10→0, 11→-, 12→=). */
   slot: number
 }
 
@@ -142,7 +148,7 @@ type PinnedCommandTooltip = {
   id: string
   title: string
   subtitle: string
-  shortcut: number
+  shortcut: string
   left: number
   top: number
 }
@@ -270,7 +276,8 @@ function readCachedHomeSearchResults(): SearchResult[] {
           Number.isFinite(candidate.score) &&
           Boolean(candidate.action) &&
           typeof candidate.action === 'object' &&
-          typeof (candidate.action as { type?: unknown }).type === 'string'
+          typeof (candidate.action as { type?: unknown }).type === 'string' &&
+          candidate.category !== 'knowledge'
         )
       })
       .slice(0, MAX_CACHED_HOME_RESULTS)
@@ -313,7 +320,8 @@ function readCachedSearchCandidates(): SearchResult[] {
           Number.isFinite(candidate.score) &&
           Boolean(candidate.action) &&
           typeof candidate.action === 'object' &&
-          typeof (candidate.action as { type?: unknown }).type === 'string'
+          typeof (candidate.action as { type?: unknown }).type === 'string' &&
+          candidate.category !== 'knowledge'
         )
       })
       .slice(0, MAX_OPTIMISTIC_SEARCH_CANDIDATES)
@@ -373,10 +381,21 @@ function parsePinnedSlotFromKeyEvent(event: KeyboardEvent): number | null {
   return null
 }
 
+function pinnedSlotShortcutKey(slot: number): string {
+  if (slot === 10) return '0'
+  if (slot === 11) return '-'
+  if (slot === 12) return '='
+  return String(slot)
+}
+
 type PinnedCommandDraft = Omit<PinnedCommand, 'slot'> & { slot?: number }
 
 function isPinnableSearchResult(result: SearchResult): boolean {
-  return result.category !== 'calculator' && result.category !== 'color-converter'
+  return (
+    result.category !== 'calculator' &&
+    result.category !== 'color-converter' &&
+    !result.id.startsWith(DEEP_SEARCH_RESULT_PREFIX)
+  )
 }
 
 /** Keep shortcuts aligned with the current pin order. */
@@ -614,6 +633,7 @@ type ListItemIconKind = PathCompletionItem['kind'] | SearchResult['category']
 
 type CommandIconKind =
   | 'settings'
+  | 'deep-search'
   | 'indexing'
   | 'extensions'
   | 'snippets'
@@ -656,6 +676,7 @@ type CommandIconKind =
 
 type TezbarCommandId =
   | 'open-settings'
+  | typeof ACTIVATE_DEEP_SEARCH_COMMAND
   | 'open-extensions-settings'
   | 'open-extensions'
   | 'open-snippets'
@@ -665,6 +686,7 @@ type TezbarCommandId =
 
 const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'open-settings': 'settings',
+  [ACTIVATE_DEEP_SEARCH_COMMAND]: 'deep-search',
   'open-extensions-settings': 'settings',
   'open-extensions': 'extensions',
   'open-snippets': 'snippets',
@@ -738,6 +760,8 @@ function commandIconTone(kind: CommandIconKind): string {
     case 'ports':
     case 'indexing':
       return 'border-sky-300/25 bg-sky-300/10 text-sky-200'
+    case 'deep-search':
+      return 'border-cyan-300/30 bg-cyan-300/[0.12] text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_12px_rgba(103,232,249,0.08)]'
     case 'extensions':
     case 'brew':
     case 'git':
@@ -783,6 +807,15 @@ function commandIconTone(kind: CommandIconKind): string {
 
 function CommandIconGlyph({ kind }: { kind: CommandIconKind }): ReactNode {
   switch (kind) {
+    case 'deep-search':
+      return (
+        <>
+          <path d="M2.25 2.25h6.5M2.25 4.75H6.5M2.25 7.25h2.5" />
+          <circle cx="8.25" cy="8.25" r="3" />
+          <path d="m10.45 10.45 1.8 1.8" />
+          <path d="M8.25 6.85v2.8M6.85 8.25h2.8" strokeWidth=".9" />
+        </>
+      )
     case 'settings':
       return (
         <g fill="currentColor" stroke="none" transform="scale(0.583333)">
@@ -1334,7 +1367,6 @@ export default function CommandBar({
   const normalizedInitialValue = initialValue.startsWith('>') ? initialValue.slice(1) : initialValue
   const [value, setValue] = useState(normalizedInitialValue)
   const [prevInitialValue, setPrevInitialValue] = useState(initialValue)
-  const [lastIntent, setLastIntent] = useState<Intent | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [streamText, setStreamText] = useState('')
   const [streamError, setStreamError] = useState<string | null>(null)
@@ -1356,6 +1388,7 @@ export default function CommandBar({
   const [selectedSuggestion, setSelectedSuggestion] = useState(0)
   const [followSuggestionSelection, setFollowSuggestionSelection] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[]>(readInitialSearchResults)
+  const [deepSearchLoadingQuery, setDeepSearchLoadingQuery] = useState<string | null>(null)
   const [cachedSearchCandidates] = useState<SearchResult[]>(readCachedSearchCandidates)
   const [initialSearchCandidates] = useState<SearchResult[]>(() =>
     mergeSearchCandidates(searchResults, cachedSearchCandidates)
@@ -1391,6 +1424,8 @@ export default function CommandBar({
   // dedicated AI Chat surface (see App.tsx + AgentChatView).
   // Trigger AI mode if input starts with a space, or if it ends with exactly two spaces.
   const isAiMode = value.startsWith(' ') || value.endsWith('  ')
+  const isDeepSearchMode = parseSearchQuery(value).mode === 'deep'
+  const deepSearchQuery = isDeepSearchMode ? parseSearchQuery(value).query : ''
   const agentTask = isAiMode ? value.trim() : ''
 
   const [pendingAction, setPendingAction] = useState<{
@@ -1876,51 +1911,63 @@ export default function CommandBar({
   useEffect(() => {
     let cancelled = false
     const requestId = ++lastSearchRequestId.current
-    const t = setTimeout(() => {
-      if (isAiMode || isCompletionInput || terminalMode) {
-        return
-      }
-      void window.tezbar
-        .searchAll(value)
-        .then((items) => {
-          if (!cancelled && requestId === lastSearchRequestId.current) {
-            const isHome = !value.trim()
-            if (isHome && items.length > 0) {
-              homeSearchResultsRef.current = items
-              searchCandidatesRef.current = mergeSearchCandidates(
-                searchCandidatesRef.current,
-                items
-              )
-              setSearchResults(items)
-              writeCachedHomeSearchResults(items)
-            } else {
-              if (!isHome) {
-                queryResultsCacheRef.current.set(value.trim().toLowerCase(), {
-                  items,
-                  cachedAt: Date.now(),
-                })
+    const t = setTimeout(
+      () => {
+        if (isAiMode || isCompletionInput || terminalMode) {
+          return
+        }
+        if (isDeepSearchMode && deepSearchQuery.length >= 3) {
+          setDeepSearchLoadingQuery(deepSearchQuery)
+          setError(null)
+        }
+        void window.tezbar
+          .searchAll(value)
+          .then((items) => {
+            if (!cancelled && requestId === lastSearchRequestId.current) {
+              const isHome = !value.trim()
+              if (isHome && items.length > 0) {
+                homeSearchResultsRef.current = items
                 searchCandidatesRef.current = mergeSearchCandidates(
                   searchCandidatesRef.current,
                   items
                 )
+                setSearchResults(items)
+                writeCachedHomeSearchResults(items)
+              } else {
+                if (!isHome) {
+                  queryResultsCacheRef.current.set(value.trim().toLowerCase(), {
+                    items,
+                    cachedAt: Date.now(),
+                  })
+                  if (!isDeepSearchMode) {
+                    searchCandidatesRef.current = mergeSearchCandidates(
+                      searchCandidatesRef.current,
+                      items.filter((item) => item.category !== 'knowledge')
+                    )
+                  }
+                }
+                setSearchResults((current) => (isHome ? current : items))
               }
-              setSearchResults((current) => (isHome ? current : items))
+              setError(null)
+              setDeepSearchLoadingQuery(null)
             }
-            setError(null)
-          }
-        })
-        .catch((searchError: unknown) => {
-          if (!cancelled && requestId === lastSearchRequestId.current) {
-            const detail = searchError instanceof Error ? searchError.message : String(searchError)
-            setError(`Search unavailable: ${detail}`)
-          }
-        })
-    }, 20)
+          })
+          .catch((searchError: unknown) => {
+            if (!cancelled && requestId === lastSearchRequestId.current) {
+              const detail =
+                searchError instanceof Error ? searchError.message : String(searchError)
+              setError(`Search unavailable: ${detail}`)
+              setDeepSearchLoadingQuery(null)
+            }
+          })
+      },
+      isDeepSearchMode && deepSearchQuery.length >= 3 ? 180 : 20
+    )
     return () => {
       cancelled = true
       clearTimeout(t)
     }
-  }, [isAiMode, isCompletionInput, terminalMode, value])
+  }, [deepSearchQuery, isAiMode, isCompletionInput, isDeepSearchMode, terminalMode, value])
 
   useEffect(() => {
     if (
@@ -2252,7 +2299,7 @@ export default function CommandBar({
       id: pin.id,
       title: pin.title,
       subtitle: pin.subtitle,
-      shortcut: pin.slot,
+      shortcut: pinnedSlotShortcutKey(pin.slot),
       left: rect.right + 10,
       top: rect.top + rect.height / 2,
     })
@@ -2325,6 +2372,15 @@ export default function CommandBar({
   const clearPendingAction = (): void => {
     setPendingAction(null)
     setArgumentValues({})
+  }
+
+  const activateDeepSearch = (): void => {
+    const query = parseSearchQuery(valueRef.current).query
+    setValue(deepSearchInput(query))
+    setSelectedSearch(0)
+    setFollowSearchSelection(true)
+    showActionMsg(query ? 'Deep Search · searching indexed file contents' : null)
+    requestAnimationFrame(() => focusCommandInput())
   }
 
   const enterKillPortMode = (): void => {
@@ -2446,6 +2502,19 @@ export default function CommandBar({
     rank = selectedSearch + 1
   ): Promise<void> {
     rememberCurrentLauncherQuery()
+
+    if (
+      result.action.type === 'invoke-command' &&
+      result.action.commandId === ACTIVATE_DEEP_SEARCH_COMMAND
+    ) {
+      const requestedQuery = String(result.action.payload?.query ?? parseSearchQuery(value).query)
+      setValue(deepSearchInput(requestedQuery))
+      setSelectedSearch(0)
+      setFollowSearchSelection(true)
+      showActionMsg('Deep Search · searching indexed file contents')
+      requestAnimationFrame(() => focusCommandInput())
+      return
+    }
 
     const recordHandledSearchUsage = async (): Promise<void> => {
       try {
@@ -2844,6 +2913,13 @@ export default function CommandBar({
         focusCommandInput()
         return true
       }
+      if (valueRef.current.startsWith('!')) {
+        // Deep Search mirrors the other launcher modes: clear its query first,
+        // then let a second Escape return to basic search.
+        setValue(parseSearchQuery(valueRef.current).query ? '!' : '')
+        focusCommandInput()
+        return true
+      }
       if (valueRef.current.trimStart().startsWith('`')) {
         // The applications prefix is hidden from the input. Match AI mode's
         // two-step Escape behavior: clear the query first, then leave the mode.
@@ -3077,10 +3153,8 @@ export default function CommandBar({
         onOpenPortsPage()
         return
       }
-      setLastIntent(intent)
     } catch (err) {
       setIsStreaming(false)
-      setLastIntent(null)
       setError(err instanceof Error ? err.message : 'Query failed')
     }
   }
@@ -3090,8 +3164,14 @@ export default function CommandBar({
   const showAnswer =
     !isAiMode && (isStreaming || Boolean(streamText) || Boolean(streamError) || emptyAnswer)
   const showSuggestions = isCompletionInput && suggestions.length > 0
+  const showDeepSearchLoading =
+    isDeepSearchMode && deepSearchQuery.length >= 3 && deepSearchLoadingQuery === deepSearchQuery
   const showSearchResults =
-    !isCompletionInput && !isAiMode && !terminalMode && visibleSearchCount > 0
+    !showDeepSearchLoading &&
+    !isCompletionInput &&
+    !isAiMode &&
+    !terminalMode &&
+    visibleSearchCount > 0
   const terminalSelectedIndex =
     selectedSearch >= 0 && selectedSearch < terminalSessionCount ? selectedSearch : -1
 
@@ -3099,6 +3179,21 @@ export default function CommandBar({
     if (isAiMode && (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
       e.preventDefault()
       onOpenAiChat({ kind: 'screen' })
+      return
+    }
+
+    if (
+      e.key === 'Enter' &&
+      (e.metaKey || e.ctrlKey) &&
+      !isAiMode &&
+      !isDeepSearchMode &&
+      !terminalMode &&
+      !killPortMode &&
+      !pendingAction &&
+      !isCompletionInput
+    ) {
+      e.preventDefault()
+      activateDeepSearch()
       return
     }
 
@@ -3127,6 +3222,15 @@ export default function CommandBar({
       setTerminalMode(false)
       setTerminalPrompt('')
       terminalWorkingDirectoryRef.current = undefined
+      return
+    }
+
+    if (isDeepSearchMode && e.key === 'Backspace' && !parseSearchQuery(value).query) {
+      e.preventDefault()
+      setValue('')
+      const homeResults = homeSearchResultsRef.current
+      if (homeResults.length > 0) setSearchResults(homeResults)
+      setSelectedSearch(0)
       return
     }
 
@@ -3280,17 +3384,19 @@ export default function CommandBar({
     }
 
     if (e.key === 'Tab') {
-      e.preventDefault()
       if (pendingAction) {
+        e.preventDefault()
         argInputRefs.current[0]?.focus()
         return
       }
       if (isCompletionInput) {
+        e.preventDefault()
         const item = suggestions[selectedSuggestion]
         if (item) completePathInput(item)
         return
       }
       if (showChatHistory) {
+        e.preventDefault()
         setFollowSearchSelection(true)
         setSelectedSearch((i) =>
           e.shiftKey ? Math.max(i - 1, -1) : Math.min(i + 1, filteredChatHistory.length - 1)
@@ -3298,19 +3404,8 @@ export default function CommandBar({
         return
       }
       if (canEnterKillPortMode) {
+        e.preventDefault()
         enterKillPortMode()
-        return
-      }
-      // Tab on a result mirrors Cmd+P for quick pinning.
-      if (showSearchResults) {
-        const selected = visibleSearchResults[selectedSearch] ?? visibleSearchResults[0]
-        if (
-          selected &&
-          selected.category !== 'calculator' &&
-          selected.category !== 'color-converter'
-        ) {
-          openPinPicker(selected)
-        }
       }
     }
     // Enter with completion suggestions: let the form `onSubmit` run so
@@ -3361,7 +3456,13 @@ export default function CommandBar({
           <div className="flex h-7 items-center gap-3">
             <span
               className={cx(
-                isAiMode ? 'text-violet-300' : terminalMode ? 'text-emerald-300' : 'text-ink-3'
+                isAiMode
+                  ? 'text-violet-300'
+                  : terminalMode
+                    ? 'text-emerald-300'
+                    : isDeepSearchMode
+                      ? 'text-cyan-300'
+                      : 'text-ink-3'
               )}
             >
               {isAiMode ? (
@@ -3381,6 +3482,14 @@ export default function CommandBar({
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
                 AI
+              </span>
+            ) : isDeepSearchMode ? (
+              <span
+                aria-label="Deep Search mode"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-cyan-300/30 bg-cyan-300/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_rgba(103,232,249,0.7)]" />
+                Deep
               </span>
             ) : null}
             {killPortMode ? (
@@ -3411,7 +3520,13 @@ export default function CommandBar({
                 id="command-input"
                 type="text"
                 value={
-                  killPortMode ? killPortValue : isApplicationInput ? slashQuery.slice(1) : value
+                  killPortMode
+                    ? killPortValue
+                    : isApplicationInput
+                      ? slashQuery.slice(1)
+                      : isDeepSearchMode
+                        ? parseSearchQuery(value).query
+                        : value
                 }
                 onChange={(e) => {
                   if (killPortMode) {
@@ -3424,9 +3539,13 @@ export default function CommandBar({
                     clearPendingAction()
                     showActionMsg(null)
                   }
-                  // Keep the applications-mode sentinel in state for the
-                  // completion backend, but never render it in the input.
-                  let newValue = isApplicationInput ? `\`${e.target.value}` : e.target.value
+                  // Keep mode sentinels in state for the search backends, but
+                  // never render them beside the visible mode badge.
+                  let newValue = isApplicationInput
+                    ? `\`${e.target.value}`
+                    : isDeepSearchMode
+                      ? deepSearchInput(e.target.value)
+                      : e.target.value
                   let nextTerminalMode = terminalMode
                   if (!terminalMode) {
                     const separator = newValue.indexOf('>')
@@ -3438,13 +3557,31 @@ export default function CommandBar({
                       newValue = newValue.slice(separator + 1)
                     }
                   }
+                  const nextSearchQuery = parseSearchQuery(newValue)
+                  if (
+                    !nextTerminalMode &&
+                    nextSearchQuery.mode === 'deep' &&
+                    nextSearchQuery.query.length >= 3
+                  ) {
+                    setDeepSearchLoadingQuery(nextSearchQuery.query)
+                    setError(null)
+                  } else {
+                    setDeepSearchLoadingQuery(null)
+                  }
                   setKillPortArgumentDismissed(false)
                   if (!nextTerminalMode && newValue.length === 0) {
                     const homeResults = homeSearchResultsRef.current
                     if (homeResults.length > 0) setSearchResults(homeResults)
                   } else if (
                     !nextTerminalMode &&
+                    nextSearchQuery.mode === 'deep' &&
+                    nextSearchQuery.query
+                  ) {
+                    setSearchResults([])
+                  } else if (
+                    !nextTerminalMode &&
                     newValue.trim() &&
+                    !newValue.trimStart().startsWith('!') &&
                     !newValue.startsWith(' ') &&
                     !newValue.startsWith('/') &&
                     !newValue.startsWith('`') &&
@@ -3638,7 +3775,7 @@ export default function CommandBar({
                     <button
                       type="button"
                       draggable={false}
-                      aria-label={`Run pinned command: ${pin.title}`}
+                      aria-label={`Run pinned command: ${pin.title} (Option + ${pinnedSlotShortcutKey(pin.slot)})`}
                       aria-describedby={
                         pinnedCommandTooltip?.id === pin.id ? 'pinned-command-tooltip' : undefined
                       }
@@ -3671,7 +3808,7 @@ export default function CommandBar({
                           : 'h-[15px] min-w-[15px] text-[9px]'
                       )}
                     >
-                      {pin.slot}
+                      {pinnedSlotShortcutKey(pin.slot)}
                     </span>
                   </div>
                 )
@@ -3783,6 +3920,69 @@ export default function CommandBar({
                   })}
                 </GlideList>
               )}
+            </div>
+          ) : null}
+
+          {showDeepSearchLoading ? (
+            <div
+              className="glass-card animate-tezbar-scale-in flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6 py-8"
+              role="status"
+              aria-live="polite"
+              aria-label={`Deep Search is searching for ${deepSearchQuery}`}
+            >
+              <div className="flex w-full max-w-[520px] flex-col items-center">
+                <div className="relative mb-5 grid h-14 w-14 place-items-center">
+                  <span className="absolute inset-0 animate-pulse rounded-full border border-cyan-300/15 bg-cyan-300/[0.035] shadow-[0_0_28px_rgba(103,232,249,0.08)]" />
+                  <span className="absolute inset-[7px] animate-spin rounded-full border border-transparent border-r-cyan-300/30 border-t-cyan-200/80 [animation-duration:1.15s]" />
+                  <svg
+                    width="19"
+                    height="19"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    aria-hidden
+                    className="relative text-cyan-200"
+                  >
+                    <circle cx="8.5" cy="8.5" r="5.25" stroke="currentColor" strokeWidth="1.6" />
+                    <path
+                      d="m12.4 12.4 4.1 4.1"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </div>
+
+                <p className="font-display text-[14px] font-semibold tracking-[0.01em] text-ink-1">
+                  Searching indexed files
+                </p>
+                <p className="mt-1 max-w-[380px] truncate text-center text-[11px] text-ink-4">
+                  Matching text, OCR, and vector embeddings for “{deepSearchQuery}”
+                </p>
+
+                <div className="mt-7 w-full space-y-2" aria-hidden>
+                  {[82, 68, 91].map((titleWidth, index) => (
+                    <div
+                      key={titleWidth}
+                      className="flex items-center gap-3 rounded-tezbar-row border border-white/[0.045] bg-white/[0.018] px-3 py-2.5"
+                    >
+                      <span className="h-8 w-8 shrink-0 animate-pulse rounded-tezbar-row border border-cyan-200/[0.08] bg-cyan-200/[0.035]" />
+                      <span className="min-w-0 flex-1 space-y-2">
+                        <span
+                          className="block h-2.5 animate-tezbar-shimmer rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.035),rgba(103,232,249,0.10),rgba(255,255,255,0.035))] bg-[length:200%_100%]"
+                          style={{ width: `${titleWidth}%` }}
+                        />
+                        <span
+                          className="block h-2 animate-tezbar-shimmer rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.025),rgba(255,255,255,0.07),rgba(255,255,255,0.025))] bg-[length:200%_100%]"
+                          style={{
+                            width: `${Math.max(46, titleWidth - 18 - index * 4)}%`,
+                            animationDelay: `${index * 110}ms`,
+                          }}
+                        />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -4280,7 +4480,7 @@ export default function CommandBar({
                                 {pinnedMeta ? (
                                   <span className="inline-flex items-center gap-1 rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-ink-3">
                                     <Kbd>⌥</Kbd>
-                                    <Kbd>{pinnedMeta.slot}</Kbd>
+                                    <Kbd>{pinnedSlotShortcutKey(pinnedMeta.slot)}</Kbd>
                                   </span>
                                 ) : null}
                                 {i === selectedSearch ? (
@@ -4345,18 +4545,10 @@ export default function CommandBar({
             </div>
           ) : null}
 
-          {/* Inline status line (errors, intent, action msg) */}
-          {error || lastIntent || actionMsg ? (
+          {/* Inline status line */}
+          {error || actionMsg ? (
             <div className="px-1">
               {error ? <Message tone="error">{error}</Message> : null}
-              {lastIntent && !error ? (
-                <Message tone="info">
-                  {lastIntent.type}
-                  {lastIntent.type === 'extension' && 'name' in lastIntent
-                    ? ` · ${lastIntent.name}`
-                    : ''}
-                </Message>
-              ) : null}
               {actionMsg ? <Message>{actionMsg}</Message> : null}
             </div>
           ) : null}
@@ -4367,7 +4559,9 @@ export default function CommandBar({
       <div
         className={cx(
           'glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in',
-          showSearchResults || showSuggestions || showAnswer ? 'opacity-60' : ''
+          showSearchResults || showSuggestions || showDeepSearchLoading || showAnswer
+            ? 'opacity-60'
+            : ''
         )}
       >
         <div className="flex min-w-0 items-center justify-between gap-4">
@@ -4473,15 +4667,6 @@ export default function CommandBar({
                       }
                     />
                     <Hint
-                      label="Pinned"
-                      keys={
-                        <>
-                          <Kbd>⌥</Kbd>
-                          <Kbd>1-12</Kbd>
-                        </>
-                      }
-                    />
-                    <Hint
                       label="Save note"
                       keys={
                         <>
@@ -4492,17 +4677,26 @@ export default function CommandBar({
                     />
                   </>
                 )}
-                <Hint
-                  label="Navigate"
-                  keys={
-                    <>
-                      <Kbd>↑</Kbd>
-                      <Kbd>↓</Kbd>
-                    </>
-                  }
-                />
-                {!isCompletionInput ? <Hint label="Run" keys={<Kbd>↵</Kbd>} /> : null}
-                <Hint label="Close" keys={<Kbd>Esc</Kbd>} />
+                {!isCompletionInput ? (
+                  <button
+                    type="button"
+                    aria-label="Use Deep Search"
+                    aria-pressed={isDeepSearchMode}
+                    className={cx(
+                      'no-drag ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip text-[10.5px] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
+                      isDeepSearchMode ? 'text-cyan-200' : 'text-ink-3 hover:text-cyan-200'
+                    )}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={activateDeepSearch}
+                    title="Use Deep Search (Command + Enter)"
+                  >
+                    <span className="inline-flex items-center gap-0.5">
+                      <Kbd>⌘</Kbd>
+                      <Kbd>↵</Kbd>
+                    </span>
+                    <span>Deep Search</span>
+                  </button>
+                ) : null}
               </>
             )}
           </HintBar>

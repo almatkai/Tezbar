@@ -11,65 +11,66 @@
  * - `bun install` is ~25x faster than `npm install`
  */
 
-import { app, BrowserWindow } from '@tezbar/desktop-runtime';
-import { exec, execFile } from 'child_process';
-import { promisify } from 'util';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as https from 'https';
-import * as http from 'http';
-import * as zlib from 'zlib';
+import { app, BrowserWindow } from '@tezbar/desktop-runtime'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+import * as fs from 'fs'
+import * as path from 'path'
+import * as https from 'https'
+import * as http from 'http'
+import * as zlib from 'zlib'
 
-const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
+const execFileAsync = promisify(execFile)
 
-const BUN_VERSION = '1.2.5';
+const BUN_VERSION = '1.2.5'
 
 /** Broadcast install status to all renderer windows. */
 function broadcastInstallStatus(message: string): void {
   for (const window of BrowserWindow.getAllWindows()) {
-    if (window.isDestroyed()) continue;
+    if (window.isDestroyed()) continue
     try {
-      window.webContents.send('extension-install-status', message);
+      window.webContents.send('extension-install-status', message)
     } catch {}
   }
 }
 
 function getBunDownloadUrl(): string {
-  const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
+  const arch = process.arch === 'arm64' ? 'aarch64' : 'x64'
 
   if (process.platform === 'darwin') {
-    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-darwin-${arch}.zip`;
+    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-darwin-${arch}.zip`
   }
   if (process.platform === 'linux') {
-    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${arch}.zip`;
+    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${arch}.zip`
   }
-  // Windows not supported yet
-  return '';
+  if (process.platform === 'win32') {
+    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-windows-${arch}.zip`
+  }
+  return ''
 }
 
 function getBunDir(): string {
-  return path.join(app.getPath('userData'), 'bun');
+  return path.join(app.getPath('userData'), 'bun')
 }
 
 function getBunBinaryPath(): string {
-  return path.join(getBunDir(), 'bun');
+  return path.join(getBunDir(), process.platform === 'win32' ? 'bun.exe' : 'bun')
 }
 
 /** Check if Bun is already downloaded and cached. */
 export function isBunAvailable(): boolean {
-  const binPath = getBunBinaryPath();
+  const binPath = getBunBinaryPath()
   try {
-    return fs.existsSync(binPath) && fs.statSync(binPath).size > 1_000_000; // sanity check: >1MB
+    return fs.existsSync(binPath) && fs.statSync(binPath).size > 1_000_000 // sanity check: >1MB
   } catch {
-    return false;
+    return false
   }
 }
 
 /** Get the path to the Bun binary, or null if not downloaded yet. */
 export function getBunPath(): string | null {
-  if (isBunAvailable()) return getBunBinaryPath();
-  return null;
+  if (isBunAvailable()) return getBunBinaryPath()
+  return null
 }
 
 /**
@@ -78,63 +79,87 @@ export function getBunPath(): string | null {
  */
 export async function ensureBun(): Promise<string | null> {
   if (isBunAvailable()) {
-    return getBunBinaryPath();
+    return getBunBinaryPath()
   }
 
-  const url = getBunDownloadUrl();
+  const url = getBunDownloadUrl()
   if (!url) {
-    console.warn('Bun download not supported on this platform');
-    return null;
+    console.warn('Bun download not supported on this platform')
+    return null
   }
 
-  const bunDir = getBunDir();
-  fs.mkdirSync(bunDir, { recursive: true });
+  const bunDir = getBunDir()
+  fs.mkdirSync(bunDir, { recursive: true })
 
-  console.log(`Downloading Bun v${BUN_VERSION}...`);
-  broadcastInstallStatus('Setting up installer for first use…');
+  console.log(`Downloading Bun v${BUN_VERSION}...`)
+  broadcastInstallStatus('Setting up installer for first use…')
 
   try {
-    const zipBuffer = await downloadFile(url);
-    broadcastInstallStatus('Setting up installer…');
-    console.log(`Downloaded Bun (${(zipBuffer.length / 1024 / 1024).toFixed(1)}MB), extracting...`);
+    const zipBuffer = await downloadFile(url)
+    broadcastInstallStatus('Setting up installer…')
+    console.log(`Downloaded Bun (${(zipBuffer.length / 1024 / 1024).toFixed(1)}MB), extracting...`)
 
     // Extract the zip
-    const tmpZipPath = path.join(app.getPath('temp'), `bun-${Date.now()}.zip`);
-    fs.writeFileSync(tmpZipPath, zipBuffer);
+    const tmpZipPath = path.join(app.getPath('temp'), `bun-${Date.now()}.zip`)
+    fs.writeFileSync(tmpZipPath, zipBuffer)
 
-    // Use unzip command (available on macOS and Linux)
-    const tmpExtractDir = path.join(app.getPath('temp'), `bun-extract-${Date.now()}`);
-    fs.mkdirSync(tmpExtractDir, { recursive: true });
+    const tmpExtractDir = path.join(app.getPath('temp'), `bun-extract-${Date.now()}`)
+    fs.mkdirSync(tmpExtractDir, { recursive: true })
 
-    await execAsync(`unzip -o "${tmpZipPath}" -d "${tmpExtractDir}"`, {
-      timeout: 30_000,
-    });
+    if (process.platform === 'win32') {
+      await execFileAsync(
+        'powershell.exe',
+        [
+          '-NoLogo',
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          'Expand-Archive -LiteralPath $env:TEZBAR_BUN_ZIP -DestinationPath $env:TEZBAR_BUN_EXTRACT -Force',
+        ],
+        {
+          timeout: 30_000,
+          env: {
+            ...process.env,
+            TEZBAR_BUN_ZIP: tmpZipPath,
+            TEZBAR_BUN_EXTRACT: tmpExtractDir,
+          },
+        }
+      )
+    } else {
+      await execFileAsync('unzip', ['-o', tmpZipPath, '-d', tmpExtractDir], { timeout: 30_000 })
+    }
 
     // Find the bun binary in the extracted directory
-    const bunBinary = findFile(tmpExtractDir, 'bun');
+    const bunBinary = findFile(tmpExtractDir, process.platform === 'win32' ? 'bun.exe' : 'bun')
     if (!bunBinary) {
-      throw new Error('Bun binary not found in downloaded archive');
+      throw new Error('Bun binary not found in downloaded archive')
     }
 
     // Copy to our cache directory
-    const destPath = getBunBinaryPath();
-    fs.copyFileSync(bunBinary, destPath);
-    fs.chmodSync(destPath, 0o755);
+    const destPath = getBunBinaryPath()
+    fs.copyFileSync(bunBinary, destPath)
+    if (process.platform !== 'win32') fs.chmodSync(destPath, 0o755)
 
     // Cleanup
-    try { fs.rmSync(tmpZipPath, { force: true }); } catch {}
-    try { fs.rmSync(tmpExtractDir, { recursive: true, force: true }); } catch {}
+    try {
+      fs.rmSync(tmpZipPath, { force: true })
+    } catch {}
+    try {
+      fs.rmSync(tmpExtractDir, { recursive: true, force: true })
+    } catch {}
 
     // Verify it works
-    const { stdout } = await execAsync(`"${destPath}" --version`, { timeout: 5_000 });
-    console.log(`Bun installed successfully: ${stdout.trim()}`);
+    const { stdout } = await execFileAsync(destPath, ['--version'], { timeout: 5_000 })
+    console.log(`Bun installed successfully: ${stdout.trim()}`)
 
-    return destPath;
+    return destPath
   } catch (error: any) {
-    console.error('Failed to download/install Bun:', error?.message || error);
+    console.error('Failed to download/install Bun:', error?.message || error)
     // Cleanup partial install
-    try { fs.rmSync(getBunBinaryPath(), { force: true }); } catch {}
-    return null;
+    try {
+      fs.rmSync(getBunBinaryPath(), { force: true })
+    } catch {}
+    return null
   }
 }
 
@@ -142,37 +167,35 @@ export async function ensureBun(): Promise<string | null> {
  * Install extension dependencies using Bun.
  * Filters out @raycast/* packages (provided by runtime shim).
  */
-export async function installDepsWithBun(
-  extPath: string,
-): Promise<boolean> {
-  const bunPath = await ensureBun();
-  if (!bunPath) return false;
+export async function installDepsWithBun(extPath: string): Promise<boolean> {
+  const bunPath = await ensureBun()
+  if (!bunPath) return false
 
-  const pkgPath = path.join(extPath, 'package.json');
-  if (!fs.existsSync(pkgPath)) return true; // no deps needed
+  const pkgPath = path.join(extPath, 'package.json')
+  if (!fs.existsSync(pkgPath)) return true // no deps needed
 
-  let pkg: any;
+  let pkg: any
   try {
-    pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
   } catch {
-    return true;
+    return true
   }
 
   const deps = {
     ...(pkg.dependencies || {}),
     ...(pkg.optionalDependencies || {}),
-  };
+  }
   const thirdPartyDeps = Object.entries(deps)
     .filter(([name]) => !name.startsWith('@raycast/'))
     .map(([name, version]) => `${name}@${version}`)
-    .filter(Boolean);
+    .filter(Boolean)
 
   if (thirdPartyDeps.length === 0) {
-    console.log(`No third-party deps for ${path.basename(extPath)} — skipping bun install`);
-    return true;
+    console.log(`No third-party deps for ${path.basename(extPath)} — skipping bun install`)
+    return true
   }
 
-  console.log(`Installing ${thirdPartyDeps.length} deps via Bun for ${path.basename(extPath)}...`);
+  console.log(`Installing ${thirdPartyDeps.length} deps via Bun for ${path.basename(extPath)}...`)
 
   try {
     // Create a minimal package.json with only third-party deps
@@ -182,47 +205,55 @@ export async function installDepsWithBun(
       version: pkg.version || '1.0.0',
       private: true,
       dependencies: Object.fromEntries(
-        Object.entries(deps).filter(([name]) => !name.startsWith('@raycast/')),
+        Object.entries(deps).filter(([name]) => !name.startsWith('@raycast/'))
       ),
-    };
-    const originalPkg = fs.readFileSync(pkgPath, 'utf-8');
-    fs.writeFileSync(pkgPath, JSON.stringify(cleanPkg, null, 2));
+    }
+    const originalPkg = fs.readFileSync(pkgPath, 'utf-8')
+    fs.writeFileSync(pkgPath, JSON.stringify(cleanPkg, null, 2))
 
     // Remove lockfiles — they cause Bun to enter frozen mode
-    for (const lockfile of ['package-lock.json', 'bun.lockb', 'bun.lock', 'yarn.lock', 'pnpm-lock.yaml']) {
-      try { fs.rmSync(path.join(extPath, lockfile), { force: true }); } catch {}
+    for (const lockfile of [
+      'package-lock.json',
+      'bun.lockb',
+      'bun.lock',
+      'yarn.lock',
+      'pnpm-lock.yaml',
+    ]) {
+      try {
+        fs.rmSync(path.join(extPath, lockfile), { force: true })
+      } catch {}
     }
 
-    await execAsync(`"${bunPath}" install --production --no-save`, {
+    await execFileAsync(bunPath, ['install', '--production', '--no-save'], {
       cwd: extPath,
       timeout: 120_000,
       env: {
         ...process.env,
         PATH: `${path.dirname(bunPath)}:${process.env.PATH || ''}`,
       },
-    });
+    })
 
     // Restore original package.json
-    fs.writeFileSync(pkgPath, originalPkg);
+    fs.writeFileSync(pkgPath, originalPkg)
 
-    const hasNodeModules = fs.existsSync(path.join(extPath, 'node_modules'));
+    const hasNodeModules = fs.existsSync(path.join(extPath, 'node_modules'))
     if (hasNodeModules) {
-      console.log(`Bun install succeeded for ${path.basename(extPath)}`);
-      return true;
+      console.log(`Bun install succeeded for ${path.basename(extPath)}`)
+      return true
     }
 
-    console.warn(`Bun completed but node_modules missing for ${path.basename(extPath)}`);
+    console.warn(`Bun completed but node_modules missing for ${path.basename(extPath)}`)
     // Restore original package.json in case of failure
-    fs.writeFileSync(pkgPath, originalPkg);
-    return false;
+    fs.writeFileSync(pkgPath, originalPkg)
+    return false
   } catch (error: any) {
-    console.warn(`Bun install failed for ${path.basename(extPath)}:`, error?.message);
+    console.warn(`Bun install failed for ${path.basename(extPath)}:`, error?.message)
     // Restore original package.json
     try {
-      const originalContent = JSON.stringify(pkg, null, 2);
-      fs.writeFileSync(pkgPath, originalContent);
+      const originalContent = JSON.stringify(pkg, null, 2)
+      fs.writeFileSync(pkgPath, originalContent)
     } catch {}
-    return false;
+    return false
   }
 }
 
@@ -234,21 +265,23 @@ export async function installSpecificPackagesWithBun(
   extPath: string,
   packageNames: string[]
 ): Promise<boolean> {
-  const bunPath = await ensureBun();
-  if (!bunPath) return false;
+  const bunPath = await ensureBun()
+  if (!bunPath) return false
 
   const unique = Array.from(
     new Set(packageNames.map((name) => String(name || '').trim()).filter(Boolean))
-  );
-  if (unique.length === 0) return true;
-  const validPackageName = /^(?:@[A-Za-z0-9][A-Za-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/;
-  const invalid = unique.find((name) => !validPackageName.test(name));
+  )
+  if (unique.length === 0) return true
+  const validPackageName = /^(?:@[A-Za-z0-9][A-Za-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/
+  const invalid = unique.find((name) => !validPackageName.test(name))
   if (invalid) {
-    console.warn(`Refusing invalid package name from extension build: ${invalid}`);
-    return false;
+    console.warn(`Refusing invalid package name from extension build: ${invalid}`)
+    return false
   }
 
-  console.log(`Installing specific packages via Bun for ${path.basename(extPath)}: ${unique.join(', ')}`);
+  console.log(
+    `Installing specific packages via Bun for ${path.basename(extPath)}: ${unique.join(', ')}`
+  )
 
   try {
     await execFileAsync(bunPath, ['add', '--no-save', ...unique], {
@@ -258,11 +291,11 @@ export async function installSpecificPackagesWithBun(
         ...process.env,
         PATH: `${path.dirname(bunPath)}:${process.env.PATH || ''}`,
       },
-    });
-    return fs.existsSync(path.join(extPath, 'node_modules'));
+    })
+    return fs.existsSync(path.join(extPath, 'node_modules'))
   } catch (error: any) {
-    console.warn(`Bun add failed for ${path.basename(extPath)}:`, error?.message);
-    return false;
+    console.warn(`Bun add failed for ${path.basename(extPath)}:`, error?.message)
+    return false
   }
 }
 
@@ -273,47 +306,54 @@ function downloadFile(url: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const makeRequest = (requestUrl: string, redirects = 0) => {
       if (redirects > 10) {
-        reject(new Error('Too many redirects'));
-        return;
+        reject(new Error('Too many redirects'))
+        return
       }
 
-      const parsedUrl = new URL(requestUrl);
-      const transport = parsedUrl.protocol === 'https:' ? https : http;
+      const parsedUrl = new URL(requestUrl)
+      const transport = parsedUrl.protocol === 'https:' ? https : http
 
-      transport.get(requestUrl, { timeout: 120_000 }, (res) => {
-        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          makeRequest(res.headers.location, redirects + 1);
-          return;
-        }
+      transport
+        .get(requestUrl, { timeout: 120_000 }, (res) => {
+          if (
+            res.statusCode &&
+            res.statusCode >= 300 &&
+            res.statusCode < 400 &&
+            res.headers.location
+          ) {
+            makeRequest(res.headers.location, redirects + 1)
+            return
+          }
 
-        if (res.statusCode !== 200) {
-          reject(new Error(`Download failed: ${res.statusCode} ${res.statusMessage}`));
-          return;
-        }
+          if (res.statusCode !== 200) {
+            reject(new Error(`Download failed: ${res.statusCode} ${res.statusMessage}`))
+            return
+          }
 
-        const chunks: Buffer[] = [];
-        res.on('data', (chunk: Buffer) => chunks.push(chunk));
-        res.on('error', reject);
-        res.on('end', () => resolve(Buffer.concat(chunks)));
-      }).on('error', reject);
-    };
+          const chunks: Buffer[] = []
+          res.on('data', (chunk: Buffer) => chunks.push(chunk))
+          res.on('error', reject)
+          res.on('end', () => resolve(Buffer.concat(chunks)))
+        })
+        .on('error', reject)
+    }
 
-    makeRequest(url);
-  });
+    makeRequest(url)
+  })
 }
 
 /** Recursively find a file by name in a directory. */
 function findFile(dir: string, name: string): string | null {
   try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
     for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isFile() && entry.name === name) return full;
+      const full = path.join(dir, entry.name)
+      if (entry.isFile() && entry.name === name) return full
       if (entry.isDirectory()) {
-        const found = findFile(full, name);
-        if (found) return found;
+        const found = findFile(full, name)
+        if (found) return found
       }
     }
   } catch {}
-  return null;
+  return null
 }

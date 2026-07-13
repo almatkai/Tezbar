@@ -1,9 +1,9 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ExtensionRuntimeAction, ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
 import { Action, ActionPanel, ActionPanelOverlay } from './action-runtime'
 import { ActionRegistryContext } from './action-runtime-registry'
 import { DetailRuntime } from './detail-runtime'
-import { FormRuntime } from './form-runtime'
+import { FormRuntime, type FormRuntimeHandle } from './form-runtime'
 import { GridRuntime } from './grid-runtime'
 import { ListRuntime } from './list-runtime'
 import {
@@ -57,6 +57,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
   } = props
   const [showActions, setShowActions] = useState(false)
   const [actionFilterIds, setActionFilterIds] = useState<string[] | null>(null)
+  const formRuntimeRef = useRef<FormRuntimeHandle>(null)
 
   useEffect(() => {
     setRuntimeContext(extensionId, commandName)
@@ -64,6 +65,19 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
 
   const primaryAction = actions[0]
   const kind = rootKind(root)
+  const submitAction = useMemo(
+    () =>
+      kind === 'form'
+        ? actions.find((action) => action.kind === 'submit-form') || primaryAction
+        : undefined,
+    [actions, kind, primaryAction]
+  )
+  const actionRegistry = useMemo(() => ({ actions }), [actions])
+  const overlayActions = useMemo(() => {
+    if (!actionFilterIds) return actions
+    const visibleIds = new Set(actionFilterIds)
+    return actions.filter((action) => visibleIds.has(action.id))
+  }, [actionFilterIds, actions])
 
   const navApi = useMemo(
     () => ({
@@ -92,7 +106,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
         return
       }
 
-      if (event.key === 'Enter' && primaryAction && kind !== 'list' && kind !== 'grid') {
+      if (event.key === 'Enter' && primaryAction && kind === 'detail') {
         event.preventDefault()
         void onInvokeAction(primaryAction.id)
       }
@@ -113,24 +127,28 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
     setShowActions(true)
   }
 
-  const onSubmitForm = (values: Record<string, unknown>): void => {
-    const submitAction = actions.find((action) => action.kind === 'submit-form') || primaryAction
-    if (!submitAction) return
-    void onInvokeAction(submitAction.id, values)
-  }
+  const onSubmitForm = useCallback(
+    (values: Record<string, unknown>): void => {
+      if (!submitAction) return
+      void onInvokeAction(submitAction.id, values)
+    },
+    [onInvokeAction, submitAction]
+  )
 
   return (
     <NavigationContext.Provider value={navApi}>
-      <ActionRegistryContext.Provider value={{ actions }}>
+      <ActionRegistryContext.Provider value={actionRegistry}>
         <div className="flex h-full min-h-0 flex-col">
           {kind === 'form' ? (
             <FormRuntime
+              ref={formRuntimeRef}
               root={root}
               title={title}
               onBack={onBack}
               onSubmitForm={onSubmitForm}
               onChangeField={(actionId, value) => onInvokeAction(actionId, { value })}
               onOpenActions={() => openActions()}
+              actionNotice={actionNotice}
             />
           ) : kind === 'grid' ? (
             <GridRuntime
@@ -167,11 +185,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
 
           {showActions && actions.length > 0 ? (
             <ActionPanelOverlay
-              actions={
-                actionFilterIds
-                  ? actions.filter((action) => actionFilterIds.includes(action.id))
-                  : actions
-              }
+              actions={overlayActions}
               onClose={() => {
                 setShowActions(false)
                 setActionFilterIds(null)
@@ -179,6 +193,10 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
               onExecute={(action) => {
                 setShowActions(false)
                 setActionFilterIds(null)
+                if (kind === 'form' && action.id === submitAction?.id) {
+                  onSubmitForm(formRuntimeRef.current?.getValues() ?? {})
+                  return
+                }
                 void onInvokeAction(action.id)
               }}
             />

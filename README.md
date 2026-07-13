@@ -19,7 +19,7 @@ Tezbar is a desktop command surface for search, AI help, terminal access, notes,
 
 ## Tech Stack
 
-- Electron + Vite for the main desktop app
+- Tauri + Vite for the main desktop app
 - React + TypeScript for the UI
 - Rust, Swift, and native helpers for platform features
 - SQLite for local persistence and search
@@ -28,7 +28,7 @@ Tezbar is a desktop command surface for search, AI help, terminal access, notes,
 
 - macOS or Windows 10/11
 - [pnpm](https://pnpm.io/)
-- Homebrew for some native dependencies
+- Homebrew for optional macOS native dependencies
 - Rust toolchain for native modules
 
 ## Setup
@@ -39,22 +39,22 @@ pnpm build:native
 pnpm dev
 ```
 
-On Windows, skip `pnpm build:native`: the currently bundled native helper
-scripts target macOS. Install dependencies, then start Electron with `pnpm dev`.
+`pnpm build:native` builds the Swift helpers on macOS and safely does nothing
+on Windows.
 
 ## Useful Scripts
 
-- `pnpm dev` - start the Electron app in development mode
-- `pnpm build` - build the Electron app
+- `pnpm dev` - start the Tauri app in development mode
+- `pnpm build` - build and package the Tauri app for the current platform
+- `pnpm build:windows` - build Windows NSIS and MSI installers (run on Windows)
 - `pnpm build:native` - build native helpers
-- `pnpm dist` - build the app and package with Electron Builder
-- `pnpm dist:win` - package a Windows NSIS installer and portable executable
+- `pnpm dist` - build and package the Tauri app
 - `pnpm tauri:dev` - build the backend and run the Tauri app in dev mode
 - `pnpm tauri:build` - build the backend and package the Tauri app
 
 ## Windows support status
 
-### Working in the Electron app
+### Working in the Tauri app
 
 - Launcher UI, hotkey (`Alt+Space` by default), AI chat, notes, snippets,
   calculator, currency, emoji picker, extensions, and voice UI.
@@ -66,21 +66,19 @@ scripts target macOS. Install dependencies, then start Electron with `pnpm dev`.
 - Windows system helpers: dark mode, lock screen, suspend, keep-awake,
   volume up/down/mute, Downloads, network, CPU, memory, disk, and battery
   information. Wi-Fi adapter toggling asks for Windows UAC confirmation.
-- Windows packaging command: `pnpm dist:win`.
+- Windows packaging command: `pnpm build:windows`.
 
 ### Remaining work for a full Windows port
 
 - Replace the Swift OCR and color-picker helpers with Windows-native helpers.
-- Add Windows UI-automation/accessibility support for agent actions.
-- Replace AppleScript and Finder-specific extension actions with Explorer and
-  WinAPI equivalents.
+- Add Windows UI-automation/accessibility tree support for semantic agent actions.
+- Port extensions that directly depend on arbitrary AppleScript when a meaningful
+  Windows equivalent exists.
 - Add native Windows clipboard file-list support and installed-app icons.
-- Port the Tauri configuration and Rust backend, which still use macOS-private
-  APIs and resources.
-- Make Electron-native module rebuilding reliable on machines without Visual
-  Studio's Spectre-mitigated libraries; `better-sqlite3` must match Electron's
-  ABI and `node-pty` should continue to use its Windows prebuilt binary.
 - Complete and test a signed Windows installer build in CI.
+
+See [`docs/WINDOWS_SUPPORT.md`](docs/WINDOWS_SUPPORT.md) for the detailed
+platform mapping and remaining native parity work.
 
 ## Tauri Builds
 
@@ -109,5 +107,5 @@ The Electron build uses the branded icon files in [`build/`](/Users/almatkairato
   clipboard text/images, Open Ports, and the cross-platform system helpers.
   AppleScript, Finder automation, macOS accessibility snapshots, and the Swift
   OCR/color-picker helpers remain macOS-only.
-- This repository contains both Electron and Tauri configuration, but the primary app flow is Electron/Vite.
+- The primary app flow is Tauri/Vite with a bundled TypeScript backend.
 - If macOS Finder shows an old app icon after rebuilding, that is usually icon cache lag rather than a bad build.

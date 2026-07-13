@@ -4,7 +4,7 @@ type BindValue = string | number | bigint | Buffer | null | undefined
 type NodeBindValue = string | number | bigint | Uint8Array | null
 
 function normalizeParams(params: BindValue[]): NodeBindValue[] {
-  return params.map((value) => value === undefined ? null : value)
+  return params.map((value) => (value === undefined ? null : value))
 }
 
 class StatementShim {
@@ -28,7 +28,7 @@ class DatabaseShim {
   private readonly database: DatabaseSync
 
   constructor(filename: string) {
-    this.database = new DatabaseSync(filename)
+    this.database = new DatabaseSync(filename, { allowExtension: true })
   }
 
   pragma(value: string): void {
@@ -41,6 +41,10 @@ class DatabaseShim {
 
   prepare(sql: string): StatementShim {
     return new StatementShim(this.database.prepare(sql))
+  }
+
+  loadExtension(path: string): void {
+    this.database.loadExtension(path)
   }
 
   transaction<T extends unknown[]>(fn: (...args: T) => void): (...args: T) => void {

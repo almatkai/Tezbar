@@ -108,9 +108,31 @@ export async function nativeFileIconDataUrl(path: string): Promise<string | unde
     mkdirSync(outputDir, { recursive: true })
 
     if (!existsSync(outputPath)) {
-      await execFileAsync('/usr/bin/qlmanage', ['-t', '-i', '-s', '64', '-o', outputDir, path], {
-        timeout: 3_000,
-      })
+      if (process.platform === 'win32') {
+        await execFileAsync(
+          'powershell.exe',
+          [
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Drawing; $icon=[System.Drawing.Icon]::ExtractAssociatedIcon($env:TEZBAR_ICON_SOURCE); if($null-eq $icon){exit 2}; try{$bitmap=$icon.ToBitmap(); try{$bitmap.Save($env:TEZBAR_ICON_DEST,[System.Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}}finally{$icon.Dispose()}",
+          ],
+          {
+            timeout: 3_000,
+            windowsHide: true,
+            env: {
+              ...process.env,
+              TEZBAR_ICON_SOURCE: path,
+              TEZBAR_ICON_DEST: outputPath,
+            },
+          }
+        )
+      } else {
+        await execFileAsync('/usr/bin/qlmanage', ['-t', '-i', '-s', '64', '-o', outputDir, path], {
+          timeout: 3_000,
+        })
+      }
     }
     if (!existsSync(outputPath)) {
       nativeFileIconCache.set(path, null)
