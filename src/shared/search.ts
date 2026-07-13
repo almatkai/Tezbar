@@ -1,6 +1,7 @@
 export type SearchCategory =
   | 'applications'
   | 'files'
+  | 'knowledge'
   | 'clipboard'
   | 'quick-notes'
   | 'extensions'

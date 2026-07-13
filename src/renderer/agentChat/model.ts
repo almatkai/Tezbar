@@ -25,6 +25,7 @@ export function buildAgentPromptFromChat(session: ChatSession, nextUserText: str
   const lines: string[] = [
     'You are running inside Tezbar on the user machine through the Pi agent harness.',
     'You have tool access. You can run bash commands and inspect local files/folders/apps on this Mac.',
+    'You can search user-approved Tezbar Knowledge with pc_search and read nearby context with pc_read. Use them for questions about indexed documents, PDFs, screenshots, and images.',
     'For local/system questions, actively use bash/read/listing tools before answering.',
     'Never say you cannot access the computer when the requested information can be inspected with bash.',
     'When the user asks what is installed or what they have, inspect /Applications, ~/Applications, PATH, or relevant local locations.',

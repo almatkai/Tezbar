@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { createPortal } from 'react-dom'
 import type { Intent } from '../shared/intent'
 import { defaultModels, normalizeProviderModelList } from '../shared/aiProviders'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
@@ -41,10 +42,25 @@ import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 import { ModelPicker } from './ModelPicker'
 import { formatShortcutForDisplay } from './HotkeyRecorder'
+import { moveTerminalSelectionDown, terminalSessionAtIndex } from './terminalSessionSelection'
+import BackgroundTaskStatus from './BackgroundTaskStatus'
+import {
+  addLauncherQueryHistoryEntry,
+  launcherQueryHistoryEntry,
+  parseLauncherQueryHistory,
+} from './launcherQueryHistory'
+import { optimisticSearchResults } from './optimisticSearch'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
 const PINNED_COMMANDS_KEY = 'tezbar:pinned-commands'
+const LAUNCHER_QUERY_HISTORY_KEY = 'tezbar:launcher-query-history:v1'
+const HOME_SEARCH_RESULTS_CACHE_KEY = 'tezbar:home-search-results:v1'
+const SEARCH_CANDIDATES_CACHE_KEY = 'tezbar:search-candidates:v1'
+const MAX_CACHED_HOME_RESULTS = 40
+const MAX_OPTIMISTIC_SEARCH_CANDIDATES = 1_000
+const QUERY_RESULTS_CACHE_TTL_MS = 5_000
+const PINNED_HOME_RESULT_SCORE_PENALTY = 850
 const MAX_PINNED_COMMANDS = 12
 const SEARCH_RESULT_PIN_DRAG_THRESHOLD = 6
 const COMMAND_HINT = { shortcut: '>', label: 'Open terminal' } as const
@@ -63,7 +79,9 @@ const TERMINAL_PINNED_SESSIONS_KEY = 'tezbar:terminal-pinned-sessions'
 function readPinnedTerminalSessionIds(): string[] {
   try {
     const value = JSON.parse(localStorage.getItem(TERMINAL_PINNED_SESSIONS_KEY) ?? '[]')
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : []
   } catch {
     return []
   }
@@ -72,6 +90,22 @@ function readPinnedTerminalSessionIds(): string[] {
 function writePinnedTerminalSessionIds(ids: string[]): void {
   try {
     localStorage.setItem(TERMINAL_PINNED_SESSIONS_KEY, JSON.stringify(ids))
+  } catch {
+    // Storage can be unavailable in private/webview contexts.
+  }
+}
+
+function readLauncherQueryHistory(): string[] {
+  try {
+    return parseLauncherQueryHistory(localStorage.getItem(LAUNCHER_QUERY_HISTORY_KEY))
+  } catch {
+    return []
+  }
+}
+
+function writeLauncherQueryHistory(history: string[]): void {
+  try {
+    localStorage.setItem(LAUNCHER_QUERY_HISTORY_KEY, JSON.stringify(history))
   } catch {
     // Storage can be unavailable in private/webview contexts.
   }
@@ -102,6 +136,15 @@ type PinnedCommand = {
   iconDataUrl?: string
   /** ⌥+slot hotkey derived from the pin's current order, 1–12 */
   slot: number
+}
+
+type PinnedCommandTooltip = {
+  id: string
+  title: string
+  subtitle: string
+  shortcut: number
+  left: number
+  top: number
 }
 
 type PendingExtensionArgument = {
@@ -207,6 +250,112 @@ function readPinnedCommands(): PinnedCommand[] {
   }
 }
 
+function readCachedHomeSearchResults(): SearchResult[] {
+  try {
+    const raw = window.localStorage.getItem(HOME_SEARCH_RESULTS_CACHE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((item): item is SearchResult => {
+        if (!item || typeof item !== 'object') return false
+        const candidate = item as Partial<SearchResult>
+        return (
+          typeof candidate.id === 'string' &&
+          Boolean(candidate.id) &&
+          typeof candidate.title === 'string' &&
+          typeof candidate.subtitle === 'string' &&
+          typeof candidate.category === 'string' &&
+          typeof candidate.score === 'number' &&
+          Number.isFinite(candidate.score) &&
+          Boolean(candidate.action) &&
+          typeof candidate.action === 'object' &&
+          typeof (candidate.action as { type?: unknown }).type === 'string'
+        )
+      })
+      .slice(0, MAX_CACHED_HOME_RESULTS)
+  } catch {
+    return []
+  }
+}
+
+function writeCachedHomeSearchResults(results: SearchResult[]): void {
+  try {
+    // Icons are resolved lazily and can be large data URLs, so only cache the
+    // lightweight, immediately renderable command metadata.
+    const cacheable = results
+      .slice(0, MAX_CACHED_HOME_RESULTS)
+      .map((item) => ({ ...item, iconDataUrl: undefined }))
+    window.localStorage.setItem(HOME_SEARCH_RESULTS_CACHE_KEY, JSON.stringify(cacheable))
+  } catch {
+    // A usable in-memory result set is still better than failing the search
+    // when WebView storage is unavailable or full.
+  }
+}
+
+function readCachedSearchCandidates(): SearchResult[] {
+  try {
+    const raw = window.localStorage.getItem(SEARCH_CANDIDATES_CACHE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((item): item is SearchResult => {
+        if (!item || typeof item !== 'object') return false
+        const candidate = item as Partial<SearchResult>
+        return (
+          typeof candidate.id === 'string' &&
+          Boolean(candidate.id) &&
+          typeof candidate.title === 'string' &&
+          typeof candidate.subtitle === 'string' &&
+          typeof candidate.category === 'string' &&
+          typeof candidate.score === 'number' &&
+          Number.isFinite(candidate.score) &&
+          Boolean(candidate.action) &&
+          typeof candidate.action === 'object' &&
+          typeof (candidate.action as { type?: unknown }).type === 'string'
+        )
+      })
+      .slice(0, MAX_OPTIMISTIC_SEARCH_CANDIDATES)
+  } catch {
+    return []
+  }
+}
+
+function writeCachedSearchCandidates(results: SearchResult[]): void {
+  try {
+    const cacheable = results
+      .slice(0, MAX_OPTIMISTIC_SEARCH_CANDIDATES)
+      .map((item) => ({ ...item, iconDataUrl: undefined }))
+    window.localStorage.setItem(SEARCH_CANDIDATES_CACHE_KEY, JSON.stringify(cacheable))
+  } catch {
+    // The backend query remains available if WebView storage is unavailable.
+  }
+}
+
+function readInitialSearchResults(): SearchResult[] {
+  const cached = readCachedHomeSearchResults()
+  if (cached.length > 0) return cached
+  return readPinnedCommands().map((pin, index) => ({
+    id: pin.id,
+    title: pin.title,
+    subtitle: pin.subtitle,
+    category: pin.category,
+    action: pin.action,
+    iconDataUrl: pin.iconDataUrl,
+    score: 10_000 - index,
+  }))
+}
+
+function mergeSearchCandidates(current: SearchResult[], incoming: SearchResult[]): SearchResult[] {
+  const byId = new Map<string, SearchResult>()
+  for (const item of incoming) byId.set(item.id, item)
+  for (const item of current) {
+    if (!byId.has(item.id)) byId.set(item.id, item)
+  }
+  return Array.from(byId.values()).slice(0, MAX_OPTIMISTIC_SEARCH_CANDIDATES)
+}
+
 function writePinnedCommands(next: PinnedCommand[]): void {
   window.localStorage.setItem(
     PINNED_COMMANDS_KEY,
@@ -262,21 +411,42 @@ function SearchIcon(): JSX.Element {
   )
 }
 
-/* App Store-style icon ("A" on a blue rounded square) used in the applications
-   (Launchpad) mode in place of the magnifying glass. */
+/* App Store icon used in applications (Launchpad) mode. The mark is built from
+   the same three rounded strokes as Apple's icon instead of a text glyph. */
 function AppStoreIcon(): JSX.Element {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden>
       <defs>
-        <linearGradient id="appstore-grad" x1="1" y1="1" x2="13" y2="13" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#2aa9ff" />
-          <stop offset="1" stopColor="#1466ff" />
+        <linearGradient
+          id="appstore-gradient"
+          x1="8"
+          y1="0.5"
+          x2="8"
+          y2="15.5"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#4CC3FF" />
+          <stop offset="0.52" stopColor="#168CF5" />
+          <stop offset="1" stopColor="#0875E1" />
         </linearGradient>
       </defs>
-      <rect x="1" y="1" width="12" height="12" rx="3" fill="url(#appstore-grad)" />
+      <rect x="0.5" y="0.5" width="15" height="15" rx="4" fill="url(#appstore-gradient)" />
+      <rect
+        x="0.75"
+        y="0.75"
+        width="14.5"
+        height="14.5"
+        rx="3.75"
+        stroke="white"
+        strokeOpacity="0.18"
+        strokeWidth="0.5"
+      />
       <path
-        d="M7 3.4 10.7 11h-1.5L8.45 9.05H5.55L5.05 11H3.5L7 3.4Zm-.55 3.85h1.1L7 5.95 6.45 7.25Z"
-        fill="#fff"
+        d="M3.35 11.95 8.15 3.65M7.05 3.65l5 8.3M3.05 9.45h9.9"
+        stroke="white"
+        strokeWidth="1.65"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   )
@@ -444,6 +614,7 @@ type ListItemIconKind = PathCompletionItem['kind'] | SearchResult['category']
 
 type CommandIconKind =
   | 'settings'
+  | 'indexing'
   | 'extensions'
   | 'snippets'
   | 'notes'
@@ -490,6 +661,7 @@ type TezbarCommandId =
   | 'open-snippets'
   | 'open-notes'
   | 'open-emoji-picker'
+  | 'open-indexing'
 
 const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'open-settings': 'settings',
@@ -498,6 +670,7 @@ const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'open-snippets': 'snippets',
   'open-notes': 'notes',
   'open-emoji-picker': 'emoji',
+  'open-indexing': 'indexing',
 }
 
 const NATIVE_COMMAND_ICON_BY_ID: Record<NativeCommandId, CommandIconKind> = {
@@ -563,6 +736,7 @@ function commandIconTone(kind: CommandIconKind): string {
     case 'memory':
     case 'disk':
     case 'ports':
+    case 'indexing':
       return 'border-sky-300/25 bg-sky-300/10 text-sky-200'
     case 'extensions':
     case 'brew':
@@ -618,6 +792,13 @@ function CommandIconGlyph({ kind }: { kind: CommandIconKind }): ReactNode {
       )
     case 'extensions':
       return <path d="M5.25 2.25h3.5v2h2.75v3.5h-2v3.5H6v-2H2.5v-3.5h2.75v-3.5Z" />
+    case 'indexing':
+      return (
+        <>
+          <ellipse cx="7" cy="3.25" rx="4.25" ry="1.75" />
+          <path d="M2.75 3.25v3.25c0 .97 1.9 1.75 4.25 1.75s4.25-.78 4.25-1.75V3.25M2.75 6.5v3.25c0 .97 1.9 1.75 4.25 1.75s4.25-.78 4.25-1.75V6.5" />
+        </>
+      )
     case 'snippets':
       return (
         <>
@@ -1096,7 +1277,10 @@ function searchResultIconAsset(item: SearchResult): {
   if (item.category === 'applications' && item.subtitle.endsWith('.app')) {
     return { kind: 'application', path: item.subtitle }
   }
-  if (item.category === 'files' && item.action.type === 'open-file') {
+  if (
+    (item.category === 'files' || item.category === 'knowledge') &&
+    item.action.type === 'open-file'
+  ) {
     return { kind: 'file', path: item.action.path }
   }
   if (
@@ -1119,6 +1303,7 @@ export default function CommandBar({
   onOpenExtensions,
   onOpenExtensionRuntime,
   onOpenPortsPage,
+  onOpenIndexingPage,
   onOpenClipboardPage,
   onOpenSnippetsPage,
   onOpenNotesPage,
@@ -1134,6 +1319,7 @@ export default function CommandBar({
   onOpenExtensions: () => void
   onOpenExtensionRuntime: (initial: ExtensionRuntimeViewPayload) => void
   onOpenPortsPage: (opts?: { tab?: 'listen' | 'named' }) => void
+  onOpenIndexingPage: () => void
   onOpenClipboardPage: () => void
   onOpenSnippetsPage: () => void
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
@@ -1142,7 +1328,7 @@ export default function CommandBar({
     initialCommand?: string,
     workingDirectory?: string,
     sessionId?: string,
-    defaults?: TerminalDefaults,
+    defaults?: TerminalDefaults
   ) => void
 }): JSX.Element {
   const normalizedInitialValue = initialValue.startsWith('>') ? initialValue.slice(1) : initialValue
@@ -1158,7 +1344,10 @@ export default function CommandBar({
   const [emptyAnswer, setEmptyAnswer] = useState(false)
   const [pathCompletions, setPathCompletions] = useState<PathCompletionItem[]>([])
   const [recentExtensionCommands, setRecentExtensionCommands] = useState<string[]>([])
-  const [pinnedCommands, setPinnedCommands] = useState<PinnedCommand[]>([])
+  const [pinnedCommands, setPinnedCommands] = useState<PinnedCommand[]>(readPinnedCommands)
+  const [pinnedCommandTooltip, setPinnedCommandTooltip] = useState<PinnedCommandTooltip | null>(
+    null
+  )
   const [chatHistory, setChatHistory] = useState<ChatSessionSummary[]>([])
   const [draggingPinId, setDraggingPinId] = useState<string | null>(null)
   const [draggingSearchResultId, setDraggingSearchResultId] = useState<string | null>(null)
@@ -1166,9 +1355,20 @@ export default function CommandBar({
   const [pinUnpinDropActive, setPinUnpinDropActive] = useState(false)
   const [selectedSuggestion, setSelectedSuggestion] = useState(0)
   const [followSuggestionSelection, setFollowSuggestionSelection] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchResults, setSearchResults] = useState<SearchResult[]>(readInitialSearchResults)
+  const [cachedSearchCandidates] = useState<SearchResult[]>(readCachedSearchCandidates)
+  const [initialSearchCandidates] = useState<SearchResult[]>(() =>
+    mergeSearchCandidates(searchResults, cachedSearchCandidates)
+  )
+  const homeSearchResultsRef = useRef<SearchResult[]>(searchResults)
+  const searchCandidatesRef = useRef<SearchResult[]>(initialSearchCandidates)
+  const queryResultsCacheRef = useRef<Map<string, { items: SearchResult[]; cachedAt: number }>>(
+    new Map()
+  )
   const [selectedSearch, setSelectedSearch] = useState(
-    initialValue.startsWith(' ') || initialValue.endsWith('  ') ? -1 : 0
+    initialValue.startsWith('>') || initialValue.startsWith(' ') || initialValue.endsWith('  ')
+      ? -1
+      : 0
   )
   const [followSearchSelection, setFollowSearchSelection] = useState(false)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
@@ -1210,7 +1410,7 @@ export default function CommandBar({
   const [pinnedTerminalSessionIds, setPinnedTerminalSessionIds] = useState<string[]>([])
   const [terminalSettingsOpen, setTerminalSettingsOpen] = useState(false)
   const [terminalSettingsDraft, setTerminalSettingsDraft] = useState<TerminalDefaults>(() =>
-    readTerminalDefaults(),
+    readTerminalDefaults()
   )
   const terminalWorkingDirectoryRef = useRef<string | undefined>()
   const argInputRefs = useRef<Array<HTMLInputElement | HTMLSelectElement | null>>([])
@@ -1223,6 +1423,7 @@ export default function CommandBar({
   const killPortValueRef = useRef(killPortValue)
   const terminalModeRef = useRef(terminalMode)
   const terminalSettingsOpenRef = useRef(terminalSettingsOpen)
+  const launcherQueryHistoryRef = useRef<string[]>([])
   const lastSearchRequestId = useRef(0)
   const draggingPinIdRef = useRef<string | null>(null)
   const pinDropIndexRef = useRef<number | null>(null)
@@ -1285,6 +1486,11 @@ export default function CommandBar({
     setPrevInitialValue(initialValue)
     setTerminalMode(initialValue.startsWith('>'))
     setValue(normalizedInitialValue)
+    setSelectedSearch(
+      initialValue.startsWith('>') || initialValue.startsWith(' ') || initialValue.endsWith('  ')
+        ? -1
+        : 0
+    )
   }
 
   useEffect(() => {
@@ -1326,8 +1532,8 @@ export default function CommandBar({
   }, [terminalMode])
 
   useEffect(() => {
+    launcherQueryHistoryRef.current = readLauncherQueryHistory()
     setRecentExtensionCommands(readRecentExtensionCommands())
-    setPinnedCommands(readPinnedCommands())
     setPinnedTerminalSessionIds(readPinnedTerminalSessionIds())
     void window.tezbar.chatList(40).then(setChatHistory)
   }, [])
@@ -1452,7 +1658,8 @@ export default function CommandBar({
     if (!q) return terminalSessions
     const terms = q.split(/\s+/).filter(Boolean)
     return terminalSessions.filter((session) => {
-      const haystack = `${session.name} ${session.cwd} ${session.lastCommand ?? session.initialCommand ?? ''}`.toLowerCase()
+      const haystack =
+        `${session.name} ${session.cwd} ${session.lastCommand ?? session.initialCommand ?? ''}`.toLowerCase()
       return terms.every((term) => haystack.includes(term))
     })
   }, [terminalMode, terminalSessions, value])
@@ -1568,11 +1775,21 @@ export default function CommandBar({
     if (pendingAction) {
       return pendingColorConversionRows
     }
+    const pinnedIds = new Set(pinnedCommands.map((pin) => pin.id))
+    const homeRankedResults = value.trim()
+      ? searchResults
+      : [...searchResults].sort((left, right) => {
+          const leftScore =
+            left.score - (pinnedIds.has(left.id) ? PINNED_HOME_RESULT_SCORE_PENALTY : 0)
+          const rightScore =
+            right.score - (pinnedIds.has(right.id) ? PINNED_HOME_RESULT_SCORE_PENALTY : 0)
+          return rightScore - leftScore
+        })
     const withoutDuplicatePort = killPortCommandResult
       ? searchResults.filter(
           (item) => item.id !== 'extcmd:raycast.port-manager:kill-listening-process'
         )
-      : searchResults
+      : homeRankedResults
     const withoutDuplicateColorRows =
       colorConversionRows.length > 0
         ? withoutDuplicatePort.filter((item) => item.category !== 'color-converter')
@@ -1590,7 +1807,9 @@ export default function CommandBar({
     killPortMode,
     pendingAction,
     pendingColorConversionRows,
+    pinnedCommands,
     searchResults,
+    value,
   ])
   const visibleSearchCount = visibleSearchResults.length
   const topResult = visibleSearchResults[0] ?? null
@@ -1620,6 +1839,23 @@ export default function CommandBar({
   )
 
   useEffect(() => {
+    let cancelled = false
+    void window.tezbar
+      .listSearchCandidates()
+      .then((items) => {
+        if (cancelled) return
+        searchCandidatesRef.current = mergeSearchCandidates(searchCandidatesRef.current, items)
+        writeCachedSearchCandidates(searchCandidatesRef.current)
+      })
+      .catch(() => {
+        // Persisted candidates and the normal query endpoint remain available.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!isCompletionInput) {
       setPathCompletions([])
       return
@@ -1642,25 +1878,44 @@ export default function CommandBar({
     const requestId = ++lastSearchRequestId.current
     const t = setTimeout(() => {
       if (isAiMode || isCompletionInput || terminalMode) {
-        setSearchResults([])
         return
       }
       void window.tezbar
         .searchAll(value)
         .then((items) => {
           if (!cancelled && requestId === lastSearchRequestId.current) {
-            setSearchResults(items)
+            const isHome = !value.trim()
+            if (isHome && items.length > 0) {
+              homeSearchResultsRef.current = items
+              searchCandidatesRef.current = mergeSearchCandidates(
+                searchCandidatesRef.current,
+                items
+              )
+              setSearchResults(items)
+              writeCachedHomeSearchResults(items)
+            } else {
+              if (!isHome) {
+                queryResultsCacheRef.current.set(value.trim().toLowerCase(), {
+                  items,
+                  cachedAt: Date.now(),
+                })
+                searchCandidatesRef.current = mergeSearchCandidates(
+                  searchCandidatesRef.current,
+                  items
+                )
+              }
+              setSearchResults((current) => (isHome ? current : items))
+            }
             setError(null)
           }
         })
         .catch((searchError: unknown) => {
           if (!cancelled && requestId === lastSearchRequestId.current) {
-            setSearchResults([])
             const detail = searchError instanceof Error ? searchError.message : String(searchError)
             setError(`Search unavailable: ${detail}`)
           }
         })
-    }, 120)
+    }, 20)
     return () => {
       cancelled = true
       clearTimeout(t)
@@ -1668,7 +1923,12 @@ export default function CommandBar({
   }, [isAiMode, isCompletionInput, terminalMode, value])
 
   useEffect(() => {
-    if (isCompletionInput || searchResults.length === 0 || recentExtensionCommands.length === 0)
+    if (
+      terminalMode ||
+      isCompletionInput ||
+      searchResults.length === 0 ||
+      recentExtensionCommands.length === 0
+    )
       return
     if (value.trim()) return
     // When the calc row is present it owns index 0 and should stay
@@ -1681,6 +1941,7 @@ export default function CommandBar({
     }
   }, [
     isCompletionInput,
+    terminalMode,
     recentExtensionCommands,
     searchResults,
     value,
@@ -1974,6 +2235,7 @@ export default function CommandBar({
     pinId: string,
     index: number
   ): void => {
+    setPinnedCommandTooltip(null)
     if (event.button !== 0) return
     pinPointerActiveRef.current = true
     pinPointerStartYRef.current = event.clientY
@@ -1982,6 +2244,18 @@ export default function CommandBar({
     updateDraggingPin(pinId)
     updatePinDropIndex(index)
     event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const showPinnedCommandTooltip = (element: HTMLElement, pin: PinnedCommand): void => {
+    const rect = element.getBoundingClientRect()
+    setPinnedCommandTooltip({
+      id: pin.id,
+      title: pin.title,
+      subtitle: pin.subtitle,
+      shortcut: pin.slot,
+      left: rect.right + 10,
+      top: rect.top + rect.height / 2,
+    })
   }
 
   const movePinPointerDrag = (event: PointerEvent<HTMLElement>): void => {
@@ -2171,6 +2445,8 @@ export default function CommandBar({
     result: SearchResult,
     rank = selectedSearch + 1
   ): Promise<void> {
+    rememberCurrentLauncherQuery()
+
     const recordHandledSearchUsage = async (): Promise<void> => {
       try {
         await window.tezbar.recordSearchActionUsage(result.action, {
@@ -2221,6 +2497,11 @@ export default function CommandBar({
       if (result.action.commandId === 'open-emoji-picker') {
         await recordHandledSearchUsage()
         onOpenEmojiPicker()
+        return
+      }
+      if (result.action.commandId === 'open-indexing') {
+        await recordHandledSearchUsage()
+        onOpenIndexingPage()
         return
       }
       if (result.action.commandId === 'quit-tezbar') {
@@ -2441,7 +2722,7 @@ export default function CommandBar({
   }
 
   const selectedTerminalSession = (): TerminalSessionSummary | null => {
-    return orderedTerminalSessions[selectedSearch] ?? orderedTerminalSessions[0] ?? null
+    return terminalSessionAtIndex(orderedTerminalSessions, selectedSearch) ?? null
   }
 
   const toggleTerminalSessionPin = (): void => {
@@ -2489,6 +2770,8 @@ export default function CommandBar({
   }
 
   async function openPathCompletion(item: PathCompletionItem): Promise<void> {
+    rememberCurrentLauncherQuery()
+
     if (!item.path) {
       setValue(item.value)
       requestAnimationFrame(() => focusCommandInput())
@@ -2561,6 +2844,13 @@ export default function CommandBar({
         focusCommandInput()
         return true
       }
+      if (valueRef.current.trimStart().startsWith('`')) {
+        // The applications prefix is hidden from the input. Match AI mode's
+        // two-step Escape behavior: clear the query first, then leave the mode.
+        setValue(valueRef.current.trimStart().slice(1).trim() ? '`' : '')
+        focusCommandInput()
+        return true
+      }
       if (terminalSettingsOpenRef.current) {
         terminalSettingsOpenRef.current = false
         setTerminalSettingsOpen(false)
@@ -2598,12 +2888,6 @@ export default function CommandBar({
           openTerminalSettings()
           return
         }
-        if (key === 'o') {
-          event.preventDefault()
-          const session = selectedTerminalSession()
-          if (session) openTerminalSession(session)
-          return
-        }
         if (key === 'x') {
           event.preventDefault()
           void stopSelectedTerminalSession()
@@ -2614,7 +2898,7 @@ export default function CommandBar({
           toggleTerminalSessionPin()
           return
         }
-        if (key === 'backspace' || key === 'delete') {
+        if (key === 'd') {
           event.preventDefault()
           void deleteSelectedTerminalSession()
           return
@@ -2663,6 +2947,15 @@ export default function CommandBar({
     return () => window.removeEventListener('keydown', onGlobalKeyDown)
   }, [isAiMode, pinnedCommands, selectedSearch, visibleSearchResults])
 
+  function rememberCurrentLauncherQuery(): void {
+    const entry = launcherQueryHistoryEntry(valueRef.current, terminalModeRef.current)
+    if (!entry) return
+
+    const history = addLauncherQueryHistoryEntry(launcherQueryHistoryRef.current ?? [], entry)
+    launcherQueryHistoryRef.current = history
+    writeLauncherQueryHistory(history)
+  }
+
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault()
     setError(null)
@@ -2693,6 +2986,8 @@ export default function CommandBar({
       showActionMsg(null)
     }
 
+    rememberCurrentLauncherQuery()
+
     // AI mode: open the dedicated AI Chat surface and submit the prompt
     // there (multi-turn chat, logs, history — see AgentChatView).
     if (isAiMode) {
@@ -2713,15 +3008,18 @@ export default function CommandBar({
     }
 
     if (terminalMode) {
-      const selectedSession =
-        (selectedSearch >= 0 ? orderedTerminalSessions[selectedSearch] : undefined) ??
-        orderedTerminalSessions[0]
+      const selectedSession = terminalSessionAtIndex(orderedTerminalSessions, selectedSearch)
       if (selectedSession) {
         openTerminalSession(selectedSession)
         return
       }
       const initialCommand = value.trim() || undefined
-      onOpenTerminal(initialCommand, terminalWorkingDirectoryRef.current, undefined, terminalSettingsDraft)
+      onOpenTerminal(
+        initialCommand,
+        terminalWorkingDirectoryRef.current,
+        undefined,
+        terminalSettingsDraft
+      )
       setValue('')
       setTerminalMode(false)
       setTerminalPrompt('')
@@ -2795,7 +3093,7 @@ export default function CommandBar({
   const showSearchResults =
     !isCompletionInput && !isAiMode && !terminalMode && visibleSearchCount > 0
   const terminalSelectedIndex =
-    terminalSessionCount === 0 ? -1 : Math.min(Math.max(0, selectedSearch), terminalSessionCount - 1)
+    selectedSearch >= 0 && selectedSearch < terminalSessionCount ? selectedSearch : -1
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (isAiMode && (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
@@ -2832,6 +3130,14 @@ export default function CommandBar({
       return
     }
 
+    if (isApplicationInput && e.key === 'Backspace' && !slashQuery.slice(1)) {
+      e.preventDefault()
+      setValue('')
+      setPathCompletions([])
+      setSelectedSuggestion(0)
+      return
+    }
+
     if (
       isSlashInput &&
       (e.key === ' ' || e.code === 'Space') &&
@@ -2861,7 +3167,31 @@ export default function CommandBar({
       terminalWorkingDirectoryRef.current = isSlashInput ? value.trim() : undefined
       setValue('')
       setTerminalMode(true)
+      setSelectedSearch(-1)
+      setFollowSearchSelection(true)
       return
+    }
+
+    if (
+      e.key === 'ArrowUp' &&
+      !value &&
+      !terminalMode &&
+      !pendingAction &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      !e.shiftKey
+    ) {
+      const previousQuery = launcherQueryHistoryRef.current?.[0]
+      if (previousQuery) {
+        e.preventDefault()
+        setValue(previousQuery)
+        setFollowSuggestionSelection(true)
+        setSelectedSuggestion(0)
+        setFollowSearchSelection(true)
+        setSelectedSearch(previousQuery.startsWith(' ') ? -1 : 0)
+        return
+      }
     }
 
     if (isCompletionInput && suggestions.length) {
@@ -2880,7 +3210,9 @@ export default function CommandBar({
         if (e.key === 'ArrowDown') {
           e.preventDefault()
           setFollowSuggestionSelection(true)
-          setSelectedSuggestion((i) => Math.min(i + APPLICATIONS_GRID_COLUMNS, suggestions.length - 1))
+          setSelectedSuggestion((i) =>
+            Math.min(i + APPLICATIONS_GRID_COLUMNS, suggestions.length - 1)
+          )
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault()
@@ -2921,9 +3253,10 @@ export default function CommandBar({
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         setFollowSearchSelection(true)
-        setSelectedSearch((i) => Math.min(i + 1, terminalSessionCount - 1))
+        setSelectedSearch((i) => moveTerminalSelectionDown(i, terminalSessionCount))
       }
       if (e.key === 'ArrowUp') {
+        if (selectedSearch < 0) return
         e.preventDefault()
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.max(i - 1, 0))
@@ -3077,7 +3410,9 @@ export default function CommandBar({
               <input
                 id="command-input"
                 type="text"
-                value={killPortMode ? killPortValue : value}
+                value={
+                  killPortMode ? killPortValue : isApplicationInput ? slashQuery.slice(1) : value
+                }
                 onChange={(e) => {
                   if (killPortMode) {
                     const nextPort = e.target.value.replace(/[^\d]/g, '').slice(0, 5)
@@ -3089,22 +3424,53 @@ export default function CommandBar({
                     clearPendingAction()
                     showActionMsg(null)
                   }
-                  let newValue = e.target.value
+                  // Keep the applications-mode sentinel in state for the
+                  // completion backend, but never render it in the input.
+                  let newValue = isApplicationInput ? `\`${e.target.value}` : e.target.value
+                  let nextTerminalMode = terminalMode
                   if (!terminalMode) {
                     const separator = newValue.indexOf('>')
                     const pathPrefix = separator > 0 ? newValue.slice(0, separator).trim() : ''
                     if (separator === 0 || (separator > 0 && pathPrefix.startsWith('/'))) {
                       terminalWorkingDirectoryRef.current = pathPrefix || undefined
                       setTerminalMode(true)
+                      nextTerminalMode = true
                       newValue = newValue.slice(separator + 1)
                     }
                   }
                   setKillPortArgumentDismissed(false)
+                  if (!nextTerminalMode && newValue.length === 0) {
+                    const homeResults = homeSearchResultsRef.current
+                    if (homeResults.length > 0) setSearchResults(homeResults)
+                  } else if (
+                    !nextTerminalMode &&
+                    newValue.trim() &&
+                    !newValue.startsWith(' ') &&
+                    !newValue.startsWith('/') &&
+                    !newValue.startsWith('`') &&
+                    !newValue.endsWith('  ')
+                  ) {
+                    const normalizedQuery = newValue.trim().toLowerCase()
+                    const cachedEntry = queryResultsCacheRef.current.get(normalizedQuery)
+                    const cachedResults =
+                      cachedEntry && Date.now() - cachedEntry.cachedAt <= QUERY_RESULTS_CACHE_TTL_MS
+                        ? cachedEntry.items
+                        : undefined
+                    if (cachedEntry && !cachedResults) {
+                      queryResultsCacheRef.current.delete(normalizedQuery)
+                    }
+                    const immediateResults =
+                      cachedResults ??
+                      optimisticSearchResults(searchCandidatesRef.current, normalizedQuery)
+                    if (immediateResults.length > 0) setSearchResults(immediateResults)
+                  }
                   setValue(newValue)
                   setFollowSuggestionSelection(true)
                   setSelectedSuggestion(0)
                   setFollowSearchSelection(true)
-                  setSelectedSearch(newValue.startsWith(' ') || newValue.endsWith('  ') ? -1 : 0)
+                  setSelectedSearch(
+                    nextTerminalMode || newValue.startsWith(' ') || newValue.endsWith('  ') ? -1 : 0
+                  )
                 }}
                 onKeyDown={handleInputKeyDown}
                 aria-label="Search Tezbar or use a shortcut"
@@ -3234,7 +3600,8 @@ export default function CommandBar({
                   <div
                     key={`pin:${pin.id}`}
                     data-pin-index={index}
-                    title="Drag to reorder · Click icon to run · ⌥ shortcut follows order · Right-click to unpin"
+                    onPointerEnter={(event) => showPinnedCommandTooltip(event.currentTarget, pin)}
+                    onPointerLeave={() => setPinnedCommandTooltip(null)}
                     onPointerDown={(event) => {
                       beginPinPointerDrag(event, pin.id, index)
                     }}
@@ -3272,7 +3639,9 @@ export default function CommandBar({
                       type="button"
                       draggable={false}
                       aria-label={`Run pinned command: ${pin.title}`}
-                      title={pin.title}
+                      aria-describedby={
+                        pinnedCommandTooltip?.id === pin.id ? 'pinned-command-tooltip' : undefined
+                      }
                       className="grid h-9 w-9 shrink-0 place-items-center rounded-tezbar-row border border-white/10 bg-white/[0.035] transition hover:border-white/20 hover:bg-white/[0.08]"
                       onClick={(event) => {
                         if (suppressNextPinClickRef.current) {
@@ -3283,6 +3652,8 @@ export default function CommandBar({
                         }
                         void runPinnedCommand(pin, index)
                       }}
+                      onFocus={(event) => showPinnedCommandTooltip(event.currentTarget, pin)}
+                      onBlur={() => setPinnedCommandTooltip(null)}
                     >
                       <ListItemIcon
                         kind={pin.category}
@@ -3293,7 +3664,6 @@ export default function CommandBar({
                       />
                     </button>
                     <span
-                      title={`Shortcut: ⌥${pin.slot}`}
                       className={cx(
                         'absolute bottom-0 right-0 grid place-items-center rounded-[5px] border border-white/10 bg-[#14161c] px-1 font-mono leading-none text-ink-3 transition hover:text-ink-1',
                         densePinRail
@@ -3624,12 +3994,15 @@ export default function CommandBar({
                       Terminal Sessions
                     </div>
                     <div className="mt-0.5 text-[10.5px] text-ink-4">
-                      {terminalSessions.filter((session) => session.status === 'running').length} running
+                      {terminalSessions.filter((session) => session.status === 'running').length}{' '}
+                      running
                     </div>
                   </div>
-                  <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-ink-4">
-                    Enter restores · type to filter
-                  </span>
+                  {terminalSelectedIndex < 0 ? (
+                    <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-ink-4">
+                      ↓ selects a session · Enter starts new
+                    </span>
+                  ) : null}
                 </div>
                 <GlideList
                   selectedIndex={terminalSelectedIndex}
@@ -3654,7 +4027,7 @@ export default function CommandBar({
                             'relative flex w-full items-center justify-between gap-3 rounded-tezbar-row px-3 py-2.5 text-left transition',
                             i === terminalSelectedIndex
                               ? 'bg-emerald-400/[0.08] text-ink-1'
-                              : 'text-ink-3 hover:bg-white/[0.05] hover:text-ink-1',
+                              : 'text-ink-3 hover:bg-white/[0.05] hover:text-ink-1'
                           )}
                           onMouseMove={() => {
                             setFollowSearchSelection(false)
@@ -3669,7 +4042,7 @@ export default function CommandBar({
                                 'grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border',
                                 running
                                   ? 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200'
-                                  : 'border-white/10 bg-white/[0.035] text-ink-4',
+                                  : 'border-white/10 bg-white/[0.035] text-ink-4'
                               )}
                             >
                               <TerminalIcon />
@@ -3681,14 +4054,17 @@ export default function CommandBar({
                                     'h-1.5 w-1.5 shrink-0 rounded-full',
                                     running
                                       ? 'bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]'
-                                      : 'bg-white/25',
+                                      : 'bg-white/25'
                                   )}
                                 />
                                 <span className="truncate text-[13px] font-semibold text-ink-1">
                                   {session.name}
                                 </span>
                                 {pinnedTerminalSessionIds.includes(session.sessionId) ? (
-                                  <span className="shrink-0 text-[10px] text-amber-200" aria-label="Pinned">
+                                  <span
+                                    className="shrink-0 text-[10px] text-amber-200"
+                                    aria-label="Pinned"
+                                  >
                                     ★
                                   </span>
                                 ) : null}
@@ -3702,7 +4078,7 @@ export default function CommandBar({
                             <span
                               className={cx(
                                 'block text-[10px] font-semibold uppercase tracking-[0.12em]',
-                                running ? 'text-emerald-300' : 'text-ink-4',
+                                running ? 'text-emerald-300' : 'text-ink-4'
                               )}
                             >
                               {running ? 'Running' : 'Saved'}
@@ -3994,115 +4370,171 @@ export default function CommandBar({
           showSearchResults || showSuggestions || showAnswer ? 'opacity-60' : ''
         )}
       >
-        <HintBar>
-          {terminalMode ? (
-            <>
-              <Hint label="Open" keys={<><Kbd>⌘</Kbd><Kbd>O</Kbd></>} />
-              <Hint label="Stop" keys={<><Kbd>⌘</Kbd><Kbd>X</Kbd></>} />
-              <Hint label="Delete" keys={<><Kbd>⌘</Kbd><Kbd>⌫</Kbd></>} />
-              <Hint label="Pin / Unpin" keys={<><Kbd>⌘</Kbd><Kbd>P</Kbd></>} />
-              <Hint label="Settings" keys={<><Kbd>⌘</Kbd><Kbd>K</Kbd></>} />
-              <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
-              <Hint label="Open / New" keys={<Kbd>↵</Kbd>} />
-              <Hint label="Close" keys={<Kbd>Esc</Kbd>} />
-            </>
-          ) : isAiMode ? (
-            <>
-              <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
-              <Hint
-                label="Attach screen"
-                keys={
+        <div className="flex min-w-0 items-center justify-between gap-4">
+          <HintBar className="min-w-0 flex-1">
+            {terminalMode ? (
+              <>
+                <Hint
+                  label="Stop"
+                  keys={
+                    <>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>X</Kbd>
+                    </>
+                  }
+                />
+                <Hint
+                  label="Delete"
+                  keys={
+                    <>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>D</Kbd>
+                    </>
+                  }
+                />
+                <Hint
+                  label="Pin / Unpin"
+                  keys={
+                    <>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>P</Kbd>
+                    </>
+                  }
+                />
+                <Hint
+                  label="Settings"
+                  keys={
+                    <>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>K</Kbd>
+                    </>
+                  }
+                />
+              </>
+            ) : isAiMode ? (
+              <>
+                <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
+                <Hint
+                  label="Attach screen"
+                  keys={
+                    <>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>⇧</Kbd>
+                      <Kbd>S</Kbd>
+                    </>
+                  }
+                />
+                <Hint label="Open chat" keys={<Kbd>↵</Kbd>} />
+                <Hint
+                  label="New chat"
+                  keys={
+                    <>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>N</Kbd>
+                    </>
+                  }
+                />
+                <Hint
+                  label="Close window"
+                  keys={
+                    <>
+                      <Kbd>Esc</Kbd>
+                      <Kbd>⌘</Kbd>
+                    </>
+                  }
+                />
+              </>
+            ) : (
+              <>
+                {isApplicationInput ? (
+                  <Hint label="Open" keys={<Kbd>↵</Kbd>} />
+                ) : isSlashInput ? (
                   <>
-                    <Kbd>⌘</Kbd>
-                    <Kbd>⇧</Kbd>
-                    <Kbd>S</Kbd>
+                    <Hint label="Complete" keys={<Kbd>↵</Kbd>} />
+                    <Hint
+                      label="Open"
+                      keys={
+                        <>
+                          <Kbd>⌘</Kbd>
+                          <Kbd>↵</Kbd>
+                        </>
+                      }
+                    />
                   </>
-                }
-              />
-              <Hint label="Open chat" keys={<Kbd>↵</Kbd>} />
-              <Hint
-                label="New chat"
-                keys={
+                ) : (
                   <>
-                    <Kbd>⌘</Kbd>
-                    <Kbd>N</Kbd>
+                    <Hint
+                      label="Pin / Unpin"
+                      keys={
+                        <>
+                          <Kbd>⌘</Kbd>
+                          <Kbd>P</Kbd>
+                        </>
+                      }
+                    />
+                    <Hint
+                      label="Pinned"
+                      keys={
+                        <>
+                          <Kbd>⌥</Kbd>
+                          <Kbd>1-12</Kbd>
+                        </>
+                      }
+                    />
+                    <Hint
+                      label="Save note"
+                      keys={
+                        <>
+                          <Kbd>⌘</Kbd>
+                          <Kbd>N</Kbd>
+                        </>
+                      }
+                    />
                   </>
-                }
-              />
-              <Hint label="Exit AI" keys={<Kbd>Esc</Kbd>} />
-              <Hint
-                label="Close window"
-                keys={
-                  <>
-                    <Kbd>Esc</Kbd>
-                    <Kbd>⌘</Kbd>
-                  </>
-                }
-              />
-            </>
-          ) : (
-            <>
-              {isApplicationInput ? (
-                <Hint label="Open" keys={<Kbd>↵</Kbd>} />
-              ) : isSlashInput ? (
-                <>
-                  <Hint label="Complete" keys={<Kbd>↵</Kbd>} />
-                  <Hint
-                    label="Open"
-                    keys={
-                      <>
-                        <Kbd>⌘</Kbd>
-                        <Kbd>↵</Kbd>
-                      </>
-                    }
-                  />
-                </>
-              ) : (
-                <>
-                  <Hint
-                    label="Pin / Unpin"
-                    keys={
-                      <>
-                        <Kbd>⌘</Kbd>
-                        <Kbd>P</Kbd>
-                      </>
-                    }
-                  />
-                  <Hint
-                    label="Pinned"
-                    keys={
-                      <>
-                        <Kbd>⌥</Kbd>
-                        <Kbd>1-12</Kbd>
-                      </>
-                    }
-                  />
-                  <Hint
-                    label="Save note"
-                    keys={
-                      <>
-                        <Kbd>⌘</Kbd>
-                        <Kbd>N</Kbd>
-                      </>
-                    }
-                  />
-                </>
-              )}
-              <Hint
-                label="Navigate"
-                keys={
-                  <>
-                    <Kbd>↑</Kbd>
-                    <Kbd>↓</Kbd>
-                  </>
-                }
-              />
-              {!isCompletionInput ? <Hint label="Run" keys={<Kbd>↵</Kbd>} /> : null}
-              <Hint label="Close" keys={<Kbd>Esc</Kbd>} />
-            </>
-          )}
-        </HintBar>
+                )}
+                <Hint
+                  label="Navigate"
+                  keys={
+                    <>
+                      <Kbd>↑</Kbd>
+                      <Kbd>↓</Kbd>
+                    </>
+                  }
+                />
+                {!isCompletionInput ? <Hint label="Run" keys={<Kbd>↵</Kbd>} /> : null}
+                <Hint label="Close" keys={<Kbd>Esc</Kbd>} />
+              </>
+            )}
+          </HintBar>
+          <BackgroundTaskStatus
+            onOpenIndexing={onOpenIndexingPage}
+            onOpenExtensionRuntime={onOpenExtensionRuntime}
+          />
+        </div>
       </div>
+
+      {pinnedCommandTooltip
+        ? createPortal(
+            <div
+              id="pinned-command-tooltip"
+              role="tooltip"
+              style={{ left: pinnedCommandTooltip.left, top: pinnedCommandTooltip.top }}
+              className="pointer-events-none fixed z-[100] max-w-[260px] -translate-y-1/2 rounded-[10px] border border-white/[0.12] bg-[#11141c]/95 px-3 py-2 shadow-[0_12px_36px_rgba(0,0,0,0.48)] backdrop-blur-xl"
+            >
+              <span
+                aria-hidden
+                className="absolute -left-[5px] top-1/2 h-[9px] w-[9px] -translate-y-1/2 rotate-45 border-b border-l border-white/[0.12] bg-[#11141c]"
+              />
+              <span className="block truncate text-[12px] font-semibold leading-4 text-ink-1">
+                {pinnedCommandTooltip.title}
+              </span>
+              <span className="mt-0.5 block truncate text-[10px] leading-4 text-ink-3">
+                {pinnedCommandTooltip.subtitle} · ⌥{pinnedCommandTooltip.shortcut}
+              </span>
+            </div>,
+            document.body
+          )
+        : null}
 
       {terminalSettingsOpen ? (
         <div
@@ -4128,7 +4560,8 @@ export default function CommandBar({
                   Terminal defaults
                 </h2>
                 <p className="mt-1 text-[11px] leading-4 text-ink-4">
-                  New sessions use these defaults. A long-running service can stay alive until you stop it.
+                  New sessions use these defaults. A long-running service can stay alive until you
+                  stop it.
                 </p>
               </div>
               <Kbd>Esc</Kbd>

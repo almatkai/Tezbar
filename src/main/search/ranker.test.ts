@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { computeLearnedUsageBoost, computeQueryLearningBoost, computeWeightedScore } from './ranker'
+import {
+  computeHotUsageBoost,
+  computeLearnedUsageBoost,
+  computeQueryLearningBoost,
+  computeWeightedScore,
+} from './ranker'
 
 describe('search ranker learned usage', () => {
   it('lets a frequently used matching native command outrank an unused exact app hit', () => {
@@ -72,5 +77,11 @@ describe('search ranker learned usage', () => {
       })
 
     expect(learnedFuzzyPickScore).toBeGreaterThan(literalMatchScore)
+  })
+
+  it('decisively promotes an item used three times inside the hot window', () => {
+    expect(computeHotUsageBoost(2)).toBeLessThan(1000)
+    expect(computeHotUsageBoost(3)).toBeGreaterThan(2500)
+    expect(computeHotUsageBoost(6)).toBeGreaterThan(computeHotUsageBoost(3))
   })
 })

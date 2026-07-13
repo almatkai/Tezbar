@@ -1263,10 +1263,13 @@ pub fn run() {
       native_input::is_physical_key_down,
       native_terminal::native_terminal_create,
       native_terminal::native_terminal_attach,
+      native_terminal::native_terminal_cwd,
       native_terminal::native_terminal_detach,
       native_terminal::native_terminal_write,
       native_terminal::native_terminal_resize,
-      native_terminal::native_terminal_kill
+      native_terminal::native_terminal_kill,
+      native_terminal::native_terminal_delete_history,
+      native_terminal::native_terminal_prune_history
     ])
     .setup(move |app| {
       let handle = app.handle().clone();

@@ -4,7 +4,7 @@ import type {
   ExtensionRuntimeAction,
   ExtensionRuntimeNode,
 } from '../shared/extensionRuntime'
-import { Message } from './ui/primitives'
+import { Button, Message } from './ui/primitives'
 import { ExtensionRuntimeSurface } from './src/raycast-api'
 
 type PreferenceOption = { title?: string; value?: string }
@@ -57,8 +57,39 @@ function fromRunResult(
   }
 }
 
-function fileUrl(path: string): string {
-  return `file://${encodeURI(path)}`
+function useExtensionIcon(iconPath: string): {
+  src: string | null
+  loading: boolean
+  clear: () => void
+} {
+  const [src, setSrc] = useState<string | null>(null)
+  const [loading, setLoading] = useState(Boolean(iconPath))
+
+  useEffect(() => {
+    let cancelled = false
+    setSrc(null)
+    setLoading(Boolean(iconPath))
+
+    if (!iconPath) return
+
+    void window.tezbar
+      .getAssetIconDataUrl('extension', iconPath)
+      .then((value) => {
+        if (!cancelled) setSrc(value)
+      })
+      .catch(() => {
+        if (!cancelled) setSrc(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [iconPath])
+
+  return { src, loading, clear: () => setSrc(null) }
 }
 
 function PreferenceSetupView({
@@ -82,6 +113,7 @@ function PreferenceSetupView({
   const commandName = typeof props.commandName === 'string' ? props.commandName : ''
   const title = typeof props.title === 'string' ? props.title : 'Extension'
   const iconPath = typeof props.iconPath === 'string' ? props.iconPath : ''
+  const extensionIcon = useExtensionIcon(iconPath)
   const includeApiKey = props.includeApiKey === true
   const hasFields = includeApiKey || preferences.length > 0
 
@@ -109,12 +141,11 @@ function PreferenceSetupView({
     (pref) => pref.name !== 'lang1' && pref.name !== 'lang2'
   )
 
-  const fieldRowClass = 'grid items-start gap-2 sm:grid-cols-[112px_minmax(0,1fr)] sm:gap-4'
+  const fieldRowClass = 'grid items-start gap-1.5 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-4'
   const fieldLabelClass =
-    'pt-2.5 text-left text-[11px] font-semibold leading-5 text-ink-3 sm:text-right'
-  const fieldControlClass =
-    'h-8 w-full rounded-[9px] border border-white/75 bg-white/[0.025] px-2.5 text-[13px] text-ink-1 outline-none transition placeholder:text-ink-4 focus:border-accent-strong focus:bg-white/[0.045] focus:shadow-[0_0_0_2px_rgba(139,141,247,0.18)]'
-  const fieldHintClass = 'mt-1.5 block text-[10.5px] leading-4 text-ink-4'
+    'pt-2 text-left text-[11px] font-medium leading-5 text-ink-3 sm:text-right'
+  const fieldControlClass = 'glass-field h-9 px-3 py-0 text-[12.5px]'
+  const fieldHintClass = 'mt-1.5 block text-[10.5px] leading-[1.45] text-ink-4'
 
   const renderPreference = (pref: PreferenceField): JSX.Element | null => {
     const name = pref.name
@@ -126,12 +157,12 @@ function PreferenceSetupView({
       return (
         <div key={name} className={fieldRowClass}>
           <div className={fieldLabelClass}>{label}</div>
-          <label className="flex min-h-8 items-center gap-2 text-[12px] font-semibold text-ink-2">
+          <label className="flex min-h-9 items-center gap-2.5 text-[12px] font-medium text-ink-2">
             <input
               type="checkbox"
               checked={value === 'true'}
               onChange={(event) => setValue(name, event.target.checked ? 'true' : 'false')}
-              className="h-[13px] w-[13px] rounded-[3px] accent-accent"
+              className="h-3.5 w-3.5 rounded-[4px] accent-accent"
             />
             <span className="min-w-0">
               {pref.description || `Enable ${label.toLowerCase()}`}
@@ -222,92 +253,133 @@ function PreferenceSetupView({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[18px] border border-white/[0.07] bg-[#1f1f2a] text-white shadow-[0_24px_70px_rgba(0,0,0,0.42)]">
-      <button
-        type="button"
-        onClick={onBack}
-        className="absolute left-4 top-4 z-10 grid h-8 w-8 place-items-center rounded-[9px] text-ink-4 transition hover:bg-white/[0.06] hover:text-ink-1"
-        aria-label="Back"
-      >
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <path d="m15 18-6-6 6-6" />
-        </svg>
-      </button>
+    <div className="glass-card relative flex h-full min-h-0 flex-col overflow-hidden text-white">
+      <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/[0.065] px-3.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <button
+            type="button"
+            onClick={onBack}
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-tezbar-chip text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1"
+            aria-label="Back"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </button>
+          <span className="h-4 w-px bg-white/[0.08]" aria-hidden />
+          <p className="truncate text-[11.5px] font-medium text-ink-2">{title}</p>
+        </div>
+        <span className="rounded-tezbar-chip border border-white/[0.07] bg-white/[0.035] px-2 py-1 text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-4">
+          Extension setup
+        </span>
+      </header>
 
-      <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-7 pb-8 pt-8">
-        <div className="w-full max-w-[600px]">
-          <div className="mb-5 flex flex-col items-center text-center">
-            {iconPath ? (
-              <img
-                src={fileUrl(iconPath)}
-                alt=""
-                className="mb-3 h-8 w-8 rounded-[8px] border border-white/10 bg-black/20 shadow-[0_8px_24px_rgba(0,0,0,0.25)]"
-              />
-            ) : null}
-            <h1 className="text-[24px] font-bold leading-tight text-ink-1">Welcome to {title}</h1>
-            <p className="mt-3 max-w-[480px] text-[13px] font-semibold leading-6 text-ink-3">
-              Before you can start using this command, add a few things to the settings listed
-              below.
-            </p>
-            <span className="mt-3 inline-flex h-7 items-center rounded-[9px] border border-white/[0.06] bg-white/[0.08] px-3 text-[11.5px] font-bold text-ink-2">
-              Settings are stored locally
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {includeApiKey ? (
-              <label className={fieldRowClass}>
-                <span className={fieldLabelClass}>API Key</span>
-                <input
-                  type="password"
-                  value={formValues.apiKey ?? ''}
-                  onChange={(event) => setValue('apiKey', event.target.value)}
-                  placeholder="API Key"
-                  className={fieldControlClass}
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
+        <div className="mx-auto w-full max-w-[760px]">
+          <div className="mb-6 flex items-start gap-4">
+            <span className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-[14px] border border-white/[0.1] bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              {extensionIcon.src ? (
+                <img
+                  src={extensionIcon.src}
+                  alt={`${title} icon`}
+                  className="h-full w-full object-cover"
+                  draggable={false}
+                  onError={extensionIcon.clear}
                 />
-              </label>
-            ) : null}
-
-            {primaryPreferences.map(renderPreference)}
-            {secondaryPreferences.map(renderPreference)}
-            {localError ? (
-              <div className={fieldRowClass}>
-                <div />
-                <Message tone="error">{localError}</Message>
-              </div>
-            ) : null}
+              ) : extensionIcon.loading ? (
+                <span className="h-7 w-7 animate-pulse rounded-[8px] bg-white/[0.07]" />
+              ) : (
+                <span className="text-[18px] font-semibold text-ink-3" aria-hidden>
+                  {title.slice(0, 1).toUpperCase()}
+                </span>
+              )}
+            </span>
+            <div className="min-w-0 flex-1 pt-0.5">
+              <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-accent-strong">
+                One-time setup
+              </p>
+              <h1 className="mt-1 font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink-1">
+                Welcome to {title}
+              </h1>
+              <p className="mt-1.5 max-w-[580px] text-[12px] leading-[1.55] text-ink-3">
+                Add the settings below to start using this extension. You can change them later from
+                Extensions in Settings.
+              </p>
+            </div>
           </div>
+
+          <section className="overflow-hidden rounded-tezbar-card border border-white/[0.065] bg-black/[0.1]">
+            <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] px-4 py-3">
+              <div>
+                <h2 className="text-[12px] font-semibold text-ink-1">Configuration</h2>
+                <p className="mt-0.5 text-[10.5px] text-ink-4">
+                  Required fields are marked with an asterisk.
+                </p>
+              </div>
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-300/[0.14] bg-emerald-400/[0.055] px-2 py-1 text-[9.5px] font-medium text-emerald-200/80">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M8 1.75 13 3.6v3.7c0 3.1-2.05 5.75-5 6.95-2.95-1.2-5-3.85-5-6.95V3.6L8 1.75Z" />
+                  <path d="m5.75 8 1.35 1.35 3.15-3.2" />
+                </svg>
+                Stored locally
+              </span>
+            </div>
+
+            <div className="space-y-4 p-4">
+              {includeApiKey ? (
+                <label className={fieldRowClass}>
+                  <span className={fieldLabelClass}>API Key</span>
+                  <input
+                    type="password"
+                    value={formValues.apiKey ?? ''}
+                    onChange={(event) => setValue('apiKey', event.target.value)}
+                    placeholder="API Key"
+                    className={fieldControlClass}
+                  />
+                </label>
+              ) : null}
+
+              {primaryPreferences.map(renderPreference)}
+              {secondaryPreferences.map(renderPreference)}
+              {localError ? (
+                <div className={fieldRowClass}>
+                  <div />
+                  <div className="rounded-tezbar-field border border-rose-400/20 bg-rose-400/[0.07] px-3 py-2">
+                    <Message tone="error">{localError}</Message>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
 
           {hasFields ? (
-            <div className="mt-6 grid items-center gap-2 sm:grid-cols-[112px_minmax(0,1fr)] sm:gap-4">
-              <div />
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="h-8 rounded-[9px] px-3 text-[12px] font-semibold text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1"
-                  onClick={onBack}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void save()}
-                  disabled={saving}
-                  className="h-8 rounded-[9px] bg-accent px-4 text-[12px] font-bold text-white transition hover:bg-accent-strong active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : 'Save and continue'}
-                </button>
-              </div>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <Button variant="quiet" onClick={onBack}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={() => void save()} disabled={saving}>
+                {saving ? 'Saving…' : 'Save and continue'}
+              </Button>
             </div>
           ) : null}
         </div>

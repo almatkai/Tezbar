@@ -70,6 +70,7 @@ export async function getStorageBreakdown(): Promise<StorageBreakdown> {
   const extensionsDir = userData('extensions')
   const cacheDir = userData('Cache')
   const codeCacheDir = userData('Code Cache')
+  const knowledgeDir = userData('knowledge')
 
   // Split search dir into DB/WAL/json and clipboard images for clarity.
   const [
@@ -83,6 +84,7 @@ export async function getStorageBreakdown(): Promise<StorageBreakdown> {
     extensionsBytes,
     cacheDirBytes,
     codeCacheBytes,
+    knowledgeBytes,
   ] = await Promise.all([
     fileSize(join(searchDir, 'index.sqlite3')),
     fileSize(join(searchDir, 'index.sqlite3-wal')),
@@ -94,6 +96,7 @@ export async function getStorageBreakdown(): Promise<StorageBreakdown> {
     dirSize(extensionsDir),
     dirSize(cacheDir),
     dirSize(codeCacheDir),
+    dirSize(knowledgeDir),
   ])
   const searchDbBytes = indexBytes + walBytes + shmBytes + clipboardJsonBytes
   const cacheBytes = cacheDirBytes + codeCacheBytes
@@ -110,6 +113,12 @@ export async function getStorageBreakdown(): Promise<StorageBreakdown> {
       label: 'Search index & history',
       bytes: searchDbBytes,
       paths: [searchDir],
+    },
+    {
+      id: 'knowledge-index',
+      label: 'Knowledge index',
+      bytes: knowledgeBytes,
+      paths: [knowledgeDir],
     },
     {
       id: 'voice-models',

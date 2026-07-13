@@ -1,6 +1,7 @@
 import { app } from '@tezbar/desktop-runtime'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { redactSensitiveText } from '../safety/redaction'
 
 type MemorySource = 'conversation' | 'clipboard' | 'manual'
 
@@ -62,13 +63,6 @@ function overlapScore(query: Set<string>, text: Set<string>): number {
   return overlap / query.size
 }
 
-function redactSensitive(text: string): string {
-  return text
-    .replace(/(sk-[A-Za-z0-9]{12,})/g, '[REDACTED_API_KEY]')
-    .replace(/(gh[pousr]_[A-Za-z0-9_]{12,})/g, '[REDACTED_TOKEN]')
-    .replace(/(password\s*[=:]\s*[^\s]+)/gi, 'password=[REDACTED]')
-}
-
 export function rememberMemory(text: string, source: MemorySource, isPrivate = false): void {
   const cleaned = text.trim()
   if (!cleaned) return
@@ -77,7 +71,7 @@ export function rememberMemory(text: string, source: MemorySource, isPrivate = f
   db.entries = [
     {
       id: `mem:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-      text: redactSensitive(cleaned),
+      text: redactSensitiveText(cleaned),
       source,
       createdAt: Date.now(),
       private: isPrivate,

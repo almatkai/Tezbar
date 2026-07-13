@@ -7,7 +7,10 @@ import type { IndexedDocument, SearchProvider } from './types'
 function buildNativeCommandDocuments(): IndexedDocument[] {
   const now = Date.now()
   return listNativeCommands()
-    .filter((descriptor) => descriptor.id !== 'list-listening-ports')
+    .filter(
+      (descriptor) =>
+        descriptor.id !== 'list-listening-ports' && descriptor.id !== 'open-emoji-picker'
+    )
     .map((descriptor) => ({
       id: `native:${descriptor.id}`,
       category: 'native-command' as const,
@@ -28,6 +31,13 @@ function buildRaymesSurfaceDocuments(): IndexedDocument[] {
       subtitle: 'Tezbar settings',
       keywords: ['settings', 'preferences', '/settings'],
       commandId: 'open-settings',
+    },
+    {
+      id: 'command:open-indexing',
+      title: 'Indexing Status',
+      subtitle: 'Knowledge index · progress, storage, and indexed files',
+      keywords: ['indexing', 'index', 'knowledge', 'status', 'progress', 'files', 'storage', 'cache', '/indexing'],
+      commandId: 'open-indexing',
     },
     {
       id: 'command:open-extensions-settings',

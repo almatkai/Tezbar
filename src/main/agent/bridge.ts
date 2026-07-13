@@ -35,6 +35,7 @@ import { createLoopDriver, type PiEvent } from './loop'
 import type { AgentInputImage, Stage } from '../../shared/agent'
 import { observe, type Observation } from './observer'
 import { buildPromptCommand } from './prompt'
+import { ensureKnowledgeAgentGateway } from '../knowledge/agent/gateway'
 
 const PI_BIN_CANDIDATES = [
   // Where pnpm installs global bins for this user (matches `which pi`
@@ -160,6 +161,8 @@ function spawnRpc(options: {
   raymesProviderJson?: string
   raymesAlwaysAllowJson?: string
   extraArgs: readonly string[]
+  knowledgeEndpoint?: string
+  knowledgeToken?: string
 }): ChildProcessWithoutNullStreams {
   const args: string[] = ['--mode', 'rpc']
   if (options.ephemeral) args.push('--no-session')
@@ -183,6 +186,10 @@ function spawnRpc(options: {
       ...(options.raymesAlwaysAllowJson
         ? { RAYMES_PI_ALWAYS_ALLOW_JSON: options.raymesAlwaysAllowJson }
         : {}),
+      ...(options.knowledgeEndpoint
+        ? { TEZBAR_KNOWLEDGE_ENDPOINT: options.knowledgeEndpoint }
+        : {}),
+      ...(options.knowledgeToken ? { TEZBAR_KNOWLEDGE_TOKEN: options.knowledgeToken } : {}),
     },
     stdio: ['pipe', 'pipe', 'pipe'],
   }) as ChildProcessWithoutNullStreams
@@ -363,6 +370,7 @@ export function createBridge(): Bridge {
       const cwd = options.cwd ?? process.cwd()
       const piBin = resolvePiBinary(options.piBin)
       const ephemeral = options.ephemeral !== false
+      const knowledgeGateway = await ensureKnowledgeAgentGateway().catch(() => null)
 
       const stages: Stage[] = []
       let finalAnswer = ''
@@ -398,6 +406,8 @@ export function createBridge(): Bridge {
         model: options.model,
         raymesProviderJson: options.raymesProviderJson,
         raymesAlwaysAllowJson: options.raymesAlwaysAllowJson,
+        knowledgeEndpoint: knowledgeGateway?.endpoint,
+        knowledgeToken: knowledgeGateway?.token,
         extraArgs: options.extraArgs ?? [],
       })
       trackChild(child)

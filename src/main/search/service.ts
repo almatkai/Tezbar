@@ -30,9 +30,15 @@ import { recordSafetyEntry } from '../safety/log'
 import { getSafetyDescriptor } from '../safety/registry'
 import { fileIconDataUrl, folderIconDataUrl } from '../pathIcons'
 import { appIconDataUrl } from '../appIcon'
+import { getKnowledgeService } from '../knowledge/service'
 import { commandBus } from './commandBus'
 // Fix imports from indexDb
-import { getInstance, readBenchmarkHistory, runOfflineBenchmarks, type SearchIndexRow } from './indexDb'
+import {
+  getInstance,
+  readBenchmarkHistory,
+  runOfflineBenchmarks,
+  type SearchIndexRow,
+} from './indexDb'
 import { appsProvider, listApplications } from './providers/appsProvider'
 import { captureClipboardSnapshot, clipboardProvider } from './providers/clipboardProvider'
 import { commandsProvider } from './providers/commandsProvider'
@@ -47,6 +53,7 @@ import { quickLinksProvider } from './providers/quickLinksProvider'
 import { snippetsProvider } from './providers/snippetsProvider'
 import type { IndexedDocument, SearchProvider } from './providers/types'
 import {
+  computeHotUsageBoost,
   computeLearnedUsageBoost,
   computeQueryLearningBoost,
   computeWeightedScore,
@@ -159,13 +166,15 @@ async function runWithSafety(
 // Use singleton database with session caching
 const indexDb = getInstance()
 
-let bootstrapPromise: Promise<void> | null = null
+let searchReadyPromise: Promise<void> | null = null
 let fileBootstrapPromise: Promise<void> | null = null
 let volatileRefreshPromise: Promise<void> | null = null
 let stopFileWatcher: (() => void) | null = null
-let providerRefreshTimer: NodeJS.Timeout | null = null
 let lastExtensionRefreshAt = 0
 let lastVolatileRefreshAt = 0
+let initialProviderRefreshStarted = false
+let volatileRefreshScheduled = false
+let searchLifecycleRegistered = false
 
 type OpenWithUsageEntry = {
   count: number
@@ -328,8 +337,18 @@ async function refreshVolatileProviders(): Promise<void> {
 
 function refreshVolatileProvidersIfStale(): void {
   if (Date.now() - lastVolatileRefreshAt < PROVIDER_REFRESH_MIN_AGE_MS) return
-  void refreshVolatileProviders().catch((error: unknown) => {
-    console.warn('[Search] Failed to refresh providers:', error)
+  if (lastVolatileRefreshAt === 0 && initialProviderRefreshStarted) return
+  if (volatileRefreshPromise || volatileRefreshScheduled) return
+  // `refreshVolatileProviders()` performs some synchronous filesystem reads
+  // before its first await. Queue it after the current IPC reply so cached
+  // search results reach the renderer first.
+  volatileRefreshScheduled = true
+  setImmediate(() => {
+    volatileRefreshScheduled = false
+    if (Date.now() - lastVolatileRefreshAt < PROVIDER_REFRESH_MIN_AGE_MS) return
+    void refreshVolatileProviders().catch((error: unknown) => {
+      console.warn('[Search] Failed to refresh providers:', error)
+    })
   })
 }
 
@@ -355,36 +374,57 @@ function startBackgroundFileIndexing(): void {
   })
 }
 
+function registerSearchLifecycle(): void {
+  if (searchLifecycleRegistered) return
+  searchLifecycleRegistered = true
+  app.once('before-quit', () => {
+    stopFileWatcher?.()
+    stopFileWatcher = null
+  })
+}
+
+function startInitialProviderRefresh(): void {
+  if (initialProviderRefreshStarted) return
+  initialProviderRefreshStarted = true
+  setImmediate(() => {
+    void refreshAllProviders()
+      .then(() => {
+        lastVolatileRefreshAt = Date.now()
+        startBackgroundFileIndexing()
+      })
+      .catch((error: unknown) => {
+        // The persisted index remains usable. A later explicit provider update
+        // or launcher invocation can retry whichever source failed to refresh.
+        initialProviderRefreshStarted = false
+        console.warn('[Search] Failed to refresh the cached search index:', error)
+      })
+  })
+}
+
 async function bootstrapSearchIndex(): Promise<void> {
-  if (bootstrapPromise) {
-    return bootstrapPromise
+  if (!searchReadyPromise) {
+    searchReadyPromise = (async () => {
+      await indexDb.ensureInitialized()
+
+      // Built-in commands are cheap and guarantee a useful first-run screen.
+      // Everything else is stale-while-revalidate: persisted apps, extensions,
+      // notes, and usage-ranked recommendations can be queried immediately.
+      await upsertProvider(commandsProvider)
+      registerSearchLifecycle()
+    })().catch((error: unknown) => {
+      searchReadyPromise = null
+      throw error
+    })
   }
 
-  bootstrapPromise = (async () => {
-    await indexDb.ensureInitialized()
-    indexDb.removeDocumentsByCategory('clipboard')
+  await searchReadyPromise
+  startInitialProviderRefresh()
+}
 
-    captureClipboardSnapshot()
-    await refreshAllProviders()
-    lastVolatileRefreshAt = Date.now()
-    startBackgroundFileIndexing()
-
-    // The index is now refreshed on demand via refreshVolatileProvidersIfStale
-    // and by explicit invalidation after extension/snippets/notes changes.
-    // The previous 90-second background loop has been removed to eliminate
-    // idle churn.
-
-    app.once('before-quit', () => {
-      stopFileWatcher?.()
-      stopFileWatcher = null
-      if (providerRefreshTimer) {
-        clearInterval(providerRefreshTimer)
-        providerRefreshTimer = null
-      }
-    })
-  })()
-
-  return bootstrapPromise
+/** Warm the persistent index as soon as the backend starts, before the first
+ * launcher invocation. This never waits for provider or file re-indexing. */
+export async function warmSearchIndex(): Promise<void> {
+  await bootstrapSearchIndex()
 }
 
 /** Rebuild FTS rows for quick notes after CRUD (append/update/delete). */
@@ -528,7 +568,11 @@ function exactRecentQuickNoteBoost(
  * from pushing partial-match documents above exact multi-token hits.
  */
 function fullTokenMatchBoost(query: string, title: string, subtitle: string): number {
-  const tokens = query.trim().toLowerCase().match(/[a-z0-9]+/g) ?? []
+  const tokens =
+    query
+      .trim()
+      .toLowerCase()
+      .match(/[a-z0-9]+/g) ?? []
   if (tokens.length < 2) return 0
   const text = `${title} ${subtitle}`.toLowerCase()
   const allMatch = tokens.every((t) => text.includes(t))
@@ -540,40 +584,32 @@ function rankRows(
   docs: Array<{ doc: IndexedDocument; lexical: number; fuzzyDistance?: number }>
 ): Array<SearchResult & { updatedAt: number }> {
   const now = Date.now()
-  const stats = indexDb?.getActionStats(docs.map((entry) => entry.doc.id)) ?? new Map()
-  const queryStats = indexDb?.getQueryActionStats(query, docs.map((entry) => entry.doc.id)) ?? new Map()
+  const queryStats =
+    indexDb?.getQueryActionStats(
+      query,
+      docs.map((entry) => entry.doc.id)
+    ) ?? new Map()
 
   const ranked = docs.map((entry) => {
-    const actionStat = stats.get(entry.doc.id)
     const queryStat = queryStats.get(entry.doc.id)
-    const frequency = actionStat?.frequency ?? 0
-    const totalCount = actionStat?.totalCount ?? 0
-    const successCount = actionStat?.successCount ?? 0
-    const successRate = totalCount > 0 ? successCount / totalCount : 0
     const queryTotalCount = queryStat?.totalCount ?? 0
-    const querySuccessRate = queryTotalCount > 0 ? (queryStat?.successCount ?? 0) / queryTotalCount : 0
-    const activityAt =
-      actionStat?.lastUsedAt && actionStat.lastUsedAt > 0
-        ? actionStat.lastUsedAt
-        : entry.doc.updatedAt
+    const querySuccessRate =
+      queryTotalCount > 0 ? (queryStat?.successCount ?? 0) / queryTotalCount : 0
+    const activityAt = entry.doc.updatedAt
 
     const score =
       computeWeightedScore({
         lexical: entry.lexical,
         recencyMs: now - activityAt,
-        frequency,
-        successRate,
+        frequency: 0,
+        successRate: 0,
         category: entry.doc.category,
         fuzzyDistance: entry.fuzzyDistance,
         popularity: entry.doc.popularity,
       }) +
-      computeLearnedUsageBoost({
-        category: entry.doc.category,
-        frequency,
-        successRate,
-        lastUsedAt: actionStat?.lastUsedAt ?? 0,
-        now,
-      }) +
+      // Typed searches learn only from this exact query. Global frequency and
+      // five-minute hot usage belong on the home screen; otherwise repeatedly
+      // opening Library can incorrectly dominate a later "gemini" search.
       computeQueryLearningBoost({
         frequency: queryStat?.frequency ?? 0,
         successRate: querySuccessRate,
@@ -655,6 +691,7 @@ function buildRecommendations(): SearchResult[] {
     frequency: number
     successRate: number
     lastUsedAt: number
+    recentUseCount: number
   }> = indexDb.listRecommendedDocuments(MAX_RESULTS).map((row) => {
     const totalCount = row.totalCount > 0 ? row.totalCount : 0
     const successRate = totalCount > 0 ? row.successCount / totalCount : 0
@@ -668,6 +705,7 @@ function buildRecommendations(): SearchResult[] {
       frequency: row.frequency,
       successRate,
       lastUsedAt: row.lastUsedAt,
+      recentUseCount: row.recentUseCount,
     }
   })
 
@@ -693,6 +731,7 @@ function buildRecommendations(): SearchResult[] {
       frequency: 0,
       successRate: 0,
       lastUsedAt: 0,
+      recentUseCount: 0,
     })
   }
 
@@ -706,7 +745,16 @@ function buildRecommendations(): SearchResult[] {
           frequency: seed.frequency,
           successRate: seed.successRate,
           category: seed.category,
-        }) + recommendationBoost(seed.id)
+        }) +
+        computeLearnedUsageBoost({
+          category: seed.category,
+          frequency: seed.frequency,
+          successRate: seed.successRate,
+          lastUsedAt: seed.lastUsedAt,
+          now,
+        }) +
+        computeHotUsageBoost(seed.recentUseCount) +
+        recommendationBoost(seed.id)
 
       return {
         id: seed.id,
@@ -850,6 +898,7 @@ async function attachOpenPortProcessIcons(
 }
 
 export async function searchEverything(query: string): Promise<SearchResult[]> {
+  getKnowledgeService().notifyInteractiveActivity()
   await bootstrapSearchIndex()
   refreshVolatileProvidersIfStale()
 
@@ -892,14 +941,56 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     return true
   })
   const fileResults = asResults.filter((result) => result.category === 'files')
+  const normalizedQuery = trimmed.toLowerCase()
+  const queryTerms = normalizedQuery.split(/\s+/).filter(Boolean)
+  const hasStrongLocalMatch = resultsWithoutFiles.some((result) => {
+    if (
+      result.category !== 'applications' &&
+      result.category !== 'commands' &&
+      result.category !== 'native-command' &&
+      result.category !== 'extensions' &&
+      result.category !== 'snippets' &&
+      result.category !== 'quick-links'
+    ) {
+      return false
+    }
+
+    const title = result.title.trim().toLowerCase()
+    const titleTerms = title.split(/\s+/).filter(Boolean)
+    return (
+      title === normalizedQuery ||
+      title.startsWith(normalizedQuery) ||
+      queryTerms.every((term) =>
+        titleTerms.some((titleTerm) => titleTerm === term || titleTerm.startsWith(term))
+      )
+    )
+  })
 
   let fallbackFiles: SearchResult[] = []
-  if (trimmed.length > 0 && fileResults.length < 2) {
+  if (!hasStrongLocalMatch && trimmed.length > 0 && fileResults.length < 2) {
     fallbackFiles = await spotlightFallback(trimmed)
   }
 
-  const emojiPickerResult = buildEmojiPickerSearchResult(trimmed)
   const openPortResults = await searchPortManagerOpenPorts(trimmed)
+  const knowledgeHits =
+    !hasStrongLocalMatch && trimmed.length >= 2 ? getKnowledgeService().search(trimmed, 10) : []
+  const seenKnowledgeSources = new Set<string>()
+  const knowledgeResults = knowledgeHits.flatMap((hit): SearchResult[] => {
+    if (seenKnowledgeSources.has(hit.sourceId)) return []
+    seenKnowledgeSources.add(hit.sourceId)
+    const location = hit.pageNumber ? ` · page ${hit.pageNumber}` : ''
+    const excerpt = hit.text.replace(/\s+/g, ' ').trim()
+    return [
+      {
+        id: `knowledge:${hit.chunkId}`,
+        title: hit.title,
+        subtitle: `Knowledge${location} · ${excerpt.slice(0, 180)}`,
+        category: 'knowledge',
+        score: 520 + Math.round(hit.score * 430),
+        action: { type: 'open-file', path: hit.path },
+      },
+    ]
+  })
 
   function quickNoteAddScore(query: string): number {
     const q = query.trim().toLowerCase()
@@ -923,8 +1014,8 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
 
   const results = uniqById([
     ...resultsWithoutFiles,
-    ...emojiPickerResult,
     ...fileResults,
+    ...knowledgeResults,
     ...fallbackFiles,
     ...openPortResults,
     ...noteAdd,
@@ -932,6 +1023,22 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_RESULTS)
   return attachSearchResultIcons(results)
+}
+
+/** Lightweight non-file corpus used by the renderer for zero-wait filtering.
+ * Icons stay lazy and file rows stay in SQLite so this can be safely cached in
+ * the WebView without turning startup into another indexing operation. */
+export async function listSearchCandidates(): Promise<SearchResult[]> {
+  await bootstrapSearchIndex()
+  const rows = indexDb.listRecommendedDocuments(1_000)
+  return rows.map((row, index) => ({
+    id: row.id,
+    title: row.title,
+    subtitle: row.subtitle,
+    category: row.category,
+    score: rows.length - index,
+    action: indexDb.parseAction(row.actionJson),
+  }))
 }
 
 function expandUserPath(input: string): string {
@@ -1339,7 +1446,10 @@ export async function completePath(query: string, limit = 50): Promise<PathCompl
     const apps = listApplications()
       .filter((item) => appMatchesTerm(item.name, appTerm))
       .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, limit)
+    // Launchpad mode is a complete application browser. The grid lazy-loads
+    // icons as they enter the viewport, so returning every installed app is
+    // both inexpensive and avoids truncating the alphabet at the default
+    // path-completion limit.
     return apps.map((item, index) => installedApplicationItem(item, index))
   }
 
@@ -1498,76 +1608,65 @@ async function searchPortManagerOpenPorts(query: string): Promise<SearchResult[]
     .slice(0, 12)
 }
 
-function buildEmojiPickerSearchResult(query: string): SearchResult[] {
-  const n = query.trim().toLowerCase()
-  if (!n) return []
-  const emojiActionStats = indexDb
-    .getActionStats(['native:open-emoji-picker'])
-    .get('native:open-emoji-picker')
-  const recentUseBoost = (() => {
-    if (!emojiActionStats?.lastUsedAt) return 0
-    const ageMs = Date.now() - emojiActionStats.lastUsedAt
-    if (ageMs < 5 * 60 * 1000) return 1000
-    if (ageMs < 60 * 60 * 1000) return 550
-    if (ageMs < 24 * 60 * 60 * 1000) return 180
-    return 0
-  })()
-  const shortPrefixBoost =
-    n === 'e' ? 920 : n.startsWith('em') ? 760 : n.startsWith('emo') ? 920 : 0
-  const shouldShow =
-    n.includes('emoji') ||
-    n.startsWith('emo') ||
-    n === 'e' ||
-    n.includes('smiley') ||
-    n.includes('emoticon') ||
-    n.includes('symbol') ||
-    n === '/emoji'
-  if (!shouldShow) return []
-  return [
-    {
-      id: 'native:open-emoji-picker',
-      title: 'Emoji Picker',
-      subtitle: 'Browse and copy emojis by name, mood, and category.',
-      category: 'native-command',
-      score: 2600 + shortPrefixBoost + recentUseBoost,
-      action: { type: 'run-native-command', commandId: 'open-emoji-picker' },
-    },
-  ]
-}
-
 export async function listOpenPorts(): Promise<OpenPortProcess[]> {
   if (process.platform === 'win32') {
     try {
       const { stdout } = await execFileAsync('netstat.exe', ['-ano', '-p', 'tcp'])
-      const pids = Array.from(new Set(
-        stdout.split(/\r?\n/).map((line) => line.trim().split(/\s+/).at(-1) ?? '').filter((pid) => /^\d+$/.test(pid))
-      ))
+      const pids = Array.from(
+        new Set(
+          stdout
+            .split(/\r?\n/)
+            .map((line) => line.trim().split(/\s+/).at(-1) ?? '')
+            .filter((pid) => /^\d+$/.test(pid))
+        )
+      )
       const names = new Map<string, string>()
-      await Promise.all(pids.map(async (pid) => {
-        try {
-          const { stdout: task } = await execFileAsync('tasklist.exe', ['/fi', `PID eq ${pid}`, '/fo', 'csv', '/nh'])
-          const match = task.match(/^"([^"]+)"/)
-          if (match) names.set(pid, match[1])
-        } catch { /* Best-effort process names only. */ }
-      }))
+      await Promise.all(
+        pids.map(async (pid) => {
+          try {
+            const { stdout: task } = await execFileAsync('tasklist.exe', [
+              '/fi',
+              `PID eq ${pid}`,
+              '/fo',
+              'csv',
+              '/nh',
+            ])
+            const match = task.match(/^"([^"]+)"/)
+            if (match) names.set(pid, match[1])
+          } catch {
+            /* Best-effort process names only. */
+          }
+        })
+      )
       const grouped = new Map<string, { process: string; pid: string; ports: Set<number> }>()
       for (const line of stdout.split(/\r?\n/)) {
         const parts = line.trim().split(/\s+/)
-        if (parts.length < 5 || parts[0]?.toUpperCase() !== 'TCP' || parts[3]?.toUpperCase() !== 'LISTENING') continue
+        if (
+          parts.length < 5 ||
+          parts[0]?.toUpperCase() !== 'TCP' ||
+          parts[3]?.toUpperCase() !== 'LISTENING'
+        )
+          continue
         const port = Number(parts[1]?.match(/:(\d+)$/)?.[1])
         const pid = parts[4]
         if (!Number.isFinite(port) || !pid) continue
         const key = `${pid}:${names.get(pid) ?? 'unknown'}`
-        const row = grouped.get(key) ?? { process: names.get(pid) ?? 'unknown', pid, ports: new Set<number>() }
+        const row = grouped.get(key) ?? {
+          process: names.get(pid) ?? 'unknown',
+          pid,
+          ports: new Set<number>(),
+        }
         row.ports.add(port)
         grouped.set(key, row)
       }
-      return Array.from(grouped.values()).map((row) => ({
-        process: row.process,
-        user: 'current user',
-        pid: row.pid,
-        ports: Array.from(row.ports).sort((a, b) => a - b),
-      })).sort((a, b) => a.process.localeCompare(b.process) || a.pid.localeCompare(b.pid))
+      return Array.from(grouped.values())
+        .map((row) => ({
+          process: row.process,
+          user: 'current user',
+          pid: row.pid,
+          ports: Array.from(row.ports).sort((a, b) => a - b),
+        }))
+        .sort((a, b) => a.process.localeCompare(b.process) || a.pid.localeCompare(b.pid))
     } catch (error) {
       console.error('[OpenPorts] Failed to list Windows listening ports:', error)
       return []
@@ -1594,7 +1693,9 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
     case 'open-app': {
       if (process.platform === 'win32' && action.appPath) {
         const opened = await shell.openPath(action.appPath)
-        return opened ? { ok: false, message: opened } : { ok: true, message: `Opened ${action.appName}` }
+        return opened
+          ? { ok: false, message: opened }
+          : { ok: true, message: `Opened ${action.appName}` }
       }
       await execFileAsync('open', ['-a', action.appName])
       return { ok: true, message: `Opened ${action.appName}` }
@@ -1636,7 +1737,12 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
       app.hide()
       await new Promise<void>((resolve) => setTimeout(resolve, 50))
       if (process.platform === 'win32') {
-        await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '(New-Object -ComObject WScript.Shell).SendKeys("^v")'])
+        await execFileAsync('powershell.exe', [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          '(New-Object -ComObject WScript.Shell).SendKeys("^v")',
+        ])
       } else {
         await execFileAsync('osascript', [
           '-e',

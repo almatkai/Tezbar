@@ -61,17 +61,17 @@ describe('extension preference onboarding', () => {
       JSON.stringify({
         name: 'credential-gate-fixture',
         title: 'Credential Gate Fixture',
-        preferences: [
-          { name: 'apiKey', title: 'API Key', type: 'password', required: false },
+        preferences: [{ name: 'apiKey', title: 'API Key', type: 'password', required: false }],
+        commands: [
+          {
+            name: 'index',
+            title: 'Index',
+            mode: 'view',
+            preferences: [
+              { name: 'resultLimit', title: 'Result Limit', type: 'dropdown', required: false },
+            ],
+          },
         ],
-        commands: [{
-          name: 'index',
-          title: 'Index',
-          mode: 'view',
-          preferences: [
-            { name: 'resultLimit', title: 'Result Limit', type: 'dropdown', required: false },
-          ],
-        }],
       })
     )
     writeFileSync(
@@ -178,9 +178,74 @@ describe('extension runtime API compatibility', () => {
         source: 'avatar.png',
         mask: 'circle',
       })
-      expect(result.root.children[0].props.accessories).toEqual([
-        { text: 'roundedRectangle' },
+      expect(result.root.children[0].props.accessories).toEqual([{ text: 'roundedRectangle' }])
+    } finally {
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('extension runtime form changes', () => {
+  it('rerenders conditional form controls after a file picker changes', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-form-change-extension-'))
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({
+        name: 'form-change-fixture',
+        title: 'Form Change Fixture',
+        commands: [{ name: 'index', title: 'Index', mode: 'view' }],
+      })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'index.js'),
+      `const React = require('react').default
+       const { Form } = require('@raycast/api')
+       module.exports.default = function Command() {
+         const [files, setFiles] = React.useState([])
+         const [format, setFormat] = React.useState('.jpg')
+         return React.createElement(Form, null,
+           React.createElement(Form.FilePicker, { id: 'files', title: 'Select files', value: files, onChange: setFiles }),
+           files.length > 0 && React.createElement(React.Fragment, null,
+             React.createElement(Form.Dropdown, { id: 'format', title: 'Select output format', value: format, onChange: setFormat },
+               React.createElement(Form.Dropdown.Section, { title: 'Images' },
+                 React.createElement(Form.Dropdown.Item, { title: '.jpg', value: '.jpg' }),
+                 React.createElement(Form.Dropdown.Item, { title: '.png', value: '.png' }))),
+             React.createElement(Form.Separator),
+             React.createElement(Form.Description, { title: 'Save to', text: 'Same folder as input' }),
+             React.createElement(Form.Checkbox, { id: 'private', title: 'Privacy', label: 'Strip metadata', value: false, onChange: () => undefined })))
+       }`
+    )
+
+    try {
+      const initial = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index'
+      )
+      expect(initial.ok, JSON.stringify(initial)).toBe(true)
+      if (!initial.ok || initial.mode !== 'view') return
+      expect(initial.root.children.map((child) => child.type)).toEqual(['Form.FilePicker'])
+
+      const filePickerActionId = initial.root.children[0].props.actionId
+      expect(filePickerActionId).toEqual(expect.any(String))
+      const changed = await invokeExtensionAction({
+        sessionId: initial.sessionId,
+        actionId: String(filePickerActionId),
+        formValues: { value: ['/tmp/result-clear.png'] },
+      })
+
+      expect(changed.ok, JSON.stringify(changed)).toBe(true)
+      if (!changed.ok || changed.mode !== 'view') return
+      expect(changed.root.children.map((child) => child.type)).toEqual([
+        'Form.FilePicker',
+        'Form.Dropdown',
+        'Form.Separator',
+        'Form.Description',
+        'Form.Checkbox',
       ])
+      expect(changed.root.children[0].props.value).toEqual(['/tmp/result-clear.png'])
+      expect(changed.root.children[1].props.value).toBe('.jpg')
+      expect(changed.root.children[1].props.actionId).toEqual(expect.any(String))
     } finally {
       rmSync(extensionRoot, { recursive: true, force: true })
     }
@@ -405,7 +470,10 @@ describe('extension runtime list pagination', () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-utils-extension-'))
     const databasePath = join(extensionRoot, 'fixture.sqlite')
     mkdirSync(join(extensionRoot, 'src'))
-    execFileSync('/usr/bin/sqlite3', [databasePath, 'create table items (name text); insert into items values ("ready");'])
+    execFileSync('/usr/bin/sqlite3', [
+      databasePath,
+      'create table items (name text); insert into items values ("ready");',
+    ])
     writeFileSync(
       join(extensionRoot, 'package.json'),
       JSON.stringify({

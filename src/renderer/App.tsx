@@ -13,6 +13,7 @@ const SettingsView = React.lazy(() => import('./SettingsView'))
 const ExtensionsView = React.lazy(() => import('./ExtensionsView'))
 const ExtensionRuntimeView = React.lazy(() => import('./ExtensionRuntimeView'))
 const OpenPortsView = React.lazy(() => import('./OpenPortsView'))
+const IndexingView = React.lazy(() => import('./IndexingView'))
 const PermissionsView = React.lazy(() => import('./PermissionsView'))
 const ClipboardView = React.lazy(() => import('./ClipboardView'))
 const NotesView = React.lazy(() => import('./NotesView'))
@@ -32,6 +33,7 @@ type Surface =
   | 'extensions'
   | 'extension-runtime'
   | 'open-ports'
+  | 'indexing'
   | 'permissions'
   | 'clipboard'
   | 'snippets'
@@ -39,12 +41,12 @@ type Surface =
   | 'emoji-picker'
   | 'terminal'
 
-type SettingsTab = 'general' | 'ai' | 'voice' | 'extensions' | 'permissions' | 'storage' | 'advanced'
+type SettingsTab = 'general' | 'ai' | 'voice' | 'knowledge' | 'extensions' | 'permissions' | 'storage' | 'advanced'
 
 const SETTINGS_TAB_STORAGE_KEY = 'tezbar:settings-tab'
 
 function normalizeSettingsTab(tab: unknown): SettingsTab {
-  return tab === 'ai' || tab === 'voice' || tab === 'extensions' || tab === 'permissions' || tab === 'storage' || tab === 'advanced'
+  return tab === 'ai' || tab === 'voice' || tab === 'knowledge' || tab === 'extensions' || tab === 'permissions' || tab === 'storage' || tab === 'advanced'
     ? tab
     : 'general'
 }
@@ -62,6 +64,7 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
   extensions: '[aria-label="Extensions"]',
   'extension-runtime': '[aria-label="Extension Runtime"]',
   'open-ports': '[aria-label="Open Ports"]',
+  indexing: '[aria-label="Indexing Status"]',
   permissions: '[aria-label="Permissions"]',
   clipboard: '[aria-label="Clipboard History"]',
   snippets: '[aria-label="Snippets"]',
@@ -457,6 +460,13 @@ function LauncherApp(): JSX.Element {
                 setSurface('command')
               }}
             />
+          ) : surface === 'indexing' ? (
+            <IndexingView
+              onBack={() => setSurface('command')}
+              onOpenSettings={() => {
+                void openNativeSettings('knowledge')
+              }}
+            />
           ) : surface === 'permissions' ? (
             <PermissionsView onBack={() => setSurface('settings')} />
           ) : surface === 'clipboard' ? (
@@ -530,6 +540,10 @@ function LauncherApp(): JSX.Element {
               onOpenPortsPage={(opts) => {
                 setOpenPortsInitialTab(opts?.tab ?? 'listen')
                 setSurface('open-ports')
+              }}
+              onOpenIndexingPage={() => {
+                setCommandInitialValue('')
+                setSurface('indexing')
               }}
               onOpenClipboardPage={() => setSurface('clipboard')}
               onOpenSnippetsPage={() => setSurface('snippets')}

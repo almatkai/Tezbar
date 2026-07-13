@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { emitTo, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { RaymesApi } from '../shared/desktop-api'
-import type { TerminalSessionsAction } from '../shared/terminal'
+import { formatTerminalSessionName, type TerminalSessionsAction } from '../shared/terminal'
 
 type TauriRaymesApi = RaymesApi & {
   moveMouse: (x: number, y: number) => Promise<unknown>
@@ -150,6 +150,7 @@ export async function initTauriBridge(): Promise<void> {
     getExtensionPreferenceSetup: (payload: any) => callBackend('preferences:setup', payload),
     saveExtensionPreferences: (payload: any) => callBackend('preferences:set', payload),
     searchAll: (query: string) => callBackend('search:all', query),
+    listSearchCandidates: () => callBackend('search:candidates'),
     completePath: (query: string) => callBackend('path:complete', query),
     recordDirectoryVisit: (path: string) => callBackend('directory-visit:record', path),
     runSearchBenchmark: () => callBackend('search:benchmark:run'),
@@ -247,15 +248,21 @@ export async function initTauriBridge(): Promise<void> {
       // process is down, the native PTY still works — don't fail the open.
       let summary: any = null
       try {
-        summary = await callBackend('terminal:native-create', {
-          sessionId: created.sessionId,
-          shell: created.shell,
-          cwd: created.cwd,
-          initialCommand: request?.initialCommand,
-          name: request?.name,
-          saveFor: request?.saveFor,
-          keepAliveFor: request?.keepAliveFor,
-        })
+        summary = request?.restoreSessionId
+          ? await callBackend('terminal:native-restore', {
+              sessionId: created.sessionId,
+              shell: created.shell,
+              cwd: created.cwd,
+            })
+          : await callBackend('terminal:native-create', {
+              sessionId: created.sessionId,
+              shell: created.shell,
+              cwd: created.cwd,
+              initialCommand: request?.initialCommand,
+              name: request?.name,
+              saveFor: request?.saveFor,
+              keepAliveFor: request?.keepAliveFor,
+            })
       } catch (error: unknown) {
         console.warn('[Tauri bridge] terminal:native-create failed (backend down?):', error)
       }
@@ -286,19 +293,59 @@ export async function initTauriBridge(): Promise<void> {
     },
     terminalDetach: async (sessionId: string) =>
       Boolean(await invoke('native_terminal_detach', { sessionId })),
-    terminalList: () => callBackend('terminal:list'),
+    terminalList: async () => {
+      const listed = await callBackend('terminal:list')
+      const sessions = Array.isArray(listed)
+        ? await Promise.all(
+            listed.map(async (session: any) => {
+              if (session?.status !== 'running' || typeof session?.sessionId !== 'string') {
+                return session
+              }
+              try {
+                const cwd = await invoke<string | null>('native_terminal_cwd', {
+                  sessionId: session.sessionId,
+                })
+                if (!cwd || cwd === session.cwd) return session
+                return (
+                  (await callBackend('terminal:update', {
+                    sessionId: session.sessionId,
+                    cwd,
+                    name: formatTerminalSessionName(
+                      cwd,
+                      session.lastCommand ?? session.initialCommand ?? ''
+                    ),
+                  })) ?? session
+                )
+              } catch {
+                return session
+              }
+            })
+          )
+        : listed
+      if (Array.isArray(sessions)) {
+        void invoke('native_terminal_prune_history', {
+          sessionIds: sessions
+            .map((session: any) => session?.sessionId)
+            .filter((sessionId: unknown): sessionId is string => typeof sessionId === 'string'),
+        }).catch((error: unknown) => {
+          console.warn('[Tauri bridge] terminal history pruning failed:', error)
+        })
+      }
+      return sessions
+    },
     terminalUpdate: (request: any) => callBackend('terminal:update', request),
     terminalWrite: (sessionId: string, data: string) =>
       invoke('native_terminal_write', { sessionId, data }),
     terminalResize: (sessionId: string, cols: number, rows: number) =>
       invoke('native_terminal_resize', { sessionId, cols, rows }),
+    terminalGetCwd: (sessionId: string) => invoke('native_terminal_cwd', { sessionId }),
     terminalKill: async (sessionId: string) => {
       const killed = Boolean(await invoke('native_terminal_kill', { sessionId }))
       if (killed) {
         await callBackend('terminal:native-exit', { sessionId, exitCode: 0 }).catch(
           (error: unknown) => {
             console.error('[Tauri bridge] terminal:native-exit failed:', error)
-          },
+          }
         )
       }
       return killed
@@ -309,10 +356,16 @@ export async function initTauriBridge(): Promise<void> {
         await callBackend('terminal:native-exit', { sessionId, exitCode: 0 }).catch(
           (error: unknown) => {
             console.error('[Tauri bridge] terminal:native-exit failed:', error)
-          },
+          }
         )
       }
-      return Boolean(await callBackend('terminal:delete', { sessionId }))
+      const deleted = Boolean(await callBackend('terminal:delete', { sessionId }))
+      if (deleted) {
+        await invoke('native_terminal_delete_history', { sessionId }).catch((error: unknown) => {
+          console.warn('[Tauri bridge] terminal history deletion failed:', error)
+        })
+      }
+      return deleted
     },
     getTerminalPromptInfo: () => callBackend('terminal:get-prompt-info'),
     terminalSessionsShow: () => invoke('terminal_sessions_show'),
@@ -329,6 +382,22 @@ export async function initTauriBridge(): Promise<void> {
     clearClipboardImages: () => callBackend('storage:clear-clipboard-images'),
     vacuumSearchDatabase: () => callBackend('storage:vacuum-search-db'),
     clearChromiumCache: () => callBackend('storage:clear-chromium-cache'),
+    listBackgroundTasks: () => callBackend('background-tasks:list'),
+    getKnowledgeSnapshot: () => callBackend('knowledge:snapshot'),
+    listKnowledgeSources: (input) => callBackend('knowledge:sources:list', input ?? {}),
+    chooseKnowledgeFolder: () => callBackend('knowledge:choose-folder'),
+    addKnowledgeRoot: (path: string) => callBackend('knowledge:root:add', path),
+    addMajorKnowledgeRoots: () => callBackend('knowledge:roots:add-major'),
+    removeKnowledgeRoot: (rootId: string) => callBackend('knowledge:root:remove', rootId),
+    setKnowledgeRootEnabled: (rootId: string, enabled: boolean) =>
+      callBackend('knowledge:root:set-enabled', { rootId, enabled }),
+    setKnowledgeDepth: (depth) => callBackend('knowledge:depth:set', depth),
+    setKnowledgeRootDepth: (rootId, depth) =>
+      callBackend('knowledge:root:set-depth', { rootId, depth }),
+    startKnowledgeIndexing: () => callBackend('knowledge:index:start'),
+    pauseKnowledgeIndexing: () => callBackend('knowledge:index:pause'),
+    resumeKnowledgeIndexing: () => callBackend('knowledge:index:resume'),
+    onKnowledgeStatus: (listener) => setupEventListener('knowledge:status', listener),
 
     agentRun: (request) => callBackend('agent:run', request),
     captureActiveScreen: async () => {

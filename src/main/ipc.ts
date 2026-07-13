@@ -114,6 +114,7 @@ import {
   recordDirectoryVisit,
   recordSearchActionUsage,
   getSearchBenchmarkHistory,
+  listSearchCandidates,
   listOpenPorts,
   reindexExtensions,
   reindexQuickNotes,
@@ -142,6 +143,8 @@ import {
   transcribeAudio,
 } from './voice/service'
 import type { VoiceModelId } from '../shared/voice'
+import type { KnowledgeDepth, KnowledgeRootDepth } from '../shared/knowledge'
+import { listBackgroundTasks } from './backgroundTasks'
 import { requestPermission, snapshotPermissions } from './permissions/manager'
 import type { PermissionId } from '../shared/permissions'
 import { clearSafetyLog, listSafetyLog } from './safety/log'
@@ -170,10 +173,12 @@ import {
   deleteTerminalSession,
   detachTerminalSession,
   getTerminalPromptInfo,
+  getTerminalSessionCwd,
   killTerminalSession,
   listTerminalSessions,
   markNativeTerminalSessionAttached,
   markNativeTerminalSessionExited,
+  markNativeTerminalSessionRestored,
   recordNativeTerminalSession,
   resizeTerminalSession,
   shutdownTerminalSessions,
@@ -194,6 +199,7 @@ import {
   setClipboardStorageConfig,
   vacuumSearchDatabase,
 } from './storage/service'
+import { chooseKnowledgeFolder, getKnowledgeService } from './knowledge/service'
 
 const LLM_DEFAULTS = {
   uiStateRetentionMs: 60_000,
@@ -851,6 +857,12 @@ export function registerIpcHandlers(
     if (body.initialCommand !== undefined && typeof body.initialCommand !== 'string') {
       throw new Error('Invalid initial terminal command')
     }
+    if (body.restoreSessionId !== undefined && typeof body.restoreSessionId !== 'string') {
+      throw new Error('Invalid terminal session to restore')
+    }
+    if (body.restoreCommand !== undefined && typeof body.restoreCommand !== 'string') {
+      throw new Error('Invalid restored terminal command')
+    }
     if (body.name !== undefined && typeof body.name !== 'string') {
       throw new Error('Invalid terminal session name')
     }
@@ -915,8 +927,7 @@ export function registerIpcHandlers(
     }
     if (body.initialCommand !== undefined && typeof body.initialCommand !== 'string') return null
     if (body.name !== undefined && typeof body.name !== 'string') return null
-    const initialCommand =
-      typeof body.initialCommand === 'string' ? body.initialCommand : undefined
+    const initialCommand = typeof body.initialCommand === 'string' ? body.initialCommand : undefined
     const name = typeof body.name === 'string' ? body.name : undefined
     const saveFor =
       body.saveFor === 'day' ||
@@ -949,6 +960,23 @@ export function registerIpcHandlers(
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return null
     return markNativeTerminalSessionAttached(body.sessionId)
+  })
+
+  ipcMain.handle('terminal:native-restore', async (_event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return null
+    const body = raw as { sessionId?: unknown; shell?: unknown; cwd?: unknown }
+    if (
+      typeof body.sessionId !== 'string' ||
+      typeof body.shell !== 'string' ||
+      typeof body.cwd !== 'string'
+    ) {
+      return null
+    }
+    return markNativeTerminalSessionRestored({
+      sessionId: body.sessionId,
+      shell: body.shell,
+      cwd: body.cwd,
+    })
   })
 
   ipcMain.handle('terminal:native-exit', async (_event, raw: unknown) => {
@@ -984,6 +1012,13 @@ export function registerIpcHandlers(
       return false
     }
     return resizeTerminalSession(event.sender.id, body.sessionId, body.cols, body.rows)
+  })
+
+  ipcMain.handle(TERMINAL_IPC.GET_CWD, async (event, raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return null
+    const body = raw as { sessionId?: unknown }
+    if (typeof body.sessionId !== 'string') return null
+    return getTerminalSessionCwd(event.sender.id, body.sessionId)
   })
 
   ipcMain.handle(TERMINAL_IPC.KILL, async (event, raw: unknown) => {
@@ -1598,6 +1633,71 @@ export function registerIpcHandlers(
     const q = typeof query === 'string' ? query : ''
     return searchEverything(q)
   })
+
+  ipcMain.handle(IPC_CHANNELS.SEARCH_CANDIDATES, async () => listSearchCandidates())
+
+  ipcMain.handle('knowledge:snapshot', async () => getKnowledgeService().snapshot())
+
+  ipcMain.handle('background-tasks:list', async () => listBackgroundTasks())
+
+  ipcMain.handle('knowledge:sources:list', async (_event, payload: unknown) => {
+    const body =
+      payload && typeof payload === 'object'
+        ? (payload as { query?: unknown; offset?: unknown; limit?: unknown })
+        : {}
+    return getKnowledgeService().listSources({
+      query: typeof body.query === 'string' ? body.query : '',
+      offset: typeof body.offset === 'number' ? body.offset : 0,
+      limit: typeof body.limit === 'number' ? body.limit : 200,
+    })
+  })
+
+  ipcMain.handle('knowledge:choose-folder', async () => chooseKnowledgeFolder())
+
+  ipcMain.handle('knowledge:root:add', async (_event, path: unknown) => {
+    if (typeof path !== 'string') throw new Error('A folder path is required')
+    return getKnowledgeService().addRoot(path)
+  })
+
+  ipcMain.handle('knowledge:roots:add-major', async () => getKnowledgeService().addMajorRoots())
+
+  ipcMain.handle('knowledge:root:remove', async (_event, rootId: unknown) => {
+    if (typeof rootId !== 'string') throw new Error('A knowledge folder id is required')
+    return getKnowledgeService().removeRoot(rootId)
+  })
+
+  ipcMain.handle('knowledge:root:set-enabled', async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') throw new Error('Invalid knowledge folder update')
+    const body = payload as { rootId?: unknown; enabled?: unknown }
+    if (typeof body.rootId !== 'string' || typeof body.enabled !== 'boolean') {
+      throw new Error('Invalid knowledge folder update')
+    }
+    return getKnowledgeService().setRootEnabled(body.rootId, body.enabled)
+  })
+
+  ipcMain.handle('knowledge:depth:set', async (_event, depth: unknown) => {
+    if (typeof depth !== 'string' || !['off', 'basic', 'smart', 'deep'].includes(depth)) {
+      throw new Error('Invalid Knowledge Depth')
+    }
+    return getKnowledgeService().setDepth(depth as KnowledgeDepth)
+  })
+
+  ipcMain.handle('knowledge:root:set-depth', async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') throw new Error('Invalid folder Knowledge Depth')
+    const body = payload as { rootId?: unknown; depth?: unknown }
+    if (
+      typeof body.rootId !== 'string' ||
+      typeof body.depth !== 'string' ||
+      !['inherit', 'off', 'basic', 'smart', 'deep'].includes(body.depth)
+    ) {
+      throw new Error('Invalid folder Knowledge Depth')
+    }
+    return getKnowledgeService().setRootDepth(body.rootId, body.depth as KnowledgeRootDepth)
+  })
+
+  ipcMain.handle('knowledge:index:start', async () => getKnowledgeService().startIndexing())
+  ipcMain.handle('knowledge:index:pause', async () => getKnowledgeService().pause())
+  ipcMain.handle('knowledge:index:resume', async () => getKnowledgeService().resume())
 
   ipcMain.handle(IPC_CHANNELS.PATH_COMPLETE, async (_event, query: unknown) => {
     const q = typeof query === 'string' ? query : ''

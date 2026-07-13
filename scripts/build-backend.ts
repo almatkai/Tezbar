@@ -8,11 +8,15 @@ async function runBuild(): Promise<void> {
 
   console.log('Building TypeScript backend runner with esbuild...')
   await build({
-    entryPoints: [join(root, 'src/main/server.ts')],
+    entryPoints: {
+      main: join(root, 'src/main/server.ts'),
+      'knowledge-worker': join(root, 'src/main/knowledge/worker.ts'),
+    },
     bundle: true,
     platform: 'node',
     target: 'node22',
-    outfile: join(root, 'dist-backend/main.js'),
+    outdir: join(root, 'dist-backend'),
+    entryNames: '[name]',
     define: {
       __RAYMES_PI_POLICY_SOURCE__: JSON.stringify(
         readFileSync(join(root, 'src/main/agent/raymes-pi-policy.ts'), 'utf8')
@@ -31,7 +35,7 @@ async function runBuild(): Promise<void> {
     minify: false,
     format: 'cjs'
   })
-  console.log('TypeScript backend runner built successfully at dist-backend/main.js')
+  console.log('TypeScript backend runners built successfully at dist-backend/')
 }
 
 runBuild().catch((err) => {

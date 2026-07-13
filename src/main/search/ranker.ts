@@ -28,6 +28,7 @@ type QueryLearningFeatures = {
 const CATEGORY_PRIOR: Record<SearchCategory, number> = {
   applications: 0.72,
   files: 0.6,
+  knowledge: 0.64,
   clipboard: 0.45,
   /** Was 0.4 (lowest), which pushed real quick notes below random `*notes*` files. */
   'quick-notes': 0.68,
@@ -82,7 +83,8 @@ export function computeLearnedUsageBoost(input: LearnedUsageFeatures): number {
   const now = input.now ?? Date.now()
   const ageMs = Math.max(0, now - input.lastUsedAt)
   const oneDay = 24 * 60 * 60 * 1000
-  const recencyBoost = ageMs < oneDay ? 360 : ageMs < 7 * oneDay ? 220 : ageMs < 30 * oneDay ? 100 : 0
+  const recencyBoost =
+    ageMs < oneDay ? 360 : ageMs < 7 * oneDay ? 220 : ageMs < 30 * oneDay ? 100 : 0
   const frequencyBoost = Math.min(900, Math.log2(input.frequency + 1) * 220)
   const successBoost = input.successRate >= 0.5 ? 120 : 0
 
@@ -95,11 +97,22 @@ export function computeQueryLearningBoost(input: QueryLearningFeatures): number 
   const now = input.now ?? Date.now()
   const ageMs = Math.max(0, now - input.lastUsedAt)
   const oneDay = 24 * 60 * 60 * 1000
-  const recencyBoost = ageMs < oneDay ? 1250 : ageMs < 7 * oneDay ? 900 : ageMs < 30 * oneDay ? 550 : 250
+  const recencyBoost =
+    ageMs < oneDay ? 1250 : ageMs < 7 * oneDay ? 900 : ageMs < 30 * oneDay ? 550 : 250
   const frequencyBoost = Math.min(1200, Math.log2(input.frequency + 1) * 350)
   const successBoost = input.successRate >= 0.5 ? 150 : 0
 
   return Math.round(recencyBoost + frequencyBoost + successBoost)
+}
+
+/** A short burst is stronger intent than lifetime frequency. Three successful
+ * uses inside the five-minute window should dominate the home recommendations,
+ * then decay naturally as those persisted events leave the window. */
+export function computeHotUsageBoost(recentUseCount: number): number {
+  if (recentUseCount <= 0) return 0
+  if (recentUseCount === 1) return 180
+  if (recentUseCount === 2) return 600
+  return Math.min(3600, 2600 + (recentUseCount - 3) * 250)
 }
 
 export function computeWeightedScore(input: RankFeatures): number {
@@ -122,7 +135,12 @@ export function computeWeightedScore(input: RankFeatures): number {
   return Math.round(weighted * 1000)
 }
 
-export function shouldPreferRecent(leftScore: number, leftAgeMs: number, rightScore: number, rightAgeMs: number): boolean {
+export function shouldPreferRecent(
+  leftScore: number,
+  leftAgeMs: number,
+  rightScore: number,
+  rightAgeMs: number
+): boolean {
   const gap = Math.abs(leftScore - rightScore)
   if (gap > 20) return false
   return leftAgeMs < rightAgeMs

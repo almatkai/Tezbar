@@ -1,15 +1,18 @@
 import Cocoa
+import PDFKit
 import Vision
 
 enum HelperError: LocalizedError {
   case invalidArguments
   case captureFailed
   case screenRecordingPermissionDenied
+  case documentOpenFailed
 
   var errorDescription: String? {
     switch self {
     case .invalidArguments: return "Invalid ScreenOCR helper arguments"
     case .captureFailed: return "Failed to capture an image"
+    case .documentOpenFailed: return "Failed to open the document"
     case .screenRecordingPermissionDenied:
       return "Screen Recording permission is required. Enable Raymes in System Settings > Privacy & Security > Screen & System Audio Recording."
     }
@@ -100,15 +103,29 @@ func capturedImage(_ values: [String: Any], fullscreen: Bool) throws -> CGImage 
   return image
 }
 
-func recognizeText(_ values: [String: Any]) throws -> String {
-  let image = try capturedImage(values, fullscreen: bool(values, "fullscreen"))
+func recognizeTextDetails(_ image: CGImage, values: [String: Any]) throws -> [String: Any] {
   var result = ""
+  var blocks: [[String: Any]] = []
   var requestError: Error?
   let ignoreLineBreaks = bool(values, "ignoreLineBreaks")
   let request = VNRecognizeTextRequest { request, error in
     requestError = error
     guard let observations = request.results as? [VNRecognizedTextObservation] else { return }
-    result = observations.compactMap { $0.topCandidates(1).first?.string }
+    blocks = observations.compactMap { observation in
+      guard let candidate = observation.topCandidates(1).first else { return nil }
+      let box = observation.boundingBox
+      return [
+        "text": candidate.string,
+        "confidence": Double(candidate.confidence),
+        "bounds": [
+          "x": Double(box.origin.x),
+          "y": Double(box.origin.y),
+          "width": Double(box.size.width),
+          "height": Double(box.size.height),
+        ],
+      ]
+    }
+    result = blocks.compactMap { $0["text"] as? String }
       .joined(separator: ignoreLineBreaks ? " " : "\n")
   }
   request.recognitionLevel = bool(values, "fast") ? .fast : .accurate
@@ -119,7 +136,65 @@ func recognizeText(_ values: [String: Any]) throws -> String {
   request.customWords = strings(values, "customWordsList")
   try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
   if let requestError { throw requestError }
+  let confidences = blocks.compactMap { $0["confidence"] as? Double }
+  let averageConfidence = confidences.isEmpty
+    ? nil
+    : confidences.reduce(0, +) / Double(confidences.count)
+  var output: [String: Any] = ["text": result, "blocks": blocks]
+  if let averageConfidence { output["averageConfidence"] = averageConfidence }
+  return output
+}
+
+func recognizeText(_ values: [String: Any]) throws -> String {
+  let image = try capturedImage(values, fullscreen: bool(values, "fullscreen"))
+  return try recognizeTextDetails(image, values: values)["text"] as? String ?? ""
+}
+
+func recognizeFile(_ values: [String: Any]) throws -> [String: Any] {
+  let image = try capturedImage(values, fullscreen: false)
+  var result = try recognizeTextDetails(image, values: values)
+  result["width"] = image.width
+  result["height"] = image.height
   return result
+}
+
+func pdfPageImage(_ page: PDFPage) -> CGImage? {
+  let bounds = page.bounds(for: .mediaBox)
+  guard bounds.width > 0, bounds.height > 0 else { return nil }
+  let maxDimension: CGFloat = 1800
+  let scale = min(maxDimension / max(bounds.width, bounds.height), 2.5)
+  let size = NSSize(width: max(1, bounds.width * scale), height: max(1, bounds.height * scale))
+  let thumbnail = page.thumbnail(of: size, for: .mediaBox)
+  guard let data = thumbnail.tiffRepresentation,
+        let bitmap = NSBitmapImageRep(data: data) else { return nil }
+  return bitmap.cgImage
+}
+
+func extractPdf(_ values: [String: Any]) throws -> [String: Any] {
+  guard let documentPath = values["documentPath"] as? String,
+        let document = PDFDocument(url: URL(fileURLWithPath: documentPath)) else {
+    throw HelperError.documentOpenFailed
+  }
+  let requestedMax = values["maxPages"] as? Int ?? document.pageCount
+  let pageLimit = min(document.pageCount, max(0, requestedMax))
+  let shouldOcr = bool(values, "ocrScannedPages", default: true)
+  let requestedOcrMax = values["maxOcrPages"] as? Int ?? pageLimit
+  let ocrPageLimit = max(0, requestedOcrMax)
+  let ocrEveryPage = bool(values, "ocrEveryPage")
+  var ocrPages = 0
+  var pages: [[String: Any]] = []
+  for index in 0..<pageLimit {
+    guard let page = document.page(at: index) else { continue }
+    let extracted = page.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    var row: [String: Any] = ["pageNumber": index + 1, "extractedText": extracted]
+    if shouldOcr && ocrPages < ocrPageLimit && (ocrEveryPage || extracted.count < 32),
+       let image = pdfPageImage(page) {
+      row["ocr"] = try recognizeTextDetails(image, values: values)
+      ocrPages += 1
+    }
+    pages.append(row)
+  }
+  return ["pages": pages, "totalPages": document.pageCount]
 }
 
 func detectBarcode(_ values: [String: Any]) throws -> String {
@@ -148,9 +223,11 @@ do {
         let values = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
     throw HelperError.invalidArguments
   }
-  let value: String
+  let value: Any
   switch CommandLine.arguments[1] {
   case "recognize-text": value = try recognizeText(values)
+  case "recognize-file": value = try recognizeFile(values)
+  case "extract-pdf": value = try extractPdf(values)
   case "detect-barcode": value = try detectBarcode(values)
   default: throw HelperError.invalidArguments
   }

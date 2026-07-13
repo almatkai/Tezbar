@@ -5,6 +5,17 @@ import '@xterm/xterm/css/xterm.css'
 import { cx, Hint, HintBar, Kbd, SelectField, TextField } from './ui/primitives'
 import { readTerminalDefaults, type TerminalDefaults } from './terminalPreferences'
 import {
+  terminalSessionRestoreOptions,
+  terminalSessionShortcutIndex,
+} from './terminalSessionSelection'
+import { terminalOutputAfterSnapshot } from './terminalSessionHistory'
+import {
+  commandFromTerminalLine,
+  formatTerminalSessionName,
+  normalizeTerminalCommand,
+  terminalDirectoryLabel,
+} from './terminalSessionLabel'
+import {
   type TerminalDataEvent,
   type TerminalExitEvent,
   type TerminalKeepAliveFor,
@@ -25,6 +36,13 @@ const KEEP_ALIVE_OPTIONS: Array<{ value: TerminalKeepAliveFor; label: string }> 
   { value: 'day', label: 'Day' },
   { value: 'until-stop', label: 'Until stop' },
 ]
+
+const DEFAULT_TERMINAL_FONT_SIZE = 12
+const MIN_TERMINAL_FONT_SIZE = 8
+const MAX_TERMINAL_FONT_SIZE = 24
+const TERMINAL_ZOOM_STEP = 1
+
+type TerminalZoomAction = 'in' | 'out' | 'reset'
 
 function terminalTheme(): ITerminalOptions['theme'] {
   return {
@@ -58,19 +76,6 @@ type ConfigDraft = {
   keepAliveFor: TerminalKeepAliveFor
 }
 
-function formatDynamicSessionName(cwd: string, lastCommand: string): string {
-  const parts = cwd.split('/').filter(Boolean)
-  const codeIndex = parts.lastIndexOf('code')
-  const compactPath =
-    codeIndex >= 0 && parts[codeIndex + 1]
-      ? `code/${parts[codeIndex + 1]}`
-      : parts[parts.length - 1] || '~'
-
-  const command = lastCommand.trim().replace(/\s+/g, ' ')
-  return command ? `${compactPath} ${command}` : compactPath
-}
-
-
 export default function TerminalView({
   initialCommand,
   initialSessionId,
@@ -101,31 +106,56 @@ export default function TerminalView({
     defaults: defaults ?? readTerminalDefaults(),
   })
   const bootedRef = useRef(false)
+  const terminalFontSizeRef = useRef(DEFAULT_TERMINAL_FONT_SIZE)
   // Buffer data that arrives before the terminal has been attached to a session.
   const pendingOutputRef = useRef<Map<string, string>>(new Map())
+  const replayingSessionIdRef = useRef<string | null>(null)
   const sessionCwds = useRef<Map<string, string>>(new Map())
   const sessionCommands = useRef<Map<string, string>>(new Map())
   const lastActiveNames = useRef<Map<string, string>>(new Map())
   const inputBuffers = useRef<Map<string, string>>(new Map())
+  const cwdRefreshGenerations = useRef<Map<string, number>>(new Map())
 
   const updateSessionName = useCallback((sessId: string, cwd: string, lastCommand: string) => {
-    const newName = formatDynamicSessionName(cwd, lastCommand)
+    const newName = formatTerminalSessionName(cwd, lastCommand)
     if (lastActiveNames.current.get(sessId) === newName) return
     lastActiveNames.current.set(sessId, newName)
 
-    void window.tezbar.terminalUpdate({
-      sessionId: sessId,
-      name: newName,
-      cwd,
-      lastCommand,
-    }).then((updated) => {
-      if (updated) {
-        setSessions((prev) =>
-          prev.map((s) => (s.sessionId === updated.sessionId ? updated : s))
-        )
-      }
-    })
+    void window.tezbar
+      .terminalUpdate({
+        sessionId: sessId,
+        name: newName,
+        cwd,
+        lastCommand,
+      })
+      .then((updated) => {
+        if (updated) {
+          sessionCwds.current.set(sessId, updated.cwd)
+          setSessions((prev) =>
+            prev.map((s) => (s.sessionId === updated.sessionId ? updated : s)),
+          )
+        }
+      })
   }, [])
+
+  const refreshSessionCwd = useCallback(
+    (sessionId: string, lastCommand: string): void => {
+      const generation = (cwdRefreshGenerations.current.get(sessionId) ?? 0) + 1
+      cwdRefreshGenerations.current.set(sessionId, generation)
+      for (const delay of [80, 350, 1_200]) {
+        window.setTimeout(() => {
+          if (!terminalRef.current) return
+          if (cwdRefreshGenerations.current.get(sessionId) !== generation) return
+          void window.tezbar.terminalGetCwd(sessionId).then((cwd) => {
+            if (!cwd || cwdRefreshGenerations.current.get(sessionId) !== generation) return
+            sessionCwds.current.set(sessionId, cwd)
+            updateSessionName(sessionId, cwd, lastCommand)
+          })
+        }, delay)
+      }
+    },
+    [updateSessionName],
+  )
 
   const [terminalReady, setTerminalReady] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -133,6 +163,7 @@ export default function TerminalView({
   const [shellName, setShellName] = useState('Shell')
   const [configOpen, setConfigOpen] = useState(false)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [terminalFontSize, setTerminalFontSize] = useState(DEFAULT_TERMINAL_FONT_SIZE)
   const [configDraft, setConfigDraft] = useState<ConfigDraft>({
     name: '',
     saveFor: 'week',
@@ -143,6 +174,15 @@ export default function TerminalView({
     () => sessions.find((session) => session.sessionId === activeSessionId) ?? null,
     [activeSessionId, sessions],
   )
+  const activeSessionDirectory = activeSession
+    ? terminalDirectoryLabel(activeSession.cwd)
+    : shellName
+  const activeSessionCommand = normalizeTerminalCommand(
+    activeSession?.lastCommand ?? activeSession?.initialCommand,
+  )
+  const activeSessionTitle = activeSession
+    ? formatTerminalSessionName(activeSession.cwd, activeSessionCommand)
+    : shellName
 
   useEffect(() => {
     onBackRef.current = onBack
@@ -190,9 +230,35 @@ export default function TerminalView({
     }
   }, [])
 
+  const updateTerminalZoom = useCallback(
+    (action: TerminalZoomAction): void => {
+      const current = terminalFontSizeRef.current
+      const next =
+        action === 'reset'
+          ? DEFAULT_TERMINAL_FONT_SIZE
+          : Math.min(
+              MAX_TERMINAL_FONT_SIZE,
+              Math.max(
+                MIN_TERMINAL_FONT_SIZE,
+                current + (action === 'in' ? TERMINAL_ZOOM_STEP : -TERMINAL_ZOOM_STEP)
+              )
+            )
+      if (next === current) return
+
+      terminalFontSizeRef.current = next
+      setTerminalFontSize(next)
+      const terminal = terminalRef.current
+      if (terminal) terminal.options.fontSize = next
+      window.requestAnimationFrame(fit)
+    },
+    [fit]
+  )
+
   const createSession = useCallback(
     async (opts?: {
       initialCommand?: string
+      restoreSessionId?: string
+      restoreCommand?: string
       workingDirectory?: string
       name?: string
       saveFor?: TerminalSaveFor
@@ -203,6 +269,8 @@ export default function TerminalView({
       const result = await window.tezbar.terminalCreate({
         cwd: opts?.workingDirectory,
         initialCommand: opts?.initialCommand,
+        restoreSessionId: opts?.restoreSessionId,
+        restoreCommand: opts?.restoreCommand,
         name: opts?.name,
         saveFor: opts?.saveFor ?? bootRef.current.defaults.saveFor,
         keepAliveFor: opts?.keepAliveFor ?? bootRef.current.defaults.keepAliveFor,
@@ -222,12 +290,7 @@ export default function TerminalView({
         setActiveSessionId(session.sessionId)
         return
       }
-      await createSession({
-        workingDirectory: session.cwd,
-        name: session.name,
-        saveFor: session.saveFor,
-        keepAliveFor: session.keepAliveFor,
-      })
+      await createSession(terminalSessionRestoreOptions(session))
     },
     [createSession],
   )
@@ -250,9 +313,11 @@ export default function TerminalView({
       cursorStyle: 'bar',
       convertEol: true,
       fontFamily: '"SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, monospace',
-      fontSize: 12,
+      fontSize: terminalFontSizeRef.current,
       lineHeight: 1.22,
-      scrollback: 5000,
+      // Native history is durable and unbounded on disk. Keep a generous
+      // interactive buffer so restored sessions remain browsable in xterm.
+      scrollback: 1_000_000,
       theme: terminalTheme(),
     })
     const fitAddon = new FitAddon()
@@ -263,6 +328,7 @@ export default function TerminalView({
 
     let disposed = false
     let resizeFrame = 0
+    let wheelZoomAccumulator = 0
 
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type === 'keydown' && event.metaKey && event.key === '[') {
@@ -286,7 +352,10 @@ export default function TerminalView({
     }
 
     const offData = window.tezbar.onTerminalData((event: TerminalDataEvent) => {
-      if (event.sessionId === activeSessionIdRef.current) {
+      if (
+        event.sessionId === activeSessionIdRef.current &&
+        event.sessionId !== replayingSessionIdRef.current
+      ) {
         terminal.write(event.data)
       } else {
         // Buffer output that arrives before the active session ID is committed
@@ -308,34 +377,17 @@ export default function TerminalView({
       void window.tezbar.terminalWrite(sessionId, data)
 
       const submitCommand = (): void => {
-        const buf = (inputBuffers.current.get(sessionId) ?? '').trim()
+        const buffer = terminal.buffer.active
+        const renderedLine =
+          buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? ''
+        const buf =
+          commandFromTerminalLine(renderedLine) ??
+          normalizeTerminalCommand(inputBuffers.current.get(sessionId))
         if (buf) {
           const cmd = buf.split('\n').pop()?.trim() || buf
           sessionCommands.current.set(sessionId, cmd)
 
-          // Detect cd commands to update tracked CWD
-          const cdMatch = cmd.match(/^cd(?:\s+(.+))?$/)
-          if (cdMatch) {
-            const currentCwd = sessionCwds.current.get(sessionId) || ''
-            let target = (cdMatch[1] ?? '~').replace(/^['"]|['"]$/g, '').trim()
-            if (target === '~' || target === '') {
-              target = `/Users/${currentCwd.split('/')[2] || 'user'}`
-            } else if (target.startsWith('~/')) {
-              target = `/Users/${currentCwd.split('/')[2] || 'user'}/${target.slice(2)}`
-            } else if (!target.startsWith('/')) {
-              target = `${currentCwd}/${target}`.replace(/\/+/g, '/')
-            }
-            // Resolve .. in path
-            const resolved = target.split('/').reduce<string[]>((acc, part) => {
-              if (part === '..') acc.pop()
-              else if (part && part !== '.') acc.push(part)
-              return acc
-            }, [])
-            sessionCwds.current.set(sessionId, '/' + resolved.join('/'))
-          }
-
-          const cwd = sessionCwds.current.get(sessionId) || ''
-          if (cwd) updateSessionName(sessionId, cwd, cmd)
+          refreshSessionCwd(sessionId, cmd)
         }
         inputBuffers.current.set(sessionId, '')
       }
@@ -360,6 +412,23 @@ export default function TerminalView({
     })
 
     const onWindowKeyDown = (event: KeyboardEvent): void => {
+      const zoomModifier = event.metaKey || event.ctrlKey
+      if (zoomModifier && !event.altKey) {
+        const zoomAction: TerminalZoomAction | null =
+          event.key === '+' || event.key === '=' || event.code === 'NumpadAdd'
+            ? 'in'
+            : event.key === '-' || event.code === 'NumpadSubtract'
+              ? 'out'
+              : event.key === '0' || event.code === 'Numpad0'
+                ? 'reset'
+                : null
+        if (zoomAction) {
+          event.preventDefault()
+          event.stopPropagation()
+          updateTerminalZoom(zoomAction)
+          return
+        }
+      }
       if (event.key === 'Escape') {
         if (configOpenRef.current) {
           event.preventDefault()
@@ -378,15 +447,9 @@ export default function TerminalView({
         setConfigOpen(true)
         return
       }
-      if (
-        event.altKey &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.shiftKey &&
-        /^[1-9]$/.test(event.key)
-      ) {
-        const index = Number(event.key) - 1
-        const session = sessionsRef.current[index]
+      const sessionIndex = terminalSessionShortcutIndex(event)
+      if (sessionIndex !== null) {
+        const session = sessionsRef.current[sessionIndex]
         if (!session) return
         event.preventDefault()
         event.stopPropagation()
@@ -394,9 +457,23 @@ export default function TerminalView({
       }
     }
 
+    const onZoomWheel = (event: WheelEvent): void => {
+      if (!event.metaKey && !event.ctrlKey) {
+        wheelZoomAccumulator = 0
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      wheelZoomAccumulator += event.deltaY
+      if (Math.abs(wheelZoomAccumulator) < 40) return
+      updateTerminalZoom(wheelZoomAccumulator < 0 ? 'in' : 'out')
+      wheelZoomAccumulator = 0
+    }
+
     const resizeObserver = new ResizeObserver(scheduleFit)
     resizeObserver.observe(host)
     window.addEventListener('keydown', onWindowKeyDown, true)
+    host.addEventListener('wheel', onZoomWheel, { passive: false })
 
     scheduleFit()
     setTerminalReady(true)
@@ -409,6 +486,7 @@ export default function TerminalView({
       lastAttachedSessionIdRef.current = null
       activeSessionIdRef.current = null
       window.removeEventListener('keydown', onWindowKeyDown, true)
+      host.removeEventListener('wheel', onZoomWheel)
       cancelAnimationFrame(resizeFrame)
       resizeObserver.disconnect()
       inputDisposable.dispose()
@@ -418,7 +496,7 @@ export default function TerminalView({
       terminalRef.current = null
       fitAddonRef.current = null
     }
-  }, [fit, refreshSessions, restoreSavedSession, updateSessionName])
+  }, [fit, refreshSessionCwd, refreshSessions, restoreSavedSession, updateTerminalZoom])
 
   useEffect(() => {
     if (!terminalReady || bootedRef.current) return
@@ -445,7 +523,7 @@ export default function TerminalView({
       }
       setActiveSessionId(mostRecentRunning.sessionId)
     })()
-  }, [createSession, refreshSessions, terminalReady])
+  }, [createSession, refreshSessions, restoreSavedSession, terminalReady])
 
   useEffect(() => {
     const terminal = terminalRef.current
@@ -457,6 +535,7 @@ export default function TerminalView({
       void window.tezbar.terminalDetach(previous)
     }
     lastAttachedSessionIdRef.current = activeSessionId
+    replayingSessionIdRef.current = activeSessionId
 
     terminal.reset()
     void window.tezbar
@@ -468,11 +547,12 @@ export default function TerminalView({
       .then(async (result) => {
         if (cancelled) return
         if (!result) {
+          replayingSessionIdRef.current = null
           await refreshSessions()
           return
         }
         setShellName(result.shell.split('/').pop() || result.shell)
-        const cwd = result.summary?.cwd ?? result.cwd
+        const cwd = result.cwd || result.summary?.cwd
         const lastCommand =
           sessionCommands.current.get(activeSessionId) ??
           result.summary?.lastCommand ??
@@ -483,17 +563,21 @@ export default function TerminalView({
         updateSessionName(activeSessionId, cwd, lastCommand)
 
         if (result.recentOutput) terminal.write(result.recentOutput)
-        // Flush output that arrived before the session ID was committed to state.
+        // Output can arrive while the durable snapshot is in flight. Replay
+        // only the suffix that was not already captured in that snapshot.
         const buffered = pendingOutputRef.current.get(activeSessionId)
         if (buffered) {
-          terminal.write(buffered)
+          const afterSnapshot = terminalOutputAfterSnapshot(result.recentOutput, buffered)
+          if (afterSnapshot) terminal.write(afterSnapshot)
           pendingOutputRef.current.delete(activeSessionId)
         }
+        replayingSessionIdRef.current = null
         fit()
         terminal.focus()
         await refreshSessions()
       })
       .catch((error: unknown) => {
+        replayingSessionIdRef.current = null
         terminal.writeln(
           `\x1b[31mCould not restore terminal: ${error instanceof Error ? error.message : String(error)}\x1b[0m`,
         )
@@ -501,6 +585,9 @@ export default function TerminalView({
 
     return () => {
       cancelled = true
+      if (replayingSessionIdRef.current === activeSessionId) {
+        replayingSessionIdRef.current = null
+      }
     }
   }, [activeSessionId, fit, refreshSessions, updateSessionName])
 
@@ -535,10 +622,57 @@ export default function TerminalView({
       )}
     >
       <header className="glass-card relative z-30 flex h-11 shrink-0 items-center justify-between px-5 shadow-[0_18px_45px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight text-ink-1" title={activeSession?.name ?? shellName}>
-          {activeSession?.name ?? shellName}
-        </span>
-        <div className="relative flex items-center">
+        <div className="flex min-w-0 flex-1 items-center pr-4" title={activeSessionTitle}>
+          <span className="max-w-[42%] shrink-0 truncate text-[13px] font-semibold tracking-tight text-ink-1">
+            {activeSessionDirectory}
+          </span>
+          {activeSessionCommand ? (
+            <>
+              <span
+                aria-hidden
+                className="mx-2.5 h-3.5 w-px shrink-0 bg-gradient-to-b from-transparent via-emerald-300/45 to-transparent"
+              />
+              <span className="min-w-0 truncate font-mono text-[11px] font-medium text-emerald-100/65">
+                {activeSessionCommand}
+              </span>
+            </>
+          ) : null}
+        </div>
+        <div className="no-drag mr-2 flex shrink-0 items-center rounded-lg border border-white/[0.08] bg-black/15 p-0.5">
+          <button
+            type="button"
+            aria-label="Zoom terminal out"
+            title="Zoom out (⌘−)"
+            disabled={terminalFontSize <= MIN_TERMINAL_FONT_SIZE}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => updateTerminalZoom('out')}
+            className="grid h-5 w-5 place-items-center rounded-md text-[13px] text-ink-3 transition hover:bg-white/[0.07] hover:text-ink-1 disabled:cursor-default disabled:opacity-30"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            aria-label="Reset terminal zoom"
+            title="Reset zoom (⌘0)"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => updateTerminalZoom('reset')}
+            className="h-5 min-w-9 rounded-md px-1 font-mono text-[9px] tabular-nums text-ink-4 transition hover:bg-white/[0.07] hover:text-ink-2"
+          >
+            {Math.round((terminalFontSize / DEFAULT_TERMINAL_FONT_SIZE) * 100)}%
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom terminal in"
+            title="Zoom in (⌘+)"
+            disabled={terminalFontSize >= MAX_TERMINAL_FONT_SIZE}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => updateTerminalZoom('in')}
+            className="grid h-5 w-5 place-items-center rounded-md text-[13px] text-ink-3 transition hover:bg-white/[0.07] hover:text-ink-1 disabled:cursor-default disabled:opacity-30"
+          >
+            +
+          </button>
+        </div>
+        <div className="relative flex shrink-0 items-center">
           <button
             type="button"
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -609,7 +743,7 @@ export default function TerminalView({
                           </span>
                         </span>
                         <span className="mt-0.5 shrink-0 rounded border border-white/10 bg-black/20 px-1 py-0.5 text-[8.5px] font-semibold text-ink-4">
-                          ⌥{index + 1}
+                          ⌘{index + 1}
                         </span>
                       </button>
                     )
@@ -621,14 +755,14 @@ export default function TerminalView({
         </div>
       </header>
 
-      <div className="glass-card relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#10131d]/92 shadow-[0_24px_60px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.035)] p-3">
+      <div className="glass-card no-drag relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#10131d]/92 shadow-[0_24px_60px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.035)] p-3">
         <div ref={hostRef} className="terminal-host h-full w-full overflow-hidden" />
       </div>
 
       <div className="glass-card relative z-20 flex h-10 shrink-0 items-center px-5 shadow-[0_18px_45px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.035)]">
         <HintBar>
           <Hint label="Configure" keys={<><Kbd>⌘</Kbd><Kbd>K</Kbd></>} />
-          <Hint label="Switch sessions" keys={<><Kbd>⌥</Kbd><Kbd>1-9</Kbd></>} />
+          <Hint label="Switch sessions" keys={<><Kbd>⌘</Kbd><Kbd>1-9</Kbd></>} />
           <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
           <Hint label="Back" keys={<><Kbd>⌘</Kbd><Kbd>[</Kbd></>} />
         </HintBar>

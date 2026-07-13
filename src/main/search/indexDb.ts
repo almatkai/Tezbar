@@ -29,6 +29,7 @@ type RecommendedIndexRow = {
   successCount: number
   totalCount: number
   lastUsedAt: number
+  recentUseCount: number
 }
 
 type ActionStats = {
@@ -37,10 +38,16 @@ type ActionStats = {
   successCount: number
   totalCount: number
   lastUsedAt: number
+  recentUseCount: number
 }
 
-type QueryActionStats = ActionStats & {
+type QueryActionStats = {
   query: string
+  actionId: string
+  frequency: number
+  successCount: number
+  totalCount: number
+  lastUsedAt: number
 }
 
 function normalizeStoredQuery(query: string): string {
@@ -62,17 +69,19 @@ function safeJsonParse<T>(value: string, fallback: T): T {
 }
 
 const CLICK_EVENTS_RETAIN = 1000
+const ACTION_USAGE_EVENTS_RETAIN = 5000
 const BENCHMARK_SNAPSHOTS_RETAIN = 50
+const HOT_USAGE_WINDOW_MS = 5 * 60 * 1000
 
 export async function readBenchmarkHistory() {
-  return [];
+  return []
 }
 
 export async function runOfflineBenchmarks(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _searchFn: (q: string) => Promise<unknown[]>,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _db: unknown,
+  _db: unknown
 ) {
   // Benchmark implementation omitted for brevity
 }
@@ -156,6 +165,15 @@ export class SearchIndexDatabase {
         PRIMARY KEY (query, action_id)
       );
 
+      CREATE TABLE IF NOT EXISTS action_usage_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_action_usage_events_action_time
+      ON action_usage_events(action_id, created_at DESC);
+
       CREATE TABLE IF NOT EXISTS benchmark_snapshots (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         created_at INTEGER NOT NULL,
@@ -188,14 +206,21 @@ export class SearchIndexDatabase {
         .prepare(
           `DELETE FROM click_events WHERE id NOT IN (
             SELECT id FROM click_events ORDER BY id DESC LIMIT ?
-          )`,
+          )`
         )
         .run(CLICK_EVENTS_RETAIN)
       this.db
         .prepare(
+          `DELETE FROM action_usage_events WHERE id NOT IN (
+            SELECT id FROM action_usage_events ORDER BY id DESC LIMIT ?
+          )`
+        )
+        .run(ACTION_USAGE_EVENTS_RETAIN)
+      this.db
+        .prepare(
           `DELETE FROM benchmark_snapshots WHERE id NOT IN (
             SELECT id FROM benchmark_snapshots ORDER BY id DESC LIMIT ?
-          )`,
+          )`
         )
         .run(BENCHMARK_SNAPSHOTS_RETAIN)
     } catch (error) {
@@ -244,7 +269,7 @@ export class SearchIndexDatabase {
 
     const deleteFts = this.db.prepare('DELETE FROM documents_fts WHERE id = ?')
     const insertFts = this.db.prepare(
-      'INSERT INTO documents_fts (id, title, subtitle, tokens) VALUES (?, ?, ?, ?)',
+      'INSERT INTO documents_fts (id, title, subtitle, tokens) VALUES (?, ?, ?, ?)'
     )
 
     const upsertTx = this.db.transaction((rows: IndexedDocument[]) => {
@@ -259,7 +284,7 @@ export class SearchIndexDatabase {
           Math.round(row.updatedAt || Date.now()),
           row.sourcePath ?? null,
           row.sourceMtime ? Math.round(row.sourceMtime) : null,
-          row.popularity ?? 0,
+          row.popularity ?? 0
         )
         deleteFts.run(row.id)
         insertFts.run(row.id, row.title, row.subtitle, row.tokens)
@@ -275,9 +300,9 @@ export class SearchIndexDatabase {
   }
 
   removeDocumentsByCategory(category: SearchCategory): number {
-    const ids = this.db
-      .prepare('SELECT id FROM documents WHERE category = ?')
-      .all(category) as { id: string }[]
+    const ids = this.db.prepare('SELECT id FROM documents WHERE category = ?').all(category) as {
+      id: string
+    }[]
     if (ids.length === 0) return 0
     const delDoc = this.db.prepare('DELETE FROM documents WHERE id = ?')
     const delFts = this.db.prepare('DELETE FROM documents_fts WHERE id = ?')
@@ -291,12 +316,9 @@ export class SearchIndexDatabase {
     return ids.length
   }
 
-  replaceDocumentsByCategory(
-    category: SearchCategory,
-    documents: IndexedDocument[],
-  ): void {
+  replaceDocumentsByCategory(category: SearchCategory, documents: IndexedDocument[]): void {
     const deleteFts = this.db.prepare(
-      'DELETE FROM documents_fts WHERE id IN (SELECT id FROM documents WHERE category = ?)',
+      'DELETE FROM documents_fts WHERE id IN (SELECT id FROM documents WHERE category = ?)'
     )
     const deleteDocuments = this.db.prepare('DELETE FROM documents WHERE category = ?')
     const replaceTx = this.db.transaction(() => {
@@ -332,12 +354,23 @@ export class SearchIndexDatabase {
                 WHERE documents_fts MATCH ?
                 ORDER BY bm25Score ASC
                 LIMIT ?
-              `,
+              `
             )
             .all(ftsQuery, candidateLimit)
         : []
 
-    const mapped = (rows as Array<{ id: string; category: SearchCategory; title: string; subtitle: string; actionJson: string; updatedAt: number; popularity: number; bm25Score: number }>).map((row) => {
+    const mapped = (
+      rows as Array<{
+        id: string
+        category: SearchCategory
+        title: string
+        subtitle: string
+        actionJson: string
+        updatedAt: number
+        popularity: number
+        bm25Score: number
+      }>
+    ).map((row) => {
       const inverseBm25 = Number.isFinite(row.bm25Score)
         ? (() => {
             const negBm25 = Math.max(-row.bm25Score, 0)
@@ -378,7 +411,9 @@ export class SearchIndexDatabase {
 
     if (trimmed === 'process kill' || trimmed === 'timer stop' || trimmed === 'stop timer') {
       const lines: string[] = []
-      lines.push(`[Search DEBUG] query="${trimmed}" ftsQuery="${ftsQuery}" FTS rows=${rows.length} mapped=${mapped.length} fuzzyRows=${fuzzyRows.length}`)
+      lines.push(
+        `[Search DEBUG] query="${trimmed}" ftsQuery="${ftsQuery}" FTS rows=${rows.length} mapped=${mapped.length} fuzzyRows=${fuzzyRows.length}`
+      )
       for (const r of result.slice(0, 10)) {
         lines.push(`  [DEBUG] lex=${r.lexical.toFixed(3)} cat=${r.category} title="${r.title}"`)
       }
@@ -401,7 +436,7 @@ export class SearchIndexDatabase {
           FROM documents
           ORDER BY updated_at DESC
           LIMIT ?
-        `,
+        `
       )
       .all(Math.max(1000, limit * 50)) as Array<{
       id: string
@@ -441,7 +476,11 @@ export class SearchIndexDatabase {
       if (a.lexical !== b.lexical) {
         return b.lexical - a.lexical
       }
-      if (a.fuzzyDistance !== undefined && b.fuzzyDistance !== undefined && a.fuzzyDistance !== b.fuzzyDistance) {
+      if (
+        a.fuzzyDistance !== undefined &&
+        b.fuzzyDistance !== undefined &&
+        a.fuzzyDistance !== b.fuzzyDistance
+      ) {
         return a.fuzzyDistance - b.fuzzyDistance
       }
       return b.updatedAt - a.updatedAt
@@ -461,16 +500,20 @@ export class SearchIndexDatabase {
     const rows = this.db
       .prepare(
         `
-          SELECT action_id AS actionId,
-                 frequency AS frequency,
-                 success_count AS successCount,
-                 total_count AS totalCount,
-                 last_used_at AS lastUsedAt
-          FROM action_stats
-          WHERE action_id IN (${placeholders})
-        `,
+          SELECT a.action_id AS actionId,
+                 a.frequency AS frequency,
+                 a.success_count AS successCount,
+                 a.total_count AS totalCount,
+                 a.last_used_at AS lastUsedAt,
+                 COUNT(recent.id) AS recentUseCount
+          FROM action_stats a
+          LEFT JOIN action_usage_events recent
+            ON recent.action_id = a.action_id AND recent.created_at >= ?
+          WHERE a.action_id IN (${placeholders})
+          GROUP BY a.action_id
+        `
       )
-      .all(...actionIds) as ActionStats[]
+      .all(Date.now() - HOT_USAGE_WINDOW_MS, ...actionIds) as ActionStats[]
 
     return new Map(rows.map((row) => [row.actionId, row]))
   }
@@ -491,7 +534,7 @@ export class SearchIndexDatabase {
                  last_used_at AS lastUsedAt
           FROM query_action_stats
           WHERE query = ? AND action_id IN (${placeholders})
-        `,
+        `
       )
       .all(normalizedQuery, ...actionIds) as QueryActionStats[]
 
@@ -510,7 +553,7 @@ export class SearchIndexDatabase {
           WHERE query = ? AND success_count > 0
           ORDER BY last_used_at DESC, frequency DESC
           LIMIT ?
-        `,
+        `
       )
       .all(normalizedQuery, limit) as Array<{ actionId: string }>
 
@@ -532,7 +575,7 @@ export class SearchIndexDatabase {
                  popularity
           FROM documents
           WHERE id IN (${placeholders})
-        `,
+        `
       )
       .all(...ids) as Array<{
       id: string
@@ -571,19 +614,27 @@ export class SearchIndexDatabase {
                  COALESCE(a.frequency, 0) AS frequency,
                  COALESCE(a.success_count, 0) AS successCount,
                  COALESCE(a.total_count, 0) AS totalCount,
-                 COALESCE(a.last_used_at, 0) AS lastUsedAt
+                 COALESCE(a.last_used_at, 0) AS lastUsedAt,
+                 COALESCE(recent.recentUseCount, 0) AS recentUseCount
           FROM documents d
           LEFT JOIN action_stats a ON a.action_id = d.id
+          LEFT JOIN (
+            SELECT action_id, COUNT(*) AS recentUseCount
+            FROM action_usage_events
+            WHERE created_at >= ?
+            GROUP BY action_id
+          ) recent ON recent.action_id = d.id
           WHERE d.category <> 'files'
           ORDER BY
+            COALESCE(recent.recentUseCount, 0) DESC,
             CASE WHEN COALESCE(a.last_used_at, 0) > 0 THEN 0 ELSE 1 END ASC,
             COALESCE(a.last_used_at, 0) DESC,
             COALESCE(a.frequency, 0) DESC,
             d.updated_at DESC
           LIMIT ?
-        `,
+        `
       )
-      .all(limit) as RecommendedIndexRow[]
+      .all(Date.now() - HOT_USAGE_WINDOW_MS, limit) as RecommendedIndexRow[]
   }
 
   recordAction(actionId: string, success: boolean): void {
@@ -598,9 +649,15 @@ export class SearchIndexDatabase {
             success_count = action_stats.success_count + excluded.success_count,
             total_count = action_stats.total_count + 1,
             last_used_at = excluded.last_used_at
-        `,
+        `
       )
       .run(actionId, success ? 1 : 0, now)
+
+    if (success) {
+      this.db
+        .prepare('INSERT INTO action_usage_events (action_id, created_at) VALUES (?, ?)')
+        .run(actionId, now)
+    }
   }
 
   recordActionForQuery(query: string, actionId: string, success: boolean): void {
@@ -618,7 +675,7 @@ export class SearchIndexDatabase {
             success_count = query_action_stats.success_count + excluded.success_count,
             total_count = query_action_stats.total_count + 1,
             last_used_at = excluded.last_used_at
-        `,
+        `
       )
       .run(normalizedQuery, actionId, success ? 1 : 0, now)
   }
@@ -626,7 +683,7 @@ export class SearchIndexDatabase {
   recordClick(query: string, resultId: string, rank: number, success: boolean): void {
     this.db
       .prepare(
-        'INSERT INTO click_events (created_at, query, result_id, rank, success) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO click_events (created_at, query, result_id, rank, success) VALUES (?, ?, ?, ?, ?)'
       )
       .run(Date.now(), query, resultId, rank, success ? 1 : 0)
   }
@@ -643,12 +700,19 @@ export class SearchIndexDatabase {
   writeBenchmarkSnapshot(precisionAt5: number, precisionAt10: number, benchmarkSize: number): void {
     this.db
       .prepare(
-        'INSERT INTO benchmark_snapshots (created_at, precision_at_5, precision_at_10, avg_click_rank, benchmark_size) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO benchmark_snapshots (created_at, precision_at_5, precision_at_10, avg_click_rank, benchmark_size) VALUES (?, ?, ?, ?, ?)'
       )
       .run(Date.now(), precisionAt5, precisionAt10, this.readRecentClickAverage(), benchmarkSize)
   }
 
-  readBenchmarkHistory(limit = 40): Array<{ createdAt: number; precisionAt5: number; precisionAt10: number; avgClickRank: number }> {
+  readBenchmarkHistory(
+    limit = 40
+  ): Array<{
+    createdAt: number
+    precisionAt5: number
+    precisionAt10: number
+    avgClickRank: number
+  }> {
     return this.db
       .prepare(
         `SELECT created_at AS createdAt,
@@ -658,9 +722,14 @@ export class SearchIndexDatabase {
         FROM benchmark_snapshots
         ORDER BY id DESC
         LIMIT ?
-      `,
+      `
       )
-      .all(limit) as Array<{ createdAt: number; precisionAt5: number; precisionAt10: number; avgClickRank: number }>
+      .all(limit) as Array<{
+      createdAt: number
+      precisionAt5: number
+      precisionAt10: number
+      avgClickRank: number
+    }>
   }
 
   // Session cache for search results

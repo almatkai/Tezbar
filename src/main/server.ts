@@ -7,6 +7,9 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { createConnection } from 'node:net'
+import { getKnowledgeService } from './knowledge/service'
+import { stopKnowledgeAgentGateway } from './knowledge/agent/gateway'
+import { warmSearchIndex } from './search/service'
 
 declare const __RAYMES_PI_POLICY_SOURCE__: string
 
@@ -53,6 +56,10 @@ function fixPathSync(): void {
 
 fixPathSync()
 materializePiPolicy()
+void warmSearchIndex().catch((error: unknown) => {
+  console.warn('[server] failed to warm the cached search index:', error)
+})
+getKnowledgeService()
 
 // A rejected fire-and-forget integration must not take down every backend
 // feature. Individual operations should still catch their own errors; this is
@@ -176,6 +183,8 @@ function cleanup(): void {
     stopClipboardWatcher()
     shutdownIpcHandlers()
     flushConfig()
+    getKnowledgeService().shutdown()
+    void stopKnowledgeAgentGateway()
   } catch (err) {
     console.error('[server] error during cleanup:', err)
   }

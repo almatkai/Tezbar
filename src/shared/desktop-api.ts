@@ -5,13 +5,10 @@ import type {
   AgentRunRequest,
 } from './agent'
 import type { ChatSession, ChatSessionSummary, ChatTurn } from './chat'
+import type { BackgroundTask } from './backgroundTasks'
 import type { Intent } from './intent'
 import type { ClipboardEntry, ClipboardImagePayload } from './clipboard'
-import type {
-  ExtensionIntegrityReport,
-  ExtensionManifest,
-  InstalledExtension,
-} from './extensions'
+import type { ExtensionIntegrityReport, ExtensionManifest, InstalledExtension } from './extensions'
 import type {
   ExtensionDisposeSessionRequest,
   ExtensionInvokeActionResult,
@@ -23,6 +20,13 @@ import type {
   InstalledRegistryExtension,
 } from './extensionRuntime'
 import type { LlmConfigRecord, ProviderId } from './llmConfig'
+import type {
+  KnowledgeDepth,
+  KnowledgeRootDepth,
+  KnowledgeSnapshot,
+  KnowledgeSourcesPage,
+  KnowledgeStatus,
+} from './knowledge'
 import type { NativeCommandDescriptor } from './nativeCommands'
 import type { PermissionId, PermissionStatus, PermissionsSnapshot } from './permissions'
 import type { SafetyDescriptor, SafetyLogEntry } from './safety'
@@ -155,6 +159,7 @@ export type RaymesApi = {
     values: Record<string, unknown>
   }) => Promise<Record<string, unknown>>
   searchAll: (query: string) => Promise<SearchResult[]>
+  listSearchCandidates: () => Promise<SearchResult[]>
   completePath: (query: string) => Promise<PathCompletionItem[]>
   recordDirectoryVisit: (path: string) => Promise<void>
   runSearchBenchmark: () => Promise<SearchBenchmarkReport>
@@ -256,6 +261,7 @@ export type RaymesApi = {
   terminalUpdate: (request: TerminalUpdateRequest) => Promise<TerminalSessionSummary | null>
   terminalWrite: (sessionId: string, data: string) => Promise<boolean>
   terminalResize: (sessionId: string, cols: number, rows: number) => Promise<boolean>
+  terminalGetCwd: (sessionId: string) => Promise<string | null>
   terminalKill: (sessionId: string) => Promise<boolean>
   terminalDelete: (sessionId: string) => Promise<boolean>
   getTerminalPromptInfo: () => Promise<TerminalPromptInfo>
@@ -288,6 +294,24 @@ export type RaymesApi = {
 
   vacuumSearchDatabase: () => Promise<{ beforeBytes: number; afterBytes: number }>
   clearChromiumCache: () => Promise<{ ok: boolean }>
+  listBackgroundTasks: () => Promise<BackgroundTask[]>
+  getKnowledgeSnapshot: () => Promise<KnowledgeSnapshot>
+  listKnowledgeSources: (input?: {
+    query?: string
+    offset?: number
+    limit?: number
+  }) => Promise<KnowledgeSourcesPage>
+  chooseKnowledgeFolder: () => Promise<string | null>
+  addKnowledgeRoot: (path: string) => Promise<KnowledgeSnapshot>
+  addMajorKnowledgeRoots: () => Promise<KnowledgeSnapshot>
+  removeKnowledgeRoot: (rootId: string) => Promise<KnowledgeSnapshot>
+  setKnowledgeRootEnabled: (rootId: string, enabled: boolean) => Promise<KnowledgeSnapshot>
+  setKnowledgeDepth: (depth: KnowledgeDepth) => Promise<KnowledgeSnapshot>
+  setKnowledgeRootDepth: (rootId: string, depth: KnowledgeRootDepth) => Promise<KnowledgeSnapshot>
+  startKnowledgeIndexing: () => Promise<KnowledgeSnapshot>
+  pauseKnowledgeIndexing: () => Promise<KnowledgeSnapshot>
+  resumeKnowledgeIndexing: () => Promise<KnowledgeSnapshot>
+  onKnowledgeStatus: (listener: (status: KnowledgeStatus) => void) => () => void
   /** Fired when the user presses ⌘N / Ctrl+N (global) — save command-bar text to notes. */
   onQuickNoteSaveShortcut: (listener: () => void) => () => void
   /** Fired from the top-bar tray menu to open a built-in Tezbar surface. */

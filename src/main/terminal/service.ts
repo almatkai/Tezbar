@@ -1,12 +1,21 @@
 import type { WebContents } from '@tezbar/desktop-runtime'
-import { existsSync, statSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { homedir, hostname, userInfo } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { spawn as spawnChild } from 'node:child_process'
+import { execFileSync, spawn as spawnChild } from 'node:child_process'
 import {
   TERMINAL_IPC,
-  compactTerminalPath,
+  formatTerminalSessionName,
   type TerminalAttachRequest,
   type TerminalAttachResult,
   type TerminalCreateRequest,
@@ -44,6 +53,7 @@ type TerminalSession = {
   pipeMode: boolean
   shell: string
   cwd: string
+  historyPath: string
   summary: TerminalSessionSummary
   outputChunks: string[]
   outputBytes: number
@@ -186,6 +196,7 @@ const persistedSummaries = new Map<string, TerminalSessionSummary>()
 let persistedLoaded = false
 const OUTPUT_REPLAY_LIMIT_BYTES = 512 * 1024
 const TERMINAL_CONFIG_KEY = 'terminalSessions'
+const TERMINAL_HISTORY_DIR = join(homedir(), '.openray', 'terminal-history')
 
 const SAVE_FOR_MS: Record<Exclude<TerminalSaveFor, 'forever'>, number> = {
   day: 24 * 60 * 60 * 1000,
@@ -235,9 +246,65 @@ function resolveExistingWorkingDirectory(raw: string): string | null {
   }
 }
 
+function processWorkingDirectory(pid: number): string | null {
+  try {
+    if (process.platform === 'darwin') {
+      const output = execFileSync(
+        '/usr/sbin/lsof',
+        ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'],
+        { encoding: 'utf8', timeout: 1_000 },
+      )
+      const path = output
+        .split(/\r?\n/)
+        .find((line) => line.startsWith('n'))
+        ?.slice(1)
+      return path ? resolveExistingWorkingDirectory(path) : null
+    }
+    if (process.platform === 'linux') {
+      return resolveExistingWorkingDirectory(readlinkSync(`/proc/${pid}/cwd`))
+    }
+  } catch {
+    // The process may exit between looking it up and reading its cwd.
+  }
+  return null
+}
+
 function normalizeLastCommand(raw: string): string | undefined {
   const command = raw.trim().replace(/\s+/g, ' ')
   return command ? command.slice(0, 4_096) : undefined
+}
+
+function validHistorySessionId(sessionId: string): boolean {
+  return /^[a-zA-Z0-9_-]{1,200}$/.test(sessionId)
+}
+
+function terminalHistoryPath(sessionId: string): string {
+  if (!validHistorySessionId(sessionId)) throw new Error('Invalid terminal session id')
+  mkdirSync(TERMINAL_HISTORY_DIR, { recursive: true, mode: 0o700 })
+  return join(TERMINAL_HISTORY_DIR, `${sessionId}.log`)
+}
+
+function readTerminalHistory(session: TerminalSession): string {
+  try {
+    return readFileSync(session.historyPath, 'utf8')
+  } catch {
+    return session.outputChunks.join('')
+  }
+}
+
+function removeTerminalHistory(sessionId: string): void {
+  if (!validHistorySessionId(sessionId)) return
+  try {
+    rmSync(terminalHistoryPath(sessionId), { force: true })
+  } catch {
+    // History cleanup is best effort; session metadata remains authoritative.
+  }
+}
+
+function legacyTerminalHistory(command: string | undefined): string {
+  const safeCommand = command?.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 4_096)
+  if (!safeCommand) return ''
+  return `[Previous output was not recorded by this app version]\n$ ${safeCommand}\n\n`
 }
 
 function isSaveFor(value: unknown): value is TerminalSaveFor {
@@ -257,14 +324,7 @@ function keepAliveUntil(keepAliveFor: TerminalKeepAliveFor, from: number): numbe
 }
 
 function defaultSessionName(cwd: string, initialCommand?: string): string {
-  const command = initialCommand?.split('\n')[0]?.trim()
-  const parts = cwd.split('/').filter(Boolean)
-  const codeIndex = parts.lastIndexOf('code')
-  const compactPath =
-    codeIndex >= 0 && parts[codeIndex + 1]
-      ? `code/${parts[codeIndex + 1]}`
-      : basename(cwd) || compactTerminalPath(cwd)
-  return command ? `${compactPath} ${command}` : compactPath
+  return formatTerminalSessionName(cwd, initialCommand?.split('\n')[0] ?? '')
 }
 
 function normalizeSessionName(raw: unknown, cwd: string, initialCommand?: string): string {
@@ -320,6 +380,7 @@ function prunePersistedSummaries(now = Date.now()): void {
     if (sessions.has(sessionId)) continue
     if (summary.saveUntil !== undefined && summary.saveUntil <= now) {
       persistedSummaries.delete(sessionId)
+      removeTerminalHistory(sessionId)
       changed = true
     }
   }
@@ -333,6 +394,11 @@ function persistSessionSummary(summary: TerminalSessionSummary): void {
 }
 
 function appendOutput(session: TerminalSession, data: string): void {
+  try {
+    appendFileSync(session.historyPath, data, 'utf8')
+  } catch {
+    // Keep the live terminal functional if durable history is temporarily unavailable.
+  }
   session.outputChunks.push(data)
   session.outputBytes += Buffer.byteLength(data, 'utf8')
   while (session.outputBytes > OUTPUT_REPLAY_LIMIT_BYTES && session.outputChunks.length > 1) {
@@ -457,7 +523,22 @@ export function createTerminalSession(
   request: TerminalCreateRequest,
 ): TerminalCreateResult {
   loadPersistedSummaries()
-  const sessionId = randomUUID()
+  if (request.restoreSessionId && !validHistorySessionId(request.restoreSessionId)) {
+    throw new Error('Invalid terminal session id')
+  }
+  const restoredSummary = request.restoreSessionId
+    ? persistedSummaries.get(request.restoreSessionId)
+    : undefined
+  const sessionId = restoredSummary ? restoredSummary.sessionId : randomUUID()
+  if (sessions.has(sessionId)) throw new Error('Terminal session is already running')
+  const historyPath = terminalHistoryPath(sessionId)
+  if (!restoredSummary) writeFileSync(historyPath, '', { encoding: 'utf8', mode: 0o600 })
+  else if (!existsSync(historyPath) || statSync(historyPath).size === 0) {
+    writeFileSync(historyPath, legacyTerminalHistory(request.restoreCommand), {
+      encoding: 'utf8',
+      mode: 0o600,
+    })
+  }
   const cwd = resolveWorkingDirectory(request.cwd)
   const shell = resolveShell()
   const cols = clampDimension(request.cols, 2, 500)
@@ -471,22 +552,38 @@ export function createTerminalSession(
   const env = terminalEnvironment()
   const ptyProcess = spawnBunPipeTerminal(shell, args, cwd, env, cols, rows)
 
-  const summary: TerminalSessionSummary = {
-    sessionId,
-    name: normalizeSessionName(request.name, cwd, request.initialCommand),
-    cwd,
-    shell,
-    initialCommand: request.initialCommand?.trim() || undefined,
-    lastCommand: request.initialCommand ? normalizeLastCommand(request.initialCommand) : undefined,
-    createdAt: now,
-    updatedAt: now,
-    lastActiveAt: now,
-    saveFor,
-    keepAliveFor,
-    saveUntil: saveUntil(saveFor, now),
-    status: 'running',
-    pid: ptyProcess.pid,
-  }
+  const summary: TerminalSessionSummary = restoredSummary
+    ? {
+        ...restoredSummary,
+        cwd,
+        shell,
+        updatedAt: now,
+        lastActiveAt: now,
+        saveUntil: saveUntil(restoredSummary.saveFor, now),
+        keepAliveUntil: undefined,
+        status: 'running',
+        exitCode: undefined,
+        signal: undefined,
+        pid: ptyProcess.pid,
+      }
+    : {
+        sessionId,
+        name: normalizeSessionName(request.name, cwd, request.initialCommand),
+        cwd,
+        shell,
+        initialCommand: request.initialCommand?.trim() || undefined,
+        lastCommand: request.initialCommand
+          ? normalizeLastCommand(request.initialCommand)
+          : undefined,
+        createdAt: now,
+        updatedAt: now,
+        lastActiveAt: now,
+        saveFor,
+        keepAliveFor,
+        saveUntil: saveUntil(saveFor, now),
+        status: 'running',
+        pid: ptyProcess.pid,
+      }
   const session: TerminalSession = {
     ownerId: sender.id,
     attachedSenders: new Map([[sender.id, sender]]),
@@ -494,6 +591,7 @@ export function createTerminalSession(
     pipeMode: Boolean(process.versions.bun),
     shell,
     cwd,
+    historyPath,
     summary,
     outputChunks: [],
     outputBytes: 0,
@@ -548,7 +646,7 @@ export function attachTerminalSession(
     sessionId: request.sessionId,
     shell: session.shell,
     cwd: session.cwd,
-    recentOutput: session.outputChunks.join(''),
+    recentOutput: readTerminalHistory(session),
     summary: { ...session.summary },
   }
 }
@@ -670,6 +768,29 @@ export function markNativeTerminalSessionAttached(
   return { ...summary }
 }
 
+export function markNativeTerminalSessionRestored(request: {
+  sessionId: string
+  shell: string
+  cwd: string
+}): TerminalSessionSummary | null {
+  loadPersistedSummaries()
+  const summary = persistedSummaries.get(request.sessionId)
+  if (!summary) return null
+  const now = Date.now()
+  summary.shell = request.shell
+  summary.cwd = resolveExistingWorkingDirectory(request.cwd) ?? summary.cwd
+  summary.updatedAt = now
+  summary.lastActiveAt = now
+  summary.status = 'running'
+  summary.exitCode = undefined
+  summary.signal = undefined
+  summary.pid = undefined
+  summary.keepAliveUntil = undefined
+  summary.saveUntil = saveUntil(summary.saveFor, now)
+  persistSessionSummary(summary)
+  return { ...summary }
+}
+
 export function markNativeTerminalSessionExited(
   sessionId: string,
   exitCode: number,
@@ -718,12 +839,23 @@ export function resizeTerminalSession(
   return true
 }
 
+export function getTerminalSessionCwd(ownerId: number, sessionId: string): string | null {
+  const session = sessionForOwner(sessionId, ownerId)
+  if (!session) return null
+  const cwd = processWorkingDirectory(session.process.pid) ?? session.cwd
+  session.cwd = cwd
+  return cwd
+}
+
 export function killTerminalSession(ownerId: number, sessionId: string): boolean {
   const session = sessionForOwner(sessionId, ownerId)
   if (!session) {
     loadPersistedSummaries()
     const deleted = persistedSummaries.delete(sessionId)
-    if (deleted) writePersistedSummaries()
+    if (deleted) {
+      removeTerminalHistory(sessionId)
+      writePersistedSummaries()
+    }
     return deleted
   }
   try {
@@ -739,7 +871,10 @@ export function deleteTerminalSession(ownerId: number, sessionId: string): boole
   if (session) return false
   loadPersistedSummaries()
   const deleted = persistedSummaries.delete(sessionId)
-  if (deleted) writePersistedSummaries()
+  if (deleted) {
+    removeTerminalHistory(sessionId)
+    writePersistedSummaries()
+  }
   return deleted
 }
 

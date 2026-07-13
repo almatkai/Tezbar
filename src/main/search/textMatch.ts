@@ -26,9 +26,7 @@ export function lexicalScore(text: string, query: string): number {
 }
 
 function searchableTokens(text: string): string[] {
-  return text
-    .toLowerCase()
-    .match(/[a-z0-9]+/g) ?? []
+  return text.toLowerCase().match(/[a-z0-9]+/g) ?? []
 }
 
 export function levenshteinDistance(left: string, right: string): number {
@@ -60,7 +58,13 @@ function tokenSimilarity(candidate: string, query: string): number {
   if (candidate === query) return 1
   if (candidate.startsWith(query)) return 0.92
   if (query.startsWith(candidate) && candidate.length >= 3) return 0.82
-  if (candidate.includes(query) || query.includes(candidate)) return 0.74
+  // Reverse containment creates disastrous false positives: "gemini"
+  // contains common candidate tokens such as "in" and "min". Search text
+  // may contain the user's query, but not the other way around. Prefix
+  // handling above still supports short intentional queries like "op".
+  if (query.length >= 3 && candidate.includes(query)) {
+    return 0.74
+  }
 
   const distance = levenshteinDistance(candidate, query)
   const length = Math.max(candidate.length, query.length)
@@ -91,9 +95,7 @@ export function fuzzySimilarityScore(text: string, query: string): number {
 }
 
 export function buildFtsQuery(query: string): string {
-  const tokens = query
-    .toLowerCase()
-    .match(/[a-z0-9]+/g) ?? []
+  const tokens = query.toLowerCase().match(/[a-z0-9]+/g) ?? []
   if (tokens.length === 0) return ''
   return tokens.map((token) => `${token}*`).join(' OR ')
 }

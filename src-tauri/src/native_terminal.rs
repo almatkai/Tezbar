@@ -1,8 +1,12 @@
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::PathBuf;
+use std::process::Command as ProcessCommand;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -30,6 +34,8 @@ struct NativeTerminalSession {
     killer: Box<dyn ChildKiller + Send + Sync>,
     shell: String,
     cwd: String,
+    pid: Option<u32>,
+    history_path: PathBuf,
     output_chunks: VecDeque<String>,
     output_bytes: usize,
 }
@@ -39,6 +45,8 @@ struct NativeTerminalSession {
 pub struct TerminalCreateRequest {
     cwd: Option<String>,
     initial_command: Option<String>,
+    restore_session_id: Option<String>,
+    restore_command: Option<String>,
     cols: u16,
     rows: u16,
 }
@@ -104,6 +112,47 @@ fn working_directory(requested: Option<&str>) -> PathBuf {
     }
 }
 
+fn parse_lsof_working_directory(output: &str) -> Option<String> {
+    output
+        .lines()
+        .find_map(|line| line.strip_prefix('n'))
+        .filter(|path| PathBuf::from(path).is_dir())
+        .map(str::to_string)
+}
+
+#[cfg(target_os = "macos")]
+fn process_working_directory(pid: u32) -> Option<String> {
+    let output = ProcessCommand::new("/usr/sbin/lsof")
+        .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+        .and_then(|stdout| parse_lsof_working_directory(&stdout))
+}
+
+#[cfg(target_os = "linux")]
+fn process_working_directory(pid: u32) -> Option<String> {
+    fs::read_link(format!("/proc/{pid}/cwd"))
+        .ok()
+        .filter(|path| path.is_dir())
+        .map(|path| path.to_string_lossy().into_owned())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn process_working_directory(_pid: u32) -> Option<String> {
+    None
+}
+
+fn refresh_session_working_directory(session: &mut NativeTerminalSession) -> String {
+    if let Some(cwd) = session.pid.and_then(process_working_directory) {
+        session.cwd = cwd;
+    }
+    session.cwd.clone()
+}
+
 fn login_shell() -> String {
     std::env::var("SHELL")
         .ok()
@@ -127,6 +176,55 @@ fn now_millis() -> u128 {
         .unwrap_or(0)
 }
 
+fn valid_history_session_id(session_id: &str) -> bool {
+    !session_id.is_empty()
+        && session_id.len() <= 200
+        && session_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+}
+
+fn terminal_history_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("failed to locate terminal history: {error}"))?
+        .join("terminal-history");
+    fs::create_dir_all(&dir)
+        .map_err(|error| format!("failed to create terminal history directory: {error}"))?;
+    #[cfg(unix)]
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))
+        .map_err(|error| format!("failed to secure terminal history directory: {error}"))?;
+    Ok(dir)
+}
+
+fn terminal_history_path(app: &AppHandle, session_id: &str) -> Result<PathBuf, String> {
+    if !valid_history_session_id(session_id) {
+        return Err("invalid terminal session id".to_string());
+    }
+    Ok(terminal_history_dir(app)?.join(format!("{session_id}.log")))
+}
+
+fn read_persisted_history(path: &PathBuf) -> Option<String> {
+    fs::read_to_string(path).ok()
+}
+
+fn legacy_terminal_history(command: Option<&str>) -> String {
+    let safe_command: String = command
+        .unwrap_or_default()
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(4_096)
+        .collect();
+    if safe_command.trim().is_empty() {
+        return String::new();
+    }
+    format!(
+        "[Previous output was not recorded by this app version]\r\n$ {}\r\n\r\n",
+        safe_command.trim()
+    )
+}
+
 fn append_output(session: &mut NativeTerminalSession, data: String) {
     session.output_bytes += data.len();
     session.output_chunks.push_back(data);
@@ -147,6 +245,45 @@ pub fn native_terminal_create(
     state: State<'_, NativeTerminalState>,
     request: TerminalCreateRequest,
 ) -> Result<TerminalCreateResult, String> {
+    let restore_session_id = match request.restore_session_id {
+        Some(session_id) if valid_history_session_id(&session_id) => Some(session_id),
+        Some(_) => return Err("invalid terminal session id".to_string()),
+        None => None,
+    };
+    let session_id = restore_session_id.clone().unwrap_or_else(|| {
+        format!(
+            "native-terminal-{}-{}",
+            now_millis(),
+            state.next_id.fetch_add(1, Ordering::Relaxed)
+        )
+    });
+    if state.sessions.lock().unwrap().contains_key(&session_id) {
+        return Err("terminal session is already running".to_string());
+    }
+    let history_path = terminal_history_path(&app, &session_id)?;
+    let seed_legacy_history = restore_session_id.is_some()
+        && fs::metadata(&history_path)
+            .map(|metadata| metadata.len() == 0)
+            .unwrap_or(true);
+    let mut history_options = OpenOptions::new();
+    history_options
+        .create(true)
+        .write(true)
+        .append(restore_session_id.is_some())
+        .truncate(restore_session_id.is_none());
+    #[cfg(unix)]
+    history_options.mode(0o600);
+    let mut history_file = history_options
+        .open(&history_path)
+        .map_err(|error| format!("failed to open terminal history: {error}"))?;
+    if seed_legacy_history {
+        let history = legacy_terminal_history(request.restore_command.as_deref());
+        history_file
+            .write_all(history.as_bytes())
+            .and_then(|_| history_file.flush())
+            .map_err(|error| format!("failed to seed terminal history: {error}"))?;
+    }
+
     let cwd = working_directory(request.cwd.as_deref());
     let shell = login_shell();
     let pair = native_pty_system()
@@ -177,11 +314,7 @@ pub fn native_terminal_create(
 
     let initial_command = request.initial_command.filter(|v| !v.is_empty());
 
-    let session_id = format!(
-        "native-terminal-{}-{}",
-        now_millis(),
-        state.next_id.fetch_add(1, Ordering::Relaxed)
-    );
+    let pid = child.process_id();
     let killer = child.clone_killer();
     state.sessions.lock().unwrap().insert(
         session_id.clone(),
@@ -191,6 +324,8 @@ pub fn native_terminal_create(
             killer,
             shell: shell.clone(),
             cwd: cwd.to_string_lossy().into_owned(),
+            pid,
+            history_path,
             output_chunks: VecDeque::new(),
             output_bytes: 0,
         },
@@ -199,6 +334,7 @@ pub fn native_terminal_create(
     let output_app = app.clone();
     let output_session_id = session_id.clone();
     std::thread::spawn(move || {
+        let mut history_file = history_file;
         let mut buffer = [0_u8; 16 * 1024];
         let mut first_chunk = true;
         loop {
@@ -227,6 +363,12 @@ pub fn native_terminal_create(
                     }
 
                     let data = String::from_utf8_lossy(&buffer[..count]).into_owned();
+                    // Keep the complete stream on disk. The in-memory replay
+                    // buffer remains bounded, but saved sessions can always
+                    // recover their full terminal history after an app restart.
+                    let _ = history_file
+                        .write_all(data.as_bytes())
+                        .and_then(|_| history_file.flush());
                     if let Some(session) = output_app
                         .state::<NativeTerminalState>()
                         .sessions
@@ -283,8 +425,8 @@ pub fn native_terminal_attach(
     state: State<'_, NativeTerminalState>,
     request: TerminalAttachRequest,
 ) -> Result<Option<TerminalAttachResult>, String> {
-    let sessions = state.sessions.lock().unwrap();
-    let Some(session) = sessions.get(&request.session_id) else {
+    let mut sessions = state.sessions.lock().unwrap();
+    let Some(session) = sessions.get_mut(&request.session_id) else {
         return Ok(None);
     };
     session
@@ -294,9 +436,73 @@ pub fn native_terminal_attach(
     Ok(Some(TerminalAttachResult {
         session_id: request.session_id,
         shell: session.shell.clone(),
-        cwd: session.cwd.clone(),
-        recent_output: recent_output(session),
+        cwd: refresh_session_working_directory(session),
+        recent_output: read_persisted_history(&session.history_path)
+            .unwrap_or_else(|| recent_output(session)),
     }))
+}
+
+#[tauri::command]
+pub fn native_terminal_cwd(
+    state: State<'_, NativeTerminalState>,
+    session_id: String,
+) -> Result<Option<String>, String> {
+    let mut sessions = state.sessions.lock().unwrap();
+    let Some(session) = sessions.get_mut(&session_id) else {
+        return Ok(None);
+    };
+    Ok(Some(refresh_session_working_directory(session)))
+}
+
+#[tauri::command]
+pub fn native_terminal_delete_history(
+    app: AppHandle,
+    state: State<'_, NativeTerminalState>,
+    session_id: String,
+) -> Result<bool, String> {
+    if state.sessions.lock().unwrap().contains_key(&session_id) {
+        return Ok(false);
+    }
+    let path = terminal_history_path(&app, &session_id)?;
+    match fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(format!("failed to delete terminal history: {error}")),
+    }
+}
+
+#[tauri::command]
+pub fn native_terminal_prune_history(
+    app: AppHandle,
+    state: State<'_, NativeTerminalState>,
+    session_ids: Vec<String>,
+) -> Result<usize, String> {
+    let keep: HashSet<String> = session_ids
+        .into_iter()
+        .filter(|session_id| valid_history_session_id(session_id))
+        .collect();
+    let active: HashSet<String> = state.sessions.lock().unwrap().keys().cloned().collect();
+    let mut removed = 0;
+    for entry in fs::read_dir(terminal_history_dir(&app)?)
+        .map_err(|error| format!("failed to read terminal history directory: {error}"))?
+    {
+        let entry =
+            entry.map_err(|error| format!("failed to read terminal history entry: {error}"))?;
+        let path = entry.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("log") {
+            continue;
+        }
+        let Some(session_id) = path.file_stem().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if keep.contains(session_id) || active.contains(session_id) {
+            continue;
+        }
+        if fs::remove_file(path).is_ok() {
+            removed += 1;
+        }
+    }
+    Ok(removed)
 }
 
 #[tauri::command]
@@ -364,6 +570,22 @@ pub fn native_terminal_kill(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn history_session_ids_cannot_escape_the_history_directory() {
+        assert!(valid_history_session_id("native-terminal-123-4"));
+        assert!(!valid_history_session_id("../config"));
+        assert!(!valid_history_session_id("nested/session"));
+        assert!(!valid_history_session_id(""));
+    }
+
+    #[test]
+    fn parses_the_cwd_record_from_lsof_field_output() {
+        assert_eq!(
+            parse_lsof_working_directory("p123\nfcwd\nn/tmp\n"),
+            Some("/tmp".to_string())
+        );
+    }
 
     #[test]
     fn pty_keeps_follow_up_commands_in_the_same_shell() {

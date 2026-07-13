@@ -133,6 +133,10 @@ export const RAYMES_DEFAULT_TOOLS: readonly PiToolName[] = [
  * tools still render sensibly.
  */
 export function labelForToolCall(toolName: string, args: unknown): string {
+  if (toolName === 'search_knowledge') {
+    const safeArgs = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
+    return `search knowledge: ${truncate(str(safeArgs.query, '<query>'))}`
+  }
   const descriptor = PI_TOOLS[toolName as PiToolName]
   if (!descriptor) return `${toolName}`
   const safeArgs = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}

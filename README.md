@@ -1,19 +1,21 @@
 # Tezbar
 
-Tezbar is a desktop command surface for search, AI help, terminal access, notes, snippets, clipboard history, and a handful of small utility tools. It is built for a keyboard-first workflow and aims to keep the common stuff in one place.
+Tezbar is a desktop command surface for search, AI help, terminal access, notes, snippets, and a handful of small utility tools. It is built for a keyboard-first workflow and aims to keep the common stuff in one place.
 
-## What’s in the app
+## What's in the app
 
 - Command bar for launching actions quickly
 - AI chat and agent-style workflows
 - Embedded terminal
-- Clipboard history
 - Notes and snippets
+- Local Knowledge indexing for document text, PDFs, and image OCR, shared by the Command Bar and AI agent
 - Emoji picker
 - Currency and calculator helpers
-- Extension browsing and execution
+- Extension browsing and execution (Raycast extensions supported)
 - Voice input and text-to-speech
-- System commands and safety prompts (platform-dependent)
+- System commands (platform-dependent)
+- **Folder search** — type `/` to quickly navigate into any folder and open it in your preferred app or open a terminal directly in that directory
+  ![Folder search](assets/directory_search.png)
 
 ## Tech Stack
 

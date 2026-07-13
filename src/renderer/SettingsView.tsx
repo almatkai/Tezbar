@@ -29,6 +29,11 @@ import type {
   ProviderId,
 } from '../shared/llmConfig'
 import type { VoiceModel, VoiceModelId } from '../shared/voice'
+import type {
+  KnowledgeDepth,
+  KnowledgeRootDepth,
+  KnowledgeSnapshot,
+} from '../shared/knowledge'
 import {
   Button,
   cx,
@@ -43,12 +48,13 @@ import {
 import { CurrencySettings } from './CurrencySettings'
 import ExtensionsSettingsTab from './ExtensionsSettingsTab'
 
-type SettingsTab = 'general' | 'ai' | 'voice' | 'extensions' | 'permissions' | 'storage' | 'advanced'
+type SettingsTab = 'general' | 'ai' | 'voice' | 'knowledge' | 'extensions' | 'permissions' | 'storage' | 'advanced'
 
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'general', label: 'General', icon: 'gear' },
   { id: 'ai', label: 'AI', icon: 'spark' },
   { id: 'voice', label: 'Voice', icon: 'mic' },
+  { id: 'knowledge', label: 'Knowledge', icon: 'knowledge' },
   { id: 'extensions', label: 'Extensions', icon: 'puzzle' },
   { id: 'permissions', label: 'Permissions', icon: 'lock' },
   { id: 'storage', label: 'Storage', icon: 'database' },
@@ -56,6 +62,51 @@ const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: string }> = [
 ]
 
 const DEFAULT_RAYMES_HOTKEY = 'Alt+Space'
+
+const KNOWLEDGE_DEPTH_OPTIONS: Array<{
+  id: KnowledgeDepth
+  title: string
+  summary: string
+  detail: string
+  accent: string
+}> = [
+  {
+    id: 'off',
+    title: 'Off',
+    summary: 'Metadata only',
+    detail: 'Filename and path search stays available.',
+    accent: 'bg-white/35',
+  },
+  {
+    id: 'basic',
+    title: 'Basic',
+    summary: 'Fast keyword search',
+    detail: 'Embedded text, first 20 PDF pages, no OCR or vectors.',
+    accent: 'bg-amber-300',
+  },
+  {
+    id: 'smart',
+    title: 'Smart',
+    summary: 'Recommended',
+    detail: 'Full text, selective OCR, and semantic search.',
+    accent: 'bg-cyan-300',
+  },
+  {
+    id: 'deep',
+    title: 'Deep',
+    summary: 'Maximum recall',
+    detail: 'Full text and embeddings with thorough page OCR.',
+    accent: 'bg-violet-300',
+  },
+]
+
+const KNOWLEDGE_ROOT_DEPTH_OPTIONS: Array<{ value: KnowledgeRootDepth; label: string }> = [
+  { value: 'inherit', label: 'Use global' },
+  { value: 'off', label: 'Off' },
+  { value: 'basic', label: 'Basic' },
+  { value: 'smart', label: 'Smart' },
+  { value: 'deep', label: 'Deep' },
+]
 
 const KEY_ACCELERATORS: Record<string, string> = {
   ' ': 'Space',
@@ -189,6 +240,14 @@ function SettingsIcon({ name, className }: { name: string; className?: string })
         <ellipse cx="12" cy="6" rx="9" ry="3" />
         <path d="M3 6v12c0 1.7 4 3 9 3s9-1.3 9-3V6" />
         <path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3" />
+      </svg>
+    )
+  }
+  if (name === 'knowledge') {
+    return (
+      <svg {...common}>
+        <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z" />
+        <path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z" />
       </svg>
     )
   }
@@ -562,6 +621,9 @@ export default function SettingsView({
   const [clipboardWatchEnabled, setClipboardWatchEnabled] = useState(true)
   const [clipboardCaptureImages, setClipboardCaptureImages] = useState(false)
   const [clipboardMaxImageMegapixels, setClipboardMaxImageMegapixels] = useState('2')
+  const [knowledge, setKnowledge] = useState<KnowledgeSnapshot | null>(null)
+  const [knowledgeBusy, setKnowledgeBusy] = useState(false)
+  const [knowledgeMessage, setKnowledgeMessage] = useState<string | null>(null)
 
   const loadAiModels = useCallback(async (provider: ProviderId) => {
     setAiModelsLoading(true)
@@ -617,6 +679,18 @@ export default function SettingsView({
       console.warn('[Settings] Failed to load storage breakdown:', err)
     } finally {
       setStorageLoading(false)
+    }
+  }, [])
+
+  const loadKnowledge = useCallback(async () => {
+    setKnowledgeBusy(true)
+    try {
+      setKnowledge(await window.tezbar.getKnowledgeSnapshot())
+      setKnowledgeMessage(null)
+    } catch (error) {
+      setKnowledgeMessage(error instanceof Error ? error.message : 'Could not load Knowledge settings.')
+    } finally {
+      setKnowledgeBusy(false)
     }
   }, [])
 
@@ -712,6 +786,17 @@ export default function SettingsView({
     if (activeTab !== 'storage') return
     void loadStorage()
   }, [activeTab, loadStorage])
+
+  useEffect(() => {
+    if (activeTab !== 'knowledge') return
+    void loadKnowledge()
+  }, [activeTab, loadKnowledge])
+
+  useEffect(() => {
+    return window.tezbar.onKnowledgeStatus((status) => {
+      setKnowledge((current) => current ? { ...current, status } : current)
+    })
+  }, [])
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent): void => {
@@ -1775,6 +1860,349 @@ export default function SettingsView({
 
           {activeTab === 'extensions' ? (
             <ExtensionsSettingsTab onBrowseStore={onBrowseStore} />
+          ) : null}
+
+          {activeTab === 'knowledge' ? (
+            <div className="mx-auto max-w-[650px]">
+              <div className="mb-4 overflow-hidden rounded-[16px] border border-white/[0.09] bg-[linear-gradient(135deg,rgba(90,148,255,0.13),rgba(255,255,255,0.025)_55%)] p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-400/15 text-sky-200">
+                        <SettingsIcon name="knowledge" className="h-4 w-4" />
+                      </span>
+                      <h3 className="text-[13.5px] font-semibold text-ink-1">Local knowledge index</h3>
+                    </div>
+                    <p className="mt-2 max-w-[460px] text-[11.5px] leading-relaxed text-ink-3">
+                      Tezbar extracts text, recognizes text in images and scanned PDFs, and stores
+                      searchable chunks locally. The Command Bar and AI agent share this index.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-emerald-300/15 bg-emerald-300/10 px-2.5 py-1 text-[10.5px] font-semibold text-emerald-200">
+                    LOCAL
+                  </span>
+                </div>
+              </div>
+
+              <SettingsRow
+                label="Knowledge Depth"
+                detail="The global default for folders set to Use global. Deeper modes trade more background work and storage for better recall."
+              >
+                <div
+                  role="radiogroup"
+                  aria-label="Default Knowledge Depth"
+                  className="grid grid-cols-2 gap-2.5"
+                >
+                  {KNOWLEDGE_DEPTH_OPTIONS.map((option) => {
+                    const selected = knowledge?.settings.depth === option.id
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        disabled={knowledgeBusy || !knowledge}
+                        onClick={() => {
+                          setKnowledgeBusy(true)
+                          setKnowledgeMessage(null)
+                          void window.tezbar.setKnowledgeDepth(option.id)
+                            .then(setKnowledge)
+                            .catch((error: unknown) => setKnowledgeMessage(
+                              error instanceof Error ? error.message : String(error)
+                            ))
+                            .finally(() => setKnowledgeBusy(false))
+                        }}
+                        className={cx(
+                          'relative min-h-[88px] rounded-[13px] border p-3 text-left transition',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50',
+                          selected
+                            ? 'border-cyan-300/35 bg-cyan-300/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                            : 'border-white/[0.08] bg-white/[0.025] hover:border-white/[0.15] hover:bg-white/[0.045]',
+                          knowledgeBusy ? 'cursor-wait opacity-65' : ''
+                        )}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-2">
+                            <span className={cx('h-1.5 w-1.5 rounded-full', option.accent)} />
+                            <span className="text-[12.5px] font-semibold text-ink-1">{option.title}</span>
+                          </span>
+                          <span className={cx(
+                            'text-[9.5px] font-medium uppercase tracking-[0.08em]',
+                            selected ? 'text-cyan-200' : 'text-ink-4'
+                          )}>
+                            {option.summary}
+                          </span>
+                        </span>
+                        <span className="mt-2 block text-[10.5px] leading-[1.45] text-ink-3">
+                          {option.detail}
+                        </span>
+                        {selected ? (
+                          <span className="absolute inset-y-3 left-0 w-0.5 rounded-r-full bg-cyan-300" />
+                        ) : null}
+                      </button>
+                    )
+                  })}
+                </div>
+              </SettingsRow>
+              <Divider />
+
+              <SettingsRow
+                label="Folders"
+                detail="Only folders added here are content-indexed. Existing filename search remains separate."
+              >
+                <div className="space-y-2.5">
+                  {knowledge?.roots.length ? knowledge.roots.map((root) => {
+                    const title = root.path.split('/').filter(Boolean).at(-1) ?? root.path
+                    return (
+                      <div
+                        key={root.id}
+                        className="group flex items-center gap-3 rounded-tezbar-row border border-white/[0.08] bg-white/[0.035] px-3 py-2.5"
+                      >
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={root.enabled}
+                          onClick={() => {
+                            setKnowledgeBusy(true)
+                            void window.tezbar.setKnowledgeRootEnabled(root.id, !root.enabled)
+                              .then(setKnowledge)
+                              .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                              .finally(() => setKnowledgeBusy(false))
+                          }}
+                          className={cx(
+                            'relative h-5 w-9 shrink-0 rounded-full transition',
+                            root.enabled ? 'bg-sky-400/80' : 'bg-white/15'
+                          )}
+                        >
+                          <span className={cx(
+                            'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition',
+                            root.enabled ? 'left-[18px]' : 'left-0.5'
+                          )} />
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12.5px] font-medium text-ink-1">{title}</p>
+                          <p className="truncate font-mono text-[10.5px] text-ink-4">{root.path}</p>
+                        </div>
+                        <select
+                          aria-label={`Knowledge Depth for ${title}`}
+                          value={root.depth}
+                          disabled={knowledgeBusy}
+                          onChange={(event) => {
+                            const depth = event.target.value as KnowledgeRootDepth
+                            setKnowledgeBusy(true)
+                            setKnowledgeMessage(null)
+                            void window.tezbar.setKnowledgeRootDepth(root.id, depth)
+                              .then(setKnowledge)
+                              .catch((error: unknown) => setKnowledgeMessage(
+                                error instanceof Error ? error.message : String(error)
+                              ))
+                              .finally(() => setKnowledgeBusy(false))
+                          }}
+                          className="h-7 max-w-[108px] rounded-lg border border-white/[0.09] bg-[#191b24] px-2 text-[10.5px] text-ink-2 outline-none transition focus:border-cyan-300/35 disabled:opacity-50"
+                        >
+                          {KNOWLEDGE_ROOT_DEPTH_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                        <span className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-ink-3">Local</span>
+                        <Button
+                          variant="quiet"
+                          disabled={knowledgeBusy}
+                          onClick={() => {
+                            setKnowledgeBusy(true)
+                            void window.tezbar.removeKnowledgeRoot(root.id)
+                              .then(setKnowledge)
+                              .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                              .finally(() => setKnowledgeBusy(false))
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    )
+                  }) : (
+                    <div className="rounded-tezbar-row border border-dashed border-white/[0.12] px-4 py-5 text-center">
+                      <p className="text-[12px] text-ink-3">No folders are being content-indexed.</p>
+                      <p className="mt-1 text-[10.5px] text-ink-4">Nothing leaves this computer.</p>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="primary"
+                      disabled={knowledgeBusy}
+                      onClick={() => {
+                        setKnowledgeBusy(true)
+                        setKnowledgeMessage(null)
+                        void window.tezbar.addMajorKnowledgeRoots()
+                          .then(setKnowledge)
+                          .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                          .finally(() => setKnowledgeBusy(false))
+                      }}
+                    >
+                      {knowledgeBusy ? 'Working…' : 'Add Major Folders'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={knowledgeBusy}
+                      onClick={() => {
+                        setKnowledgeBusy(true)
+                        setKnowledgeMessage(null)
+                        void window.tezbar.chooseKnowledgeFolder()
+                          .then((path) => path ? window.tezbar.addKnowledgeRoot(path) : null)
+                          .then((snapshot) => { if (snapshot) setKnowledge(snapshot) })
+                          .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                          .finally(() => setKnowledgeBusy(false))
+                      }}
+                    >
+                      Choose Folder…
+                    </Button>
+                  </div>
+                  <p className="text-[10.5px] leading-relaxed text-ink-4">
+                    Major folders include Desktop, Documents, Downloads, and Pictures. System,
+                    cache, dependency, build, and generated files stay excluded.
+                  </p>
+                </div>
+              </SettingsRow>
+              <Divider />
+
+              <SettingsRow label="Index status">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3 text-[11.5px]">
+                    <span className="flex items-center gap-2 capitalize text-ink-2">
+                      <span className={cx(
+                        'h-1.5 w-1.5 rounded-full',
+                        knowledge?.status.state === 'indexing' || knowledge?.status.state === 'scanning'
+                          ? 'animate-pulse bg-cyan-300'
+                          : knowledge?.status.state === 'failed'
+                            ? 'bg-red-300'
+                            : knowledge?.status.state === 'paused'
+                              ? 'bg-amber-300'
+                              : 'bg-emerald-300'
+                      )} />
+                      {knowledge?.status.state ?? 'Loading'}
+                    </span>
+                    <span className="font-mono text-ink-4">
+                      {knowledge?.status.sourceCount ?? 0} files · {knowledge?.status.chunkCount ?? 0} chunks
+                      {(knowledge?.status.totalPageCount ?? 0) > 0
+                        ? ` · ${knowledge?.status.indexedPageCount ?? 0}/${knowledge?.status.totalPageCount ?? 0} pages`
+                        : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                      <div
+                        className="h-full rounded-full bg-[linear-gradient(90deg,#5ea7ff,#6de1c2)] transition-[width] duration-300"
+                        style={{ width: `${Math.round((knowledge?.status.progress ?? 0) * 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-3 font-mono text-[10px] text-ink-4">
+                      <span>
+                        {knowledge?.status.processedSources ?? 0} processed · {knowledge?.status.queuedSources ?? 0} remaining
+                        {(knowledge?.status.failedSources ?? 0) > 0
+                          ? ` · ${knowledge?.status.failedSources ?? 0} failed`
+                          : ''}
+                      </span>
+                      <span>{Math.round((knowledge?.status.progress ?? 0) * 100)}%</span>
+                    </div>
+                  </div>
+                  <p className="min-h-4 truncate text-[10.5px] text-ink-4">
+                    {knowledge?.status.detail ?? 'Ready to index approved folders.'}
+                  </p>
+                  {(knowledge?.status.partialSourceCount ?? 0) > 0 ? (
+                    <p className="text-[10.5px] text-amber-200/80">
+                      {knowledge?.status.partialSourceCount} large document{knowledge?.status.partialSourceCount === 1 ? '' : 's'} partially indexed at the selected depth.
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    {knowledge?.status.state === 'indexing' || knowledge?.status.state === 'scanning' ? (
+                      <Button
+                        variant="ghost"
+                        disabled={knowledgeBusy}
+                        onClick={() => {
+                          setKnowledgeBusy(true)
+                          setKnowledgeMessage(null)
+                          setKnowledge((current) => current ? {
+                            ...current,
+                            status: { ...current.status, state: 'paused', detail: 'Pausing indexing…' },
+                          } : current)
+                          void window.tezbar.pauseKnowledgeIndexing()
+                            .then(setKnowledge)
+                            .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                            .finally(() => setKnowledgeBusy(false))
+                        }}
+                      >
+                        {knowledgeBusy ? 'Pausing…' : 'Pause indexing'}
+                      </Button>
+                    ) : knowledge?.status.state === 'paused' ? (
+                      <Button
+                        variant="primary"
+                        disabled={knowledgeBusy}
+                        onClick={() => {
+                          setKnowledgeBusy(true)
+                          setKnowledgeMessage(null)
+                          void window.tezbar.resumeKnowledgeIndexing()
+                            .then(setKnowledge)
+                            .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                            .finally(() => setKnowledgeBusy(false))
+                        }}
+                      >
+                        {knowledgeBusy ? 'Starting…' : 'Resume indexing'}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant={knowledge?.status.state === 'completed' ? 'ghost' : 'primary'}
+                        disabled={knowledgeBusy || !knowledge?.roots.length}
+                        onClick={() => {
+                          setKnowledgeBusy(true)
+                          setKnowledgeMessage(null)
+                          void window.tezbar.startKnowledgeIndexing()
+                            .then(setKnowledge)
+                            .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                            .finally(() => setKnowledgeBusy(false))
+                        }}
+                      >
+                        {knowledgeBusy
+                          ? 'Starting…'
+                          : knowledge?.status.state === 'completed'
+                            ? 'Reindex now'
+                            : knowledge?.status.state === 'failed'
+                              ? 'Retry indexing'
+                              : 'Start indexing'}
+                      </Button>
+                    )}
+                    <Button variant="quiet" disabled={knowledgeBusy} onClick={() => void loadKnowledge()}>
+                      Refresh
+                    </Button>
+                  </div>
+                  <p className="text-[10.5px] leading-relaxed text-ink-4">
+                    Indexing starts automatically after adding a folder. You can close Settings;
+                    processing continues in the background. To search, type words from inside a
+                    document in the Command Bar; an empty bar only shows launcher recommendations.
+                  </p>
+                </div>
+              </SettingsRow>
+              <Divider />
+
+              <SettingsRow
+                label="Processing"
+                detail="Backend-independent artifacts stay in the local database, even if cloud acceleration is added later."
+              >
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="rounded-tezbar-row border border-sky-300/20 bg-sky-300/[0.07] p-3">
+                    <p className="text-[12px] font-semibold text-ink-1">On this computer</p>
+                    <p className="mt-1 text-[10.5px] leading-snug text-ink-3">Private, offline, and enabled.</p>
+                  </div>
+                  <div className="rounded-tezbar-row border border-white/[0.07] bg-white/[0.02] p-3 opacity-60">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[12px] font-semibold text-ink-2">Tezbar Cloud</p>
+                      <span className="text-[9.5px] uppercase tracking-wide text-ink-4">Coming later</span>
+                    </div>
+                    <p className="mt-1 text-[10.5px] leading-snug text-ink-4">Disabled. Files are never uploaded.</p>
+                  </div>
+                </div>
+              </SettingsRow>
+              {knowledgeMessage ? <Message tone="error">{knowledgeMessage}</Message> : null}
+            </div>
           ) : null}
 
           {activeTab === 'storage' ? (

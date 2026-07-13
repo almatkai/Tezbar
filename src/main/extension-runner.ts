@@ -510,7 +510,7 @@ function nativeColorPickerBundledBinaryPath(): string | null {
     if (resourcesPath) {
       candidates.unshift(
         join(resourcesPath, 'app.asar.unpacked', 'native', 'color-picker', 'color-picker-helper'),
-        join(resourcesPath, 'native', 'color-picker', 'color-picker-helper'),
+        join(resourcesPath, 'native', 'color-picker', 'color-picker-helper')
       )
     }
   }
@@ -650,7 +650,7 @@ function screenOcrHelperPath(): string {
 
 async function runScreenOcrHelper(
   command: 'recognize-text' | 'detect-barcode',
-  values: Record<string, unknown>,
+  values: Record<string, unknown>
 ): Promise<string> {
   const helperPath = screenOcrHelperPath()
   if (!existsSync(helperPath)) {
@@ -2187,18 +2187,20 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
         maxBuffer: 20 * 1024 * 1024,
       })
       const trimmed = stdout.trim()
-      return trimmed ? JSON.parse(trimmed) as unknown[] : []
+      return trimmed ? (JSON.parse(trimmed) as unknown[]) : []
     }
     const result = useSQLPromise(load, [databasePath, query], options) as Record<string, unknown>
     return { ...result, permissionView: undefined }
   }
 
   const FormValidation = { Required: 'required' } as const
-  const useForm = (options: {
-    onSubmit?: (values: Record<string, unknown>) => unknown
-    initialValues?: Record<string, unknown>
-    validation?: Record<string, unknown>
-  } = {}): Record<string, unknown> => {
+  const useForm = (
+    options: {
+      onSubmit?: (values: Record<string, unknown>) => unknown
+      initialValues?: Record<string, unknown>
+      validation?: Record<string, unknown>
+    } = {}
+  ): Record<string, unknown> => {
     const [values, setValues] = useCachedState<Record<string, unknown>>(
       `form-values:${session.commandName}`,
       options.initialValues ?? {}
@@ -2211,13 +2213,19 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       const nextErrors: Record<string, string> = {}
       for (const [key, rule] of Object.entries(options.validation ?? {})) {
         const value = candidate[key]
-        const empty = value === undefined || value === null || value === '' ||
+        const empty =
+          value === undefined ||
+          value === null ||
+          value === '' ||
           (Array.isArray(value) && value.length === 0)
-        const error = rule === FormValidation.Required
-          ? empty ? 'This field is required' : undefined
-          : typeof rule === 'function'
-            ? (rule as (input: unknown) => string | null | undefined)(value)
-            : undefined
+        const error =
+          rule === FormValidation.Required
+            ? empty
+              ? 'This field is required'
+              : undefined
+            : typeof rule === 'function'
+              ? (rule as (input: unknown) => string | null | undefined)(value)
+              : undefined
         if (error) nextErrors[key] = String(error)
       }
       setErrors(nextErrors)
@@ -2236,12 +2244,17 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       ...Object.keys(options.validation ?? {}),
       ...Object.keys(values),
     ])
-    const itemProps = Object.fromEntries([...keys].map((key) => [key, {
-      id: key,
-      value: values[key],
-      error: errors[key],
-      onChange: (value: unknown) => setValue(key, value),
-    }]))
+    const itemProps = Object.fromEntries(
+      [...keys].map((key) => [
+        key,
+        {
+          id: key,
+          value: values[key],
+          error: errors[key],
+          onChange: (value: unknown) => setValue(key, value),
+        },
+      ])
+    )
     return {
       values,
       itemProps,
@@ -2268,17 +2281,20 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       namespace?: string
       sortUnvisited?: (a: T, b: T) => number
     }
-  ): { data: T[]; visitItem: (item: T) => Promise<void>; resetRanking: (item: T) => Promise<void> } => {
+  ): {
+    data: T[]
+    visitItem: (item: T) => Promise<void>
+    resetRanking: (item: T) => Promise<void>
+  } => {
     type Entry = { count: number; lastVisited: number }
     const namespace = options?.namespace || 'default'
-    const [ranking, setRanking] = useCachedState<Record<string, Entry>>(
-      `frecency:${namespace}`,
-      {}
-    )
-    const keyFor = options?.key ?? ((item: T) => {
-      const candidate = item as { id?: unknown }
-      return candidate?.id === undefined ? String(item) : String(candidate.id)
-    })
+    const [ranking, setRanking] = useCachedState<Record<string, Entry>>(`frecency:${namespace}`, {})
+    const keyFor =
+      options?.key ??
+      ((item: T) => {
+        const candidate = item as { id?: unknown }
+        return candidate?.id === undefined ? String(item) : String(candidate.id)
+      })
     const source = Array.isArray(input)
       ? input
       : input && Array.isArray(input.data)
@@ -2412,7 +2428,8 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       existingRefreshToken?: string
     ): Promise<void> {
       const accessToken = String(response.access_token ?? '')
-      if (!accessToken) throw new Error(`${this.provider} OAuth response did not include an access token`)
+      if (!accessToken)
+        throw new Error(`${this.provider} OAuth response did not include an access token`)
       const expiresIn = Number(response.expires_in)
       const stored: StoredOAuthServiceTokens = {
         accessToken,
@@ -2426,7 +2443,9 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       await Promise.resolve(this.onAuthorize?.({ token: accessToken, type: 'oauth' }))
     }
 
-    private async exchangeGoogleToken(parameters: URLSearchParams): Promise<Record<string, unknown>> {
+    private async exchangeGoogleToken(
+      parameters: URLSearchParams
+    ): Promise<Record<string, unknown>> {
       const endpoint =
         typeof this.options.tokenEndpoint === 'string' && this.options.tokenEndpoint
           ? this.options.tokenEndpoint
@@ -2445,7 +2464,11 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       }
       if (!response.ok) {
         throw new Error(
-          String(payload.error_description ?? payload.error ?? `OAuth token exchange failed (${response.status})`)
+          String(
+            payload.error_description ??
+              payload.error ??
+              `OAuth token exchange failed (${response.status})`
+          )
         )
       }
       return payload
@@ -2478,10 +2501,12 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url')
       let settleCallback: ((value: { code: string; redirectUri: string }) => void) | null = null
       let rejectCallback: ((error: Error) => void) | null = null
-      const callbackPromise = new Promise<{ code: string; redirectUri: string }>((resolve, reject) => {
-        settleCallback = resolve
-        rejectCallback = reject
-      })
+      const callbackPromise = new Promise<{ code: string; redirectUri: string }>(
+        (resolve, reject) => {
+          settleCallback = resolve
+          rejectCallback = reject
+        }
+      )
       const server = createServer((request, response) => {
         const address = server.address()
         const port = address && typeof address === 'object' ? address.port : 0
@@ -2504,7 +2529,9 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
           return
         }
         response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-        response.end('<!doctype html><title>Tezbar authorized</title><p>You can close this window.</p>')
+        response.end(
+          '<!doctype html><title>Tezbar authorized</title><p>You can close this window.</p>'
+        )
         settleCallback?.({ code, redirectUri })
       })
 
@@ -3014,10 +3041,34 @@ function walkRuntimeNodes(
       )
     })
   }
+  if (typeName.startsWith('Form.') && typeof props.onChange === 'function' && sanitizedProps) {
+    const actionId = makeId('form-change')
+    sanitizedProps.actionId = actionId
+    session.actionHandlers.set(actionId, async (formValues) => {
+      const rawValue = formValues?.value
+      const value =
+        typeName === 'Form.Checkbox'
+          ? rawValue === true
+          : typeName === 'Form.FilePicker' || typeName === 'Form.TagPicker'
+            ? Array.isArray(rawValue)
+              ? rawValue.filter((entry): entry is string => typeof entry === 'string')
+              : []
+            : typeName === 'Form.DatePicker'
+              ? typeof rawValue === 'string' && rawValue
+                ? new Date(`${rawValue}T00:00:00`)
+                : null
+              : String(rawValue ?? '')
+      await Promise.resolve((props.onChange as (nextValue: unknown) => unknown)(value))
+    })
+  }
   if (hasSearchTextChangeHandler && sanitizedProps) {
     sanitizedProps.__hasServerSearch = true
   }
-  if ((typeName === 'List' || typeName === 'Grid') && props.pagination && typeof props.pagination === 'object') {
+  if (
+    (typeName === 'List' || typeName === 'Grid') &&
+    props.pagination &&
+    typeof props.pagination === 'object'
+  ) {
     const pagination = props.pagination as {
       hasMore?: unknown
       onLoadMore?: unknown
@@ -3029,21 +3080,20 @@ function walkRuntimeNodes(
   }
   const isSearchCollection = typeName === 'List' || typeName === 'Grid'
   const listItemsTruncated = isSearchCollection ? { value: false } : options.listItemsTruncated
-  const childOptions =
-    isSearchCollection
+  const childOptions = isSearchCollection
+    ? {
+        ...options,
+        listItemsSeen: { count: 0 },
+        listItemLimit: session.listItemLimit,
+        listItemsTruncated,
+      }
+    : typeName === 'List.Section' || typeName === 'Grid.Section'
       ? {
           ...options,
-          listItemsSeen: { count: 0 },
+          listItemsSeen: options.listItemsSeen ?? { count: 0 },
           listItemLimit: session.listItemLimit,
-          listItemsTruncated,
         }
-      : typeName === 'List.Section' || typeName === 'Grid.Section'
-        ? {
-            ...options,
-            listItemsSeen: options.listItemsSeen ?? { count: 0 },
-            listItemLimit: session.listItemLimit,
-          }
-        : options
+      : options
   const children = walkRuntimeNodes(props.children, session, depth + 1, budget, childOptions)
   if (isSearchCollection && sanitizedProps && listItemsTruncated) {
     sanitizedProps.__hasMore =
@@ -3095,9 +3145,10 @@ function renderCurrentView(
 
   const budget = { remaining: RUNTIME_COMPONENT_LIMIT }
   const internalTop = top as Partial<ExtensionRuntimeNode>
-  const nodes = typeof internalTop.type === 'string' && internalTop.type.startsWith('Tezbar.')
-    ? [top as ExtensionRuntimeNode]
-    : walkRuntimeNodes(top, session, 0, budget)
+  const nodes =
+    typeof internalTop.type === 'string' && internalTop.type.startsWith('Tezbar.')
+      ? [top as ExtensionRuntimeNode]
+      : walkRuntimeNodes(top, session, 0, budget)
   console.log(
     `[Runner] walkRuntimeNodes complete after ${elapsedMs(startedAt)}; nodes=${nodes.length}, budgetUsed=${RUNTIME_COMPONENT_LIMIT - budget.remaining}, actions=${session.currentActions.length}`
   )
@@ -3479,7 +3530,9 @@ function runBundle(code: string, packageRoot: string, session: RuntimeSession): 
         post: (url: string, data?: unknown, config?: AxiosConfig) => Promise<AxiosResponse>
         put: (url: string, data?: unknown, config?: AxiosConfig) => Promise<AxiosResponse>
         patch: (url: string, data?: unknown, config?: AxiosConfig) => Promise<AxiosResponse>
-        defaults: AxiosConfig & { headers: Record<string, string> & { common: Record<string, string> } }
+        defaults: AxiosConfig & {
+          headers: Record<string, string> & { common: Record<string, string> }
+        }
         interceptors: {
           request: { use: () => number; eject: () => void }
           response: { use: () => number; eject: () => void }
@@ -3557,7 +3610,9 @@ function runBundle(code: string, packageRoot: string, session: RuntimeSession): 
             config: merged,
           }
           if (!response.ok) {
-            const error = new Error(`Request failed with status code ${response.status}`) as Error & {
+            const error = new Error(
+              `Request failed with status code ${response.status}`
+            ) as Error & {
               response?: AxiosResponse
               config?: AxiosConfig
             }
@@ -3706,7 +3761,7 @@ function runBundle(code: string, packageRoot: string, session: RuntimeSession): 
         ignoreLineBreaks = false,
         customWordsList: string[] = [],
         languages: string[] = [],
-        playSound = false,
+        playSound = false
       ): Promise<string> =>
         runScreenOcrHelper('recognize-text', {
           fullscreen,

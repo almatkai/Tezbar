@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { compactTerminalPath, type TerminalSessionSummary } from '../shared/terminal'
+import { terminalSessionShortcutIndex } from './terminalSessionSelection'
 import { cx } from './ui/primitives'
 
 function sessionSubtitle(session: TerminalSessionSummary): string {
@@ -53,14 +54,9 @@ export default function TerminalSessionsWindow(): ReactNode {
         void window.tezbar.terminalSessionsHide()
         return
       }
-      if (
-        event.altKey &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.shiftKey &&
-        /^[1-9]$/.test(event.key)
-      ) {
-        const session = sessionsRef.current[Number(event.key) - 1]
+      const sessionIndex = terminalSessionShortcutIndex(event)
+      if (sessionIndex !== null) {
+        const session = sessionsRef.current[sessionIndex]
         if (!session) return
         event.preventDefault()
         void window.tezbar.terminalSessionsAction({
@@ -140,7 +136,7 @@ export default function TerminalSessionsWindow(): ReactNode {
                     </span>
                   </span>
                   <span className="mt-0.5 shrink-0 rounded-md border border-white/10 bg-black/20 px-1.5 py-0.5 text-[9px] font-semibold text-ink-4">
-                    ⌥{index + 1}
+                    ⌘{index + 1}
                   </span>
                 </button>
               )

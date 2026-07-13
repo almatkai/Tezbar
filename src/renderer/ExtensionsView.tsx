@@ -94,11 +94,13 @@ function CachedImage({
   alt = '',
   className,
   variant,
+  onError,
 }: {
   src: string
   alt?: string
   className?: string
   variant: ImageVariant
+  onError?: () => void
 }): ReactNode {
   const normalized = imageSrcFromPathOrUrl(src)
   const [resolvedSrc, setResolvedSrc] = useState(normalized)
@@ -153,23 +155,69 @@ function CachedImage({
     }
   }, [normalized, variant])
 
-  return <img src={resolvedSrc} alt={alt} loading="lazy" decoding="async" className={className} />
+  return (
+    <img
+      src={resolvedSrc}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      className={className}
+      onError={onError}
+    />
+  )
+}
+
+function ExtensionIconPlaceholder(): ReactNode {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="h-[52%] w-[52%]"
+    >
+      <path
+        d="M9 4.75H6.75a2 2 0 0 0-2 2V9m10.25-4.25h2.25a2 2 0 0 1 2 2V9M4.75 15v2.25a2 2 0 0 0 2 2H9M19.25 15v2.25a2 2 0 0 1-2 2H15"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9.25 9.25h5.5v5.5h-5.5z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
 }
 
 function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 'small' | 'large' }): JSX.Element {
   const iconUrl = typeof ext.iconUrl === 'string' && ext.iconUrl.trim() ? ext.iconUrl : ''
+  const [failedIconUrl, setFailedIconUrl] = useState<string | null>(null)
+  const hasIcon = Boolean(iconUrl) && failedIconUrl !== iconUrl
   const className = size === 'large' ? 'h-20 w-20 text-[24px]' : 'h-7 w-7 text-[10px]'
   return (
     <span
+      role="img"
+      aria-label={`${ext.name} icon`}
       className={cx(
-        'grid shrink-0 place-items-center overflow-hidden rounded-[18px] border border-white/15 bg-[radial-gradient(circle_at_30%_20%,rgba(120,255,180,0.95),rgba(62,210,104,0.72)_42%,rgba(18,93,64,0.6))] font-mono font-bold text-white shadow-[0_18px_60px_rgba(0,0,0,0.25)]',
+        'grid shrink-0 place-items-center overflow-hidden rounded-[18px]',
+        hasIcon
+          ? 'bg-transparent'
+          : 'border border-white/10 bg-white/[0.055] text-ink-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
         className,
       )}
     >
-      {iconUrl ? (
-        <CachedImage src={iconUrl} alt="" variant="icon" className="h-full w-full object-cover" />
+      {hasIcon ? (
+        <CachedImage
+          src={iconUrl}
+          alt=""
+          variant="icon"
+          className="h-full w-full object-cover"
+          onError={() => setFailedIconUrl(iconUrl)}
+        />
       ) : (
-        <span>{iconLabel(ext.name)}</span>
+        <ExtensionIconPlaceholder />
       )}
     </span>
   )

@@ -55,5 +55,5 @@ export type LlmConfigRecord = {
   raymesHotkey?: string
   /** Milliseconds to remember palette UI (e.g. Providers) after hide. Default 60000. Use 0 to always reset. */
   uiStateRetentionMs?: number
-  settingsInitialTab?: 'general' | 'ai' | 'voice' | 'extensions' | 'permissions' | 'storage' | 'advanced'
+  settingsInitialTab?: 'general' | 'ai' | 'voice' | 'knowledge' | 'extensions' | 'permissions' | 'storage' | 'advanced'
 }

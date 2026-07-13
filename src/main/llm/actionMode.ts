@@ -1,21 +1,15 @@
 import type { AiActionRequest } from '../../shared/ipc'
 import type { Message } from './provider'
 import { getProviderForTask } from './registry'
-
-function redactContext(input: string): string {
-  return input
-    .replace(/(sk-[A-Za-z0-9]{12,})/g, '[REDACTED_API_KEY]')
-    .replace(/(gh[pousr]_[A-Za-z0-9_]{12,})/g, '[REDACTED_TOKEN]')
-    .replace(/(password\s*[=:]\s*[^\s]+)/gi, 'password=[REDACTED]')
-}
+import { redactSensitiveText } from '../safety/redaction'
 
 export async function runAiActionMode(
   req: AiActionRequest,
   options?: { signal?: AbortSignal },
 ): Promise<{ ok: boolean; output: string }> {
   const provider = getProviderForTask('action')
-  const selectedText = req.selectedText ? (req.redactSensitive === false ? req.selectedText : redactContext(req.selectedText)) : ''
-  const appContext = req.appContext ? (req.redactSensitive === false ? req.appContext : redactContext(req.appContext)) : ''
+  const selectedText = req.selectedText ? (req.redactSensitive === false ? req.selectedText : redactSensitiveText(req.selectedText)) : ''
+  const appContext = req.appContext ? (req.redactSensitive === false ? req.appContext : redactSensitiveText(req.appContext)) : ''
 
   const messages: Message[] = [
     {

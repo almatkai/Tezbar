@@ -6,6 +6,7 @@ export const TERMINAL_IPC = {
   UPDATE: 'terminal:update',
   WRITE: 'terminal:write',
   RESIZE: 'terminal:resize',
+  GET_CWD: 'terminal:get-cwd',
   KILL: 'terminal:kill',
   DELETE: 'terminal:delete',
   DATA: 'terminal:data',
@@ -17,9 +18,31 @@ export function compactTerminalPath(value: string): string {
   return value.replace(/^\/Users\/[^/]+(?=\/|$)/, '...')
 }
 
+export function terminalDirectoryLabel(cwd: string): string {
+  const parts = cwd.split('/').filter(Boolean)
+  if (parts.length === 2 && parts[0] === 'Users') return '~'
+  if (parts.length === 3 && parts[0] === 'Users') return `~/${parts[2]}`
+  if (parts.length === 0) return '/'
+  return parts.slice(-2).join('/')
+}
+
+export function normalizeTerminalCommand(command: string | undefined): string {
+  return command?.trim().replace(/\s+/g, ' ') ?? ''
+}
+
+export function formatTerminalSessionName(cwd: string, lastCommand: string): string {
+  const directory = terminalDirectoryLabel(cwd)
+  const command = normalizeTerminalCommand(lastCommand)
+  return command ? `${directory} · ${command}` : directory
+}
+
 export type TerminalCreateRequest = {
   cwd?: string
   initialCommand?: string
+  /** Reopen an exited session under the same id so its durable history can be replayed. */
+  restoreSessionId?: string
+  /** Legacy fallback shown without execution when a session predates durable history. */
+  restoreCommand?: string
   name?: string
   saveFor?: TerminalSaveFor
   keepAliveFor?: TerminalKeepAliveFor

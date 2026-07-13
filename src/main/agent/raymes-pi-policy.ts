@@ -1,3 +1,5 @@
+import { Type } from '@earendil-works/pi-ai'
+
 type ToolCallEvent = {
   toolName: string
   input?: {
@@ -22,6 +24,19 @@ type ExtensionAPI = {
     handler: (event: ToolCallEvent, ctx: ExtensionContext) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>,
   ): void
   registerProvider(name: string, config: RaymesPiProviderConfig): void
+  registerTool(definition: {
+    name: string
+    label: string
+    description: string
+    promptSnippet?: string
+    promptGuidelines?: string[]
+    parameters: unknown
+    execute: (
+      toolCallId: string,
+      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },
+      signal?: AbortSignal,
+    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>
+  }): void
 }
 
 type RaymesPiProviderConfig = {
@@ -164,6 +179,86 @@ export function isAutoAllowedBash(
 
 export default function raymesPiPolicy(pi: ExtensionAPI): void {
   registerRaymesProvider(pi)
+
+  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']
+  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']
+  if (knowledgeEndpoint && knowledgeToken && /^http:\/\/127\.0\.0\.1:\d+\/search$/.test(knowledgeEndpoint)) {
+    pi.registerTool({
+      name: 'pc_search',
+      label: 'Search PC Knowledge',
+      description: 'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',
+      promptSnippet: 'Search user-approved local documents, PDFs, images, and notes indexed by Tezbar',
+      promptGuidelines: [
+        'Use pc_search when the user asks about information that may be in their documents, PDFs, screenshots, images, or knowledge folders.',
+        'Use pc_read with a returned result ID when more surrounding content is needed.',
+        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',
+      ],
+      parameters: Type.Object({
+        query: Type.String({ description: 'A focused natural-language or keyword search query' }),
+        limit: Type.Optional(Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })),
+      }),
+      async execute(_toolCallId, params, signal) {
+        const response = await fetch(knowledgeEndpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${knowledgeToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),
+          signal,
+        })
+        const result = await response.json() as {
+          hits?: Array<{ chunkId: string; path: string; pageNumber?: number; text: string; score: number }>
+          error?: string
+        }
+        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')
+        const hits = result.hits ?? []
+        const text = hits.length === 0
+          ? 'No indexed knowledge matched this query.'
+          : hits.map((hit, index) => {
+              const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''
+              return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\n${hit.text}`
+            }).join('\n\n')
+        return { content: [{ type: 'text', text }], details: { hits } }
+      },
+    })
+
+    pi.registerTool({
+      name: 'pc_read',
+      label: 'Read PC Knowledge Result',
+      description: 'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',
+      parameters: Type.Object({
+        resultId: Type.String({ description: 'The result ID returned by pc_search' }),
+        maxChars: Type.Optional(Type.Number({ minimum: 500, maximum: 50_000, description: 'Maximum text characters to return' })),
+      }),
+      async execute(_toolCallId, params, signal) {
+        const response = await fetch(knowledgeEndpoint.replace(/\/search$/, '/read'), {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${knowledgeToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            resultId: params.resultId ?? '',
+            maxChars: params.maxChars ?? 12_000,
+          }),
+          signal,
+        })
+        const payload = await response.json() as {
+          result?: { path: string; pageNumber?: number; text: string }
+          error?: string
+        }
+        if (!response.ok || !payload.result) {
+          throw new Error(payload.error || 'Knowledge result could not be read')
+        }
+        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''
+        return {
+          content: [{ type: 'text', text: `${payload.result.path}${page}\n\n${payload.result.text}` }],
+          details: payload.result,
+        }
+      },
+    })
+  }
 
   pi.on('tool_call', async (event, ctx) => {
     if (event.toolName !== 'bash') return undefined

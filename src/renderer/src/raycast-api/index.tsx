@@ -129,6 +129,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
               title={title}
               onBack={onBack}
               onSubmitForm={onSubmitForm}
+              onChangeField={(actionId, value) => onInvokeAction(actionId, { value })}
               onOpenActions={() => openActions()}
             />
           ) : kind === 'grid' ? (
