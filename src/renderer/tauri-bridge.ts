@@ -42,6 +42,11 @@ export async function initTauriBridge(): Promise<void> {
     })
   }
 
+  const setBlurHideSuppressed = async (value: boolean): Promise<{ ok: boolean }> => {
+    await invoke('set_suppress_blur_hide', { value })
+    return callBackend('window:suppress-blur-hide', value)
+  }
+
   const recordNativeTerminalExit = (payload: any): void => {
     if (!payload || typeof payload.sessionId !== 'string') return
     void callBackend('terminal:native-exit', {
@@ -159,6 +164,16 @@ export async function initTauriBridge(): Promise<void> {
     listNamedPorts: () => callBackend('port-manager:named:list'),
     addNamedPort: (payload: any) => callBackend('port-manager:named:add', payload),
     removeNamedPort: (id: string) => callBackend('port-manager:named:remove', id),
+    quickLookFiles: async (paths: string[]) => {
+      await setBlurHideSuppressed(true)
+      try {
+        await invoke('set_quick_look_window_state', { previewing: true })
+        return await callBackend('file:quick-look', paths)
+      } finally {
+        await invoke('set_quick_look_window_state', { previewing: false }).catch(() => undefined)
+        await setBlurHideSuppressed(false).catch(() => undefined)
+      }
+    },
     executeSearchAction: (action: any, context?: any) =>
       callBackend('search:execute', { action, context }),
     recordSearchActionUsage: (action: any, context?: any) =>
@@ -169,10 +184,7 @@ export async function initTauriBridge(): Promise<void> {
     voiceStop: () => callBackend('voice:tts:stop'),
     voiceTranscribe: (payload: any) => callBackend('voice:stt:transcribe', payload),
 
-    setSuppressBlurHide: async (value: boolean) => {
-      await invoke('set_suppress_blur_hide', { value })
-      return callBackend('window:suppress-blur-hide', value)
-    },
+    setSuppressBlurHide: setBlurHideSuppressed,
     listVoiceSttModes: () => callBackend('voice:stt:modes'),
     listVoiceModels: () => callBackend('voice:models:list'),
     downloadVoiceModel: (modelId: any) => callBackend('voice:model:download', { modelId }),
@@ -216,6 +228,7 @@ export async function initTauriBridge(): Promise<void> {
     setSafetyDryRun: (value: boolean) => callBackend('safety:dry-run:set', value),
 
     getNativeCommands: () => callBackend('native-commands:list'),
+    getSystemStats: () => callBackend('system-stats:get'),
 
     listClipboardEntries: () => callBackend('clipboard:list'),
     restoreClipboardEntry: (id: string) => callBackend('clipboard:restore', id),
@@ -440,8 +453,6 @@ export async function initTauriBridge(): Promise<void> {
       setupEventListener('window-shown', listener),
     onWindowSnapGuides: (listener: (payload: { visible: boolean; active: boolean }) => void) =>
       setupEventListener('window:snap-guides', listener),
-    onVoiceHotkeyHold: (listener: (payload: { phase: 'press' | 'release' }) => void) =>
-      setupEventListener('voice:hotkey-hold', listener),
     onTerminalData: (listener: (event: any) => void) =>
       setupEventListener('terminal:data', listener),
     onTerminalExit: (listener: (event: any) => void) =>

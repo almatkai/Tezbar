@@ -5,6 +5,7 @@
       "../native/axhelper/axhelper": "native/axhelper/axhelper",
       "../native/screenocr/screenocr-helper": "native/screenocr/screenocr-helper",
       "../native/color-picker/color-picker-helper": "native/color-picker/color-picker-helper",
+      "../native/image-colors/image-colors-helper": "native/image-colors/image-colors-helper",
       "../dist-backend/libsqlite3.dylib": "dist-backend/libsqlite3.dylib",
       "../node_modules/@esbuild": "node_modules/@esbuild",
       "../node_modules/esbuild": "node_modules/esbuild"

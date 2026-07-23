@@ -6,6 +6,7 @@ export const IPC_CHANNELS = {
   SEARCH_CANDIDATES: 'search:candidates',
   PATH_COMPLETE: 'path:complete',
   DIRECTORY_VISIT_RECORD: 'directory-visit:record',
+  QUICK_LOOK_FILE: 'file:quick-look',
   SEARCH_EXECUTE: 'search:execute',
   SEARCH_RECORD_USAGE: 'search:record-usage',
   SEARCH_BENCHMARK_RUN: 'search:benchmark:run',

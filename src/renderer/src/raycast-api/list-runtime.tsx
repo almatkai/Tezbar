@@ -15,6 +15,7 @@ type ListRow = {
   icon?: {
     fileIcon?: string
     source?: unknown
+    tintColor?: unknown
   }
   accessories?: Array<{ text?: unknown; tag?: unknown; date?: unknown; icon?: unknown }>
   detail?: ExtensionRuntimeNode
@@ -62,11 +63,11 @@ function parseRowIcon(value: unknown): ListRow['icon'] | undefined {
     return { source: value.trim() }
   }
   if (!value || typeof value !== 'object') return undefined
-  const icon = value as { fileIcon?: unknown }
+  const icon = value as { fileIcon?: unknown; source?: unknown; tintColor?: unknown }
   if (typeof icon.fileIcon === 'string' && icon.fileIcon.trim()) {
     return { fileIcon: icon.fileIcon.trim() }
   }
-  if ('source' in icon) return { source: (icon as { source?: unknown }).source }
+  if ('source' in icon) return { source: icon.source, tintColor: icon.tintColor }
   return undefined
 }
 
@@ -174,15 +175,56 @@ function FileIcon({ path, title }: { path: string; title: string }): React.React
   )
 }
 
-function SymbolIcon({ icon, title }: { icon: unknown; title: string }): React.ReactNode {
-  const token = textValue(icon && typeof icon === 'object' ? (icon as { source?: unknown }).source : icon)
+function resolveIconTintColor(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (!value || typeof value !== 'object') return undefined
+
+  const adaptiveColor = value as { dark?: unknown; light?: unknown }
+  const dark = typeof adaptiveColor.dark === 'string' ? adaptiveColor.dark.trim() : ''
+  const light = typeof adaptiveColor.light === 'string' ? adaptiveColor.light.trim() : ''
+  return dark || light || undefined
+}
+
+function SymbolIcon({
+  icon,
+  title,
+  tintColor,
+}: {
+  icon: unknown
+  title: string
+  tintColor?: unknown
+}): React.ReactNode {
+  const token = textValue(
+    icon && typeof icon === 'object' ? (icon as { source?: unknown }).source : icon
+  )
     .replace(/^Icon\./, '')
     .toLowerCase()
   const label = token || title.slice(0, 1).toLowerCase()
+  const resolvedTintColor = resolveIconTintColor(tintColor)
+
+  if (label.includes('circlefilled')) {
+    return (
+      <span
+        className="h-[18px] w-[18px] shrink-0 rounded-full border border-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_3px_rgba(0,0,0,0.22)]"
+        style={{ backgroundColor: resolvedTintColor || 'currentColor' }}
+        aria-hidden="true"
+      />
+    )
+  }
 
   return (
-    <span className="grid h-5 w-5 shrink-0 place-items-center text-accent-1" aria-hidden="true">
-      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+    <span
+      className="grid h-5 w-5 shrink-0 place-items-center text-accent-1"
+      style={resolvedTintColor ? { color: resolvedTintColor } : undefined}
+      aria-hidden="true"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
         {label.includes('check') ? (
           <>
             <circle cx="12" cy="12" r="9" />
@@ -265,10 +307,15 @@ function RowIcon({ row }: { row: ListRow }): JSX.Element | null {
   }
   if (row.icon?.fileIcon) return <FileIcon path={row.icon.fileIcon} title={row.title} />
   if (isEmojiGlyph(row.icon?.source)) return <GlyphIcon value={row.icon.source} />
-  if (typeof row.icon?.source === 'string' && /^(?:data:image|https?:|file:)/i.test(row.icon.source)) {
+  if (
+    typeof row.icon?.source === 'string' &&
+    /^(?:data:image|https?:|file:)/i.test(row.icon.source)
+  ) {
     return <img src={row.icon.source} alt="" className="h-5 w-5 shrink-0" draggable={false} />
   }
-  if (row.icon?.source) return <SymbolIcon icon={row.icon.source} title={row.title} />
+  if (row.icon?.source) {
+    return <SymbolIcon icon={row.icon.source} title={row.title} tintColor={row.icon.tintColor} />
+  }
   return null
 }
 
@@ -427,6 +474,7 @@ export function ListRuntime({
   onBack,
   onRunPrimaryAction,
   actions,
+  onOpenActions,
   onSearchTextChanged,
   onLoadMore,
 }: {
@@ -436,7 +484,7 @@ export function ListRuntime({
   onBack: () => void
   onRunPrimaryAction: (actionId?: string, formValues?: Record<string, unknown>) => void
   actions: ExtensionRuntimeAction[]
-  onOpenActions: () => void
+  onOpenActions: (actionIds?: string[]) => void
   onSearchTextChanged: (searchText: string) => Promise<void> | void
   onLoadMore: () => Promise<void> | void
 }): React.ReactNode {
@@ -585,6 +633,19 @@ export function ListRuntime({
   }, [selected])
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    const isActionsShortcut =
+      e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      !e.shiftKey &&
+      e.key.toLowerCase() === 'k'
+    if (isActionsShortcut) {
+      e.preventDefault()
+      e.stopPropagation()
+      onOpenActions(filteredRows[selected]?.actionIds)
+      return
+    }
+
     if (filteredRows.length === 0) return
 
     if (e.key === 'ArrowDown') {

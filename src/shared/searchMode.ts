@@ -22,7 +22,18 @@ export function parseSearchQuery(input: string): ParsedSearchQuery {
 
 export function deepSearchInput(query: string): string {
   const trimmed = query.trim()
-  return trimmed ? `${DEEP_SEARCH_PREFIX}${trimmed}` : DEEP_SEARCH_PREFIX
+  return deepSearchDraftInput(trimmed)
+}
+
+/** Preserve the editable text while keeping the hidden Deep Search sentinel. */
+export function deepSearchDraftInput(query: string): string {
+  return `${DEEP_SEARCH_PREFIX}${query}`
+}
+
+/** Stable backend input: whitespace-only edits do not represent a new search. */
+export function searchRequestInput(input: string): string {
+  const parsed = parseSearchQuery(input)
+  return parsed.mode === 'deep' ? deepSearchInput(parsed.query) : parsed.query
 }
 
 function tokens(value: string): string[] {
@@ -75,4 +86,27 @@ export function hasGoodMetadataMatch(
 
     return queryTokens.length > 1 || result.score >= 650
   })
+}
+
+/** Build the zero-wait fallback shown when launcher metadata has no close match. */
+export function buildDeepSearchRecommendation(
+  query: string,
+  results: Array<Pick<SearchResult, 'id' | 'title' | 'subtitle' | 'category' | 'score'>>
+): SearchResult | null {
+  const trimmed = query.trim()
+  if (trimmed.length < 3 || hasGoodMetadataMatch(trimmed, results)) return null
+
+  const bestCandidateScore = results.reduce((best, candidate) => Math.max(best, candidate.score), 0)
+  return {
+    id: `${DEEP_SEARCH_RESULT_PREFIX}${encodeURIComponent(trimmed.toLowerCase())}`,
+    title: `Deep Search “${trimmed.slice(0, 72)}”`,
+    subtitle: 'No strong metadata match · Search inside indexed file contents',
+    category: 'knowledge',
+    score: Math.max(1_200, bestCandidateScore + 1),
+    action: {
+      type: 'invoke-command',
+      commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
+      payload: { query: trimmed },
+    },
+  }
 }

@@ -1,12 +1,14 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import type { ExtensionRuntimeAction, ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
 import { Hint, HintBar, Kbd, cx } from '../../ui/primitives'
+import { colorFromGridContent } from './grid-content'
 
 type GridItem = {
   id: string
   title: string
   subtitle: string
   image?: string
+  color?: string
   actionIds: string[]
 }
 
@@ -77,10 +79,11 @@ function collectGridItems(root: ExtensionRuntimeNode): GridItem[] {
       const title = typeof node.props?.title === 'string' ? node.props.title : 'Untitled'
       const subtitle = typeof node.props?.subtitle === 'string' ? node.props.subtitle : ''
       const image = imageSourceFromContent(node.props?.content)
+      const color = colorFromGridContent(node.props?.content)
       const actionIds = Array.isArray(node.props?.actionIds)
         ? node.props.actionIds.filter((value): value is string => typeof value === 'string')
         : []
-      out.push({ id, title, subtitle, image, actionIds })
+      out.push({ id, title, subtitle, image, color, actionIds })
       return
     }
 
@@ -200,6 +203,19 @@ export function GridRuntime({
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const isActionsShortcut =
+      event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      event.key.toLowerCase() === 'k'
+    if (isActionsShortcut) {
+      event.preventDefault()
+      event.stopPropagation()
+      onOpenActions(selectedItem?.actionIds)
+      return
+    }
+
     const isFavoriteShortcut =
       event.metaKey &&
       !event.ctrlKey &&
@@ -318,7 +334,15 @@ export function GridRuntime({
                     : 'border-white/[0.075] bg-transparent text-ink-2 hover:border-white/16 hover:bg-white/[0.045]'
                 }`}
               >
-                <div className="mx-auto mb-3 grid aspect-square w-full max-w-[88px] place-items-center rounded-[8px] bg-[#242936] p-4 transition group-hover:bg-[#2b3040]">
+                <div
+                  className={cx(
+                    'mx-auto mb-3 grid aspect-square w-full max-w-[88px] place-items-center rounded-[8px] border transition',
+                    item.color
+                      ? 'border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_8px_22px_rgba(0,0,0,0.16)]'
+                      : 'border-transparent bg-[#242936] p-4 group-hover:bg-[#2b3040]'
+                  )}
+                  style={item.color ? { backgroundColor: item.color } : undefined}
+                >
                   {item.image ? (
                     <img
                       src={item.image}
@@ -326,7 +350,7 @@ export function GridRuntime({
                       className="h-full w-full object-contain"
                       loading="lazy"
                     />
-                  ) : (
+                  ) : item.color ? null : (
                     <span className="text-[20px] font-semibold text-ink-4">
                       {item.title.slice(0, 1).toUpperCase()}
                     </span>

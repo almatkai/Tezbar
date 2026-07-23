@@ -755,7 +755,7 @@ export default function AgentChatView({
       let decision: AgentApprovalDecision | null = null
       if (event.key === 'Escape') decision = 'deny'
       if (event.key === 'Enter') {
-        decision = (event.metaKey || event.ctrlKey) && approval.suggestedRule ? 'always' : 'once'
+        decision = event.metaKey || event.ctrlKey ? 'always' : 'once'
       }
       if (!decision) return
       event.preventDefault()
@@ -1238,16 +1238,15 @@ export default function AgentChatView({
                 >
                   Deny <span className="ml-1 font-mono text-[9px] text-ink-4">esc</span>
                 </button>
-                {pendingApproval.suggestedRule ? (
-                  <button
-                    type="button"
-                    className="rounded-lg px-2 py-1.5 text-[10.5px] text-ink-3 transition hover:bg-white/[0.055] hover:text-ink-1"
-                    onClick={() => void resolveApproval('always')}
-                  >
-                    Always allow {pendingApproval.suggestedRule}
-                    <span className="ml-1.5 font-mono text-[9px] text-ink-4">⌘↵</span>
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className="rounded-lg px-2 py-1.5 text-[10.5px] text-ink-3 transition hover:bg-white/[0.055] hover:text-ink-1"
+                  title="Remember this exact command and run it automatically next time"
+                  onClick={() => void resolveApproval('always')}
+                >
+                  Run without asking
+                  <span className="ml-1.5 font-mono text-[9px] text-ink-4">⌘↵</span>
+                </button>
                 <button
                   type="button"
                   className="ml-auto rounded-lg bg-ink-1 px-2.5 py-1.5 text-[10.5px] font-semibold text-glass-shell sm:hidden"

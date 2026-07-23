@@ -28,6 +28,7 @@ import type {
   KnowledgeStatus,
 } from './knowledge'
 import type { NativeCommandDescriptor } from './nativeCommands'
+import type { SystemStatsSnapshot } from './systemStats'
 import type { PermissionId, PermissionStatus, PermissionsSnapshot } from './permissions'
 import type { SafetyDescriptor, SafetyLogEntry } from './safety'
 import type { NamedPortEntry } from './portManager'
@@ -168,6 +169,7 @@ export type RaymesApi = {
   listNamedPorts: () => Promise<NamedPortEntry[]>
   addNamedPort: (payload: { name: string; port: number }) => Promise<NamedPortEntry | null>
   removeNamedPort: (id: string) => Promise<boolean>
+  quickLookFiles: (paths: string[]) => Promise<SearchExecuteResult>
   executeSearchAction: (
     action: SearchAction,
     context?: SearchExecuteContext
@@ -221,8 +223,6 @@ export type RaymesApi = {
   onWindowSnapGuides: (
     listener: (payload: { visible: boolean; active: boolean }) => void
   ) => () => void
-  /** Configured launcher shortcut held after opening — same pipeline as Hold to speak. */
-  onVoiceHotkeyHold: (listener: (payload: { phase: 'press' | 'release' }) => void) => () => void
   getPermissions: () => Promise<PermissionsSnapshot>
   requestPermission: (id: PermissionId) => Promise<PermissionStatus>
   getSafetyDescriptors: () => Promise<SafetyDescriptor[]>
@@ -231,6 +231,7 @@ export type RaymesApi = {
   getSafetyDryRun: () => Promise<boolean>
   setSafetyDryRun: (value: boolean) => Promise<boolean>
   getNativeCommands: () => Promise<NativeCommandDescriptor[]>
+  getSystemStats: () => Promise<SystemStatsSnapshot>
   listClipboardEntries: () => Promise<ClipboardEntry[]>
   restoreClipboardEntry: (id: string) => Promise<boolean>
   deleteClipboardEntry: (id: string) => Promise<boolean>

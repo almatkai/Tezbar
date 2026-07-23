@@ -100,7 +100,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
         !event.shiftKey &&
         String(event.key || '').toLowerCase() === 'k'
 
-      if (isActionShortcut) {
+      if (isActionShortcut && (kind === 'form' || kind === 'detail')) {
         event.preventDefault()
         setShowActions((value) => !value)
         return
@@ -147,7 +147,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
               onBack={onBack}
               onSubmitForm={onSubmitForm}
               onChangeField={(actionId, value) => onInvokeAction(actionId, { value })}
-              onOpenActions={() => openActions()}
+              onOpenActions={openActions}
               actionNotice={actionNotice}
             />
           ) : kind === 'grid' ? (
@@ -167,7 +167,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
               title={title}
               onBack={onBack}
               onRunPrimaryAction={onRunPrimaryAction}
-              onOpenActions={() => openActions()}
+              onOpenActions={openActions}
             />
           ) : (
             <ListRuntime
@@ -177,7 +177,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
               onBack={onBack}
               onRunPrimaryAction={onRunPrimaryAction}
               actions={actions}
-              onOpenActions={() => openActions()}
+              onOpenActions={openActions}
               onSearchTextChanged={onSearchTextChanged}
               onLoadMore={onLoadMore}
             />

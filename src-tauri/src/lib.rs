@@ -49,7 +49,6 @@ const TAURI_WINDOW_POSITION_KEY: &str = "tauriWindowPosition";
 const TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "tauriWindowPositionsByDisplay";
 const LEGACY_WINDOW_POSITION_KEY: &str = "windowPosition";
 const LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "windowPositionsByDisplay";
-const SHORTCUT_HOLD_THRESHOLD: Duration = Duration::from_millis(100);
 
 struct BackendState {
     writer: Arc<Mutex<Option<TcpStream>>>,
@@ -68,14 +67,6 @@ struct BackendLaunchConfig {
 struct WindowBehaviorState {
     suppress_blur_hide: Mutex<bool>,
     backend_hidden_windows: Mutex<Vec<String>>,
-}
-
-#[derive(Default)]
-struct ShortcutGestureState {
-    pressed_at: Option<Instant>,
-    generation: u64,
-    dictation_armed: bool,
-    was_visible_and_focused: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -1054,6 +1045,17 @@ fn set_suppress_blur_hide(state: State<'_, WindowBehaviorState>, value: bool) {
 }
 
 #[tauri::command]
+fn set_quick_look_window_state(window: WebviewWindow, previewing: bool) -> Result<(), String> {
+    window
+        .set_always_on_top(!previewing)
+        .map_err(|e| e.to_string())?;
+    if !previewing {
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn window_set_content_height(
     window: WebviewWindow,
     height: f64,
@@ -1202,86 +1204,14 @@ pub fn run() {
 
     let pending_requests_app = pending_requests.clone();
     let backend_writer_app = backend_writer.clone();
-    let shortcut_gesture = Arc::new(Mutex::new(ShortcutGestureState::default()));
-    let shortcut_gesture_handler = shortcut_gesture.clone();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, _shortcut, event| {
-                    let Some(win) = app.get_webview_window("main") else {
-                        return;
-                    };
-
-                    match event.state() {
-                        ShortcutState::Pressed => {
-                            let was_visible_and_focused = win.is_visible().unwrap_or(false)
-                                && win.is_focused().unwrap_or(false);
-                            let generation = {
-                                let mut gesture = shortcut_gesture_handler.lock().unwrap();
-                                // Ignore keyboard auto-repeat while the chord remains held.
-                                if gesture.pressed_at.is_some() {
-                                    return;
-                                }
-                                gesture.generation = gesture.generation.wrapping_add(1);
-                                gesture.pressed_at = Some(Instant::now());
-                                gesture.dictation_armed = false;
-                                gesture.was_visible_and_focused = was_visible_and_focused;
-                                gesture.generation
-                            };
-
-                            // A tap from outside Tezbar opens it immediately. A tap while the
-                            // focused palette is open is classified on release, so it no longer
-                            // disappears before a possible push-to-talk hold can begin.
-                            if !was_visible_and_focused {
-                                let _ = show_window(win.clone());
-                            }
-
-                            let app = app.clone();
-                            let gesture_state = shortcut_gesture_handler.clone();
-                            std::thread::spawn(move || {
-                                std::thread::sleep(SHORTCUT_HOLD_THRESHOLD);
-                                {
-                                    let mut gesture = gesture_state.lock().unwrap();
-                                    if gesture.generation != generation
-                                        || gesture.pressed_at.is_none()
-                                    {
-                                        return;
-                                    }
-                                    gesture.dictation_armed = true;
-                                }
-                                if let Some(window) = app.get_webview_window("main") {
-                                    if !window.is_visible().unwrap_or(false)
-                                        || !window.is_focused().unwrap_or(false)
-                                    {
-                                        let _ = show_window(window.clone());
-                                    }
-                                    let _ = window
-                                        .emit("voice:hotkey-hold", json!({ "phase": "press" }));
-                                }
-                            });
-                        }
-                        ShortcutState::Released => {
-                            let (dictation_armed, was_visible_and_focused) = {
-                                let mut gesture = shortcut_gesture_handler.lock().unwrap();
-                                if gesture.pressed_at.take().is_none() {
-                                    return;
-                                }
-                                gesture.generation = gesture.generation.wrapping_add(1);
-                                let result =
-                                    (gesture.dictation_armed, gesture.was_visible_and_focused);
-                                gesture.dictation_armed = false;
-                                gesture.was_visible_and_focused = false;
-                                result
-                            };
-
-                            if dictation_armed {
-                                let _ =
-                                    win.emit("voice:hotkey-hold", json!({ "phase": "release" }));
-                            } else if was_visible_and_focused {
-                                let _ = hide_window(win);
-                            }
+                    if event.state() == ShortcutState::Pressed {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = toggle_window(win);
                         }
                     }
                 })
@@ -1375,6 +1305,7 @@ pub fn run() {
             start_window_snap_drag,
             end_window_snap_drag,
             set_suppress_blur_hide,
+            set_quick_look_window_state,
             window_set_content_height,
             update_raymes_shortcut,
             native_input::move_mouse,

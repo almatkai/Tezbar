@@ -16,6 +16,7 @@
     "build:native:axhelper": "./native/axhelper/build.sh",
     "build:native:screenocr": "./native/screenocr/build.sh",
     "build:native:color-picker": "./native/color-picker/build.sh",
+    "build:native:image-colors": "./native/image-colors/build.sh",
     "build:native": "node scripts/build-native.mjs",
     "dist": "pnpm build",
     "tauri": "tauri",

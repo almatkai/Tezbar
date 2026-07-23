@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { SearchResult } from './search'
-import { deepSearchInput, hasGoodMetadataMatch, parseSearchQuery } from './searchMode'
+import {
+  buildDeepSearchRecommendation,
+  deepSearchDraftInput,
+  deepSearchInput,
+  hasGoodMetadataMatch,
+  parseSearchQuery,
+  searchRequestInput,
+} from './searchMode'
 
 function result(
   id: string,
@@ -34,6 +41,14 @@ describe('search modes', () => {
       query: 'quarterly revenue',
     })
     expect(deepSearchInput(' quarterly revenue ')).toBe('!quarterly revenue')
+    expect(deepSearchDraftInput('quarterly revenue ')).toBe('!quarterly revenue ')
+  })
+
+  it('does not change the backend query for trailing whitespace', () => {
+    expect(searchRequestInput('quarterly revenue')).toBe('quarterly revenue')
+    expect(searchRequestInput('quarterly revenue ')).toBe('quarterly revenue')
+    expect(searchRequestInput('!quarterly revenue')).toBe('!quarterly revenue')
+    expect(searchRequestInput('!quarterly revenue   ')).toBe('!quarterly revenue')
   })
 
   it('accepts a complete metadata match', () => {
@@ -86,5 +101,29 @@ describe('search modes', () => {
         result('file:quarter', 'Quarter report.pdf', '/Documents'),
       ])
     ).toBe(true)
+  })
+
+  it('builds an immediate recommendation above weak local candidates', () => {
+    const recommendation = buildDeepSearchRecommendation('¡Comienzo!', [
+      result('file:person-promoter', 'PersonPromoter', '/private/com.apple/cache', 'files', 2_489),
+    ])
+
+    expect(recommendation).toMatchObject({
+      title: 'Deep Search “¡Comienzo!”',
+      score: 2_490,
+      action: {
+        type: 'invoke-command',
+        commandId: 'activate-deep-search',
+        payload: { query: '¡Comienzo!' },
+      },
+    })
+  })
+
+  it('does not recommend Deep Search when local metadata is already close', () => {
+    expect(
+      buildDeepSearchRecommendation('quarterly revenue', [
+        result('file:report', 'Q3 quarterly report.pdf', '/Documents/revenue'),
+      ])
+    ).toBeNull()
   })
 })

@@ -1,7 +1,4 @@
-import {
-  CHAT_CONTEXT_MAX_TURNS,
-  type ChatSession,
-} from '../../shared/chat'
+import { CHAT_CONTEXT_MAX_TURNS, type ChatSession } from '../../shared/chat'
 
 /** Random id generator for chat sessions + turns. */
 export function makeChatId(): string {
@@ -25,8 +22,10 @@ export function buildAgentPromptFromChat(session: ChatSession, nextUserText: str
   const lines: string[] = [
     'You are running inside Tezbar on the user machine through the Pi agent harness.',
     'You have tool access. You can run bash commands and inspect local files/folders/apps on this Mac.',
-    'You can search user-approved Tezbar Knowledge with pc_search and read nearby context with pc_read. Use them for questions about indexed documents, PDFs, screenshots, and images.',
-    'For local/system questions, actively use bash/read/listing tools before answering.',
+    'Use launcher_search first to find local files, folders, applications, commands, clipboard items, notes, snippets, or links by name or metadata.',
+    'Use pc_search first to find text or information inside indexed documents, PDFs, screenshots, images, and notes; use pc_read for nearby context.',
+    'Never start with find, mdfind, grep, rg, or a recursive shell scan across the home, Desktop, Documents, Downloads, Pictures, or code folders. Tezbar indexed search must be tried first.',
+    'For narrow codebase inspection and live system facts such as processes or ports, actively use bash/read/listing tools before answering.',
     'Never say you cannot access the computer when the requested information can be inspected with bash.',
     'When the user asks what is installed or what they have, inspect /Applications, ~/Applications, PATH, or relevant local locations.',
     'Resolve common macOS shorthand like "desktop/code" to ~/Desktop/code when appropriate.',

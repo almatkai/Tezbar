@@ -12,6 +12,10 @@ describe('buildFtsQuery', () => {
     expect(buildFtsQuery('--- ... ___')).toBe('')
   })
 
+  it('does not expand transient one-character input across the whole corpus', () => {
+    expect(buildFtsQuery('n')).toBe('"n"')
+  })
+
   it('keeps Unicode words', () => {
     expect(buildFtsQuery('Поиск документов')).toBe('поиск* OR документов*')
   })
@@ -36,9 +40,9 @@ describe('fuzzySimilarityScore', () => {
   })
 
   it('matches Unicode query tokens', () => {
-    expect(
-      fuzzySimilarityScore('Быстрый поиск документов', 'Поиск документов')
-    ).toBeGreaterThan(0.9)
+    expect(fuzzySimilarityScore('Быстрый поиск документов', 'Поиск документов')).toBeGreaterThan(
+      0.9
+    )
   })
 
   it('does not match unrelated text', () => {

@@ -18,6 +18,11 @@ export type SearchIndexRow = {
   popularity: number
 }
 
+export type SearchDocumentSyncState = {
+  id: string
+  sourceMtime: number | null
+}
+
 type RecommendedIndexRow = {
   id: string
   category: SearchCategory
@@ -139,14 +144,6 @@ export class SearchIndexDatabase {
         popularity REAL NOT NULL DEFAULT 0
       );
 
-      CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
-        id UNINDEXED,
-        title,
-        subtitle,
-        tokens,
-        tokenize = 'unicode61'
-      );
-
       CREATE TABLE IF NOT EXISTS action_stats (
         action_id TEXT PRIMARY KEY,
         frequency INTEGER NOT NULL DEFAULT 0,
@@ -194,7 +191,77 @@ export class SearchIndexDatabase {
     `)
 
     this.ensureDocumentsSchema()
+    this.ensureFtsSchema()
     this.pruneTelemetry()
+  }
+
+  /**
+   * Keep FTS rowids identical to the owning document rowids. The previous
+   * schema stored `id UNINDEXED` in the virtual table and then deleted with
+   * `WHERE id = ?`. FTS5 cannot index an UNINDEXED column, so every document
+   * update scanned the entire search corpus. A full file refresh consequently
+   * became quadratic and blocked the backend event loop for minutes.
+   *
+   * External-content triggers make document writes the single source of truth
+   * and let FTS5 address updates by rowid. Existing installations are rebuilt
+   * once into the new layout during startup.
+   */
+  private ensureFtsSchema(): void {
+    const row = this.db
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'documents_fts'")
+      .get() as { sql?: string } | undefined
+    const normalizedSql = row?.sql?.replace(/\s+/g, '').toLowerCase() ?? ''
+    const usesDocumentContent =
+      normalizedSql.includes("content='documents'") || normalizedSql.includes('content="documents"')
+
+    const createTriggers = (): void => {
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS documents_fts_after_insert
+        AFTER INSERT ON documents BEGIN
+          INSERT INTO documents_fts(rowid, title, subtitle, tokens)
+          VALUES (new.rowid, new.title, new.subtitle, new.tokens);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS documents_fts_after_delete
+        AFTER DELETE ON documents BEGIN
+          INSERT INTO documents_fts(documents_fts, rowid, title, subtitle, tokens)
+          VALUES ('delete', old.rowid, old.title, old.subtitle, old.tokens);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS documents_fts_after_update
+        AFTER UPDATE ON documents BEGIN
+          INSERT INTO documents_fts(documents_fts, rowid, title, subtitle, tokens)
+          VALUES ('delete', old.rowid, old.title, old.subtitle, old.tokens);
+          INSERT INTO documents_fts(rowid, title, subtitle, tokens)
+          VALUES (new.rowid, new.title, new.subtitle, new.tokens);
+        END;
+      `)
+    }
+
+    if (usesDocumentContent) {
+      createTriggers()
+      return
+    }
+
+    const migrate = this.db.transaction(() => {
+      this.db.exec(`
+        DROP TRIGGER IF EXISTS documents_fts_after_insert;
+        DROP TRIGGER IF EXISTS documents_fts_after_delete;
+        DROP TRIGGER IF EXISTS documents_fts_after_update;
+        DROP TABLE IF EXISTS documents_fts;
+        CREATE VIRTUAL TABLE documents_fts USING fts5(
+          title,
+          subtitle,
+          tokens,
+          content = 'documents',
+          content_rowid = 'rowid',
+          tokenize = 'unicode61'
+        );
+      `)
+      createTriggers()
+      this.db.exec("INSERT INTO documents_fts(documents_fts) VALUES ('rebuild')")
+    })
+    migrate()
   }
 
   /** Remove old click-events and benchmark snapshots so the DB doesn't grow
@@ -267,11 +334,6 @@ export class SearchIndexDatabase {
         popularity = excluded.popularity
     `)
 
-    const deleteFts = this.db.prepare('DELETE FROM documents_fts WHERE id = ?')
-    const insertFts = this.db.prepare(
-      'INSERT INTO documents_fts (id, title, subtitle, tokens) VALUES (?, ?, ?, ?)'
-    )
-
     const upsertTx = this.db.transaction((rows: IndexedDocument[]) => {
       for (const row of rows) {
         upsertDoc.run(
@@ -286,8 +348,6 @@ export class SearchIndexDatabase {
           row.sourceMtime ? Math.round(row.sourceMtime) : null,
           row.popularity ?? 0
         )
-        deleteFts.run(row.id)
-        insertFts.run(row.id, row.title, row.subtitle, row.tokens)
       }
     })
 
@@ -296,33 +356,32 @@ export class SearchIndexDatabase {
 
   removeDocumentById(id: string): void {
     this.db.prepare('DELETE FROM documents WHERE id = ?').run(id)
-    this.db.prepare('DELETE FROM documents_fts WHERE id = ?').run(id)
+  }
+
+  removeDocumentsByIds(ids: string[]): number {
+    if (ids.length === 0) return 0
+    const placeholders = ids.map(() => '?').join(',')
+    return this.db.prepare(`DELETE FROM documents WHERE id IN (${placeholders})`).run(...ids)
+      .changes
+  }
+
+  listDocumentSyncState(category: SearchCategory): SearchDocumentSyncState[] {
+    return this.db
+      .prepare(
+        `SELECT id, source_mtime AS sourceMtime
+         FROM documents
+         WHERE category = ?`
+      )
+      .all(category) as SearchDocumentSyncState[]
   }
 
   removeDocumentsByCategory(category: SearchCategory): number {
-    const ids = this.db.prepare('SELECT id FROM documents WHERE category = ?').all(category) as {
-      id: string
-    }[]
-    if (ids.length === 0) return 0
-    const delDoc = this.db.prepare('DELETE FROM documents WHERE id = ?')
-    const delFts = this.db.prepare('DELETE FROM documents_fts WHERE id = ?')
-    const removeTx = this.db.transaction((rows: { id: string }[]) => {
-      for (const row of rows) {
-        delDoc.run(row.id)
-        delFts.run(row.id)
-      }
-    })
-    removeTx(ids)
-    return ids.length
+    return this.db.prepare('DELETE FROM documents WHERE category = ?').run(category).changes
   }
 
   replaceDocumentsByCategory(category: SearchCategory, documents: IndexedDocument[]): void {
-    const deleteFts = this.db.prepare(
-      'DELETE FROM documents_fts WHERE id IN (SELECT id FROM documents WHERE category = ?)'
-    )
     const deleteDocuments = this.db.prepare('DELETE FROM documents WHERE category = ?')
     const replaceTx = this.db.transaction(() => {
-      deleteFts.run(category)
       deleteDocuments.run(category)
       this.upsertDocuments(documents)
     })
@@ -350,7 +409,7 @@ export class SearchIndexDatabase {
                        d.popularity AS popularity,
                        bm25(documents_fts, 5.0, 2.0, 1.0) AS bm25Score
                 FROM documents_fts
-                JOIN documents d ON d.id = documents_fts.id
+                JOIN documents d ON d.rowid = documents_fts.rowid
                 WHERE documents_fts MATCH ?
                 ORDER BY bm25Score ASC
                 LIMIT ?
@@ -395,7 +454,11 @@ export class SearchIndexDatabase {
       } satisfies SearchIndexRow
     })
 
-    const fuzzyRows = this.fuzzySearch(trimmed, candidateLimit)
+    // FTS already supplied a complete candidate page. Running the fuzzy
+    // fallback as well would synchronously rescore thousands of rows on every
+    // keystroke without changing the visible result set.
+    const fuzzyRows =
+      mapped.length >= candidateLimit ? [] : this.fuzzySearch(trimmed, candidateLimit)
     const byId = new Map<string, SearchIndexRow>()
 
     for (const row of [...mapped, ...fuzzyRows]) {
@@ -434,11 +497,11 @@ export class SearchIndexDatabase {
         `
           SELECT id, category, title, subtitle, tokens, action_json AS actionJson, updated_at AS updatedAt, popularity
           FROM documents
-          ORDER BY updated_at DESC
+          ORDER BY CASE WHEN category = 'files' THEN 1 ELSE 0 END, updated_at DESC
           LIMIT ?
         `
       )
-      .all(Math.max(1000, limit * 50)) as Array<{
+      .all(Math.max(1000, limit * 10)) as Array<{
       id: string
       category: SearchCategory
       title: string
@@ -705,9 +768,7 @@ export class SearchIndexDatabase {
       .run(Date.now(), precisionAt5, precisionAt10, this.readRecentClickAverage(), benchmarkSize)
   }
 
-  readBenchmarkHistory(
-    limit = 40
-  ): Array<{
+  readBenchmarkHistory(limit = 40): Array<{
     createdAt: number
     precisionAt5: number
     precisionAt10: number

@@ -677,6 +677,61 @@ async function pickColorWithNativeSampler(): Promise<{
   }
 }
 
+type ExtractedImageColor = {
+  hex: string
+  red: number
+  green: number
+  blue: number
+  area: number
+  hue: number
+  saturation: number
+  lightness: number
+  intensity: number
+}
+
+function imageColorsHelperPath(): string | null {
+  const envPath = process.env.IMAGE_COLORS_HELPER_PATH
+  if (envPath && existsSync(envPath)) return envPath
+
+  const candidates = [
+    join(process.cwd(), 'native', 'image-colors', 'image-colors-helper'),
+    join(app.getAppPath(), 'native', 'image-colors', 'image-colors-helper'),
+  ]
+  if (app?.isPackaged) {
+    const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
+    if (resourcesPath) {
+      candidates.unshift(
+        join(resourcesPath, 'app.asar.unpacked', 'native', 'image-colors', 'image-colors-helper'),
+        join(resourcesPath, 'native', 'image-colors', 'image-colors-helper')
+      )
+    }
+  }
+  return candidates.find((candidate) => existsSync(candidate)) ?? null
+}
+
+async function extractColorsFromImage(
+  path: string,
+  colorCount = 40,
+  dominantOnly = false
+): Promise<ExtractedImageColor[]> {
+  if (process.platform !== 'darwin') {
+    throw new Error('Native image color extraction is not available on this platform')
+  }
+  if (!path || !existsSync(path)) throw new Error('The selected image no longer exists')
+
+  const helperPath = imageColorsHelperPath()
+  if (!helperPath) throw new Error('The native image color helper is missing')
+  const count = Math.max(1, Math.min(80, Math.round(Number(colorCount) || 40)))
+  const { stdout } = await execFileAsync(
+    helperPath,
+    [path, String(count), dominantOnly ? 'true' : 'false'],
+    { timeout: 60_000, maxBuffer: 10 * 1024 * 1024 }
+  )
+  const parsed = JSON.parse(stdout.trim()) as unknown
+  if (!Array.isArray(parsed)) throw new Error('The native image color helper returned invalid data')
+  return parsed as ExtractedImageColor[]
+}
+
 type ScreenOcrHelperResponse = {
   ok?: boolean
   value?: string
@@ -1613,6 +1668,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     ImageMask: IMAGE_MASK,
     AI: {
       ask: async (prompt: unknown): Promise<string> => askExtensionAI(String(prompt ?? '')),
+      Model: iconProxy,
       Creativity: {
         None: 'none',
         Low: 'low',
@@ -3946,6 +4002,8 @@ function runBundle(code: string, packageRoot: string, session: RuntimeSession): 
       return {
         pickColor,
         pick_color: pickColor,
+        extractColor: extractColorsFromImage,
+        extract_color: extractColorsFromImage,
         recognizeText,
         recognize_text: recognizeText,
         detectBarcode,

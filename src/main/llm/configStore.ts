@@ -93,6 +93,34 @@ export function addAgentAlwaysAllowedCommand(command: string): void {
   })
 }
 
+function normalizeAgentAlwaysAllowedExactCommand(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const command = value.trim()
+  return command && command.length <= 16_384 && !command.includes('\0') ? command : null
+}
+
+export function getAgentAlwaysAllowedExactCommands(): string[] {
+  const value = readRawConfig().agentAlwaysAllowedExactCommands
+  if (!Array.isArray(value)) return []
+  return Array.from(
+    new Set(
+      value
+        .map(normalizeAgentAlwaysAllowedExactCommand)
+        .filter((command): command is string => command !== null)
+    )
+  )
+}
+
+export function addAgentAlwaysAllowedExactCommand(command: string): void {
+  const normalized = normalizeAgentAlwaysAllowedExactCommand(command)
+  if (!normalized) return
+  writeConfigPatch({
+    agentAlwaysAllowedExactCommands: Array.from(
+      new Set([...getAgentAlwaysAllowedExactCommands(), normalized])
+    ),
+  })
+}
+
 export type PersistedWindowPosition = { x: number; y: number }
 
 function isPersistedWindowPosition(value: unknown): value is PersistedWindowPosition {

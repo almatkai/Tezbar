@@ -1,4 +1,27 @@
-export const LAUNCHER_QUERY_HISTORY_LIMIT = 50
+export const LAUNCHER_QUERY_HISTORY_LIMIT = 1
+
+type LastLauncherQueryRecallContext = {
+  isDeepSearchMode: boolean
+  key: string
+  selectedResultIndex: number
+  value: string
+  visibleResultCount: number
+}
+
+/**
+ * The last query can only be recalled with ArrowUp at the top boundary.
+ * ArrowDown always remains available for search-result navigation.
+ */
+export function shouldRecallLastLauncherQuery({
+  isDeepSearchMode,
+  key,
+  selectedResultIndex,
+  value,
+  visibleResultCount,
+}: LastLauncherQueryRecallContext): boolean {
+  if (key !== 'ArrowUp' || isDeepSearchMode || value) return false
+  return visibleResultCount === 0 || selectedResultIndex <= 0
+}
 
 /**
  * Returns the value that should be saved when the launcher submits.
@@ -16,14 +39,8 @@ export function launcherQueryHistoryEntry(value: string, terminalMode: boolean):
   return isAiMode ? ` ${query}` : query
 }
 
-export function addLauncherQueryHistoryEntry(
-  history: string[],
-  entry: string,
-  limit = LAUNCHER_QUERY_HISTORY_LIMIT
-): string[] {
-  const normalizedLimit = Math.max(0, Math.floor(limit))
-  if (normalizedLimit === 0) return []
-  return [entry, ...history.filter((item) => item !== entry)].slice(0, normalizedLimit)
+export function addLauncherQueryHistoryEntry(entry: string): string[] {
+  return [entry]
 }
 
 export function parseLauncherQueryHistory(raw: string | null): string[] {

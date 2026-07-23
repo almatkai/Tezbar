@@ -1,8 +1,10 @@
 function wordTokens(value: string): string[] {
-  return value
-    .toLocaleLowerCase()
-    .normalize('NFKC')
-    .match(/[\p{L}\p{N}]+/gu) ?? []
+  return (
+    value
+      .toLocaleLowerCase()
+      .normalize('NFKC')
+      .match(/[\p{L}\p{N}]+/gu) ?? []
+  )
 }
 
 export function tokenizeQuery(query: string): string[] {
@@ -99,7 +101,12 @@ export function fuzzySimilarityScore(text: string, query: string): number {
 export function buildFtsQuery(query: string): string {
   const tokens = wordTokens(query)
   if (tokens.length === 0) return ''
-  return tokens.map((token) => `${token}*`).join(' OR ')
+  // A one-character prefix such as `n*` can match most of a large file
+  // corpus and force FTS5 to rank thousands of rows for a transient
+  // keystroke. Exact single-character terms remain supported without the
+  // pathological fan-out; the renderer's local candidate cache covers the
+  // normal one-character launcher experience.
+  return tokens.map((token) => (token.length === 1 ? `"${token}"` : `${token}*`)).join(' OR ')
 }
 
 /**

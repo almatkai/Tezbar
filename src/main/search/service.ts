@@ -18,8 +18,8 @@ import type { NativeCommandId } from '../../shared/nativeCommands'
 import type { SafetyActionId } from '../../shared/safety'
 import {
   ACTIVATE_DEEP_SEARCH_COMMAND,
+  buildDeepSearchRecommendation,
   DEEP_SEARCH_RESULT_PREFIX,
-  hasGoodMetadataMatch,
   parseSearchQuery,
 } from '../../shared/searchMode'
 import {
@@ -62,11 +62,13 @@ import {
   shouldPreferRecent,
 } from './ranker'
 import { rankDirectoryRecommendations, type DirectoryVisit } from './directoryRecommendations'
+import { selectVolatileSearchProviders } from './providerRefreshPolicy'
 
 const execFileAsync = promisify(execFile)
 const MAX_RESULTS = 80
 const PROVIDER_REFRESH_MIN_AGE_MS = 10_000
 const FILE_INDEX_LIMIT = 75_000
+const FILE_INDEX_WRITE_BATCH_SIZE = 400
 
 type ProcessIdentity = {
   name: string
@@ -172,7 +174,6 @@ let searchReadyPromise: Promise<void> | null = null
 let fileBootstrapPromise: Promise<void> | null = null
 let volatileRefreshPromise: Promise<void> | null = null
 let stopFileWatcher: (() => void) | null = null
-let lastExtensionRefreshAt = 0
 let lastVolatileRefreshAt = 0
 let initialProviderRefreshStarted = false
 let volatileRefreshScheduled = false
@@ -302,7 +303,6 @@ async function refreshAllProviders(): Promise<void> {
   // extension is inspected; core commands and applications are useful now.
   void upsertProvider(extensionsProvider)
     .then(() => {
-      lastExtensionRefreshAt = Date.now()
       indexDb.clearSearchCache()
     })
     .catch((error: unknown) => {
@@ -315,19 +315,15 @@ async function refreshVolatileProviders(): Promise<void> {
 
   volatileRefreshPromise = (async () => {
     captureClipboardSnapshot()
-    await Promise.all([
-      upsertProvider(commandsProvider),
-      upsertProvider(clipboardProvider),
-      upsertProvider(notesProvider),
-      upsertProvider(snippetsProvider),
-      upsertProvider(quickLinksProvider),
+    const providers = selectVolatileSearchProviders([
+      commandsProvider,
+      clipboardProvider,
+      notesProvider,
+      snippetsProvider,
+      quickLinksProvider,
+      extensionsProvider,
     ])
-
-    const now = Date.now()
-    if (now - lastExtensionRefreshAt > 30_000) {
-      lastExtensionRefreshAt = now
-      await upsertProvider(extensionsProvider)
-    }
+    await Promise.all(providers.map((provider) => upsertProvider(provider)))
     lastVolatileRefreshAt = Date.now()
     indexDb.clearSearchCache()
   })().finally(() => {
@@ -359,7 +355,29 @@ function startBackgroundFileIndexing(): void {
 
   fileBootstrapPromise = (async () => {
     const fileDocs = await collectInitialFileDocuments(FILE_INDEX_LIMIT)
-    indexDb.replaceDocumentsByCategory('files', fileDocs)
+    const existing = new Map(
+      indexDb.listDocumentSyncState('files').map((row) => [row.id, row.sourceMtime])
+    )
+    const incomingIds = new Set(fileDocs.map((document) => document.id))
+    const removals = Array.from(existing.keys()).filter((id) => !incomingIds.has(id))
+    const upserts = fileDocs.filter((document) => {
+      const persistedMtime = existing.get(document.id)
+      return (
+        persistedMtime === undefined || persistedMtime !== Math.round(document.sourceMtime ?? 0)
+      )
+    })
+
+    // Only write the delta, and yield between bounded transactions. Search IPC
+    // can therefore run while a large first-time index is being populated.
+    for (let offset = 0; offset < removals.length; offset += FILE_INDEX_WRITE_BATCH_SIZE) {
+      indexDb.removeDocumentsByIds(removals.slice(offset, offset + FILE_INDEX_WRITE_BATCH_SIZE))
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+    for (let offset = 0; offset < upserts.length; offset += FILE_INDEX_WRITE_BATCH_SIZE) {
+      indexDb.upsertDocuments(upserts.slice(offset, offset + FILE_INDEX_WRITE_BATCH_SIZE))
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+    if (removals.length > 0 || upserts.length > 0) indexDb.clearSearchCache()
 
     stopFileWatcher = startFileWatcher(({ upserts, removeIds }) => {
       if (upserts.length > 0) indexDb.upsertDocuments(upserts)
@@ -447,7 +465,6 @@ export async function reindexSnippets(): Promise<void> {
 export async function reindexExtensions(): Promise<void> {
   await bootstrapSearchIndex()
   await upsertProvider(extensionsProvider)
-  lastExtensionRefreshAt = Date.now()
   indexDb?.clearSearchCache()
 }
 
@@ -1041,33 +1058,18 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     (result) => result.action.type !== 'open-file' || !deepMatchedPaths.has(result.action.path)
   )
   const basicCandidates = [...resultsWithoutFiles, ...allFileResults, ...openPortResults]
-  const shouldRecommendDeepSearch =
-    !isDeepSearch && trimmed.length >= 3 && !hasGoodMetadataMatch(trimmed, basicCandidates)
-  const bestBasicCandidateScore = basicCandidates.reduce(
-    (best, candidate) => Math.max(best, candidate.score),
-    0
-  )
-  const deepSearchRecommendation: SearchResult[] = shouldRecommendDeepSearch
-    ? [
-        {
-          id: `${DEEP_SEARCH_RESULT_PREFIX}${encodeURIComponent(trimmed.toLowerCase())}`,
-          title: `Deep Search “${trimmed.slice(0, 72)}”`,
-          subtitle: 'No strong metadata match · Search inside indexed file contents',
-          category: 'knowledge',
-          score: Math.max(1_200, bestBasicCandidateScore + 1),
-          action: {
-            type: 'invoke-command',
-            commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
-            payload: { query: trimmed },
-          },
-        },
-      ]
-    : []
+  const deepSearchRecommendation = isDeepSearch
+    ? null
+    : buildDeepSearchRecommendation(trimmed, basicCandidates)
 
   const results = uniqById(
     isDeepSearch
       ? [...knowledgeResults, ...metadataFileResults]
-      : [...deepSearchRecommendation, ...basicCandidates, ...noteAdd]
+      : [
+          ...(deepSearchRecommendation ? [deepSearchRecommendation] : []),
+          ...basicCandidates,
+          ...noteAdd,
+        ]
   )
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_RESULTS)

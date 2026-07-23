@@ -13,6 +13,7 @@ const SettingsView = React.lazy(() => import('./SettingsView'))
 const ExtensionsView = React.lazy(() => import('./ExtensionsView'))
 const ExtensionRuntimeView = React.lazy(() => import('./ExtensionRuntimeView'))
 const OpenPortsView = React.lazy(() => import('./OpenPortsView'))
+const SystemMonitorView = React.lazy(() => import('./SystemMonitorView'))
 const IndexingView = React.lazy(() => import('./IndexingView'))
 const PermissionsView = React.lazy(() => import('./PermissionsView'))
 const ClipboardView = React.lazy(() => import('./ClipboardView'))
@@ -23,7 +24,9 @@ const TerminalView = React.lazy(() => import('./TerminalView'))
 const TerminalSessionsWindow = React.lazy(() => import('./TerminalSessionsWindow'))
 
 const SurfaceFallback = (): JSX.Element => (
-  <div className="flex h-full w-full items-center justify-center text-[12px] text-ink-3">Loading…</div>
+  <div className="flex h-full w-full items-center justify-center text-[12px] text-ink-3">
+    Loading…
+  </div>
 )
 
 type Surface =
@@ -33,6 +36,7 @@ type Surface =
   | 'extensions'
   | 'extension-runtime'
   | 'open-ports'
+  | 'system-monitor'
   | 'indexing'
   | 'permissions'
   | 'clipboard'
@@ -41,12 +45,26 @@ type Surface =
   | 'emoji-picker'
   | 'terminal'
 
-type SettingsTab = 'general' | 'ai' | 'voice' | 'knowledge' | 'extensions' | 'permissions' | 'storage' | 'advanced'
+type SettingsTab =
+  | 'general'
+  | 'ai'
+  | 'voice'
+  | 'knowledge'
+  | 'extensions'
+  | 'permissions'
+  | 'storage'
+  | 'advanced'
 
 const SETTINGS_TAB_STORAGE_KEY = 'tezbar:settings-tab'
 
 function normalizeSettingsTab(tab: unknown): SettingsTab {
-  return tab === 'ai' || tab === 'voice' || tab === 'knowledge' || tab === 'extensions' || tab === 'permissions' || tab === 'storage' || tab === 'advanced'
+  return tab === 'ai' ||
+    tab === 'voice' ||
+    tab === 'knowledge' ||
+    tab === 'extensions' ||
+    tab === 'permissions' ||
+    tab === 'storage' ||
+    tab === 'advanced'
     ? tab
     : 'general'
 }
@@ -64,6 +82,7 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
   extensions: '[aria-label="Extensions"]',
   'extension-runtime': '[aria-label="Extension Runtime"]',
   'open-ports': '[aria-label="Open Ports"]',
+  'system-monitor': '[aria-label="System Monitor"]',
   indexing: '[aria-label="Indexing Status"]',
   permissions: '[aria-label="Permissions"]',
   clipboard: '[aria-label="Clipboard History"]',
@@ -229,15 +248,13 @@ function LauncherApp(): JSX.Element {
 
   useEffect(() => {
     return window.tezbar.onRunExtensionCommandFromHotkey(({ extensionId, commandName }) => {
-      void window.tezbar
-        .extensionRunCommand({ extensionId, commandName })
-        .then((result) => {
-          if (result.ok && result.mode === 'view') {
-            setCommandInitialValue('')
-            setExtensionRuntimeInitial(result)
-            setSurface('extension-runtime')
-          }
-        })
+      void window.tezbar.extensionRunCommand({ extensionId, commandName }).then((result) => {
+        if (result.ok && result.mode === 'view') {
+          setCommandInitialValue('')
+          setExtensionRuntimeInitial(result)
+          setSurface('extension-runtime')
+        }
+      })
     })
   }, [])
 
@@ -384,7 +401,8 @@ function LauncherApp(): JSX.Element {
     if (!el) return
 
     const report = (): void => {
-      const cssHeight = Math.max(el.getBoundingClientRect().height, el.scrollHeight) + OUTER_PADDING_PX
+      const cssHeight =
+        Math.max(el.getBoundingClientRect().height, el.scrollHeight) + OUTER_PADDING_PX
       const zoomFactor = Math.max(1, window.tezbar.getWindowZoomFactor())
       const measured = Math.ceil(cssHeight * zoomFactor)
       if (measured === lastReportedHeightRef.current) return
@@ -460,6 +478,8 @@ function LauncherApp(): JSX.Element {
                 setSurface('command')
               }}
             />
+          ) : surface === 'system-monitor' ? (
+            <SystemMonitorView onBack={() => setSurface('command')} />
           ) : surface === 'indexing' ? (
             <IndexingView
               onBack={() => setSurface('command')}
@@ -541,6 +561,10 @@ function LauncherApp(): JSX.Element {
                 setOpenPortsInitialTab(opts?.tab ?? 'listen')
                 setSurface('open-ports')
               }}
+              onOpenSystemMonitor={() => {
+                setCommandInitialValue('')
+                setSurface('system-monitor')
+              }}
               onOpenIndexingPage={() => {
                 setCommandInitialValue('')
                 setSurface('indexing')
@@ -548,7 +572,9 @@ function LauncherApp(): JSX.Element {
               onOpenClipboardPage={() => setSurface('clipboard')}
               onOpenSnippetsPage={() => setSurface('snippets')}
               onOpenNotesPage={(opts) => {
-                setNotesInitialSelectedId(typeof opts?.createdAt === 'number' ? opts.createdAt : null)
+                setNotesInitialSelectedId(
+                  typeof opts?.createdAt === 'number' ? opts.createdAt : null
+                )
                 setSurface('notes')
               }}
               onOpenEmojiPicker={() => setSurface('emoji-picker')}

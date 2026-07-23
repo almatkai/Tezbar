@@ -52,6 +52,23 @@ const IMAGE_EXTENSIONS = new Set([
 ])
 const ARCHIVE_EXTENSIONS = new Set(['.7z', '.bz2', '.gz', '.rar', '.tar', '.tgz'])
 const nativeFileIconCache = new Map<string, string | null>()
+const nativeFileIconRequests = new Map<string, Promise<string | undefined>>()
+const nativeFileIconWaiters: Array<() => void> = []
+const NATIVE_FILE_ICON_CONCURRENCY = 2
+let activeNativeFileIcons = 0
+
+async function withNativeFileIconSlot<T>(work: () => Promise<T>): Promise<T> {
+  if (activeNativeFileIcons >= NATIVE_FILE_ICON_CONCURRENCY) {
+    await new Promise<void>((resolve) => nativeFileIconWaiters.push(resolve))
+  }
+  activeNativeFileIcons += 1
+  try {
+    return await work()
+  } finally {
+    activeNativeFileIcons -= 1
+    nativeFileIconWaiters.shift()?.()
+  }
+}
 
 function svgDataUrl(svg: string): string {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
@@ -94,7 +111,7 @@ export function imageFileDataUrl(path: string): string | undefined {
   }
 }
 
-export async function nativeFileIconDataUrl(path: string): Promise<string | undefined> {
+async function generateNativeFileIconDataUrl(path: string): Promise<string | undefined> {
   if (nativeFileIconCache.has(path)) return nativeFileIconCache.get(path) ?? undefined
   if (!existsSync(path)) return undefined
 
@@ -131,6 +148,10 @@ export async function nativeFileIconDataUrl(path: string): Promise<string | unde
       } else {
         await execFileAsync('/usr/bin/qlmanage', ['-t', '-i', '-s', '64', '-o', outputDir, path], {
           timeout: 3_000,
+          // Quick Look occasionally ignores the default SIGTERM timeout and
+          // survives as an orphan. It is disposable thumbnail work, so enforce
+          // a hard kill and keep it off the backend indefinitely.
+          killSignal: 'SIGKILL',
         })
       }
     }
@@ -145,5 +166,19 @@ export async function nativeFileIconDataUrl(path: string): Promise<string | unde
   } catch {
     nativeFileIconCache.set(path, null)
     return undefined
+  }
+}
+
+export async function nativeFileIconDataUrl(path: string): Promise<string | undefined> {
+  if (nativeFileIconCache.has(path)) return nativeFileIconCache.get(path) ?? undefined
+  const pending = nativeFileIconRequests.get(path)
+  if (pending) return pending
+
+  const request = withNativeFileIconSlot(() => generateNativeFileIconDataUrl(path))
+  nativeFileIconRequests.set(path, request)
+  try {
+    return await request
+  } finally {
+    nativeFileIconRequests.delete(path)
   }
 }

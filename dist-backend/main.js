@@ -31,8 +31,8 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // src/main/desktop-runtime.ts
-function runDetached(command, args, description) {
-  void execFileAsync(command, args).catch((error) => {
+function runDetached(command2, args, description) {
+  void execFileAsync(command2, args).catch((error) => {
     console.error(`[desktop-runtime] ${description} failed:`, error);
   });
 }
@@ -152,13 +152,13 @@ var init_desktop_runtime = __esm({
     };
     shell = {
       async openExternal(url) {
-        const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer.exe" : "xdg-open";
-        await execFileAsync(command, [url]);
+        const command2 = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer.exe" : "xdg-open";
+        await execFileAsync(command2, [url]);
       },
       async openPath(target) {
-        const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer.exe" : "xdg-open";
+        const command2 = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer.exe" : "xdg-open";
         try {
-          await execFileAsync(command, [target]);
+          await execFileAsync(command2, [target]);
           return "";
         } catch (error) {
           return error instanceof Error ? error.message : String(error);
@@ -185,7 +185,7 @@ var init_desktop_runtime = __esm({
           return "";
         }
       },
-      writeText(text) {
+      writeText(text2) {
         try {
           if (process.platform === "win32") {
             const child2 = (0, import_node_child_process.spawn)("powershell.exe", [
@@ -194,7 +194,7 @@ var init_desktop_runtime = __esm({
               "-Command",
               "Set-Clipboard -Value ([Console]::In.ReadToEnd())"
             ]);
-            child2.stdin.write(text);
+            child2.stdin.write(text2);
             child2.stdin.end();
             return;
           }
@@ -207,7 +207,7 @@ var init_desktop_runtime = __esm({
             "error",
             (error) => console.error("[desktop-runtime] clipboard input failed:", error)
           );
-          child.stdin.write(text);
+          child.stdin.write(text2);
           child.stdin.end();
         } catch (error) {
           console.error("[desktop-runtime] clipboard text copy failed:", error);
@@ -439,6 +439,2663 @@ var init_windowState = __esm({
   "src/main/windowState.ts"() {
     "use strict";
     suppressBlurHide = false;
+  }
+});
+
+// src/main/search/providers/appsProvider.ts
+function listApplications() {
+  if (process.platform === "win32") {
+    if (windowsApplicationCache && Date.now() - windowsApplicationCache.collectedAt < 3e4) {
+      return windowsApplicationCache.applications;
+    }
+    const roots2 = [
+      (0, import_node_path2.join)(
+        process.env.ProgramData ?? "C:\\ProgramData",
+        "Microsoft",
+        "Windows",
+        "Start Menu",
+        "Programs"
+      ),
+      (0, import_node_path2.join)(
+        process.env.APPDATA ?? (0, import_node_path2.join)((0, import_node_os2.homedir)(), "AppData", "Roaming"),
+        "Microsoft",
+        "Windows",
+        "Start Menu",
+        "Programs"
+      )
+    ];
+    const out2 = [];
+    const seen2 = /* @__PURE__ */ new Set();
+    for (const root of roots2) {
+      try {
+        for (const entry of (0, import_node_fs2.readdirSync)(root, { recursive: true, withFileTypes: true })) {
+          if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".lnk")) continue;
+          const name = entry.name.replace(/\.lnk$/i, "");
+          if (seen2.has(name.toLowerCase())) continue;
+          seen2.add(name.toLowerCase());
+          out2.push({ name, path: (0, import_node_path2.join)(entry.parentPath, entry.name) });
+        }
+      } catch {
+      }
+    }
+    try {
+      const raw = (0, import_node_child_process2.execFileSync)(
+        "powershell.exe",
+        [
+          "-NoLogo",
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Get-StartApps | Select-Object Name,AppID | ConvertTo-Json -Compress"
+        ],
+        { encoding: "utf8", timeout: 5e3, windowsHide: true }
+      ).trim();
+      const parsed = raw ? JSON.parse(raw) : [];
+      const entries = Array.isArray(parsed) ? parsed : [parsed];
+      for (const value of entries) {
+        if (!value || typeof value !== "object") continue;
+        const item = value;
+        if (typeof item.Name !== "string" || typeof item.AppID !== "string") continue;
+        const name = item.Name.trim();
+        const appId = item.AppID.trim();
+        if (!name || !appId || seen2.has(name.toLowerCase())) continue;
+        seen2.add(name.toLowerCase());
+        out2.push({ name, path: `shell:AppsFolder\\${appId}` });
+      }
+    } catch {
+    }
+    windowsApplicationCache = { collectedAt: Date.now(), applications: out2 };
+    return out2;
+  }
+  const roots = [
+    "/Applications",
+    "/Applications/Utilities",
+    "/System/Applications",
+    "/System/Applications/Utilities",
+    "/System/Library/CoreServices/Applications",
+    "/System/Library/CoreServices",
+    (0, import_node_path2.join)((0, import_node_os2.homedir)(), "Applications")
+  ];
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const root of roots) {
+    try {
+      for (const entry of (0, import_node_fs2.readdirSync)(root)) {
+        if (!entry.endsWith(".app")) continue;
+        const name = entry.replace(/\.app$/, "");
+        if (seen.has(name)) continue;
+        seen.add(name);
+        out.push({
+          name,
+          path: (0, import_node_path2.join)(root, entry)
+        });
+      }
+    } catch {
+    }
+  }
+  return out;
+}
+var import_node_fs2, import_node_child_process2, import_node_os2, import_node_path2, windowsApplicationCache, appsProvider;
+var init_appsProvider = __esm({
+  "src/main/search/providers/appsProvider.ts"() {
+    "use strict";
+    import_node_fs2 = require("node:fs");
+    import_node_child_process2 = require("node:child_process");
+    import_node_os2 = require("node:os");
+    import_node_path2 = require("node:path");
+    appsProvider = {
+      providerId: "apps",
+      async buildDocuments() {
+        const now = Date.now();
+        return listApplications().map((app2) => ({
+          id: `app:${app2.path}`,
+          category: "applications",
+          title: app2.name,
+          subtitle: app2.path,
+          tokens: `${app2.name} ${app2.path}`,
+          action: { type: "open-app", appName: app2.name, appPath: app2.path },
+          updatedAt: now,
+          sourcePath: app2.path
+        }));
+      }
+    };
+  }
+});
+
+// src/main/llm/configStore.ts
+function readRawConfig() {
+  if (configCache) return configCache;
+  if (!(0, import_node_fs5.existsSync)(OPENRAY_CONFIG_PATH)) {
+    configCache = {};
+    return configCache;
+  }
+  try {
+    const raw = (0, import_node_fs5.readFileSync)(OPENRAY_CONFIG_PATH, "utf-8");
+    configCache = JSON.parse(raw);
+    return configCache;
+  } catch {
+    configCache = {};
+    return configCache;
+  }
+}
+function flushConfig() {
+  if (!configCache || !writeTimeout) return;
+  try {
+    (0, import_node_fs5.mkdirSync)((0, import_node_path6.dirname)(OPENRAY_CONFIG_PATH), { recursive: true });
+    (0, import_node_fs5.writeFileSync)(OPENRAY_CONFIG_PATH, `${JSON.stringify(configCache, null, 2)}
+`, "utf-8");
+    if (writeTimeout) {
+      clearTimeout(writeTimeout);
+      writeTimeout = null;
+    }
+  } catch (err) {
+    console.error("Failed to write config:", err);
+  }
+}
+function writeConfigPatch(patch) {
+  const current = readRawConfig();
+  configCache = { ...current, ...patch };
+  if (writeTimeout) clearTimeout(writeTimeout);
+  writeTimeout = setTimeout(() => {
+    flushConfig();
+    writeTimeout = null;
+  }, 1e3);
+}
+function getUiStateRetentionMs() {
+  const raw = readRawConfig();
+  const v = raw.uiStateRetentionMs;
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+    return v;
+  }
+  return 6e4;
+}
+function getSafetyDryRun() {
+  const raw = readRawConfig();
+  return raw.safetyDryRun === true;
+}
+function setSafetyDryRun(value) {
+  writeConfigPatch({ safetyDryRun: value });
+}
+function getAgentAlwaysAllowedCommands() {
+  const value = readRawConfig().agentAlwaysAllowedCommands;
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value.filter(
+        (entry) => typeof entry === "string" && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)
+      )
+    )
+  );
+}
+function normalizeAgentAlwaysAllowedExactCommand(value) {
+  if (typeof value !== "string") return null;
+  const command2 = value.trim();
+  return command2 && command2.length <= 16384 && !command2.includes("\0") ? command2 : null;
+}
+function getAgentAlwaysAllowedExactCommands() {
+  const value = readRawConfig().agentAlwaysAllowedExactCommands;
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value.map(normalizeAgentAlwaysAllowedExactCommand).filter((command2) => command2 !== null)
+    )
+  );
+}
+function addAgentAlwaysAllowedExactCommand(command2) {
+  const normalized = normalizeAgentAlwaysAllowedExactCommand(command2);
+  if (!normalized) return;
+  writeConfigPatch({
+    agentAlwaysAllowedExactCommands: Array.from(
+      /* @__PURE__ */ new Set([...getAgentAlwaysAllowedExactCommands(), normalized])
+    )
+  });
+}
+function getCommandHotkeys() {
+  const value = readRawConfig().commandHotkeys;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  return {};
+}
+function getCommandAliases() {
+  const value = readRawConfig().commandAliases;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  return {};
+}
+function setCommandAliases(aliases) {
+  writeConfigPatch({ commandAliases: aliases });
+}
+function getDisabledCommands() {
+  const value = readRawConfig().disabledCommands;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  return {};
+}
+function setDisabledCommands(disabled) {
+  writeConfigPatch({ disabledCommands: disabled });
+}
+var import_node_fs5, import_node_os6, import_node_path6, OPENRAY_CONFIG_DIR, OPENRAY_CONFIG_PATH, configCache, writeTimeout;
+var init_configStore = __esm({
+  "src/main/llm/configStore.ts"() {
+    "use strict";
+    import_node_fs5 = require("node:fs");
+    import_node_os6 = require("node:os");
+    import_node_path6 = require("node:path");
+    OPENRAY_CONFIG_DIR = (0, import_node_path6.join)((0, import_node_os6.homedir)(), ".openray");
+    OPENRAY_CONFIG_PATH = (0, import_node_path6.join)(OPENRAY_CONFIG_DIR, "config.json");
+    configCache = null;
+    writeTimeout = null;
+  }
+});
+
+// src/main/extension-platform.ts
+function normalizePlatform(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "macos" || normalized === "darwin" || normalized === "mac") {
+    return "macOS";
+  }
+  if (normalized === "windows" || normalized === "win32" || normalized === "win") {
+    return "Windows";
+  }
+  if (normalized === "linux") {
+    return "Linux";
+  }
+  return null;
+}
+function getCurrentRaycastPlatform() {
+  if (process.platform === "win32") return "Windows";
+  if (process.platform === "linux") return "Linux";
+  return "macOS";
+}
+function getManifestPlatforms(manifest) {
+  if (!manifest || typeof manifest !== "object") return [];
+  if (!Array.isArray(manifest.platforms)) return [];
+  const supported = /* @__PURE__ */ new Set();
+  for (const raw of manifest.platforms) {
+    const normalized = normalizePlatform(raw);
+    if (normalized) supported.add(normalized);
+  }
+  return [...supported];
+}
+function isManifestPlatformCompatible(manifest) {
+  const supported = getManifestPlatforms(manifest);
+  if (supported.length === 0) return true;
+  return supported.includes(getCurrentRaycastPlatform());
+}
+function isCommandPlatformCompatible(cmd) {
+  if (!cmd || typeof cmd !== "object") return false;
+  if (!Object.prototype.hasOwnProperty.call(cmd, "platforms")) return true;
+  return isManifestPlatformCompatible(cmd);
+}
+var init_extension_platform = __esm({
+  "src/main/extension-platform.ts"() {
+    "use strict";
+  }
+});
+
+// src/main/esbuild-runtime.ts
+function configurePackagedEsbuildBinary() {
+}
+var init_esbuild_runtime = __esm({
+  "src/main/esbuild-runtime.ts"() {
+    "use strict";
+  }
+});
+
+// src/main/extension-builder.ts
+var extension_builder_exports = {};
+__export(extension_builder_exports, {
+  buildAllCommands: () => buildAllCommands,
+  buildSingleCommand: () => buildSingleCommand,
+  discoverInstalledExtensionCommands: () => discoverInstalledExtensionCommands,
+  getExtensionBundle: () => getExtensionBundle,
+  getInstalledExtensionsSettingsSchema: () => getInstalledExtensionsSettingsSchema
+});
+function requireEsbuild() {
+  configurePackagedEsbuildBinary();
+  return require("esbuild");
+}
+function legacyCheerioInteropPlugin() {
+  return {
+    name: "legacy-cheerio-default-interop",
+    setup(build) {
+      build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, (args) => {
+        const source = fs.readFileSync(args.path, "utf8");
+        if (!/import\s+[A-Za-z_$][\w$]*\s+from\s+['"]cheerio['"]/.test(source)) return null;
+        const extension = path.extname(args.path).toLowerCase();
+        const loader = extension.endsWith("x") ? extension.slice(1) : extension.slice(1) || "js";
+        return {
+          contents: source.replace(
+            /import\s+([A-Za-z_$][\w$]*)\s+from\s+(['"])cheerio\2/g,
+            "import * as $1 from $2cheerio$2"
+          ),
+          loader
+        };
+      });
+    }
+  };
+}
+function getManagedExtensionsDir() {
+  const dir = path.join(app.getPath("userData"), "extensions");
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+function getBuildDir(extPath) {
+  const dir = path.join(extPath, ".sc-build");
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+function expandHome(inputPath) {
+  const raw = String(inputPath || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("~/")) return path.join(os.homedir(), raw.slice(2));
+  return raw;
+}
+function normalizeFsPath(inputPath) {
+  return path.resolve(expandHome(inputPath));
+}
+function normalizeExtensionName(name) {
+  const raw = String(name || "").trim();
+  if (!raw) return "";
+  return raw.replace(/^@/, "").replace(/^raycast\./, "").replace(/[\\/]/g, "-");
+}
+function getConfiguredExtensionRoots() {
+  const settingsPaths = [];
+  const envPaths = String(process.env.SUPERCMD_EXTENSION_PATHS || "").split(path.delimiter).map((value) => value.trim()).filter(Boolean);
+  const unique = /* @__PURE__ */ new Set();
+  for (const root of [
+    getManagedExtensionsDir(),
+    path.join(getManagedExtensionsDir(), "packages"),
+    path.join(app.getPath("userData"), "extension-registry", "packages"),
+    ...settingsPaths,
+    ...envPaths
+  ]) {
+    const normalized = normalizeFsPath(root);
+    if (!normalized) continue;
+    unique.add(normalized);
+  }
+  return [...unique];
+}
+function collectInstalledExtensions() {
+  const results = [];
+  const seen = /* @__PURE__ */ new Set();
+  const addIfValid = (extPath, sourceRoot, fallbackName) => {
+    const pkgPath = path.join(extPath, "package.json");
+    if (!fs.existsSync(pkgPath)) return;
+    try {
+      if (!fs.statSync(extPath).isDirectory()) return;
+    } catch {
+      return;
+    }
+    const extName = normalizeExtensionName(fallbackName);
+    if (!extName) return;
+    const dedupeKey = extName.toLowerCase();
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    results.push({ extName, extPath, sourceRoot });
+  };
+  for (const sourceRoot of getConfiguredExtensionRoots()) {
+    if (!fs.existsSync(sourceRoot)) continue;
+    const sourceRootPkg = path.join(sourceRoot, "package.json");
+    if (fs.existsSync(sourceRootPkg)) {
+      addIfValid(sourceRoot, sourceRoot, path.basename(sourceRoot));
+      continue;
+    }
+    let entries = [];
+    try {
+      entries = fs.readdirSync(sourceRoot);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      addIfValid(path.join(sourceRoot, entry), sourceRoot, entry);
+    }
+  }
+  return results;
+}
+function resolveInstalledExtensionPath(extName) {
+  const normalized = normalizeExtensionName(extName);
+  if (!normalized) return null;
+  const match = collectInstalledExtensions().find((entry) => entry.extName === normalized);
+  return match?.extPath || null;
+}
+function getExtensionIconDataUrl(extPath, iconFile) {
+  const candidates = [
+    path.join(extPath, "assets", iconFile),
+    path.join(extPath, iconFile)
+  ];
+  for (const p of candidates) {
+    if (!fs.existsSync(p)) continue;
+    try {
+      const ext = path.extname(p).toLowerCase();
+      const data = fs.readFileSync(p);
+      if (data.length < 50) continue;
+      const mime = ext === ".svg" ? "image/svg+xml" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
+      return `data:${mime};base64,${data.toString("base64")}`;
+    } catch {
+    }
+  }
+  return void 0;
+}
+function resolvePlatformDefault(value) {
+  const platformKey = process.platform === "win32" ? "Windows" : "macOS";
+  if (value && typeof value === "object" && !Array.isArray(value) && (Object.prototype.hasOwnProperty.call(value, "macOS") || Object.prototype.hasOwnProperty.call(value, "Windows"))) {
+    if (Object.prototype.hasOwnProperty.call(value, platformKey)) {
+      return value[platformKey];
+    }
+    return value.macOS ?? value.Windows;
+  }
+  return value;
+}
+function normalizePreferenceSchema(pref, scope) {
+  if (!pref || typeof pref !== "object" || !pref.name) return null;
+  return {
+    scope,
+    name: String(pref.name),
+    title: pref.title,
+    label: pref.label,
+    description: pref.description,
+    placeholder: pref.placeholder,
+    required: Boolean(pref.required),
+    type: pref.type,
+    default: resolvePlatformDefault(pref.default),
+    data: Array.isArray(pref.data) ? pref.data : void 0
+  };
+}
+function discoverInstalledExtensionCommands() {
+  const results = [];
+  for (const source of collectInstalledExtensions()) {
+    const extPath = source.extPath;
+    const pkgPath = path.join(extPath, "package.json");
+    const extName = source.extName;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      if (!isManifestPlatformCompatible(pkg)) continue;
+      const iconDataUrl = getExtensionIconDataUrl(
+        extPath,
+        pkg.icon || "icon.png"
+      );
+      const ownerRaw = pkg.owner || pkg.author || "";
+      const owner = (typeof ownerRaw === "object" ? ownerRaw?.name || "" : String(ownerRaw || "")).trim();
+      for (const cmd of pkg.commands || []) {
+        if (!cmd.name) continue;
+        if (!isCommandPlatformCompatible(cmd)) continue;
+        results.push({
+          id: `ext-${extName}-${cmd.name}`,
+          title: cmd.title || cmd.name,
+          extensionTitle: pkg.title || extName,
+          extName,
+          cmdName: cmd.name,
+          owner: owner || void 0,
+          description: cmd.description || "",
+          mode: cmd.mode || "view",
+          interval: typeof cmd.interval === "string" ? cmd.interval : void 0,
+          disabledByDefault: Boolean(cmd.disabledByDefault),
+          commandArgumentDefinitions: Array.isArray(cmd.arguments) ? cmd.arguments.filter((arg) => arg && arg.name).map((arg) => ({
+            name: String(arg.name),
+            required: Boolean(arg.required),
+            type: arg.type,
+            placeholder: arg.placeholder,
+            title: arg.title,
+            data: Array.isArray(arg.data) ? arg.data : void 0
+          })) : [],
+          keywords: [
+            extName,
+            pkg.title || "",
+            cmd.name,
+            cmd.title || "",
+            cmd.description || ""
+          ].filter(Boolean).map((s) => s.toLowerCase()),
+          iconDataUrl
+        });
+      }
+    } catch {
+    }
+  }
+  return results;
+}
+function getInstalledExtensionsSettingsSchema() {
+  const results = [];
+  for (const source of collectInstalledExtensions()) {
+    const extPath = source.extPath;
+    const pkgPath = path.join(extPath, "package.json");
+    const extName = source.extName;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      if (!isManifestPlatformCompatible(pkg)) continue;
+      const iconDataUrl = getExtensionIconDataUrl(extPath, pkg.icon || "icon.png");
+      const ownerRaw = pkg.owner || pkg.author || "";
+      const owner = typeof ownerRaw === "object" ? ownerRaw.name || "" : String(ownerRaw || "");
+      const extensionPreferences = Array.isArray(pkg.preferences) ? pkg.preferences.map((pref) => normalizePreferenceSchema(pref, "extension")).filter(Boolean) : [];
+      const commands = Array.isArray(pkg.commands) ? pkg.commands.filter((cmd) => cmd && cmd.name && isCommandPlatformCompatible(cmd)).map((cmd) => ({
+        name: cmd.name,
+        title: cmd.title || cmd.name,
+        description: cmd.description || "",
+        mode: cmd.mode || "view",
+        interval: typeof cmd.interval === "string" ? cmd.interval : void 0,
+        disabledByDefault: Boolean(cmd.disabledByDefault),
+        preferences: Array.isArray(cmd.preferences) ? cmd.preferences.map((pref) => normalizePreferenceSchema(pref, "command")).filter(Boolean) : []
+      })) : [];
+      results.push({
+        extName,
+        title: pkg.title || extName,
+        description: pkg.description || "",
+        owner,
+        iconDataUrl,
+        preferences: extensionPreferences,
+        commands
+      });
+    } catch {
+    }
+  }
+  return results.sort((a, b) => a.title.localeCompare(b.title));
+}
+function getInstallableRuntimeDeps(pkg) {
+  const deps = {
+    ...pkg?.dependencies || {},
+    ...pkg?.optionalDependencies || {}
+  };
+  return Object.entries(deps).filter(([name]) => typeof name === "string" && !name.startsWith("@raycast/")).map(([name, version]) => `${name}@${String(version || "").trim()}`).filter((value) => {
+    const atIndex = value.lastIndexOf("@");
+    return atIndex > 0 && atIndex < value.length - 1;
+  });
+}
+function extensionRequiresNodeModules(pkg) {
+  return getInstallableRuntimeDeps(pkg).length > 0;
+}
+function parseJsonc(source) {
+  let out = "";
+  let i = 0;
+  const n = source.length;
+  while (i < n) {
+    const ch = source[i];
+    if (ch === '"') {
+      out += ch;
+      i++;
+      while (i < n) {
+        const c = source[i];
+        out += c;
+        i++;
+        if (c === "\\" && i < n) {
+          out += source[i];
+          i++;
+          continue;
+        }
+        if (c === '"') break;
+      }
+      continue;
+    }
+    if (ch === "/" && source[i + 1] === "/") {
+      i += 2;
+      while (i < n && source[i] !== "\n") i++;
+      continue;
+    }
+    if (ch === "/" && source[i + 1] === "*") {
+      i += 2;
+      while (i < n && !(source[i] === "*" && source[i + 1] === "/")) i++;
+      i += 2;
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  out = out.replace(/,(\s*[}\]])/g, "$1");
+  return JSON.parse(out);
+}
+function getExtensionCompilerOptions(extPath) {
+  const tsconfigPath = path.join(extPath, "tsconfig.json");
+  if (!fs.existsSync(tsconfigPath)) return {};
+  try {
+    const parsed = parseJsonc(fs.readFileSync(tsconfigPath, "utf-8"));
+    const compilerOptions = parsed && typeof parsed === "object" && parsed.compilerOptions && typeof parsed.compilerOptions === "object" ? parsed.compilerOptions : {};
+    const options = {};
+    if (typeof compilerOptions.baseUrl === "string" && compilerOptions.baseUrl.trim()) {
+      options.baseUrl = compilerOptions.baseUrl;
+    }
+    if (compilerOptions.paths && typeof compilerOptions.paths === "object" && !Array.isArray(compilerOptions.paths)) {
+      options.paths = compilerOptions.paths;
+      if (!options.baseUrl) options.baseUrl = ".";
+    }
+    if (typeof compilerOptions.jsx === "string" && compilerOptions.jsx.trim()) {
+      options.jsx = compilerOptions.jsx;
+    }
+    if (typeof compilerOptions.jsxImportSource === "string" && compilerOptions.jsxImportSource.trim()) {
+      options.jsxImportSource = compilerOptions.jsxImportSource;
+    }
+    return options;
+  } catch (error) {
+    console.warn(`Failed to parse tsconfig for ${path.basename(extPath)}:`, error?.message || error);
+    return {};
+  }
+}
+function getEsbuildTsconfigRaw(extPath) {
+  const extensionCompilerOptions = getExtensionCompilerOptions(extPath);
+  return JSON.stringify({
+    compilerOptions: {
+      target: "ES2020",
+      jsx: "react-jsx",
+      jsxImportSource: "react",
+      strict: false,
+      esModuleInterop: true,
+      moduleResolution: "node",
+      ...extensionCompilerOptions
+    }
+  });
+}
+function resolveEntryFile(extPath, cmd) {
+  const cmdName = String(cmd?.name || "").trim();
+  if (!cmdName) return null;
+  const srcDir = path.join(extPath, "src");
+  const validExt = /\.(tsx?|jsx?)$/i;
+  const explicitEntry = typeof cmd?.path === "string" ? cmd.path : typeof cmd?.entrypoint === "string" ? cmd.entrypoint : typeof cmd?.entry === "string" ? cmd.entry : typeof cmd?.file === "string" ? cmd.file : typeof cmd?.source === "string" ? cmd.source : "";
+  const candidates = [
+    explicitEntry ? path.join(extPath, explicitEntry) : "",
+    path.join(srcDir, `${cmdName}.tsx`),
+    path.join(srcDir, `${cmdName}.ts`),
+    path.join(srcDir, `${cmdName}.jsx`),
+    path.join(srcDir, `${cmdName}.js`),
+    path.join(srcDir, cmdName, "index.tsx"),
+    path.join(srcDir, cmdName, "index.ts"),
+    path.join(srcDir, cmdName, "index.jsx"),
+    path.join(srcDir, cmdName, "index.js"),
+    path.join(srcDir, "commands", `${cmdName}.tsx`),
+    path.join(srcDir, "commands", `${cmdName}.ts`),
+    path.join(srcDir, "commands", `${cmdName}.jsx`),
+    path.join(srcDir, "commands", `${cmdName}.js`)
+  ].filter(Boolean);
+  const found = candidates.find((p) => fs.existsSync(p));
+  if (found) return found;
+  if (!fs.existsSync(srcDir)) return null;
+  const stack = [srcDir];
+  const normalized = cmdName.toLowerCase();
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry);
+      let stat2;
+      try {
+        stat2 = fs.statSync(full);
+      } catch {
+        continue;
+      }
+      if (stat2.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!validExt.test(entry)) continue;
+      const base = path.basename(entry, path.extname(entry)).toLowerCase();
+      if (base === normalized) return full;
+    }
+  }
+  return null;
+}
+async function buildAllCommands(extName, extPathOverride) {
+  const extPath = extPathOverride ? normalizeFsPath(extPathOverride) : resolveInstalledExtensionPath(extName);
+  if (!extPath) {
+    console.error(`Extension path not found for ${extName}`);
+    return 0;
+  }
+  const pkgPath = path.join(extPath, "package.json");
+  if (!fs.existsSync(pkgPath)) {
+    console.error(`No package.json found for extension ${extName}`);
+    return 0;
+  }
+  let commands;
+  let requiresNodeModules = false;
+  let manifestExternal = [];
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    if (!isManifestPlatformCompatible(pkg)) {
+      console.warn(`Skipping build for incompatible extension ${extName}`);
+      return 0;
+    }
+    commands = pkg.commands || [];
+    requiresNodeModules = extensionRequiresNodeModules(pkg);
+    manifestExternal = Array.isArray(pkg.external) ? pkg.external.filter((v) => typeof v === "string" && v.trim().length > 0) : [];
+  } catch {
+    return 0;
+  }
+  if (commands.length === 0) return 0;
+  const esbuild = requireEsbuild();
+  const extNodeModules = path.join(extPath, "node_modules");
+  if (requiresNodeModules && !fs.existsSync(extNodeModules)) {
+    try {
+      const { installExtensionDeps: installExtensionDeps2 } = (init_extension_registry(), __toCommonJS(extension_registry_exports));
+      await installExtensionDeps2(extPath);
+    } catch (e) {
+      console.error(`Failed to install dependencies for ${extName}:`, e?.message || e);
+      return 0;
+    }
+    if (!fs.existsSync(extNodeModules)) {
+      console.error(`Dependencies missing for ${extName}: ${extNodeModules} not found`);
+      return 0;
+    }
+  }
+  const buildDir = getBuildDir(extPath);
+  try {
+    fs.rmSync(buildDir, { recursive: true, force: true });
+  } catch {
+  }
+  fs.mkdirSync(buildDir, { recursive: true });
+  let built = 0;
+  for (const cmd of commands) {
+    if (!cmd.name) continue;
+    if (!isCommandPlatformCompatible(cmd)) continue;
+    const entryFile = resolveEntryFile(extPath, cmd);
+    if (!entryFile) {
+      console.warn(`No entry file for ${extName}/${cmd.name}, skipping`);
+      continue;
+    }
+    const outFile = path.join(buildDir, `${cmd.name}.js`);
+    fs.mkdirSync(path.dirname(outFile), { recursive: true });
+    try {
+      console.log(`  Building ${extName}/${cmd.name}\u2026`);
+      await runEsbuildBuild(
+        esbuild,
+        {
+          entryPoints: [entryFile],
+          absWorkingDir: extPath,
+          bundle: true,
+          format: "cjs",
+          platform: "node",
+          conditions: ["require", "node"],
+          outfile: outFile,
+          plugins: [
+            legacyCheerioInteropPlugin(),
+            // Mark swift: imports as external so fakeRequire can handle them at runtime
+            {
+              name: "swift-external",
+              setup(build) {
+                build.onResolve({ filter: /^swift:/ }, (args) => ({
+                  path: args.path,
+                  external: true
+                }));
+              }
+            }
+          ],
+          external: [
+            // React — provided by the renderer at runtime
+            "react",
+            "react-dom",
+            "react-dom/*",
+            "react/jsx-runtime",
+            "react/jsx-dev-runtime",
+            // Raycast — provided by our shim
+            "@raycast/api",
+            "@raycast/utils",
+            // Native C++ addons — cannot be bundled, we stub them at runtime
+            "re2",
+            "better-sqlite3",
+            "fsevents",
+            // Cross-extension calls — not supported, stubbed
+            "raycast-cross-extension",
+            // Fetch libs — use runtime shims in renderer instead of bundling Node internals
+            "node-fetch",
+            "undici",
+            "undici/*",
+            // HTTP / file-download / archive packages — must be kept external so our renderer
+            // shim can intercept them and route file I/O through the main process (which has
+            // real filesystem access). Bundling them inline breaks binary downloads because the
+            // browser renderer cannot do streaming file writes or archive extraction natively.
+            "axios",
+            "tar",
+            "extract-zip",
+            "sha256-file",
+            // Respect extension-defined externals from manifest
+            ...manifestExternal,
+            // Node.js built-ins — stubbed at runtime in the renderer
+            ...nodeBuiltins
+          ],
+          nodePaths: fs.existsSync(extNodeModules) ? [extNodeModules] : [],
+          target: "es2020",
+          jsx: "automatic",
+          jsxImportSource: "react",
+          tsconfigRaw: getEsbuildTsconfigRaw(extPath),
+          define: {
+            "process.env.NODE_ENV": '"production"',
+            "global": "globalThis"
+          },
+          logLevel: "warning"
+        },
+        extPath,
+        `${extName}/${cmd.name}`
+      );
+      if (fs.existsSync(outFile)) {
+        built++;
+      }
+    } catch (e) {
+      console.error(`  esbuild failed for ${extName}/${cmd.name}:`, e);
+    }
+  }
+  console.log(`Built ${built}/${commands.length} commands for ${extName}`);
+  return built;
+}
+function parsePreferences(pkg, cmdName) {
+  const extensionPrefs = {};
+  const commandPrefs = {};
+  const definitions = [];
+  for (const pref of pkg.preferences || []) {
+    if (!pref.name) continue;
+    const resolvedDefault = resolvePlatformDefault(pref.default);
+    definitions.push({
+      scope: "extension",
+      name: pref.name,
+      title: pref.title,
+      description: pref.description,
+      placeholder: pref.placeholder,
+      required: Boolean(pref.required),
+      type: pref.type,
+      default: resolvedDefault,
+      data: Array.isArray(pref.data) ? pref.data : void 0
+    });
+    if (resolvedDefault !== void 0) {
+      extensionPrefs[pref.name] = resolvedDefault;
+    } else if (pref.type === "checkbox") {
+      extensionPrefs[pref.name] = false;
+    } else if (pref.type === "textfield" || pref.type === "password") {
+      extensionPrefs[pref.name] = "";
+    } else if (pref.type === "dropdown") {
+      extensionPrefs[pref.name] = pref.data?.[0]?.value ?? "";
+    }
+  }
+  const cmd = (pkg.commands || []).find((c) => c.name === cmdName);
+  if (cmd?.preferences) {
+    for (const pref of cmd.preferences) {
+      if (!pref.name) continue;
+      const resolvedDefault = resolvePlatformDefault(pref.default);
+      definitions.push({
+        scope: "command",
+        name: pref.name,
+        title: pref.title,
+        description: pref.description,
+        placeholder: pref.placeholder,
+        required: Boolean(pref.required),
+        type: pref.type,
+        default: resolvedDefault,
+        data: Array.isArray(pref.data) ? pref.data : void 0
+      });
+      if (resolvedDefault !== void 0) {
+        commandPrefs[pref.name] = resolvedDefault;
+      } else if (pref.type === "checkbox") {
+        commandPrefs[pref.name] = false;
+      } else if (pref.type === "textfield" || pref.type === "password") {
+        commandPrefs[pref.name] = "";
+      } else if (pref.type === "dropdown") {
+        commandPrefs[pref.name] = pref.data?.[0]?.value ?? "";
+      }
+    }
+  }
+  return { extensionPrefs, commandPrefs, definitions };
+}
+async function buildSingleCommand(extName, cmdName) {
+  const extPath = resolveInstalledExtensionPath(extName);
+  if (!extPath) {
+    console.error(`buildSingleCommand: extension path not found for ${extName}`);
+    return false;
+  }
+  const pkgPath = path.join(extPath, "package.json");
+  if (!fs.existsSync(pkgPath)) {
+    console.error(`buildSingleCommand: package.json not found at ${pkgPath}`);
+    return false;
+  }
+  let cmd;
+  let requiresNodeModules = false;
+  let manifestExternal = [];
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    if (!isManifestPlatformCompatible(pkg)) {
+      console.error(`buildSingleCommand: platform not compatible for ${extName}`);
+      return false;
+    }
+    const commands = pkg.commands || [];
+    cmd = commands.find((c) => c.name === cmdName);
+    requiresNodeModules = extensionRequiresNodeModules(pkg);
+    manifestExternal = Array.isArray(pkg.external) ? pkg.external.filter((v) => typeof v === "string" && v.trim().length > 0) : [];
+  } catch (e) {
+    console.error(`buildSingleCommand: failed to parse package.json for ${extName}:`, e?.message);
+    return false;
+  }
+  if (!cmd) {
+    console.error(`buildSingleCommand: command "${cmdName}" not found in ${extName} package.json`);
+    return false;
+  }
+  if (!isCommandPlatformCompatible(cmd)) {
+    console.error(`buildSingleCommand: command "${cmdName}" not compatible with current platform`);
+    return false;
+  }
+  const entryFile = resolveEntryFile(extPath, cmd);
+  if (!entryFile) {
+    console.error(`buildSingleCommand: entry file not found for ${extName}/${cmdName}`);
+    return false;
+  }
+  const buildDir = getBuildDir(extPath);
+  fs.mkdirSync(buildDir, { recursive: true });
+  const outFile = path.join(buildDir, `${cmdName}.js`);
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
+  const extNodeModules = path.join(extPath, "node_modules");
+  if (requiresNodeModules && !fs.existsSync(extNodeModules)) {
+    console.log(`  node_modules missing for ${extName}, installing dependencies\u2026`);
+    try {
+      const { installExtensionDeps: installExtensionDeps2 } = (init_extension_registry(), __toCommonJS(extension_registry_exports));
+      await installExtensionDeps2(extPath);
+    } catch (e) {
+      console.error(`  Failed to install dependencies for ${extName}:`, e?.message);
+      return false;
+    }
+    if (!fs.existsSync(extNodeModules)) return false;
+  }
+  try {
+    const esbuild = requireEsbuild();
+    console.log(`  On-demand building ${extName}/${cmdName}\u2026`);
+    await runEsbuildBuild(
+      esbuild,
+      {
+        entryPoints: [entryFile],
+        absWorkingDir: extPath,
+        bundle: true,
+        format: "cjs",
+        platform: "node",
+        conditions: ["require", "node"],
+        outfile: outFile,
+        plugins: [
+          legacyCheerioInteropPlugin(),
+          {
+            name: "swift-external",
+            setup(build) {
+              build.onResolve({ filter: /^swift:/ }, (args) => ({
+                path: args.path,
+                external: true
+              }));
+            }
+          }
+        ],
+        external: [
+          "react",
+          "react-dom",
+          "react-dom/*",
+          "react/jsx-runtime",
+          "react/jsx-dev-runtime",
+          "@raycast/api",
+          "@raycast/utils",
+          "re2",
+          "better-sqlite3",
+          "fsevents",
+          "raycast-cross-extension",
+          "node-fetch",
+          "undici",
+          "undici/*",
+          "axios",
+          "tar",
+          "extract-zip",
+          "sha256-file",
+          ...manifestExternal,
+          ...nodeBuiltins
+        ],
+        nodePaths: fs.existsSync(extNodeModules) ? [extNodeModules] : [],
+        target: "es2020",
+        jsx: "automatic",
+        jsxImportSource: "react",
+        tsconfigRaw: getEsbuildTsconfigRaw(extPath),
+        define: {
+          "process.env.NODE_ENV": '"production"',
+          "global": "globalThis"
+        },
+        logLevel: "warning"
+      },
+      extPath,
+      `${extName}/${cmdName}`
+    );
+    return fs.existsSync(outFile);
+  } catch (e) {
+    console.error(`  On-demand esbuild failed for ${extName}/${cmdName}:`, e);
+    lastBuildError.set(`${extName}/${cmdName}`, e?.message || String(e));
+    return false;
+  }
+}
+function extractMissingBareImports(error) {
+  const errors = Array.isArray(error?.errors) ? error.errors : [];
+  const found = /* @__PURE__ */ new Set();
+  for (const err of errors) {
+    const text2 = String(err?.text || "");
+    const match = text2.match(/Could not resolve\s+"([^"]+)"/);
+    if (!match) continue;
+    const specifier = match[1];
+    if (!specifier || specifier.startsWith(".") || specifier.startsWith("/") || specifier.includes(":")) {
+      continue;
+    }
+    const parts = specifier.split("/");
+    const pkgName = specifier.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
+    if (!pkgName) continue;
+    if (nodeBuiltins.includes(pkgName)) continue;
+    if (pkgName.startsWith("@raycast/")) continue;
+    found.add(pkgName);
+  }
+  return [...found];
+}
+async function runEsbuildBuild(esbuild, options, extPath, label) {
+  try {
+    await esbuild.build(options);
+  } catch (error) {
+    const missing = extractMissingBareImports(error);
+    if (missing.length === 0) throw error;
+    console.log(
+      `  Missing packages for ${label} (${missing.join(", ")}); installing and retrying\u2026`
+    );
+    const { installSpecificPackages: installSpecificPackages2 } = (init_extension_registry(), __toCommonJS(extension_registry_exports));
+    try {
+      await installSpecificPackages2(extPath, missing);
+    } catch (installError) {
+      console.error(
+        `  Failed to install missing packages for ${label}: ${installError?.message || installError}`
+      );
+      throw error;
+    }
+    await esbuild.build(options);
+  }
+}
+async function getExtensionBundle(extName, cmdName) {
+  const normalizedExtName = normalizeExtensionName(extName);
+  const extPath = resolveInstalledExtensionPath(normalizedExtName);
+  if (!extPath) {
+    const searchRoots = getConfiguredExtensionRoots();
+    const msg = `Extension directory not found: ${normalizedExtName}. Searched roots: ${searchRoots.join(", ")}`;
+    console.error(msg);
+    throw new Error(msg);
+  }
+  let outFile = path.join(extPath, ".sc-build", `${cmdName}.js`);
+  if (!fs.existsSync(outFile)) {
+    console.log(`Pre-built bundle not found for ${normalizedExtName}/${cmdName}, building on-demand\u2026`);
+    const built = await buildSingleCommand(normalizedExtName, cmdName);
+    if (!built || !fs.existsSync(outFile)) {
+      try {
+        console.log(`Single-command build failed for ${normalizedExtName}/${cmdName}; trying full extension rebuild\u2026`);
+        await buildAllCommands(normalizedExtName);
+      } catch (rebuildError) {
+        console.warn(`Full rebuild fallback failed for ${normalizedExtName}:`, rebuildError);
+      }
+    }
+    if (!fs.existsSync(outFile)) {
+      let diagnostic = "";
+      try {
+        const pkgPath = path.join(extPath, "package.json");
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+        const commands = Array.isArray(pkg?.commands) ? pkg.commands : [];
+        const cmd = commands.find((c) => c?.name === cmdName);
+        const nodeModulesExists = fs.existsSync(path.join(extPath, "node_modules"));
+        const requiresNodeModules = extensionRequiresNodeModules(pkg);
+        if (!cmd) {
+          diagnostic = ` Command "${cmdName}" not found in package.json.`;
+        } else {
+          const entry = resolveEntryFile(extPath, cmd);
+          if (!entry) {
+            diagnostic = ` Entry file not found for "${cmdName}".`;
+          } else if (requiresNodeModules && !nodeModulesExists) {
+            diagnostic = " node_modules is missing (dependency installation likely failed).";
+          }
+        }
+      } catch {
+      }
+      const underlying = lastBuildError.get(`${normalizedExtName}/${cmdName}`);
+      const underlyingSuffix = underlying ? ` Underlying error: ${underlying}` : "";
+      const msg = `On-demand build failed for ${normalizedExtName}/${cmdName}. Extension path: ${extPath}. Expected output: ${outFile}.${diagnostic}${underlyingSuffix}`;
+      console.error(msg);
+      throw new Error(msg);
+    }
+  }
+  const code = fs.readFileSync(outFile, "utf-8");
+  if (!code) {
+    const msg = `Pre-built bundle is empty: ${outFile}`;
+    console.error(msg);
+    throw new Error(msg);
+  }
+  let title = cmdName;
+  let mode = "view";
+  let owner = "";
+  let extensionDisplayName = extName;
+  let extensionIconDataUrl;
+  let preferences = {};
+  let commandPreferences = {};
+  let preferenceDefinitions = [];
+  let commandArgumentDefinitions = [];
+  try {
+    const pkgPath = path.join(extPath, "package.json");
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    if (!isManifestPlatformCompatible(pkg)) {
+      return null;
+    }
+    const cmd = (pkg.commands || []).find((c) => c.name === cmdName);
+    if (cmd && !isCommandPlatformCompatible(cmd)) {
+      return null;
+    }
+    if (cmd?.title) title = cmd.title;
+    if (cmd?.mode) mode = cmd.mode;
+    if (pkg?.title) extensionDisplayName = pkg.title;
+    extensionIconDataUrl = getExtensionIconDataUrl(extPath, pkg.icon || "icon.png");
+    const rawOwner = pkg.owner || pkg.author || "";
+    owner = typeof rawOwner === "object" ? rawOwner.name || "" : rawOwner;
+    const { extensionPrefs, commandPrefs, definitions } = parsePreferences(pkg, cmdName);
+    preferences = extensionPrefs;
+    commandPreferences = commandPrefs;
+    preferenceDefinitions = definitions;
+    commandArgumentDefinitions = Array.isArray(cmd?.arguments) ? cmd.arguments.filter((arg) => arg && arg.name).map((arg) => ({
+      name: arg.name,
+      required: Boolean(arg.required),
+      type: arg.type,
+      placeholder: arg.placeholder,
+      title: arg.title,
+      data: Array.isArray(arg.data) ? arg.data : void 0
+    })) : [];
+  } catch {
+  }
+  const assetsPath = path.join(extPath, "assets");
+  const supportPath = path.join(app.getPath("userData"), "extension-support", normalizedExtName);
+  if (!fs.existsSync(supportPath)) {
+    fs.mkdirSync(supportPath, { recursive: true });
+  }
+  return {
+    code,
+    title,
+    mode,
+    extensionName: normalizedExtName,
+    extensionDisplayName,
+    extensionIconDataUrl,
+    commandName: cmdName,
+    assetsPath,
+    supportPath,
+    extensionPath: extPath,
+    owner,
+    preferences: { ...preferences, ...commandPreferences },
+    commandPreferences,
+    preferenceDefinitions,
+    commandArgumentDefinitions
+  };
+}
+var fs, os, path, nodeBuiltins, lastBuildError;
+var init_extension_builder = __esm({
+  "src/main/extension-builder.ts"() {
+    "use strict";
+    init_desktop_runtime();
+    fs = __toESM(require("fs"));
+    os = __toESM(require("os"));
+    path = __toESM(require("path"));
+    init_extension_platform();
+    init_esbuild_runtime();
+    nodeBuiltins = [
+      "assert",
+      "buffer",
+      "child_process",
+      "cluster",
+      "crypto",
+      "dgram",
+      "dns",
+      "events",
+      "fs",
+      "fs/promises",
+      "http",
+      "http2",
+      "https",
+      "module",
+      "net",
+      "os",
+      "path",
+      "perf_hooks",
+      "process",
+      "querystring",
+      "readline",
+      "stream",
+      "stream/promises",
+      "string_decoder",
+      "timers",
+      "timers/promises",
+      "tls",
+      "tty",
+      "url",
+      "util",
+      "v8",
+      "vm",
+      "worker_threads",
+      "zlib",
+      "async_hooks",
+      "node:assert",
+      "node:buffer",
+      "node:child_process",
+      "node:crypto",
+      "node:events",
+      "node:fs",
+      "node:fs/promises",
+      "node:http",
+      "node:https",
+      "node:module",
+      "node:net",
+      "node:os",
+      "node:path",
+      "node:process",
+      "node:querystring",
+      "node:stream",
+      "node:timers",
+      "node:timers/promises",
+      "node:url",
+      "node:util",
+      "node:vm",
+      "node:worker_threads",
+      "node:zlib",
+      "node:async_hooks"
+    ];
+    lastBuildError = /* @__PURE__ */ new Map();
+  }
+});
+
+// src/main/extension-api.ts
+function getApiBaseUrl() {
+  return process.env.RAYMES_EXTENSION_API_URL || DEFAULT_API_URL;
+}
+function jsonRequest(method, urlPath, body) {
+  return new Promise((resolve5, reject) => {
+    const baseUrl = getApiBaseUrl();
+    const fullUrl = new URL(urlPath, baseUrl);
+    const isHttps = fullUrl.protocol === "https:";
+    const transport = isHttps ? https : http;
+    const payload = body ? JSON.stringify(body) : void 0;
+    const options = {
+      method,
+      hostname: fullUrl.hostname,
+      port: fullUrl.port || (isHttps ? 443 : 80),
+      path: fullUrl.pathname + fullUrl.search,
+      headers: {
+        "User-Agent": "Tezbar",
+        Accept: "application/json",
+        ...payload ? {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload)
+        } : {}
+      },
+      timeout: REQUEST_TIMEOUT
+    };
+    const req = transport.request(options, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => {
+        const statusCode = res.statusCode ?? 0;
+        const rawBody = Buffer.concat(chunks).toString("utf-8");
+        if (statusCode < 200 || statusCode >= 300) {
+          reject(
+            new Error(
+              `API request failed: ${method} ${urlPath} \u2192 ${statusCode} ${res.statusMessage}
+${rawBody}`
+            )
+          );
+          return;
+        }
+        try {
+          resolve5(JSON.parse(rawBody));
+        } catch (parseError) {
+          reject(new Error(`Failed to parse API response as JSON: ${rawBody}`));
+        }
+      });
+    });
+    req.on("error", (err) => reject(err));
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error(`API request timed out: ${method} ${urlPath}`));
+    });
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+async function fetchCatalogFromAPI() {
+  const data = await jsonRequest("GET", "/extensions/catalog");
+  return data.map((entry) => ({
+    name: entry.name ?? "",
+    title: entry.title ?? "",
+    description: entry.description ?? "",
+    author: entry.author ?? "",
+    contributors: entry.contributors ?? [],
+    icon: entry.icon ?? "",
+    iconUrl: entry.iconUrl ?? entry.icon_url ?? "",
+    screenshotUrls: entry.screenshotUrls ?? entry.screenshot_urls ?? [],
+    categories: entry.categories ?? [],
+    platforms: entry.platforms ?? [],
+    commands: (entry.commands ?? []).map((cmd) => ({
+      name: cmd.name ?? "",
+      title: cmd.title ?? "",
+      description: cmd.description ?? ""
+    })),
+    installCount: entry.installCount ?? entry.install_count ?? 0
+  }));
+}
+async function getExtensionBundleUrl(name) {
+  return jsonRequest(
+    "GET",
+    `/extensions/${encodeURIComponent(name)}/bundle`
+  );
+}
+async function getExtensionScreenshotsFromAPI(name) {
+  try {
+    return await jsonRequest(
+      "GET",
+      `/extensions/${encodeURIComponent(name)}/screenshots`
+    );
+  } catch {
+    return [];
+  }
+}
+async function reportInstall(name, machineId) {
+  try {
+    await jsonRequest(
+      "POST",
+      `/extensions/${encodeURIComponent(name)}/install`,
+      machineId ? { machineId } : {}
+    );
+  } catch (err) {
+    console.warn("Failed to report install:", err);
+  }
+}
+async function reportUninstall(name, machineId) {
+  try {
+    await jsonRequest(
+      "POST",
+      `/extensions/${encodeURIComponent(name)}/uninstall`,
+      machineId ? { machineId } : {}
+    );
+  } catch (err) {
+    console.warn("Failed to report uninstall:", err);
+  }
+}
+var https, http, DEFAULT_API_URL, REQUEST_TIMEOUT;
+var init_extension_api = __esm({
+  "src/main/extension-api.ts"() {
+    "use strict";
+    https = __toESM(require("https"));
+    http = __toESM(require("http"));
+    DEFAULT_API_URL = "https://api.supercmd.sh";
+    REQUEST_TIMEOUT = 3e4;
+  }
+});
+
+// src/main/bun-manager.ts
+function broadcastInstallStatus(message) {
+  for (const window2 of BrowserWindow.getAllWindows()) {
+    if (window2.isDestroyed()) continue;
+    try {
+      window2.webContents.send("extension-install-status", message);
+    } catch {
+    }
+  }
+}
+function getBunDownloadUrl() {
+  const arch = process.arch === "arm64" ? "aarch64" : "x64";
+  if (process.platform === "darwin") {
+    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-darwin-${arch}.zip`;
+  }
+  if (process.platform === "linux") {
+    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${arch}.zip`;
+  }
+  if (process.platform === "win32") {
+    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-windows-${arch}.zip`;
+  }
+  return "";
+}
+function getBunDir() {
+  return path2.join(app.getPath("userData"), "bun");
+}
+function getBunBinaryPath() {
+  return path2.join(getBunDir(), process.platform === "win32" ? "bun.exe" : "bun");
+}
+function isBunAvailable() {
+  const binPath = getBunBinaryPath();
+  try {
+    return fs2.existsSync(binPath) && fs2.statSync(binPath).size > 1e6;
+  } catch {
+    return false;
+  }
+}
+async function ensureBun() {
+  if (isBunAvailable()) {
+    return getBunBinaryPath();
+  }
+  const url = getBunDownloadUrl();
+  if (!url) {
+    console.warn("Bun download not supported on this platform");
+    return null;
+  }
+  const bunDir = getBunDir();
+  fs2.mkdirSync(bunDir, { recursive: true });
+  console.log(`Downloading Bun v${BUN_VERSION}...`);
+  broadcastInstallStatus("Setting up installer for first use\u2026");
+  try {
+    const zipBuffer = await downloadFile(url);
+    broadcastInstallStatus("Setting up installer\u2026");
+    console.log(`Downloaded Bun (${(zipBuffer.length / 1024 / 1024).toFixed(1)}MB), extracting...`);
+    const tmpZipPath = path2.join(app.getPath("temp"), `bun-${Date.now()}.zip`);
+    fs2.writeFileSync(tmpZipPath, zipBuffer);
+    const tmpExtractDir = path2.join(app.getPath("temp"), `bun-extract-${Date.now()}`);
+    fs2.mkdirSync(tmpExtractDir, { recursive: true });
+    if (process.platform === "win32") {
+      await execFileAsync9(
+        "powershell.exe",
+        [
+          "-NoLogo",
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Expand-Archive -LiteralPath $env:TEZBAR_BUN_ZIP -DestinationPath $env:TEZBAR_BUN_EXTRACT -Force"
+        ],
+        {
+          timeout: 3e4,
+          env: {
+            ...process.env,
+            TEZBAR_BUN_ZIP: tmpZipPath,
+            TEZBAR_BUN_EXTRACT: tmpExtractDir
+          }
+        }
+      );
+    } else {
+      await execFileAsync9("unzip", ["-o", tmpZipPath, "-d", tmpExtractDir], { timeout: 3e4 });
+    }
+    const bunBinary = findFile(tmpExtractDir, process.platform === "win32" ? "bun.exe" : "bun");
+    if (!bunBinary) {
+      throw new Error("Bun binary not found in downloaded archive");
+    }
+    const destPath = getBunBinaryPath();
+    fs2.copyFileSync(bunBinary, destPath);
+    if (process.platform !== "win32") fs2.chmodSync(destPath, 493);
+    try {
+      fs2.rmSync(tmpZipPath, { force: true });
+    } catch {
+    }
+    try {
+      fs2.rmSync(tmpExtractDir, { recursive: true, force: true });
+    } catch {
+    }
+    const { stdout } = await execFileAsync9(destPath, ["--version"], { timeout: 5e3 });
+    console.log(`Bun installed successfully: ${stdout.trim()}`);
+    return destPath;
+  } catch (error) {
+    console.error("Failed to download/install Bun:", error?.message || error);
+    try {
+      fs2.rmSync(getBunBinaryPath(), { force: true });
+    } catch {
+    }
+    return null;
+  }
+}
+async function installDepsWithBun(extPath) {
+  const bunPath = await ensureBun();
+  if (!bunPath) return false;
+  const pkgPath = path2.join(extPath, "package.json");
+  if (!fs2.existsSync(pkgPath)) return true;
+  let pkg;
+  try {
+    pkg = JSON.parse(fs2.readFileSync(pkgPath, "utf-8"));
+  } catch {
+    return true;
+  }
+  const deps = {
+    ...pkg.dependencies || {},
+    ...pkg.optionalDependencies || {}
+  };
+  const thirdPartyDeps = Object.entries(deps).filter(([name]) => !name.startsWith("@raycast/")).map(([name, version]) => `${name}@${version}`).filter(Boolean);
+  if (thirdPartyDeps.length === 0) {
+    console.log(`No third-party deps for ${path2.basename(extPath)} \u2014 skipping bun install`);
+    return true;
+  }
+  console.log(`Installing ${thirdPartyDeps.length} deps via Bun for ${path2.basename(extPath)}...`);
+  try {
+    const cleanPkg = {
+      name: pkg.name || "extension",
+      version: pkg.version || "1.0.0",
+      private: true,
+      dependencies: Object.fromEntries(
+        Object.entries(deps).filter(([name]) => !name.startsWith("@raycast/"))
+      )
+    };
+    const originalPkg = fs2.readFileSync(pkgPath, "utf-8");
+    fs2.writeFileSync(pkgPath, JSON.stringify(cleanPkg, null, 2));
+    for (const lockfile of [
+      "package-lock.json",
+      "bun.lockb",
+      "bun.lock",
+      "yarn.lock",
+      "pnpm-lock.yaml"
+    ]) {
+      try {
+        fs2.rmSync(path2.join(extPath, lockfile), { force: true });
+      } catch {
+      }
+    }
+    await execFileAsync9(bunPath, ["install", "--production", "--no-save"], {
+      cwd: extPath,
+      timeout: 12e4,
+      env: {
+        ...process.env,
+        PATH: `${path2.dirname(bunPath)}:${process.env.PATH || ""}`
+      }
+    });
+    fs2.writeFileSync(pkgPath, originalPkg);
+    const hasNodeModules2 = fs2.existsSync(path2.join(extPath, "node_modules"));
+    if (hasNodeModules2) {
+      console.log(`Bun install succeeded for ${path2.basename(extPath)}`);
+      return true;
+    }
+    console.warn(`Bun completed but node_modules missing for ${path2.basename(extPath)}`);
+    fs2.writeFileSync(pkgPath, originalPkg);
+    return false;
+  } catch (error) {
+    console.warn(`Bun install failed for ${path2.basename(extPath)}:`, error?.message);
+    try {
+      const originalContent = JSON.stringify(pkg, null, 2);
+      fs2.writeFileSync(pkgPath, originalContent);
+    } catch {
+    }
+    return false;
+  }
+}
+async function installSpecificPackagesWithBun(extPath, packageNames) {
+  const bunPath = await ensureBun();
+  if (!bunPath) return false;
+  const unique = Array.from(
+    new Set(packageNames.map((name) => String(name || "").trim()).filter(Boolean))
+  );
+  if (unique.length === 0) return true;
+  const validPackageName = /^(?:@[A-Za-z0-9][A-Za-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/;
+  const invalid = unique.find((name) => !validPackageName.test(name));
+  if (invalid) {
+    console.warn(`Refusing invalid package name from extension build: ${invalid}`);
+    return false;
+  }
+  console.log(
+    `Installing specific packages via Bun for ${path2.basename(extPath)}: ${unique.join(", ")}`
+  );
+  try {
+    await execFileAsync9(bunPath, ["add", "--no-save", ...unique], {
+      cwd: extPath,
+      timeout: 3e5,
+      env: {
+        ...process.env,
+        PATH: `${path2.dirname(bunPath)}:${process.env.PATH || ""}`
+      }
+    });
+    return fs2.existsSync(path2.join(extPath, "node_modules"));
+  } catch (error) {
+    console.warn(`Bun add failed for ${path2.basename(extPath)}:`, error?.message);
+    return false;
+  }
+}
+function downloadFile(url) {
+  return new Promise((resolve5, reject) => {
+    const makeRequest = (requestUrl, redirects = 0) => {
+      if (redirects > 10) {
+        reject(new Error("Too many redirects"));
+        return;
+      }
+      const parsedUrl = new URL(requestUrl);
+      const transport = parsedUrl.protocol === "https:" ? https2 : http2;
+      transport.get(requestUrl, { timeout: 12e4 }, (res) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          makeRequest(res.headers.location, redirects + 1);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          reject(new Error(`Download failed: ${res.statusCode} ${res.statusMessage}`));
+          return;
+        }
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("error", reject);
+        res.on("end", () => resolve5(Buffer.concat(chunks)));
+      }).on("error", reject);
+    };
+    makeRequest(url);
+  });
+}
+function findFile(dir, name) {
+  try {
+    const entries = fs2.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path2.join(dir, entry.name);
+      if (entry.isFile() && entry.name === name) return full;
+      if (entry.isDirectory()) {
+        const found = findFile(full, name);
+        if (found) return found;
+      }
+    }
+  } catch {
+  }
+  return null;
+}
+var import_child_process, import_util, fs2, path2, https2, http2, execFileAsync9, BUN_VERSION;
+var init_bun_manager = __esm({
+  "src/main/bun-manager.ts"() {
+    "use strict";
+    init_desktop_runtime();
+    import_child_process = require("child_process");
+    import_util = require("util");
+    fs2 = __toESM(require("fs"));
+    path2 = __toESM(require("path"));
+    https2 = __toESM(require("https"));
+    http2 = __toESM(require("http"));
+    execFileAsync9 = (0, import_util.promisify)(import_child_process.execFile);
+    BUN_VERSION = "1.2.5";
+  }
+});
+
+// src/main/extension-registry.ts
+var extension_registry_exports = {};
+__export(extension_registry_exports, {
+  extensionRegistryEvents: () => extensionRegistryEvents,
+  getCatalog: () => getCatalog,
+  getExtensionPreferenceSetup: () => getExtensionPreferenceSetup,
+  getExtensionPreferences: () => getExtensionPreferences,
+  getExtensionScreenshotUrls: () => getExtensionScreenshotUrls,
+  getInstalledExtensionNames: () => getInstalledExtensionNames,
+  installExtension: () => installExtension2,
+  installExtensionDeps: () => installExtensionDeps,
+  installRegistryExtension: () => installRegistryExtension,
+  installSpecificPackages: () => installSpecificPackages,
+  isExtensionInstalled: () => isExtensionInstalled,
+  listInstalledExtensionSlugsFromDisk: () => listInstalledExtensionSlugsFromDisk,
+  listInstalledRegistryExtensions: () => listInstalledRegistryExtensions,
+  resolveInstalledPackageJsonPath: () => resolveInstalledPackageJsonPath,
+  saveExtensionPreferences: () => saveExtensionPreferences,
+  scoreCatalogEntrySearch: () => scoreCatalogEntrySearch,
+  searchExtensionCatalog: () => searchExtensionCatalog,
+  shouldShowExtensionPreferenceSetup: () => shouldShowExtensionPreferenceSetup,
+  uninstallExtension: () => uninstallExtension2,
+  uninstallRegistryExtension: () => uninstallRegistryExtension
+});
+function hasNodeModules(extPath) {
+  try {
+    return fs3.existsSync(path3.join(extPath, "node_modules"));
+  } catch {
+    return false;
+  }
+}
+function githubApiHeaders() {
+  return {
+    "User-Agent": "Tezbar",
+    Accept: "application/vnd.github+json"
+  };
+}
+async function fetchWithTimeout(url, options = {}, timeoutMs = 45e3) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+async function fetchRepoTreeEntries(forceRefresh = false) {
+  if (!forceRefresh && repoTreeCache && Date.now() - repoTreeCache.fetchedAt < REPO_TREE_TTL_MS) {
+    return repoTreeCache.entries;
+  }
+  const response = await fetchWithTimeout(
+    GITHUB_TREE_API,
+    { headers: githubApiHeaders() },
+    9e4
+  );
+  if (!response.ok) {
+    throw new Error(`GitHub tree fetch failed with ${response.status} ${response.statusText}`);
+  }
+  const data = await response.json();
+  const rawEntries = Array.isArray(data?.tree) ? data.tree : [];
+  const entries = rawEntries.map((entry) => ({
+    path: String(entry?.path || ""),
+    type: String(entry?.type || ""),
+    size: typeof entry?.size === "number" ? entry.size : void 0
+  })).filter((entry) => Boolean(entry.path));
+  repoTreeCache = {
+    fetchedAt: Date.now(),
+    entries
+  };
+  return entries;
+}
+async function downloadExtensionFromTree(name, tmpDir) {
+  const treeEntries = await fetchRepoTreeEntries();
+  const prefix = `extensions/${name}/`;
+  const fileEntries = treeEntries.filter(
+    (entry) => entry.type === "blob" && entry.path.startsWith(prefix)
+  );
+  if (fileEntries.length === 0) return null;
+  const srcDir = path3.join(tmpDir, "extensions", name);
+  fs3.mkdirSync(srcDir, { recursive: true });
+  for (const entry of fileEntries) {
+    const relativePath = entry.path.slice(prefix.length);
+    if (!relativePath) continue;
+    const destination = path3.join(srcDir, relativePath);
+    fs3.mkdirSync(path3.dirname(destination), { recursive: true });
+  }
+  const CONCURRENCY = 30;
+  let index = 0;
+  const downloadOne = async () => {
+    while (index < fileEntries.length) {
+      const i = index++;
+      const entry = fileEntries[i];
+      const relativePath = entry.path.slice(prefix.length);
+      if (!relativePath) continue;
+      const destination = path3.join(srcDir, relativePath);
+      const fileUrl = `${GITHUB_RAW}/${entry.path}`;
+      const response = await fetchWithTimeout(
+        fileUrl,
+        {
+          headers: {
+            "User-Agent": "Tezbar",
+            Accept: "application/octet-stream"
+          }
+        },
+        9e4
+      );
+      if (!response.ok) {
+        throw new Error(`Failed to download ${entry.path} (${response.status} ${response.statusText})`);
+      }
+      const data = await response.arrayBuffer();
+      fs3.writeFileSync(destination, Buffer.from(data));
+    }
+  };
+  const workers = Array.from(
+    { length: Math.min(CONCURRENCY, fileEntries.length) },
+    () => downloadOne()
+  );
+  await Promise.all(workers);
+  console.log(`Downloaded ${fileEntries.length} files for "${name}"`);
+  return srcDir;
+}
+function downloadExtensionViaSparseGit(name, tmpDir) {
+  const checkoutDir = path3.join(tmpDir, "raymes-extensions-source");
+  try {
+    (0, import_child_process2.execFileSync)("git", [
+      "clone",
+      "--depth",
+      "1",
+      "--filter=blob:none",
+      "--sparse",
+      RAYMES_EXTENSIONS_GIT,
+      checkoutDir
+    ], { stdio: "ignore", timeout: 18e4 });
+    (0, import_child_process2.execFileSync)("git", [
+      "-C",
+      checkoutDir,
+      "sparse-checkout",
+      "set",
+      `extensions/${name}`
+    ], { stdio: "ignore", timeout: 12e4 });
+    const extensionDir = path3.join(checkoutDir, "extensions", name);
+    return fs3.existsSync(path3.join(extensionDir, "package.json")) ? extensionDir : null;
+  } catch (error) {
+    console.warn(`Sparse git fallback failed for "${name}":`, error);
+    return null;
+  }
+}
+function coerceCatalogEntry(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const name = typeof raw.name === "string" ? raw.name : "";
+  if (!name) return null;
+  const commands = Array.isArray(raw.commands) ? raw.commands.filter((cmd) => cmd && typeof cmd === "object" && cmd.name).map((cmd) => ({
+    name: String(cmd.name || ""),
+    title: String(cmd.title || cmd.name || ""),
+    description: String(cmd.description || "")
+  })) : [];
+  return {
+    name,
+    title: typeof raw.title === "string" ? raw.title : name,
+    description: typeof raw.description === "string" ? raw.description : "",
+    author: typeof raw.author === "string" ? raw.author : "",
+    contributors: Array.isArray(raw.contributors) ? raw.contributors.filter((v) => typeof v === "string") : [],
+    icon: typeof raw.icon === "string" ? raw.icon : "",
+    iconUrl: typeof raw.iconUrl === "string" ? raw.iconUrl : "",
+    screenshotUrls: Array.isArray(raw.screenshotUrls) ? raw.screenshotUrls.filter((v) => typeof v === "string") : [],
+    categories: Array.isArray(raw.categories) ? raw.categories.filter((v) => typeof v === "string") : [],
+    platforms: Array.isArray(raw.platforms) ? raw.platforms.filter((v) => typeof v === "string") : [],
+    commands
+  };
+}
+function getCatalogPath() {
+  return path3.join(app.getPath("userData"), "extension-catalog.json");
+}
+function getExtensionsDir() {
+  const dir = path3.join(app.getPath("userData"), "extensions");
+  if (!fs3.existsSync(dir)) {
+    fs3.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+function getInstalledPath(name) {
+  return path3.join(getExtensionsDir(), name);
+}
+function getLegacyInstalledPath(name) {
+  const slug = slugFromRaymesExtensionId(name);
+  return path3.join(getExtensionsDir(), "packages", normalizeRaymesExtensionId(slug));
+}
+function getLegacyRegistryInstalledPath(name) {
+  const slug = slugFromRaymesExtensionId(name);
+  return path3.join(app.getPath("userData"), "extension-registry", "packages", normalizeRaymesExtensionId(slug));
+}
+function resolveInstalledExtensionPathForRaymes(name) {
+  const slug = slugFromRaymesExtensionId(name);
+  if (!slug) return null;
+  const candidates = [
+    getInstalledPath(slug),
+    getInstalledPath(normalizeRaymesExtensionId(slug)),
+    getLegacyInstalledPath(slug),
+    getLegacyRegistryInstalledPath(slug)
+  ];
+  for (const candidate of candidates) {
+    if (fs3.existsSync(path3.join(candidate, "package.json"))) return candidate;
+  }
+  return null;
+}
+function loadCatalogFromDisk() {
+  try {
+    const data = fs3.readFileSync(getCatalogPath(), "utf-8");
+    const parsed = JSON.parse(data);
+    const entries = Array.isArray(parsed.entries) ? parsed.entries.map((entry) => coerceCatalogEntry(entry)).filter(Boolean) : [];
+    if (entries.length === 0) return null;
+    return {
+      entries,
+      fetchedAt: typeof parsed.fetchedAt === "number" ? parsed.fetchedAt : Date.now(),
+      version: typeof parsed.version === "number" ? parsed.version : CATALOG_VERSION
+    };
+  } catch {
+  }
+  return null;
+}
+function saveCatalogToDisk(catalog) {
+  try {
+    fs3.writeFileSync(getCatalogPath(), JSON.stringify(catalog));
+  } catch (e) {
+    console.error("Failed to save catalog:", e);
+  }
+}
+async function getCatalog(forceRefresh = false) {
+  if (!forceRefresh && catalogCache2 && Date.now() - catalogCache2.fetchedAt < CATALOG_TTL) {
+    return catalogCache2.entries;
+  }
+  if (!forceRefresh) {
+    const diskCache2 = loadCatalogFromDisk();
+    if (diskCache2 && Date.now() - diskCache2.fetchedAt < CATALOG_TTL) {
+      catalogCache2 = diskCache2;
+      return diskCache2.entries;
+    }
+  }
+  try {
+    console.log("Fetching extension catalog from API\u2026");
+    const entries = await fetchCatalogFromAPI();
+    const cache2 = {
+      entries,
+      fetchedAt: Date.now(),
+      version: CATALOG_VERSION
+    };
+    catalogCache2 = cache2;
+    saveCatalogToDisk(cache2);
+    console.log(`Extension catalog (API): ${entries.length} extensions cached.`);
+    return entries;
+  } catch (apiError) {
+    console.warn("API catalog fetch failed:", apiError?.message || apiError);
+  }
+  const diskCache = loadCatalogFromDisk();
+  if (diskCache) {
+    catalogCache2 = diskCache;
+    console.log(`Extension catalog (disk cache): ${diskCache.entries.length} extensions from cache.`);
+    return diskCache.entries;
+  }
+  return [];
+}
+async function getExtensionScreenshotUrls(name) {
+  if (!name) return [];
+  try {
+    const urls = await getExtensionScreenshotsFromAPI(name);
+    if (urls.length > 0) return urls;
+  } catch (apiError) {
+    console.warn(`API screenshots fetch failed for ${name}:`, apiError?.message || apiError);
+  }
+  try {
+    const url = `${GITHUB_API}/extensions/${encodeURIComponent(name)}/metadata`;
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Tezbar",
+        Accept: "application/vnd.github+json"
+      }
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    if (!Array.isArray(data)) return [];
+    const imagePattern = /\.(png|jpe?g|webp|gif)$/i;
+    return data.filter((entry) => entry?.type === "file" && imagePattern.test(entry?.name || "")).sort(
+      (a, b) => String(a?.name || "").localeCompare(String(b?.name || ""), void 0, {
+        numeric: true
+      })
+    ).map((entry) => String(entry?.download_url || "")).filter(Boolean);
+  } catch (e) {
+    console.warn(`Failed to load screenshots for ${name}:`, e);
+    return [];
+  }
+}
+async function installSpecificPackages(extPath, packageNames) {
+  const unique = Array.from(
+    new Set(
+      packageNames.map((name) => String(name || "").trim()).filter(Boolean)
+    )
+  );
+  if (unique.length === 0) return;
+  console.log(
+    `Installing missing packages for ${path3.basename(extPath)}: ${unique.join(", ")}`
+  );
+  const ok = await installSpecificPackagesWithBun(extPath, unique);
+  if (!ok) {
+    throw new Error(`Bun failed to install packages for ${path3.basename(extPath)}`);
+  }
+}
+async function installExtensionDeps(extPath) {
+  const pkgPath = path3.join(extPath, "package.json");
+  if (!fs3.existsSync(pkgPath)) return;
+  let pkg;
+  try {
+    pkg = JSON.parse(fs3.readFileSync(pkgPath, "utf-8"));
+  } catch {
+    return;
+  }
+  const deps = {
+    ...pkg.dependencies || {},
+    ...pkg.optionalDependencies || {}
+  };
+  const thirdPartyDeps = Object.entries(deps).filter(([name]) => !name.startsWith("@raycast/")).map(([name, version]) => `${name}@${version}`).filter(Boolean);
+  if (thirdPartyDeps.length === 0) {
+    console.log(`No third-party dependencies for ${path3.basename(extPath)}`);
+    return;
+  }
+  console.log(
+    `Installing ${thirdPartyDeps.length} dependencies for ${path3.basename(extPath)}: ${thirdPartyDeps.join(", ")}`
+  );
+  const ok = await installDepsWithBun(extPath);
+  if (!ok) {
+    throw new Error(`Bun dependency installation failed for ${path3.basename(extPath)}`);
+  }
+  if (!hasNodeModules(extPath)) {
+    throw new Error("Bun completed but node_modules is still missing");
+  }
+  console.log(`Dependencies installed for ${path3.basename(extPath)}`);
+}
+function isExtensionInstalled(name) {
+  return resolveInstalledExtensionPathForRaymes(name) !== null;
+}
+function getInstalledExtensionNames() {
+  const names = /* @__PURE__ */ new Set();
+  const scanRoot = (root, stripRaycastPrefix) => {
+    if (!fs3.existsSync(root)) return;
+    try {
+      for (const d of fs3.readdirSync(root)) {
+        const p = path3.join(root, d);
+        if (fs3.statSync(p).isDirectory() && fs3.existsSync(path3.join(p, "package.json"))) {
+          names.add(stripRaycastPrefix ? slugFromRaymesExtensionId(d) : d);
+        }
+      }
+    } catch {
+    }
+  };
+  scanRoot(getExtensionsDir(), false);
+  scanRoot(path3.join(getExtensionsDir(), "packages"), true);
+  scanRoot(path3.join(app.getPath("userData"), "extension-registry", "packages"), true);
+  return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b));
+}
+async function installExtension2(name) {
+  if (!/^[A-Za-z0-9._-]+$/.test(String(name || ""))) {
+    console.error(`Invalid extension name: "${name}"`);
+    return false;
+  }
+  try {
+    const success = await installExtensionFromBundle(name);
+    if (success) return true;
+  } catch (bundleError) {
+    console.warn(`Bundle install failed for "${name}":`, bundleError?.message || bundleError);
+  }
+  try {
+    const success = await installExtensionViaAPI(name);
+    if (success) return true;
+  } catch (apiError) {
+    console.warn(`API install failed for "${name}":`, apiError?.message || apiError);
+  }
+  return false;
+}
+async function installExtensionFromBundle(name) {
+  const installPath = getInstalledPath(name);
+  const hadExistingInstall = fs3.existsSync(installPath);
+  const backupPath = hadExistingInstall ? path3.join(getExtensionsDir(), `${name}.backup-${Date.now()}`) : "";
+  const tmpDir = path3.join(app.getPath("temp"), `supercmd-bundle-${Date.now()}`);
+  try {
+    const t0 = Date.now();
+    const { url } = await getExtensionBundleUrl(name);
+    console.log(`Downloading pre-built bundle for "${name}"\u2026`);
+    fs3.mkdirSync(tmpDir, { recursive: true });
+    await downloadAndExtractTarball(url, tmpDir);
+    const nestedPath = path3.join(tmpDir, name);
+    let srcDir = tmpDir;
+    if (fs3.existsSync(path3.join(nestedPath, "package.json"))) {
+      srcDir = nestedPath;
+    } else if (!fs3.existsSync(path3.join(srcDir, "package.json"))) {
+      const subdirs = fs3.readdirSync(tmpDir, { withFileTypes: true }).filter((d) => d.isDirectory());
+      for (const sub of subdirs) {
+        if (fs3.existsSync(path3.join(tmpDir, sub.name, "package.json"))) {
+          srcDir = path3.join(tmpDir, sub.name);
+          break;
+        }
+      }
+    }
+    if (!fs3.existsSync(path3.join(srcDir, "package.json"))) {
+      throw new Error("Bundle has no package.json");
+    }
+    if (!fs3.existsSync(path3.join(srcDir, ".sc-build"))) {
+      throw new Error("Bundle has no .sc-build/ directory \u2014 not a pre-built bundle");
+    }
+    const bundleManifest = JSON.parse(fs3.readFileSync(path3.join(srcDir, "package.json"), "utf8"));
+    const missingCommandBundles = (Array.isArray(bundleManifest.commands) ? bundleManifest.commands : []).filter((command2) => command2?.name).filter((command2) => !fs3.existsSync(path3.join(srcDir, ".sc-build", `${command2.name}.js`))).map((command2) => command2.name);
+    if (missingCommandBundles.length > 0) {
+      throw new Error(`Bundle is incomplete; missing commands: ${missingCommandBundles.join(", ")}`);
+    }
+    if (hadExistingInstall) {
+      fs3.renameSync(installPath, backupPath);
+    }
+    fs3.cpSync(srcDir, installPath, { recursive: true });
+    if (backupPath && fs3.existsSync(backupPath)) {
+      fs3.rmSync(backupPath, { recursive: true, force: true });
+    }
+    reportInstall(name, getMachineId()).catch(() => {
+    });
+    console.log(`Extension "${name}" installed from pre-built bundle in ${Date.now() - t0}ms`);
+    return true;
+  } catch (error) {
+    try {
+      fs3.rmSync(installPath, { recursive: true, force: true });
+    } catch {
+    }
+    if (backupPath && fs3.existsSync(backupPath)) {
+      try {
+        fs3.renameSync(backupPath, installPath);
+      } catch {
+      }
+    }
+    throw error;
+  } finally {
+    try {
+      fs3.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+    }
+    if (backupPath && fs3.existsSync(backupPath)) {
+      try {
+        fs3.rmSync(backupPath, { recursive: true, force: true });
+      } catch {
+      }
+    }
+  }
+}
+async function installExtensionViaAPI(name) {
+  const installPath = getInstalledPath(name);
+  const hadExistingInstall = fs3.existsSync(installPath);
+  const backupPath = hadExistingInstall ? path3.join(getExtensionsDir(), `${name}.backup-${Date.now()}`) : "";
+  const tmpDir = path3.join(app.getPath("temp"), `supercmd-api-install-${Date.now()}`);
+  try {
+    const t0 = Date.now();
+    console.log(`Installing extension: ${name}\u2026`);
+    fs3.mkdirSync(tmpDir, { recursive: true });
+    let srcDir = null;
+    try {
+      srcDir = await downloadExtensionFromTree(name, tmpDir);
+    } catch (error) {
+      console.warn(`GitHub API source download failed for "${name}"; trying sparse git.`, error);
+    }
+    if (!srcDir) srcDir = downloadExtensionViaSparseGit(name, tmpDir);
+    console.log(`  Download: ${Date.now() - t0}ms`);
+    if (!srcDir || !fs3.existsSync(path3.join(srcDir, "package.json"))) {
+      throw new Error(`Extension "${name}" not found or has no package.json`);
+    }
+    const srcPkg = JSON.parse(fs3.readFileSync(path3.join(srcDir, "package.json"), "utf-8"));
+    if (!isManifestPlatformCompatible(srcPkg)) {
+      const supported = getManifestPlatforms(srcPkg);
+      console.error(`Extension "${name}" is not compatible with ${getCurrentRaycastPlatform()} (supports: ${supported.join(", ")})`);
+      return false;
+    }
+    if (hadExistingInstall) {
+      fs3.renameSync(installPath, backupPath);
+    }
+    fs3.cpSync(srcDir, installPath, { recursive: true });
+    {
+      const extPkg = JSON.parse(fs3.readFileSync(path3.join(installPath, "package.json"), "utf-8"));
+      const allDeps = { ...extPkg.dependencies || {}, ...extPkg.optionalDependencies || {} };
+      const thirdPartyDeps = Object.keys(allDeps).filter((d) => !d.startsWith("@raycast/"));
+      if (thirdPartyDeps.length === 0) {
+        console.log(`No third-party dependencies for "${name}" \u2014 skipping install`);
+      } else {
+        const depsInstalled = await installDepsWithBun(installPath);
+        if (!depsInstalled) {
+          console.warn(`Could not install deps for "${name}" \u2014 extension may not work fully.`);
+        }
+      }
+      const t1 = Date.now();
+      console.log(`  Deps: ${t1 - t0}ms. Pre-building commands for "${name}"\u2026`);
+      const { buildAllCommands: buildAllCommands2 } = (init_extension_builder(), __toCommonJS(extension_builder_exports));
+      const builtCount = await buildAllCommands2(name);
+      const expectedCount = (Array.isArray(extPkg.commands) ? extPkg.commands : []).filter((command2) => command2?.name).length;
+      if (builtCount < expectedCount) {
+        throw new Error(`Built ${builtCount}/${expectedCount} commands for "${name}"`);
+      }
+      console.log(`  Build: ${Date.now() - t1}ms. Extension "${name}" installed (${builtCount} commands) in ${Date.now() - t0}ms total`);
+    }
+    if (backupPath && fs3.existsSync(backupPath)) {
+      fs3.rmSync(backupPath, { recursive: true, force: true });
+    }
+    reportInstall(name, getMachineId()).catch(() => {
+    });
+    return true;
+  } catch (error) {
+    console.error(`API install failed for "${name}":`, error);
+    try {
+      fs3.rmSync(installPath, { recursive: true, force: true });
+    } catch {
+    }
+    if (backupPath && fs3.existsSync(backupPath)) {
+      try {
+        fs3.renameSync(backupPath, installPath);
+      } catch {
+      }
+    }
+    throw error;
+  } finally {
+    try {
+      fs3.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+    }
+    if (backupPath && fs3.existsSync(backupPath)) {
+      try {
+        fs3.rmSync(backupPath, { recursive: true, force: true });
+      } catch {
+      }
+    }
+  }
+}
+async function downloadAndExtractTarball(url, destDir) {
+  return new Promise((resolve5, reject) => {
+    const makeRequest = (requestUrl, redirectCount = 0) => {
+      if (redirectCount > 5) {
+        reject(new Error("Too many redirects"));
+        return;
+      }
+      const parsedUrl = new URL(requestUrl);
+      const isHttps = parsedUrl.protocol === "https:";
+      const transport = isHttps ? require("https") : require("http");
+      transport.get(requestUrl, { timeout: 12e4 }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          makeRequest(res.headers.location, redirectCount + 1);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          reject(new Error(`Download failed: ${res.statusCode} ${res.statusMessage}`));
+          return;
+        }
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("error", reject);
+        res.on("end", () => {
+          try {
+            const buffer = Buffer.concat(chunks);
+            extractTarGz(buffer, destDir);
+            resolve5();
+          } catch (err) {
+            reject(err);
+          }
+        });
+      }).on("error", reject);
+    };
+    makeRequest(url);
+  });
+}
+function extractTarGz(buffer, destDir) {
+  const decompressed = zlib.gunzipSync(buffer);
+  let offset = 0;
+  while (offset < decompressed.length - 512) {
+    const header = decompressed.subarray(offset, offset + 512);
+    if (header.every((b) => b === 0)) break;
+    const nameRaw = header.subarray(0, 100).toString("utf-8").replace(/\0+$/, "");
+    const sizeOctal = header.subarray(124, 136).toString("utf-8").replace(/\0+$/, "").trim();
+    const typeFlag = header[156];
+    const prefixRaw = header.subarray(345, 500).toString("utf-8").replace(/\0+$/, "");
+    const fullName = prefixRaw ? `${prefixRaw}/${nameRaw}` : nameRaw;
+    const size = parseInt(sizeOctal, 8) || 0;
+    offset += 512;
+    if (typeFlag === 53 || fullName.endsWith("/")) {
+      const dirPath = path3.join(destDir, fullName);
+      fs3.mkdirSync(dirPath, { recursive: true });
+    } else if (typeFlag === 0 || typeFlag === 48) {
+      const filePath = path3.join(destDir, fullName);
+      fs3.mkdirSync(path3.dirname(filePath), { recursive: true });
+      const fileData = decompressed.subarray(offset, offset + size);
+      fs3.writeFileSync(filePath, fileData);
+    }
+    const dataBlocks = Math.ceil(size / 512);
+    offset += dataBlocks * 512;
+  }
+}
+function getMachineId() {
+  if (_machineId) return _machineId;
+  const idPath = path3.join(app.getPath("userData"), ".machine-id");
+  try {
+    const existing = fs3.readFileSync(idPath, "utf-8").trim();
+    if (existing) {
+      _machineId = existing;
+      return existing;
+    }
+  } catch {
+  }
+  const id = `${randomHex(8)}-${randomHex(4)}-${randomHex(4)}-${randomHex(4)}-${randomHex(12)}`;
+  try {
+    fs3.writeFileSync(idPath, id);
+  } catch {
+  }
+  _machineId = id;
+  return id;
+}
+function randomHex(length) {
+  const bytes = require("crypto").randomBytes(Math.ceil(length / 2));
+  return bytes.toString("hex").slice(0, length);
+}
+async function uninstallExtension2(name) {
+  const installPath = getInstalledPath(name);
+  if (!fs3.existsSync(installPath)) {
+    return true;
+  }
+  try {
+    fs3.rmSync(installPath, { recursive: true, force: true });
+    console.log(`Extension "${name}" uninstalled.`);
+    reportUninstall(name, getMachineId()).catch(() => {
+    });
+    return true;
+  } catch (error) {
+    console.error(`Failed to uninstall extension "${name}":`, error);
+    return false;
+  }
+}
+function normalizeRaymesExtensionId(input) {
+  const slug = String(input || "").trim().replace(/^raycast\./, "");
+  return slug ? `raycast.${slug}` : "";
+}
+function slugFromRaymesExtensionId(input) {
+  return String(input || "").trim().replace(/^raycast\./, "");
+}
+function extensionNameFromSlug(slug) {
+  return slug.split(/[-_]/g).filter(Boolean).map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`).join(" ");
+}
+function readInstalledPackage(slug) {
+  const extensionPath = resolveInstalledExtensionPathForRaymes(slug);
+  const pkgPath = extensionPath ? path3.join(extensionPath, "package.json") : "";
+  if (!fs3.existsSync(pkgPath)) return {};
+  try {
+    return JSON.parse(fs3.readFileSync(pkgPath, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+function resolvePlatformDefault2(value) {
+  const platformKey = process.platform === "win32" ? "Windows" : "macOS";
+  if (value && typeof value === "object" && !Array.isArray(value) && (Object.prototype.hasOwnProperty.call(value, "macOS") || Object.prototype.hasOwnProperty.call(value, "Windows"))) {
+    if (Object.prototype.hasOwnProperty.call(value, platformKey)) {
+      return value[platformKey];
+    }
+    return value.macOS ?? value.Windows;
+  }
+  return value;
+}
+function normalizeRegistryCommand(command2) {
+  return {
+    name: command2.cmdName,
+    title: command2.title,
+    subtitle: command2.description || command2.extensionTitle,
+    description: command2.description,
+    mode: command2.mode,
+    argumentDefinitions: command2.commandArgumentDefinitions
+  };
+}
+function githubAvatarUrlForHandle(value) {
+  const raw = typeof value === "object" && value ? String(value.handle || value.name || "") : String(value || "");
+  const handle = raw.split("<")[0].split("(")[0].trim().replace(/^@/, "");
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/i.test(handle)) return void 0;
+  if (handle.toLowerCase() === "raycast community") return void 0;
+  return `https://github.com/${handle}.png?size=96`;
+}
+function resolveInstalledIconPath(extensionPath, icon) {
+  if (typeof icon !== "string" || !icon.trim()) return void 0;
+  if (/^https?:\/\//i.test(icon)) return icon;
+  const normalized = icon.replace(/^\.?\//, "");
+  const candidates = [
+    path3.join(extensionPath, normalized),
+    path3.join(extensionPath, "assets", normalized)
+  ];
+  return candidates.find((candidate) => fs3.existsSync(candidate));
+}
+function readAppBundleIdentifier(appPath) {
+  const infoPlistPath = path3.join(appPath, "Contents", "Info.plist");
+  if (!fs3.existsSync(infoPlistPath)) return void 0;
+  try {
+    return (0, import_child_process2.execFileSync)("/usr/bin/plutil", ["-extract", "CFBundleIdentifier", "raw", "-o", "-", infoPlistPath], {
+      encoding: "utf8",
+      timeout: 1e3
+    }).trim() || void 0;
+  } catch {
+    return void 0;
+  }
+}
+function appPickerValue(name, appPath) {
+  if (!fs3.existsSync(appPath)) return null;
+  return {
+    name,
+    path: appPath,
+    bundleId: readAppBundleIdentifier(appPath) || ""
+  };
+}
+function resolveAppPickerDefault(pref) {
+  const candidates = pref?.name === "uninstaller_app" || pref?.key === "uninstaller_app" ? [
+    appPickerValue("AppCleaner", "/Applications/AppCleaner.app"),
+    appPickerValue("Pearcleaner", "/Applications/PearCleaner.app"),
+    appPickerValue("TrashMe 3", "/Applications/TrashMe 3.app"),
+    appPickerValue("App Cleaner 8", "/Applications/App Cleaner 8.app")
+  ] : [];
+  return candidates.find((candidate) => Boolean(candidate)) || "";
+}
+function listInstalledRegistryExtensions() {
+  const commands = discoverInstalledExtensionCommands();
+  const commandsBySlug = /* @__PURE__ */ new Map();
+  for (const command2 of commands) {
+    const list = commandsBySlug.get(command2.extName) || [];
+    list.push(command2);
+    commandsBySlug.set(command2.extName, list);
+  }
+  return getInstalledExtensionNames().map((slug) => {
+    const pkg = readInstalledPackage(slug);
+    const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
+    const id = normalizeRaymesExtensionId(slug);
+    const authorRaw = pkg.author || pkg.owner || "";
+    const author = typeof authorRaw === "object" ? String(authorRaw?.name || authorRaw?.handle || "") : String(authorRaw || "");
+    const ownerRaw = pkg.owner || pkg.author || "";
+    const owner = typeof ownerRaw === "object" ? String(ownerRaw?.handle || ownerRaw?.name || "") : String(ownerRaw || "");
+    const authorIconUrl = githubAvatarUrlForHandle(authorRaw);
+    const iconPath = resolveInstalledIconPath(extensionPath, pkg.icon || "icon.png");
+    return {
+      id,
+      slug,
+      name: String(pkg.title || extensionNameFromSlug(slug)),
+      version: String(pkg.version || "1.0.0"),
+      description: String(pkg.description || ""),
+      author: author || void 0,
+      owner: owner || void 0,
+      authorIconUrl,
+      iconPath,
+      packageJsonPath: path3.join(extensionPath, "package.json"),
+      extensionPath,
+      commands: (commandsBySlug.get(slug) || []).map(normalizeRegistryCommand),
+      installedAt: (() => {
+        try {
+          return fs3.statSync(extensionPath).mtimeMs;
+        } catch {
+          return Date.now();
+        }
+      })()
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+function resolveInstalledPackageJsonPath(extensionId) {
+  const slug = slugFromRaymesExtensionId(extensionId);
+  if (!slug) return null;
+  const extensionPath = resolveInstalledExtensionPathForRaymes(slug);
+  const pkgPath = extensionPath ? path3.join(extensionPath, "package.json") : "";
+  return fs3.existsSync(pkgPath) ? pkgPath : null;
+}
+function searchTokens(value) {
+  return String(value || "").toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean);
+}
+function tokenScore(tokens2, query, exactScore, prefixScore) {
+  if (tokens2.some((token) => token === query)) return exactScore;
+  if (tokens2.some((token) => token.startsWith(query))) return prefixScore;
+  return 0;
+}
+function scoreCatalogEntrySearch(entry, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return 1;
+  const name = String(entry.name || "").toLowerCase();
+  const title = String(entry.title || "").toLowerCase();
+  const author = String(entry.author || "").toLowerCase();
+  const categories = entry.categories || [];
+  const commands = entry.commands || [];
+  const titleTokens = searchTokens(entry.title);
+  const nameTokens = searchTokens(entry.name);
+  const authorTokens = searchTokens(author);
+  const categoryTokens = searchTokens(categories.join(" "));
+  const commandTokens = searchTokens(
+    commands.map((command2) => `${command2.name} ${command2.title}`).join(" ")
+  );
+  const descriptionTokens = searchTokens(entry.description);
+  let score = 0;
+  if (name === q || title === q) score += 1e4;
+  if (name.startsWith(q) || title.startsWith(q)) score += 9e3;
+  score += tokenScore(nameTokens, q, 8200, 7200);
+  score += tokenScore(titleTokens, q, 8e3, 7e3);
+  score += tokenScore(categoryTokens, q, 3e3, 2200);
+  score += tokenScore(authorTokens, q, 2200, 1600);
+  score += tokenScore(commandTokens, q, 1800, 1200);
+  score += tokenScore(descriptionTokens, q, 900, 550);
+  if (q.length >= 4) {
+    if (name.includes(q) || title.includes(q)) score += 1400;
+    if (entry.description.toLowerCase().includes(q)) score += 350;
+  }
+  if (score > 0 && entry.installCount && entry.installCount > 0) {
+    score += Math.min(500, Math.log10(entry.installCount) * 80);
+  }
+  return score;
+}
+async function searchExtensionCatalog(query) {
+  const q = String(query || "").trim().toLowerCase();
+  const catalog = await getCatalog(false);
+  return catalog.map((entry) => {
+    return { entry, score: scoreCatalogEntrySearch(entry, q) };
+  }).filter(({ score }) => score > 0).sort((a, b) => {
+    return b.score - a.score || (b.entry.installCount ?? 0) - (a.entry.installCount ?? 0) || a.entry.title.localeCompare(b.entry.title);
+  }).slice(0, 200).map(({ entry }) => ({
+    id: normalizeRaymesExtensionId(entry.name),
+    name: entry.title || extensionNameFromSlug(entry.name),
+    description: entry.description || "",
+    author: entry.author || entry.contributors?.[0] || "Raycast Community",
+    version: "latest",
+    repository: `https://github.com/raycast/extensions/tree/main/extensions/${entry.name}`,
+    downloadCount: entry.installCount,
+    icon: entry.icon,
+    iconUrl: entry.iconUrl,
+    authorIconUrl: githubAvatarUrlForHandle(entry.author || entry.contributors?.[0]),
+    screenshotUrls: entry.screenshotUrls,
+    categories: entry.categories,
+    commands: entry.commands,
+    owner: entry.author || void 0
+  }));
+}
+async function installRegistryExtension(extensionIdOrSlug) {
+  const slug = slugFromRaymesExtensionId(extensionIdOrSlug);
+  if (!slug) throw new Error("A valid extension id is required");
+  extensionRegistryEvents.emit("progress", { id: normalizeRaymesExtensionId(slug), progress: 5 });
+  const ok = await installExtension2(slug);
+  extensionRegistryEvents.emit("progress", { id: normalizeRaymesExtensionId(slug), progress: ok ? 100 : 0 });
+  if (!ok) throw new Error(`Failed to install extension: ${slug}`);
+  const installed = listInstalledRegistryExtensions().find((entry) => entry.slug === slug);
+  if (!installed) throw new Error(`Extension installed but could not be loaded: ${slug}`);
+  return installed;
+}
+function uninstallRegistryExtension(extensionIdOrSlug) {
+  const slug = slugFromRaymesExtensionId(extensionIdOrSlug);
+  if (!slug) return false;
+  let removed = false;
+  for (const candidate of [
+    getInstalledPath(slug),
+    getLegacyInstalledPath(slug),
+    getLegacyRegistryInstalledPath(slug)
+  ]) {
+    if (fs3.existsSync(candidate)) {
+      fs3.rmSync(candidate, { recursive: true, force: true });
+      removed = true;
+    }
+  }
+  return removed || true;
+}
+function listInstalledExtensionSlugsFromDisk() {
+  return getInstalledExtensionNames();
+}
+function getExtensionPreferences(extensionId, commandName2) {
+  const slug = slugFromRaymesExtensionId(extensionId);
+  const pkg = readInstalledPackage(slug);
+  const values = {};
+  const applyDefaults = (preferences) => {
+    for (const pref of preferences || []) {
+      if (!pref?.name) continue;
+      const resolvedDefault = resolvePlatformDefault2(pref.default);
+      if (resolvedDefault !== void 0) {
+        values[pref.name] = resolvedDefault;
+      } else if (pref.type === "checkbox") {
+        values[pref.name] = false;
+      } else if (pref.type === "dropdown") {
+        values[pref.name] = pref.data?.[0]?.value ?? "";
+      } else if (pref.type === "appPicker") {
+        values[pref.name] = resolveAppPickerDefault(pref);
+      } else {
+        values[pref.name] = "";
+      }
+    }
+  };
+  applyDefaults(Array.isArray(pkg.preferences) ? pkg.preferences : []);
+  const command2 = Array.isArray(pkg.commands) ? pkg.commands.find((cmd) => cmd?.name === commandName2) : null;
+  applyDefaults(Array.isArray(command2?.preferences) ? command2.preferences : []);
+  const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
+  const preferencesPath = path3.join(extensionPath, "preferences.json");
+  if (fs3.existsSync(preferencesPath)) {
+    try {
+      const saved = JSON.parse(fs3.readFileSync(preferencesPath, "utf-8"));
+      if (saved && typeof saved === "object") {
+        Object.assign(values, saved);
+        if (commandName2 && saved.commands?.[commandName2]) {
+          Object.assign(values, saved.commands[commandName2]);
+        }
+      }
+    } catch {
+    }
+  }
+  return values;
+}
+function getExtensionPreferenceSetup(extensionId, commandName2) {
+  const slug = slugFromRaymesExtensionId(extensionId);
+  const pkg = readInstalledPackage(slug);
+  const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
+  const command2 = Array.isArray(pkg.commands) ? pkg.commands.find((cmd) => cmd?.name === commandName2) : null;
+  const extensionPreferences = Array.isArray(pkg.preferences) ? pkg.preferences.map((preference) => ({ ...preference })) : [];
+  const commandPreferences = Array.isArray(command2?.preferences) ? command2.preferences.map((preference) => ({
+    ...preference,
+    commandName: commandName2,
+    commandTitle: String(command2?.title || commandName2)
+  })) : [];
+  const preferences = [...extensionPreferences, ...commandPreferences];
+  const preferencesPath = path3.join(extensionPath, "preferences.json");
+  return {
+    extensionId: normalizeRaymesExtensionId(slug),
+    commandName: commandName2,
+    title: String(pkg.title || extensionNameFromSlug(slug)),
+    iconPath: resolveInstalledIconPath(extensionPath, pkg.icon || "icon.png") || void 0,
+    preferences,
+    values: getExtensionPreferences(extensionId, commandName2),
+    hasSavedPreferences: fs3.existsSync(preferencesPath)
+  };
+}
+function shouldShowExtensionPreferenceSetup(extensionId, commandName2) {
+  const setup = getExtensionPreferenceSetup(extensionId, commandName2);
+  if (setup.preferences.length === 0) return false;
+  const needsRequiredValue = setup.preferences.some((pref) => {
+    if (!pref?.required || !pref?.name) return false;
+    const value = setup.values[pref.name];
+    return value === void 0 || value === null || String(value).trim() === "";
+  });
+  if (needsRequiredValue) return true;
+  const needsCredentialValue = setup.preferences.some((pref) => {
+    if (pref?.type !== "password" || !pref?.name) return false;
+    const value = setup.values[pref.name];
+    return value === void 0 || value === null || String(value).trim() === "";
+  });
+  if (needsCredentialValue) return true;
+  if (!setup.hasSavedPreferences && setup.preferences.some((pref) => pref?.required)) {
+    return true;
+  }
+  return !setup.hasSavedPreferences && extensionId === "raycast.google-translate";
+}
+function saveExtensionPreferences(extensionId, values, commandName2) {
+  const slug = slugFromRaymesExtensionId(extensionId);
+  const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
+  fs3.mkdirSync(extensionPath, { recursive: true });
+  const preferencesPath = path3.join(extensionPath, "preferences.json");
+  let existing = {};
+  if (fs3.existsSync(preferencesPath)) {
+    try {
+      const parsed = JSON.parse(fs3.readFileSync(preferencesPath, "utf-8"));
+      if (parsed && typeof parsed === "object") existing = parsed;
+    } catch {
+    }
+  }
+  if (commandName2) {
+    existing.commands = existing.commands && typeof existing.commands === "object" ? existing.commands : {};
+    existing.commands[commandName2] = {
+      ...existing.commands[commandName2] || {},
+      ...values
+    };
+  } else {
+    existing = {
+      ...existing,
+      ...values
+    };
+  }
+  fs3.writeFileSync(preferencesPath, JSON.stringify(existing, null, 2));
+  return getExtensionPreferences(extensionId, commandName2);
+}
+var import_child_process2, import_events, fs3, path3, zlib, extensionRegistryEvents, GITHUB_RAW, GITHUB_API, GITHUB_TREE_API, RAYMES_EXTENSIONS_GIT, REPO_TREE_TTL_MS, repoTreeCache, CATALOG_VERSION, CATALOG_TTL, catalogCache2, _machineId;
+var init_extension_registry = __esm({
+  "src/main/extension-registry.ts"() {
+    "use strict";
+    init_desktop_runtime();
+    import_child_process2 = require("child_process");
+    import_events = require("events");
+    fs3 = __toESM(require("fs"));
+    path3 = __toESM(require("path"));
+    zlib = __toESM(require("zlib"));
+    init_extension_platform();
+    init_extension_builder();
+    init_extension_api();
+    init_bun_manager();
+    extensionRegistryEvents = new import_events.EventEmitter();
+    GITHUB_RAW = "https://raw.githubusercontent.com/raycast/extensions/main";
+    GITHUB_API = "https://api.github.com/repos/raycast/extensions/contents";
+    GITHUB_TREE_API = "https://api.github.com/repos/raycast/extensions/git/trees/main?recursive=1";
+    RAYMES_EXTENSIONS_GIT = "https://github.com/almatkai/raymes-extensions.git";
+    REPO_TREE_TTL_MS = 10 * 60 * 1e3;
+    repoTreeCache = null;
+    CATALOG_VERSION = 6;
+    CATALOG_TTL = 24 * 60 * 60 * 1e3;
+    catalogCache2 = null;
+    _machineId = null;
   }
 });
 
@@ -771,10 +3428,10 @@ function isEmptyObj(obj) {
     return false;
   return true;
 }
-function hasOwn(obj, key) {
+function hasOwn2(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key);
 }
-var startsWithSchemeRegexp, isAbsoluteURL, isArray, isReadonlyArray, validatePositiveInteger, safeJSON;
+var startsWithSchemeRegexp, isAbsoluteURL, isArray2, isReadonlyArray, validatePositiveInteger, safeJSON;
 var init_values = __esm({
   "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs"() {
     init_error();
@@ -782,8 +3439,8 @@ var init_values = __esm({
     isAbsoluteURL = (url) => {
       return startsWithSchemeRegexp.test(url);
     };
-    isArray = (val) => (isArray = Array.isArray, isArray(val));
-    isReadonlyArray = isArray;
+    isArray2 = (val) => (isArray2 = Array.isArray, isArray2(val));
+    isReadonlyArray = isArray2;
     validatePositiveInteger = (name, n) => {
       if (typeof n !== "number" || !Number.isInteger(n)) {
         throw new AnthropicError(`${name} must be an integer`);
@@ -793,9 +3450,9 @@ var init_values = __esm({
       }
       return n;
     };
-    safeJSON = (text) => {
+    safeJSON = (text2) => {
       try {
-        return JSON.parse(text);
+        return JSON.parse(text2);
       } catch (err) {
         return void 0;
       }
@@ -855,7 +3512,7 @@ function getBrowserInfo() {
   }
   return null;
 }
-var isRunningInBrowser, getPlatformProperties, normalizeArch, normalizePlatform, _platformHeaders, getPlatformHeaders;
+var isRunningInBrowser, getPlatformProperties, normalizeArch, normalizePlatform2, _platformHeaders, getPlatformHeaders;
 var init_detect_platform = __esm({
   "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs"() {
     init_version();
@@ -873,7 +3530,7 @@ var init_detect_platform = __esm({
         return {
           "X-Stainless-Lang": "js",
           "X-Stainless-Package-Version": VERSION,
-          "X-Stainless-OS": normalizePlatform(Deno.build.os),
+          "X-Stainless-OS": normalizePlatform2(Deno.build.os),
           "X-Stainless-Arch": normalizeArch(Deno.build.arch),
           "X-Stainless-Runtime": "deno",
           "X-Stainless-Runtime-Version": typeof Deno.version === "string" ? Deno.version : Deno.version?.deno ?? "unknown"
@@ -893,7 +3550,7 @@ var init_detect_platform = __esm({
         return {
           "X-Stainless-Lang": "js",
           "X-Stainless-Package-Version": VERSION,
-          "X-Stainless-OS": normalizePlatform(globalThis.process.platform ?? "unknown"),
+          "X-Stainless-OS": normalizePlatform2(globalThis.process.platform ?? "unknown"),
           "X-Stainless-Arch": normalizeArch(globalThis.process.arch ?? "unknown"),
           "X-Stainless-Runtime": "node",
           "X-Stainless-Runtime-Version": globalThis.process.version ?? "unknown"
@@ -932,7 +3589,7 @@ var init_detect_platform = __esm({
         return `other:${arch}`;
       return "unknown";
     };
-    normalizePlatform = (platform) => {
+    normalizePlatform2 = (platform) => {
       platform = platform.toLowerCase();
       if (platform.includes("ios"))
         return "iOS";
@@ -1221,7 +3878,7 @@ var init_log = __esm({
       if (!maybeLevel) {
         return void 0;
       }
-      if (hasOwn(levelNumbers, maybeLevel)) {
+      if (hasOwn2(levelNumbers, maybeLevel)) {
         return maybeLevel;
       }
       loggerFor(client).warn(`${sourceName} was set to ${JSON.stringify(maybeLevel)}, expected one of ${JSON.stringify(Object.keys(levelNumbers))}`);
@@ -1549,8 +4206,8 @@ async function defaultParseResponse(client, props) {
       const json = await response.json();
       return addRequestID(json, response);
     }
-    const text = await response.text();
-    return text;
+    const text2 = await response.text();
+    return text2;
   })();
   loggerFor(client).debug(`[${requestLogID}] response parsed`, formatRequestDetails({
     retryOfRequestLogID,
@@ -2025,7 +4682,7 @@ var init_headers = __esm({
 function encodeURIPath(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
-var EMPTY, createPathTagFunction, path3;
+var EMPTY, createPathTagFunction, path6;
 var init_path = __esm({
   "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs"() {
     init_error();
@@ -2078,7 +4735,7 @@ ${underline}`);
       }
       return path8;
     };
-    path3 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
+    path6 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
   }
 });
 
@@ -2126,7 +4783,7 @@ var init_environments = __esm({
        */
       retrieve(environmentID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/environments/${environmentID}?beta=true`, {
+        return this._client.get(path6`/v1/environments/${environmentID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -2147,7 +4804,7 @@ var init_environments = __esm({
        */
       update(environmentID, params, options) {
         const { betas, ...body } = params;
-        return this._client.post(path3`/v1/environments/${environmentID}?beta=true`, {
+        return this._client.post(path6`/v1/environments/${environmentID}?beta=true`, {
           body,
           ...options,
           headers: buildHeaders([
@@ -2191,7 +4848,7 @@ var init_environments = __esm({
        */
       delete(environmentID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.delete(path3`/v1/environments/${environmentID}?beta=true`, {
+        return this._client.delete(path6`/v1/environments/${environmentID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -2213,7 +4870,7 @@ var init_environments = __esm({
        */
       archive(environmentID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.post(path3`/v1/environments/${environmentID}/archive?beta=true`, {
+        return this._client.post(path6`/v1/environments/${environmentID}/archive?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -2318,7 +4975,7 @@ var init_files = __esm({
        */
       delete(fileID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.delete(path3`/v1/files/${fileID}`, {
+        return this._client.delete(path6`/v1/files/${fileID}`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
@@ -2341,7 +4998,7 @@ var init_files = __esm({
        */
       download(fileID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/files/${fileID}/content`, {
+        return this._client.get(path6`/v1/files/${fileID}/content`, {
           ...options,
           headers: buildHeaders([
             {
@@ -2364,7 +5021,7 @@ var init_files = __esm({
        */
       retrieveMetadata(fileID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/files/${fileID}`, {
+        return this._client.get(path6`/v1/files/${fileID}`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
@@ -2422,7 +5079,7 @@ var init_models = __esm({
        */
       retrieve(modelID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/models/${modelID}?beta=true`, {
+        return this._client.get(path6`/v1/models/${modelID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
@@ -2501,7 +5158,7 @@ var init_user_profiles = __esm({
        */
       retrieve(userProfileID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/user_profiles/${userProfileID}?beta=true`, {
+        return this._client.get(path6`/v1/user_profiles/${userProfileID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
@@ -2522,7 +5179,7 @@ var init_user_profiles = __esm({
        */
       update(userProfileID, params, options) {
         const { betas, ...body } = params;
-        return this._client.post(path3`/v1/user_profiles/${userProfileID}?beta=true`, {
+        return this._client.post(path6`/v1/user_profiles/${userProfileID}?beta=true`, {
           body,
           ...options,
           headers: buildHeaders([
@@ -2566,7 +5223,7 @@ var init_user_profiles = __esm({
        */
       createEnrollmentURL(userProfileID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.post(path3`/v1/user_profiles/${userProfileID}/enrollment_url?beta=true`, {
+        return this._client.post(path6`/v1/user_profiles/${userProfileID}/enrollment_url?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "user-profiles-2026-03-24"].toString() },
@@ -2602,7 +5259,7 @@ var init_versions = __esm({
        */
       list(agentID, params = {}, options) {
         const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path3`/v1/agents/${agentID}/versions?beta=true`, PageCursor, {
+        return this._client.getAPIList(path6`/v1/agents/${agentID}/versions?beta=true`, PageCursor, {
           query,
           ...options,
           headers: buildHeaders([
@@ -2666,7 +5323,7 @@ var init_agents = __esm({
        */
       retrieve(agentID, params = {}, options) {
         const { betas, ...query } = params ?? {};
-        return this._client.get(path3`/v1/agents/${agentID}?beta=true`, {
+        return this._client.get(path6`/v1/agents/${agentID}?beta=true`, {
           query,
           ...options,
           headers: buildHeaders([
@@ -2689,7 +5346,7 @@ var init_agents = __esm({
        */
       update(agentID, params, options) {
         const { betas, ...body } = params;
-        return this._client.post(path3`/v1/agents/${agentID}?beta=true`, {
+        return this._client.post(path6`/v1/agents/${agentID}?beta=true`, {
           body,
           ...options,
           headers: buildHeaders([
@@ -2733,7 +5390,7 @@ var init_agents = __esm({
        */
       archive(agentID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.post(path3`/v1/agents/${agentID}/archive?beta=true`, {
+        return this._client.post(path6`/v1/agents/${agentID}/archive?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -2849,10 +5506,10 @@ var init_beta_parser = __esm({
 });
 
 // node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs
-var tokenize2, strip, unstrip, generate, partialParse;
+var tokenize3, strip, unstrip, generate, partialParse;
 var init_parser = __esm({
   "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs"() {
-    tokenize2 = (input) => {
+    tokenize3 = (input) => {
       let current = 0;
       let tokens2 = [];
       while (current < input.length) {
@@ -3069,7 +5726,7 @@ var init_parser = __esm({
       });
       return output;
     };
-    partialParse = (input) => JSON.parse(generate(unstrip(strip(tokenize2(input)))));
+    partialParse = (input) => JSON.parse(generate(unstrip(strip(tokenize3(input)))));
   }
 });
 
@@ -4193,7 +6850,7 @@ var init_batches = __esm({
        */
       retrieve(messageBatchID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/messages/batches/${messageBatchID}?beta=true`, {
+        return this._client.get(path6`/v1/messages/batches/${messageBatchID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
@@ -4246,7 +6903,7 @@ var init_batches = __esm({
        */
       delete(messageBatchID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.delete(path3`/v1/messages/batches/${messageBatchID}?beta=true`, {
+        return this._client.delete(path6`/v1/messages/batches/${messageBatchID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
@@ -4278,7 +6935,7 @@ var init_batches = __esm({
        */
       cancel(messageBatchID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.post(path3`/v1/messages/batches/${messageBatchID}/cancel?beta=true`, {
+        return this._client.post(path6`/v1/messages/batches/${messageBatchID}/cancel?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "message-batches-2024-09-24"].toString() },
@@ -4503,7 +7160,7 @@ var init_events = __esm({
        */
       list(sessionID, params = {}, options) {
         const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path3`/v1/sessions/${sessionID}/events?beta=true`, PageCursor, {
+        return this._client.getAPIList(path6`/v1/sessions/${sessionID}/events?beta=true`, PageCursor, {
           query,
           ...options,
           headers: buildHeaders([
@@ -4538,7 +7195,7 @@ var init_events = __esm({
        */
       send(sessionID, params, options) {
         const { betas, ...body } = params;
-        return this._client.post(path3`/v1/sessions/${sessionID}/events?beta=true`, {
+        return this._client.post(path6`/v1/sessions/${sessionID}/events?beta=true`, {
           body,
           ...options,
           headers: buildHeaders([
@@ -4560,7 +7217,7 @@ var init_events = __esm({
        */
       stream(sessionID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/sessions/${sessionID}/events/stream?beta=true`, {
+        return this._client.get(path6`/v1/sessions/${sessionID}/events/stream?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -4596,7 +7253,7 @@ var init_resources = __esm({
        */
       retrieve(resourceID, params, options) {
         const { session_id, betas } = params;
-        return this._client.get(path3`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+        return this._client.get(path6`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -4621,7 +7278,7 @@ var init_resources = __esm({
        */
       update(resourceID, params, options) {
         const { session_id, betas, ...body } = params;
-        return this._client.post(path3`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+        return this._client.post(path6`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
           body,
           ...options,
           headers: buildHeaders([
@@ -4645,7 +7302,7 @@ var init_resources = __esm({
        */
       list(sessionID, params = {}, options) {
         const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path3`/v1/sessions/${sessionID}/resources?beta=true`, PageCursor, {
+        return this._client.getAPIList(path6`/v1/sessions/${sessionID}/resources?beta=true`, PageCursor, {
           query,
           ...options,
           headers: buildHeaders([
@@ -4668,7 +7325,7 @@ var init_resources = __esm({
        */
       delete(resourceID, params, options) {
         const { session_id, betas } = params;
-        return this._client.delete(path3`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+        return this._client.delete(path6`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -4693,7 +7350,7 @@ var init_resources = __esm({
        */
       add(sessionID, params, options) {
         const { betas, ...body } = params;
-        return this._client.post(path3`/v1/sessions/${sessionID}/resources?beta=true`, {
+        return this._client.post(path6`/v1/sessions/${sessionID}/resources?beta=true`, {
           body,
           ...options,
           headers: buildHeaders([
@@ -4760,7 +7417,7 @@ var init_sessions = __esm({
        */
       retrieve(sessionID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/sessions/${sessionID}?beta=true`, {
+        return this._client.get(path6`/v1/sessions/${sessionID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -4781,7 +7438,7 @@ var init_sessions = __esm({
        */
       update(sessionID, params, options) {
         const { betas, ...body } = params;
-        return this._client.post(path3`/v1/sessions/${sessionID}?beta=true`, {
+        return this._client.post(path6`/v1/sessions/${sessionID}?beta=true`, {
           body,
           ...options,
           headers: buildHeaders([
@@ -4825,7 +7482,7 @@ var init_sessions = __esm({
        */
       delete(sessionID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.delete(path3`/v1/sessions/${sessionID}?beta=true`, {
+        return this._client.delete(path6`/v1/sessions/${sessionID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -4846,7 +7503,7 @@ var init_sessions = __esm({
        */
       archive(sessionID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.post(path3`/v1/sessions/${sessionID}/archive?beta=true`, {
+        return this._client.post(path6`/v1/sessions/${sessionID}/archive?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -4882,7 +7539,7 @@ var init_versions2 = __esm({
        */
       create(skillID, params = {}, options) {
         const { betas, ...body } = params ?? {};
-        return this._client.post(path3`/v1/skills/${skillID}/versions?beta=true`, multipartFormRequestOptions({
+        return this._client.post(path6`/v1/skills/${skillID}/versions?beta=true`, multipartFormRequestOptions({
           body,
           ...options,
           headers: buildHeaders([
@@ -4904,7 +7561,7 @@ var init_versions2 = __esm({
        */
       retrieve(version, params, options) {
         const { skill_id, betas } = params;
-        return this._client.get(path3`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
+        return this._client.get(path6`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
@@ -4927,7 +7584,7 @@ var init_versions2 = __esm({
        */
       list(skillID, params = {}, options) {
         const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path3`/v1/skills/${skillID}/versions?beta=true`, PageCursor, {
+        return this._client.getAPIList(path6`/v1/skills/${skillID}/versions?beta=true`, PageCursor, {
           query,
           ...options,
           headers: buildHeaders([
@@ -4949,7 +7606,7 @@ var init_versions2 = __esm({
        */
       delete(version, params, options) {
         const { skill_id, betas } = params;
-        return this._client.delete(path3`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
+        return this._client.delete(path6`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
@@ -5006,7 +7663,7 @@ var init_skills = __esm({
        */
       retrieve(skillID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/skills/${skillID}?beta=true`, {
+        return this._client.get(path6`/v1/skills/${skillID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
@@ -5046,7 +7703,7 @@ var init_skills = __esm({
        */
       delete(skillID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.delete(path3`/v1/skills/${skillID}?beta=true`, {
+        return this._client.delete(path6`/v1/skills/${skillID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
@@ -5089,7 +7746,7 @@ var init_credentials = __esm({
        */
       create(vaultID, params, options) {
         const { betas, ...body } = params;
-        return this._client.post(path3`/v1/vaults/${vaultID}/credentials?beta=true`, {
+        return this._client.post(path6`/v1/vaults/${vaultID}/credentials?beta=true`, {
           body,
           ...options,
           headers: buildHeaders([
@@ -5112,7 +7769,7 @@ var init_credentials = __esm({
        */
       retrieve(credentialID, params, options) {
         const { vault_id, betas } = params;
-        return this._client.get(path3`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+        return this._client.get(path6`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -5134,7 +7791,7 @@ var init_credentials = __esm({
        */
       update(credentialID, params, options) {
         const { vault_id, betas, ...body } = params;
-        return this._client.post(path3`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+        return this._client.post(path6`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
           body,
           ...options,
           headers: buildHeaders([
@@ -5158,7 +7815,7 @@ var init_credentials = __esm({
        */
       list(vaultID, params = {}, options) {
         const { betas, ...query } = params ?? {};
-        return this._client.getAPIList(path3`/v1/vaults/${vaultID}/credentials?beta=true`, PageCursor, {
+        return this._client.getAPIList(path6`/v1/vaults/${vaultID}/credentials?beta=true`, PageCursor, {
           query,
           ...options,
           headers: buildHeaders([
@@ -5181,7 +7838,7 @@ var init_credentials = __esm({
        */
       delete(credentialID, params, options) {
         const { vault_id, betas } = params;
-        return this._client.delete(path3`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+        return this._client.delete(path6`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -5203,7 +7860,7 @@ var init_credentials = __esm({
        */
       archive(credentialID, params, options) {
         const { vault_id, betas } = params;
-        return this._client.post(path3`/v1/vaults/${vault_id}/credentials/${credentialID}/archive?beta=true`, {
+        return this._client.post(path6`/v1/vaults/${vault_id}/credentials/${credentialID}/archive?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -5265,7 +7922,7 @@ var init_vaults = __esm({
        */
       retrieve(vaultID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/vaults/${vaultID}?beta=true`, {
+        return this._client.get(path6`/v1/vaults/${vaultID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -5286,7 +7943,7 @@ var init_vaults = __esm({
        */
       update(vaultID, params, options) {
         const { betas, ...body } = params;
-        return this._client.post(path3`/v1/vaults/${vaultID}?beta=true`, {
+        return this._client.post(path6`/v1/vaults/${vaultID}?beta=true`, {
           body,
           ...options,
           headers: buildHeaders([
@@ -5330,7 +7987,7 @@ var init_vaults = __esm({
        */
       delete(vaultID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.delete(path3`/v1/vaults/${vaultID}?beta=true`, {
+        return this._client.delete(path6`/v1/vaults/${vaultID}?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -5351,7 +8008,7 @@ var init_vaults = __esm({
        */
       archive(vaultID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.post(path3`/v1/vaults/${vaultID}/archive?beta=true`, {
+        return this._client.post(path6`/v1/vaults/${vaultID}/archive?beta=true`, {
           ...options,
           headers: buildHeaders([
             { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
@@ -6138,7 +8795,7 @@ var init_batches2 = __esm({
        * ```
        */
       retrieve(messageBatchID, options) {
-        return this._client.get(path3`/v1/messages/batches/${messageBatchID}`, options);
+        return this._client.get(path6`/v1/messages/batches/${messageBatchID}`, options);
       }
       /**
        * List all Message Batches within a Workspace. Most recently created batches are
@@ -6174,7 +8831,7 @@ var init_batches2 = __esm({
        * ```
        */
       delete(messageBatchID, options) {
-        return this._client.delete(path3`/v1/messages/batches/${messageBatchID}`, options);
+        return this._client.delete(path6`/v1/messages/batches/${messageBatchID}`, options);
       }
       /**
        * Batches may be canceled any time before processing ends. Once cancellation is
@@ -6198,7 +8855,7 @@ var init_batches2 = __esm({
        * ```
        */
       cancel(messageBatchID, options) {
-        return this._client.post(path3`/v1/messages/batches/${messageBatchID}/cancel`, options);
+        return this._client.post(path6`/v1/messages/batches/${messageBatchID}/cancel`, options);
       }
       /**
        * Streams the results of a Message Batch as a `.jsonl` file.
@@ -6379,7 +9036,7 @@ var init_models2 = __esm({
        */
       retrieve(modelID, params = {}, options) {
         const { betas } = params ?? {};
-        return this._client.get(path3`/v1/models/${modelID}`, {
+        return this._client.get(path6`/v1/models/${modelID}`, {
           ...options,
           headers: buildHeaders([
             { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
@@ -7064,120 +9721,6 @@ var init_anthropic = __esm({
   }
 });
 
-// src/main/llm/configStore.ts
-function readRawConfig() {
-  if (configCache) return configCache;
-  if (!(0, import_node_fs14.existsSync)(OPENRAY_CONFIG_PATH)) {
-    configCache = {};
-    return configCache;
-  }
-  try {
-    const raw = (0, import_node_fs14.readFileSync)(OPENRAY_CONFIG_PATH, "utf-8");
-    configCache = JSON.parse(raw);
-    return configCache;
-  } catch {
-    configCache = {};
-    return configCache;
-  }
-}
-function flushConfig() {
-  if (!configCache || !writeTimeout) return;
-  try {
-    (0, import_node_fs14.mkdirSync)((0, import_node_path14.dirname)(OPENRAY_CONFIG_PATH), { recursive: true });
-    (0, import_node_fs14.writeFileSync)(OPENRAY_CONFIG_PATH, `${JSON.stringify(configCache, null, 2)}
-`, "utf-8");
-    if (writeTimeout) {
-      clearTimeout(writeTimeout);
-      writeTimeout = null;
-    }
-  } catch (err) {
-    console.error("Failed to write config:", err);
-  }
-}
-function writeConfigPatch(patch) {
-  const current = readRawConfig();
-  configCache = { ...current, ...patch };
-  if (writeTimeout) clearTimeout(writeTimeout);
-  writeTimeout = setTimeout(() => {
-    flushConfig();
-    writeTimeout = null;
-  }, 1e3);
-}
-function getUiStateRetentionMs() {
-  const raw = readRawConfig();
-  const v = raw.uiStateRetentionMs;
-  if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
-    return v;
-  }
-  return 6e4;
-}
-function getSafetyDryRun() {
-  const raw = readRawConfig();
-  return raw.safetyDryRun === true;
-}
-function setSafetyDryRun(value) {
-  writeConfigPatch({ safetyDryRun: value });
-}
-function getAgentAlwaysAllowedCommands() {
-  const value = readRawConfig().agentAlwaysAllowedCommands;
-  if (!Array.isArray(value)) return [];
-  return Array.from(
-    new Set(
-      value.filter(
-        (entry) => typeof entry === "string" && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)
-      )
-    )
-  );
-}
-function addAgentAlwaysAllowedCommand(command) {
-  if (!/^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(command)) return;
-  writeConfigPatch({
-    agentAlwaysAllowedCommands: Array.from(
-      /* @__PURE__ */ new Set([...getAgentAlwaysAllowedCommands(), command.toLowerCase()])
-    )
-  });
-}
-function getCommandHotkeys() {
-  const value = readRawConfig().commandHotkeys;
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value;
-  }
-  return {};
-}
-function getCommandAliases() {
-  const value = readRawConfig().commandAliases;
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value;
-  }
-  return {};
-}
-function setCommandAliases(aliases) {
-  writeConfigPatch({ commandAliases: aliases });
-}
-function getDisabledCommands() {
-  const value = readRawConfig().disabledCommands;
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value;
-  }
-  return {};
-}
-function setDisabledCommands(disabled) {
-  writeConfigPatch({ disabledCommands: disabled });
-}
-var import_node_fs14, import_node_os5, import_node_path14, OPENRAY_CONFIG_DIR, OPENRAY_CONFIG_PATH, configCache, writeTimeout;
-var init_configStore = __esm({
-  "src/main/llm/configStore.ts"() {
-    "use strict";
-    import_node_fs14 = require("node:fs");
-    import_node_os5 = require("node:os");
-    import_node_path14 = require("node:path");
-    OPENRAY_CONFIG_DIR = (0, import_node_path14.join)((0, import_node_os5.homedir)(), ".openray");
-    OPENRAY_CONFIG_PATH = (0, import_node_path14.join)(OPENRAY_CONFIG_DIR, "config.json");
-    configCache = null;
-    writeTimeout = null;
-  }
-});
-
 // src/main/llm/githubCopilotAuth.ts
 function clearDeviceSession() {
   deviceSession = null;
@@ -7471,13 +10014,13 @@ var init_copilot = __esm({
         };
       }
       async refreshIfNeeded(signal) {
-        const { access, refresh, expiresAt, clientId } = this.readTokens();
+        const { access: access2, refresh, expiresAt, clientId } = this.readTokens();
         if (!refresh) {
-          return access;
+          return access2;
         }
         const stale = expiresAt > 0 && Date.now() > expiresAt - 12e4;
         if (!stale) {
-          return access;
+          return access2;
         }
         const next = await refreshGithubAccessToken(refresh, clientId, signal);
         const expires_in = next.expires_in;
@@ -7527,11 +10070,11 @@ var init_copilot = __esm({
         return parseOpenAISSE(res, options?.signal);
       }
       async isAvailable() {
-        const { access } = this.readTokens();
-        if (!access.trim()) return false;
-        const ping = await copilotApiPing(access);
+        const { access: access2 } = this.readTokens();
+        if (!access2.trim()) return false;
+        const ping = await copilotApiPing(access2);
         if (ping) return true;
-        return access.length > 20;
+        return access2.length > 20;
       }
       /** Bearer token after optional OAuth refresh (reads tokens from config on disk). */
       async getAccessToken(options) {
@@ -7793,12 +10336,12 @@ var init_openai = __esm({
 });
 
 // src/main/llm/opencode.ts
-var import_node_child_process9, import_node_util7, OpenCodeProvider;
+var import_node_child_process16, import_node_util13, OpenCodeProvider;
 var init_opencode = __esm({
   "src/main/llm/opencode.ts"() {
     "use strict";
-    import_node_child_process9 = require("node:child_process");
-    import_node_util7 = require("node:util");
+    import_node_child_process16 = require("node:child_process");
+    import_node_util13 = require("node:util");
     OpenCodeProvider = class {
       constructor(model) {
         this.model = model;
@@ -7814,7 +10357,7 @@ var init_opencode = __esm({
       }
       async *runOpenCode(message, signal) {
         const args = ["run", "--model", this.model, "--", message];
-        const child = (0, import_node_child_process9.spawn)("opencode", args, {
+        const child = (0, import_node_child_process16.spawn)("opencode", args, {
           stdio: ["ignore", "pipe", "pipe"],
           env: { ...process.env, TERM: "dumb", CI: "true" }
         });
@@ -7847,9 +10390,9 @@ var init_opencode = __esm({
       }
       async isAvailable() {
         try {
-          const { execFile: execFile15 } = await import("node:child_process");
-          const execFileAsync15 = (0, import_node_util7.promisify)(execFile15);
-          const { stdout } = await execFileAsync15("which", ["opencode"], { timeout: 4e3 });
+          const { execFile: execFile17 } = await import("node:child_process");
+          const execFileAsync17 = (0, import_node_util13.promisify)(execFile17);
+          const { stdout } = await execFileAsync17("which", ["opencode"], { timeout: 4e3 });
           return stdout.trim().length > 0;
         } catch {
           return false;
@@ -8205,2534 +10748,6 @@ var init_registry = __esm({
   }
 });
 
-// src/main/extension-platform.ts
-function normalizePlatform2(value) {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return null;
-  if (normalized === "macos" || normalized === "darwin" || normalized === "mac") {
-    return "macOS";
-  }
-  if (normalized === "windows" || normalized === "win32" || normalized === "win") {
-    return "Windows";
-  }
-  if (normalized === "linux") {
-    return "Linux";
-  }
-  return null;
-}
-function getCurrentRaycastPlatform() {
-  if (process.platform === "win32") return "Windows";
-  if (process.platform === "linux") return "Linux";
-  return "macOS";
-}
-function getManifestPlatforms(manifest) {
-  if (!manifest || typeof manifest !== "object") return [];
-  if (!Array.isArray(manifest.platforms)) return [];
-  const supported = /* @__PURE__ */ new Set();
-  for (const raw of manifest.platforms) {
-    const normalized = normalizePlatform2(raw);
-    if (normalized) supported.add(normalized);
-  }
-  return [...supported];
-}
-function isManifestPlatformCompatible(manifest) {
-  const supported = getManifestPlatforms(manifest);
-  if (supported.length === 0) return true;
-  return supported.includes(getCurrentRaycastPlatform());
-}
-function isCommandPlatformCompatible(cmd) {
-  if (!cmd || typeof cmd !== "object") return false;
-  if (!Object.prototype.hasOwnProperty.call(cmd, "platforms")) return true;
-  return isManifestPlatformCompatible(cmd);
-}
-var init_extension_platform = __esm({
-  "src/main/extension-platform.ts"() {
-    "use strict";
-  }
-});
-
-// src/main/esbuild-runtime.ts
-function configurePackagedEsbuildBinary() {
-}
-var init_esbuild_runtime = __esm({
-  "src/main/esbuild-runtime.ts"() {
-    "use strict";
-  }
-});
-
-// src/main/extension-api.ts
-function getApiBaseUrl() {
-  return process.env.RAYMES_EXTENSION_API_URL || DEFAULT_API_URL;
-}
-function jsonRequest(method, urlPath, body) {
-  return new Promise((resolve5, reject) => {
-    const baseUrl = getApiBaseUrl();
-    const fullUrl = new URL(urlPath, baseUrl);
-    const isHttps = fullUrl.protocol === "https:";
-    const transport = isHttps ? https : http;
-    const payload = body ? JSON.stringify(body) : void 0;
-    const options = {
-      method,
-      hostname: fullUrl.hostname,
-      port: fullUrl.port || (isHttps ? 443 : 80),
-      path: fullUrl.pathname + fullUrl.search,
-      headers: {
-        "User-Agent": "Tezbar",
-        Accept: "application/json",
-        ...payload ? {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(payload)
-        } : {}
-      },
-      timeout: REQUEST_TIMEOUT
-    };
-    const req = transport.request(options, (res) => {
-      const chunks = [];
-      res.on("data", (chunk) => chunks.push(chunk));
-      res.on("end", () => {
-        const statusCode = res.statusCode ?? 0;
-        const rawBody = Buffer.concat(chunks).toString("utf-8");
-        if (statusCode < 200 || statusCode >= 300) {
-          reject(
-            new Error(
-              `API request failed: ${method} ${urlPath} \u2192 ${statusCode} ${res.statusMessage}
-${rawBody}`
-            )
-          );
-          return;
-        }
-        try {
-          resolve5(JSON.parse(rawBody));
-        } catch (parseError) {
-          reject(new Error(`Failed to parse API response as JSON: ${rawBody}`));
-        }
-      });
-    });
-    req.on("error", (err) => reject(err));
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error(`API request timed out: ${method} ${urlPath}`));
-    });
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
-async function fetchCatalogFromAPI() {
-  const data = await jsonRequest("GET", "/extensions/catalog");
-  return data.map((entry) => ({
-    name: entry.name ?? "",
-    title: entry.title ?? "",
-    description: entry.description ?? "",
-    author: entry.author ?? "",
-    contributors: entry.contributors ?? [],
-    icon: entry.icon ?? "",
-    iconUrl: entry.iconUrl ?? entry.icon_url ?? "",
-    screenshotUrls: entry.screenshotUrls ?? entry.screenshot_urls ?? [],
-    categories: entry.categories ?? [],
-    platforms: entry.platforms ?? [],
-    commands: (entry.commands ?? []).map((cmd) => ({
-      name: cmd.name ?? "",
-      title: cmd.title ?? "",
-      description: cmd.description ?? ""
-    })),
-    installCount: entry.installCount ?? entry.install_count ?? 0
-  }));
-}
-async function getExtensionBundleUrl(name) {
-  return jsonRequest(
-    "GET",
-    `/extensions/${encodeURIComponent(name)}/bundle`
-  );
-}
-async function getExtensionScreenshotsFromAPI(name) {
-  try {
-    return await jsonRequest(
-      "GET",
-      `/extensions/${encodeURIComponent(name)}/screenshots`
-    );
-  } catch {
-    return [];
-  }
-}
-async function reportInstall(name, machineId) {
-  try {
-    await jsonRequest(
-      "POST",
-      `/extensions/${encodeURIComponent(name)}/install`,
-      machineId ? { machineId } : {}
-    );
-  } catch (err) {
-    console.warn("Failed to report install:", err);
-  }
-}
-async function reportUninstall(name, machineId) {
-  try {
-    await jsonRequest(
-      "POST",
-      `/extensions/${encodeURIComponent(name)}/uninstall`,
-      machineId ? { machineId } : {}
-    );
-  } catch (err) {
-    console.warn("Failed to report uninstall:", err);
-  }
-}
-var https, http, DEFAULT_API_URL, REQUEST_TIMEOUT;
-var init_extension_api = __esm({
-  "src/main/extension-api.ts"() {
-    "use strict";
-    https = __toESM(require("https"));
-    http = __toESM(require("http"));
-    DEFAULT_API_URL = "https://api.supercmd.sh";
-    REQUEST_TIMEOUT = 3e4;
-  }
-});
-
-// src/main/bun-manager.ts
-function broadcastInstallStatus(message) {
-  for (const window2 of BrowserWindow.getAllWindows()) {
-    if (window2.isDestroyed()) continue;
-    try {
-      window2.webContents.send("extension-install-status", message);
-    } catch {
-    }
-  }
-}
-function getBunDownloadUrl() {
-  const arch = process.arch === "arm64" ? "aarch64" : "x64";
-  if (process.platform === "darwin") {
-    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-darwin-${arch}.zip`;
-  }
-  if (process.platform === "linux") {
-    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${arch}.zip`;
-  }
-  if (process.platform === "win32") {
-    return `https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-windows-${arch}.zip`;
-  }
-  return "";
-}
-function getBunDir() {
-  return path4.join(app.getPath("userData"), "bun");
-}
-function getBunBinaryPath() {
-  return path4.join(getBunDir(), process.platform === "win32" ? "bun.exe" : "bun");
-}
-function isBunAvailable() {
-  const binPath = getBunBinaryPath();
-  try {
-    return fs.existsSync(binPath) && fs.statSync(binPath).size > 1e6;
-  } catch {
-    return false;
-  }
-}
-async function ensureBun() {
-  if (isBunAvailable()) {
-    return getBunBinaryPath();
-  }
-  const url = getBunDownloadUrl();
-  if (!url) {
-    console.warn("Bun download not supported on this platform");
-    return null;
-  }
-  const bunDir = getBunDir();
-  fs.mkdirSync(bunDir, { recursive: true });
-  console.log(`Downloading Bun v${BUN_VERSION}...`);
-  broadcastInstallStatus("Setting up installer for first use\u2026");
-  try {
-    const zipBuffer = await downloadFile(url);
-    broadcastInstallStatus("Setting up installer\u2026");
-    console.log(`Downloaded Bun (${(zipBuffer.length / 1024 / 1024).toFixed(1)}MB), extracting...`);
-    const tmpZipPath = path4.join(app.getPath("temp"), `bun-${Date.now()}.zip`);
-    fs.writeFileSync(tmpZipPath, zipBuffer);
-    const tmpExtractDir = path4.join(app.getPath("temp"), `bun-extract-${Date.now()}`);
-    fs.mkdirSync(tmpExtractDir, { recursive: true });
-    if (process.platform === "win32") {
-      await execFileAsync7(
-        "powershell.exe",
-        [
-          "-NoLogo",
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          "Expand-Archive -LiteralPath $env:TEZBAR_BUN_ZIP -DestinationPath $env:TEZBAR_BUN_EXTRACT -Force"
-        ],
-        {
-          timeout: 3e4,
-          env: {
-            ...process.env,
-            TEZBAR_BUN_ZIP: tmpZipPath,
-            TEZBAR_BUN_EXTRACT: tmpExtractDir
-          }
-        }
-      );
-    } else {
-      await execFileAsync7("unzip", ["-o", tmpZipPath, "-d", tmpExtractDir], { timeout: 3e4 });
-    }
-    const bunBinary = findFile(tmpExtractDir, process.platform === "win32" ? "bun.exe" : "bun");
-    if (!bunBinary) {
-      throw new Error("Bun binary not found in downloaded archive");
-    }
-    const destPath = getBunBinaryPath();
-    fs.copyFileSync(bunBinary, destPath);
-    if (process.platform !== "win32") fs.chmodSync(destPath, 493);
-    try {
-      fs.rmSync(tmpZipPath, { force: true });
-    } catch {
-    }
-    try {
-      fs.rmSync(tmpExtractDir, { recursive: true, force: true });
-    } catch {
-    }
-    const { stdout } = await execFileAsync7(destPath, ["--version"], { timeout: 5e3 });
-    console.log(`Bun installed successfully: ${stdout.trim()}`);
-    return destPath;
-  } catch (error) {
-    console.error("Failed to download/install Bun:", error?.message || error);
-    try {
-      fs.rmSync(getBunBinaryPath(), { force: true });
-    } catch {
-    }
-    return null;
-  }
-}
-async function installDepsWithBun(extPath) {
-  const bunPath = await ensureBun();
-  if (!bunPath) return false;
-  const pkgPath = path4.join(extPath, "package.json");
-  if (!fs.existsSync(pkgPath)) return true;
-  let pkg;
-  try {
-    pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-  } catch {
-    return true;
-  }
-  const deps = {
-    ...pkg.dependencies || {},
-    ...pkg.optionalDependencies || {}
-  };
-  const thirdPartyDeps = Object.entries(deps).filter(([name]) => !name.startsWith("@raycast/")).map(([name, version]) => `${name}@${version}`).filter(Boolean);
-  if (thirdPartyDeps.length === 0) {
-    console.log(`No third-party deps for ${path4.basename(extPath)} \u2014 skipping bun install`);
-    return true;
-  }
-  console.log(`Installing ${thirdPartyDeps.length} deps via Bun for ${path4.basename(extPath)}...`);
-  try {
-    const cleanPkg = {
-      name: pkg.name || "extension",
-      version: pkg.version || "1.0.0",
-      private: true,
-      dependencies: Object.fromEntries(
-        Object.entries(deps).filter(([name]) => !name.startsWith("@raycast/"))
-      )
-    };
-    const originalPkg = fs.readFileSync(pkgPath, "utf-8");
-    fs.writeFileSync(pkgPath, JSON.stringify(cleanPkg, null, 2));
-    for (const lockfile of [
-      "package-lock.json",
-      "bun.lockb",
-      "bun.lock",
-      "yarn.lock",
-      "pnpm-lock.yaml"
-    ]) {
-      try {
-        fs.rmSync(path4.join(extPath, lockfile), { force: true });
-      } catch {
-      }
-    }
-    await execFileAsync7(bunPath, ["install", "--production", "--no-save"], {
-      cwd: extPath,
-      timeout: 12e4,
-      env: {
-        ...process.env,
-        PATH: `${path4.dirname(bunPath)}:${process.env.PATH || ""}`
-      }
-    });
-    fs.writeFileSync(pkgPath, originalPkg);
-    const hasNodeModules2 = fs.existsSync(path4.join(extPath, "node_modules"));
-    if (hasNodeModules2) {
-      console.log(`Bun install succeeded for ${path4.basename(extPath)}`);
-      return true;
-    }
-    console.warn(`Bun completed but node_modules missing for ${path4.basename(extPath)}`);
-    fs.writeFileSync(pkgPath, originalPkg);
-    return false;
-  } catch (error) {
-    console.warn(`Bun install failed for ${path4.basename(extPath)}:`, error?.message);
-    try {
-      const originalContent = JSON.stringify(pkg, null, 2);
-      fs.writeFileSync(pkgPath, originalContent);
-    } catch {
-    }
-    return false;
-  }
-}
-async function installSpecificPackagesWithBun(extPath, packageNames) {
-  const bunPath = await ensureBun();
-  if (!bunPath) return false;
-  const unique = Array.from(
-    new Set(packageNames.map((name) => String(name || "").trim()).filter(Boolean))
-  );
-  if (unique.length === 0) return true;
-  const validPackageName = /^(?:@[A-Za-z0-9][A-Za-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/;
-  const invalid = unique.find((name) => !validPackageName.test(name));
-  if (invalid) {
-    console.warn(`Refusing invalid package name from extension build: ${invalid}`);
-    return false;
-  }
-  console.log(
-    `Installing specific packages via Bun for ${path4.basename(extPath)}: ${unique.join(", ")}`
-  );
-  try {
-    await execFileAsync7(bunPath, ["add", "--no-save", ...unique], {
-      cwd: extPath,
-      timeout: 3e5,
-      env: {
-        ...process.env,
-        PATH: `${path4.dirname(bunPath)}:${process.env.PATH || ""}`
-      }
-    });
-    return fs.existsSync(path4.join(extPath, "node_modules"));
-  } catch (error) {
-    console.warn(`Bun add failed for ${path4.basename(extPath)}:`, error?.message);
-    return false;
-  }
-}
-function downloadFile(url) {
-  return new Promise((resolve5, reject) => {
-    const makeRequest = (requestUrl, redirects = 0) => {
-      if (redirects > 10) {
-        reject(new Error("Too many redirects"));
-        return;
-      }
-      const parsedUrl = new URL(requestUrl);
-      const transport = parsedUrl.protocol === "https:" ? https2 : http2;
-      transport.get(requestUrl, { timeout: 12e4 }, (res) => {
-        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          makeRequest(res.headers.location, redirects + 1);
-          return;
-        }
-        if (res.statusCode !== 200) {
-          reject(new Error(`Download failed: ${res.statusCode} ${res.statusMessage}`));
-          return;
-        }
-        const chunks = [];
-        res.on("data", (chunk) => chunks.push(chunk));
-        res.on("error", reject);
-        res.on("end", () => resolve5(Buffer.concat(chunks)));
-      }).on("error", reject);
-    };
-    makeRequest(url);
-  });
-}
-function findFile(dir, name) {
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = path4.join(dir, entry.name);
-      if (entry.isFile() && entry.name === name) return full;
-      if (entry.isDirectory()) {
-        const found = findFile(full, name);
-        if (found) return found;
-      }
-    }
-  } catch {
-  }
-  return null;
-}
-var import_child_process, import_util, fs, path4, https2, http2, execFileAsync7, BUN_VERSION;
-var init_bun_manager = __esm({
-  "src/main/bun-manager.ts"() {
-    "use strict";
-    init_desktop_runtime();
-    import_child_process = require("child_process");
-    import_util = require("util");
-    fs = __toESM(require("fs"));
-    path4 = __toESM(require("path"));
-    https2 = __toESM(require("https"));
-    http2 = __toESM(require("http"));
-    execFileAsync7 = (0, import_util.promisify)(import_child_process.execFile);
-    BUN_VERSION = "1.2.5";
-  }
-});
-
-// src/main/extension-registry.ts
-var extension_registry_exports = {};
-__export(extension_registry_exports, {
-  extensionRegistryEvents: () => extensionRegistryEvents,
-  getCatalog: () => getCatalog,
-  getExtensionPreferenceSetup: () => getExtensionPreferenceSetup,
-  getExtensionPreferences: () => getExtensionPreferences,
-  getExtensionScreenshotUrls: () => getExtensionScreenshotUrls,
-  getInstalledExtensionNames: () => getInstalledExtensionNames,
-  installExtension: () => installExtension,
-  installExtensionDeps: () => installExtensionDeps,
-  installRegistryExtension: () => installRegistryExtension,
-  installSpecificPackages: () => installSpecificPackages,
-  isExtensionInstalled: () => isExtensionInstalled,
-  listInstalledExtensionSlugsFromDisk: () => listInstalledExtensionSlugsFromDisk,
-  listInstalledRegistryExtensions: () => listInstalledRegistryExtensions,
-  resolveInstalledPackageJsonPath: () => resolveInstalledPackageJsonPath,
-  saveExtensionPreferences: () => saveExtensionPreferences,
-  scoreCatalogEntrySearch: () => scoreCatalogEntrySearch,
-  searchExtensionCatalog: () => searchExtensionCatalog,
-  shouldShowExtensionPreferenceSetup: () => shouldShowExtensionPreferenceSetup,
-  uninstallExtension: () => uninstallExtension,
-  uninstallRegistryExtension: () => uninstallRegistryExtension
-});
-function hasNodeModules(extPath) {
-  try {
-    return fs2.existsSync(path5.join(extPath, "node_modules"));
-  } catch {
-    return false;
-  }
-}
-function githubApiHeaders() {
-  return {
-    "User-Agent": "Tezbar",
-    Accept: "application/vnd.github+json"
-  };
-}
-async function fetchWithTimeout(url, options = {}, timeoutMs = 45e3) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      ...options,
-      signal: controller.signal
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-async function fetchRepoTreeEntries(forceRefresh = false) {
-  if (!forceRefresh && repoTreeCache && Date.now() - repoTreeCache.fetchedAt < REPO_TREE_TTL_MS) {
-    return repoTreeCache.entries;
-  }
-  const response = await fetchWithTimeout(
-    GITHUB_TREE_API,
-    { headers: githubApiHeaders() },
-    9e4
-  );
-  if (!response.ok) {
-    throw new Error(`GitHub tree fetch failed with ${response.status} ${response.statusText}`);
-  }
-  const data = await response.json();
-  const rawEntries = Array.isArray(data?.tree) ? data.tree : [];
-  const entries = rawEntries.map((entry) => ({
-    path: String(entry?.path || ""),
-    type: String(entry?.type || ""),
-    size: typeof entry?.size === "number" ? entry.size : void 0
-  })).filter((entry) => Boolean(entry.path));
-  repoTreeCache = {
-    fetchedAt: Date.now(),
-    entries
-  };
-  return entries;
-}
-async function downloadExtensionFromTree(name, tmpDir) {
-  const treeEntries = await fetchRepoTreeEntries();
-  const prefix = `extensions/${name}/`;
-  const fileEntries = treeEntries.filter(
-    (entry) => entry.type === "blob" && entry.path.startsWith(prefix)
-  );
-  if (fileEntries.length === 0) return null;
-  const srcDir = path5.join(tmpDir, "extensions", name);
-  fs2.mkdirSync(srcDir, { recursive: true });
-  for (const entry of fileEntries) {
-    const relativePath = entry.path.slice(prefix.length);
-    if (!relativePath) continue;
-    const destination = path5.join(srcDir, relativePath);
-    fs2.mkdirSync(path5.dirname(destination), { recursive: true });
-  }
-  const CONCURRENCY = 30;
-  let index = 0;
-  const downloadOne = async () => {
-    while (index < fileEntries.length) {
-      const i = index++;
-      const entry = fileEntries[i];
-      const relativePath = entry.path.slice(prefix.length);
-      if (!relativePath) continue;
-      const destination = path5.join(srcDir, relativePath);
-      const fileUrl = `${GITHUB_RAW}/${entry.path}`;
-      const response = await fetchWithTimeout(
-        fileUrl,
-        {
-          headers: {
-            "User-Agent": "Tezbar",
-            Accept: "application/octet-stream"
-          }
-        },
-        9e4
-      );
-      if (!response.ok) {
-        throw new Error(`Failed to download ${entry.path} (${response.status} ${response.statusText})`);
-      }
-      const data = await response.arrayBuffer();
-      fs2.writeFileSync(destination, Buffer.from(data));
-    }
-  };
-  const workers = Array.from(
-    { length: Math.min(CONCURRENCY, fileEntries.length) },
-    () => downloadOne()
-  );
-  await Promise.all(workers);
-  console.log(`Downloaded ${fileEntries.length} files for "${name}"`);
-  return srcDir;
-}
-function downloadExtensionViaSparseGit(name, tmpDir) {
-  const checkoutDir = path5.join(tmpDir, "raymes-extensions-source");
-  try {
-    (0, import_child_process2.execFileSync)("git", [
-      "clone",
-      "--depth",
-      "1",
-      "--filter=blob:none",
-      "--sparse",
-      RAYMES_EXTENSIONS_GIT,
-      checkoutDir
-    ], { stdio: "ignore", timeout: 18e4 });
-    (0, import_child_process2.execFileSync)("git", [
-      "-C",
-      checkoutDir,
-      "sparse-checkout",
-      "set",
-      `extensions/${name}`
-    ], { stdio: "ignore", timeout: 12e4 });
-    const extensionDir = path5.join(checkoutDir, "extensions", name);
-    return fs2.existsSync(path5.join(extensionDir, "package.json")) ? extensionDir : null;
-  } catch (error) {
-    console.warn(`Sparse git fallback failed for "${name}":`, error);
-    return null;
-  }
-}
-function coerceCatalogEntry(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const name = typeof raw.name === "string" ? raw.name : "";
-  if (!name) return null;
-  const commands = Array.isArray(raw.commands) ? raw.commands.filter((cmd) => cmd && typeof cmd === "object" && cmd.name).map((cmd) => ({
-    name: String(cmd.name || ""),
-    title: String(cmd.title || cmd.name || ""),
-    description: String(cmd.description || "")
-  })) : [];
-  return {
-    name,
-    title: typeof raw.title === "string" ? raw.title : name,
-    description: typeof raw.description === "string" ? raw.description : "",
-    author: typeof raw.author === "string" ? raw.author : "",
-    contributors: Array.isArray(raw.contributors) ? raw.contributors.filter((v) => typeof v === "string") : [],
-    icon: typeof raw.icon === "string" ? raw.icon : "",
-    iconUrl: typeof raw.iconUrl === "string" ? raw.iconUrl : "",
-    screenshotUrls: Array.isArray(raw.screenshotUrls) ? raw.screenshotUrls.filter((v) => typeof v === "string") : [],
-    categories: Array.isArray(raw.categories) ? raw.categories.filter((v) => typeof v === "string") : [],
-    platforms: Array.isArray(raw.platforms) ? raw.platforms.filter((v) => typeof v === "string") : [],
-    commands
-  };
-}
-function getCatalogPath() {
-  return path5.join(app.getPath("userData"), "extension-catalog.json");
-}
-function getExtensionsDir() {
-  const dir = path5.join(app.getPath("userData"), "extensions");
-  if (!fs2.existsSync(dir)) {
-    fs2.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-function getInstalledPath(name) {
-  return path5.join(getExtensionsDir(), name);
-}
-function getLegacyInstalledPath(name) {
-  const slug = slugFromRaymesExtensionId(name);
-  return path5.join(getExtensionsDir(), "packages", normalizeRaymesExtensionId(slug));
-}
-function getLegacyRegistryInstalledPath(name) {
-  const slug = slugFromRaymesExtensionId(name);
-  return path5.join(app.getPath("userData"), "extension-registry", "packages", normalizeRaymesExtensionId(slug));
-}
-function resolveInstalledExtensionPathForRaymes(name) {
-  const slug = slugFromRaymesExtensionId(name);
-  if (!slug) return null;
-  const candidates = [
-    getInstalledPath(slug),
-    getInstalledPath(normalizeRaymesExtensionId(slug)),
-    getLegacyInstalledPath(slug),
-    getLegacyRegistryInstalledPath(slug)
-  ];
-  for (const candidate of candidates) {
-    if (fs2.existsSync(path5.join(candidate, "package.json"))) return candidate;
-  }
-  return null;
-}
-function loadCatalogFromDisk() {
-  try {
-    const data = fs2.readFileSync(getCatalogPath(), "utf-8");
-    const parsed = JSON.parse(data);
-    const entries = Array.isArray(parsed.entries) ? parsed.entries.map((entry) => coerceCatalogEntry(entry)).filter(Boolean) : [];
-    if (entries.length === 0) return null;
-    return {
-      entries,
-      fetchedAt: typeof parsed.fetchedAt === "number" ? parsed.fetchedAt : Date.now(),
-      version: typeof parsed.version === "number" ? parsed.version : CATALOG_VERSION
-    };
-  } catch {
-  }
-  return null;
-}
-function saveCatalogToDisk(catalog) {
-  try {
-    fs2.writeFileSync(getCatalogPath(), JSON.stringify(catalog));
-  } catch (e) {
-    console.error("Failed to save catalog:", e);
-  }
-}
-async function getCatalog(forceRefresh = false) {
-  if (!forceRefresh && catalogCache && Date.now() - catalogCache.fetchedAt < CATALOG_TTL) {
-    return catalogCache.entries;
-  }
-  if (!forceRefresh) {
-    const diskCache2 = loadCatalogFromDisk();
-    if (diskCache2 && Date.now() - diskCache2.fetchedAt < CATALOG_TTL) {
-      catalogCache = diskCache2;
-      return diskCache2.entries;
-    }
-  }
-  try {
-    console.log("Fetching extension catalog from API\u2026");
-    const entries = await fetchCatalogFromAPI();
-    const cache2 = {
-      entries,
-      fetchedAt: Date.now(),
-      version: CATALOG_VERSION
-    };
-    catalogCache = cache2;
-    saveCatalogToDisk(cache2);
-    console.log(`Extension catalog (API): ${entries.length} extensions cached.`);
-    return entries;
-  } catch (apiError) {
-    console.warn("API catalog fetch failed:", apiError?.message || apiError);
-  }
-  const diskCache = loadCatalogFromDisk();
-  if (diskCache) {
-    catalogCache = diskCache;
-    console.log(`Extension catalog (disk cache): ${diskCache.entries.length} extensions from cache.`);
-    return diskCache.entries;
-  }
-  return [];
-}
-async function getExtensionScreenshotUrls(name) {
-  if (!name) return [];
-  try {
-    const urls = await getExtensionScreenshotsFromAPI(name);
-    if (urls.length > 0) return urls;
-  } catch (apiError) {
-    console.warn(`API screenshots fetch failed for ${name}:`, apiError?.message || apiError);
-  }
-  try {
-    const url = `${GITHUB_API}/extensions/${encodeURIComponent(name)}/metadata`;
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Tezbar",
-        Accept: "application/vnd.github+json"
-      }
-    });
-    if (!response.ok) return [];
-    const data = await response.json();
-    if (!Array.isArray(data)) return [];
-    const imagePattern = /\.(png|jpe?g|webp|gif)$/i;
-    return data.filter((entry) => entry?.type === "file" && imagePattern.test(entry?.name || "")).sort(
-      (a, b) => String(a?.name || "").localeCompare(String(b?.name || ""), void 0, {
-        numeric: true
-      })
-    ).map((entry) => String(entry?.download_url || "")).filter(Boolean);
-  } catch (e) {
-    console.warn(`Failed to load screenshots for ${name}:`, e);
-    return [];
-  }
-}
-async function installSpecificPackages(extPath, packageNames) {
-  const unique = Array.from(
-    new Set(
-      packageNames.map((name) => String(name || "").trim()).filter(Boolean)
-    )
-  );
-  if (unique.length === 0) return;
-  console.log(
-    `Installing missing packages for ${path5.basename(extPath)}: ${unique.join(", ")}`
-  );
-  const ok = await installSpecificPackagesWithBun(extPath, unique);
-  if (!ok) {
-    throw new Error(`Bun failed to install packages for ${path5.basename(extPath)}`);
-  }
-}
-async function installExtensionDeps(extPath) {
-  const pkgPath = path5.join(extPath, "package.json");
-  if (!fs2.existsSync(pkgPath)) return;
-  let pkg;
-  try {
-    pkg = JSON.parse(fs2.readFileSync(pkgPath, "utf-8"));
-  } catch {
-    return;
-  }
-  const deps = {
-    ...pkg.dependencies || {},
-    ...pkg.optionalDependencies || {}
-  };
-  const thirdPartyDeps = Object.entries(deps).filter(([name]) => !name.startsWith("@raycast/")).map(([name, version]) => `${name}@${version}`).filter(Boolean);
-  if (thirdPartyDeps.length === 0) {
-    console.log(`No third-party dependencies for ${path5.basename(extPath)}`);
-    return;
-  }
-  console.log(
-    `Installing ${thirdPartyDeps.length} dependencies for ${path5.basename(extPath)}: ${thirdPartyDeps.join(", ")}`
-  );
-  const ok = await installDepsWithBun(extPath);
-  if (!ok) {
-    throw new Error(`Bun dependency installation failed for ${path5.basename(extPath)}`);
-  }
-  if (!hasNodeModules(extPath)) {
-    throw new Error("Bun completed but node_modules is still missing");
-  }
-  console.log(`Dependencies installed for ${path5.basename(extPath)}`);
-}
-function isExtensionInstalled(name) {
-  return resolveInstalledExtensionPathForRaymes(name) !== null;
-}
-function getInstalledExtensionNames() {
-  const names = /* @__PURE__ */ new Set();
-  const scanRoot = (root, stripRaycastPrefix) => {
-    if (!fs2.existsSync(root)) return;
-    try {
-      for (const d of fs2.readdirSync(root)) {
-        const p = path5.join(root, d);
-        if (fs2.statSync(p).isDirectory() && fs2.existsSync(path5.join(p, "package.json"))) {
-          names.add(stripRaycastPrefix ? slugFromRaymesExtensionId(d) : d);
-        }
-      }
-    } catch {
-    }
-  };
-  scanRoot(getExtensionsDir(), false);
-  scanRoot(path5.join(getExtensionsDir(), "packages"), true);
-  scanRoot(path5.join(app.getPath("userData"), "extension-registry", "packages"), true);
-  return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b));
-}
-async function installExtension(name) {
-  if (!/^[A-Za-z0-9._-]+$/.test(String(name || ""))) {
-    console.error(`Invalid extension name: "${name}"`);
-    return false;
-  }
-  try {
-    const success = await installExtensionFromBundle(name);
-    if (success) return true;
-  } catch (bundleError) {
-    console.warn(`Bundle install failed for "${name}":`, bundleError?.message || bundleError);
-  }
-  try {
-    const success = await installExtensionViaAPI(name);
-    if (success) return true;
-  } catch (apiError) {
-    console.warn(`API install failed for "${name}":`, apiError?.message || apiError);
-  }
-  return false;
-}
-async function installExtensionFromBundle(name) {
-  const installPath = getInstalledPath(name);
-  const hadExistingInstall = fs2.existsSync(installPath);
-  const backupPath = hadExistingInstall ? path5.join(getExtensionsDir(), `${name}.backup-${Date.now()}`) : "";
-  const tmpDir = path5.join(app.getPath("temp"), `supercmd-bundle-${Date.now()}`);
-  try {
-    const t0 = Date.now();
-    const { url } = await getExtensionBundleUrl(name);
-    console.log(`Downloading pre-built bundle for "${name}"\u2026`);
-    fs2.mkdirSync(tmpDir, { recursive: true });
-    await downloadAndExtractTarball(url, tmpDir);
-    const nestedPath = path5.join(tmpDir, name);
-    let srcDir = tmpDir;
-    if (fs2.existsSync(path5.join(nestedPath, "package.json"))) {
-      srcDir = nestedPath;
-    } else if (!fs2.existsSync(path5.join(srcDir, "package.json"))) {
-      const subdirs = fs2.readdirSync(tmpDir, { withFileTypes: true }).filter((d) => d.isDirectory());
-      for (const sub of subdirs) {
-        if (fs2.existsSync(path5.join(tmpDir, sub.name, "package.json"))) {
-          srcDir = path5.join(tmpDir, sub.name);
-          break;
-        }
-      }
-    }
-    if (!fs2.existsSync(path5.join(srcDir, "package.json"))) {
-      throw new Error("Bundle has no package.json");
-    }
-    if (!fs2.existsSync(path5.join(srcDir, ".sc-build"))) {
-      throw new Error("Bundle has no .sc-build/ directory \u2014 not a pre-built bundle");
-    }
-    const bundleManifest = JSON.parse(fs2.readFileSync(path5.join(srcDir, "package.json"), "utf8"));
-    const missingCommandBundles = (Array.isArray(bundleManifest.commands) ? bundleManifest.commands : []).filter((command) => command?.name).filter((command) => !fs2.existsSync(path5.join(srcDir, ".sc-build", `${command.name}.js`))).map((command) => command.name);
-    if (missingCommandBundles.length > 0) {
-      throw new Error(`Bundle is incomplete; missing commands: ${missingCommandBundles.join(", ")}`);
-    }
-    if (hadExistingInstall) {
-      fs2.renameSync(installPath, backupPath);
-    }
-    fs2.cpSync(srcDir, installPath, { recursive: true });
-    if (backupPath && fs2.existsSync(backupPath)) {
-      fs2.rmSync(backupPath, { recursive: true, force: true });
-    }
-    reportInstall(name, getMachineId()).catch(() => {
-    });
-    console.log(`Extension "${name}" installed from pre-built bundle in ${Date.now() - t0}ms`);
-    return true;
-  } catch (error) {
-    try {
-      fs2.rmSync(installPath, { recursive: true, force: true });
-    } catch {
-    }
-    if (backupPath && fs2.existsSync(backupPath)) {
-      try {
-        fs2.renameSync(backupPath, installPath);
-      } catch {
-      }
-    }
-    throw error;
-  } finally {
-    try {
-      fs2.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-    }
-    if (backupPath && fs2.existsSync(backupPath)) {
-      try {
-        fs2.rmSync(backupPath, { recursive: true, force: true });
-      } catch {
-      }
-    }
-  }
-}
-async function installExtensionViaAPI(name) {
-  const installPath = getInstalledPath(name);
-  const hadExistingInstall = fs2.existsSync(installPath);
-  const backupPath = hadExistingInstall ? path5.join(getExtensionsDir(), `${name}.backup-${Date.now()}`) : "";
-  const tmpDir = path5.join(app.getPath("temp"), `supercmd-api-install-${Date.now()}`);
-  try {
-    const t0 = Date.now();
-    console.log(`Installing extension: ${name}\u2026`);
-    fs2.mkdirSync(tmpDir, { recursive: true });
-    let srcDir = null;
-    try {
-      srcDir = await downloadExtensionFromTree(name, tmpDir);
-    } catch (error) {
-      console.warn(`GitHub API source download failed for "${name}"; trying sparse git.`, error);
-    }
-    if (!srcDir) srcDir = downloadExtensionViaSparseGit(name, tmpDir);
-    console.log(`  Download: ${Date.now() - t0}ms`);
-    if (!srcDir || !fs2.existsSync(path5.join(srcDir, "package.json"))) {
-      throw new Error(`Extension "${name}" not found or has no package.json`);
-    }
-    const srcPkg = JSON.parse(fs2.readFileSync(path5.join(srcDir, "package.json"), "utf-8"));
-    if (!isManifestPlatformCompatible(srcPkg)) {
-      const supported = getManifestPlatforms(srcPkg);
-      console.error(`Extension "${name}" is not compatible with ${getCurrentRaycastPlatform()} (supports: ${supported.join(", ")})`);
-      return false;
-    }
-    if (hadExistingInstall) {
-      fs2.renameSync(installPath, backupPath);
-    }
-    fs2.cpSync(srcDir, installPath, { recursive: true });
-    {
-      const extPkg = JSON.parse(fs2.readFileSync(path5.join(installPath, "package.json"), "utf-8"));
-      const allDeps = { ...extPkg.dependencies || {}, ...extPkg.optionalDependencies || {} };
-      const thirdPartyDeps = Object.keys(allDeps).filter((d) => !d.startsWith("@raycast/"));
-      if (thirdPartyDeps.length === 0) {
-        console.log(`No third-party dependencies for "${name}" \u2014 skipping install`);
-      } else {
-        const depsInstalled = await installDepsWithBun(installPath);
-        if (!depsInstalled) {
-          console.warn(`Could not install deps for "${name}" \u2014 extension may not work fully.`);
-        }
-      }
-      const t1 = Date.now();
-      console.log(`  Deps: ${t1 - t0}ms. Pre-building commands for "${name}"\u2026`);
-      const { buildAllCommands: buildAllCommands2 } = (init_extension_builder(), __toCommonJS(extension_builder_exports));
-      const builtCount = await buildAllCommands2(name);
-      const expectedCount = (Array.isArray(extPkg.commands) ? extPkg.commands : []).filter((command) => command?.name).length;
-      if (builtCount < expectedCount) {
-        throw new Error(`Built ${builtCount}/${expectedCount} commands for "${name}"`);
-      }
-      console.log(`  Build: ${Date.now() - t1}ms. Extension "${name}" installed (${builtCount} commands) in ${Date.now() - t0}ms total`);
-    }
-    if (backupPath && fs2.existsSync(backupPath)) {
-      fs2.rmSync(backupPath, { recursive: true, force: true });
-    }
-    reportInstall(name, getMachineId()).catch(() => {
-    });
-    return true;
-  } catch (error) {
-    console.error(`API install failed for "${name}":`, error);
-    try {
-      fs2.rmSync(installPath, { recursive: true, force: true });
-    } catch {
-    }
-    if (backupPath && fs2.existsSync(backupPath)) {
-      try {
-        fs2.renameSync(backupPath, installPath);
-      } catch {
-      }
-    }
-    throw error;
-  } finally {
-    try {
-      fs2.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-    }
-    if (backupPath && fs2.existsSync(backupPath)) {
-      try {
-        fs2.rmSync(backupPath, { recursive: true, force: true });
-      } catch {
-      }
-    }
-  }
-}
-async function downloadAndExtractTarball(url, destDir) {
-  return new Promise((resolve5, reject) => {
-    const makeRequest = (requestUrl, redirectCount = 0) => {
-      if (redirectCount > 5) {
-        reject(new Error("Too many redirects"));
-        return;
-      }
-      const parsedUrl = new URL(requestUrl);
-      const isHttps = parsedUrl.protocol === "https:";
-      const transport = isHttps ? require("https") : require("http");
-      transport.get(requestUrl, { timeout: 12e4 }, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          makeRequest(res.headers.location, redirectCount + 1);
-          return;
-        }
-        if (res.statusCode !== 200) {
-          reject(new Error(`Download failed: ${res.statusCode} ${res.statusMessage}`));
-          return;
-        }
-        const chunks = [];
-        res.on("data", (chunk) => chunks.push(chunk));
-        res.on("error", reject);
-        res.on("end", () => {
-          try {
-            const buffer = Buffer.concat(chunks);
-            extractTarGz(buffer, destDir);
-            resolve5();
-          } catch (err) {
-            reject(err);
-          }
-        });
-      }).on("error", reject);
-    };
-    makeRequest(url);
-  });
-}
-function extractTarGz(buffer, destDir) {
-  const decompressed = zlib.gunzipSync(buffer);
-  let offset = 0;
-  while (offset < decompressed.length - 512) {
-    const header = decompressed.subarray(offset, offset + 512);
-    if (header.every((b) => b === 0)) break;
-    const nameRaw = header.subarray(0, 100).toString("utf-8").replace(/\0+$/, "");
-    const sizeOctal = header.subarray(124, 136).toString("utf-8").replace(/\0+$/, "").trim();
-    const typeFlag = header[156];
-    const prefixRaw = header.subarray(345, 500).toString("utf-8").replace(/\0+$/, "");
-    const fullName = prefixRaw ? `${prefixRaw}/${nameRaw}` : nameRaw;
-    const size = parseInt(sizeOctal, 8) || 0;
-    offset += 512;
-    if (typeFlag === 53 || fullName.endsWith("/")) {
-      const dirPath = path5.join(destDir, fullName);
-      fs2.mkdirSync(dirPath, { recursive: true });
-    } else if (typeFlag === 0 || typeFlag === 48) {
-      const filePath = path5.join(destDir, fullName);
-      fs2.mkdirSync(path5.dirname(filePath), { recursive: true });
-      const fileData = decompressed.subarray(offset, offset + size);
-      fs2.writeFileSync(filePath, fileData);
-    }
-    const dataBlocks = Math.ceil(size / 512);
-    offset += dataBlocks * 512;
-  }
-}
-function getMachineId() {
-  if (_machineId) return _machineId;
-  const idPath = path5.join(app.getPath("userData"), ".machine-id");
-  try {
-    const existing = fs2.readFileSync(idPath, "utf-8").trim();
-    if (existing) {
-      _machineId = existing;
-      return existing;
-    }
-  } catch {
-  }
-  const id = `${randomHex(8)}-${randomHex(4)}-${randomHex(4)}-${randomHex(4)}-${randomHex(12)}`;
-  try {
-    fs2.writeFileSync(idPath, id);
-  } catch {
-  }
-  _machineId = id;
-  return id;
-}
-function randomHex(length) {
-  const bytes = require("crypto").randomBytes(Math.ceil(length / 2));
-  return bytes.toString("hex").slice(0, length);
-}
-async function uninstallExtension(name) {
-  const installPath = getInstalledPath(name);
-  if (!fs2.existsSync(installPath)) {
-    return true;
-  }
-  try {
-    fs2.rmSync(installPath, { recursive: true, force: true });
-    console.log(`Extension "${name}" uninstalled.`);
-    reportUninstall(name, getMachineId()).catch(() => {
-    });
-    return true;
-  } catch (error) {
-    console.error(`Failed to uninstall extension "${name}":`, error);
-    return false;
-  }
-}
-function normalizeRaymesExtensionId(input) {
-  const slug = String(input || "").trim().replace(/^raycast\./, "");
-  return slug ? `raycast.${slug}` : "";
-}
-function slugFromRaymesExtensionId(input) {
-  return String(input || "").trim().replace(/^raycast\./, "");
-}
-function extensionNameFromSlug(slug) {
-  return slug.split(/[-_]/g).filter(Boolean).map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`).join(" ");
-}
-function readInstalledPackage(slug) {
-  const extensionPath = resolveInstalledExtensionPathForRaymes(slug);
-  const pkgPath = extensionPath ? path5.join(extensionPath, "package.json") : "";
-  if (!fs2.existsSync(pkgPath)) return {};
-  try {
-    return JSON.parse(fs2.readFileSync(pkgPath, "utf-8"));
-  } catch {
-    return {};
-  }
-}
-function resolvePlatformDefault(value) {
-  const platformKey = process.platform === "win32" ? "Windows" : "macOS";
-  if (value && typeof value === "object" && !Array.isArray(value) && (Object.prototype.hasOwnProperty.call(value, "macOS") || Object.prototype.hasOwnProperty.call(value, "Windows"))) {
-    if (Object.prototype.hasOwnProperty.call(value, platformKey)) {
-      return value[platformKey];
-    }
-    return value.macOS ?? value.Windows;
-  }
-  return value;
-}
-function normalizeRegistryCommand(command) {
-  return {
-    name: command.cmdName,
-    title: command.title,
-    subtitle: command.description || command.extensionTitle,
-    description: command.description,
-    mode: command.mode,
-    argumentDefinitions: command.commandArgumentDefinitions
-  };
-}
-function githubAvatarUrlForHandle(value) {
-  const raw = typeof value === "object" && value ? String(value.handle || value.name || "") : String(value || "");
-  const handle = raw.split("<")[0].split("(")[0].trim().replace(/^@/, "");
-  if (!/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/i.test(handle)) return void 0;
-  if (handle.toLowerCase() === "raycast community") return void 0;
-  return `https://github.com/${handle}.png?size=96`;
-}
-function resolveInstalledIconPath(extensionPath, icon) {
-  if (typeof icon !== "string" || !icon.trim()) return void 0;
-  if (/^https?:\/\//i.test(icon)) return icon;
-  const normalized = icon.replace(/^\.?\//, "");
-  const candidates = [
-    path5.join(extensionPath, normalized),
-    path5.join(extensionPath, "assets", normalized)
-  ];
-  return candidates.find((candidate) => fs2.existsSync(candidate));
-}
-function readAppBundleIdentifier(appPath) {
-  const infoPlistPath = path5.join(appPath, "Contents", "Info.plist");
-  if (!fs2.existsSync(infoPlistPath)) return void 0;
-  try {
-    return (0, import_child_process2.execFileSync)("/usr/bin/plutil", ["-extract", "CFBundleIdentifier", "raw", "-o", "-", infoPlistPath], {
-      encoding: "utf8",
-      timeout: 1e3
-    }).trim() || void 0;
-  } catch {
-    return void 0;
-  }
-}
-function appPickerValue(name, appPath) {
-  if (!fs2.existsSync(appPath)) return null;
-  return {
-    name,
-    path: appPath,
-    bundleId: readAppBundleIdentifier(appPath) || ""
-  };
-}
-function resolveAppPickerDefault(pref) {
-  const candidates = pref?.name === "uninstaller_app" || pref?.key === "uninstaller_app" ? [
-    appPickerValue("AppCleaner", "/Applications/AppCleaner.app"),
-    appPickerValue("Pearcleaner", "/Applications/PearCleaner.app"),
-    appPickerValue("TrashMe 3", "/Applications/TrashMe 3.app"),
-    appPickerValue("App Cleaner 8", "/Applications/App Cleaner 8.app")
-  ] : [];
-  return candidates.find((candidate) => Boolean(candidate)) || "";
-}
-function listInstalledRegistryExtensions() {
-  const commands = discoverInstalledExtensionCommands();
-  const commandsBySlug = /* @__PURE__ */ new Map();
-  for (const command of commands) {
-    const list = commandsBySlug.get(command.extName) || [];
-    list.push(command);
-    commandsBySlug.set(command.extName, list);
-  }
-  return getInstalledExtensionNames().map((slug) => {
-    const pkg = readInstalledPackage(slug);
-    const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
-    const id = normalizeRaymesExtensionId(slug);
-    const authorRaw = pkg.author || pkg.owner || "";
-    const author = typeof authorRaw === "object" ? String(authorRaw?.name || authorRaw?.handle || "") : String(authorRaw || "");
-    const ownerRaw = pkg.owner || pkg.author || "";
-    const owner = typeof ownerRaw === "object" ? String(ownerRaw?.handle || ownerRaw?.name || "") : String(ownerRaw || "");
-    const authorIconUrl = githubAvatarUrlForHandle(authorRaw);
-    const iconPath = resolveInstalledIconPath(extensionPath, pkg.icon || "icon.png");
-    return {
-      id,
-      slug,
-      name: String(pkg.title || extensionNameFromSlug(slug)),
-      version: String(pkg.version || "1.0.0"),
-      description: String(pkg.description || ""),
-      author: author || void 0,
-      owner: owner || void 0,
-      authorIconUrl,
-      iconPath,
-      packageJsonPath: path5.join(extensionPath, "package.json"),
-      extensionPath,
-      commands: (commandsBySlug.get(slug) || []).map(normalizeRegistryCommand),
-      installedAt: (() => {
-        try {
-          return fs2.statSync(extensionPath).mtimeMs;
-        } catch {
-          return Date.now();
-        }
-      })()
-    };
-  }).sort((a, b) => a.name.localeCompare(b.name));
-}
-function resolveInstalledPackageJsonPath(extensionId) {
-  const slug = slugFromRaymesExtensionId(extensionId);
-  if (!slug) return null;
-  const extensionPath = resolveInstalledExtensionPathForRaymes(slug);
-  const pkgPath = extensionPath ? path5.join(extensionPath, "package.json") : "";
-  return fs2.existsSync(pkgPath) ? pkgPath : null;
-}
-function searchTokens(value) {
-  return String(value || "").toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean);
-}
-function tokenScore(tokens2, query, exactScore, prefixScore) {
-  if (tokens2.some((token) => token === query)) return exactScore;
-  if (tokens2.some((token) => token.startsWith(query))) return prefixScore;
-  return 0;
-}
-function scoreCatalogEntrySearch(entry, query) {
-  const q = String(query || "").trim().toLowerCase();
-  if (!q) return 1;
-  const name = String(entry.name || "").toLowerCase();
-  const title = String(entry.title || "").toLowerCase();
-  const author = String(entry.author || "").toLowerCase();
-  const categories = entry.categories || [];
-  const commands = entry.commands || [];
-  const titleTokens = searchTokens(entry.title);
-  const nameTokens = searchTokens(entry.name);
-  const authorTokens = searchTokens(author);
-  const categoryTokens = searchTokens(categories.join(" "));
-  const commandTokens = searchTokens(
-    commands.map((command) => `${command.name} ${command.title}`).join(" ")
-  );
-  const descriptionTokens = searchTokens(entry.description);
-  let score = 0;
-  if (name === q || title === q) score += 1e4;
-  if (name.startsWith(q) || title.startsWith(q)) score += 9e3;
-  score += tokenScore(nameTokens, q, 8200, 7200);
-  score += tokenScore(titleTokens, q, 8e3, 7e3);
-  score += tokenScore(categoryTokens, q, 3e3, 2200);
-  score += tokenScore(authorTokens, q, 2200, 1600);
-  score += tokenScore(commandTokens, q, 1800, 1200);
-  score += tokenScore(descriptionTokens, q, 900, 550);
-  if (q.length >= 4) {
-    if (name.includes(q) || title.includes(q)) score += 1400;
-    if (entry.description.toLowerCase().includes(q)) score += 350;
-  }
-  if (score > 0 && entry.installCount && entry.installCount > 0) {
-    score += Math.min(500, Math.log10(entry.installCount) * 80);
-  }
-  return score;
-}
-async function searchExtensionCatalog(query) {
-  const q = String(query || "").trim().toLowerCase();
-  const catalog = await getCatalog(false);
-  return catalog.map((entry) => {
-    return { entry, score: scoreCatalogEntrySearch(entry, q) };
-  }).filter(({ score }) => score > 0).sort((a, b) => {
-    return b.score - a.score || (b.entry.installCount ?? 0) - (a.entry.installCount ?? 0) || a.entry.title.localeCompare(b.entry.title);
-  }).slice(0, 200).map(({ entry }) => ({
-    id: normalizeRaymesExtensionId(entry.name),
-    name: entry.title || extensionNameFromSlug(entry.name),
-    description: entry.description || "",
-    author: entry.author || entry.contributors?.[0] || "Raycast Community",
-    version: "latest",
-    repository: `https://github.com/raycast/extensions/tree/main/extensions/${entry.name}`,
-    downloadCount: entry.installCount,
-    icon: entry.icon,
-    iconUrl: entry.iconUrl,
-    authorIconUrl: githubAvatarUrlForHandle(entry.author || entry.contributors?.[0]),
-    screenshotUrls: entry.screenshotUrls,
-    categories: entry.categories,
-    commands: entry.commands,
-    owner: entry.author || void 0
-  }));
-}
-async function installRegistryExtension(extensionIdOrSlug) {
-  const slug = slugFromRaymesExtensionId(extensionIdOrSlug);
-  if (!slug) throw new Error("A valid extension id is required");
-  extensionRegistryEvents.emit("progress", { id: normalizeRaymesExtensionId(slug), progress: 5 });
-  const ok = await installExtension(slug);
-  extensionRegistryEvents.emit("progress", { id: normalizeRaymesExtensionId(slug), progress: ok ? 100 : 0 });
-  if (!ok) throw new Error(`Failed to install extension: ${slug}`);
-  const installed = listInstalledRegistryExtensions().find((entry) => entry.slug === slug);
-  if (!installed) throw new Error(`Extension installed but could not be loaded: ${slug}`);
-  return installed;
-}
-function uninstallRegistryExtension(extensionIdOrSlug) {
-  const slug = slugFromRaymesExtensionId(extensionIdOrSlug);
-  if (!slug) return false;
-  let removed = false;
-  for (const candidate of [
-    getInstalledPath(slug),
-    getLegacyInstalledPath(slug),
-    getLegacyRegistryInstalledPath(slug)
-  ]) {
-    if (fs2.existsSync(candidate)) {
-      fs2.rmSync(candidate, { recursive: true, force: true });
-      removed = true;
-    }
-  }
-  return removed || true;
-}
-function listInstalledExtensionSlugsFromDisk() {
-  return getInstalledExtensionNames();
-}
-function getExtensionPreferences(extensionId, commandName2) {
-  const slug = slugFromRaymesExtensionId(extensionId);
-  const pkg = readInstalledPackage(slug);
-  const values = {};
-  const applyDefaults = (preferences) => {
-    for (const pref of preferences || []) {
-      if (!pref?.name) continue;
-      const resolvedDefault = resolvePlatformDefault(pref.default);
-      if (resolvedDefault !== void 0) {
-        values[pref.name] = resolvedDefault;
-      } else if (pref.type === "checkbox") {
-        values[pref.name] = false;
-      } else if (pref.type === "dropdown") {
-        values[pref.name] = pref.data?.[0]?.value ?? "";
-      } else if (pref.type === "appPicker") {
-        values[pref.name] = resolveAppPickerDefault(pref);
-      } else {
-        values[pref.name] = "";
-      }
-    }
-  };
-  applyDefaults(Array.isArray(pkg.preferences) ? pkg.preferences : []);
-  const command = Array.isArray(pkg.commands) ? pkg.commands.find((cmd) => cmd?.name === commandName2) : null;
-  applyDefaults(Array.isArray(command?.preferences) ? command.preferences : []);
-  const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
-  const preferencesPath = path5.join(extensionPath, "preferences.json");
-  if (fs2.existsSync(preferencesPath)) {
-    try {
-      const saved = JSON.parse(fs2.readFileSync(preferencesPath, "utf-8"));
-      if (saved && typeof saved === "object") {
-        Object.assign(values, saved);
-        if (commandName2 && saved.commands?.[commandName2]) {
-          Object.assign(values, saved.commands[commandName2]);
-        }
-      }
-    } catch {
-    }
-  }
-  return values;
-}
-function getExtensionPreferenceSetup(extensionId, commandName2) {
-  const slug = slugFromRaymesExtensionId(extensionId);
-  const pkg = readInstalledPackage(slug);
-  const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
-  const command = Array.isArray(pkg.commands) ? pkg.commands.find((cmd) => cmd?.name === commandName2) : null;
-  const extensionPreferences = Array.isArray(pkg.preferences) ? pkg.preferences.map((preference) => ({ ...preference })) : [];
-  const commandPreferences = Array.isArray(command?.preferences) ? command.preferences.map((preference) => ({
-    ...preference,
-    commandName: commandName2,
-    commandTitle: String(command?.title || commandName2)
-  })) : [];
-  const preferences = [...extensionPreferences, ...commandPreferences];
-  const preferencesPath = path5.join(extensionPath, "preferences.json");
-  return {
-    extensionId: normalizeRaymesExtensionId(slug),
-    commandName: commandName2,
-    title: String(pkg.title || extensionNameFromSlug(slug)),
-    iconPath: resolveInstalledIconPath(extensionPath, pkg.icon || "icon.png") || void 0,
-    preferences,
-    values: getExtensionPreferences(extensionId, commandName2),
-    hasSavedPreferences: fs2.existsSync(preferencesPath)
-  };
-}
-function shouldShowExtensionPreferenceSetup(extensionId, commandName2) {
-  const setup = getExtensionPreferenceSetup(extensionId, commandName2);
-  if (setup.preferences.length === 0) return false;
-  const needsRequiredValue = setup.preferences.some((pref) => {
-    if (!pref?.required || !pref?.name) return false;
-    const value = setup.values[pref.name];
-    return value === void 0 || value === null || String(value).trim() === "";
-  });
-  if (needsRequiredValue) return true;
-  const needsCredentialValue = setup.preferences.some((pref) => {
-    if (pref?.type !== "password" || !pref?.name) return false;
-    const value = setup.values[pref.name];
-    return value === void 0 || value === null || String(value).trim() === "";
-  });
-  if (needsCredentialValue) return true;
-  if (!setup.hasSavedPreferences && setup.preferences.some((pref) => pref?.required)) {
-    return true;
-  }
-  return !setup.hasSavedPreferences && extensionId === "raycast.google-translate";
-}
-function saveExtensionPreferences(extensionId, values, commandName2) {
-  const slug = slugFromRaymesExtensionId(extensionId);
-  const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
-  fs2.mkdirSync(extensionPath, { recursive: true });
-  const preferencesPath = path5.join(extensionPath, "preferences.json");
-  let existing = {};
-  if (fs2.existsSync(preferencesPath)) {
-    try {
-      const parsed = JSON.parse(fs2.readFileSync(preferencesPath, "utf-8"));
-      if (parsed && typeof parsed === "object") existing = parsed;
-    } catch {
-    }
-  }
-  if (commandName2) {
-    existing.commands = existing.commands && typeof existing.commands === "object" ? existing.commands : {};
-    existing.commands[commandName2] = {
-      ...existing.commands[commandName2] || {},
-      ...values
-    };
-  } else {
-    existing = {
-      ...existing,
-      ...values
-    };
-  }
-  fs2.writeFileSync(preferencesPath, JSON.stringify(existing, null, 2));
-  return getExtensionPreferences(extensionId, commandName2);
-}
-var import_child_process2, import_events2, fs2, path5, zlib, extensionRegistryEvents, GITHUB_RAW, GITHUB_API, GITHUB_TREE_API, RAYMES_EXTENSIONS_GIT, REPO_TREE_TTL_MS, repoTreeCache, CATALOG_VERSION, CATALOG_TTL, catalogCache, _machineId;
-var init_extension_registry = __esm({
-  "src/main/extension-registry.ts"() {
-    "use strict";
-    init_desktop_runtime();
-    import_child_process2 = require("child_process");
-    import_events2 = require("events");
-    fs2 = __toESM(require("fs"));
-    path5 = __toESM(require("path"));
-    zlib = __toESM(require("zlib"));
-    init_extension_platform();
-    init_extension_builder();
-    init_extension_api();
-    init_bun_manager();
-    extensionRegistryEvents = new import_events2.EventEmitter();
-    GITHUB_RAW = "https://raw.githubusercontent.com/raycast/extensions/main";
-    GITHUB_API = "https://api.github.com/repos/raycast/extensions/contents";
-    GITHUB_TREE_API = "https://api.github.com/repos/raycast/extensions/git/trees/main?recursive=1";
-    RAYMES_EXTENSIONS_GIT = "https://github.com/almatkai/raymes-extensions.git";
-    REPO_TREE_TTL_MS = 10 * 60 * 1e3;
-    repoTreeCache = null;
-    CATALOG_VERSION = 6;
-    CATALOG_TTL = 24 * 60 * 60 * 1e3;
-    catalogCache = null;
-    _machineId = null;
-  }
-});
-
-// src/main/extension-builder.ts
-var extension_builder_exports = {};
-__export(extension_builder_exports, {
-  buildAllCommands: () => buildAllCommands,
-  buildSingleCommand: () => buildSingleCommand,
-  discoverInstalledExtensionCommands: () => discoverInstalledExtensionCommands,
-  getExtensionBundle: () => getExtensionBundle,
-  getInstalledExtensionsSettingsSchema: () => getInstalledExtensionsSettingsSchema
-});
-function requireEsbuild() {
-  configurePackagedEsbuildBinary();
-  return require("esbuild");
-}
-function legacyCheerioInteropPlugin() {
-  return {
-    name: "legacy-cheerio-default-interop",
-    setup(build) {
-      build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, (args) => {
-        const source = fs3.readFileSync(args.path, "utf8");
-        if (!/import\s+[A-Za-z_$][\w$]*\s+from\s+['"]cheerio['"]/.test(source)) return null;
-        const extension = path6.extname(args.path).toLowerCase();
-        const loader = extension.endsWith("x") ? extension.slice(1) : extension.slice(1) || "js";
-        return {
-          contents: source.replace(
-            /import\s+([A-Za-z_$][\w$]*)\s+from\s+(['"])cheerio\2/g,
-            "import * as $1 from $2cheerio$2"
-          ),
-          loader
-        };
-      });
-    }
-  };
-}
-function getManagedExtensionsDir() {
-  const dir = path6.join(app.getPath("userData"), "extensions");
-  if (!fs3.existsSync(dir)) {
-    fs3.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-function getBuildDir(extPath) {
-  const dir = path6.join(extPath, ".sc-build");
-  if (!fs3.existsSync(dir)) {
-    fs3.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-function expandHome(inputPath) {
-  const raw = String(inputPath || "").trim();
-  if (!raw) return "";
-  if (raw.startsWith("~/")) return path6.join(os.homedir(), raw.slice(2));
-  return raw;
-}
-function normalizeFsPath(inputPath) {
-  return path6.resolve(expandHome(inputPath));
-}
-function normalizeExtensionName(name) {
-  const raw = String(name || "").trim();
-  if (!raw) return "";
-  return raw.replace(/^@/, "").replace(/^raycast\./, "").replace(/[\\/]/g, "-");
-}
-function getConfiguredExtensionRoots() {
-  const settingsPaths = [];
-  const envPaths = String(process.env.SUPERCMD_EXTENSION_PATHS || "").split(path6.delimiter).map((value) => value.trim()).filter(Boolean);
-  const unique = /* @__PURE__ */ new Set();
-  for (const root of [
-    getManagedExtensionsDir(),
-    path6.join(getManagedExtensionsDir(), "packages"),
-    path6.join(app.getPath("userData"), "extension-registry", "packages"),
-    ...settingsPaths,
-    ...envPaths
-  ]) {
-    const normalized = normalizeFsPath(root);
-    if (!normalized) continue;
-    unique.add(normalized);
-  }
-  return [...unique];
-}
-function collectInstalledExtensions() {
-  const results = [];
-  const seen = /* @__PURE__ */ new Set();
-  const addIfValid = (extPath, sourceRoot, fallbackName) => {
-    const pkgPath = path6.join(extPath, "package.json");
-    if (!fs3.existsSync(pkgPath)) return;
-    try {
-      if (!fs3.statSync(extPath).isDirectory()) return;
-    } catch {
-      return;
-    }
-    const extName = normalizeExtensionName(fallbackName);
-    if (!extName) return;
-    const dedupeKey = extName.toLowerCase();
-    if (seen.has(dedupeKey)) return;
-    seen.add(dedupeKey);
-    results.push({ extName, extPath, sourceRoot });
-  };
-  for (const sourceRoot of getConfiguredExtensionRoots()) {
-    if (!fs3.existsSync(sourceRoot)) continue;
-    const sourceRootPkg = path6.join(sourceRoot, "package.json");
-    if (fs3.existsSync(sourceRootPkg)) {
-      addIfValid(sourceRoot, sourceRoot, path6.basename(sourceRoot));
-      continue;
-    }
-    let entries = [];
-    try {
-      entries = fs3.readdirSync(sourceRoot);
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      addIfValid(path6.join(sourceRoot, entry), sourceRoot, entry);
-    }
-  }
-  return results;
-}
-function resolveInstalledExtensionPath(extName) {
-  const normalized = normalizeExtensionName(extName);
-  if (!normalized) return null;
-  const match = collectInstalledExtensions().find((entry) => entry.extName === normalized);
-  return match?.extPath || null;
-}
-function getExtensionIconDataUrl(extPath, iconFile) {
-  const candidates = [
-    path6.join(extPath, "assets", iconFile),
-    path6.join(extPath, iconFile)
-  ];
-  for (const p of candidates) {
-    if (!fs3.existsSync(p)) continue;
-    try {
-      const ext = path6.extname(p).toLowerCase();
-      const data = fs3.readFileSync(p);
-      if (data.length < 50) continue;
-      const mime = ext === ".svg" ? "image/svg+xml" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
-      return `data:${mime};base64,${data.toString("base64")}`;
-    } catch {
-    }
-  }
-  return void 0;
-}
-function resolvePlatformDefault2(value) {
-  const platformKey = process.platform === "win32" ? "Windows" : "macOS";
-  if (value && typeof value === "object" && !Array.isArray(value) && (Object.prototype.hasOwnProperty.call(value, "macOS") || Object.prototype.hasOwnProperty.call(value, "Windows"))) {
-    if (Object.prototype.hasOwnProperty.call(value, platformKey)) {
-      return value[platformKey];
-    }
-    return value.macOS ?? value.Windows;
-  }
-  return value;
-}
-function normalizePreferenceSchema(pref, scope) {
-  if (!pref || typeof pref !== "object" || !pref.name) return null;
-  return {
-    scope,
-    name: String(pref.name),
-    title: pref.title,
-    label: pref.label,
-    description: pref.description,
-    placeholder: pref.placeholder,
-    required: Boolean(pref.required),
-    type: pref.type,
-    default: resolvePlatformDefault2(pref.default),
-    data: Array.isArray(pref.data) ? pref.data : void 0
-  };
-}
-function discoverInstalledExtensionCommands() {
-  const results = [];
-  for (const source of collectInstalledExtensions()) {
-    const extPath = source.extPath;
-    const pkgPath = path6.join(extPath, "package.json");
-    const extName = source.extName;
-    try {
-      const pkg = JSON.parse(fs3.readFileSync(pkgPath, "utf-8"));
-      if (!isManifestPlatformCompatible(pkg)) continue;
-      const iconDataUrl = getExtensionIconDataUrl(
-        extPath,
-        pkg.icon || "icon.png"
-      );
-      const ownerRaw = pkg.owner || pkg.author || "";
-      const owner = (typeof ownerRaw === "object" ? ownerRaw?.name || "" : String(ownerRaw || "")).trim();
-      for (const cmd of pkg.commands || []) {
-        if (!cmd.name) continue;
-        if (!isCommandPlatformCompatible(cmd)) continue;
-        results.push({
-          id: `ext-${extName}-${cmd.name}`,
-          title: cmd.title || cmd.name,
-          extensionTitle: pkg.title || extName,
-          extName,
-          cmdName: cmd.name,
-          owner: owner || void 0,
-          description: cmd.description || "",
-          mode: cmd.mode || "view",
-          interval: typeof cmd.interval === "string" ? cmd.interval : void 0,
-          disabledByDefault: Boolean(cmd.disabledByDefault),
-          commandArgumentDefinitions: Array.isArray(cmd.arguments) ? cmd.arguments.filter((arg) => arg && arg.name).map((arg) => ({
-            name: String(arg.name),
-            required: Boolean(arg.required),
-            type: arg.type,
-            placeholder: arg.placeholder,
-            title: arg.title,
-            data: Array.isArray(arg.data) ? arg.data : void 0
-          })) : [],
-          keywords: [
-            extName,
-            pkg.title || "",
-            cmd.name,
-            cmd.title || "",
-            cmd.description || ""
-          ].filter(Boolean).map((s) => s.toLowerCase()),
-          iconDataUrl
-        });
-      }
-    } catch {
-    }
-  }
-  return results;
-}
-function getInstalledExtensionsSettingsSchema() {
-  const results = [];
-  for (const source of collectInstalledExtensions()) {
-    const extPath = source.extPath;
-    const pkgPath = path6.join(extPath, "package.json");
-    const extName = source.extName;
-    try {
-      const pkg = JSON.parse(fs3.readFileSync(pkgPath, "utf-8"));
-      if (!isManifestPlatformCompatible(pkg)) continue;
-      const iconDataUrl = getExtensionIconDataUrl(extPath, pkg.icon || "icon.png");
-      const ownerRaw = pkg.owner || pkg.author || "";
-      const owner = typeof ownerRaw === "object" ? ownerRaw.name || "" : String(ownerRaw || "");
-      const extensionPreferences = Array.isArray(pkg.preferences) ? pkg.preferences.map((pref) => normalizePreferenceSchema(pref, "extension")).filter(Boolean) : [];
-      const commands = Array.isArray(pkg.commands) ? pkg.commands.filter((cmd) => cmd && cmd.name && isCommandPlatformCompatible(cmd)).map((cmd) => ({
-        name: cmd.name,
-        title: cmd.title || cmd.name,
-        description: cmd.description || "",
-        mode: cmd.mode || "view",
-        interval: typeof cmd.interval === "string" ? cmd.interval : void 0,
-        disabledByDefault: Boolean(cmd.disabledByDefault),
-        preferences: Array.isArray(cmd.preferences) ? cmd.preferences.map((pref) => normalizePreferenceSchema(pref, "command")).filter(Boolean) : []
-      })) : [];
-      results.push({
-        extName,
-        title: pkg.title || extName,
-        description: pkg.description || "",
-        owner,
-        iconDataUrl,
-        preferences: extensionPreferences,
-        commands
-      });
-    } catch {
-    }
-  }
-  return results.sort((a, b) => a.title.localeCompare(b.title));
-}
-function getInstallableRuntimeDeps(pkg) {
-  const deps = {
-    ...pkg?.dependencies || {},
-    ...pkg?.optionalDependencies || {}
-  };
-  return Object.entries(deps).filter(([name]) => typeof name === "string" && !name.startsWith("@raycast/")).map(([name, version]) => `${name}@${String(version || "").trim()}`).filter((value) => {
-    const atIndex = value.lastIndexOf("@");
-    return atIndex > 0 && atIndex < value.length - 1;
-  });
-}
-function extensionRequiresNodeModules(pkg) {
-  return getInstallableRuntimeDeps(pkg).length > 0;
-}
-function parseJsonc(source) {
-  let out = "";
-  let i = 0;
-  const n = source.length;
-  while (i < n) {
-    const ch = source[i];
-    if (ch === '"') {
-      out += ch;
-      i++;
-      while (i < n) {
-        const c = source[i];
-        out += c;
-        i++;
-        if (c === "\\" && i < n) {
-          out += source[i];
-          i++;
-          continue;
-        }
-        if (c === '"') break;
-      }
-      continue;
-    }
-    if (ch === "/" && source[i + 1] === "/") {
-      i += 2;
-      while (i < n && source[i] !== "\n") i++;
-      continue;
-    }
-    if (ch === "/" && source[i + 1] === "*") {
-      i += 2;
-      while (i < n && !(source[i] === "*" && source[i + 1] === "/")) i++;
-      i += 2;
-      continue;
-    }
-    out += ch;
-    i++;
-  }
-  out = out.replace(/,(\s*[}\]])/g, "$1");
-  return JSON.parse(out);
-}
-function getExtensionCompilerOptions(extPath) {
-  const tsconfigPath = path6.join(extPath, "tsconfig.json");
-  if (!fs3.existsSync(tsconfigPath)) return {};
-  try {
-    const parsed = parseJsonc(fs3.readFileSync(tsconfigPath, "utf-8"));
-    const compilerOptions = parsed && typeof parsed === "object" && parsed.compilerOptions && typeof parsed.compilerOptions === "object" ? parsed.compilerOptions : {};
-    const options = {};
-    if (typeof compilerOptions.baseUrl === "string" && compilerOptions.baseUrl.trim()) {
-      options.baseUrl = compilerOptions.baseUrl;
-    }
-    if (compilerOptions.paths && typeof compilerOptions.paths === "object" && !Array.isArray(compilerOptions.paths)) {
-      options.paths = compilerOptions.paths;
-      if (!options.baseUrl) options.baseUrl = ".";
-    }
-    if (typeof compilerOptions.jsx === "string" && compilerOptions.jsx.trim()) {
-      options.jsx = compilerOptions.jsx;
-    }
-    if (typeof compilerOptions.jsxImportSource === "string" && compilerOptions.jsxImportSource.trim()) {
-      options.jsxImportSource = compilerOptions.jsxImportSource;
-    }
-    return options;
-  } catch (error) {
-    console.warn(`Failed to parse tsconfig for ${path6.basename(extPath)}:`, error?.message || error);
-    return {};
-  }
-}
-function getEsbuildTsconfigRaw(extPath) {
-  const extensionCompilerOptions = getExtensionCompilerOptions(extPath);
-  return JSON.stringify({
-    compilerOptions: {
-      target: "ES2020",
-      jsx: "react-jsx",
-      jsxImportSource: "react",
-      strict: false,
-      esModuleInterop: true,
-      moduleResolution: "node",
-      ...extensionCompilerOptions
-    }
-  });
-}
-function resolveEntryFile(extPath, cmd) {
-  const cmdName = String(cmd?.name || "").trim();
-  if (!cmdName) return null;
-  const srcDir = path6.join(extPath, "src");
-  const validExt = /\.(tsx?|jsx?)$/i;
-  const explicitEntry = typeof cmd?.path === "string" ? cmd.path : typeof cmd?.entrypoint === "string" ? cmd.entrypoint : typeof cmd?.entry === "string" ? cmd.entry : typeof cmd?.file === "string" ? cmd.file : typeof cmd?.source === "string" ? cmd.source : "";
-  const candidates = [
-    explicitEntry ? path6.join(extPath, explicitEntry) : "",
-    path6.join(srcDir, `${cmdName}.tsx`),
-    path6.join(srcDir, `${cmdName}.ts`),
-    path6.join(srcDir, `${cmdName}.jsx`),
-    path6.join(srcDir, `${cmdName}.js`),
-    path6.join(srcDir, cmdName, "index.tsx"),
-    path6.join(srcDir, cmdName, "index.ts"),
-    path6.join(srcDir, cmdName, "index.jsx"),
-    path6.join(srcDir, cmdName, "index.js"),
-    path6.join(srcDir, "commands", `${cmdName}.tsx`),
-    path6.join(srcDir, "commands", `${cmdName}.ts`),
-    path6.join(srcDir, "commands", `${cmdName}.jsx`),
-    path6.join(srcDir, "commands", `${cmdName}.js`)
-  ].filter(Boolean);
-  const found = candidates.find((p) => fs3.existsSync(p));
-  if (found) return found;
-  if (!fs3.existsSync(srcDir)) return null;
-  const stack = [srcDir];
-  const normalized = cmdName.toLowerCase();
-  while (stack.length > 0) {
-    const dir = stack.pop();
-    let entries = [];
-    try {
-      entries = fs3.readdirSync(dir);
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const full = path6.join(dir, entry);
-      let stat2;
-      try {
-        stat2 = fs3.statSync(full);
-      } catch {
-        continue;
-      }
-      if (stat2.isDirectory()) {
-        stack.push(full);
-        continue;
-      }
-      if (!validExt.test(entry)) continue;
-      const base = path6.basename(entry, path6.extname(entry)).toLowerCase();
-      if (base === normalized) return full;
-    }
-  }
-  return null;
-}
-async function buildAllCommands(extName, extPathOverride) {
-  const extPath = extPathOverride ? normalizeFsPath(extPathOverride) : resolveInstalledExtensionPath(extName);
-  if (!extPath) {
-    console.error(`Extension path not found for ${extName}`);
-    return 0;
-  }
-  const pkgPath = path6.join(extPath, "package.json");
-  if (!fs3.existsSync(pkgPath)) {
-    console.error(`No package.json found for extension ${extName}`);
-    return 0;
-  }
-  let commands;
-  let requiresNodeModules = false;
-  let manifestExternal = [];
-  try {
-    const pkg = JSON.parse(fs3.readFileSync(pkgPath, "utf-8"));
-    if (!isManifestPlatformCompatible(pkg)) {
-      console.warn(`Skipping build for incompatible extension ${extName}`);
-      return 0;
-    }
-    commands = pkg.commands || [];
-    requiresNodeModules = extensionRequiresNodeModules(pkg);
-    manifestExternal = Array.isArray(pkg.external) ? pkg.external.filter((v) => typeof v === "string" && v.trim().length > 0) : [];
-  } catch {
-    return 0;
-  }
-  if (commands.length === 0) return 0;
-  const esbuild = requireEsbuild();
-  const extNodeModules = path6.join(extPath, "node_modules");
-  if (requiresNodeModules && !fs3.existsSync(extNodeModules)) {
-    try {
-      const { installExtensionDeps: installExtensionDeps2 } = (init_extension_registry(), __toCommonJS(extension_registry_exports));
-      await installExtensionDeps2(extPath);
-    } catch (e) {
-      console.error(`Failed to install dependencies for ${extName}:`, e?.message || e);
-      return 0;
-    }
-    if (!fs3.existsSync(extNodeModules)) {
-      console.error(`Dependencies missing for ${extName}: ${extNodeModules} not found`);
-      return 0;
-    }
-  }
-  const buildDir = getBuildDir(extPath);
-  try {
-    fs3.rmSync(buildDir, { recursive: true, force: true });
-  } catch {
-  }
-  fs3.mkdirSync(buildDir, { recursive: true });
-  let built = 0;
-  for (const cmd of commands) {
-    if (!cmd.name) continue;
-    if (!isCommandPlatformCompatible(cmd)) continue;
-    const entryFile = resolveEntryFile(extPath, cmd);
-    if (!entryFile) {
-      console.warn(`No entry file for ${extName}/${cmd.name}, skipping`);
-      continue;
-    }
-    const outFile = path6.join(buildDir, `${cmd.name}.js`);
-    fs3.mkdirSync(path6.dirname(outFile), { recursive: true });
-    try {
-      console.log(`  Building ${extName}/${cmd.name}\u2026`);
-      await runEsbuildBuild(
-        esbuild,
-        {
-          entryPoints: [entryFile],
-          absWorkingDir: extPath,
-          bundle: true,
-          format: "cjs",
-          platform: "node",
-          conditions: ["require", "node"],
-          outfile: outFile,
-          plugins: [
-            legacyCheerioInteropPlugin(),
-            // Mark swift: imports as external so fakeRequire can handle them at runtime
-            {
-              name: "swift-external",
-              setup(build) {
-                build.onResolve({ filter: /^swift:/ }, (args) => ({
-                  path: args.path,
-                  external: true
-                }));
-              }
-            }
-          ],
-          external: [
-            // React — provided by the renderer at runtime
-            "react",
-            "react-dom",
-            "react-dom/*",
-            "react/jsx-runtime",
-            "react/jsx-dev-runtime",
-            // Raycast — provided by our shim
-            "@raycast/api",
-            "@raycast/utils",
-            // Native C++ addons — cannot be bundled, we stub them at runtime
-            "re2",
-            "better-sqlite3",
-            "fsevents",
-            // Cross-extension calls — not supported, stubbed
-            "raycast-cross-extension",
-            // Fetch libs — use runtime shims in renderer instead of bundling Node internals
-            "node-fetch",
-            "undici",
-            "undici/*",
-            // HTTP / file-download / archive packages — must be kept external so our renderer
-            // shim can intercept them and route file I/O through the main process (which has
-            // real filesystem access). Bundling them inline breaks binary downloads because the
-            // browser renderer cannot do streaming file writes or archive extraction natively.
-            "axios",
-            "tar",
-            "extract-zip",
-            "sha256-file",
-            // Respect extension-defined externals from manifest
-            ...manifestExternal,
-            // Node.js built-ins — stubbed at runtime in the renderer
-            ...nodeBuiltins
-          ],
-          nodePaths: fs3.existsSync(extNodeModules) ? [extNodeModules] : [],
-          target: "es2020",
-          jsx: "automatic",
-          jsxImportSource: "react",
-          tsconfigRaw: getEsbuildTsconfigRaw(extPath),
-          define: {
-            "process.env.NODE_ENV": '"production"',
-            "global": "globalThis"
-          },
-          logLevel: "warning"
-        },
-        extPath,
-        `${extName}/${cmd.name}`
-      );
-      if (fs3.existsSync(outFile)) {
-        built++;
-      }
-    } catch (e) {
-      console.error(`  esbuild failed for ${extName}/${cmd.name}:`, e);
-    }
-  }
-  console.log(`Built ${built}/${commands.length} commands for ${extName}`);
-  return built;
-}
-function parsePreferences(pkg, cmdName) {
-  const extensionPrefs = {};
-  const commandPrefs = {};
-  const definitions = [];
-  for (const pref of pkg.preferences || []) {
-    if (!pref.name) continue;
-    const resolvedDefault = resolvePlatformDefault2(pref.default);
-    definitions.push({
-      scope: "extension",
-      name: pref.name,
-      title: pref.title,
-      description: pref.description,
-      placeholder: pref.placeholder,
-      required: Boolean(pref.required),
-      type: pref.type,
-      default: resolvedDefault,
-      data: Array.isArray(pref.data) ? pref.data : void 0
-    });
-    if (resolvedDefault !== void 0) {
-      extensionPrefs[pref.name] = resolvedDefault;
-    } else if (pref.type === "checkbox") {
-      extensionPrefs[pref.name] = false;
-    } else if (pref.type === "textfield" || pref.type === "password") {
-      extensionPrefs[pref.name] = "";
-    } else if (pref.type === "dropdown") {
-      extensionPrefs[pref.name] = pref.data?.[0]?.value ?? "";
-    }
-  }
-  const cmd = (pkg.commands || []).find((c) => c.name === cmdName);
-  if (cmd?.preferences) {
-    for (const pref of cmd.preferences) {
-      if (!pref.name) continue;
-      const resolvedDefault = resolvePlatformDefault2(pref.default);
-      definitions.push({
-        scope: "command",
-        name: pref.name,
-        title: pref.title,
-        description: pref.description,
-        placeholder: pref.placeholder,
-        required: Boolean(pref.required),
-        type: pref.type,
-        default: resolvedDefault,
-        data: Array.isArray(pref.data) ? pref.data : void 0
-      });
-      if (resolvedDefault !== void 0) {
-        commandPrefs[pref.name] = resolvedDefault;
-      } else if (pref.type === "checkbox") {
-        commandPrefs[pref.name] = false;
-      } else if (pref.type === "textfield" || pref.type === "password") {
-        commandPrefs[pref.name] = "";
-      } else if (pref.type === "dropdown") {
-        commandPrefs[pref.name] = pref.data?.[0]?.value ?? "";
-      }
-    }
-  }
-  return { extensionPrefs, commandPrefs, definitions };
-}
-async function buildSingleCommand(extName, cmdName) {
-  const extPath = resolveInstalledExtensionPath(extName);
-  if (!extPath) {
-    console.error(`buildSingleCommand: extension path not found for ${extName}`);
-    return false;
-  }
-  const pkgPath = path6.join(extPath, "package.json");
-  if (!fs3.existsSync(pkgPath)) {
-    console.error(`buildSingleCommand: package.json not found at ${pkgPath}`);
-    return false;
-  }
-  let cmd;
-  let requiresNodeModules = false;
-  let manifestExternal = [];
-  try {
-    const pkg = JSON.parse(fs3.readFileSync(pkgPath, "utf-8"));
-    if (!isManifestPlatformCompatible(pkg)) {
-      console.error(`buildSingleCommand: platform not compatible for ${extName}`);
-      return false;
-    }
-    const commands = pkg.commands || [];
-    cmd = commands.find((c) => c.name === cmdName);
-    requiresNodeModules = extensionRequiresNodeModules(pkg);
-    manifestExternal = Array.isArray(pkg.external) ? pkg.external.filter((v) => typeof v === "string" && v.trim().length > 0) : [];
-  } catch (e) {
-    console.error(`buildSingleCommand: failed to parse package.json for ${extName}:`, e?.message);
-    return false;
-  }
-  if (!cmd) {
-    console.error(`buildSingleCommand: command "${cmdName}" not found in ${extName} package.json`);
-    return false;
-  }
-  if (!isCommandPlatformCompatible(cmd)) {
-    console.error(`buildSingleCommand: command "${cmdName}" not compatible with current platform`);
-    return false;
-  }
-  const entryFile = resolveEntryFile(extPath, cmd);
-  if (!entryFile) {
-    console.error(`buildSingleCommand: entry file not found for ${extName}/${cmdName}`);
-    return false;
-  }
-  const buildDir = getBuildDir(extPath);
-  fs3.mkdirSync(buildDir, { recursive: true });
-  const outFile = path6.join(buildDir, `${cmdName}.js`);
-  fs3.mkdirSync(path6.dirname(outFile), { recursive: true });
-  const extNodeModules = path6.join(extPath, "node_modules");
-  if (requiresNodeModules && !fs3.existsSync(extNodeModules)) {
-    console.log(`  node_modules missing for ${extName}, installing dependencies\u2026`);
-    try {
-      const { installExtensionDeps: installExtensionDeps2 } = (init_extension_registry(), __toCommonJS(extension_registry_exports));
-      await installExtensionDeps2(extPath);
-    } catch (e) {
-      console.error(`  Failed to install dependencies for ${extName}:`, e?.message);
-      return false;
-    }
-    if (!fs3.existsSync(extNodeModules)) return false;
-  }
-  try {
-    const esbuild = requireEsbuild();
-    console.log(`  On-demand building ${extName}/${cmdName}\u2026`);
-    await runEsbuildBuild(
-      esbuild,
-      {
-        entryPoints: [entryFile],
-        absWorkingDir: extPath,
-        bundle: true,
-        format: "cjs",
-        platform: "node",
-        conditions: ["require", "node"],
-        outfile: outFile,
-        plugins: [
-          legacyCheerioInteropPlugin(),
-          {
-            name: "swift-external",
-            setup(build) {
-              build.onResolve({ filter: /^swift:/ }, (args) => ({
-                path: args.path,
-                external: true
-              }));
-            }
-          }
-        ],
-        external: [
-          "react",
-          "react-dom",
-          "react-dom/*",
-          "react/jsx-runtime",
-          "react/jsx-dev-runtime",
-          "@raycast/api",
-          "@raycast/utils",
-          "re2",
-          "better-sqlite3",
-          "fsevents",
-          "raycast-cross-extension",
-          "node-fetch",
-          "undici",
-          "undici/*",
-          "axios",
-          "tar",
-          "extract-zip",
-          "sha256-file",
-          ...manifestExternal,
-          ...nodeBuiltins
-        ],
-        nodePaths: fs3.existsSync(extNodeModules) ? [extNodeModules] : [],
-        target: "es2020",
-        jsx: "automatic",
-        jsxImportSource: "react",
-        tsconfigRaw: getEsbuildTsconfigRaw(extPath),
-        define: {
-          "process.env.NODE_ENV": '"production"',
-          "global": "globalThis"
-        },
-        logLevel: "warning"
-      },
-      extPath,
-      `${extName}/${cmdName}`
-    );
-    return fs3.existsSync(outFile);
-  } catch (e) {
-    console.error(`  On-demand esbuild failed for ${extName}/${cmdName}:`, e);
-    lastBuildError.set(`${extName}/${cmdName}`, e?.message || String(e));
-    return false;
-  }
-}
-function extractMissingBareImports(error) {
-  const errors = Array.isArray(error?.errors) ? error.errors : [];
-  const found = /* @__PURE__ */ new Set();
-  for (const err of errors) {
-    const text = String(err?.text || "");
-    const match = text.match(/Could not resolve\s+"([^"]+)"/);
-    if (!match) continue;
-    const specifier = match[1];
-    if (!specifier || specifier.startsWith(".") || specifier.startsWith("/") || specifier.includes(":")) {
-      continue;
-    }
-    const parts = specifier.split("/");
-    const pkgName = specifier.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
-    if (!pkgName) continue;
-    if (nodeBuiltins.includes(pkgName)) continue;
-    if (pkgName.startsWith("@raycast/")) continue;
-    found.add(pkgName);
-  }
-  return [...found];
-}
-async function runEsbuildBuild(esbuild, options, extPath, label) {
-  try {
-    await esbuild.build(options);
-  } catch (error) {
-    const missing = extractMissingBareImports(error);
-    if (missing.length === 0) throw error;
-    console.log(
-      `  Missing packages for ${label} (${missing.join(", ")}); installing and retrying\u2026`
-    );
-    const { installSpecificPackages: installSpecificPackages2 } = (init_extension_registry(), __toCommonJS(extension_registry_exports));
-    try {
-      await installSpecificPackages2(extPath, missing);
-    } catch (installError) {
-      console.error(
-        `  Failed to install missing packages for ${label}: ${installError?.message || installError}`
-      );
-      throw error;
-    }
-    await esbuild.build(options);
-  }
-}
-async function getExtensionBundle(extName, cmdName) {
-  const normalizedExtName = normalizeExtensionName(extName);
-  const extPath = resolveInstalledExtensionPath(normalizedExtName);
-  if (!extPath) {
-    const searchRoots = getConfiguredExtensionRoots();
-    const msg = `Extension directory not found: ${normalizedExtName}. Searched roots: ${searchRoots.join(", ")}`;
-    console.error(msg);
-    throw new Error(msg);
-  }
-  let outFile = path6.join(extPath, ".sc-build", `${cmdName}.js`);
-  if (!fs3.existsSync(outFile)) {
-    console.log(`Pre-built bundle not found for ${normalizedExtName}/${cmdName}, building on-demand\u2026`);
-    const built = await buildSingleCommand(normalizedExtName, cmdName);
-    if (!built || !fs3.existsSync(outFile)) {
-      try {
-        console.log(`Single-command build failed for ${normalizedExtName}/${cmdName}; trying full extension rebuild\u2026`);
-        await buildAllCommands(normalizedExtName);
-      } catch (rebuildError) {
-        console.warn(`Full rebuild fallback failed for ${normalizedExtName}:`, rebuildError);
-      }
-    }
-    if (!fs3.existsSync(outFile)) {
-      let diagnostic = "";
-      try {
-        const pkgPath = path6.join(extPath, "package.json");
-        const pkg = JSON.parse(fs3.readFileSync(pkgPath, "utf-8"));
-        const commands = Array.isArray(pkg?.commands) ? pkg.commands : [];
-        const cmd = commands.find((c) => c?.name === cmdName);
-        const nodeModulesExists = fs3.existsSync(path6.join(extPath, "node_modules"));
-        const requiresNodeModules = extensionRequiresNodeModules(pkg);
-        if (!cmd) {
-          diagnostic = ` Command "${cmdName}" not found in package.json.`;
-        } else {
-          const entry = resolveEntryFile(extPath, cmd);
-          if (!entry) {
-            diagnostic = ` Entry file not found for "${cmdName}".`;
-          } else if (requiresNodeModules && !nodeModulesExists) {
-            diagnostic = " node_modules is missing (dependency installation likely failed).";
-          }
-        }
-      } catch {
-      }
-      const underlying = lastBuildError.get(`${normalizedExtName}/${cmdName}`);
-      const underlyingSuffix = underlying ? ` Underlying error: ${underlying}` : "";
-      const msg = `On-demand build failed for ${normalizedExtName}/${cmdName}. Extension path: ${extPath}. Expected output: ${outFile}.${diagnostic}${underlyingSuffix}`;
-      console.error(msg);
-      throw new Error(msg);
-    }
-  }
-  const code = fs3.readFileSync(outFile, "utf-8");
-  if (!code) {
-    const msg = `Pre-built bundle is empty: ${outFile}`;
-    console.error(msg);
-    throw new Error(msg);
-  }
-  let title = cmdName;
-  let mode = "view";
-  let owner = "";
-  let extensionDisplayName = extName;
-  let extensionIconDataUrl;
-  let preferences = {};
-  let commandPreferences = {};
-  let preferenceDefinitions = [];
-  let commandArgumentDefinitions = [];
-  try {
-    const pkgPath = path6.join(extPath, "package.json");
-    const pkg = JSON.parse(fs3.readFileSync(pkgPath, "utf-8"));
-    if (!isManifestPlatformCompatible(pkg)) {
-      return null;
-    }
-    const cmd = (pkg.commands || []).find((c) => c.name === cmdName);
-    if (cmd && !isCommandPlatformCompatible(cmd)) {
-      return null;
-    }
-    if (cmd?.title) title = cmd.title;
-    if (cmd?.mode) mode = cmd.mode;
-    if (pkg?.title) extensionDisplayName = pkg.title;
-    extensionIconDataUrl = getExtensionIconDataUrl(extPath, pkg.icon || "icon.png");
-    const rawOwner = pkg.owner || pkg.author || "";
-    owner = typeof rawOwner === "object" ? rawOwner.name || "" : rawOwner;
-    const { extensionPrefs, commandPrefs, definitions } = parsePreferences(pkg, cmdName);
-    preferences = extensionPrefs;
-    commandPreferences = commandPrefs;
-    preferenceDefinitions = definitions;
-    commandArgumentDefinitions = Array.isArray(cmd?.arguments) ? cmd.arguments.filter((arg) => arg && arg.name).map((arg) => ({
-      name: arg.name,
-      required: Boolean(arg.required),
-      type: arg.type,
-      placeholder: arg.placeholder,
-      title: arg.title,
-      data: Array.isArray(arg.data) ? arg.data : void 0
-    })) : [];
-  } catch {
-  }
-  const assetsPath = path6.join(extPath, "assets");
-  const supportPath = path6.join(app.getPath("userData"), "extension-support", normalizedExtName);
-  if (!fs3.existsSync(supportPath)) {
-    fs3.mkdirSync(supportPath, { recursive: true });
-  }
-  return {
-    code,
-    title,
-    mode,
-    extensionName: normalizedExtName,
-    extensionDisplayName,
-    extensionIconDataUrl,
-    commandName: cmdName,
-    assetsPath,
-    supportPath,
-    extensionPath: extPath,
-    owner,
-    preferences: { ...preferences, ...commandPreferences },
-    commandPreferences,
-    preferenceDefinitions,
-    commandArgumentDefinitions
-  };
-}
-var fs3, os, path6, nodeBuiltins, lastBuildError;
-var init_extension_builder = __esm({
-  "src/main/extension-builder.ts"() {
-    "use strict";
-    init_desktop_runtime();
-    fs3 = __toESM(require("fs"));
-    os = __toESM(require("os"));
-    path6 = __toESM(require("path"));
-    init_extension_platform();
-    init_esbuild_runtime();
-    nodeBuiltins = [
-      "assert",
-      "buffer",
-      "child_process",
-      "cluster",
-      "crypto",
-      "dgram",
-      "dns",
-      "events",
-      "fs",
-      "fs/promises",
-      "http",
-      "http2",
-      "https",
-      "module",
-      "net",
-      "os",
-      "path",
-      "perf_hooks",
-      "process",
-      "querystring",
-      "readline",
-      "stream",
-      "stream/promises",
-      "string_decoder",
-      "timers",
-      "timers/promises",
-      "tls",
-      "tty",
-      "url",
-      "util",
-      "v8",
-      "vm",
-      "worker_threads",
-      "zlib",
-      "async_hooks",
-      "node:assert",
-      "node:buffer",
-      "node:child_process",
-      "node:crypto",
-      "node:events",
-      "node:fs",
-      "node:fs/promises",
-      "node:http",
-      "node:https",
-      "node:module",
-      "node:net",
-      "node:os",
-      "node:path",
-      "node:process",
-      "node:querystring",
-      "node:stream",
-      "node:timers",
-      "node:timers/promises",
-      "node:url",
-      "node:util",
-      "node:vm",
-      "node:worker_threads",
-      "node:zlib",
-      "node:async_hooks"
-    ];
-    lastBuildError = /* @__PURE__ */ new Map();
-  }
-});
-
-// src/main/search/providers/appsProvider.ts
-function listApplications() {
-  if (process.platform === "win32") {
-    if (windowsApplicationCache && Date.now() - windowsApplicationCache.collectedAt < 3e4) {
-      return windowsApplicationCache.applications;
-    }
-    const roots2 = [
-      (0, import_node_path15.join)(
-        process.env.ProgramData ?? "C:\\ProgramData",
-        "Microsoft",
-        "Windows",
-        "Start Menu",
-        "Programs"
-      ),
-      (0, import_node_path15.join)(
-        process.env.APPDATA ?? (0, import_node_path15.join)((0, import_node_os6.homedir)(), "AppData", "Roaming"),
-        "Microsoft",
-        "Windows",
-        "Start Menu",
-        "Programs"
-      )
-    ];
-    const out2 = [];
-    const seen2 = /* @__PURE__ */ new Set();
-    for (const root of roots2) {
-      try {
-        for (const entry of (0, import_node_fs15.readdirSync)(root, { recursive: true, withFileTypes: true })) {
-          if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".lnk")) continue;
-          const name = entry.name.replace(/\.lnk$/i, "");
-          if (seen2.has(name.toLowerCase())) continue;
-          seen2.add(name.toLowerCase());
-          out2.push({ name, path: (0, import_node_path15.join)(entry.parentPath, entry.name) });
-        }
-      } catch {
-      }
-    }
-    try {
-      const raw = (0, import_node_child_process10.execFileSync)(
-        "powershell.exe",
-        [
-          "-NoLogo",
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          "Get-StartApps | Select-Object Name,AppID | ConvertTo-Json -Compress"
-        ],
-        { encoding: "utf8", timeout: 5e3, windowsHide: true }
-      ).trim();
-      const parsed = raw ? JSON.parse(raw) : [];
-      const entries = Array.isArray(parsed) ? parsed : [parsed];
-      for (const value of entries) {
-        if (!value || typeof value !== "object") continue;
-        const item = value;
-        if (typeof item.Name !== "string" || typeof item.AppID !== "string") continue;
-        const name = item.Name.trim();
-        const appId = item.AppID.trim();
-        if (!name || !appId || seen2.has(name.toLowerCase())) continue;
-        seen2.add(name.toLowerCase());
-        out2.push({ name, path: `shell:AppsFolder\\${appId}` });
-      }
-    } catch {
-    }
-    windowsApplicationCache = { collectedAt: Date.now(), applications: out2 };
-    return out2;
-  }
-  const roots = [
-    "/Applications",
-    "/Applications/Utilities",
-    "/System/Applications",
-    "/System/Applications/Utilities",
-    "/System/Library/CoreServices/Applications",
-    "/System/Library/CoreServices",
-    (0, import_node_path15.join)((0, import_node_os6.homedir)(), "Applications")
-  ];
-  const out = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const root of roots) {
-    try {
-      for (const entry of (0, import_node_fs15.readdirSync)(root)) {
-        if (!entry.endsWith(".app")) continue;
-        const name = entry.replace(/\.app$/, "");
-        if (seen.has(name)) continue;
-        seen.add(name);
-        out.push({
-          name,
-          path: (0, import_node_path15.join)(root, entry)
-        });
-      }
-    } catch {
-    }
-  }
-  return out;
-}
-var import_node_fs15, import_node_child_process10, import_node_os6, import_node_path15, windowsApplicationCache, appsProvider;
-var init_appsProvider = __esm({
-  "src/main/search/providers/appsProvider.ts"() {
-    "use strict";
-    import_node_fs15 = require("node:fs");
-    import_node_child_process10 = require("node:child_process");
-    import_node_os6 = require("node:os");
-    import_node_path15 = require("node:path");
-    appsProvider = {
-      providerId: "apps",
-      async buildDocuments() {
-        const now = Date.now();
-        return listApplications().map((app2) => ({
-          id: `app:${app2.path}`,
-          category: "applications",
-          title: app2.name,
-          subtitle: app2.path,
-          tokens: `${app2.name} ${app2.path}`,
-          action: { type: "open-app", appName: app2.name, appPath: app2.path },
-          updatedAt: now,
-          sourcePath: app2.path
-        }));
-      }
-    };
-  }
-});
-
 // src/main/llm/extensionAI.ts
 async function askExtensionAI(prompt) {
   const normalizedPrompt = String(prompt || "").trim();
@@ -10786,15 +10801,15 @@ __export(extension_runner_exports, {
   runExtensionCommandFromPackageJson: () => runExtensionCommandFromPackageJson,
   updateSearchText: () => updateSearchText
 });
-function instrumentTimerNotificationCommand(command) {
-  const timerFile = /if \[ -f "([^"]+\.timer)" \]; then/.exec(command)?.[1];
+function instrumentTimerNotificationCommand(command2) {
+  const timerFile = /if \[ -f "([^"]+\.timer)" \]; then/.exec(command2)?.[1];
   const notification = /osascript -e 'display notification "Timer \\"(.*?)\\" complete" with title "Ding!"'/.exec(
-    command
+    command2
   );
-  if (!timerFile || !notification) return command;
+  if (!timerFile || !notification) return command2;
   const payload = { timerFile, name: notification[1] };
   const marker = `${TIMER_NOTIFICATION_MARKER}${Buffer.from(JSON.stringify(payload)).toString("base64url")}`;
-  return command.replace(notification[0], `printf '%s\\n' '${marker}'`);
+  return command2.replace(notification[0], `printf '%s\\n' '${marker}'`);
 }
 function timerNotificationPayload(line) {
   const markerIndex = line.indexOf(TIMER_NOTIFICATION_MARKER);
@@ -10868,8 +10883,8 @@ function promiseHookLabel(hookIdx, fn, args) {
   return `hook=${hookIdx} fn="${source}" args=${serializedArgs.slice(0, 160)}`;
 }
 function promiseResultCachePath(session2, key) {
-  const digest = (0, import_node_crypto10.createHash)("sha256").update(session2.bundledCode).update("\0").update(session2.extensionId).update("\0").update(session2.commandName).update("\0").update(key).digest("hex");
-  return (0, import_node_path18.join)(session2.packageRoot, ".tezbar-runtime-cache", `${digest}.bin.gz`);
+  const digest = (0, import_node_crypto12.createHash)("sha256").update(session2.bundledCode).update("\0").update(session2.extensionId).update("\0").update(session2.commandName).update("\0").update(key).digest("hex");
+  return (0, import_node_path29.join)(session2.packageRoot, ".tezbar-runtime-cache", `${digest}.bin.gz`);
 }
 function readPromiseResultCache(session2, key) {
   const memoryKey = `${session2.extensionId}/${session2.commandName}:${key}`;
@@ -10879,9 +10894,9 @@ function readPromiseResultCache(session2, key) {
   }
   const cachePath = promiseResultCachePath(session2, key);
   try {
-    const stats = (0, import_node_fs18.statSync)(cachePath);
+    const stats = (0, import_node_fs26.statSync)(cachePath);
     if (Date.now() - stats.mtimeMs > PROMISE_RESULT_CACHE_TTL_MS) return null;
-    const compressed = (0, import_node_fs18.readFileSync)(cachePath);
+    const compressed = (0, import_node_fs26.readFileSync)(cachePath);
     const payload = (0, import_node_v8.deserialize)((0, import_node_zlib.gunzipSync)(compressed));
     setPromiseResultMemoryCache(memoryKey, payload);
     console.log(
@@ -10903,8 +10918,8 @@ function writePromiseResultCache(session2, key, data) {
     try {
       const encoded = (0, import_node_v8.serialize)({ data, cachedAt });
       const compressed = await gzipAsync(encoded);
-      (0, import_node_fs18.mkdirSync)((0, import_node_path18.dirname)(cachePath), { recursive: true });
-      await (0, import_promises3.writeFile)(cachePath, compressed);
+      (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(cachePath), { recursive: true });
+      await (0, import_promises4.writeFile)(cachePath, compressed);
       console.log(
         `[usePromise] Persistent cache write complete after ${elapsedMs(startedAt)}; raw=${encoded.byteLength}, compressed=${compressed.byteLength}`
       );
@@ -10979,15 +10994,15 @@ async function recoverIncompleteChunkedCache(session2, error, promiseKey) {
   const indexPath = missingIndex[1];
   const cacheName = missingIndex[2];
   if (!indexPath || !cacheName) return false;
-  const supportRoot = (0, import_node_path18.join)(session2.packageRoot, ".tezbar-support");
-  const chunkDirectory = (0, import_node_path18.join)(indexPath, cacheName);
-  const sourcePath = (0, import_node_path18.join)(indexPath, `${cacheName}.json`);
-  if ((0, import_node_path18.dirname)(sourcePath) !== supportRoot || (0, import_node_path18.dirname)(chunkDirectory) !== supportRoot) {
+  const supportRoot = (0, import_node_path29.join)(session2.packageRoot, ".tezbar-support");
+  const chunkDirectory = (0, import_node_path29.join)(indexPath, cacheName);
+  const sourcePath = (0, import_node_path29.join)(indexPath, `${cacheName}.json`);
+  if ((0, import_node_path29.dirname)(sourcePath) !== supportRoot || (0, import_node_path29.dirname)(chunkDirectory) !== supportRoot) {
     return false;
   }
   let handle = null;
   try {
-    handle = await (0, import_promises3.open)(sourcePath, "r");
+    handle = await (0, import_promises4.open)(sourcePath, "r");
     const stats = await handle.stat();
     if (stats.size <= 0) return false;
     const tailSize = Math.min(stats.size, 4096);
@@ -11003,8 +11018,8 @@ async function recoverIncompleteChunkedCache(session2, error, promiseKey) {
   }
   session2.cacheRecoveryKeys.add(promiseKey);
   await Promise.all([
-    (0, import_promises3.rm)(sourcePath, { force: true }),
-    (0, import_promises3.rm)(chunkDirectory, { recursive: true, force: true })
+    (0, import_promises4.rm)(sourcePath, { force: true }),
+    (0, import_promises4.rm)(chunkDirectory, { recursive: true, force: true })
   ]);
   console.warn(
     `[Runner] Removed incomplete extension cache "${cacheName}" and scheduled one rebuild.`
@@ -11021,14 +11036,14 @@ function createFetchModuleShim() {
   boundFetch.__esModule = true;
   return boundFetch;
 }
-async function runAppleScript2(source) {
+async function runAppleScript3(source) {
   if (process.platform !== "darwin") {
     throw new Error("AppleScript is only available on macOS");
   }
   if (typeof source !== "string" || source.trim().length === 0) {
     return "";
   }
-  const { stdout } = await execFileAsync9("/usr/bin/osascript", ["-e", source], {
+  const { stdout } = await execFileAsync14("/usr/bin/osascript", ["-e", source], {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024
   });
@@ -11037,37 +11052,37 @@ async function runAppleScript2(source) {
 async function runAppleScriptForSession(session2, source) {
   pushEffect(session2, { kind: "apple-script", value: String(source ?? "").slice(0, 2e3) });
   if (session2.effectMode === "record") return "";
-  return runAppleScript2(source);
+  return runAppleScript3(source);
 }
 function nativeColorPickerBundledBinaryPath() {
   const envPath = process.env.COLOR_PICKER_HELPER_PATH;
-  if (envPath && (0, import_node_fs18.existsSync)(envPath)) return envPath;
+  if (envPath && (0, import_node_fs26.existsSync)(envPath)) return envPath;
   const candidates = [
-    (0, import_node_path18.join)(process.cwd(), "native", "color-picker", "color-picker-helper"),
-    (0, import_node_path18.join)(app.getAppPath(), "native", "color-picker", "color-picker-helper")
+    (0, import_node_path29.join)(process.cwd(), "native", "color-picker", "color-picker-helper"),
+    (0, import_node_path29.join)(app.getAppPath(), "native", "color-picker", "color-picker-helper")
   ];
   if (app?.isPackaged) {
     const resourcesPath = process.resourcesPath;
     if (resourcesPath) {
       candidates.unshift(
-        (0, import_node_path18.join)(resourcesPath, "app.asar.unpacked", "native", "color-picker", "color-picker-helper"),
-        (0, import_node_path18.join)(resourcesPath, "native", "color-picker", "color-picker-helper")
+        (0, import_node_path29.join)(resourcesPath, "app.asar.unpacked", "native", "color-picker", "color-picker-helper"),
+        (0, import_node_path29.join)(resourcesPath, "native", "color-picker", "color-picker-helper")
       );
     }
   }
-  return candidates.find((candidate) => (0, import_node_fs18.existsSync)(candidate)) ?? null;
+  return candidates.find((candidate) => (0, import_node_fs26.existsSync)(candidate)) ?? null;
 }
 function nativeColorPickerCachedBinaryPath() {
-  return (0, import_node_path18.join)(app.getPath("userData"), "native", "color-picker");
+  return (0, import_node_path29.join)(app.getPath("userData"), "native", "color-picker");
 }
 function nativeColorPickerSourcePath() {
   const candidates = [
-    (0, import_node_path18.join)(process.cwd(), "native", "color-picker", "main.swift"),
-    (0, import_node_path18.join)(process.cwd(), "src", "native", "color-picker.swift"),
-    (0, import_node_path18.join)(app.getAppPath(), "native", "color-picker", "main.swift"),
-    (0, import_node_path18.join)(app.getAppPath(), "src", "native", "color-picker.swift")
+    (0, import_node_path29.join)(process.cwd(), "native", "color-picker", "main.swift"),
+    (0, import_node_path29.join)(process.cwd(), "src", "native", "color-picker.swift"),
+    (0, import_node_path29.join)(app.getAppPath(), "native", "color-picker", "main.swift"),
+    (0, import_node_path29.join)(app.getAppPath(), "src", "native", "color-picker.swift")
   ];
-  return candidates.find((candidate) => (0, import_node_fs18.existsSync)(candidate)) ?? null;
+  return candidates.find((candidate) => (0, import_node_fs26.existsSync)(candidate)) ?? null;
 }
 async function ensureNativeColorPickerBinary() {
   const bundledPath = nativeColorPickerBundledBinaryPath();
@@ -11075,18 +11090,18 @@ async function ensureNativeColorPickerBinary() {
   const sourcePath = nativeColorPickerSourcePath();
   if (!sourcePath) return null;
   const binaryPath = nativeColorPickerCachedBinaryPath();
-  if ((0, import_node_fs18.existsSync)(binaryPath)) {
+  if ((0, import_node_fs26.existsSync)(binaryPath)) {
     try {
-      if ((0, import_node_fs18.statSync)(binaryPath).mtimeMs >= (0, import_node_fs18.statSync)(sourcePath).mtimeMs) return binaryPath;
+      if ((0, import_node_fs26.statSync)(binaryPath).mtimeMs >= (0, import_node_fs26.statSync)(sourcePath).mtimeMs) return binaryPath;
     } catch {
       return binaryPath;
     }
   }
-  const moduleCachePath = (0, import_node_path18.join)((0, import_node_path18.dirname)(binaryPath), "swift-module-cache");
-  (0, import_node_fs18.mkdirSync)((0, import_node_path18.dirname)(binaryPath), { recursive: true });
-  (0, import_node_fs18.mkdirSync)(moduleCachePath, { recursive: true });
+  const moduleCachePath = (0, import_node_path29.join)((0, import_node_path29.dirname)(binaryPath), "swift-module-cache");
+  (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(binaryPath), { recursive: true });
+  (0, import_node_fs26.mkdirSync)(moduleCachePath, { recursive: true });
   try {
-    await execFileAsync9("/usr/bin/swiftc", [
+    await execFileAsync14("/usr/bin/swiftc", [
       "-module-cache-path",
       moduleCachePath,
       "-O",
@@ -11096,7 +11111,7 @@ async function ensureNativeColorPickerBinary() {
       "-framework",
       "AppKit"
     ]);
-    return (0, import_node_fs18.existsSync)(binaryPath) ? binaryPath : null;
+    return (0, import_node_fs26.existsSync)(binaryPath) ? binaryPath : null;
   } catch (error) {
     console.error("[ColorPicker] Failed to compile native helper:", error);
     return null;
@@ -11115,7 +11130,7 @@ async function pickColorWithNativeSampler() {
     }
     app.hide();
     await delay(80);
-    const { stdout } = await execFileAsync9(binaryPath);
+    const { stdout } = await execFileAsync14(binaryPath);
     const trimmed = stdout.trim();
     if (!trimmed || trimmed === "null") return null;
     const parsed = JSON.parse(trimmed);
@@ -11150,23 +11165,58 @@ async function pickColorWithNativeSampler() {
     }
   }
 }
+function imageColorsHelperPath() {
+  const envPath = process.env.IMAGE_COLORS_HELPER_PATH;
+  if (envPath && (0, import_node_fs26.existsSync)(envPath)) return envPath;
+  const candidates = [
+    (0, import_node_path29.join)(process.cwd(), "native", "image-colors", "image-colors-helper"),
+    (0, import_node_path29.join)(app.getAppPath(), "native", "image-colors", "image-colors-helper")
+  ];
+  if (app?.isPackaged) {
+    const resourcesPath = process.resourcesPath;
+    if (resourcesPath) {
+      candidates.unshift(
+        (0, import_node_path29.join)(resourcesPath, "app.asar.unpacked", "native", "image-colors", "image-colors-helper"),
+        (0, import_node_path29.join)(resourcesPath, "native", "image-colors", "image-colors-helper")
+      );
+    }
+  }
+  return candidates.find((candidate) => (0, import_node_fs26.existsSync)(candidate)) ?? null;
+}
+async function extractColorsFromImage(path7, colorCount = 40, dominantOnly = false) {
+  if (process.platform !== "darwin") {
+    throw new Error("Native image color extraction is not available on this platform");
+  }
+  if (!path7 || !(0, import_node_fs26.existsSync)(path7)) throw new Error("The selected image no longer exists");
+  const helperPath = imageColorsHelperPath();
+  if (!helperPath) throw new Error("The native image color helper is missing");
+  const count = Math.max(1, Math.min(80, Math.round(Number(colorCount) || 40)));
+  const { stdout } = await execFileAsync14(
+    helperPath,
+    [path7, String(count), dominantOnly ? "true" : "false"],
+    { timeout: 6e4, maxBuffer: 10 * 1024 * 1024 }
+  );
+  const parsed = JSON.parse(stdout.trim());
+  if (!Array.isArray(parsed)) throw new Error("The native image color helper returned invalid data");
+  return parsed;
+}
 function screenOcrHelperPath3() {
   if (process.env.SCREENOCR_HELPER_PATH) return process.env.SCREENOCR_HELPER_PATH;
   if (app?.isPackaged) {
     const resourcesPath = process.resourcesPath;
     if (resourcesPath) {
-      return (0, import_node_path18.join)(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper");
+      return (0, import_node_path29.join)(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper");
     }
   }
-  return (0, import_node_path18.join)(process.cwd(), "native", "screenocr", "screenocr-helper");
+  return (0, import_node_path29.join)(process.cwd(), "native", "screenocr", "screenocr-helper");
 }
-async function runScreenOcrHelper(command, values) {
+async function runScreenOcrHelper(command2, values) {
   const helperPath = screenOcrHelperPath3();
-  if (!(0, import_node_fs18.existsSync)(helperPath)) {
+  if (!(0, import_node_fs26.existsSync)(helperPath)) {
     throw new Error(`ScreenOCR native helper is missing at ${helperPath}`);
   }
   const visibleWindows = BrowserWindow?.getAllWindows ? BrowserWindow.getAllWindows().filter((window2) => window2.isVisible()) : [];
-  const shouldHideApp = command === "recognize-text" && values.fullscreen === true;
+  const shouldHideApp = command2 === "recognize-text" && values.fullscreen === true;
   try {
     if (shouldHideApp) {
       setSuppressBlurHide(true);
@@ -11174,7 +11224,7 @@ async function runScreenOcrHelper(command, values) {
       app?.hide?.();
       await delay(120);
     }
-    const { stdout } = await execFileAsync9(helperPath, [command, JSON.stringify(values)], {
+    const { stdout } = await execFileAsync14(helperPath, [command2, JSON.stringify(values)], {
       timeout: 18e4,
       maxBuffer: 10 * 1024 * 1024
     });
@@ -11197,7 +11247,7 @@ function colorWheelMarkdown() {
 function attachRuntimeRootMetadata(root, session2) {
   root.props = {
     ...root.props ?? {},
-    assetsPath: (0, import_node_path18.join)(session2.packageRoot, "assets")
+    assetsPath: (0, import_node_path29.join)(session2.packageRoot, "assets")
   };
   if (typeof root.props.markdown === "string") {
     root.props.markdown = resolveExtensionMarkdownAssets(root.props.markdown, session2.packageRoot);
@@ -11220,48 +11270,48 @@ function buildPreferenceSetupRoot(extensionId, commandName2) {
   };
 }
 function parsePackageJson(path7) {
-  if (!(0, import_node_fs18.existsSync)(path7)) {
+  if (!(0, import_node_fs26.existsSync)(path7)) {
     throw new Error(`Missing package.json at ${path7}`);
   }
-  const raw = (0, import_node_fs18.readFileSync)(path7, "utf8");
+  const raw = (0, import_node_fs26.readFileSync)(path7, "utf8");
   const parsed = JSON.parse(raw);
   return parsed && typeof parsed === "object" ? parsed : {};
 }
 function findCommandInManifest(pkg, commandName2) {
-  const command = (pkg.commands ?? []).find((entry) => entry.name === commandName2);
-  if (!command) {
+  const command2 = (pkg.commands ?? []).find((entry) => entry.name === commandName2);
+  if (!command2) {
     throw new Error(`Command not found: ${commandName2}`);
   }
-  return command;
+  return command2;
 }
-function resolveCommandEntry(packageRoot, commandName2, command) {
-  const prebuilt = (0, import_node_path18.join)(packageRoot, ".sc-build", `${commandName2}.js`);
-  if ((0, import_node_fs18.existsSync)(prebuilt)) return prebuilt;
-  const explicit = [command.path, command.entrypoint, command.entry, command.file, command.source].filter((entry) => typeof entry === "string" && entry.trim().length > 0).map((entry) => (0, import_node_path18.join)(packageRoot, entry));
-  const src = (0, import_node_path18.join)(packageRoot, "src");
+function resolveCommandEntry(packageRoot, commandName2, command2) {
+  const prebuilt = (0, import_node_path29.join)(packageRoot, ".sc-build", `${commandName2}.js`);
+  if ((0, import_node_fs26.existsSync)(prebuilt)) return prebuilt;
+  const explicit = [command2.path, command2.entrypoint, command2.entry, command2.file, command2.source].filter((entry) => typeof entry === "string" && entry.trim().length > 0).map((entry) => (0, import_node_path29.join)(packageRoot, entry));
+  const src = (0, import_node_path29.join)(packageRoot, "src");
   const defaults = [
-    (0, import_node_path18.join)(src, `${commandName2}.tsx`),
-    (0, import_node_path18.join)(src, `${commandName2}.ts`),
-    (0, import_node_path18.join)(src, `${commandName2}.jsx`),
-    (0, import_node_path18.join)(src, `${commandName2}.js`),
-    (0, import_node_path18.join)(src, commandName2, "index.tsx"),
-    (0, import_node_path18.join)(src, commandName2, "index.ts"),
-    (0, import_node_path18.join)(src, commandName2, "index.jsx"),
-    (0, import_node_path18.join)(src, commandName2, "index.js"),
-    (0, import_node_path18.join)(src, "commands", `${commandName2}.tsx`),
-    (0, import_node_path18.join)(src, "commands", `${commandName2}.ts`),
-    (0, import_node_path18.join)(src, "commands", `${commandName2}.jsx`),
-    (0, import_node_path18.join)(src, "commands", `${commandName2}.js`)
+    (0, import_node_path29.join)(src, `${commandName2}.tsx`),
+    (0, import_node_path29.join)(src, `${commandName2}.ts`),
+    (0, import_node_path29.join)(src, `${commandName2}.jsx`),
+    (0, import_node_path29.join)(src, `${commandName2}.js`),
+    (0, import_node_path29.join)(src, commandName2, "index.tsx"),
+    (0, import_node_path29.join)(src, commandName2, "index.ts"),
+    (0, import_node_path29.join)(src, commandName2, "index.jsx"),
+    (0, import_node_path29.join)(src, commandName2, "index.js"),
+    (0, import_node_path29.join)(src, "commands", `${commandName2}.tsx`),
+    (0, import_node_path29.join)(src, "commands", `${commandName2}.ts`),
+    (0, import_node_path29.join)(src, "commands", `${commandName2}.jsx`),
+    (0, import_node_path29.join)(src, "commands", `${commandName2}.js`)
   ];
-  const candidate = [...explicit, ...defaults].find((entry) => (0, import_node_fs18.existsSync)(entry));
+  const candidate = [...explicit, ...defaults].find((entry) => (0, import_node_fs26.existsSync)(entry));
   if (!candidate) {
     throw new Error(`Could not resolve entry file for command ${commandName2}`);
   }
   return candidate;
 }
 async function bundleCommand(entryPath, packageRoot) {
-  if (entryPath.includes(`${(0, import_node_path18.join)(".sc-build", "")}`) || entryPath.includes("/.sc-build/")) {
-    const prebuilt = (0, import_node_fs18.readFileSync)(entryPath, "utf8");
+  if (entryPath.includes(`${(0, import_node_path29.join)(".sc-build", "")}`) || entryPath.includes("/.sc-build/")) {
+    const prebuilt = (0, import_node_fs26.readFileSync)(entryPath, "utf8");
     if (!prebuilt.trim()) throw new Error(`Prebuilt extension bundle is empty: ${entryPath}`);
     return prebuilt;
   }
@@ -11271,9 +11321,9 @@ async function bundleCommand(entryPath, packageRoot) {
     name: "legacy-cheerio-default-interop",
     setup(build) {
       build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, (args) => {
-        const source = (0, import_node_fs18.readFileSync)(args.path, "utf8");
+        const source = (0, import_node_fs26.readFileSync)(args.path, "utf8");
         if (!/import\s+[A-Za-z_$][\w$]*\s+from\s+['"]cheerio['"]/.test(source)) return null;
-        const extension = (0, import_node_path18.extname)(args.path).toLowerCase();
+        const extension = (0, import_node_path29.extname)(args.path).toLowerCase();
         const loader = extension.endsWith("x") ? extension.slice(1) : extension.slice(1) || "js";
         return {
           contents: source.replace(
@@ -11302,7 +11352,7 @@ async function bundleCommand(entryPath, packageRoot) {
       "react/jsx-runtime",
       "react/jsx-dev-runtime"
     ],
-    nodePaths: [(0, import_node_path18.join)(packageRoot, "node_modules")],
+    nodePaths: [(0, import_node_path29.join)(packageRoot, "node_modules")],
     logLevel: "silent"
   });
   const output = result.outputFiles?.[0]?.text;
@@ -11521,7 +11571,7 @@ function normalizeActionTitle(typeName, props) {
   }
 }
 function stableActionId(index, typeName, title) {
-  const hash2 = (0, import_node_crypto10.createHash)("sha1").update(`${index}:${typeName}:${title}`).digest("hex").slice(0, 12);
+  const hash2 = (0, import_node_crypto12.createHash)("sha1").update(`${index}:${typeName}:${title}`).digest("hex").slice(0, 12);
   return `ext-action-${index}-${hash2}`;
 }
 function parseShortcut(shortcut) {
@@ -11545,19 +11595,19 @@ function pushEffect(session2, effect) {
   }
 }
 function createLocalStorageShim(packageRoot) {
-  const storagePath = (0, import_node_path18.join)(packageRoot, ".tezbar-local-storage.json");
+  const storagePath = (0, import_node_path29.join)(packageRoot, ".tezbar-local-storage.json");
   const readAll2 = () => {
-    if (!(0, import_node_fs18.existsSync)(storagePath)) return {};
+    if (!(0, import_node_fs26.existsSync)(storagePath)) return {};
     try {
-      const parsed = JSON.parse((0, import_node_fs18.readFileSync)(storagePath, "utf8"));
+      const parsed = JSON.parse((0, import_node_fs26.readFileSync)(storagePath, "utf8"));
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch {
       return {};
     }
   };
   const writeAll2 = (value) => {
-    (0, import_node_fs18.mkdirSync)((0, import_node_path18.dirname)(storagePath), { recursive: true });
-    (0, import_node_fs18.writeFileSync)(storagePath, JSON.stringify(value, null, 2), "utf8");
+    (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(storagePath), { recursive: true });
+    (0, import_node_fs26.writeFileSync)(storagePath, JSON.stringify(value, null, 2), "utf8");
   };
   return {
     getItem: async (key) => readAll2()[String(key)],
@@ -11582,20 +11632,20 @@ function createCacheShim(packageRoot) {
     constructor(options) {
       const rawNamespace = typeof options?.namespace === "string" && options.namespace.trim().length > 0 ? options.namespace.trim() : "shared";
       const safeNamespace = rawNamespace.replace(/[^a-z0-9._-]+/gi, "_");
-      this.storagePath = (0, import_node_path18.join)(packageRoot, ".tezbar-support", "cache", `${safeNamespace}.json`);
+      this.storagePath = (0, import_node_path29.join)(packageRoot, ".tezbar-support", "cache", `${safeNamespace}.json`);
     }
     readAll() {
-      if (!(0, import_node_fs18.existsSync)(this.storagePath)) return {};
+      if (!(0, import_node_fs26.existsSync)(this.storagePath)) return {};
       try {
-        const parsed = JSON.parse((0, import_node_fs18.readFileSync)(this.storagePath, "utf8"));
+        const parsed = JSON.parse((0, import_node_fs26.readFileSync)(this.storagePath, "utf8"));
         return parsed && typeof parsed === "object" ? parsed : {};
       } catch {
         return {};
       }
     }
     writeAll(value) {
-      (0, import_node_fs18.mkdirSync)((0, import_node_path18.dirname)(this.storagePath), { recursive: true });
-      (0, import_node_fs18.writeFileSync)(this.storagePath, JSON.stringify(value, null, 2), "utf8");
+      (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(this.storagePath), { recursive: true });
+      (0, import_node_fs26.writeFileSync)(this.storagePath, JSON.stringify(value, null, 2), "utf8");
     }
     notify(key, value) {
       for (const subscriber of this.subscribers) {
@@ -11678,10 +11728,10 @@ function copyToSystemClipboard(session2, value) {
   clipboard.writeText(String(value ?? ""));
 }
 function avatarIcon(value) {
-  const text = String(value ?? "?").trim() || "?";
-  const initials = text.split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("").replace(/[<>&"']/g, "") || "?";
+  const text2 = String(value ?? "?").trim() || "?";
+  const initials = text2.split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("").replace(/[<>&"']/g, "") || "?";
   let hash2 = 0;
-  for (const char of text) hash2 = hash2 * 31 + char.charCodeAt(0) >>> 0;
+  for (const char of text2) hash2 = hash2 * 31 + char.charCodeAt(0) >>> 0;
   const hue = hash2 % 360;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="hsl(${hue} 58% 42%)"/><text x="32" y="39" text-anchor="middle" fill="white" font-family="-apple-system, sans-serif" font-size="22" font-weight="600">${initials}</text></svg>`;
   return { source: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` };
@@ -11691,12 +11741,12 @@ function createRaycastApiShim(session2) {
     tokenPath;
     constructor(options = {}) {
       const providerId = String(options.providerId ?? options.providerName ?? "oauth").replace(/[^a-z0-9._-]+/gi, "_").toLowerCase();
-      this.tokenPath = (0, import_node_path18.join)(session2.packageRoot, ".tezbar-support", "oauth", `${providerId}.json`);
+      this.tokenPath = (0, import_node_path29.join)(session2.packageRoot, ".tezbar-support", "oauth", `${providerId}.json`);
     }
     async getTokens() {
-      if (!(0, import_node_fs18.existsSync)(this.tokenPath)) return void 0;
+      if (!(0, import_node_fs26.existsSync)(this.tokenPath)) return void 0;
       try {
-        const stored = JSON.parse((0, import_node_fs18.readFileSync)(this.tokenPath, "utf8"));
+        const stored = JSON.parse((0, import_node_fs26.readFileSync)(this.tokenPath, "utf8"));
         return {
           ...stored,
           isExpired: () => typeof stored.expiresIn === "number" && stored.expiresIn <= Date.now()
@@ -11714,11 +11764,11 @@ function createRaycastApiShim(session2) {
         scope: String(response.scope ?? ""),
         expiresIn: Number.isFinite(expiresInSeconds) ? Date.now() + expiresInSeconds * 1e3 : Number(response.expiresIn) || void 0
       };
-      (0, import_node_fs18.mkdirSync)((0, import_node_path18.dirname)(this.tokenPath), { recursive: true });
-      (0, import_node_fs18.writeFileSync)(this.tokenPath, JSON.stringify(tokens2), "utf8");
+      (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(this.tokenPath), { recursive: true });
+      (0, import_node_fs26.writeFileSync)(this.tokenPath, JSON.stringify(tokens2), "utf8");
     }
     async removeTokens() {
-      await (0, import_promises3.rm)(this.tokenPath, { force: true });
+      await (0, import_promises4.rm)(this.tokenPath, { force: true });
     }
     async authorizationRequest(options) {
       return {
@@ -11888,6 +11938,7 @@ function createRaycastApiShim(session2) {
     ImageMask: IMAGE_MASK2,
     AI: {
       ask: async (prompt) => askExtensionAI(String(prompt ?? "")),
+      Model: iconProxy,
       Creativity: {
         None: "none",
         Low: "low",
@@ -11930,8 +11981,8 @@ function createRaycastApiShim(session2) {
       commandName: session2.commandName,
       isDevelopment: false,
       commandMode: session2.commandMode,
-      assetsPath: (0, import_node_path18.join)(session2.packageRoot, "assets"),
-      supportPath: (0, import_node_path18.join)(session2.packageRoot, ".tezbar-support"),
+      assetsPath: (0, import_node_path29.join)(session2.packageRoot, "assets"),
+      supportPath: (0, import_node_path29.join)(session2.packageRoot, ".tezbar-support"),
       canAccess: () => false,
       get searchText() {
         return session2.searchText;
@@ -11948,8 +11999,8 @@ function createRaycastApiShim(session2) {
         copyToSystemClipboard(session2, value);
       },
       read: async () => {
-        const text = clipboard.readText();
-        return text ? { text } : {};
+        const text2 = clipboard.readText();
+        return text2 ? { text: text2 } : {};
       },
       readText: async () => clipboard.readText()
     },
@@ -11957,7 +12008,7 @@ function createRaycastApiShim(session2) {
     getSelectedFinderItems: async () => {
       if (process.platform === "win32") {
         try {
-          const { stdout } = await execFileAsync9(
+          const { stdout } = await execFileAsync14(
             "powershell.exe",
             [
               "-NoLogo",
@@ -11975,7 +12026,7 @@ function createRaycastApiShim(session2) {
       }
       if (process.platform !== "darwin") return [];
       try {
-        const output = await runAppleScript2(`
+        const output = await runAppleScript3(`
           tell application "Finder"
             set selectedItems to selection as alias list
             set selectedPaths to {}
@@ -12052,7 +12103,7 @@ function createRaycastApiShim(session2) {
           return listApplications().sort((a, b) => a.name.localeCompare(b.name));
         }
         try {
-          const { stdout } = await execFileAsync9(
+          const { stdout } = await execFileAsync14(
             "/usr/bin/mdfind",
             ["kMDItemKind == 'Application'"],
             {
@@ -12060,18 +12111,18 @@ function createRaycastApiShim(session2) {
               timeout: 3e3
             }
           );
-          const apps = stdout.trim().split("\n").filter((p) => p.endsWith(".app")).map((appPath) => ({ name: (0, import_node_path18.basename)(appPath, ".app"), path: appPath })).sort((a, b) => a.name.localeCompare(b.name));
+          const apps = stdout.trim().split("\n").filter((p) => p.endsWith(".app")).map((appPath) => ({ name: (0, import_node_path29.basename)(appPath, ".app"), path: appPath })).sort((a, b) => a.name.localeCompare(b.name));
           console.log(`[getApplications] mdfind returned ${apps.length} applications`);
           return apps;
         } catch (err) {
           console.warn("[getApplications] mdfind failed, falling back to directory scan:", err);
           const apps = [];
-          const dirs = ["/Applications", "/System/Applications", (0, import_node_path18.join)((0, import_node_os9.homedir)(), "Applications")];
+          const dirs = ["/Applications", "/System/Applications", (0, import_node_path29.join)((0, import_node_os13.homedir)(), "Applications")];
           for (const dir of dirs) {
             try {
-              for (const entry of (0, import_node_fs18.readdirSync)(dir)) {
+              for (const entry of (0, import_node_fs26.readdirSync)(dir)) {
                 if (entry.endsWith(".app")) {
-                  apps.push({ name: (0, import_node_path18.basename)(entry, ".app"), path: (0, import_node_path18.join)(dir, entry) });
+                  apps.push({ name: (0, import_node_path29.basename)(entry, ".app"), path: (0, import_node_path29.join)(dir, entry) });
                 }
               }
             } catch (dirErr) {
@@ -12091,7 +12142,7 @@ function createRaycastApiShim(session2) {
     getFrontmostApplication: async () => {
       if (process.platform === "win32") {
         try {
-          const { stdout } = await execFileAsync9(
+          const { stdout } = await execFileAsync14(
             "powershell.exe",
             [
               "-NoLogo",
@@ -12115,7 +12166,7 @@ function createRaycastApiShim(session2) {
       }
       try {
         const script = 'tell application "System Events" to get name of first application process whose frontmost is true';
-        const { stdout } = await execFileAsync9("/usr/bin/osascript", ["-e", script], {
+        const { stdout } = await execFileAsync14("/usr/bin/osascript", ["-e", script], {
           timeout: 3e3
         });
         const name = stdout.trim();
@@ -12389,16 +12440,16 @@ function createRaycastUtilsShim(session2) {
   const useFetchPromise = makePromiseHook();
   const useAIPromise = makePromiseHook();
   const useSQLPromise = makePromiseHook();
-  const useExec = (command, args = [], options) => {
+  const useExec = (command2, args = [], options) => {
     const exec = async () => {
-      const { stdout, stderr } = await execFileAsync9(command, args, {
+      const { stdout, stderr } = await execFileAsync14(command2, args, {
         encoding: "utf8",
         maxBuffer: 10 * 1024 * 1024
       });
       const result = { stdout, stderr, exitCode: 0 };
       return options?.parseOutput ? options.parseOutput(result) : stdout;
     };
-    return useExecPromise(exec, [command, ...args], options);
+    return useExecPromise(exec, [command2, ...args], options);
   };
   const useFetch = (input, options) => {
     const requestInit = {
@@ -12420,7 +12471,7 @@ function createRaycastUtilsShim(session2) {
   const useSQL = (databasePath2, query, options) => {
     const load3 = async (dbPath3, sql) => {
       const sqlite = process.platform === "win32" ? "sqlite3.exe" : "/usr/bin/sqlite3";
-      const { stdout } = await execFileAsync9(sqlite, ["-readonly", "-json", dbPath3, sql], {
+      const { stdout } = await execFileAsync14(sqlite, ["-readonly", "-json", dbPath3, sql], {
         encoding: "utf8",
         maxBuffer: 20 * 1024 * 1024
       });
@@ -12548,7 +12599,7 @@ function createRaycastUtilsShim(session2) {
     client = {
       removeTokens: async () => {
         activeAccessToken = void 0;
-        await (0, import_promises3.rm)(this.tokenPath, { force: true });
+        await (0, import_promises4.rm)(this.tokenPath, { force: true });
       }
     };
     provider;
@@ -12561,7 +12612,7 @@ function createRaycastUtilsShim(session2) {
       this.options = options;
       this.token = typeof options.personalAccessToken === "string" && options.personalAccessToken.trim() ? options.personalAccessToken.trim() : void 0;
       this.onAuthorize = options.onAuthorize;
-      this.tokenPath = (0, import_node_path18.join)(
+      this.tokenPath = (0, import_node_path29.join)(
         session2.packageRoot,
         ".tezbar-support",
         "oauth-service",
@@ -12576,9 +12627,9 @@ function createRaycastUtilsShim(session2) {
       return true;
     }
     readStoredTokens() {
-      if (!(0, import_node_fs18.existsSync)(this.tokenPath)) return void 0;
+      if (!(0, import_node_fs26.existsSync)(this.tokenPath)) return void 0;
       try {
-        const value = JSON.parse((0, import_node_fs18.readFileSync)(this.tokenPath, "utf8"));
+        const value = JSON.parse((0, import_node_fs26.readFileSync)(this.tokenPath, "utf8"));
         return typeof value.accessToken === "string" && value.accessToken ? value : void 0;
       } catch {
         return void 0;
@@ -12602,8 +12653,8 @@ function createRaycastUtilsShim(session2) {
         expiresAt: Number.isFinite(expiresIn) ? Date.now() + expiresIn * 1e3 : void 0,
         scope: String(response.scope ?? "") || void 0
       };
-      (0, import_node_fs18.mkdirSync)((0, import_node_path18.dirname)(this.tokenPath), { recursive: true });
-      (0, import_node_fs18.writeFileSync)(this.tokenPath, JSON.stringify(stored), "utf8");
+      (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(this.tokenPath), { recursive: true });
+      (0, import_node_fs26.writeFileSync)(this.tokenPath, JSON.stringify(stored), "utf8");
       activeAccessToken = accessToken;
       await Promise.resolve(this.onAuthorize?.({ token: accessToken, type: "oauth" }));
     }
@@ -12614,12 +12665,12 @@ function createRaycastUtilsShim(session2) {
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: parameters
       });
-      const text = await response.text();
+      const text2 = await response.text();
       let payload = {};
       try {
-        payload = text ? JSON.parse(text) : {};
+        payload = text2 ? JSON.parse(text2) : {};
       } catch {
-        payload = { error_description: text };
+        payload = { error_description: text2 };
       }
       if (!response.ok) {
         throw new Error(
@@ -12649,9 +12700,9 @@ function createRaycastUtilsShim(session2) {
       if (!clientId || !scope) throw new Error("Google OAuth requires clientId and scope");
       const stored = this.readStoredTokens();
       if (stored?.refreshToken && await this.refreshGoogleToken(stored)) return;
-      const state = (0, import_node_crypto10.randomBytes)(24).toString("base64url");
-      const codeVerifier = (0, import_node_crypto10.randomBytes)(48).toString("base64url");
-      const codeChallenge = (0, import_node_crypto10.createHash)("sha256").update(codeVerifier).digest("base64url");
+      const state = (0, import_node_crypto12.randomBytes)(24).toString("base64url");
+      const codeVerifier = (0, import_node_crypto12.randomBytes)(48).toString("base64url");
+      const codeChallenge = (0, import_node_crypto12.createHash)("sha256").update(codeVerifier).digest("base64url");
       let settleCallback = null;
       let rejectCallback = null;
       const callbackPromise = new Promise(
@@ -12862,7 +12913,7 @@ function sanitizeValue(value) {
   return void 0;
 }
 function mimeTypeForAsset(path7) {
-  switch ((0, import_node_path18.extname)(path7).toLowerCase()) {
+  switch ((0, import_node_path29.extname)(path7).toLowerCase()) {
     case ".svg":
       return "image/svg+xml";
     case ".png":
@@ -12888,13 +12939,13 @@ function resolveExtensionMarkdownAssets(markdown, packageRoot) {
       if (!src || /^(?:https?:|data:|file:)/i.test(src)) return match;
       const cleanSrc = src.split(/[?#]/)[0]?.replace(/^\.?\//, "") ?? "";
       if (!cleanSrc || cleanSrc.startsWith("/") || cleanSrc.includes("..")) return match;
-      const assetPath = (0, import_node_path18.join)(packageRoot, "assets", cleanSrc);
-      if (!(0, import_node_fs18.existsSync)(assetPath)) {
+      const assetPath = (0, import_node_path29.join)(packageRoot, "assets", cleanSrc);
+      if (!(0, import_node_fs26.existsSync)(assetPath)) {
         console.warn(`[ExtensionAssets] Missing markdown asset: ${assetPath}`);
         return match;
       }
       try {
-        const encoded = (0, import_node_fs18.readFileSync)(assetPath).toString("base64");
+        const encoded = (0, import_node_fs26.readFileSync)(assetPath).toString("base64");
         console.log(`[ExtensionAssets] Inlined markdown asset: ${assetPath}`);
         return `![${alt}](data:${mimeTypeForAsset(assetPath)};base64,${encoded})`;
       } catch {
@@ -13352,7 +13403,7 @@ function pruneSessions() {
   }
 }
 function runBundle(code, packageRoot, session2) {
-  const fileRequire = (0, import_node_module2.createRequire)((0, import_node_path18.join)(packageRoot, "package.json"));
+  const fileRequire = (0, import_node_module2.createRequire)((0, import_node_path29.join)(packageRoot, "package.json"));
   const jsxRuntimeShim = createJsxRuntimeShim();
   const reactShim = createReactShim(session2);
   const raycastApiShim = createRaycastApiShim(session2);
@@ -13369,10 +13420,10 @@ function runBundle(code, packageRoot, session2) {
       const originalExec = childProcessModule.exec;
       return {
         ...childProcessModule,
-        exec: ((command, ...args) => {
-          const instrumentedCommand = instrumentTimerNotificationCommand(command);
-          if (instrumentedCommand === command) {
-            return Reflect.apply(originalExec, childProcessModule, [command, ...args]);
+        exec: ((command2, ...args) => {
+          const instrumentedCommand = instrumentTimerNotificationCommand(command2);
+          if (instrumentedCommand === command2) {
+            return Reflect.apply(originalExec, childProcessModule, [command2, ...args]);
           }
           let callbackIndex = -1;
           for (let index = args.length - 1; index >= 0; index -= 1) {
@@ -13413,7 +13464,7 @@ function runBundle(code, packageRoot, session2) {
           return child;
         }),
         spawn: (...args) => {
-          const child = (0, import_node_child_process12.spawn)(...args);
+          const child = (0, import_node_child_process17.spawn)(...args);
           const stdout = child.stdout;
           if (stdout) {
             const originalOn = stdout.on.bind(stdout);
@@ -13475,7 +13526,7 @@ function runBundle(code, packageRoot, session2) {
     if (specifier === "sha256-file") {
       return (filename, callback) => {
         try {
-          const sum = (0, import_node_crypto10.createHash)("sha256").update((0, import_node_fs18.readFileSync)(filename)).digest("hex");
+          const sum = (0, import_node_crypto12.createHash)("sha256").update((0, import_node_fs26.readFileSync)(filename)).digest("hex");
           callback(null, sum);
         } catch (error) {
           callback(error instanceof Error ? error : new Error(String(error)));
@@ -13527,10 +13578,10 @@ function runBundle(code, packageRoot, session2) {
           if (merged.responseType === "stream") {
             data = response.body ? import_node_stream.Readable.fromWeb(response.body) : import_node_stream.Readable.from([]);
           } else {
-            const text = await response.text();
-            data = text;
+            const text2 = await response.text();
+            data = text2;
             try {
-              data = text ? JSON.parse(text) : null;
+              data = text2 ? JSON.parse(text2) : null;
             } catch {
             }
           }
@@ -13612,7 +13663,7 @@ function runBundle(code, packageRoot, session2) {
     if (specifier === "tar") {
       const extract = async (options) => {
         if (!options?.file || !options.cwd) throw new Error("tar.extract requires file and cwd");
-        (0, import_node_fs18.mkdirSync)(options.cwd, { recursive: true });
+        (0, import_node_fs26.mkdirSync)(options.cwd, { recursive: true });
         const args = ["-xzf", options.file, "-C", options.cwd];
         try {
           if (typeof options.filter === "function") {
@@ -13622,7 +13673,7 @@ function runBundle(code, packageRoot, session2) {
           }
         } catch {
         }
-        await execFileAsync9(process.platform === "win32" ? "tar.exe" : "/usr/bin/tar", args);
+        await execFileAsync14(process.platform === "win32" ? "tar.exe" : "/usr/bin/tar", args);
       };
       return {
         extract,
@@ -13635,9 +13686,9 @@ function runBundle(code, packageRoot, session2) {
       const extractZip = async (file, options) => {
         const dir = options?.dir;
         if (!dir) throw new Error("extract-zip requires dir");
-        (0, import_node_fs18.mkdirSync)(dir, { recursive: true });
+        (0, import_node_fs26.mkdirSync)(dir, { recursive: true });
         if (process.platform === "win32") {
-          await execFileAsync9(
+          await execFileAsync14(
             "powershell.exe",
             [
               "-NoLogo",
@@ -13652,7 +13703,7 @@ function runBundle(code, packageRoot, session2) {
             }
           );
         } else {
-          await execFileAsync9("/usr/bin/unzip", ["-o", file, "-d", dir]);
+          await execFileAsync14("/usr/bin/unzip", ["-o", file, "-d", dir]);
         }
       };
       return {
@@ -13681,6 +13732,8 @@ function runBundle(code, packageRoot, session2) {
       return {
         pickColor,
         pick_color: pickColor,
+        extractColor: extractColorsFromImage,
+        extract_color: extractColorsFromImage,
         recognizeText,
         recognize_text: recognizeText,
         detectBarcode,
@@ -13746,11 +13799,11 @@ function runBundle(code, packageRoot, session2) {
 ${runtimeCode}
 })`;
   const script = new import_node_vm.default.Script(wrapped, {
-    filename: (0, import_node_path18.join)(packageRoot, ".tezbar-runtime-bundle.cjs")
+    filename: (0, import_node_path29.join)(packageRoot, ".tezbar-runtime-bundle.cjs")
   });
   const fn = script.runInContext(context);
   const mod = { exports: {} };
-  fn(mod.exports, customRequire, mod, (0, import_node_path18.join)(packageRoot, ".tezbar-runtime-bundle.cjs"), packageRoot);
+  fn(mod.exports, customRequire, mod, (0, import_node_path29.join)(packageRoot, ".tezbar-runtime-bundle.cjs"), packageRoot);
   return mod.exports;
 }
 function getCommandExport(moduleExports) {
@@ -13766,13 +13819,13 @@ function getCommandExport(moduleExports) {
   return null;
 }
 async function runCommandFromPackagePath(packageJsonPath, extensionId, commandName2, argumentValues, preferenceValues, options) {
-  const packageRoot = (0, import_node_path18.dirname)(packageJsonPath);
-  (0, import_node_fs18.mkdirSync)((0, import_node_path18.join)(packageRoot, ".tezbar-support"), { recursive: true });
+  const packageRoot = (0, import_node_path29.dirname)(packageJsonPath);
+  (0, import_node_fs26.mkdirSync)((0, import_node_path29.join)(packageRoot, ".tezbar-support"), { recursive: true });
   const pkg = parsePackageJson(packageJsonPath);
-  const command = findCommandInManifest(pkg, commandName2);
-  const mode = String(command.mode || "").toLowerCase();
-  const title = String(command.title || commandName2);
-  const entryPath = resolveCommandEntry(packageRoot, commandName2, command);
+  const command2 = findCommandInManifest(pkg, commandName2);
+  const mode = String(command2.mode || "").toLowerCase();
+  const title = String(command2.title || commandName2);
+  const entryPath = resolveCommandEntry(packageRoot, commandName2, command2);
   console.log(`[Runner] Mode=${mode}, title="${title}", entry=${entryPath}`);
   const bundled = await bundleCommand(entryPath, packageRoot);
   console.log(`[Runner] Bundle size: ${bundled.length} chars`);
@@ -13924,7 +13977,7 @@ async function runExtensionCommandFromPackageJson(packageJsonPath, commandName2,
   if (!normalizedPath || !normalizedCommandName) {
     return { ok: false, message: "packageJsonPath and commandName are required." };
   }
-  const extensionId = `raycast.${(0, import_node_path18.dirname)(normalizedPath).split("/").pop() || "external"}`;
+  const extensionId = `raycast.${(0, import_node_path29.dirname)(normalizedPath).split("/").pop() || "external"}`;
   try {
     return await runCommandFromPackagePath(
       normalizedPath,
@@ -13995,22 +14048,22 @@ function clearAllExtensionSessions() {
   }
   sessions.clear();
 }
-var import_node_fs18, import_promises3, import_node_child_process12, import_node_crypto10, import_node_http2, import_node_os9, import_node_module2, import_node_path18, import_node_stream, import_web, import_node_util9, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync9, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
+var import_node_fs26, import_promises4, import_node_child_process17, import_node_crypto12, import_node_http2, import_node_os13, import_node_module2, import_node_path29, import_node_stream, import_web, import_node_util14, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync14, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
 var init_extension_runner = __esm({
   "src/main/extension-runner.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_fs18 = require("node:fs");
-    import_promises3 = require("node:fs/promises");
-    import_node_child_process12 = require("node:child_process");
-    import_node_crypto10 = require("node:crypto");
+    import_node_fs26 = require("node:fs");
+    import_promises4 = require("node:fs/promises");
+    import_node_child_process17 = require("node:child_process");
+    import_node_crypto12 = require("node:crypto");
     import_node_http2 = require("node:http");
-    import_node_os9 = require("node:os");
+    import_node_os13 = require("node:os");
     import_node_module2 = require("node:module");
-    import_node_path18 = require("node:path");
+    import_node_path29 = require("node:path");
     import_node_stream = require("node:stream");
     import_web = require("node:stream/web");
-    import_node_util9 = require("node:util");
+    import_node_util14 = require("node:util");
     import_node_v8 = require("node:v8");
     import_node_zlib = require("node:zlib");
     import_node_vm = __toESM(require("node:vm"));
@@ -14032,8 +14085,8 @@ var init_extension_runner = __esm({
     BUILTIN_SET = new Set(import_node_module2.builtinModules);
     JSX_FRAGMENT = /* @__PURE__ */ Symbol.for("tezbar.jsx.fragment");
     REACT_CONTEXT = /* @__PURE__ */ Symbol.for("react.context");
-    execFileAsync9 = (0, import_node_util9.promisify)(import_node_child_process12.execFile);
-    gzipAsync = (0, import_node_util9.promisify)(import_node_zlib.gzip);
+    execFileAsync14 = (0, import_node_util14.promisify)(import_node_child_process17.execFile);
+    gzipAsync = (0, import_node_util14.promisify)(import_node_zlib.gzip);
     IMAGE_MASK2 = {
       Circle: "circle",
       RoundedRectangle: "roundedRectangle"
@@ -14077,12 +14130,12 @@ var CHAT_IPC = {
 };
 
 // src/main/agent/bridge.ts
-var import_node_child_process5 = require("node:child_process");
-var import_node_crypto6 = require("node:crypto");
+var import_node_child_process13 = require("node:child_process");
+var import_node_crypto11 = require("node:crypto");
 var import_node_events = require("node:events");
-var import_node_fs8 = require("node:fs");
-var import_node_os3 = require("node:os");
-var import_node_path8 = __toESM(require("node:path"));
+var import_node_fs22 = require("node:fs");
+var import_node_os11 = require("node:os");
+var import_node_path24 = __toESM(require("node:path"));
 init_desktop_runtime();
 
 // src/main/agent/tools.ts
@@ -14129,15 +14182,7 @@ var PI_TOOLS = {
   grep: {
     name: "grep",
     description: "Ripgrep-backed content search (glob / literal / context)",
-    argKeys: [
-      "pattern",
-      "path",
-      "glob",
-      "ignoreCase",
-      "literal",
-      "context",
-      "limit"
-    ],
+    argKeys: ["pattern", "path", "glob", "ignoreCase", "literal", "context", "limit"],
     mutates: false,
     label: (args) => `grep ${truncate(str(args.pattern, "<pattern>"))}`
   },
@@ -14157,9 +14202,17 @@ var PI_TOOLS = {
   }
 };
 function labelForToolCall(toolName, args) {
-  if (toolName === "search_knowledge") {
+  if (toolName === "launcher_search") {
     const safeArgs2 = args && typeof args === "object" ? args : {};
-    return `search knowledge: ${truncate(str(safeArgs2.query, "<query>"))}`;
+    return `search Tezbar: ${truncate(str(safeArgs2.query, "<query>"))}`;
+  }
+  if (toolName === "pc_search" || toolName === "search_knowledge") {
+    const safeArgs2 = args && typeof args === "object" ? args : {};
+    return `deep search: ${truncate(str(safeArgs2.query, "<query>"))}`;
+  }
+  if (toolName === "pc_read") {
+    const safeArgs2 = args && typeof args === "object" ? args : {};
+    return `read deep-search result: ${truncate(str(safeArgs2.resultId, "<result>"))}`;
   }
   const descriptor = PI_TOOLS[toolName];
   if (!descriptor) return `${toolName}`;
@@ -14174,9 +14227,9 @@ function errorDetail(result) {
   if (!Array.isArray(content)) return void 0;
   for (const item of content) {
     if (item && typeof item === "object" && item.type === "text") {
-      const text = item.text;
-      if (typeof text === "string" && text.trim()) {
-        return text.replace(/\s+/g, " ").trim().slice(0, 160);
+      const text2 = item.text;
+      if (typeof text2 === "string" && text2.trim()) {
+        return text2.replace(/\s+/g, " ").trim().slice(0, 160);
       }
     }
   }
@@ -14362,30 +14415,4284 @@ function buildPromptCommand(message, images) {
 }
 
 // src/main/knowledge/agent/gateway.ts
-var import_node_crypto5 = require("node:crypto");
+var import_node_crypto10 = require("node:crypto");
 var import_node_http = require("node:http");
 
-// src/main/knowledge/service.ts
+// src/shared/searchMode.ts
+var DEEP_SEARCH_PREFIX = "!";
+var ACTIVATE_DEEP_SEARCH_COMMAND = "activate-deep-search";
+var DEEP_SEARCH_RESULT_PREFIX = "deep-search:";
+function parseSearchQuery(input) {
+  if (input.startsWith(DEEP_SEARCH_PREFIX)) {
+    return {
+      mode: "deep",
+      query: input.slice(DEEP_SEARCH_PREFIX.length).trim()
+    };
+  }
+  return { mode: "basic", query: input.trim() };
+}
+function tokens(value) {
+  return value.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+function metadataTokenMatchesQuery(metadataToken, queryToken) {
+  if (metadataToken === queryToken || metadataToken.startsWith(queryToken)) return true;
+  if (!queryToken.startsWith(metadataToken)) return false;
+  const requiredPrefixLength = Math.max(3, Math.ceil(queryToken.length * 0.7));
+  return metadataToken.length >= requiredPrefixLength;
+}
+function hasGoodMetadataMatch(query, results) {
+  const normalizedQuery = query.trim().toLowerCase();
+  const queryTokens = tokens(normalizedQuery);
+  if (normalizedQuery.length < 2 || queryTokens.length === 0) return true;
+  return results.slice(0, 10).some((result) => {
+    if (result.category === "knowledge" || result.id.startsWith(DEEP_SEARCH_RESULT_PREFIX) || result.id.startsWith("note-add:")) {
+      return false;
+    }
+    const title = result.title.trim().toLowerCase();
+    const metadata = `${title} ${result.subtitle.trim().toLowerCase()}`.trim();
+    if (title === normalizedQuery || title.startsWith(normalizedQuery)) return true;
+    if (metadata.includes(normalizedQuery)) return true;
+    const metadataTokens = tokens(metadata);
+    const coversEveryTerm = queryTokens.every(
+      (queryToken) => metadataTokens.some((metadataToken) => metadataTokenMatchesQuery(metadataToken, queryToken))
+    );
+    if (!coversEveryTerm) return false;
+    return queryTokens.length > 1 || result.score >= 650;
+  });
+}
+function buildDeepSearchRecommendation(query, results) {
+  const trimmed = query.trim();
+  if (trimmed.length < 3 || hasGoodMetadataMatch(trimmed, results)) return null;
+  const bestCandidateScore = results.reduce((best, candidate) => Math.max(best, candidate.score), 0);
+  return {
+    id: `${DEEP_SEARCH_RESULT_PREFIX}${encodeURIComponent(trimmed.toLowerCase())}`,
+    title: `Deep Search \u201C${trimmed.slice(0, 72)}\u201D`,
+    subtitle: "No strong metadata match \xB7 Search inside indexed file contents",
+    category: "knowledge",
+    score: Math.max(1200, bestCandidateScore + 1),
+    action: {
+      type: "invoke-command",
+      commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
+      payload: { query: trimmed }
+    }
+  };
+}
+
+// src/main/search/service.ts
+init_desktop_runtime();
+var import_node_child_process12 = require("node:child_process");
+var import_node_fs21 = require("node:fs");
+var import_node_os10 = require("node:os");
+var import_node_path23 = require("node:path");
+var import_node_util10 = require("node:util");
+
+// src/main/extensions/service.ts
+init_desktop_runtime();
+var import_node_crypto = require("node:crypto");
+var import_node_module = require("node:module");
+var import_node_path4 = require("node:path");
+var import_node_fs4 = require("node:fs");
+var import_node_os4 = require("node:os");
+
+// node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs
+function isArray(value) {
+  return !Array.isArray ? getTag(value) === "[object Array]" : Array.isArray(value);
+}
+function baseToString(value) {
+  if (typeof value == "string") {
+    return value;
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  const result = value + "";
+  return result == "0" && 1 / value == -Infinity ? "-0" : result;
+}
+function toString(value) {
+  return value == null ? "" : baseToString(value);
+}
+function isString(value) {
+  return typeof value === "string";
+}
+function isNumber(value) {
+  return typeof value === "number";
+}
+function isBoolean(value) {
+  return value === true || value === false || isObjectLike(value) && getTag(value) == "[object Boolean]";
+}
+function isObject(value) {
+  return typeof value === "object";
+}
+function isObjectLike(value) {
+  return isObject(value) && value !== null;
+}
+function isDefined(value) {
+  return value !== void 0 && value !== null;
+}
+function isBlank(value) {
+  return !value.trim().length;
+}
+function getTag(value) {
+  return value == null ? value === void 0 ? "[object Undefined]" : "[object Null]" : Object.prototype.toString.call(value);
+}
+var INCORRECT_INDEX_TYPE = "Incorrect 'index' type";
+var LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY = (key) => `Invalid value for key ${key}`;
+var PATTERN_LENGTH_TOO_LARGE = (max) => `Pattern length exceeds max of ${max}.`;
+var MISSING_KEY_PROPERTY = (name) => `Missing ${name} property in key`;
+var INVALID_KEY_WEIGHT_VALUE = (key) => `Property 'weight' in key '${key}' must be a positive integer`;
+var hasOwn = Object.prototype.hasOwnProperty;
+var KeyStore = class {
+  constructor(keys) {
+    this._keys = [];
+    this._keyMap = {};
+    let totalWeight = 0;
+    keys.forEach((key) => {
+      const obj = createKey(key);
+      this._keys.push(obj);
+      this._keyMap[obj.id] = obj;
+      totalWeight += obj.weight;
+    });
+    this._keys.forEach((key) => {
+      key.weight /= totalWeight;
+    });
+  }
+  get(keyId) {
+    return this._keyMap[keyId];
+  }
+  keys() {
+    return this._keys;
+  }
+  toJSON() {
+    return JSON.stringify(this._keys);
+  }
+};
+function createKey(key) {
+  let path7 = null;
+  let id = null;
+  let src = null;
+  let weight = 1;
+  let getFn = null;
+  if (isString(key) || isArray(key)) {
+    src = key;
+    path7 = createKeyPath(key);
+    id = createKeyId(key);
+  } else {
+    if (!hasOwn.call(key, "name")) {
+      throw new Error(MISSING_KEY_PROPERTY("name"));
+    }
+    const name = key.name;
+    src = name;
+    if (hasOwn.call(key, "weight")) {
+      weight = key.weight;
+      if (weight <= 0) {
+        throw new Error(INVALID_KEY_WEIGHT_VALUE(name));
+      }
+    }
+    path7 = createKeyPath(name);
+    id = createKeyId(name);
+    getFn = key.getFn;
+  }
+  return {
+    path: path7,
+    id,
+    weight,
+    src,
+    getFn
+  };
+}
+function createKeyPath(key) {
+  return isArray(key) ? key : key.split(".");
+}
+function createKeyId(key) {
+  return isArray(key) ? key.join(".") : key;
+}
+function get(obj, path7) {
+  const list = [];
+  let arr = false;
+  const deepGet = (obj2, path8, index, arrayIndex) => {
+    if (!isDefined(obj2)) {
+      return;
+    }
+    if (!path8[index]) {
+      list.push(arrayIndex !== void 0 ? {
+        v: obj2,
+        i: arrayIndex
+      } : obj2);
+    } else {
+      const key = path8[index];
+      const value = obj2[key];
+      if (!isDefined(value)) {
+        return;
+      }
+      if (index === path8.length - 1 && (isString(value) || isNumber(value) || isBoolean(value) || typeof value === "bigint")) {
+        list.push(arrayIndex !== void 0 ? {
+          v: toString(value),
+          i: arrayIndex
+        } : toString(value));
+      } else if (isArray(value)) {
+        arr = true;
+        for (let i = 0, len = value.length; i < len; i += 1) {
+          deepGet(value[i], path8, index + 1, i);
+        }
+      } else if (path8.length) {
+        deepGet(value, path8, index + 1, arrayIndex);
+      }
+    }
+  };
+  deepGet(obj, isString(path7) ? path7.split(".") : path7, 0);
+  return arr ? list : list[0];
+}
+var MatchOptions = {
+  includeMatches: false,
+  findAllMatches: false,
+  minMatchCharLength: 1
+};
+var BasicOptions = {
+  isCaseSensitive: false,
+  ignoreDiacritics: false,
+  includeScore: false,
+  keys: [],
+  shouldSort: true,
+  sortFn: (a, b) => a.score === b.score ? a.idx < b.idx ? -1 : 1 : a.score < b.score ? -1 : 1
+};
+var FuzzyOptions = {
+  location: 0,
+  threshold: 0.6,
+  distance: 100
+};
+var AdvancedOptions = {
+  useExtendedSearch: false,
+  useTokenSearch: false,
+  getFn: get,
+  ignoreLocation: false,
+  ignoreFieldNorm: false,
+  fieldNormWeight: 1
+};
+var Config = Object.freeze({
+  ...BasicOptions,
+  ...MatchOptions,
+  ...FuzzyOptions,
+  ...AdvancedOptions
+});
+var SPACE = /[^ ]+/g;
+function norm(weight = 1, mantissa = 3) {
+  const cache2 = /* @__PURE__ */ new Map();
+  const m = Math.pow(10, mantissa);
+  return {
+    get(value) {
+      const numTokens = value.match(SPACE).length;
+      if (cache2.has(numTokens)) {
+        return cache2.get(numTokens);
+      }
+      const norm2 = 1 / Math.pow(numTokens, 0.5 * weight);
+      const n = parseFloat(Math.round(norm2 * m) / m);
+      cache2.set(numTokens, n);
+      return n;
+    },
+    clear() {
+      cache2.clear();
+    }
+  };
+}
+var FuseIndex = class {
+  constructor({
+    getFn = Config.getFn,
+    fieldNormWeight = Config.fieldNormWeight
+  } = {}) {
+    this.norm = norm(fieldNormWeight, 3);
+    this.getFn = getFn;
+    this.isCreated = false;
+    this.docs = [];
+    this.keys = [];
+    this._keysMap = {};
+    this.setIndexRecords();
+  }
+  setSources(docs = []) {
+    this.docs = docs;
+  }
+  setIndexRecords(records = []) {
+    this.records = records;
+  }
+  setKeys(keys = []) {
+    this.keys = keys;
+    this._keysMap = {};
+    keys.forEach((key, idx) => {
+      this._keysMap[key.id] = idx;
+    });
+  }
+  create() {
+    if (this.isCreated || !this.docs.length) {
+      return;
+    }
+    this.isCreated = true;
+    if (isString(this.docs[0])) {
+      this.docs.forEach((doc, docIndex) => {
+        this._addString(doc, docIndex);
+      });
+    } else {
+      this.docs.forEach((doc, docIndex) => {
+        this._addObject(doc, docIndex);
+      });
+    }
+    this.norm.clear();
+  }
+  // Adds a doc to the end of the index
+  add(doc) {
+    const idx = this.size();
+    if (isString(doc)) {
+      this._addString(doc, idx);
+    } else {
+      this._addObject(doc, idx);
+    }
+  }
+  // Removes the doc at the specified index of the index
+  removeAt(idx) {
+    this.records.splice(idx, 1);
+    for (let i = idx, len = this.size(); i < len; i += 1) {
+      this.records[i].i -= 1;
+    }
+  }
+  // Removes docs at the specified indices (must be sorted ascending)
+  removeAll(indices) {
+    for (let i = indices.length - 1; i >= 0; i -= 1) {
+      this.records.splice(indices[i], 1);
+    }
+    for (let i = 0, len = this.records.length; i < len; i += 1) {
+      this.records[i].i = i;
+    }
+  }
+  getValueForItemAtKeyId(item, keyId) {
+    return item[this._keysMap[keyId]];
+  }
+  size() {
+    return this.records.length;
+  }
+  _addString(doc, docIndex) {
+    if (!isDefined(doc) || isBlank(doc)) {
+      return;
+    }
+    const record2 = {
+      v: doc,
+      i: docIndex,
+      n: this.norm.get(doc)
+    };
+    this.records.push(record2);
+  }
+  _addObject(doc, docIndex) {
+    const record2 = {
+      i: docIndex,
+      $: {}
+    };
+    this.keys.forEach((key, keyIndex) => {
+      const value = key.getFn ? key.getFn(doc) : this.getFn(doc, key.path);
+      if (!isDefined(value)) {
+        return;
+      }
+      if (isArray(value)) {
+        const subRecords = [];
+        for (let i = 0, len = value.length; i < len; i += 1) {
+          const item = value[i];
+          if (!isDefined(item)) {
+            continue;
+          }
+          if (isString(item)) {
+            if (!isBlank(item)) {
+              const subRecord = {
+                v: item,
+                i,
+                n: this.norm.get(item)
+              };
+              subRecords.push(subRecord);
+            }
+          } else if (isDefined(item.v)) {
+            const text2 = isString(item.v) ? item.v : toString(item.v);
+            if (!isBlank(text2)) {
+              const subRecord = {
+                v: text2,
+                i: item.i,
+                n: this.norm.get(text2)
+              };
+              subRecords.push(subRecord);
+            }
+          }
+        }
+        record2.$[keyIndex] = subRecords;
+      } else if (isString(value) && !isBlank(value)) {
+        const subRecord = {
+          v: value,
+          n: this.norm.get(value)
+        };
+        record2.$[keyIndex] = subRecord;
+      }
+    });
+    this.records.push(record2);
+  }
+  toJSON() {
+    return {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      keys: this.keys.map(({
+        getFn,
+        ...key
+      }) => key),
+      records: this.records
+    };
+  }
+};
+function createIndex(keys, docs, {
+  getFn = Config.getFn,
+  fieldNormWeight = Config.fieldNormWeight
+} = {}) {
+  const myIndex = new FuseIndex({
+    getFn,
+    fieldNormWeight
+  });
+  myIndex.setKeys(keys.map(createKey));
+  myIndex.setSources(docs);
+  myIndex.create();
+  return myIndex;
+}
+function parseIndex(data, {
+  getFn = Config.getFn,
+  fieldNormWeight = Config.fieldNormWeight
+} = {}) {
+  const {
+    keys,
+    records
+  } = data;
+  const myIndex = new FuseIndex({
+    getFn,
+    fieldNormWeight
+  });
+  myIndex.setKeys(keys);
+  myIndex.setIndexRecords(records);
+  return myIndex;
+}
+function convertMaskToIndices(matchmask = [], minMatchCharLength = Config.minMatchCharLength) {
+  const indices = [];
+  let start = -1;
+  let end = -1;
+  let i = 0;
+  for (let len = matchmask.length; i < len; i += 1) {
+    const match = matchmask[i];
+    if (match && start === -1) {
+      start = i;
+    } else if (!match && start !== -1) {
+      end = i - 1;
+      if (end - start + 1 >= minMatchCharLength) {
+        indices.push([start, end]);
+      }
+      start = -1;
+    }
+  }
+  if (matchmask[i - 1] && i - start >= minMatchCharLength) {
+    indices.push([start, i - 1]);
+  }
+  return indices;
+}
+var MAX_BITS = 32;
+function search(text2, pattern, patternAlphabet, {
+  location = Config.location,
+  distance = Config.distance,
+  threshold = Config.threshold,
+  findAllMatches = Config.findAllMatches,
+  minMatchCharLength = Config.minMatchCharLength,
+  includeMatches = Config.includeMatches,
+  ignoreLocation = Config.ignoreLocation
+} = {}) {
+  if (pattern.length > MAX_BITS) {
+    throw new Error(PATTERN_LENGTH_TOO_LARGE(MAX_BITS));
+  }
+  const patternLen = pattern.length;
+  const textLen = text2.length;
+  const expectedLocation = Math.max(0, Math.min(location, textLen));
+  let currentThreshold = threshold;
+  let bestLocation = expectedLocation;
+  const calcScore = (errors, currentLocation) => {
+    const accuracy = errors / patternLen;
+    if (ignoreLocation) return accuracy;
+    const proximity = Math.abs(expectedLocation - currentLocation);
+    if (!distance) return proximity ? 1 : accuracy;
+    return accuracy + proximity / distance;
+  };
+  const computeMatches = minMatchCharLength > 1 || includeMatches;
+  const matchMask = computeMatches ? Array(textLen) : [];
+  let index;
+  while ((index = text2.indexOf(pattern, bestLocation)) > -1) {
+    const score = calcScore(0, index);
+    currentThreshold = Math.min(score, currentThreshold);
+    bestLocation = index + patternLen;
+    if (computeMatches) {
+      let i = 0;
+      while (i < patternLen) {
+        matchMask[index + i] = 1;
+        i += 1;
+      }
+    }
+  }
+  bestLocation = -1;
+  let lastBitArr = [];
+  let finalScore = 1;
+  let binMax = patternLen + textLen;
+  const mask = 1 << patternLen - 1;
+  for (let i = 0; i < patternLen; i += 1) {
+    let binMin = 0;
+    let binMid = binMax;
+    while (binMin < binMid) {
+      const score2 = calcScore(i, expectedLocation + binMid);
+      if (score2 <= currentThreshold) {
+        binMin = binMid;
+      } else {
+        binMax = binMid;
+      }
+      binMid = Math.floor((binMax - binMin) / 2 + binMin);
+    }
+    binMax = binMid;
+    let start = Math.max(1, expectedLocation - binMid + 1);
+    const finish = findAllMatches ? textLen : Math.min(expectedLocation + binMid, textLen) + patternLen;
+    const bitArr = Array(finish + 2);
+    bitArr[finish + 1] = (1 << i) - 1;
+    for (let j = finish; j >= start; j -= 1) {
+      const currentLocation = j - 1;
+      const charMatch = patternAlphabet[text2[currentLocation]];
+      if (computeMatches) {
+        matchMask[currentLocation] = +!!charMatch;
+      }
+      bitArr[j] = (bitArr[j + 1] << 1 | 1) & charMatch;
+      if (i) {
+        bitArr[j] |= (lastBitArr[j + 1] | lastBitArr[j]) << 1 | 1 | lastBitArr[j + 1];
+      }
+      if (bitArr[j] & mask) {
+        finalScore = calcScore(i, currentLocation);
+        if (finalScore <= currentThreshold) {
+          currentThreshold = finalScore;
+          bestLocation = currentLocation;
+          if (bestLocation <= expectedLocation) {
+            break;
+          }
+          start = Math.max(1, 2 * expectedLocation - bestLocation);
+        }
+      }
+    }
+    const score = calcScore(i + 1, expectedLocation);
+    if (score > currentThreshold) {
+      break;
+    }
+    lastBitArr = bitArr;
+  }
+  const result = {
+    isMatch: bestLocation >= 0,
+    // Count exact matches (those with a score of 0) to be "almost" exact
+    score: Math.max(1e-3, finalScore)
+  };
+  if (computeMatches) {
+    const indices = convertMaskToIndices(matchMask, minMatchCharLength);
+    if (!indices.length) {
+      result.isMatch = false;
+    } else if (includeMatches) {
+      result.indices = indices;
+    }
+  }
+  return result;
+}
+function createPatternAlphabet(pattern) {
+  const mask = {};
+  for (let i = 0, len = pattern.length; i < len; i += 1) {
+    const char = pattern.charAt(i);
+    mask[char] = (mask[char] || 0) | 1 << len - i - 1;
+  }
+  return mask;
+}
+function mergeIndices(indices) {
+  if (indices.length <= 1) return indices;
+  indices.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const merged = [indices[0]];
+  for (let i = 1, len = indices.length; i < len; i += 1) {
+    const last = merged[merged.length - 1];
+    const curr = indices[i];
+    if (curr[0] <= last[1] + 1) {
+      last[1] = Math.max(last[1], curr[1]);
+    } else {
+      merged.push(curr);
+    }
+  }
+  return merged;
+}
+var NON_DECOMPOSABLE_MAP = {
+  "\u0142": "l",
+  // ł
+  "\u0141": "L",
+  // Ł
+  "\u0111": "d",
+  // đ
+  "\u0110": "D",
+  // Đ
+  "\xF8": "o",
+  // ø
+  "\xD8": "O",
+  // Ø
+  "\u0127": "h",
+  // ħ
+  "\u0126": "H",
+  // Ħ
+  "\u0167": "t",
+  // ŧ
+  "\u0166": "T",
+  // Ŧ
+  "\u0131": "i",
+  // ı
+  "\xDF": "ss"
+  // ß
+};
+var NON_DECOMPOSABLE_RE = new RegExp("[" + Object.keys(NON_DECOMPOSABLE_MAP).join("") + "]", "g");
+var stripDiacritics = String.prototype.normalize ? (str2) => str2.normalize("NFD").replace(/[\u0300-\u036F\u0483-\u0489\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED\u0711\u0730-\u074A\u07A6-\u07B0\u07EB-\u07F3\u07FD\u0816-\u0819\u081B-\u0823\u0825-\u0827\u0829-\u082D\u0859-\u085B\u08D3-\u08E1\u08E3-\u0903\u093A-\u093C\u093E-\u094F\u0951-\u0957\u0962\u0963\u0981-\u0983\u09BC\u09BE-\u09C4\u09C7\u09C8\u09CB-\u09CD\u09D7\u09E2\u09E3\u09FE\u0A01-\u0A03\u0A3C\u0A3E-\u0A42\u0A47\u0A48\u0A4B-\u0A4D\u0A51\u0A70\u0A71\u0A75\u0A81-\u0A83\u0ABC\u0ABE-\u0AC5\u0AC7-\u0AC9\u0ACB-\u0ACD\u0AE2\u0AE3\u0AFA-\u0AFF\u0B01-\u0B03\u0B3C\u0B3E-\u0B44\u0B47\u0B48\u0B4B-\u0B4D\u0B56\u0B57\u0B62\u0B63\u0B82\u0BBE-\u0BC2\u0BC6-\u0BC8\u0BCA-\u0BCD\u0BD7\u0C00-\u0C04\u0C3E-\u0C44\u0C46-\u0C48\u0C4A-\u0C4D\u0C55\u0C56\u0C62\u0C63\u0C81-\u0C83\u0CBC\u0CBE-\u0CC4\u0CC6-\u0CC8\u0CCA-\u0CCD\u0CD5\u0CD6\u0CE2\u0CE3\u0D00-\u0D03\u0D3B\u0D3C\u0D3E-\u0D44\u0D46-\u0D48\u0D4A-\u0D4D\u0D57\u0D62\u0D63\u0D82\u0D83\u0DCA\u0DCF-\u0DD4\u0DD6\u0DD8-\u0DDF\u0DF2\u0DF3\u0E31\u0E34-\u0E3A\u0E47-\u0E4E\u0EB1\u0EB4-\u0EB9\u0EBB\u0EBC\u0EC8-\u0ECD\u0F18\u0F19\u0F35\u0F37\u0F39\u0F3E\u0F3F\u0F71-\u0F84\u0F86\u0F87\u0F8D-\u0F97\u0F99-\u0FBC\u0FC6\u102B-\u103E\u1056-\u1059\u105E-\u1060\u1062-\u1064\u1067-\u106D\u1071-\u1074\u1082-\u108D\u108F\u109A-\u109D\u135D-\u135F\u1712-\u1714\u1732-\u1734\u1752\u1753\u1772\u1773\u17B4-\u17D3\u17DD\u180B-\u180D\u1885\u1886\u18A9\u1920-\u192B\u1930-\u193B\u1A17-\u1A1B\u1A55-\u1A5E\u1A60-\u1A7C\u1A7F\u1AB0-\u1ABE\u1B00-\u1B04\u1B34-\u1B44\u1B6B-\u1B73\u1B80-\u1B82\u1BA1-\u1BAD\u1BE6-\u1BF3\u1C24-\u1C37\u1CD0-\u1CD2\u1CD4-\u1CE8\u1CED\u1CF2-\u1CF4\u1CF7-\u1CF9\u1DC0-\u1DF9\u1DFB-\u1DFF\u20D0-\u20F0\u2CEF-\u2CF1\u2D7F\u2DE0-\u2DFF\u302A-\u302F\u3099\u309A\uA66F-\uA672\uA674-\uA67D\uA69E\uA69F\uA6F0\uA6F1\uA802\uA806\uA80B\uA823-\uA827\uA880\uA881\uA8B4-\uA8C5\uA8E0-\uA8F1\uA8FF\uA926-\uA92D\uA947-\uA953\uA980-\uA983\uA9B3-\uA9C0\uA9E5\uAA29-\uAA36\uAA43\uAA4C\uAA4D\uAA7B-\uAA7D\uAAB0\uAAB2-\uAAB4\uAAB7\uAAB8\uAABE\uAABF\uAAC1\uAAEB-\uAAEF\uAAF5\uAAF6\uABE3-\uABEA\uABEC\uABED\uFB1E\uFE00-\uFE0F\uFE20-\uFE2F]/g, "").replace(NON_DECOMPOSABLE_RE, (ch) => NON_DECOMPOSABLE_MAP[ch]) : (str2) => str2;
+var BitapSearch = class {
+  constructor(pattern, {
+    location = Config.location,
+    threshold = Config.threshold,
+    distance = Config.distance,
+    includeMatches = Config.includeMatches,
+    findAllMatches = Config.findAllMatches,
+    minMatchCharLength = Config.minMatchCharLength,
+    isCaseSensitive = Config.isCaseSensitive,
+    ignoreDiacritics = Config.ignoreDiacritics,
+    ignoreLocation = Config.ignoreLocation
+  } = {}) {
+    this.options = {
+      location,
+      threshold,
+      distance,
+      includeMatches,
+      findAllMatches,
+      minMatchCharLength,
+      isCaseSensitive,
+      ignoreDiacritics,
+      ignoreLocation
+    };
+    pattern = isCaseSensitive ? pattern : pattern.toLowerCase();
+    pattern = ignoreDiacritics ? stripDiacritics(pattern) : pattern;
+    this.pattern = pattern;
+    this.chunks = [];
+    if (!this.pattern.length) {
+      return;
+    }
+    const addChunk = (pattern2, startIndex) => {
+      this.chunks.push({
+        pattern: pattern2,
+        alphabet: createPatternAlphabet(pattern2),
+        startIndex
+      });
+    };
+    const len = this.pattern.length;
+    if (len > MAX_BITS) {
+      let i = 0;
+      const remainder = len % MAX_BITS;
+      const end = len - remainder;
+      while (i < end) {
+        addChunk(this.pattern.substr(i, MAX_BITS), i);
+        i += MAX_BITS;
+      }
+      if (remainder) {
+        const startIndex = len - MAX_BITS;
+        addChunk(this.pattern.substr(startIndex), startIndex);
+      }
+    } else {
+      addChunk(this.pattern, 0);
+    }
+  }
+  searchIn(text2) {
+    const {
+      isCaseSensitive,
+      ignoreDiacritics,
+      includeMatches
+    } = this.options;
+    text2 = isCaseSensitive ? text2 : text2.toLowerCase();
+    text2 = ignoreDiacritics ? stripDiacritics(text2) : text2;
+    if (this.pattern === text2) {
+      const result2 = {
+        isMatch: true,
+        score: 0
+      };
+      if (includeMatches) {
+        result2.indices = [[0, text2.length - 1]];
+      }
+      return result2;
+    }
+    const {
+      location,
+      distance,
+      threshold,
+      findAllMatches,
+      minMatchCharLength,
+      ignoreLocation
+    } = this.options;
+    const allIndices = [];
+    let totalScore = 0;
+    let hasMatches = false;
+    this.chunks.forEach(({
+      pattern,
+      alphabet,
+      startIndex
+    }) => {
+      const {
+        isMatch,
+        score,
+        indices
+      } = search(text2, pattern, alphabet, {
+        location: location + startIndex,
+        distance,
+        threshold,
+        findAllMatches,
+        minMatchCharLength,
+        includeMatches,
+        ignoreLocation
+      });
+      if (isMatch) {
+        hasMatches = true;
+      }
+      totalScore += score;
+      if (isMatch && indices) {
+        allIndices.push(...indices);
+      }
+    });
+    const result = {
+      isMatch: hasMatches,
+      score: hasMatches ? totalScore / this.chunks.length : 1
+    };
+    if (hasMatches && includeMatches) {
+      result.indices = mergeIndices(allIndices);
+    }
+    return result;
+  }
+};
+var BaseMatch = class {
+  constructor(pattern) {
+    this.pattern = pattern;
+  }
+  static isMultiMatch(pattern) {
+    return getMatch(pattern, this.multiRegex);
+  }
+  static isSingleMatch(pattern) {
+    return getMatch(pattern, this.singleRegex);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  search(_text) {
+    return {
+      isMatch: false,
+      score: 1
+    };
+  }
+};
+function getMatch(pattern, exp) {
+  const matches = pattern.match(exp);
+  return matches ? matches[1] : null;
+}
+var ExactMatch = class extends BaseMatch {
+  constructor(pattern) {
+    super(pattern);
+  }
+  static get type() {
+    return "exact";
+  }
+  static get multiRegex() {
+    return /^="(.*)"$/;
+  }
+  static get singleRegex() {
+    return /^=(.*)$/;
+  }
+  search(text2) {
+    const isMatch = text2 === this.pattern;
+    return {
+      isMatch,
+      score: isMatch ? 0 : 1,
+      indices: [0, this.pattern.length - 1]
+    };
+  }
+};
+var InverseExactMatch = class extends BaseMatch {
+  constructor(pattern) {
+    super(pattern);
+  }
+  static get type() {
+    return "inverse-exact";
+  }
+  static get multiRegex() {
+    return /^!"(.*)"$/;
+  }
+  static get singleRegex() {
+    return /^!(.*)$/;
+  }
+  search(text2) {
+    const index = text2.indexOf(this.pattern);
+    const isMatch = index === -1;
+    return {
+      isMatch,
+      score: isMatch ? 0 : 1,
+      indices: [0, text2.length - 1]
+    };
+  }
+};
+var PrefixExactMatch = class extends BaseMatch {
+  constructor(pattern) {
+    super(pattern);
+  }
+  static get type() {
+    return "prefix-exact";
+  }
+  static get multiRegex() {
+    return /^\^"(.*)"$/;
+  }
+  static get singleRegex() {
+    return /^\^(.*)$/;
+  }
+  search(text2) {
+    const isMatch = text2.startsWith(this.pattern);
+    return {
+      isMatch,
+      score: isMatch ? 0 : 1,
+      indices: [0, this.pattern.length - 1]
+    };
+  }
+};
+var InversePrefixExactMatch = class extends BaseMatch {
+  constructor(pattern) {
+    super(pattern);
+  }
+  static get type() {
+    return "inverse-prefix-exact";
+  }
+  static get multiRegex() {
+    return /^!\^"(.*)"$/;
+  }
+  static get singleRegex() {
+    return /^!\^(.*)$/;
+  }
+  search(text2) {
+    const isMatch = !text2.startsWith(this.pattern);
+    return {
+      isMatch,
+      score: isMatch ? 0 : 1,
+      indices: [0, text2.length - 1]
+    };
+  }
+};
+var SuffixExactMatch = class extends BaseMatch {
+  constructor(pattern) {
+    super(pattern);
+  }
+  static get type() {
+    return "suffix-exact";
+  }
+  static get multiRegex() {
+    return /^"(.*)"\$$/;
+  }
+  static get singleRegex() {
+    return /^(.*)\$$/;
+  }
+  search(text2) {
+    const isMatch = text2.endsWith(this.pattern);
+    return {
+      isMatch,
+      score: isMatch ? 0 : 1,
+      indices: [text2.length - this.pattern.length, text2.length - 1]
+    };
+  }
+};
+var InverseSuffixExactMatch = class extends BaseMatch {
+  constructor(pattern) {
+    super(pattern);
+  }
+  static get type() {
+    return "inverse-suffix-exact";
+  }
+  static get multiRegex() {
+    return /^!"(.*)"\$$/;
+  }
+  static get singleRegex() {
+    return /^!(.*)\$$/;
+  }
+  search(text2) {
+    const isMatch = !text2.endsWith(this.pattern);
+    return {
+      isMatch,
+      score: isMatch ? 0 : 1,
+      indices: [0, text2.length - 1]
+    };
+  }
+};
+var FuzzyMatch = class extends BaseMatch {
+  constructor(pattern, {
+    location = Config.location,
+    threshold = Config.threshold,
+    distance = Config.distance,
+    includeMatches = Config.includeMatches,
+    findAllMatches = Config.findAllMatches,
+    minMatchCharLength = Config.minMatchCharLength,
+    isCaseSensitive = Config.isCaseSensitive,
+    ignoreDiacritics = Config.ignoreDiacritics,
+    ignoreLocation = Config.ignoreLocation
+  } = {}) {
+    super(pattern);
+    this._bitapSearch = new BitapSearch(pattern, {
+      location,
+      threshold,
+      distance,
+      includeMatches,
+      findAllMatches,
+      minMatchCharLength,
+      isCaseSensitive,
+      ignoreDiacritics,
+      ignoreLocation
+    });
+  }
+  static get type() {
+    return "fuzzy";
+  }
+  static get multiRegex() {
+    return /^"(.*)"$/;
+  }
+  static get singleRegex() {
+    return /^(.*)$/;
+  }
+  search(text2) {
+    return this._bitapSearch.searchIn(text2);
+  }
+};
+var IncludeMatch = class extends BaseMatch {
+  constructor(pattern) {
+    super(pattern);
+  }
+  static get type() {
+    return "include";
+  }
+  static get multiRegex() {
+    return /^'"(.*)"$/;
+  }
+  static get singleRegex() {
+    return /^'(.*)$/;
+  }
+  search(text2) {
+    let location = 0;
+    let index;
+    const indices = [];
+    const patternLen = this.pattern.length;
+    while ((index = text2.indexOf(this.pattern, location)) > -1) {
+      location = index + patternLen;
+      indices.push([index, location - 1]);
+    }
+    const isMatch = !!indices.length;
+    return {
+      isMatch,
+      score: isMatch ? 0 : 1,
+      indices
+    };
+  }
+};
+var searchers = [ExactMatch, IncludeMatch, PrefixExactMatch, InversePrefixExactMatch, InverseSuffixExactMatch, SuffixExactMatch, InverseExactMatch, FuzzyMatch];
+var searchersLen = searchers.length;
+var ESCAPED_PIPE = "\0";
+var OR_TOKEN = "|";
+function tokenize(pattern) {
+  const tokens2 = [];
+  const len = pattern.length;
+  let i = 0;
+  while (i < len) {
+    while (i < len && pattern[i] === " ") i++;
+    if (i >= len) break;
+    let j = i;
+    while (j < len && pattern[j] !== " " && pattern[j] !== '"') j++;
+    if (j < len && pattern[j] === '"') {
+      j++;
+      while (j < len) {
+        if (pattern[j] === '"') {
+          const next = j + 1;
+          if (next >= len || pattern[next] === " ") {
+            j++;
+            break;
+          }
+          if (pattern[next] === "$" && (next + 1 >= len || pattern[next + 1] === " ")) {
+            j += 2;
+            break;
+          }
+        }
+        j++;
+      }
+      tokens2.push(pattern.substring(i, j));
+      i = j;
+    } else {
+      while (j < len && pattern[j] !== " ") j++;
+      tokens2.push(pattern.substring(i, j));
+      i = j;
+    }
+  }
+  return tokens2;
+}
+function parseQuery(pattern, options = {}) {
+  const escaped = pattern.replace(/\\\|/g, ESCAPED_PIPE);
+  return escaped.split(OR_TOKEN).map((item) => {
+    const restored = item.replace(/\u0000/g, "|");
+    const query = tokenize(restored.trim()).filter((item2) => item2 && !!item2.trim());
+    const results = [];
+    for (let i = 0, len = query.length; i < len; i += 1) {
+      const queryItem = query[i];
+      let found = false;
+      let idx = -1;
+      while (!found && ++idx < searchersLen) {
+        const searcher = searchers[idx];
+        const token = searcher.isMultiMatch(queryItem);
+        if (token) {
+          results.push(new searcher(token, options));
+          found = true;
+        }
+      }
+      if (found) {
+        continue;
+      }
+      idx = -1;
+      while (++idx < searchersLen) {
+        const searcher = searchers[idx];
+        const token = searcher.isSingleMatch(queryItem);
+        if (token) {
+          results.push(new searcher(token, options));
+          break;
+        }
+      }
+    }
+    return results;
+  });
+}
+var MultiMatchSet = /* @__PURE__ */ new Set([FuzzyMatch.type, IncludeMatch.type]);
+var ExtendedSearch = class {
+  constructor(pattern, {
+    isCaseSensitive = Config.isCaseSensitive,
+    ignoreDiacritics = Config.ignoreDiacritics,
+    includeMatches = Config.includeMatches,
+    minMatchCharLength = Config.minMatchCharLength,
+    ignoreLocation = Config.ignoreLocation,
+    findAllMatches = Config.findAllMatches,
+    location = Config.location,
+    threshold = Config.threshold,
+    distance = Config.distance
+  } = {}) {
+    this.query = null;
+    this.options = {
+      isCaseSensitive,
+      ignoreDiacritics,
+      includeMatches,
+      minMatchCharLength,
+      findAllMatches,
+      ignoreLocation,
+      location,
+      threshold,
+      distance
+    };
+    pattern = isCaseSensitive ? pattern : pattern.toLowerCase();
+    pattern = ignoreDiacritics ? stripDiacritics(pattern) : pattern;
+    this.pattern = pattern;
+    this.query = parseQuery(this.pattern, this.options);
+  }
+  static condition(_, options) {
+    return options.useExtendedSearch;
+  }
+  // Note: searchIn operates on a single text value and sets hasInverse on the
+  // result when inverse patterns are involved. _searchObjectList uses this to
+  // switch from "ANY key" to "ALL keys" aggregation. See #712.
+  searchIn(text2) {
+    const query = this.query;
+    if (!query) {
+      return {
+        isMatch: false,
+        score: 1
+      };
+    }
+    const {
+      includeMatches,
+      isCaseSensitive,
+      ignoreDiacritics
+    } = this.options;
+    text2 = isCaseSensitive ? text2 : text2.toLowerCase();
+    text2 = ignoreDiacritics ? stripDiacritics(text2) : text2;
+    let numMatches = 0;
+    const allIndices = [];
+    let totalScore = 0;
+    let hasInverse = false;
+    for (let i = 0, qLen = query.length; i < qLen; i += 1) {
+      const searchers2 = query[i];
+      allIndices.length = 0;
+      numMatches = 0;
+      hasInverse = false;
+      for (let j = 0, pLen = searchers2.length; j < pLen; j += 1) {
+        const searcher = searchers2[j];
+        const {
+          isMatch,
+          indices,
+          score
+        } = searcher.search(text2);
+        if (isMatch) {
+          numMatches += 1;
+          totalScore += score;
+          const type = searcher.constructor.type;
+          if (type.startsWith("inverse")) {
+            hasInverse = true;
+          }
+          if (includeMatches) {
+            if (MultiMatchSet.has(type)) {
+              allIndices.push(...indices);
+            } else {
+              allIndices.push(indices);
+            }
+          }
+        } else {
+          totalScore = 0;
+          numMatches = 0;
+          allIndices.length = 0;
+          hasInverse = false;
+          break;
+        }
+      }
+      if (numMatches) {
+        const result = {
+          isMatch: true,
+          score: totalScore / numMatches
+        };
+        if (hasInverse) {
+          result.hasInverse = true;
+        }
+        if (includeMatches) {
+          result.indices = mergeIndices(allIndices);
+        }
+        return result;
+      }
+    }
+    return {
+      isMatch: false,
+      score: 1
+    };
+  }
+};
+var registeredSearchers = [];
+function register(...args) {
+  registeredSearchers.push(...args);
+}
+function createSearcher(pattern, options) {
+  for (let i = 0, len = registeredSearchers.length; i < len; i += 1) {
+    const searcherClass = registeredSearchers[i];
+    if (searcherClass.condition(pattern, options)) {
+      return new searcherClass(pattern, options);
+    }
+  }
+  return new BitapSearch(pattern, options);
+}
+var LogicalOperator = {
+  AND: "$and",
+  OR: "$or"
+};
+var KeyType = {
+  PATH: "$path",
+  PATTERN: "$val"
+};
+var isExpression = (query) => !!(query[LogicalOperator.AND] || query[LogicalOperator.OR]);
+var isPath = (query) => !!query[KeyType.PATH];
+var isLeaf = (query) => !isArray(query) && isObject(query) && !isExpression(query);
+var convertToExplicit = (query) => ({
+  [LogicalOperator.AND]: Object.keys(query).map((key) => ({
+    [key]: query[key]
+  }))
+});
+function parse(query, options, {
+  auto = true
+} = {}) {
+  const next = (query2) => {
+    if (isString(query2)) {
+      const obj = {
+        keyId: null,
+        pattern: query2
+      };
+      if (auto) {
+        obj.searcher = createSearcher(query2, options);
+      }
+      return obj;
+    }
+    const keys = Object.keys(query2);
+    const isQueryPath = isPath(query2);
+    if (!isQueryPath && keys.length > 1 && !isExpression(query2)) {
+      return next(convertToExplicit(query2));
+    }
+    if (isLeaf(query2)) {
+      const key = isQueryPath ? query2[KeyType.PATH] : keys[0];
+      const pattern = isQueryPath ? query2[KeyType.PATTERN] : query2[key];
+      if (!isString(pattern)) {
+        throw new Error(LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY(key));
+      }
+      const obj = {
+        keyId: createKeyId(key),
+        pattern
+      };
+      if (auto) {
+        obj.searcher = createSearcher(pattern, options);
+      }
+      return obj;
+    }
+    const node = {
+      children: [],
+      operator: keys[0]
+    };
+    keys.forEach((key) => {
+      const value = query2[key];
+      if (isArray(value)) {
+        value.forEach((item) => {
+          node.children.push(next(item));
+        });
+      }
+    });
+    return node;
+  };
+  if (!isExpression(query)) {
+    query = convertToExplicit(query);
+  }
+  return next(query);
+}
+function computeScoreSingle(matches, {
+  ignoreFieldNorm = Config.ignoreFieldNorm
+}) {
+  let totalScore = 1;
+  matches.forEach(({
+    key,
+    norm: norm2,
+    score
+  }) => {
+    const weight = key ? key.weight : null;
+    totalScore *= Math.pow(score === 0 && weight ? Number.EPSILON : score, (weight || 1) * (ignoreFieldNorm ? 1 : norm2));
+  });
+  return totalScore;
+}
+function computeScore(results, {
+  ignoreFieldNorm = Config.ignoreFieldNorm
+}) {
+  results.forEach((result) => {
+    result.score = computeScoreSingle(result.matches, {
+      ignoreFieldNorm
+    });
+  });
+}
+var MaxHeap = class {
+  constructor(limit) {
+    this.limit = limit;
+    this.heap = [];
+  }
+  get size() {
+    return this.heap.length;
+  }
+  shouldInsert(score) {
+    return this.size < this.limit || score < this.heap[0].score;
+  }
+  insert(item) {
+    if (this.size < this.limit) {
+      this.heap.push(item);
+      this._bubbleUp(this.size - 1);
+    } else if (item.score < this.heap[0].score) {
+      this.heap[0] = item;
+      this._sinkDown(0);
+    }
+  }
+  extractSorted(sortFn) {
+    return this.heap.sort(sortFn);
+  }
+  _bubbleUp(i) {
+    const heap = this.heap;
+    while (i > 0) {
+      const parent = i - 1 >> 1;
+      if (heap[i].score <= heap[parent].score) break;
+      const tmp = heap[i];
+      heap[i] = heap[parent];
+      heap[parent] = tmp;
+      i = parent;
+    }
+  }
+  _sinkDown(i) {
+    const heap = this.heap;
+    const len = heap.length;
+    let largest = i;
+    do {
+      i = largest;
+      const left = 2 * i + 1;
+      const right = 2 * i + 2;
+      if (left < len && heap[left].score > heap[largest].score) {
+        largest = left;
+      }
+      if (right < len && heap[right].score > heap[largest].score) {
+        largest = right;
+      }
+      if (largest !== i) {
+        const tmp = heap[i];
+        heap[i] = heap[largest];
+        heap[largest] = tmp;
+      }
+    } while (largest !== i);
+  }
+};
+function transformMatches(result, data) {
+  const matches = result.matches;
+  data.matches = [];
+  if (!isDefined(matches)) {
+    return;
+  }
+  matches.forEach((match) => {
+    if (!isDefined(match.indices) || !match.indices.length) {
+      return;
+    }
+    const {
+      indices,
+      value
+    } = match;
+    const obj = {
+      indices,
+      value
+    };
+    if (match.key) {
+      obj.key = match.key.src;
+    }
+    if (match.idx > -1) {
+      obj.refIndex = match.idx;
+    }
+    data.matches.push(obj);
+  });
+}
+function transformScore(result, data) {
+  data.score = result.score;
+}
+function format(results, docs, {
+  includeMatches = Config.includeMatches,
+  includeScore = Config.includeScore
+} = {}) {
+  const transformers = [];
+  if (includeMatches) transformers.push(transformMatches);
+  if (includeScore) transformers.push(transformScore);
+  return results.map((result) => {
+    const {
+      idx
+    } = result;
+    const data = {
+      item: docs[idx],
+      refIndex: idx
+    };
+    if (transformers.length) {
+      transformers.forEach((transformer) => {
+        transformer(result, data);
+      });
+    }
+    return data;
+  });
+}
+var WORD = /\b\w+\b/g;
+function createAnalyzer({
+  isCaseSensitive = false,
+  ignoreDiacritics = false
+} = {}) {
+  return {
+    tokenize(text2) {
+      if (!isCaseSensitive) {
+        text2 = text2.toLowerCase();
+      }
+      if (ignoreDiacritics) {
+        text2 = stripDiacritics(text2);
+      }
+      return text2.match(WORD) || [];
+    }
+  };
+}
+function buildInvertedIndex(records, keyCount, analyzer) {
+  const terms = /* @__PURE__ */ new Map();
+  const df = /* @__PURE__ */ new Map();
+  let fieldCount = 0;
+  function addField(text2, docIdx, keyIdx, subIdx) {
+    const tokens2 = analyzer.tokenize(text2);
+    if (!tokens2.length) return;
+    fieldCount++;
+    const termFreqs = /* @__PURE__ */ new Map();
+    for (const token of tokens2) {
+      termFreqs.set(token, (termFreqs.get(token) || 0) + 1);
+    }
+    for (const [term, tf] of termFreqs) {
+      const posting = {
+        docIdx,
+        keyIdx,
+        subIdx,
+        tf
+      };
+      let postings = terms.get(term);
+      if (!postings) {
+        postings = [];
+        terms.set(term, postings);
+      }
+      postings.push(posting);
+      df.set(term, (df.get(term) || 0) + 1);
+    }
+  }
+  for (const record2 of records) {
+    const {
+      i: docIdx,
+      v,
+      $: fields
+    } = record2;
+    if (v !== void 0) {
+      addField(v, docIdx, -1, -1);
+      continue;
+    }
+    if (fields) {
+      for (let keyIdx = 0; keyIdx < keyCount; keyIdx++) {
+        const value = fields[keyIdx];
+        if (!value) continue;
+        if (Array.isArray(value)) {
+          for (const sub of value) {
+            addField(sub.v, docIdx, keyIdx, sub.i ?? -1);
+          }
+        } else {
+          addField(value.v, docIdx, keyIdx, -1);
+        }
+      }
+    }
+  }
+  return {
+    terms,
+    fieldCount,
+    df
+  };
+}
+function addToInvertedIndex(index, record2, keyCount, analyzer) {
+  const {
+    i: docIdx,
+    v,
+    $: fields
+  } = record2;
+  function addField(text2, keyIdx, subIdx) {
+    const tokens2 = analyzer.tokenize(text2);
+    if (!tokens2.length) return;
+    index.fieldCount++;
+    const termFreqs = /* @__PURE__ */ new Map();
+    for (const token of tokens2) {
+      termFreqs.set(token, (termFreqs.get(token) || 0) + 1);
+    }
+    for (const [term, tf] of termFreqs) {
+      const posting = {
+        docIdx,
+        keyIdx,
+        subIdx,
+        tf
+      };
+      let postings = index.terms.get(term);
+      if (!postings) {
+        postings = [];
+        index.terms.set(term, postings);
+      }
+      postings.push(posting);
+      index.df.set(term, (index.df.get(term) || 0) + 1);
+    }
+  }
+  if (v !== void 0) {
+    addField(v, -1, -1);
+    return;
+  }
+  if (fields) {
+    for (let keyIdx = 0; keyIdx < keyCount; keyIdx++) {
+      const value = fields[keyIdx];
+      if (!value) continue;
+      if (Array.isArray(value)) {
+        for (const sub of value) {
+          addField(sub.v, keyIdx, sub.i ?? -1);
+        }
+      } else {
+        addField(value.v, keyIdx, -1);
+      }
+    }
+  }
+}
+function removeFromInvertedIndex(index, docIdx) {
+  for (const [term, postings] of index.terms) {
+    const filtered = postings.filter((p) => p.docIdx !== docIdx);
+    const removed = postings.length - filtered.length;
+    if (removed > 0) {
+      index.fieldCount -= removed;
+      index.df.set(term, (index.df.get(term) || 0) - removed);
+      if (filtered.length === 0) {
+        index.terms.delete(term);
+        index.df.delete(term);
+      } else {
+        index.terms.set(term, filtered);
+      }
+    }
+  }
+}
+var Fuse = class {
+  // Statics are assigned in entry.ts
+  constructor(docs, options, index) {
+    this.options = {
+      ...Config,
+      ...options
+    };
+    if (this.options.useExtendedSearch && false) ;
+    if (this.options.useTokenSearch && false) ;
+    this._keyStore = new KeyStore(this.options.keys);
+    this._docs = docs;
+    this._myIndex = null;
+    this._invertedIndex = null;
+    this.setCollection(docs, index);
+    this._lastQuery = null;
+    this._lastSearcher = null;
+  }
+  _getSearcher(query) {
+    if (this._lastQuery === query) {
+      return this._lastSearcher;
+    }
+    const opts = this._invertedIndex ? {
+      ...this.options,
+      _invertedIndex: this._invertedIndex
+    } : this.options;
+    const searcher = createSearcher(query, opts);
+    this._lastQuery = query;
+    this._lastSearcher = searcher;
+    return searcher;
+  }
+  setCollection(docs, index) {
+    this._docs = docs;
+    if (index && !(index instanceof FuseIndex)) {
+      throw new Error(INCORRECT_INDEX_TYPE);
+    }
+    this._myIndex = index || createIndex(this.options.keys, this._docs, {
+      getFn: this.options.getFn,
+      fieldNormWeight: this.options.fieldNormWeight
+    });
+    if (this.options.useTokenSearch) {
+      const analyzer = createAnalyzer({
+        isCaseSensitive: this.options.isCaseSensitive,
+        ignoreDiacritics: this.options.ignoreDiacritics
+      });
+      this._invertedIndex = buildInvertedIndex(this._myIndex.records, this._myIndex.keys.length, analyzer);
+    }
+  }
+  add(doc) {
+    if (!isDefined(doc)) {
+      return;
+    }
+    this._docs.push(doc);
+    this._myIndex.add(doc);
+    if (this._invertedIndex) {
+      const record2 = this._myIndex.records[this._myIndex.records.length - 1];
+      const analyzer = createAnalyzer({
+        isCaseSensitive: this.options.isCaseSensitive,
+        ignoreDiacritics: this.options.ignoreDiacritics
+      });
+      addToInvertedIndex(this._invertedIndex, record2, this._myIndex.keys.length, analyzer);
+    }
+  }
+  remove(predicate = () => false) {
+    const results = [];
+    const indicesToRemove = [];
+    for (let i = 0, len = this._docs.length; i < len; i += 1) {
+      if (predicate(this._docs[i], i)) {
+        results.push(this._docs[i]);
+        indicesToRemove.push(i);
+      }
+    }
+    if (indicesToRemove.length) {
+      if (this._invertedIndex) {
+        for (const idx of indicesToRemove) {
+          removeFromInvertedIndex(this._invertedIndex, idx);
+        }
+      }
+      for (let i = indicesToRemove.length - 1; i >= 0; i -= 1) {
+        this._docs.splice(indicesToRemove[i], 1);
+      }
+      this._myIndex.removeAll(indicesToRemove);
+    }
+    return results;
+  }
+  removeAt(idx) {
+    if (this._invertedIndex) {
+      removeFromInvertedIndex(this._invertedIndex, idx);
+    }
+    const doc = this._docs.splice(idx, 1)[0];
+    this._myIndex.removeAt(idx);
+    return doc;
+  }
+  getIndex() {
+    return this._myIndex;
+  }
+  search(query, options) {
+    const {
+      limit = -1
+    } = options || {};
+    const {
+      includeMatches,
+      includeScore,
+      shouldSort,
+      sortFn,
+      ignoreFieldNorm
+    } = this.options;
+    if (isString(query) && !query.trim()) {
+      let docs = this._docs.map((item, idx) => ({
+        item,
+        refIndex: idx
+      }));
+      if (isNumber(limit) && limit > -1) {
+        docs = docs.slice(0, limit);
+      }
+      return docs;
+    }
+    const useHeap = isNumber(limit) && limit > 0 && isString(query);
+    let results;
+    if (useHeap) {
+      const heap = new MaxHeap(limit);
+      if (isString(this._docs[0])) {
+        this._searchStringList(query, {
+          heap,
+          ignoreFieldNorm
+        });
+      } else {
+        this._searchObjectList(query, {
+          heap,
+          ignoreFieldNorm
+        });
+      }
+      results = heap.extractSorted(sortFn);
+    } else {
+      results = isString(query) ? isString(this._docs[0]) ? this._searchStringList(query) : this._searchObjectList(query) : this._searchLogical(query);
+      computeScore(results, {
+        ignoreFieldNorm
+      });
+      if (shouldSort) {
+        results.sort(sortFn);
+      }
+      if (isNumber(limit) && limit > -1) {
+        results = results.slice(0, limit);
+      }
+    }
+    return format(results, this._docs, {
+      includeMatches,
+      includeScore
+    });
+  }
+  _searchStringList(query, {
+    heap,
+    ignoreFieldNorm
+  } = {}) {
+    const searcher = this._getSearcher(query);
+    const {
+      records
+    } = this._myIndex;
+    const results = heap ? null : [];
+    records.forEach(({
+      v: text2,
+      i: idx,
+      n: norm2
+    }) => {
+      if (!isDefined(text2)) {
+        return;
+      }
+      const {
+        isMatch,
+        score,
+        indices
+      } = searcher.searchIn(text2);
+      if (isMatch) {
+        const result = {
+          item: text2,
+          idx,
+          matches: [{
+            score,
+            value: text2,
+            norm: norm2,
+            indices
+          }]
+        };
+        if (heap) {
+          result.score = computeScoreSingle(result.matches, {
+            ignoreFieldNorm
+          });
+          if (heap.shouldInsert(result.score)) {
+            heap.insert(result);
+          }
+        } else {
+          results.push(result);
+        }
+      }
+    });
+    return results;
+  }
+  _searchLogical(query) {
+    const expression = parse(query, this.options);
+    const evaluate = (node, item, idx) => {
+      if (!("children" in node)) {
+        const {
+          keyId,
+          searcher
+        } = node;
+        let matches;
+        if (keyId === null) {
+          matches = [];
+          this._myIndex.keys.forEach((key, keyIndex) => {
+            matches.push(...this._findMatches({
+              key,
+              value: item[keyIndex],
+              searcher
+            }));
+          });
+        } else {
+          matches = this._findMatches({
+            key: this._keyStore.get(keyId),
+            value: this._myIndex.getValueForItemAtKeyId(item, keyId),
+            searcher
+          });
+        }
+        if (matches && matches.length) {
+          return [{
+            idx,
+            item,
+            matches
+          }];
+        }
+        return [];
+      }
+      const {
+        children,
+        operator
+      } = node;
+      const res = [];
+      for (let i = 0, len = children.length; i < len; i += 1) {
+        const child = children[i];
+        const result = evaluate(child, item, idx);
+        if (result.length) {
+          res.push(...result);
+        } else if (operator === LogicalOperator.AND) {
+          return [];
+        }
+      }
+      return res;
+    };
+    const records = this._myIndex.records;
+    const resultMap = /* @__PURE__ */ new Map();
+    const results = [];
+    records.forEach(({
+      $: item,
+      i: idx
+    }) => {
+      if (isDefined(item)) {
+        const expResults = evaluate(expression, item, idx);
+        if (expResults.length) {
+          if (!resultMap.has(idx)) {
+            resultMap.set(idx, {
+              idx,
+              item,
+              matches: []
+            });
+            results.push(resultMap.get(idx));
+          }
+          expResults.forEach(({
+            matches
+          }) => {
+            resultMap.get(idx).matches.push(...matches);
+          });
+        }
+      }
+    });
+    return results;
+  }
+  // When a search involves inverse patterns (e.g. !Syrup), the aggregation
+  // across keys switches from "ANY key matches" to "ALL keys must match."
+  // This is signaled by hasInverse on the SearchResult from ExtendedSearch.
+  //
+  // For mixed patterns like "^hello !Syrup", a key failure is ambiguous —
+  // it could be the positive or inverse term that failed. In that case we
+  // conservatively exclude the item, which is strictly better than the old
+  // behavior of including it. See: https://github.com/krisk/Fuse/issues/712
+  _searchObjectList(query, {
+    heap,
+    ignoreFieldNorm
+  } = {}) {
+    const searcher = this._getSearcher(query);
+    const {
+      keys,
+      records
+    } = this._myIndex;
+    const results = heap ? null : [];
+    records.forEach(({
+      $: item,
+      i: idx
+    }) => {
+      if (!isDefined(item)) {
+        return;
+      }
+      const matches = [];
+      let anyKeyFailed = false;
+      let hasInverse = false;
+      keys.forEach((key, keyIndex) => {
+        const keyMatches = this._findMatches({
+          key,
+          value: item[keyIndex],
+          searcher
+        });
+        if (keyMatches.length) {
+          matches.push(...keyMatches);
+          if (keyMatches[0].hasInverse) {
+            hasInverse = true;
+          }
+        } else {
+          anyKeyFailed = true;
+        }
+      });
+      if (hasInverse && anyKeyFailed) {
+        return;
+      }
+      if (matches.length) {
+        const result = {
+          idx,
+          item,
+          matches
+        };
+        if (heap) {
+          result.score = computeScoreSingle(result.matches, {
+            ignoreFieldNorm
+          });
+          if (heap.shouldInsert(result.score)) {
+            heap.insert(result);
+          }
+        } else {
+          results.push(result);
+        }
+      }
+    });
+    return results;
+  }
+  _findMatches({
+    key,
+    value,
+    searcher
+  }) {
+    if (!isDefined(value)) {
+      return [];
+    }
+    const matches = [];
+    if (isArray(value)) {
+      value.forEach(({
+        v: text2,
+        i: idx,
+        n: norm2
+      }) => {
+        if (!isDefined(text2)) {
+          return;
+        }
+        const {
+          isMatch,
+          score,
+          indices,
+          hasInverse
+        } = searcher.searchIn(text2);
+        if (isMatch) {
+          matches.push({
+            score,
+            key,
+            value: text2,
+            idx,
+            norm: norm2,
+            indices,
+            hasInverse
+          });
+        }
+      });
+    } else {
+      const {
+        v: text2,
+        n: norm2
+      } = value;
+      const {
+        isMatch,
+        score,
+        indices,
+        hasInverse
+      } = searcher.searchIn(text2);
+      if (isMatch) {
+        matches.push({
+          score,
+          key,
+          value: text2,
+          norm: norm2,
+          indices,
+          hasInverse
+        });
+      }
+    }
+    return matches;
+  }
+};
+var TokenSearch = class {
+  static condition(_, options) {
+    return options.useTokenSearch;
+  }
+  constructor(pattern, options) {
+    this.options = options;
+    this.analyzer = createAnalyzer({
+      isCaseSensitive: options.isCaseSensitive,
+      ignoreDiacritics: options.ignoreDiacritics
+    });
+    const queryTerms = this.analyzer.tokenize(pattern);
+    const invertedIndex = options._invertedIndex;
+    const {
+      df,
+      fieldCount
+    } = invertedIndex;
+    this.termSearchers = [];
+    this.idfWeights = [];
+    for (const term of queryTerms) {
+      this.termSearchers.push(new BitapSearch(term, {
+        location: options.location,
+        threshold: options.threshold,
+        distance: options.distance,
+        includeMatches: options.includeMatches,
+        findAllMatches: options.findAllMatches,
+        minMatchCharLength: options.minMatchCharLength,
+        isCaseSensitive: options.isCaseSensitive,
+        ignoreDiacritics: options.ignoreDiacritics,
+        ignoreLocation: true
+      }));
+      const docFreq = df.get(term) || 0;
+      const idf = Math.log(1 + (fieldCount - docFreq + 0.5) / (docFreq + 0.5));
+      this.idfWeights.push(idf);
+    }
+  }
+  searchIn(text2) {
+    if (!this.termSearchers.length) {
+      return {
+        isMatch: false,
+        score: 1
+      };
+    }
+    const allIndices = [];
+    let weightedScore = 0;
+    let maxPossibleScore = 0;
+    let matchedCount = 0;
+    for (let i = 0; i < this.termSearchers.length; i++) {
+      const result = this.termSearchers[i].searchIn(text2);
+      const idf = this.idfWeights[i];
+      maxPossibleScore += idf;
+      if (result.isMatch) {
+        matchedCount++;
+        weightedScore += idf * (1 - result.score);
+        if (result.indices) {
+          allIndices.push(...result.indices);
+        }
+      }
+    }
+    if (matchedCount === 0) {
+      return {
+        isMatch: false,
+        score: 1
+      };
+    }
+    const normalized = maxPossibleScore > 0 ? 1 - weightedScore / maxPossibleScore : 0;
+    const searchResult = {
+      isMatch: true,
+      score: Math.max(1e-3, normalized)
+    };
+    if (this.options.includeMatches && allIndices.length) {
+      searchResult.indices = mergeIndices(allIndices);
+    }
+    return searchResult;
+  }
+};
+Fuse.version = "7.3.0";
+Fuse.createIndex = createIndex;
+Fuse.parseIndex = parseIndex;
+Fuse.config = Config;
+Fuse.match = function(pattern, text2, options) {
+  const searcher = createSearcher(pattern, {
+    ...Config,
+    ...options
+  });
+  return searcher.searchIn(text2);
+};
+{
+  Fuse.parseQuery = parse;
+}
+{
+  register(ExtendedSearch);
+}
+{
+  register(TokenSearch);
+}
+Fuse.use = function(...plugins) {
+  plugins.forEach((plugin) => register(plugin));
+};
+
+// src/main/extensions/raycastShim.ts
+init_desktop_runtime();
+var import_node_child_process3 = require("node:child_process");
+var import_node_fs3 = require("node:fs");
+var import_node_os3 = require("node:os");
+var import_node_path3 = require("node:path");
+var import_node_util2 = require("node:util");
+init_appsProvider();
+var TOAST_STYLE = {
+  Success: "success",
+  Failure: "failure",
+  Animated: "animated"
+};
+var IMAGE_MASK = {
+  Circle: "circle",
+  RoundedRectangle: "roundedRectangle"
+};
+var execFileAsync2 = (0, import_node_util2.promisify)(import_node_child_process3.execFile);
+async function runAppleScript(source) {
+  if (process.platform !== "darwin") {
+    throw new Error("AppleScript is only available on macOS");
+  }
+  if (typeof source !== "string" || source.trim().length === 0) {
+    return "";
+  }
+  const { stdout } = await execFileAsync2("/usr/bin/osascript", ["-e", source], {
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024
+  });
+  return String(stdout).replace(/\r?\n$/, "");
+}
+function createRenderProxy(name) {
+  const target = function() {
+    return void 0;
+  };
+  Object.defineProperty(target, "name", { value: name });
+  return new Proxy(target, {
+    get(t, prop) {
+      if (prop === Symbol.toPrimitive) return () => `[Raycast:${name}]`;
+      if (prop === "displayName") return name;
+      if (prop === "prototype") return {};
+      if (typeof prop === "symbol") return void 0;
+      if (prop in t) return Reflect.get(t, prop);
+      return createRenderProxy(`${name}.${String(prop)}`);
+    },
+    apply() {
+      return void 0;
+    },
+    construct() {
+      return {};
+    }
+  });
+}
+function createLocalStorage(packageRoot) {
+  const file = (0, import_node_path3.join)(packageRoot, "localStorage.json");
+  const readAll2 = () => {
+    try {
+      const raw = (0, import_node_fs3.readFileSync)(file, "utf8");
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+  const writeAll2 = (value) => {
+    (0, import_node_fs3.mkdirSync)(packageRoot, { recursive: true });
+    (0, import_node_fs3.writeFileSync)(file, JSON.stringify(value, null, 2), "utf8");
+  };
+  return {
+    getItem: async (key) => readAll2()[key],
+    setItem: async (key, value) => {
+      const all = readAll2();
+      all[key] = value;
+      writeAll2(all);
+    },
+    removeItem: async (key) => {
+      const all = readAll2();
+      delete all[key];
+      writeAll2(all);
+    },
+    clear: async () => {
+      writeAll2({});
+    },
+    allItems: async () => readAll2()
+  };
+}
+function readPreferences(packageRoot) {
+  const file = (0, import_node_path3.join)(packageRoot, "preferences.json");
+  try {
+    const raw = (0, import_node_fs3.readFileSync)(file, "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function createClipboardShim() {
+  return {
+    copy: async (value) => {
+      if (value && typeof value === "object" && "text" in value) {
+        const v = value.text;
+        if (typeof v === "string") {
+          clipboard.writeText(v);
+          return;
+        }
+      }
+      if (typeof value === "string") clipboard.writeText(value);
+      else clipboard.writeText(String(value));
+    },
+    paste: async (value) => {
+      if (typeof value === "string") clipboard.writeText(value);
+      else if (value && typeof value === "object" && "text" in value) {
+        const v = value.text;
+        if (typeof v === "string") clipboard.writeText(v);
+      }
+    },
+    readText: async () => clipboard.readText(),
+    read: async () => ({
+      text: clipboard.readText() || void 0
+    }),
+    clear: async () => clipboard.clear()
+  };
+}
+function createEnvironment(ctx) {
+  const supportPath = (0, import_node_path3.join)(ctx.packageRoot, "support");
+  try {
+    (0, import_node_fs3.mkdirSync)(supportPath, { recursive: true });
+  } catch {
+  }
+  return {
+    appearance: "dark",
+    commandName: ctx.commandName,
+    commandMode: "no-view",
+    extensionName: ctx.extensionId,
+    raycastVersion: "1.77.0",
+    isDevelopment: !app.isPackaged,
+    supportPath,
+    assetsPath: (0, import_node_path3.join)(ctx.packageRoot, "assets"),
+    launchType: "userInitiated",
+    textSize: "medium"
+  };
+}
+function createRaycastApi(ctx) {
+  const Image = Object.assign(createRenderProxy("Image"), {
+    Mask: IMAGE_MASK
+  });
+  return {
+    Toast: { Style: TOAST_STYLE },
+    Icon: createRenderProxy("Icon"),
+    Color: createRenderProxy("Color"),
+    Image,
+    ImageMask: IMAGE_MASK,
+    List: createRenderProxy("List"),
+    Form: createRenderProxy("Form"),
+    Detail: createRenderProxy("Detail"),
+    Grid: createRenderProxy("Grid"),
+    Action: createRenderProxy("Action"),
+    ActionPanel: createRenderProxy("ActionPanel"),
+    MenuBarExtra: createRenderProxy("MenuBarExtra"),
+    Alert: {
+      ActionStyle: { Destructive: "destructive", Cancel: "cancel", Default: "default" }
+    },
+    Keyboard: {
+      Shortcut: { Common: {} }
+    },
+    OAuth: createRenderProxy("OAuth"),
+    BrowserExtension: createRenderProxy("BrowserExtension"),
+    AI: {
+      Model: createRenderProxy("AI.Model"),
+      ask: async (prompt) => {
+        return prompt;
+      }
+    },
+    environment: createEnvironment(ctx),
+    LocalStorage: createLocalStorage(ctx.packageRoot),
+    Cache: class {
+      store = /* @__PURE__ */ new Map();
+      get(key) {
+        return this.store.get(key);
+      }
+      set(key, value) {
+        this.store.set(key, value);
+      }
+      has(key) {
+        return this.store.has(key);
+      }
+      remove(key) {
+        this.store.delete(key);
+      }
+      clear() {
+        this.store.clear();
+      }
+    },
+    Clipboard: createClipboardShim(),
+    getPreferenceValues: () => readPreferences(ctx.packageRoot),
+    getSelectedText: async () => "",
+    getApplications: async () => listApplications(),
+    runAppleScript,
+    open: async (target) => {
+      if (typeof target !== "string") return;
+      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target) || target.startsWith("mailto:")) {
+        await shell.openExternal(target);
+      } else {
+        const resolved = target.startsWith("~") ? target.replace(/^~/, (0, import_node_os3.homedir)()) : target;
+        await shell.openPath(resolved);
+      }
+    },
+    openExtensionPreferences: async () => {
+    },
+    openCommandPreferences: async () => {
+    },
+    showToast: (opts) => {
+      const obj = opts && typeof opts === "object" ? opts : {};
+      ctx.feedback.push({
+        kind: "toast",
+        style: typeof obj.style === "string" ? obj.style : void 0,
+        title: typeof obj.title === "string" ? obj.title : void 0,
+        message: typeof obj.message === "string" ? obj.message : void 0
+      });
+      return {
+        hide: async () => {
+        },
+        set title(_v) {
+        },
+        set message(_v) {
+        },
+        set style(_v) {
+        }
+      };
+    },
+    showHUD: async (message) => {
+      ctx.feedback.push({ kind: "hud", message: String(message ?? "") });
+    },
+    showInFinder: async (path7) => {
+      if (typeof path7 !== "string") return;
+      shell.showItemInFolder(path7);
+    },
+    confirmAlert: async () => true,
+    closeMainWindow: async () => {
+    },
+    popToRoot: async () => {
+    },
+    updateCommandMetadata: async () => {
+    },
+    captureException: () => {
+    },
+    useNavigation: () => ({ push: () => {
+    }, pop: () => {
+    } }),
+    /** Image helper. Electron has its own `nativeImage`; extensions mainly
+     *  use this for sizing/base64 conversion. */
+    createImage: (buffer) => nativeImage.createFromBuffer(buffer)
+  };
+}
+function createRaycastUtils(ctx) {
+  const localStorage = createLocalStorage(ctx.packageRoot);
+  return {
+    useCachedState: (_, initialValue) => {
+      let state = initialValue;
+      const setState = (next) => {
+        state = typeof next === "function" ? next(state) : next;
+      };
+      return [state, setState];
+    },
+    useCachedPromise: () => ({
+      data: void 0,
+      revalidate: async () => {
+      },
+      isLoading: false,
+      mutate: async () => {
+      },
+      error: void 0,
+      pagination: void 0
+    }),
+    usePromise: () => ({
+      data: void 0,
+      isLoading: false,
+      revalidate: async () => {
+      },
+      mutate: async () => {
+      },
+      error: void 0
+    }),
+    useFetch: () => ({
+      data: void 0,
+      isLoading: false,
+      revalidate: async () => {
+      },
+      error: void 0
+    }),
+    useExec: () => ({
+      data: void 0,
+      isLoading: false,
+      error: void 0,
+      revalidate: async () => {
+      }
+    }),
+    useLocalStorage: (key, initialValue) => {
+      let current = initialValue;
+      void localStorage.getItem(key).then((raw) => {
+        if (typeof raw === "string") {
+          try {
+            current = JSON.parse(raw);
+          } catch {
+          }
+        }
+      });
+      return {
+        value: current,
+        setValue: async (next) => {
+          current = next;
+          await localStorage.setItem(key, JSON.stringify(next));
+        },
+        removeValue: async () => {
+          await localStorage.setItem(key, "null");
+        },
+        isLoading: false
+      };
+    },
+    useForm: () => ({
+      itemProps: new Proxy(
+        {},
+        {
+          get: () => ({ value: "", onChange: () => {
+          } })
+        }
+      ),
+      values: {},
+      setValue: () => {
+      },
+      setValidationError: () => {
+      },
+      reset: () => {
+      },
+      focus: () => {
+      },
+      handleSubmit: () => async () => true
+    }),
+    FormValidation: { Required: () => void 0 },
+    runAppleScript,
+    showFailureToast: (error) => {
+      ctx.feedback.push({
+        kind: "toast",
+        style: "failure",
+        title: error instanceof Error ? error.message : String(error)
+      });
+    },
+    getFavicon: () => createRenderProxy("Icon")
+  };
+}
+function formatRuntimeFeedback(feedback) {
+  if (feedback.kind === "hud") {
+    return feedback.message ?? "Extension command completed.";
+  }
+  const title = feedback.title?.trim() ?? "";
+  const message = feedback.message?.trim() ?? "";
+  if (title && message) return `${title}: ${message}`;
+  return title || message || "Extension command completed.";
+}
+
+// src/main/extensions/service.ts
+var RAYCAST_EXTENSIONS_REPO = "https://github.com/raycast/extensions";
+var RAYCAST_EXTENSIONS_REF = "c0e624ee0420679ed3aa296c25c1a6f29938c56a";
+var RAYCAST_EXTENSIONS_PATH = "extensions";
+var CATALOG_CACHE_TTL_MS = 10 * 6e4;
+var RUNTIME_UNSUPPORTED_MODE = "RUNTIME_UNSUPPORTED_MODE";
+var DEFAULT_DB = {
+  installed: []
+};
+var catalogCache = null;
+var commandCache = /* @__PURE__ */ new Map();
+function getDbPath() {
+  const dir = (0, import_node_path4.join)(app.getPath("userData"), "extensions");
+  (0, import_node_fs4.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path4.join)(dir, "installed.json");
+}
+function extensionsRootDir() {
+  const dir = (0, import_node_path4.join)(app.getPath("userData"), "extensions");
+  (0, import_node_fs4.mkdirSync)(dir, { recursive: true });
+  return dir;
+}
+function installedPackageRoot(extensionId) {
+  return (0, import_node_path4.join)(extensionsRootDir(), "packages", extensionId);
+}
+function packageJsonPathForInstalledExtension(extensionId) {
+  return (0, import_node_path4.join)(installedPackageRoot(extensionId), "package.json");
+}
+function scriptPathForInstalledExtensionCommand(extensionId, commandName2) {
+  return (0, import_node_path4.join)(installedPackageRoot(extensionId), ".sc-build", `${commandName2}.js`);
+}
+function metaPathForInstalledExtension(extensionId) {
+  return (0, import_node_path4.join)(installedPackageRoot(extensionId), "meta.json");
+}
+function backupPackageRoot(extensionId) {
+  return (0, import_node_path4.join)(extensionsRootDir(), "packages", `${extensionId}.backup`);
+}
+function readInstallMeta(extensionId) {
+  const p = metaPathForInstalledExtension(extensionId);
+  if (!(0, import_node_fs4.existsSync)(p)) return null;
+  try {
+    return JSON.parse((0, import_node_fs4.readFileSync)(p, "utf8"));
+  } catch {
+    return null;
+  }
+}
+function writeInstallMeta(meta) {
+  const p = metaPathForInstalledExtension(meta.extensionId);
+  (0, import_node_fs4.mkdirSync)((0, import_node_path4.dirname)(p), { recursive: true });
+  (0, import_node_fs4.writeFileSync)(p, JSON.stringify(meta, null, 2), "utf8");
+}
+function hashText(text2) {
+  return (0, import_node_crypto.createHash)("sha256").update(text2).digest("hex");
+}
+function inspectIntegrity(extensionId) {
+  const meta = readInstallMeta(extensionId);
+  if (!meta) {
+    return {
+      extensionId,
+      installed: false,
+      missingScripts: [],
+      tamperedScripts: [],
+      healthy: false
+    };
+  }
+  const missing = [...meta.missingScripts];
+  const tampered = [];
+  for (const name of meta.commandNames) {
+    if (meta.missingScripts.includes(name)) continue;
+    const scriptPath = scriptPathForInstalledExtensionCommand(extensionId, name);
+    if (!(0, import_node_fs4.existsSync)(scriptPath)) {
+      missing.push(name);
+      continue;
+    }
+    const expected = meta.scriptHashes[name];
+    if (!expected) continue;
+    try {
+      const actual = hashText((0, import_node_fs4.readFileSync)(scriptPath, "utf8"));
+      if (actual !== expected) tampered.push(name);
+    } catch {
+      missing.push(name);
+    }
+  }
+  return {
+    extensionId,
+    installed: true,
+    commitRef: meta.commitRef,
+    missingScripts: Array.from(new Set(missing)),
+    tamperedScripts: tampered,
+    healthy: missing.length === 0 && tampered.length === 0,
+    lastError: meta.lastError
+  };
+}
+function parseJsonSafe(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function readInstalledPackageJson(extensionId) {
+  const p = packageJsonPathForInstalledExtension(extensionId);
+  if (!(0, import_node_fs4.existsSync)(p)) return null;
+  try {
+    const raw = (0, import_node_fs4.readFileSync)(p, "utf8");
+    return parseJsonSafe(raw);
+  } catch {
+    return null;
+  }
+}
+function extensionSlugFromId(extensionId) {
+  return extensionId.startsWith("raycast.") ? extensionId.slice("raycast.".length) : extensionId;
+}
+function readDb() {
+  const p = getDbPath();
+  try {
+    const raw = (0, import_node_fs4.readFileSync)(p, "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      installed: Array.isArray(parsed.installed) ? parsed.installed : []
+    };
+  } catch {
+    return DEFAULT_DB;
+  }
+}
+function writeDb(db) {
+  const p = getDbPath();
+  (0, import_node_fs4.writeFileSync)(p, JSON.stringify(db, null, 2), "utf8");
+}
+function byName(a, b) {
+  return a.name.localeCompare(b.name);
+}
+function normalizeNameFromSlug(slug) {
+  return slug.split(/[-_]/g).filter(Boolean).map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" ");
+}
+async function fetchGithubJson(url) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "tezbar-extension-indexer"
+    }
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub API request failed (${response.status}): ${url}`);
+  }
+  return await response.json();
+}
+async function fetchText(url) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "tezbar-extension-indexer"
+    }
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed (${response.status}): ${url}`);
+  }
+  return await response.text();
+}
+async function fetchRaycastPackage(slug) {
+  const url = `https://raw.githubusercontent.com/raycast/extensions/${RAYCAST_EXTENSIONS_REF}/${RAYCAST_EXTENSIONS_PATH}/${slug}/package.json`;
+  const raw = await fetchText(url);
+  const parsed = parseJsonSafe(raw);
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error(`Invalid package.json for extension: ${slug}`);
+  }
+  return parsed;
+}
+var AWESOME_RAYCAST_DATA = "https://raw.githubusercontent.com/j3lte/awesome-raycast/main/data/data.json";
+async function fetchRaycastCatalogFromAwesome() {
+  const raw = await fetchText(AWESOME_RAYCAST_DATA);
+  const data = JSON.parse(raw);
+  return data.map((item) => ({
+    id: `raycast.${item.name}`,
+    name: item.title || normalizeNameFromSlug(item.name),
+    description: item.description || `Raycast extension: ${item.title}`,
+    author: item.author || "Raycast Community",
+    version: "latest",
+    repository: `${RAYCAST_EXTENSIONS_REPO}/tree/main/${RAYCAST_EXTENSIONS_PATH}/${item.name}`,
+    downloadCount: item.download_count,
+    owner: item.owner
+  }));
+}
+async function fetchRaycastCatalogFromGithub() {
+  try {
+    const commit = await fetchGithubJson(
+      `https://api.github.com/repos/raycast/extensions/git/commits/${RAYCAST_EXTENSIONS_REF}`
+    );
+    const rootTree = await fetchGithubJson(
+      `https://api.github.com/repos/raycast/extensions/git/trees/${commit.tree.sha}`
+    );
+    const extensionsDir = rootTree.tree.find(
+      (entry) => entry.type === "tree" && entry.path === RAYCAST_EXTENSIONS_PATH
+    );
+    if (!extensionsDir) return [];
+    const extensionsTree = await fetchGithubJson(
+      `https://api.github.com/repos/raycast/extensions/git/trees/${extensionsDir.sha}`
+    );
+    return extensionsTree.tree.filter((entry) => entry.type === "tree").map((entry) => {
+      const slug = entry.path;
+      const name = normalizeNameFromSlug(slug);
+      return {
+        id: `raycast.${slug}`,
+        name,
+        description: `Raycast extension: ${name}`,
+        author: "Raycast Community",
+        version: RAYCAST_EXTENSIONS_REF.slice(0, 7),
+        repository: `${RAYCAST_EXTENSIONS_REPO}/tree/${RAYCAST_EXTENSIONS_REF}/${RAYCAST_EXTENSIONS_PATH}/${slug}`
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+async function stageAndInstallExtension(extensionId, slug) {
+  const pkg = await fetchRaycastPackage(slug);
+  const staging = (0, import_node_fs4.mkdtempSync)((0, import_node_path4.join)((0, import_node_os4.tmpdir)(), `tezbar-ext-${extensionId}-`));
+  const stagingBuild = (0, import_node_path4.join)(staging, ".sc-build");
+  (0, import_node_fs4.mkdirSync)(stagingBuild, { recursive: true });
+  (0, import_node_fs4.writeFileSync)((0, import_node_path4.join)(staging, "package.json"), JSON.stringify(pkg, null, 2), "utf8");
+  const commandEntries = (pkg.commands ?? []).map((cmd) => ({
+    name: typeof cmd.name === "string" ? cmd.name.trim() : "",
+    mode: typeof cmd.mode === "string" ? cmd.mode.trim() : ""
+  })).filter((entry) => entry.name.length > 0);
+  const missingScripts = [];
+  const scriptHashes = {};
+  await Promise.all(
+    commandEntries.map(async (entry) => {
+      const url = `https://raw.githubusercontent.com/raycast/extensions/${RAYCAST_EXTENSIONS_REF}/${RAYCAST_EXTENSIONS_PATH}/${slug}/.sc-build/${entry.name}.js`;
+      try {
+        const js = await fetchText(url);
+        (0, import_node_fs4.writeFileSync)((0, import_node_path4.join)(stagingBuild, `${entry.name}.js`), js, "utf8");
+        scriptHashes[entry.name] = hashText(js);
+      } catch {
+        missingScripts.push(entry.name);
+      }
+    })
+  );
+  const root = installedPackageRoot(extensionId);
+  const backup = backupPackageRoot(extensionId);
+  if ((0, import_node_fs4.existsSync)(backup)) (0, import_node_fs4.rmSync)(backup, { recursive: true, force: true });
+  try {
+    if ((0, import_node_fs4.existsSync)(root)) (0, import_node_fs4.renameSync)(root, backup);
+    (0, import_node_fs4.mkdirSync)((0, import_node_path4.dirname)(root), { recursive: true });
+    (0, import_node_fs4.renameSync)(staging, root);
+  } catch (error) {
+    if ((0, import_node_fs4.existsSync)(backup) && !(0, import_node_fs4.existsSync)(root)) {
+      try {
+        (0, import_node_fs4.renameSync)(backup, root);
+      } catch {
+      }
+    }
+    (0, import_node_fs4.rmSync)(staging, { recursive: true, force: true });
+    throw error;
+  } finally {
+    if ((0, import_node_fs4.existsSync)(backup)) (0, import_node_fs4.rmSync)(backup, { recursive: true, force: true });
+  }
+  writeInstallMeta({
+    extensionId,
+    commitRef: RAYCAST_EXTENSIONS_REF,
+    installedAt: Date.now(),
+    commandNames: commandEntries.map((entry) => entry.name),
+    missingScripts,
+    scriptHashes
+  });
+  return pkg;
+}
+async function ensureRaycastExtensionBundle(extensionId) {
+  const meta = readInstallMeta(extensionId);
+  const existing = readInstalledPackageJson(extensionId);
+  if (meta && existing && meta.commitRef === RAYCAST_EXTENSIONS_REF) {
+    const report = inspectIntegrity(extensionId);
+    if (report.healthy) return existing;
+  }
+  const slug = extensionSlugFromId(extensionId);
+  return await stageAndInstallExtension(extensionId, slug);
+}
+var installErrors = /* @__PURE__ */ new Map();
+async function ensureExtensionBundle(extensionId) {
+  if (!extensionId.startsWith("raycast.")) return null;
+  try {
+    const pkg = await ensureRaycastExtensionBundle(extensionId);
+    installErrors.delete(extensionId);
+    return pkg;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    installErrors.set(extensionId, message);
+    const existingMeta = readInstallMeta(extensionId);
+    if (existingMeta) {
+      writeInstallMeta({ ...existingMeta, lastError: message });
+    }
+    console.warn("[extensions] failed to ensure extension bundle:", extensionId, error);
+    return readInstalledPackageJson(extensionId);
+  }
+}
+function inspectExtensionIntegrity(extensionId) {
+  return inspectIntegrity(extensionId);
+}
+function getExtensionInstallError(extensionId) {
+  return installErrors.get(extensionId) ?? null;
+}
+async function reinstallExtension(extensionId) {
+  const slug = extensionSlugFromId(extensionId);
+  try {
+    await stageAndInstallExtension(extensionId, slug);
+    installErrors.delete(extensionId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    installErrors.set(extensionId, message);
+    throw error;
+  }
+  commandCache.delete(extensionId);
+  return inspectIntegrity(extensionId);
+}
+async function executeNoViewScript(extensionId, commandName2, scriptPath, argumentValues) {
+  const fileRequire = (0, import_node_module.createRequire)(scriptPath);
+  const feedback = [];
+  const packageRoot = installedPackageRoot(extensionId);
+  const shimCtx = { extensionId, commandName: commandName2, packageRoot, feedback };
+  const raycastApiShim = createRaycastApi(shimCtx);
+  const raycastUtilsShim = createRaycastUtils(shimCtx);
+  const builtinSet = new Set(import_node_module.builtinModules);
+  const customRequire = (specifier) => {
+    if (specifier === "@raycast/api") return raycastApiShim;
+    if (specifier === "@raycast/utils") return raycastUtilsShim;
+    if (specifier.startsWith("./") || specifier.startsWith("../") || specifier.startsWith("/")) {
+      return fileRequire(specifier);
+    }
+    if (specifier.startsWith("node:") || builtinSet.has(specifier)) {
+      return fileRequire(specifier);
+    }
+    throw new Error(`Unsupported runtime dependency: ${specifier}`);
+  };
+  const mod = { exports: {} };
+  const wrapper = new Function(
+    "exports",
+    "require",
+    "module",
+    "__filename",
+    "__dirname",
+    (0, import_node_fs4.readFileSync)(scriptPath, "utf8")
+  );
+  wrapper(mod.exports, customRequire, mod, scriptPath, (0, import_node_path4.dirname)(scriptPath));
+  const exported = mod.exports;
+  const command2 = typeof exported.default === "function" ? exported.default : typeof mod.exports === "function" ? mod.exports : null;
+  if (!command2) {
+    throw new Error("Extension command entry is not executable");
+  }
+  await Promise.resolve(command2({ arguments: argumentValues }));
+  const last = feedback.at(-1);
+  if (!last) {
+    return { ok: true, message: "Extension command completed." };
+  }
+  const style = (last.style ?? "").toLowerCase();
+  const ok = style !== "failure";
+  return {
+    ok,
+    message: formatRuntimeFeedback(last)
+  };
+}
+function unsupportedModeError() {
+  const err = new Error("Only no-view extension commands are executable in this runtime.");
+  err.code = RUNTIME_UNSUPPORTED_MODE;
+  return err;
+}
+function isUnsupportedRuntimeModeError(error) {
+  if (!error || typeof error !== "object") return false;
+  return error.code === RUNTIME_UNSUPPORTED_MODE;
+}
+async function executeExtensionCommandRuntime(extensionId, commandName2, argumentValues) {
+  const pkg = await ensureExtensionBundle(extensionId);
+  if (!pkg) {
+    throw new Error(`Runtime bundle not available for extension: ${extensionId}`);
+  }
+  const commandMeta = (pkg.commands ?? []).find((command2) => command2.name === commandName2);
+  if (!commandMeta) {
+    throw new Error(`Command not found: ${commandName2}`);
+  }
+  const mode = (commandMeta.mode ?? "").toLowerCase();
+  if (mode && mode !== "no-view") {
+    throw unsupportedModeError();
+  }
+  const meta = readInstallMeta(extensionId);
+  if (meta?.missingScripts.includes(commandName2)) {
+    throw new Error(
+      `No prebuilt script for ${commandName2}. This extension doesn't ship an executable .sc-build file for this command.`
+    );
+  }
+  const scriptPath = scriptPathForInstalledExtensionCommand(extensionId, commandName2);
+  if (!(0, import_node_fs4.existsSync)(scriptPath)) {
+    throw new Error(`Missing command script: ${commandName2}.js`);
+  }
+  return await executeNoViewScript(extensionId, commandName2, scriptPath, argumentValues);
+}
+async function getStoreCatalog() {
+  const now = Date.now();
+  if (catalogCache && now - catalogCache.fetchedAt < CATALOG_CACHE_TTL_MS) {
+    return catalogCache.catalog;
+  }
+  try {
+    const catalog = await fetchRaycastCatalogFromAwesome();
+    catalogCache = { fetchedAt: now, catalog };
+    return catalog;
+  } catch (error) {
+    console.warn("[extensions] failed to refresh Raycast catalog from Awesome:", error);
+    try {
+      const catalog = await fetchRaycastCatalogFromGithub();
+      if (catalog.length > 0) {
+        catalogCache = { fetchedAt: now, catalog };
+        return catalog;
+      }
+    } catch (innerError) {
+      console.warn("[extensions] failed to refresh Raycast catalog from Github:", innerError);
+    }
+    return catalogCache?.catalog ?? [];
+  }
+}
+function scoreMatch(item, q) {
+  const name = item.name.toLowerCase();
+  const description = item.description.toLowerCase();
+  const slug = item.id.startsWith("raycast.") ? item.id.slice("raycast.".length).toLowerCase() : item.id.toLowerCase();
+  let score = 0;
+  if (name === q || slug === q) score += 1e3;
+  else if (name.startsWith(q) || slug.startsWith(q)) score += 800;
+  const nameWords = name.split(/[-_\s.]/g);
+  if (nameWords.some((word) => word.startsWith(q))) score += 600;
+  const descWords = description.split(/[-_\s.]/g);
+  if (descWords.some((word) => word.startsWith(q))) score += 500;
+  if (name.includes(q) || slug.includes(q)) score += 200;
+  if (description.includes(q)) score += 100;
+  if (item.downloadCount && item.downloadCount > 0) {
+    score += Math.log10(item.downloadCount) * 50;
+  }
+  return score;
+}
+function listInstalledExtensions() {
+  const db = readDb();
+  return [...db.installed].sort(byName);
+}
+async function searchStoreExtensions(query) {
+  const q = query.trim().toLowerCase();
+  const catalog = await getStoreCatalog();
+  if (!q) {
+    return catalog.sort((a, b) => (b.downloadCount ?? 0) - (a.downloadCount ?? 0));
+  }
+  const scored = catalog.map((item) => ({ item, score: scoreMatch(item, q) })).filter((entry) => entry.score > 0);
+  const fuse = new Fuse(catalog, {
+    keys: [
+      { name: "name", weight: 0.7 },
+      { name: "description", weight: 0.3 }
+    ],
+    threshold: 0.4,
+    includeScore: true
+  });
+  const fuzzyResults = fuse.search(q);
+  const fuzzyMap = /* @__PURE__ */ new Map();
+  fuzzyResults.forEach((res) => {
+    if (res.score !== void 0) {
+      fuzzyMap.set(res.item.id, (1 - res.score) * 500);
+    }
+  });
+  const finalResults = catalog.map((item) => {
+    let score = scoreMatch(item, q);
+    const fuzzyBoost = fuzzyMap.get(item.id) ?? 0;
+    score += fuzzyBoost;
+    return { item, score };
+  }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score || byName(a.item, b.item));
+  return finalResults.map((entry) => entry.item);
+}
+async function installExtension(extensionId) {
+  const catalog = await getStoreCatalog();
+  const manifest = catalog.find((item) => item.id === extensionId);
+  if (!manifest) {
+    throw new Error(`Extension not found in store: ${extensionId}`);
+  }
+  const db = readDb();
+  const existing = db.installed.find((item) => item.id === extensionId);
+  if (existing) {
+    void ensureExtensionBundle(extensionId);
+    return existing;
+  }
+  const next = {
+    ...manifest,
+    installedAt: Date.now()
+  };
+  db.installed.push(next);
+  writeDb(db);
+  void ensureExtensionBundle(extensionId);
+  return next;
+}
+function uninstallExtension(extensionId) {
+  const db = readDb();
+  const before = db.installed.length;
+  db.installed = db.installed.filter((item) => item.id !== extensionId);
+  if (db.installed.length === before) return false;
+  writeDb(db);
+  commandCache.delete(extensionId);
+  installErrors.delete(extensionId);
+  (0, import_node_fs4.rmSync)(installedPackageRoot(extensionId), { recursive: true, force: true });
+  (0, import_node_fs4.rmSync)(backupPackageRoot(extensionId), { recursive: true, force: true });
+  return true;
+}
+
+// src/main/nativeCommands/executor.ts
 var import_node_child_process4 = require("node:child_process");
-var import_node_crypto4 = require("node:crypto");
-var import_node_fs7 = require("node:fs");
-var import_node_os2 = require("node:os");
-var import_node_path7 = require("node:path");
+init_desktop_runtime();
+var import_node_os5 = require("node:os");
+var import_node_path5 = require("node:path");
 var import_node_util3 = require("node:util");
 
+// src/main/nativeCommands/registry.ts
+var WINDOWS = process.platform === "win32";
+var DESCRIPTORS = {
+  "toggle-dark-mode": {
+    id: "toggle-dark-mode",
+    title: "Toggle Dark Mode",
+    subtitle: "Switch between light and dark appearance.",
+    category: "display",
+    strategy: "applescript",
+    keywords: ["dark", "light", "appearance", "theme", "mode"],
+    macOnly: false
+  },
+  "start-screen-saver": {
+    id: "start-screen-saver",
+    title: "Start Screen Saver",
+    subtitle: "Launch the screen saver now.",
+    category: "display",
+    strategy: "shell",
+    keywords: ["screensaver", "screen", "saver", "lock"],
+    macOnly: false
+  },
+  "sleep-display": {
+    id: "sleep-display",
+    title: "Sleep Display",
+    subtitle: "Put just the display to sleep.",
+    category: "power",
+    strategy: "shell",
+    keywords: ["sleep", "display", "screen", "off"],
+    macOnly: false
+  },
+  "toggle-mute": {
+    id: "toggle-mute",
+    title: "Toggle Mute",
+    subtitle: "Mute or unmute the system output volume.",
+    category: "audio",
+    strategy: "applescript",
+    keywords: ["mute", "unmute", "sound", "audio", "volume"],
+    macOnly: false
+  },
+  "volume-up": {
+    id: "volume-up",
+    title: "Volume Up",
+    subtitle: "Raise system output volume by one step.",
+    category: "audio",
+    strategy: "applescript",
+    keywords: ["volume", "louder", "up"],
+    macOnly: false
+  },
+  "volume-down": {
+    id: "volume-down",
+    title: "Volume Down",
+    subtitle: "Lower system output volume by one step.",
+    category: "audio",
+    strategy: "applescript",
+    keywords: ["volume", "quieter", "down"],
+    macOnly: false
+  },
+  "toggle-hide-desktop-icons": {
+    id: "toggle-hide-desktop-icons",
+    title: "Toggle Hide Desktop Icons",
+    subtitle: "Hide or show files on the Finder desktop.",
+    category: "desktop",
+    strategy: "shell",
+    keywords: ["hide", "desktop", "icons", "clean", "finder"],
+    macOnly: true
+  },
+  "toggle-autohide-dock": {
+    id: "toggle-autohide-dock",
+    title: "Toggle Autohide Dock",
+    subtitle: "Flip the Dock auto-hide preference.",
+    category: "desktop",
+    strategy: "shell",
+    keywords: ["dock", "autohide", "hide", "bar"],
+    macOnly: true
+  },
+  "toggle-autohide-menu-bar": {
+    id: "toggle-autohide-menu-bar",
+    title: "Toggle Autohide Menu Bar",
+    subtitle: "Flip the macOS menu-bar auto-hide preference.",
+    category: "desktop",
+    strategy: "shell",
+    keywords: ["menu", "bar", "autohide", "notch"],
+    macOnly: true
+  },
+  "restart-dock": {
+    id: "restart-dock",
+    title: "Restart Dock",
+    subtitle: "Relaunch the Dock process.",
+    category: "desktop",
+    strategy: "shell",
+    keywords: ["dock", "restart", "relaunch"],
+    macOnly: true
+  },
+  "restart-finder": {
+    id: "restart-finder",
+    title: "Restart Finder",
+    subtitle: "Relaunch the Finder process.",
+    category: "desktop",
+    strategy: "shell",
+    keywords: ["finder", "restart", "relaunch"],
+    macOnly: true
+  },
+  "restart-menu-bar": {
+    id: "restart-menu-bar",
+    title: "Restart Menu Bar",
+    subtitle: "Relaunch SystemUIServer (fixes frozen menu bar).",
+    category: "desktop",
+    strategy: "shell",
+    keywords: ["menu", "bar", "restart", "systemuiserver"],
+    macOnly: true
+  },
+  "start-keep-awake": {
+    id: "start-keep-awake",
+    title: "Keep Awake",
+    subtitle: "Prevent system sleep until you stop it.",
+    category: "power",
+    strategy: "shell",
+    keywords: ["keep", "awake", "caffeinate", "no", "sleep"],
+    restoreId: "stop-keep-awake",
+    macOnly: false
+  },
+  "stop-keep-awake": {
+    id: "stop-keep-awake",
+    title: "Stop Keep Awake",
+    subtitle: "Allow the system to sleep again.",
+    category: "power",
+    strategy: "shell",
+    keywords: ["stop", "awake", "caffeinate", "sleep"],
+    macOnly: false
+  },
+  "sleep-system": {
+    id: "sleep-system",
+    title: "Sleep Computer",
+    subtitle: "Put the computer to sleep now.",
+    category: "power",
+    strategy: "applescript",
+    keywords: ["sleep", "mac", "suspend", "idle"],
+    macOnly: false
+  },
+  "toggle-bluetooth": {
+    id: "toggle-bluetooth",
+    title: "Toggle Bluetooth",
+    subtitle: "Turn Bluetooth on or off (requires blueutil).",
+    category: "network",
+    strategy: "shell",
+    keywords: ["bluetooth", "bt", "airpods", "wireless"],
+    macOnly: true
+  },
+  "toggle-wifi": {
+    id: "toggle-wifi",
+    title: "Toggle Wi-Fi",
+    subtitle: "Turn Wi-Fi on or off on the default interface.",
+    category: "network",
+    strategy: "shell",
+    keywords: ["wifi", "wireless", "network", "toggle"],
+    macOnly: false
+  },
+  "show-network-info": {
+    id: "show-network-info",
+    title: "Show Network Info",
+    subtitle: "Display current IP addresses and Wi-Fi SSID.",
+    category: "network",
+    strategy: "shell",
+    keywords: ["network", "ip", "wifi", "ssid", "info"],
+    macOnly: false
+  },
+  "show-public-ip": {
+    id: "show-public-ip",
+    title: "Show Public IP",
+    subtitle: "Look up the public IPv4 address of this connection.",
+    category: "network",
+    strategy: "shell",
+    keywords: ["ip", "public", "external", "wan"],
+    macOnly: false
+  },
+  "flush-dns-cache": {
+    id: "flush-dns-cache",
+    title: "Flush DNS Cache",
+    subtitle: WINDOWS ? "Clear the Windows DNS resolver cache." : "Clear the macOS resolver and mDNSResponder caches.",
+    category: "network",
+    strategy: "shell",
+    keywords: ["dns", "flush", "cache", "network", "resolver"],
+    macOnly: false
+  },
+  "toggle-vpn-menu": {
+    id: "toggle-vpn-menu",
+    title: "Open VPN Settings",
+    subtitle: WINDOWS ? "Open Windows VPN settings." : "Open the VPN/Network control.",
+    category: "network",
+    strategy: "shell",
+    keywords: ["vpn", "network", "menu"],
+    macOnly: false
+  },
+  "empty-trash": {
+    id: "empty-trash",
+    title: "Empty Trash",
+    subtitle: "Permanently delete everything in the Trash.",
+    category: "system",
+    strategy: "applescript",
+    keywords: ["trash", "empty", "delete", "clean"],
+    destructive: true,
+    macOnly: false
+  },
+  "lock-screen": {
+    id: "lock-screen",
+    title: "Lock Screen",
+    subtitle: "Lock the current session.",
+    category: "system",
+    strategy: "applescript",
+    keywords: ["lock", "screen", "session", "away"],
+    macOnly: false
+  },
+  "open-downloads": {
+    id: "open-downloads",
+    title: "Open Downloads Folder",
+    subtitle: "Open the Downloads folder.",
+    category: "files",
+    strategy: "shell",
+    keywords: ["downloads", "folder", "finder", "explorer"],
+    macOnly: false
+  },
+  "open-applications": {
+    id: "open-applications",
+    title: WINDOWS ? "Open All Apps" : "Open Applications Folder",
+    subtitle: WINDOWS ? "Open the Windows Apps folder." : "Reveal /Applications in Finder.",
+    category: "files",
+    strategy: "shell",
+    keywords: ["applications", "apps", "finder"],
+    macOnly: false
+  },
+  "reveal-library": {
+    id: "reveal-library",
+    title: WINDOWS ? "Open AppData" : "Open ~/Library",
+    subtitle: WINDOWS ? "Open the current user AppData folder in Explorer." : "Reveal the hidden Library folder in Finder.",
+    category: "files",
+    strategy: "shell",
+    keywords: ["library", "hidden", "finder"],
+    macOnly: false
+  },
+  "copy-current-path": {
+    id: "copy-current-path",
+    title: `Copy Path of Frontmost ${WINDOWS ? "Explorer" : "Finder"} Window`,
+    subtitle: `Copy the path of the folder open in ${WINDOWS ? "Explorer" : "Finder"}.`,
+    category: "files",
+    strategy: "applescript",
+    keywords: ["path", "finder", "copy", "directory"],
+    macOnly: false
+  },
+  "quit-tezbar": {
+    id: "quit-tezbar",
+    title: "Quit Tezbar",
+    subtitle: "Quit Tezbar and terminate all background processes.",
+    category: "system",
+    strategy: "native-helper",
+    keywords: ["quit", "tezbar", "exit", "close", "shutdown", "terminate", "app"],
+    macOnly: false
+  },
+  "show-macos-version": {
+    id: "show-macos-version",
+    title: WINDOWS ? "Show Windows Version" : "Show macOS Version",
+    subtitle: WINDOWS ? "Print the Windows product name, version, and build." : "Print kernel, build, and macOS version.",
+    category: "dev",
+    strategy: "shell",
+    keywords: ["macos", "windows", "version", "kernel", "build", "os"],
+    macOnly: false
+  },
+  "show-cpu-info": {
+    id: "show-cpu-info",
+    title: "Show CPU Info",
+    subtitle: "Display CPU brand, cores, and load averages.",
+    category: "dev",
+    strategy: "shell",
+    keywords: ["cpu", "processor", "cores", "load"],
+    macOnly: false
+  },
+  "show-system-monitor": {
+    id: "show-system-monitor",
+    title: "System Monitor",
+    subtitle: "Live CPU, GPU, memory, storage, battery, network, and fan information.",
+    category: "system",
+    strategy: "native-helper",
+    keywords: [
+      "system",
+      "monitor",
+      "info",
+      "stats",
+      "hardware",
+      "cpu",
+      "gpu",
+      "memory",
+      "ram",
+      "storage",
+      "disk",
+      "battery",
+      "health",
+      "network",
+      "internet",
+      "speed",
+      "fans",
+      "temperature",
+      "load"
+    ],
+    macOnly: true
+  },
+  "show-memory-info": {
+    id: "show-memory-info",
+    title: "Show Memory Pressure",
+    subtitle: "Display current memory pressure and free memory.",
+    category: "dev",
+    strategy: "shell",
+    keywords: ["memory", "ram", "pressure", "free"],
+    macOnly: false
+  },
+  "show-disk-usage": {
+    id: "show-disk-usage",
+    title: "Show Disk Usage",
+    subtitle: "Display disk capacity and free space.",
+    category: "dev",
+    strategy: "shell",
+    keywords: ["disk", "storage", "free", "usage"],
+    macOnly: false
+  },
+  "show-battery-status": {
+    id: "show-battery-status",
+    title: "Show Battery Status",
+    subtitle: "Display battery capacity and charging state.",
+    category: "dev",
+    strategy: "shell",
+    keywords: ["battery", "charge", "power", "percent"],
+    macOnly: false
+  },
+  "list-listening-ports": {
+    id: "list-listening-ports",
+    title: "List Listening Ports",
+    subtitle: "Open Port Manager with a structured list (same as Open Ports).",
+    category: "dev",
+    strategy: "shell",
+    keywords: ["ports", "lsof", "listen", "listening", "tcp", "dev", "port manager"],
+    macOnly: false
+  },
+  "git-root": {
+    id: "git-root",
+    title: "Git: Copy Repo Root",
+    subtitle: `Copy the root of the git repo open in ${WINDOWS ? "Explorer" : "Finder"}.`,
+    category: "dev",
+    strategy: "applescript",
+    keywords: ["git", "root", "repo", "copy"],
+    macOnly: false
+  },
+  "brew-outdated": {
+    id: "brew-outdated",
+    title: "Homebrew: Show Outdated",
+    subtitle: "List formulae that have updates available.",
+    category: "dev",
+    strategy: "shell",
+    keywords: ["brew", "homebrew", "outdated", "updates"],
+    macOnly: true
+  },
+  "brew-update": {
+    id: "brew-update",
+    title: "Homebrew: Update",
+    subtitle: "Refresh Homebrew formula metadata.",
+    category: "dev",
+    strategy: "shell",
+    keywords: ["brew", "homebrew", "update", "refresh"],
+    macOnly: true
+  },
+  // This command has no main-process implementation — it's intercepted in
+  // the renderer and navigates to the dedicated clipboard surface. Keeping
+  // it in the registry means it participates in ranking, intent routing,
+  // and fuzzy search like every other command.
+  "open-clipboard-history": {
+    id: "open-clipboard-history",
+    title: "Clipboard History",
+    subtitle: "Browse everything you have copied \u2014 text, images, files.",
+    category: "productivity",
+    strategy: "native-helper",
+    keywords: ["clipboard", "history", "paste", "copy", "pasteboard"],
+    macOnly: false
+  },
+  "open-snippets": {
+    id: "open-snippets",
+    title: "Snippets",
+    subtitle: "Browse, copy, and create your own text snippets (dates, UUIDs, templates, \u2026).",
+    category: "productivity",
+    strategy: "native-helper",
+    keywords: [
+      "snippet",
+      "snippets",
+      "template",
+      "templates",
+      "text",
+      "boilerplate",
+      "expander",
+      "macro"
+    ],
+    macOnly: false
+  },
+  "open-quick-notes": {
+    id: "open-quick-notes",
+    title: "Quick Notes",
+    subtitle: "View and edit saved notes with rich text; first line is the title.",
+    category: "productivity",
+    strategy: "native-helper",
+    keywords: ["notes", "quick notes", "notepad", "rich text", "memo", "jot"],
+    macOnly: false
+  },
+  "open-emoji-picker": {
+    id: "open-emoji-picker",
+    title: "Emoji Picker",
+    subtitle: "Browse and copy emojis by name, mood, and category.",
+    category: "productivity",
+    strategy: "native-helper",
+    keywords: ["emoji", "smiley", "symbol", "icon", "face", "emoticon"],
+    macOnly: false
+  }
+};
+function getNativeCommand(id) {
+  return Object.prototype.hasOwnProperty.call(DESCRIPTORS, id) ? DESCRIPTORS[id] : null;
+}
+function listNativeCommands() {
+  return Object.values(DESCRIPTORS);
+}
+
+// src/main/nativeCommands/executor.ts
+var execFileAsync3 = (0, import_node_util3.promisify)(import_node_child_process4.execFile);
+async function runAppleScript2(source) {
+  const { stdout } = await execFileAsync3("osascript", ["-e", source]);
+  return stdout.trim();
+}
+async function runShell(script) {
+  const { stdout } = await execFileAsync3("bash", ["-lc", script]);
+  return stdout.trim();
+}
+async function runPowerShell(script) {
+  const { stdout } = await execFileAsync3("powershell.exe", [
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    script
+  ]);
+  return stdout.trim();
+}
+async function runElevatedPowerShell(script) {
+  const encoded = Buffer.from(`$ErrorActionPreference = 'Stop'; ${script}`, "utf16le").toString(
+    "base64"
+  );
+  const launcher = `$process = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'); if ($process.ExitCode -ne 0) { exit $process.ExitCode }`;
+  await execFileAsync3("powershell.exe", [
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    launcher
+  ]);
+}
+async function executeWindowsCommand(id) {
+  switch (id) {
+    case "toggle-dark-mode":
+      await runPowerShell(
+        "$p='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'; $v=(Get-ItemPropertyValue -Path $p -Name AppsUseLightTheme -ErrorAction SilentlyContinue); $n=if($v -eq 0){1}else{0}; Set-ItemProperty -Path $p -Name AppsUseLightTheme -Value $n; Set-ItemProperty -Path $p -Name SystemUsesLightTheme -Value $n"
+      );
+      return { ok: true, message: "Toggled Windows dark mode" };
+    case "start-screen-saver":
+      await execFileAsync3("rundll32.exe", ["user32.dll,LockWorkStation"]);
+      return { ok: true, message: "Screen locked" };
+    case "sleep-display":
+      await runPowerShell(
+        `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class TezbarDisplay { [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l); }'; [TezbarDisplay]::SendMessage([IntPtr]0xffff,0x0112,[IntPtr]0xF170,[IntPtr]2) | Out-Null`
+      );
+      return { ok: true, message: "Display sleeping" };
+    case "toggle-mute":
+    case "volume-up":
+    case "volume-down": {
+      const virtualKey = id === "toggle-mute" ? 173 : id === "volume-up" ? 175 : 174;
+      await runPowerShell(
+        `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class TezbarAudio { [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra); }'; [TezbarAudio]::keybd_event(${virtualKey}, 0, 0, [UIntPtr]::Zero); [TezbarAudio]::keybd_event(${virtualKey}, 0, 2, [UIntPtr]::Zero)`
+      );
+      return {
+        ok: true,
+        message: id === "toggle-mute" ? "Toggled system mute" : id === "volume-up" ? "Volume up" : "Volume down"
+      };
+    }
+    case "start-keep-awake":
+      startBackground("keep-awake", "powershell.exe", [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        '$wshell=New-Object -ComObject WScript.Shell; while($true){$wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Milliseconds 50; $wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Seconds 240}'
+      ]);
+      return { ok: true, message: "Keep Awake is on." };
+    case "stop-keep-awake":
+      return {
+        ok: true,
+        message: stopBackground("keep-awake") ? "Keep Awake turned off." : "Keep Awake was not running."
+      };
+    case "sleep-system":
+      await runPowerShell(
+        "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)"
+      );
+      return { ok: true, message: "System sleeping" };
+    case "show-network-info": {
+      const out = await runPowerShell(
+        "Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*'} | Select-Object -First 3 -ExpandProperty IPAddress"
+      );
+      return {
+        ok: true,
+        message: out ? `IP: ${out.replace(/\r?\n/g, ", ")}` : "No network info available"
+      };
+    }
+    case "show-public-ip": {
+      const out = await runPowerShell(
+        "(Invoke-RestMethod -UseBasicParsing -TimeoutSec 5 -Uri 'https://api.ipify.org').Trim()"
+      );
+      return { ok: true, message: `Public IP: ${out}` };
+    }
+    case "flush-dns-cache":
+      await execFileAsync3("ipconfig.exe", ["/flushdns"]);
+      return { ok: true, message: "Flushed DNS cache" };
+    case "toggle-vpn-menu":
+      await execFileAsync3("explorer.exe", ["ms-settings:network-vpn"]);
+      return { ok: true, message: "Opened VPN settings" };
+    case "toggle-wifi": {
+      const adapterState = await runPowerShell(
+        "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; $adapter.AdminStatus"
+      );
+      const disabling = adapterState === "Up";
+      await runElevatedPowerShell(
+        "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; if($adapter.AdminStatus -eq 'Up'){Disable-NetAdapter -Name $adapter.Name -Confirm:$false}else{Enable-NetAdapter -Name $adapter.Name -Confirm:$false}"
+      );
+      return { ok: true, message: `Wi-Fi ${disabling ? "disabled" : "enabled"}` };
+    }
+    case "lock-screen":
+      await execFileAsync3("rundll32.exe", ["user32.dll,LockWorkStation"]);
+      return { ok: true, message: "Screen locked" };
+    case "open-downloads":
+      await execFileAsync3("explorer.exe", [(0, import_node_path5.join)((0, import_node_os5.homedir)(), "Downloads")]);
+      return { ok: true, message: "Opened Downloads" };
+    case "open-applications":
+      await execFileAsync3("explorer.exe", ["shell:AppsFolder"]);
+      return { ok: true, message: "Opened All Apps" };
+    case "reveal-library":
+      await execFileAsync3("explorer.exe", [
+        process.env.APPDATA ?? (0, import_node_path5.join)((0, import_node_os5.homedir)(), "AppData", "Roaming")
+      ]);
+      return { ok: true, message: "Opened AppData" };
+    case "copy-current-path": {
+      const out = await runPowerShell(
+        "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path } | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $path=$window.Document.Folder.Self.Path; Set-Clipboard -Value $path; $path"
+      );
+      return { ok: true, message: `Copied: ${out}` };
+    }
+    case "empty-trash":
+      await runPowerShell("Clear-RecycleBin -Force -ErrorAction Stop");
+      return { ok: true, message: "Emptied Recycle Bin" };
+    case "show-macos-version":
+      return {
+        ok: true,
+        message: await runPowerShell(
+          "$os=Get-CimInstance Win32_OperatingSystem; '{0} \u2014 version {1}, build {2}' -f $os.Caption,$os.Version,$os.BuildNumber"
+        )
+      };
+    case "show-cpu-info":
+      return {
+        ok: true,
+        message: await runPowerShell(
+          'Get-CimInstance Win32_Processor | ForEach-Object { "$($_.Name) \u2014 $($_.NumberOfCores) cores" }'
+        )
+      };
+    case "show-memory-info":
+      return {
+        ok: true,
+        message: await runPowerShell(
+          "$os=Get-CimInstance Win32_OperatingSystem; 'Free: {0:N1} GB / Total: {1:N1} GB' -f ($os.FreePhysicalMemory/1MB),($os.TotalVisibleMemorySize/1MB)"
+        )
+      };
+    case "show-disk-usage":
+      return {
+        ok: true,
+        message: await runPowerShell(
+          "Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object { '{0} Free: {1:N1} GB / {2:N1} GB' -f $_.DeviceID,($_.FreeSpace/1GB),($_.Size/1GB) }"
+        )
+      };
+    case "show-battery-status": {
+      const out = await runPowerShell(
+        "Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | ForEach-Object { 'Battery: {0}%' -f $_.EstimatedChargeRemaining }"
+      );
+      return { ok: true, message: out || "No battery detected" };
+    }
+    case "list-listening-ports":
+      return {
+        ok: true,
+        message: "Use Port Manager \u2192 Open Ports in Tezbar for a structured, filterable list."
+      };
+    case "git-root": {
+      const path7 = await runPowerShell(
+        "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path } | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $window.Document.Folder.Self.Path"
+      );
+      const { stdout } = await execFileAsync3("git.exe", ["rev-parse", "--show-toplevel"], {
+        cwd: path7
+      });
+      const root = stdout.trim();
+      clipboard.writeText(root);
+      return { ok: true, message: `Copied repo root: ${root}` };
+    }
+    default:
+      return null;
+  }
+}
+var backgroundProcesses = /* @__PURE__ */ new Map();
+function startBackground(key, command2, args) {
+  const existing = backgroundProcesses.get(key);
+  if (existing && isProcessAlive(existing)) return;
+  const child = (0, import_node_child_process4.spawn)(command2, args, { detached: true, stdio: "ignore" });
+  child.unref();
+  if (child.pid) backgroundProcesses.set(key, child.pid);
+}
+function stopBackground(key) {
+  const pid = backgroundProcesses.get(key);
+  if (!pid) return false;
+  try {
+    process.kill(pid, "SIGTERM");
+    backgroundProcesses.delete(key);
+    return true;
+  } catch {
+    backgroundProcesses.delete(key);
+    return false;
+  }
+}
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function executeNativeCommand(id) {
+  const descriptor = getNativeCommand(id);
+  if (!descriptor) {
+    return { ok: false, message: `Unknown command: ${id}` };
+  }
+  if (descriptor.macOnly && process.platform !== "darwin") {
+    return { ok: false, message: `${descriptor.title} is only available on macOS.` };
+  }
+  if (process.platform === "win32") {
+    try {
+      const result = await executeWindowsCommand(id);
+      if (result) return result;
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
+  }
+  try {
+    switch (id) {
+      case "toggle-dark-mode": {
+        const script = 'tell application "System Events" to tell appearance preferences to set dark mode to not dark mode';
+        await runAppleScript2(script);
+        return { ok: true, message: "Toggled Dark Mode" };
+      }
+      case "toggle-mute": {
+        await runAppleScript2(
+          "set volume output muted (not (output muted of (get volume settings)))"
+        );
+        return { ok: true, message: "Toggled system mute" };
+      }
+      case "toggle-hide-desktop-icons": {
+        const script = `current=$(defaults read com.apple.finder CreateDesktop 2>/dev/null || echo true); if [ "$current" = "false" ]; then defaults write com.apple.finder CreateDesktop true; else defaults write com.apple.finder CreateDesktop false; fi; killall Finder`;
+        await runShell(script);
+        return { ok: true, message: "Toggled desktop icons" };
+      }
+      case "toggle-autohide-dock": {
+        const script = `current=$(defaults read com.apple.dock autohide 2>/dev/null || echo 0); if [ "$current" = "1" ]; then defaults write com.apple.dock autohide -bool false; else defaults write com.apple.dock autohide -bool true; fi; killall Dock`;
+        await runShell(script);
+        return { ok: true, message: "Toggled Dock auto-hide" };
+      }
+      case "toggle-autohide-menu-bar": {
+        const script = `current=$(defaults read NSGlobalDomain _HIHideMenuBar 2>/dev/null || echo 0); if [ "$current" = "1" ]; then defaults write NSGlobalDomain _HIHideMenuBar -bool false; else defaults write NSGlobalDomain _HIHideMenuBar -bool true; fi; killall SystemUIServer`;
+        await runShell(script);
+        return { ok: true, message: "Toggled menu bar auto-hide" };
+      }
+      case "start-keep-awake": {
+        startBackground("caffeinate", "caffeinate", ["-di"]);
+        return { ok: true, message: "Keep Awake is on \u2014 system will not sleep." };
+      }
+      case "stop-keep-awake": {
+        const stopped = stopBackground("caffeinate");
+        return {
+          ok: true,
+          message: stopped ? "Keep Awake turned off." : "Keep Awake was not running."
+        };
+      }
+      case "start-screen-saver": {
+        await runShell("open -a ScreenSaverEngine");
+        return { ok: true, message: "Started screen saver" };
+      }
+      case "toggle-bluetooth": {
+        try {
+          const current = await runShell("blueutil -p");
+          const next = current === "1" ? "0" : "1";
+          await runShell(`blueutil -p ${next}`);
+          return { ok: true, message: `Bluetooth ${next === "1" ? "enabled" : "disabled"}` };
+        } catch {
+          return {
+            ok: false,
+            message: "Bluetooth control requires `blueutil`. Install with `brew install blueutil`."
+          };
+        }
+      }
+      case "show-network-info": {
+        const script = `echo "IP: $(ipconfig getifaddr en0 2>/dev/null || echo n/a)"; echo "Wi-Fi: $(networksetup -getairportnetwork en0 2>/dev/null | sed 's/Current Wi-Fi Network: //')"`;
+        const out = await runShell(script);
+        return { ok: true, message: out || "No network info available" };
+      }
+      case "flush-dns-cache": {
+        try {
+          await runShell("sudo -n dscacheutil -flushcache && sudo -n killall -HUP mDNSResponder");
+          return { ok: true, message: "Flushed DNS cache" };
+        } catch {
+          return {
+            ok: false,
+            message: "DNS flush requires `sudo`. Run `sudo dscacheutil -flushcache` in Terminal."
+          };
+        }
+      }
+      case "empty-trash": {
+        await runAppleScript2('tell application "Finder" to empty the trash');
+        return { ok: true, message: "Emptied Trash" };
+      }
+      case "lock-screen": {
+        await runAppleScript2(
+          'tell application "System Events" to keystroke "q" using {command down, control down}'
+        );
+        return { ok: true, message: "Screen locked" };
+      }
+      case "sleep-display": {
+        await runShell("pmset displaysleepnow");
+        return { ok: true, message: "Display sleeping" };
+      }
+      case "volume-up": {
+        await runAppleScript2(
+          "set volume output volume (output volume of (get volume settings) + 10)"
+        );
+        return { ok: true, message: "Volume up" };
+      }
+      case "volume-down": {
+        await runAppleScript2(
+          "set volume output volume (output volume of (get volume settings) - 10)"
+        );
+        return { ok: true, message: "Volume down" };
+      }
+      case "restart-dock": {
+        await runShell("killall Dock");
+        return { ok: true, message: "Dock relaunched" };
+      }
+      case "restart-finder": {
+        await runShell("killall Finder");
+        return { ok: true, message: "Finder relaunched" };
+      }
+      case "restart-menu-bar": {
+        await runShell("killall SystemUIServer");
+        return { ok: true, message: "Menu bar relaunched" };
+      }
+      case "sleep-system": {
+        await runAppleScript2('tell application "System Events" to sleep');
+        return { ok: true, message: "System sleeping" };
+      }
+      case "toggle-wifi": {
+        const script = `iface=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2; exit}'); if [ -z "$iface" ]; then exit 1; fi; state=$(networksetup -getairportpower "$iface" | awk '{print $NF}'); if [ "$state" = "On" ]; then networksetup -setairportpower "$iface" off; echo off; else networksetup -setairportpower "$iface" on; echo on; fi`;
+        const out = await runShell(script);
+        return { ok: true, message: `Wi-Fi ${out || "toggled"}` };
+      }
+      case "show-public-ip": {
+        const out = await runShell('curl -m 4 -fsS https://api.ipify.org || echo "(unreachable)"');
+        return { ok: true, message: `Public IP: ${out}` };
+      }
+      case "toggle-vpn-menu": {
+        await runShell('open "x-apple.systempreferences:com.apple.preference.network"');
+        return { ok: true, message: "Opened Network preferences" };
+      }
+      case "open-downloads": {
+        await runShell("open ~/Downloads");
+        return { ok: true, message: "Opened Downloads" };
+      }
+      case "open-applications": {
+        await runShell("open /Applications");
+        return { ok: true, message: "Opened Applications" };
+      }
+      case "reveal-library": {
+        await runShell("open ~/Library");
+        return { ok: true, message: "Opened ~/Library" };
+      }
+      case "copy-current-path": {
+        const path7 = await runAppleScript2(
+          'tell application "Finder" to try\nset thePath to POSIX path of (target of front Finder window as alias)\nset the clipboard to thePath\nreturn thePath\non error\nreturn ""\nend try'
+        );
+        if (!path7) {
+          return { ok: false, message: "No Finder window is open." };
+        }
+        return { ok: true, message: `Copied: ${path7}` };
+      }
+      case "show-macos-version": {
+        const out = await runShell("sw_vers && uname -v");
+        return { ok: true, message: out };
+      }
+      case "show-cpu-info": {
+        const out = await runShell(
+          `sysctl -n machdep.cpu.brand_string 2>/dev/null; echo "Cores: $(sysctl -n hw.ncpu)"; uptime | awk -F'load averages:' '{print "Load:"$2}'`
+        );
+        return { ok: true, message: out };
+      }
+      case "show-system-monitor": {
+        return {
+          ok: true,
+          message: "Open System Monitor from the launcher to view live hardware information."
+        };
+      }
+      case "show-memory-info": {
+        const out = await runShell("memory_pressure | head -n 6; echo; vm_stat | awk 'NR<=6'");
+        return { ok: true, message: out };
+      }
+      case "show-disk-usage": {
+        const out = await runShell("df -h / | tail -n 1");
+        return { ok: true, message: out };
+      }
+      case "show-battery-status": {
+        const out = await runShell("pmset -g batt | tail -n +2");
+        return { ok: true, message: out || "No battery detected" };
+      }
+      case "list-listening-ports": {
+        return {
+          ok: true,
+          message: "Use Port Manager \u2192 Open Ports in Tezbar for a structured, filterable list. (Raw lsof output is intentionally not shown here.)"
+        };
+      }
+      case "git-root": {
+        const path7 = await runAppleScript2(
+          'tell application "Finder" to try\nset thePath to POSIX path of (target of front Finder window as alias)\nreturn thePath\non error\nreturn ""\nend try'
+        );
+        if (!path7) {
+          return { ok: false, message: "No Finder window is open." };
+        }
+        try {
+          const root = await runShell(`cd ${JSON.stringify(path7)} && git rev-parse --show-toplevel`);
+          await runShell(`printf %s ${JSON.stringify(root)} | pbcopy`);
+          return { ok: true, message: `Copied repo root: ${root}` };
+        } catch {
+          return { ok: false, message: `${path7} is not inside a git repo.` };
+        }
+      }
+      case "brew-outdated": {
+        try {
+          const out = await runShell("brew outdated --quiet");
+          return {
+            ok: true,
+            message: out.trim().length === 0 ? "All Homebrew formulae are up to date." : out
+          };
+        } catch {
+          return { ok: false, message: "Homebrew is not installed or not in PATH." };
+        }
+      }
+      case "open-clipboard-history": {
+        return {
+          ok: false,
+          message: "Clipboard History is a UI navigation \u2014 open the launcher to browse it."
+        };
+      }
+      case "open-snippets": {
+        return {
+          ok: false,
+          message: "Snippets is a UI navigation \u2014 open the launcher to browse it."
+        };
+      }
+      case "open-quick-notes": {
+        return {
+          ok: false,
+          message: "Quick Notes is a UI navigation \u2014 open the launcher to browse it."
+        };
+      }
+      case "open-emoji-picker": {
+        return {
+          ok: false,
+          message: "Emoji Picker is a UI navigation \u2014 open the launcher to browse it."
+        };
+      }
+      case "quit-tezbar": {
+        return {
+          ok: false,
+          message: "Quit Tezbar is handled by the launcher so it can show the confirmation dialog."
+        };
+      }
+      case "brew-update": {
+        try {
+          const out = await runShell("brew update");
+          return { ok: true, message: out.slice(-400) || "Homebrew updated." };
+        } catch {
+          return { ok: false, message: "Homebrew is not installed or not in PATH." };
+        }
+      }
+      default: {
+        return {
+          ok: false,
+          message: `Command ${descriptor.title} is registered but has no executor yet.`
+        };
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, message: `${descriptor.title} failed: ${message}` };
+  }
+}
+
+// src/main/search/service.ts
+init_configStore();
+
+// src/main/safety/confirm.ts
+init_desktop_runtime();
+
+// src/main/safety/registry.ts
+var DESCRIPTORS2 = {
+  "shell.run": {
+    id: "shell.run",
+    title: "Run shell command",
+    summary: "Execute a shell command in your user environment.",
+    risk: "high",
+    requiresConfirmation: true
+  },
+  "process.kill": {
+    id: "process.kill",
+    title: "Kill process",
+    summary: "Forcibly terminate a running process.",
+    risk: "high",
+    requiresConfirmation: true
+  },
+  "port.kill": {
+    id: "port.kill",
+    title: "Kill listener on port",
+    summary: "Terminate the process listening on this TCP port.",
+    risk: "medium",
+    requiresConfirmation: true
+  },
+  "system.shutdown": {
+    id: "system.shutdown",
+    title: "Shut down Mac",
+    summary: "Shut the computer down immediately.",
+    risk: "high",
+    requiresConfirmation: true
+  },
+  "system.restart": {
+    id: "system.restart",
+    title: "Restart Mac",
+    summary: "Restart the computer immediately.",
+    risk: "high",
+    requiresConfirmation: true
+  },
+  "system.sleep": {
+    id: "system.sleep",
+    title: "Sleep Mac",
+    summary: "Put the computer to sleep.",
+    risk: "low",
+    requiresConfirmation: false
+  },
+  "system.logout": {
+    id: "system.logout",
+    title: "Log out",
+    summary: "Log out of the current macOS user.",
+    risk: "high",
+    requiresConfirmation: true
+  },
+  "trash.empty": {
+    id: "trash.empty",
+    title: "Empty Trash",
+    summary: "Permanently delete everything in the Trash.",
+    risk: "high",
+    requiresConfirmation: true
+  },
+  "app.quit": {
+    id: "app.quit",
+    title: "Quit application",
+    summary: "Quit a running application.",
+    risk: "low",
+    requiresConfirmation: false
+  },
+  "extension.install": {
+    id: "extension.install",
+    title: "Install extension",
+    summary: "Download and install a Raycast extension.",
+    risk: "medium",
+    requiresConfirmation: false
+  },
+  "extension.uninstall": {
+    id: "extension.uninstall",
+    title: "Uninstall extension",
+    summary: "Remove an installed extension and its files.",
+    risk: "medium",
+    requiresConfirmation: true
+  },
+  "native.command": {
+    id: "native.command",
+    title: "Run system command",
+    summary: "Execute a built-in macOS control (toggle, query, helper).",
+    risk: "low",
+    requiresConfirmation: false
+  }
+};
+function getSafetyDescriptor(id) {
+  return Object.prototype.hasOwnProperty.call(DESCRIPTORS2, id) ? DESCRIPTORS2[id] : null;
+}
+function listSafetyDescriptors() {
+  return Object.values(DESCRIPTORS2);
+}
+
+// src/main/safety/confirm.ts
+var RISK_LABEL = {
+  low: "Low risk",
+  medium: "Use with care",
+  high: "Destructive"
+};
+async function confirmSafetyAction(window2, descriptor, context, options) {
+  if (!getSafetyDescriptor(descriptor.id)) {
+    return { accepted: false };
+  }
+  if (!descriptor.requiresConfirmation && !options?.dryRun) {
+    return { accepted: true };
+  }
+  const detailLines = [];
+  if (options?.dryRun) {
+    detailLines.push("Dry-run mode: no changes will be made.");
+  }
+  if (descriptor.details) detailLines.push(descriptor.details);
+  if (context) {
+    for (const [key, value] of Object.entries(context)) {
+      if (value === void 0 || value === null || value === "") continue;
+      detailLines.push(`${key}: ${String(value)}`);
+    }
+  }
+  detailLines.push(`Risk: ${RISK_LABEL[descriptor.risk]}`);
+  const primaryLabel = options?.dryRun ? `Preview: ${descriptor.title}` : descriptor.title;
+  const opts = {
+    type: descriptor.risk === "high" && !options?.dryRun ? "warning" : "question",
+    buttons: ["Cancel", primaryLabel],
+    defaultId: 0,
+    cancelId: 0,
+    title: primaryLabel,
+    message: descriptor.summary,
+    detail: detailLines.join("\n"),
+    noLink: true
+  };
+  const response = window2 && !window2.isDestroyed() ? await dialog.showMessageBox(window2, opts) : await dialog.showMessageBox(opts);
+  return { accepted: response.response === 1 };
+}
+
+// src/main/safety/log.ts
+init_desktop_runtime();
+var import_node_fs6 = require("node:fs");
+var import_node_path7 = require("node:path");
+var MAX_ENTRIES = 200;
+var cache = null;
+function logPath() {
+  const dir = (0, import_node_path7.join)(app.getPath("userData"), "safety");
+  (0, import_node_fs6.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path7.join)(dir, "action-log.json");
+}
+function load() {
+  if (cache) return cache;
+  try {
+    const raw = (0, import_node_fs6.readFileSync)(logPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    cache = Array.isArray(parsed.entries) ? parsed.entries : [];
+  } catch {
+    cache = [];
+  }
+  return cache;
+}
+function persist() {
+  if (!cache) return;
+  try {
+    (0, import_node_fs6.writeFileSync)(logPath(), JSON.stringify({ entries: cache }, null, 2), "utf8");
+  } catch {
+  }
+}
+function truncateContext(context) {
+  if (!context) return void 0;
+  const out = {};
+  for (const [key, value] of Object.entries(context)) {
+    if (typeof value === "string") {
+      out[key] = value.length > 200 ? `${value.slice(0, 200)}\u2026` : value;
+    } else if (value === null || ["number", "boolean"].includes(typeof value)) {
+      out[key] = value;
+    } else {
+      try {
+        const serialised = JSON.stringify(value);
+        out[key] = serialised.length > 200 ? `${serialised.slice(0, 200)}\u2026` : serialised;
+      } catch {
+        out[key] = "[unserializable]";
+      }
+    }
+  }
+  return out;
+}
+function recordSafetyEntry(entry) {
+  const full = {
+    ...entry,
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    at: Date.now(),
+    context: truncateContext(entry.context)
+  };
+  const list = load();
+  list.unshift(full);
+  if (list.length > MAX_ENTRIES) list.length = MAX_ENTRIES;
+  persist();
+  return full;
+}
+function listSafetyLog() {
+  return load().slice();
+}
+function clearSafetyLog() {
+  cache = [];
+  persist();
+}
+
+// src/main/pathIcons.ts
+init_desktop_runtime();
+var import_node_child_process5 = require("node:child_process");
+var import_node_crypto2 = require("node:crypto");
+var import_node_fs7 = require("node:fs");
+var import_node_path8 = require("node:path");
+var import_node_util4 = require("node:util");
+var execFileAsync4 = (0, import_node_util4.promisify)(import_node_child_process5.execFile);
+var FILE_ICON_STYLES = {
+  ".c": { label: "C", color: "#6b8dd6" },
+  ".cpp": { label: "C++", color: "#5e74c9" },
+  ".css": { label: "CSS", color: "#4a90e2" },
+  ".go": { label: "GO", color: "#45b8d8" },
+  ".html": { label: "HTML", color: "#e66b3d" },
+  ".java": { label: "JAVA", color: "#d95d54" },
+  ".js": { label: "JS", color: "#e5c441" },
+  ".jsx": { label: "JSX", color: "#5fc9e8" },
+  ".json": { label: "{}", color: "#d2b84c" },
+  ".kt": { label: "KT", color: "#8c6bd1" },
+  ".md": { label: "MD", color: "#778195" },
+  ".pdf": { label: "PDF", color: "#df5b5b" },
+  ".php": { label: "PHP", color: "#777bb3" },
+  ".py": { label: "PY", color: "#4d8fbd" },
+  ".rb": { label: "RB", color: "#c95151" },
+  ".rs": { label: "RS", color: "#c7764d" },
+  ".scss": { label: "SASS", color: "#cc6699" },
+  ".sh": { label: ">_", color: "#58a36b" },
+  ".sql": { label: "SQL", color: "#527fa5" },
+  ".swift": { label: "SW", color: "#ef704f" },
+  ".ts": { label: "TS", color: "#3178c6" },
+  ".tsx": { label: "TSX", color: "#4ba6c8" },
+  ".txt": { label: "TXT", color: "#7d8798" },
+  ".xml": { label: "XML", color: "#d58945" },
+  ".yaml": { label: "YML", color: "#c85a67" },
+  ".yml": { label: "YML", color: "#c85a67" },
+  ".zip": { label: "ZIP", color: "#a78a55" }
+};
+var IMAGE_EXTENSIONS = /* @__PURE__ */ new Set([
+  ".avif",
+  ".bmp",
+  ".gif",
+  ".heic",
+  ".jpeg",
+  ".jpg",
+  ".png",
+  ".svg",
+  ".webp"
+]);
+var ARCHIVE_EXTENSIONS = /* @__PURE__ */ new Set([".7z", ".bz2", ".gz", ".rar", ".tar", ".tgz"]);
+var nativeFileIconCache = /* @__PURE__ */ new Map();
+var nativeFileIconRequests = /* @__PURE__ */ new Map();
+var nativeFileIconWaiters = [];
+var NATIVE_FILE_ICON_CONCURRENCY = 2;
+var activeNativeFileIcons = 0;
+async function withNativeFileIconSlot(work) {
+  if (activeNativeFileIcons >= NATIVE_FILE_ICON_CONCURRENCY) {
+    await new Promise((resolve5) => nativeFileIconWaiters.push(resolve5));
+  }
+  activeNativeFileIcons += 1;
+  try {
+    return await work();
+  } finally {
+    activeNativeFileIcons -= 1;
+    nativeFileIconWaiters.shift()?.();
+  }
+}
+function svgDataUrl(svg) {
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+function documentSvg(label, color) {
+  const safeLabel = label.replace(/[&<>"']/g, "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path fill="#f5f6f8" d="M13 5h25l13 13v41H13z"/><path fill="#d9dde5" d="M38 5v14h13z"/><rect x="17" y="36" width="30" height="17" rx="4" fill="${color}"/><text x="32" y="48" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="10" font-weight="800" fill="white">${safeLabel}</text></svg>`;
+}
+var folderIconDataUrl = svgDataUrl(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path fill="#62a8ed" d="M5 15a6 6 0 0 1 6-6h15l6 7h21a6 6 0 0 1 6 6v29a6 6 0 0 1-6 6H11a6 6 0 0 1-6-6z"/><path fill="#8bc4f7" d="M5 25h54v26a6 6 0 0 1-6 6H11a6 6 0 0 1-6-6z"/></svg>'
+);
+function fileIconDataUrl(path7) {
+  const extension = (0, import_node_path8.extname)(path7).toLowerCase();
+  const style = FILE_ICON_STYLES[extension];
+  if (style) return svgDataUrl(documentSvg(style.label, style.color));
+  if (IMAGE_EXTENSIONS.has(extension)) return svgDataUrl(documentSvg("IMG", "#8b6fc0"));
+  if (ARCHIVE_EXTENSIONS.has(extension)) return svgDataUrl(documentSvg("ZIP", "#a78a55"));
+  return svgDataUrl(
+    documentSvg(extension ? extension.slice(1, 5).toUpperCase() : "FILE", "#7d8798")
+  );
+}
+function imageFileDataUrl(path7) {
+  if (!(0, import_node_fs7.existsSync)(path7)) return void 0;
+  const mimeType = (0, import_node_path8.extname)(path7).toLowerCase() === ".svg" ? "image/svg+xml" : (0, import_node_path8.extname)(path7).toLowerCase() === ".jpg" || (0, import_node_path8.extname)(path7).toLowerCase() === ".jpeg" ? "image/jpeg" : (0, import_node_path8.extname)(path7).toLowerCase() === ".webp" ? "image/webp" : "image/png";
+  try {
+    return `data:${mimeType};base64,${(0, import_node_fs7.readFileSync)(path7).toString("base64")}`;
+  } catch {
+    return void 0;
+  }
+}
+async function generateNativeFileIconDataUrl(path7) {
+  if (nativeFileIconCache.has(path7)) return nativeFileIconCache.get(path7) ?? void 0;
+  if (!(0, import_node_fs7.existsSync)(path7)) return void 0;
+  try {
+    const stats = (0, import_node_fs7.statSync)(path7);
+    const cacheKey2 = (0, import_node_crypto2.createHash)("sha1").update(`${path7}:${stats.mtimeMs}:${stats.size}`).digest("hex");
+    const outputDir = (0, import_node_path8.join)(app.getPath("userData"), "icon-cache", "files", cacheKey2);
+    const outputPath = (0, import_node_path8.join)(outputDir, `${(0, import_node_path8.basename)(path7)}.png`);
+    (0, import_node_fs7.mkdirSync)(outputDir, { recursive: true });
+    if (!(0, import_node_fs7.existsSync)(outputPath)) {
+      if (process.platform === "win32") {
+        await execFileAsync4(
+          "powershell.exe",
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Drawing; $icon=[System.Drawing.Icon]::ExtractAssociatedIcon($env:TEZBAR_ICON_SOURCE); if($null-eq $icon){exit 2}; try{$bitmap=$icon.ToBitmap(); try{$bitmap.Save($env:TEZBAR_ICON_DEST,[System.Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}}finally{$icon.Dispose()}"
+          ],
+          {
+            timeout: 3e3,
+            windowsHide: true,
+            env: {
+              ...process.env,
+              TEZBAR_ICON_SOURCE: path7,
+              TEZBAR_ICON_DEST: outputPath
+            }
+          }
+        );
+      } else {
+        await execFileAsync4("/usr/bin/qlmanage", ["-t", "-i", "-s", "64", "-o", outputDir, path7], {
+          timeout: 3e3,
+          // Quick Look occasionally ignores the default SIGTERM timeout and
+          // survives as an orphan. It is disposable thumbnail work, so enforce
+          // a hard kill and keep it off the backend indefinitely.
+          killSignal: "SIGKILL"
+        });
+      }
+    }
+    if (!(0, import_node_fs7.existsSync)(outputPath)) {
+      nativeFileIconCache.set(path7, null);
+      return void 0;
+    }
+    const dataUrl = `data:image/png;base64,${(0, import_node_fs7.readFileSync)(outputPath).toString("base64")}`;
+    nativeFileIconCache.set(path7, dataUrl);
+    return dataUrl;
+  } catch {
+    nativeFileIconCache.set(path7, null);
+    return void 0;
+  }
+}
+async function nativeFileIconDataUrl(path7) {
+  if (nativeFileIconCache.has(path7)) return nativeFileIconCache.get(path7) ?? void 0;
+  const pending = nativeFileIconRequests.get(path7);
+  if (pending) return pending;
+  const request = withNativeFileIconSlot(() => generateNativeFileIconDataUrl(path7));
+  nativeFileIconRequests.set(path7, request);
+  try {
+    return await request;
+  } finally {
+    nativeFileIconRequests.delete(path7);
+  }
+}
+
+// src/main/appIcon.ts
+init_desktop_runtime();
+var import_node_child_process6 = require("node:child_process");
+var import_node_crypto3 = require("node:crypto");
+var import_node_fs8 = require("node:fs");
+var import_node_path9 = require("node:path");
+var import_node_util5 = require("node:util");
+var execFileAsync5 = (0, import_node_util5.promisify)(import_node_child_process6.execFile);
+var appIconCache = /* @__PURE__ */ new Map();
+async function appIconDataUrl(appPath) {
+  if (appIconCache.has(appPath)) return appIconCache.get(appPath) ?? void 0;
+  try {
+    if (process.platform === "win32") {
+      if (appPath.startsWith("shell:AppsFolder\\")) {
+        appIconCache.set(appPath, null);
+        return void 0;
+      }
+      const cacheDir2 = (0, import_node_path9.join)(app.getPath("userData"), "icon-cache", "applications");
+      (0, import_node_fs8.mkdirSync)(cacheDir2, { recursive: true });
+      const pngPath2 = (0, import_node_path9.join)(cacheDir2, `${(0, import_node_crypto3.createHash)("sha1").update(appPath).digest("hex")}-64.png`);
+      if (!(0, import_node_fs8.existsSync)(pngPath2)) {
+        await execFileAsync5(
+          "powershell.exe",
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Drawing; $icon=[System.Drawing.Icon]::ExtractAssociatedIcon($env:TEZBAR_ICON_SOURCE); if ($null -eq $icon) { exit 2 }; try { $bitmap=$icon.ToBitmap(); try { $bitmap.Save($env:TEZBAR_ICON_DEST,[System.Drawing.Imaging.ImageFormat]::Png) } finally { $bitmap.Dispose() } } finally { $icon.Dispose() }"
+          ],
+          {
+            timeout: 5e3,
+            windowsHide: true,
+            env: {
+              ...process.env,
+              TEZBAR_ICON_SOURCE: appPath,
+              TEZBAR_ICON_DEST: pngPath2
+            }
+          }
+        );
+      }
+      const dataUrl2 = `data:image/png;base64,${(0, import_node_fs8.readFileSync)(pngPath2).toString("base64")}`;
+      appIconCache.set(appPath, dataUrl2);
+      return dataUrl2;
+    }
+    const resourceDir = (0, import_node_path9.join)(appPath, "Contents", "Resources");
+    let iconName;
+    try {
+      const { stdout } = await execFileAsync5("/usr/bin/plutil", [
+        "-extract",
+        "CFBundleIconFile",
+        "raw",
+        "-o",
+        "-",
+        (0, import_node_path9.join)(appPath, "Contents", "Info.plist")
+      ]);
+      const configured = stdout.trim();
+      if (configured) iconName = (0, import_node_path9.extname)(configured) ? configured : `${configured}.icns`;
+    } catch {
+    }
+    const resourceEntries = (0, import_node_fs8.readdirSync)(resourceDir);
+    if (!iconName || !(0, import_node_fs8.existsSync)((0, import_node_path9.join)(resourceDir, iconName))) {
+      const appName = (0, import_node_path9.basename)(appPath, ".app").toLowerCase();
+      iconName = resourceEntries.find((entry) => entry.toLowerCase() === `${appName}.icns`) ?? resourceEntries.find((entry) => entry.toLowerCase().endsWith(".icns"));
+    }
+    if (!iconName) {
+      appIconCache.set(appPath, null);
+      return void 0;
+    }
+    const iconPath = (0, import_node_path9.join)(resourceDir, iconName);
+    const cacheDir = (0, import_node_path9.join)(app.getPath("userData"), "icon-cache");
+    (0, import_node_fs8.mkdirSync)(cacheDir, { recursive: true });
+    const cacheName = `${(0, import_node_crypto3.createHash)("sha1").update(iconPath).digest("hex")}-64.png`;
+    const pngPath = (0, import_node_path9.join)(cacheDir, cacheName);
+    if (!(0, import_node_fs8.existsSync)(pngPath)) {
+      await execFileAsync5("/usr/bin/sips", [
+        "-Z",
+        "64",
+        "-s",
+        "format",
+        "png",
+        iconPath,
+        "--out",
+        pngPath
+      ]);
+    }
+    const dataUrl = `data:image/png;base64,${(0, import_node_fs8.readFileSync)(pngPath).toString("base64")}`;
+    appIconCache.set(appPath, dataUrl);
+    return dataUrl;
+  } catch {
+    appIconCache.set(appPath, null);
+    return void 0;
+  }
+}
+
+// src/main/knowledge/service.ts
+var import_node_child_process9 = require("node:child_process");
+var import_node_crypto7 = require("node:crypto");
+var import_node_fs14 = require("node:fs");
+var import_node_os7 = require("node:os");
+var import_node_path15 = require("node:path");
+var import_node_util7 = require("node:util");
+
 // src/main/knowledge/backends/local/backend.ts
-var import_node_fs3 = require("node:fs");
+var import_node_fs10 = require("node:fs");
 
 // src/main/knowledge/core/chunker.ts
-var import_node_crypto = require("node:crypto");
+var import_node_crypto4 = require("node:crypto");
 var TARGET_CHARS = 1200;
 var OVERLAP_CHARS = 180;
 var MAX_KNOWLEDGE_CHUNKS_PER_SOURCE = 4e3;
 function normalizeText(value) {
   return value.replace(/\u0000/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
-async function chunkText(sourceId, text, pageNumber, limit, yieldToInteractiveWork) {
-  const normalized = normalizeText(text);
+async function chunkText(sourceId, text2, pageNumber, limit, yieldToInteractiveWork) {
+  const normalized = normalizeText(text2);
   if (!normalized) return [];
   const chunks = [];
   let start = 0;
@@ -14399,7 +18706,7 @@ async function chunkText(sourceId, text, pageNumber, limit, yieldToInteractiveWo
     }
     const value = normalized.slice(start, end).trim();
     if (value) {
-      const id = (0, import_node_crypto.createHash)("sha256").update(`${sourceId}:${pageNumber ?? 0}:${start}:${value}`).digest("hex");
+      const id = (0, import_node_crypto4.createHash)("sha256").update(`${sourceId}:${pageNumber ?? 0}:${start}:${value}`).digest("hex");
       chunks.push({ id, pageNumber, text: value, startOffset: start, endOffset: end });
     }
     if (end >= normalized.length) break;
@@ -14486,12 +18793,12 @@ function cosineSimilarity(left, right) {
 }
 
 // src/main/knowledge/extractors/localExtractor.ts
-var import_node_child_process2 = require("node:child_process");
-var import_node_fs2 = require("node:fs");
+var import_node_child_process7 = require("node:child_process");
+var import_node_fs9 = require("node:fs");
 var import_promises = require("node:fs/promises");
-var import_node_path2 = require("node:path");
-var import_node_util2 = require("node:util");
-var execFileAsync2 = (0, import_node_util2.promisify)(import_node_child_process2.execFile);
+var import_node_path10 = require("node:path");
+var import_node_util6 = require("node:util");
+var execFileAsync6 = (0, import_node_util6.promisify)(import_node_child_process7.execFile);
 var MAX_EXTRACTED_BYTES = 64 * 1024 * 1024;
 var MAX_PLAIN_TEXT_EXTRACTED_BYTES = 8 * 1024 * 1024;
 var MAX_PLAIN_TEXT_SOURCE_BYTES = 64 * 1024 * 1024;
@@ -14562,7 +18869,7 @@ var PLAIN_TEXT_EXTENSIONS = /* @__PURE__ */ new Set([
   ".dockerfile",
   ".gitignore"
 ]);
-var IMAGE_EXTENSIONS = /* @__PURE__ */ new Set([
+var IMAGE_EXTENSIONS2 = /* @__PURE__ */ new Set([
   ".png",
   ".jpg",
   ".jpeg",
@@ -14593,21 +18900,21 @@ var RICH_DOCUMENT_EXTENSIONS = /* @__PURE__ */ new Set([
 ]);
 var INDEXABLE_EXTENSIONS = /* @__PURE__ */ new Set([
   ...PLAIN_TEXT_EXTENSIONS,
-  ...IMAGE_EXTENSIONS,
+  ...IMAGE_EXTENSIONS2,
   ...RICH_DOCUMENT_EXTENSIONS,
   ".pdf"
 ]);
 function screenOcrHelperPath() {
   const candidates = [
     process.env.SCREENOCR_HELPER_PATH,
-    (0, import_node_path2.join)(process.cwd(), "native", "screenocr", "screenocr-helper")
+    (0, import_node_path10.join)(process.cwd(), "native", "screenocr", "screenocr-helper")
   ];
-  return candidates.find((candidate) => Boolean(candidate && (0, import_node_fs2.existsSync)(candidate))) ?? "";
+  return candidates.find((candidate) => Boolean(candidate && (0, import_node_fs9.existsSync)(candidate))) ?? "";
 }
-async function runScreenOcr(command, input, signal) {
+async function runScreenOcr(command2, input, signal) {
   const helper = screenOcrHelperPath();
   if (!helper) throw new Error("The macOS text extraction helper is not available");
-  const { stdout } = await execFileAsync2(helper, [command, JSON.stringify(input)], {
+  const { stdout } = await execFileAsync6(helper, [command2, JSON.stringify(input)], {
     encoding: "utf8",
     maxBuffer: MAX_EXTRACTED_BYTES,
     signal
@@ -14634,9 +18941,9 @@ async function extractPlainText(path7) {
     const bytesToRead = Math.min(stat2.size, MAX_PLAIN_TEXT_EXTRACTED_BYTES);
     const buffer = Buffer.allocUnsafe(bytesToRead);
     const { bytesRead } = await handle.read(buffer, 0, bytesToRead, 0);
-    const text = decodeText(buffer.subarray(0, bytesRead));
+    const text2 = decodeText(buffer.subarray(0, bytesRead));
     return {
-      text: /\.(?:html?|xml)$/i.test(path7) ? stripMarkup(text) : text.trim(),
+      text: /\.(?:html?|xml)$/i.test(path7) ? stripMarkup(text2) : text2.trim(),
       truncated: stat2.size > bytesRead
     };
   } finally {
@@ -14644,9 +18951,9 @@ async function extractPlainText(path7) {
   }
 }
 async function extractRichDocument(path7, signal) {
-  if (process.platform === "darwin" && (0, import_node_fs2.existsSync)("/usr/bin/textutil")) {
+  if (process.platform === "darwin" && (0, import_node_fs9.existsSync)("/usr/bin/textutil")) {
     try {
-      const { stdout } = await execFileAsync2("/usr/bin/textutil", ["-convert", "txt", "-stdout", path7], {
+      const { stdout } = await execFileAsync6("/usr/bin/textutil", ["-convert", "txt", "-stdout", path7], {
         encoding: "utf8",
         maxBuffer: MAX_EXTRACTED_BYTES,
         signal
@@ -14655,13 +18962,13 @@ async function extractRichDocument(path7, signal) {
     } catch {
     }
   }
-  if ((0, import_node_fs2.existsSync)("/usr/bin/unzip")) {
-    const extension = (0, import_node_path2.extname)(path7).toLowerCase();
+  if ((0, import_node_fs9.existsSync)("/usr/bin/unzip")) {
+    const extension = (0, import_node_path10.extname)(path7).toLowerCase();
     const members = extension === ".epub" ? ["*.xhtml", "*.html"] : extension === ".xlsx" || extension === ".ods" || extension === ".numbers" ? ["*.xml"] : ["*.xml", "*.xhtml"];
     const parts = [];
     for (const member of members) {
       try {
-        const { stdout } = await execFileAsync2("/usr/bin/unzip", ["-p", path7, member], {
+        const { stdout } = await execFileAsync6("/usr/bin/unzip", ["-p", path7, member], {
           encoding: "utf8",
           maxBuffer: MAX_EXTRACTED_BYTES,
           signal
@@ -14677,7 +18984,7 @@ async function extractRichDocument(path7, signal) {
 async function extractMetadataText(path7, signal) {
   if (process.platform !== "darwin") return "";
   try {
-    const { stdout } = await execFileAsync2("/usr/bin/mdls", ["-raw", "-name", "kMDItemTextContent", path7], {
+    const { stdout } = await execFileAsync6("/usr/bin/mdls", ["-raw", "-name", "kMDItemTextContent", path7], {
       encoding: "utf8",
       maxBuffer: MAX_EXTRACTED_BYTES,
       signal
@@ -14689,30 +18996,30 @@ async function extractMetadataText(path7, signal) {
   }
 }
 function isIndexablePath(path7) {
-  const extension = (0, import_node_path2.extname)(path7).toLowerCase();
+  const extension = (0, import_node_path10.extname)(path7).toLowerCase();
   if (INDEXABLE_EXTENSIONS.has(extension)) return true;
   const filename = path7.split("/").pop()?.toLowerCase() ?? "";
   return ["dockerfile", "makefile", "license", "readme", "changelog"].includes(filename);
 }
 function maximumIndexableSourceBytes(path7) {
-  const extension = (0, import_node_path2.extname)(path7).toLowerCase();
+  const extension = (0, import_node_path10.extname)(path7).toLowerCase();
   if (extension === ".pdf" || RICH_DOCUMENT_EXTENSIONS.has(extension)) {
     return MAX_DOCUMENT_SOURCE_BYTES;
   }
-  if (IMAGE_EXTENSIONS.has(extension)) return MAX_IMAGE_SOURCE_BYTES;
+  if (IMAGE_EXTENSIONS2.has(extension)) return MAX_IMAGE_SOURCE_BYTES;
   return MAX_PLAIN_TEXT_SOURCE_BYTES;
 }
 async function extractLocally(path7, signal, options) {
-  const extension = (0, import_node_path2.extname)(path7).toLowerCase();
+  const extension = (0, import_node_path10.extname)(path7).toLowerCase();
   const warnings = [];
   if (extension === ".pdf") {
     if (process.platform !== "darwin") {
-      const text2 = await extractMetadataText(path7, signal);
+      const text3 = await extractMetadataText(path7, signal);
       return {
-        pages: [{ pageNumber: 1, extractedText: text2 }],
+        pages: [{ pageNumber: 1, extractedText: text3 }],
         images: [],
         completedCapabilities: ["extracted-text"],
-        warnings: text2 ? [] : ["PDF extraction is not available on this platform yet."],
+        warnings: text3 ? [] : ["PDF extraction is not available on this platform yet."],
         extractor: { id: "metadata-pdf", version: "1.0.0" }
       };
     }
@@ -14736,7 +19043,7 @@ async function extractLocally(path7, signal, options) {
       totalPageCount: pdf.totalPages
     };
   }
-  if (IMAGE_EXTENSIONS.has(extension)) {
+  if (IMAGE_EXTENSIONS2.has(extension)) {
     if (!options.enableOcr) {
       return {
         pages: [],
@@ -14779,20 +19086,20 @@ async function extractLocally(path7, signal, options) {
       totalPageCount: 1
     };
   }
-  let text = "";
+  let text2 = "";
   if (PLAIN_TEXT_EXTENSIONS.has(extension) || !extension) {
     const extraction = await extractPlainText(path7);
-    text = extraction.text;
+    text2 = extraction.text;
     if (extraction.truncated) {
       warnings.push("Only the first 8 MB of this large text file was indexed.");
     }
   } else if (RICH_DOCUMENT_EXTENSIONS.has(extension)) {
-    text = await extractRichDocument(path7, signal);
+    text2 = await extractRichDocument(path7, signal);
   }
-  if (!text) text = await extractMetadataText(path7, signal);
-  if (!text) warnings.push("No textual content could be extracted from this file.");
+  if (!text2) text2 = await extractMetadataText(path7, signal);
+  if (!text2) warnings.push("No textual content could be extracted from this file.");
   return {
-    pages: [{ pageNumber: 1, extractedText: text }],
+    pages: [{ pageNumber: 1, extractedText: text2 }],
     images: [],
     completedCapabilities: ["extracted-text"],
     warnings,
@@ -14814,7 +19121,7 @@ var LocalIndexingBackend = class {
   id = "local";
   jobs = /* @__PURE__ */ new Map();
   async estimate(request) {
-    const stat2 = (0, import_node_fs3.statSync)(request.path);
+    const stat2 = (0, import_node_fs10.statSync)(request.path);
     const estimatedPages = request.path.toLowerCase().endsWith(".pdf") ? Math.max(1, Math.ceil(stat2.size / 75e3)) : 1;
     return {
       sourceCount: 1,
@@ -14915,12 +19222,12 @@ var TezbarCloudIndexingBackend = class {
 };
 
 // src/main/knowledge/core/fingerprint.ts
-var import_node_crypto2 = require("node:crypto");
-var import_node_fs4 = require("node:fs");
+var import_node_crypto5 = require("node:crypto");
+var import_node_fs11 = require("node:fs");
 async function fingerprintSource(path7, signal) {
-  const stat2 = (0, import_node_fs4.statSync)(path7);
-  const hash2 = (0, import_node_crypto2.createHash)("sha256");
-  const stream = (0, import_node_fs4.createReadStream)(path7);
+  const stat2 = (0, import_node_fs11.statSync)(path7);
+  const hash2 = (0, import_node_crypto5.createHash)("sha256");
+  const stream = (0, import_node_fs11.createReadStream)(path7);
   await new Promise((resolve5, reject) => {
     const abort = () => {
       stream.destroy(new Error("Indexing cancelled"));
@@ -14938,10 +19245,10 @@ async function fingerprintSource(path7, signal) {
   };
 }
 function sourceIdForPath(path7) {
-  return (0, import_node_crypto2.createHash)("sha256").update(path7).digest("hex");
+  return (0, import_node_crypto5.createHash)("sha256").update(path7).digest("hex");
 }
 function artifactSettingsHash(value) {
-  return (0, import_node_crypto2.createHash)("sha256").update(JSON.stringify(value)).digest("hex");
+  return (0, import_node_crypto5.createHash)("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 // src/main/knowledge/database/store.ts
@@ -14949,16 +19256,16 @@ init_desktop_runtime();
 
 // src/main/better-sqlite3-shim.ts
 var import_bun_sqlite = require("bun:sqlite");
-var import_node_fs5 = require("node:fs");
-var import_node_path3 = require("node:path");
+var import_node_fs12 = require("node:fs");
+var import_node_path11 = require("node:path");
 if (process.platform === "darwin") {
   const sqliteCandidates = [
     process.env.TEZBAR_SQLITE_LIBRARY_PATH,
-    (0, import_node_path3.join)(__dirname, "libsqlite3.dylib"),
+    (0, import_node_path11.join)(__dirname, "libsqlite3.dylib"),
     "/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib",
     "/usr/local/opt/sqlite/lib/libsqlite3.dylib",
     "/usr/local/opt/sqlite3/lib/libsqlite3.dylib"
-  ].filter((path7) => Boolean(path7 && (0, import_node_fs5.existsSync)(path7)));
+  ].filter((path7) => Boolean(path7 && (0, import_node_fs12.existsSync)(path7)));
   const sqliteLibrary = sqliteCandidates[0];
   if (sqliteLibrary) {
     try {
@@ -15012,14 +19319,14 @@ var DatabaseShim = class {
 var better_sqlite3_shim_default = DatabaseShim;
 
 // src/main/knowledge/database/store.ts
-var import_node_fs6 = require("node:fs");
-var import_node_path5 = require("node:path");
-var import_node_crypto3 = require("node:crypto");
+var import_node_fs13 = require("node:fs");
+var import_node_path13 = require("node:path");
+var import_node_crypto6 = require("node:crypto");
 
 // src/main/sqlite-vec-bundled.ts
-var import_node_path4 = require("node:path");
-function load(database) {
-  database.loadExtension((0, import_node_path4.join)(__dirname, "vec0"));
+var import_node_path12 = require("node:path");
+function load2(database) {
+  database.loadExtension((0, import_node_path12.join)(__dirname, "vec0"));
 }
 
 // src/main/search/textMatch.ts
@@ -15029,8 +19336,8 @@ function wordTokens(value) {
 function tokenizeQuery(query) {
   return wordTokens(query);
 }
-function lexicalScore(text, query) {
-  const t = text.toLowerCase();
+function lexicalScore(text2, query) {
+  const t = text2.toLowerCase();
   const q = query.toLowerCase().trim();
   if (!q) return 0;
   if (t === q) return 1;
@@ -15044,8 +19351,8 @@ function lexicalScore(text, query) {
   }
   return matched / tokens2.length / 1.5;
 }
-function searchableTokens(text) {
-  return wordTokens(text);
+function searchableTokens(text2) {
+  return wordTokens(text2);
 }
 function levenshteinDistance(left, right) {
   if (left === right) return 0;
@@ -15081,10 +19388,10 @@ function tokenSimilarity(candidate, query) {
   if (distance > maxDistance) return 0;
   return Math.max(0, 1 - distance / length);
 }
-function fuzzySimilarityScore(text, query) {
+function fuzzySimilarityScore(text2, query) {
   const queryTokens = searchableTokens(query);
   if (queryTokens.length === 0) return 0;
-  const candidateTokens = searchableTokens(text);
+  const candidateTokens = searchableTokens(text2);
   if (candidateTokens.length === 0) return 0;
   let total = 0;
   for (const queryToken of queryTokens) {
@@ -15100,7 +19407,7 @@ function fuzzySimilarityScore(text, query) {
 function buildFtsQuery(query) {
   const tokens2 = wordTokens(query);
   if (tokens2.length === 0) return "";
-  return tokens2.map((token) => `${token}*`).join(" OR ");
+  return tokens2.map((token) => token.length === 1 ? `"${token}"` : `${token}*`).join(" OR ");
 }
 function buildContentFtsQuery(query) {
   const tokens2 = wordTokens(query);
@@ -15170,9 +19477,9 @@ var DEFAULT_STATUS = {
   sourceBytes: 0
 };
 function databasePath() {
-  const directory = (0, import_node_path5.join)(app.getPath("userData"), "knowledge");
-  (0, import_node_fs6.mkdirSync)(directory, { recursive: true });
-  return (0, import_node_path5.join)(directory, "knowledge.sqlite3");
+  const directory = (0, import_node_path13.join)(app.getPath("userData"), "knowledge");
+  (0, import_node_fs13.mkdirSync)(directory, { recursive: true });
+  return (0, import_node_path13.join)(directory, "knowledge.sqlite3");
 }
 function parseJson(value, fallback) {
   if (!value) return fallback;
@@ -15229,7 +19536,7 @@ var KnowledgeStore = class {
     this.db.pragma("synchronous = NORMAL");
     this.db.pragma("busy_timeout = 5000");
     try {
-      load(
+      load2(
         this.db
       );
       this.vectorIndexAvailable = true;
@@ -15758,7 +20065,7 @@ ${page.ocr?.text ?? ""}`.trim();
           page.ocr ? "ocr-indexed" : "not-indexed",
           embeddedPages.has(page.pageNumber) ? "embedded" : "not-indexed",
           imageEmbeddedPages.has(page.pageNumber) ? "embedded" : "not-indexed",
-          pageText ? (0, import_node_crypto3.createHash)("sha256").update(pageText).digest("hex") : null
+          pageText ? (0, import_node_crypto6.createHash)("sha256").update(pageText).digest("hex") : null
         );
       }
       const insertChunk = this.db.prepare(`
@@ -15817,7 +20124,7 @@ ${page.ocr?.text ?? ""}`.trim();
       for (const capability of result.completedCapabilities) {
         const processor = capability === "text-embeddings" && result.textEmbeddingModel ? result.textEmbeddingModel : result.extractor;
         const settingsHash = artifactSettingsHash({ capability, processor });
-        const artifactId = (0, import_node_crypto3.createHash)("sha256").update(
+        const artifactId = (0, import_node_crypto6.createHash)("sha256").update(
           `${result.sourceHash}:${capability}:${processor.id}:${processor.version}:${settingsHash}`
         ).digest("hex");
         insertArtifact.run(
@@ -15882,7 +20189,7 @@ ${page.ocr?.text ?? ""}`.trim();
         } : void 0
       })),
       chunks: chunks.map((chunk) => ({
-        id: (0, import_node_crypto3.createHash)("sha256").update(`${targetSourceId}:${chunk.id}`).digest("hex"),
+        id: (0, import_node_crypto6.createHash)("sha256").update(`${targetSourceId}:${chunk.id}`).digest("hex"),
         pageNumber: chunk.pageNumber ?? void 0,
         text: chunk.text,
         embedding: decodeEmbedding(chunk.embeddingJson),
@@ -15890,7 +20197,7 @@ ${page.ocr?.text ?? ""}`.trim();
         endOffset: chunk.endOffset ?? void 0
       })),
       images: images.map((image) => ({
-        id: (0, import_node_crypto3.createHash)("sha256").update(`${targetSourceId}:${image.id}`).digest("hex"),
+        id: (0, import_node_crypto6.createHash)("sha256").update(`${targetSourceId}:${image.id}`).digest("hex"),
         pageNumber: image.pageNumber ?? void 0,
         ocrText: image.ocrText ?? void 0,
         description: image.description ?? void 0,
@@ -15954,7 +20261,7 @@ ${page.ocr?.text ?? ""}`.trim();
     const path7 = databasePath();
     return [path7, `${path7}-wal`, `${path7}-shm`].reduce((total, candidate) => {
       try {
-        return total + (0, import_node_fs6.statSync)(candidate).size;
+        return total + (0, import_node_fs13.statSync)(candidate).size;
       } catch {
         return total;
       }
@@ -15987,7 +20294,7 @@ ${page.ocr?.text ?? ""}`.trim();
     return {
       sources: rows.map((row) => ({
         ...row,
-        title: (0, import_node_path5.basename)(row.path),
+        title: (0, import_node_path13.basename)(row.path),
         indexedAt: row.indexedAt ?? void 0,
         error: row.error ?? void 0
       })),
@@ -16016,7 +20323,7 @@ ${page.ocr?.text ?? ""}`.trim();
     return rows.map((row, index) => ({
       sourceId: row.sourceId,
       path: row.path,
-      title: (0, import_node_path5.basename)(row.path),
+      title: (0, import_node_path13.basename)(row.path),
       score: Math.max(0.2, 1 - index / Math.max(rows.length, 1))
     }));
   }
@@ -16199,7 +20506,7 @@ ${page.ocr?.text ?? ""}`.trim();
         chunkId: row.id,
         sourceId: row.sourceId,
         path: row.path,
-        title: (0, import_node_path5.basename)(row.path),
+        title: (0, import_node_path13.basename)(row.path),
         pageNumber: row.pageNumber ?? void 0,
         text: row.text,
         score,
@@ -16232,7 +20539,7 @@ ${page.ocr?.text ?? ""}`.trim();
       ORDER BY rowid ASC
     `
     ).all(selected.sourceId, selected.rowId - 2, selected.rowId + 2);
-    const text = nearby.map((row) => row.text).join("\n\n").slice(0, Math.max(500, maxChars));
+    const text2 = nearby.map((row) => row.text).join("\n\n").slice(0, Math.max(500, maxChars));
     this.db.prepare(
       `
       UPDATE knowledge_pages SET last_accessed_at = ?
@@ -16243,16 +20550,16 @@ ${page.ocr?.text ?? ""}`.trim();
       resultId: chunkId,
       sourceId: selected.sourceId,
       path: selected.path,
-      title: (0, import_node_path5.basename)(selected.path),
+      title: (0, import_node_path13.basename)(selected.path),
       pageNumber: selected.pageNumber ?? void 0,
-      text
+      text: text2
     };
   }
 };
 
 // src/main/knowledge/workerHost.ts
-var import_node_child_process3 = require("node:child_process");
-var import_node_path6 = require("node:path");
+var import_node_child_process8 = require("node:child_process");
+var import_node_path14 = require("node:path");
 var KnowledgeWorkerHost = class {
   constructor(onStatus, onExit) {
     this.onStatus = onStatus;
@@ -16267,8 +20574,8 @@ var KnowledgeWorkerHost = class {
   }
   start() {
     if (this.child) return;
-    const workerPath = (0, import_node_path6.join)(__dirname, "knowledge-worker.js");
-    const child = (0, import_node_child_process3.spawn)(process.execPath, [workerPath], {
+    const workerPath = (0, import_node_path14.join)(__dirname, "knowledge-worker.js");
+    const child = (0, import_node_child_process8.spawn)(process.execPath, [workerPath], {
       env: { ...process.env, TEZBAR_KNOWLEDGE_WORKER: "1" },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true
@@ -16351,7 +20658,7 @@ var KnowledgeWorkerHost = class {
 };
 
 // src/main/knowledge/service.ts
-var execFileAsync3 = (0, import_node_util3.promisify)(import_node_child_process4.execFile);
+var execFileAsync7 = (0, import_node_util7.promisify)(import_node_child_process9.execFile);
 var MAX_SCANNED_FILES = 75e3;
 var STATUS_EVENT_INTERVAL_MS = 100;
 var STATUS_PERSIST_INTERVAL_MS = 1e3;
@@ -16430,19 +20737,19 @@ function shouldSkipKnowledgeEntry(name, isDirectory) {
   if (SENSITIVE_FILE_PATTERNS.some((pattern) => pattern.test(name))) return true;
   return lower.endsWith(".min.js") || lower.endsWith(".min.css");
 }
-function discoverMajorKnowledgeFolders(home = (0, import_node_os2.homedir)()) {
-  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path7.join)(home, name)).filter((path7) => {
+function discoverMajorKnowledgeFolders(home = (0, import_node_os7.homedir)()) {
+  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path15.join)(home, name)).filter((path7) => {
     try {
-      return (0, import_node_fs7.statSync)(path7).isDirectory();
+      return (0, import_node_fs14.statSync)(path7).isDirectory();
     } catch {
       return false;
     }
   });
 }
 function isKnowledgeCandidatePath(rootPath, path7) {
-  const relativePath = (0, import_node_path7.relative)(rootPath, path7);
-  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path7.sep}`)) return false;
-  const segments = relativePath.split(import_node_path7.sep).filter(Boolean);
+  const relativePath = (0, import_node_path15.relative)(rootPath, path7);
+  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path15.sep}`)) return false;
+  const segments = relativePath.split(import_node_path15.sep).filter(Boolean);
   const fileName = segments.pop();
   if (!fileName || shouldSkipKnowledgeEntry(fileName, false) || !isIndexablePath(path7)) return false;
   return segments.every((name) => !shouldSkipKnowledgeEntry(name, true));
@@ -16564,8 +20871,8 @@ var KnowledgeService = class {
   }
   addRoot(path7) {
     this.initialize();
-    const normalized = (0, import_node_path7.resolve)(path7.trim());
-    if (!normalized || !(0, import_node_fs7.existsSync)(normalized) || !(0, import_node_fs7.statSync)(normalized).isDirectory()) {
+    const normalized = (0, import_node_path15.resolve)(path7.trim());
+    if (!normalized || !(0, import_node_fs14.existsSync)(normalized) || !(0, import_node_fs14.statSync)(normalized).isDirectory()) {
       throw new Error("Choose an existing folder");
     }
     const current = this.store.listRoots();
@@ -16573,7 +20880,7 @@ var KnowledgeService = class {
     if (duplicate) return this.snapshot();
     const now = Date.now();
     this.store.upsertRoot({
-      id: (0, import_node_crypto4.randomUUID)(),
+      id: (0, import_node_crypto7.randomUUID)(),
       path: normalized,
       depth: "inherit",
       processingBackend: "local",
@@ -16597,7 +20904,7 @@ var KnowledgeService = class {
         continue;
       }
       this.store.upsertRoot({
-        id: (0, import_node_crypto4.randomUUID)(),
+        id: (0, import_node_crypto7.randomUUID)(),
         path: path7,
         depth: "inherit",
         processingBackend: "local",
@@ -16695,7 +21002,7 @@ var KnowledgeService = class {
     const roots = this.activeRoots();
     if (roots.length === 0) return this.snapshot();
     const checkpoint = this.store.getIndexingCheckpoint();
-    const jobId = checkpoint?.jobId ?? (0, import_node_crypto4.randomUUID)();
+    const jobId = checkpoint?.jobId ?? (0, import_node_crypto7.randomUUID)();
     if (checkpoint) {
       const processed = Math.min(checkpoint.processedSources, checkpoint.totalSources);
       this.updateStatus({
@@ -16869,7 +21176,7 @@ var KnowledgeService = class {
           completed += 1;
           if (!succeeded) failed += 1;
           this.updateStatus({ ...this.status, processedSources: completed, failedSources: failed });
-          this.updateProgress(completed, total, `Processed ${(0, import_node_path7.basename)(candidate.path)}`);
+          this.updateProgress(completed, total, `Processed ${(0, import_node_path15.basename)(candidate.path)}`);
           if (this.mode === "worker") {
             await new Promise((resolve5) => setTimeout(resolve5, BACKGROUND_FILE_DELAY_MS));
           }
@@ -16900,7 +21207,7 @@ var KnowledgeService = class {
       if (!directory) break;
       let entries;
       try {
-        entries = (0, import_node_fs7.readdirSync)(directory, { withFileTypes: true });
+        entries = (0, import_node_fs14.readdirSync)(directory, { withFileTypes: true });
       } catch {
         complete = false;
         continue;
@@ -16909,14 +21216,14 @@ var KnowledgeService = class {
         if (signal.aborted) break;
         visited += 1;
         if (shouldSkipKnowledgeEntry(entry.name, entry.isDirectory())) continue;
-        const path7 = (0, import_node_path7.join)(directory, entry.name);
+        const path7 = (0, import_node_path15.join)(directory, entry.name);
         if (entry.isSymbolicLink()) continue;
         if (entry.isDirectory()) {
           queue.push(path7);
         } else if (entry.isFile() && isIndexablePath(path7)) {
           try {
-            const fileStat = (0, import_node_fs7.statSync)(path7);
-            const isExtensionlessExecutable = !(0, import_node_path7.extname)(path7) && (fileStat.mode & 73) !== 0;
+            const fileStat = (0, import_node_fs14.statSync)(path7);
+            const isExtensionlessExecutable = !(0, import_node_path15.extname)(path7) && (fileStat.mode & 73) !== 0;
             if (!isExtensionlessExecutable && fileStat.size <= maximumIndexableSourceBytes(path7)) {
               paths.push(path7);
             }
@@ -16937,7 +21244,7 @@ var KnowledgeService = class {
     const sourceId = sourceIdForPath(candidate.path);
     try {
       const existing = this.store.getSourceByPath(candidate.path);
-      const stat2 = (0, import_node_fs7.statSync)(candidate.path);
+      const stat2 = (0, import_node_fs14.statSync)(candidate.path);
       if (existing?.status === "indexed" && existing.byteSize === stat2.size && Math.round(existing.modifiedAt) === Math.round(stat2.mtimeMs) && existing.indexingProfile === profileKey) {
         return true;
       }
@@ -16948,7 +21255,7 @@ var KnowledgeService = class {
         rootId: candidate.root.id,
         path: candidate.path,
         fingerprint,
-        mediaType: (0, import_node_path7.extname)(candidate.path).slice(1).toLowerCase(),
+        mediaType: (0, import_node_path15.extname)(candidate.path).slice(1).toLowerCase(),
         indexingProfile: profileKey
       });
       const reusable = this.store.findReusableResult(fingerprint.contentHash, sourceId, profileKey);
@@ -16980,7 +21287,7 @@ var KnowledgeService = class {
           this.updateStatus({
             ...this.status,
             progress: Math.max(this.status.progress, overall),
-            detail: detail ? `${detail} \xB7 ${(0, import_node_path7.basename)(candidate.path)}` : (0, import_node_path7.basename)(candidate.path)
+            detail: detail ? `${detail} \xB7 ${(0, import_node_path15.basename)(candidate.path)}` : (0, import_node_path15.basename)(candidate.path)
           });
         }
       });
@@ -16999,7 +21306,7 @@ var KnowledgeService = class {
     if (!profile) return false;
     try {
       const existing = this.store.getSourceByPath(path7);
-      const fileStat = (0, import_node_fs7.statSync)(path7);
+      const fileStat = (0, import_node_fs14.statSync)(path7);
       return !(existing?.status === "indexed" && existing.byteSize === fileStat.size && Math.round(existing.modifiedAt) === Math.round(fileStat.mtimeMs) && existing.indexingProfile === indexingProfileKey(profile));
     } catch {
       return false;
@@ -17132,7 +21439,7 @@ var KnowledgeService = class {
     for (const root of enabledRoots.values()) {
       if (this.watchers.has(root.id)) continue;
       try {
-        const watcher = (0, import_node_fs7.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
+        const watcher = (0, import_node_fs14.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
         watcher.on("error", () => {
           watcher.close();
           this.watchers.delete(root.id);
@@ -17185,7 +21492,7 @@ async function chooseKnowledgeFolder() {
 `);
   try {
     if (process.platform === "win32") {
-      const { stdout: stdout2 } = await execFileAsync3(
+      const { stdout: stdout2 } = await execFileAsync7(
         "powershell.exe",
         [
           "-NoLogo",
@@ -17199,10 +21506,10 @@ async function chooseKnowledgeFolder() {
       return stdout2.trim() || null;
     }
     const script = 'POSIX path of (choose folder with prompt "Choose a folder for Tezbar Knowledge")';
-    const { stdout } = await execFileAsync3("/usr/bin/osascript", ["-e", script], {
+    const { stdout } = await execFileAsync7("/usr/bin/osascript", ["-e", script], {
       encoding: "utf8"
     });
-    const path7 = stdout.trim().replace(new RegExp(`${import_node_path7.sep}$`), "");
+    const path7 = stdout.trim().replace(new RegExp(`${import_node_path15.sep}$`), "");
     return path7 || null;
   } catch {
     return null;
@@ -17212,8 +21519,3640 @@ async function chooseKnowledgeFolder() {
   }
 }
 
+// src/main/search/commandBus.ts
+var import_node_child_process10 = require("node:child_process");
+var import_node_util8 = require("node:util");
+var execFileAsync8 = (0, import_node_util8.promisify)(import_node_child_process10.execFile);
+function osascriptCommandHandler(script, successMessage) {
+  return async () => {
+    await execFileAsync8("/usr/bin/osascript", ["-e", script]);
+    return { ok: true, message: successMessage };
+  };
+}
+function darkModeCommandHandler(enabled) {
+  if (process.platform !== "win32") {
+    return osascriptCommandHandler(
+      `tell application "System Events" to tell appearance preferences to set dark mode to ${enabled}`,
+      `Dark mode ${enabled ? "enabled" : "disabled"}`
+    );
+  }
+  return async () => {
+    const lightTheme = enabled ? "0" : "1";
+    await execFileAsync8("powershell.exe", [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `$path='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'; Set-ItemProperty -Path $path -Name AppsUseLightTheme -Value ${lightTheme}; Set-ItemProperty -Path $path -Name SystemUsesLightTheme -Value ${lightTheme}`
+    ]);
+    return { ok: true, message: `Dark mode ${enabled ? "enabled" : "disabled"}` };
+  };
+}
+var CommandBus = class {
+  commands = /* @__PURE__ */ new Map();
+  constructor() {
+    this.registerBuiltins();
+  }
+  register(def) {
+    this.commands.set(def.id, def);
+  }
+  registerBuiltins() {
+    this.register({
+      id: "system.dark-mode.on",
+      title: "Enable dark mode",
+      permission: "system-control",
+      confirmation: "recommended",
+      analyticsKey: "system.dark_mode_on",
+      handler: darkModeCommandHandler(true)
+    });
+    this.register({
+      id: "system.dark-mode.off",
+      title: "Disable dark mode",
+      permission: "system-control",
+      confirmation: "recommended",
+      analyticsKey: "system.dark_mode_off",
+      handler: darkModeCommandHandler(false)
+    });
+    this.register({
+      id: "speech.read-aloud",
+      title: "Read text aloud",
+      permission: "none",
+      confirmation: "never",
+      analyticsKey: "speech.read_aloud",
+      handler: async (payload) => {
+        const text2 = String(payload?.text ?? "").trim();
+        if (!text2) {
+          return { ok: false, message: "No text provided for read-aloud" };
+        }
+        if (process.platform === "win32") {
+          await execFileAsync8(
+            "powershell.exe",
+            [
+              "-NoLogo",
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "Add-Type -AssemblyName System.Speech; $voice=New-Object System.Speech.Synthesis.SpeechSynthesizer; try { $voice.Speak($env:TEZBAR_SPEECH_TEXT) } finally { $voice.Dispose() }"
+            ],
+            { windowsHide: true, env: { ...process.env, TEZBAR_SPEECH_TEXT: text2 } }
+          );
+        } else {
+          await execFileAsync8("say", [text2]);
+        }
+        return { ok: true, message: "Reading aloud" };
+      }
+    });
+  }
+  async execute(context) {
+    const command2 = this.commands.get(context.commandId);
+    if (!command2) {
+      return { ok: false, message: `Unknown command: ${context.commandId}` };
+    }
+    return command2.handler(context.payload);
+  }
+};
+var commandBus = new CommandBus();
+
+// src/main/search/indexDb.ts
+init_desktop_runtime();
+var import_node_fs15 = require("node:fs");
+var import_node_path16 = require("node:path");
+function normalizeStoredQuery(query) {
+  return query.trim().toLowerCase().replace(/\s+/g, " ");
+}
+function dbPath() {
+  const dir = (0, import_node_path16.join)(app.getPath("userData"), "search");
+  (0, import_node_fs15.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path16.join)(dir, "index.sqlite3");
+}
+function safeJsonParse(value, fallback) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+var CLICK_EVENTS_RETAIN = 1e3;
+var ACTION_USAGE_EVENTS_RETAIN = 5e3;
+var BENCHMARK_SNAPSHOTS_RETAIN = 50;
+var HOT_USAGE_WINDOW_MS = 5 * 60 * 1e3;
+async function readBenchmarkHistory() {
+  return [];
+}
+async function runOfflineBenchmarks(_searchFn, _db) {
+}
+var _instance = null;
+function getInstance() {
+  if (!_instance) {
+    _instance = new SearchIndexDatabase();
+  }
+  return _instance;
+}
+var SearchIndexDatabase = class {
+  _db = null;
+  _initPromise = null;
+  get db() {
+    if (!this._db) {
+      throw new Error("Database not initialized - call ensureInitialized() first");
+    }
+    return this._db;
+  }
+  async ensureInitialized() {
+    if (this._initPromise) return this._initPromise;
+    this._initPromise = new Promise((resolve5) => {
+      setImmediate(() => {
+        this._db = new better_sqlite3_shim_default(dbPath());
+        this._db.pragma("journal_mode = WAL");
+        this._db.pragma("synchronous = NORMAL");
+        this.bootstrap();
+        resolve5();
+      });
+    });
+    return this._initPromise;
+  }
+  bootstrap() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        title TEXT NOT NULL,
+        subtitle TEXT NOT NULL,
+        tokens TEXT NOT NULL,
+        action_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        source_path TEXT,
+        source_mtime INTEGER,
+        popularity REAL NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS action_stats (
+        action_id TEXT PRIMARY KEY,
+        frequency INTEGER NOT NULL DEFAULT 0,
+        success_count INTEGER NOT NULL DEFAULT 0,
+        total_count INTEGER NOT NULL DEFAULT 0,
+        last_used_at INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS query_action_stats (
+        query TEXT NOT NULL,
+        action_id TEXT NOT NULL,
+        frequency INTEGER NOT NULL DEFAULT 0,
+        success_count INTEGER NOT NULL DEFAULT 0,
+        total_count INTEGER NOT NULL DEFAULT 0,
+        last_used_at INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (query, action_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS action_usage_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_action_usage_events_action_time
+      ON action_usage_events(action_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS benchmark_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at INTEGER NOT NULL,
+        precision_at_5 REAL NOT NULL,
+        precision_at_10 REAL NOT NULL,
+        avg_click_rank REAL NOT NULL,
+        benchmark_size INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS click_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at INTEGER NOT NULL,
+        query TEXT NOT NULL,
+        result_id TEXT NOT NULL,
+        rank INTEGER NOT NULL,
+        success INTEGER NOT NULL
+      );
+    `);
+    this.ensureDocumentsSchema();
+    this.ensureFtsSchema();
+    this.pruneTelemetry();
+  }
+  /**
+   * Keep FTS rowids identical to the owning document rowids. The previous
+   * schema stored `id UNINDEXED` in the virtual table and then deleted with
+   * `WHERE id = ?`. FTS5 cannot index an UNINDEXED column, so every document
+   * update scanned the entire search corpus. A full file refresh consequently
+   * became quadratic and blocked the backend event loop for minutes.
+   *
+   * External-content triggers make document writes the single source of truth
+   * and let FTS5 address updates by rowid. Existing installations are rebuilt
+   * once into the new layout during startup.
+   */
+  ensureFtsSchema() {
+    const row = this.db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'documents_fts'").get();
+    const normalizedSql = row?.sql?.replace(/\s+/g, "").toLowerCase() ?? "";
+    const usesDocumentContent = normalizedSql.includes("content='documents'") || normalizedSql.includes('content="documents"');
+    const createTriggers = () => {
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS documents_fts_after_insert
+        AFTER INSERT ON documents BEGIN
+          INSERT INTO documents_fts(rowid, title, subtitle, tokens)
+          VALUES (new.rowid, new.title, new.subtitle, new.tokens);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS documents_fts_after_delete
+        AFTER DELETE ON documents BEGIN
+          INSERT INTO documents_fts(documents_fts, rowid, title, subtitle, tokens)
+          VALUES ('delete', old.rowid, old.title, old.subtitle, old.tokens);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS documents_fts_after_update
+        AFTER UPDATE ON documents BEGIN
+          INSERT INTO documents_fts(documents_fts, rowid, title, subtitle, tokens)
+          VALUES ('delete', old.rowid, old.title, old.subtitle, old.tokens);
+          INSERT INTO documents_fts(rowid, title, subtitle, tokens)
+          VALUES (new.rowid, new.title, new.subtitle, new.tokens);
+        END;
+      `);
+    };
+    if (usesDocumentContent) {
+      createTriggers();
+      return;
+    }
+    const migrate = this.db.transaction(() => {
+      this.db.exec(`
+        DROP TRIGGER IF EXISTS documents_fts_after_insert;
+        DROP TRIGGER IF EXISTS documents_fts_after_delete;
+        DROP TRIGGER IF EXISTS documents_fts_after_update;
+        DROP TABLE IF EXISTS documents_fts;
+        CREATE VIRTUAL TABLE documents_fts USING fts5(
+          title,
+          subtitle,
+          tokens,
+          content = 'documents',
+          content_rowid = 'rowid',
+          tokenize = 'unicode61'
+        );
+      `);
+      createTriggers();
+      this.db.exec("INSERT INTO documents_fts(documents_fts) VALUES ('rebuild')");
+    });
+    migrate();
+  }
+  /** Remove old click-events and benchmark snapshots so the DB doesn't grow
+   *  without bound. Retention limits are conservative — enough for ranking
+   *  learning and debugging without unbounded disk use. */
+  pruneTelemetry() {
+    try {
+      this.db.prepare(
+        `DELETE FROM click_events WHERE id NOT IN (
+            SELECT id FROM click_events ORDER BY id DESC LIMIT ?
+          )`
+      ).run(CLICK_EVENTS_RETAIN);
+      this.db.prepare(
+        `DELETE FROM action_usage_events WHERE id NOT IN (
+            SELECT id FROM action_usage_events ORDER BY id DESC LIMIT ?
+          )`
+      ).run(ACTION_USAGE_EVENTS_RETAIN);
+      this.db.prepare(
+        `DELETE FROM benchmark_snapshots WHERE id NOT IN (
+            SELECT id FROM benchmark_snapshots ORDER BY id DESC LIMIT ?
+          )`
+      ).run(BENCHMARK_SNAPSHOTS_RETAIN);
+    } catch (error) {
+      console.warn("[SearchIndex] Telemetry pruning failed:", error);
+    }
+  }
+  /** Run WAL checkpoint and VACUUM to reclaim disk space. */
+  vacuum() {
+    this.db.exec("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;");
+  }
+  /** Forward-compatible schema patching for users with older local DBs. */
+  ensureDocumentsSchema() {
+    const rows = this.db.prepare("PRAGMA table_info(documents)").all();
+    const columns = new Set(rows.map((row) => row.name));
+    if (!columns.has("source_path")) {
+      this.db.exec("ALTER TABLE documents ADD COLUMN source_path TEXT");
+    }
+    if (!columns.has("source_mtime")) {
+      this.db.exec("ALTER TABLE documents ADD COLUMN source_mtime INTEGER");
+    }
+    if (!columns.has("popularity")) {
+      this.db.exec("ALTER TABLE documents ADD COLUMN popularity REAL NOT NULL DEFAULT 0");
+    }
+  }
+  upsertDocuments(documents) {
+    if (documents.length === 0) return;
+    const upsertDoc = this.db.prepare(`
+      INSERT INTO documents (id, category, title, subtitle, tokens, action_json, updated_at, source_path, source_mtime, popularity)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        category = excluded.category,
+        title = excluded.title,
+        subtitle = excluded.subtitle,
+        tokens = excluded.tokens,
+        action_json = excluded.action_json,
+        updated_at = excluded.updated_at,
+        source_path = excluded.source_path,
+        source_mtime = excluded.source_mtime,
+        popularity = excluded.popularity
+    `);
+    const upsertTx = this.db.transaction((rows) => {
+      for (const row of rows) {
+        upsertDoc.run(
+          row.id,
+          row.category,
+          row.title,
+          row.subtitle,
+          row.tokens,
+          JSON.stringify(row.action),
+          Math.round(row.updatedAt || Date.now()),
+          row.sourcePath ?? null,
+          row.sourceMtime ? Math.round(row.sourceMtime) : null,
+          row.popularity ?? 0
+        );
+      }
+    });
+    upsertTx(documents);
+  }
+  removeDocumentById(id) {
+    this.db.prepare("DELETE FROM documents WHERE id = ?").run(id);
+  }
+  removeDocumentsByIds(ids) {
+    if (ids.length === 0) return 0;
+    const placeholders = ids.map(() => "?").join(",");
+    return this.db.prepare(`DELETE FROM documents WHERE id IN (${placeholders})`).run(...ids).changes;
+  }
+  listDocumentSyncState(category) {
+    return this.db.prepare(
+      `SELECT id, source_mtime AS sourceMtime
+         FROM documents
+         WHERE category = ?`
+    ).all(category);
+  }
+  removeDocumentsByCategory(category) {
+    return this.db.prepare("DELETE FROM documents WHERE category = ?").run(category).changes;
+  }
+  replaceDocumentsByCategory(category, documents) {
+    const deleteDocuments = this.db.prepare("DELETE FROM documents WHERE category = ?");
+    const replaceTx = this.db.transaction(() => {
+      deleteDocuments.run(category);
+      this.upsertDocuments(documents);
+    });
+    replaceTx();
+    this.clearSearchCache();
+  }
+  search(query, limit) {
+    const ftsQuery = buildFtsQuery(query);
+    const trimmed = query.trim();
+    if (!trimmed) return [];
+    const candidateLimit = Math.max(limit * 2, 20);
+    const rows = ftsQuery.length > 0 ? this.db.prepare(
+      `
+                SELECT d.id AS id,
+                       d.category AS category,
+                       d.title AS title,
+                       d.subtitle AS subtitle,
+                       d.action_json AS actionJson,
+                       d.updated_at AS updatedAt,
+                       d.popularity AS popularity,
+                       bm25(documents_fts, 5.0, 2.0, 1.0) AS bm25Score
+                FROM documents_fts
+                JOIN documents d ON d.rowid = documents_fts.rowid
+                WHERE documents_fts MATCH ?
+                ORDER BY bm25Score ASC
+                LIMIT ?
+              `
+    ).all(ftsQuery, candidateLimit) : [];
+    const mapped = rows.map((row) => {
+      const inverseBm25 = Number.isFinite(row.bm25Score) ? (() => {
+        const negBm25 = Math.max(-row.bm25Score, 0);
+        return negBm25 / (1 + negBm25);
+      })() : 0.5;
+      const searchableText = `${row.title} ${row.subtitle}`;
+      const lexical = Math.max(
+        inverseBm25,
+        lexicalScore(searchableText, trimmed),
+        fuzzySimilarityScore(searchableText, trimmed)
+      );
+      return {
+        id: row.id,
+        category: row.category,
+        title: row.title,
+        subtitle: row.subtitle,
+        actionJson: row.actionJson,
+        updatedAt: row.updatedAt,
+        lexical,
+        popularity: row.popularity
+      };
+    });
+    const fuzzyRows = mapped.length >= candidateLimit ? [] : this.fuzzySearch(trimmed, candidateLimit);
+    const byId = /* @__PURE__ */ new Map();
+    for (const row of [...mapped, ...fuzzyRows]) {
+      const existing = byId.get(row.id);
+      if (!existing || row.lexical > existing.lexical) {
+        byId.set(row.id, row);
+      }
+    }
+    const result = Array.from(byId.values()).sort((a, b) => b.lexical - a.lexical).slice(0, candidateLimit);
+    if (trimmed === "process kill" || trimmed === "timer stop" || trimmed === "stop timer") {
+      const lines = [];
+      lines.push(
+        `[Search DEBUG] query="${trimmed}" ftsQuery="${ftsQuery}" FTS rows=${rows.length} mapped=${mapped.length} fuzzyRows=${fuzzyRows.length}`
+      );
+      for (const r of result.slice(0, 10)) {
+        lines.push(`  [DEBUG] lex=${r.lexical.toFixed(3)} cat=${r.category} title="${r.title}"`);
+      }
+      try {
+        const fs5 = require("fs");
+        fs5.appendFileSync("/tmp/search_debug.log", lines.join("\n") + "\n\n");
+      } catch {
+      }
+    }
+    return result;
+  }
+  fuzzySearch(query, limit) {
+    if (limit <= 0) return [];
+    const rows = this.db.prepare(
+      `
+          SELECT id, category, title, subtitle, tokens, action_json AS actionJson, updated_at AS updatedAt, popularity
+          FROM documents
+          ORDER BY CASE WHEN category = 'files' THEN 1 ELSE 0 END, updated_at DESC
+          LIMIT ?
+        `
+    ).all(Math.max(1e3, limit * 10));
+    const scored = [];
+    for (const row of rows) {
+      const searchableText = `${row.title} ${row.subtitle} ${row.tokens}`;
+      const lexical = Math.max(
+        lexicalScore(searchableText, query),
+        fuzzySimilarityScore(searchableText, query)
+      );
+      if (lexical <= 0) continue;
+      const distance = levenshteinDistance(row.title.toLowerCase(), query.toLowerCase());
+      scored.push({
+        id: row.id,
+        category: row.category,
+        title: row.title,
+        subtitle: row.subtitle,
+        actionJson: row.actionJson,
+        updatedAt: row.updatedAt,
+        lexical,
+        fuzzyDistance: distance,
+        popularity: row.popularity
+      });
+    }
+    scored.sort((a, b) => {
+      if (a.lexical !== b.lexical) {
+        return b.lexical - a.lexical;
+      }
+      if (a.fuzzyDistance !== void 0 && b.fuzzyDistance !== void 0 && a.fuzzyDistance !== b.fuzzyDistance) {
+        return a.fuzzyDistance - b.fuzzyDistance;
+      }
+      return b.updatedAt - a.updatedAt;
+    });
+    return scored.slice(0, limit);
+  }
+  parseAction(actionJson) {
+    return safeJsonParse(actionJson, { type: "copy-text", text: "" });
+  }
+  getActionStats(actionIds) {
+    if (actionIds.length === 0) return /* @__PURE__ */ new Map();
+    const placeholders = actionIds.map(() => "?").join(",");
+    const rows = this.db.prepare(
+      `
+          SELECT a.action_id AS actionId,
+                 a.frequency AS frequency,
+                 a.success_count AS successCount,
+                 a.total_count AS totalCount,
+                 a.last_used_at AS lastUsedAt,
+                 COUNT(recent.id) AS recentUseCount
+          FROM action_stats a
+          LEFT JOIN action_usage_events recent
+            ON recent.action_id = a.action_id AND recent.created_at >= ?
+          WHERE a.action_id IN (${placeholders})
+          GROUP BY a.action_id
+        `
+    ).all(Date.now() - HOT_USAGE_WINDOW_MS, ...actionIds);
+    return new Map(rows.map((row) => [row.actionId, row]));
+  }
+  getQueryActionStats(query, actionIds) {
+    const normalizedQuery = normalizeStoredQuery(query);
+    if (!normalizedQuery || actionIds.length === 0) return /* @__PURE__ */ new Map();
+    const placeholders = actionIds.map(() => "?").join(",");
+    const rows = this.db.prepare(
+      `
+          SELECT query AS query,
+                 action_id AS actionId,
+                 frequency AS frequency,
+                 success_count AS successCount,
+                 total_count AS totalCount,
+                 last_used_at AS lastUsedAt
+          FROM query_action_stats
+          WHERE query = ? AND action_id IN (${placeholders})
+        `
+    ).all(normalizedQuery, ...actionIds);
+    return new Map(rows.map((row) => [row.actionId, row]));
+  }
+  listQueryActionIds(query, limit) {
+    const normalizedQuery = normalizeStoredQuery(query);
+    if (!normalizedQuery || limit <= 0) return [];
+    const rows = this.db.prepare(
+      `
+          SELECT action_id AS actionId
+          FROM query_action_stats
+          WHERE query = ? AND success_count > 0
+          ORDER BY last_used_at DESC, frequency DESC
+          LIMIT ?
+        `
+    ).all(normalizedQuery, limit);
+    return rows.map((row) => row.actionId);
+  }
+  getDocumentsByIds(ids) {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => "?").join(",");
+    const rows = this.db.prepare(
+      `
+          SELECT id,
+                 category,
+                 title,
+                 subtitle,
+                 action_json AS actionJson,
+                 updated_at AS updatedAt,
+                 popularity
+          FROM documents
+          WHERE id IN (${placeholders})
+        `
+    ).all(...ids);
+    return rows.map((row) => ({
+      id: row.id,
+      category: row.category,
+      title: row.title,
+      subtitle: row.subtitle,
+      actionJson: row.actionJson,
+      updatedAt: row.updatedAt,
+      lexical: 0,
+      popularity: row.popularity
+    }));
+  }
+  listRecommendedDocuments(limit) {
+    if (limit <= 0) return [];
+    return this.db.prepare(
+      `
+          SELECT d.id AS id,
+                 d.category AS category,
+                 d.title AS title,
+                 d.subtitle AS subtitle,
+                 d.action_json AS actionJson,
+                 d.updated_at AS updatedAt,
+                 COALESCE(a.frequency, 0) AS frequency,
+                 COALESCE(a.success_count, 0) AS successCount,
+                 COALESCE(a.total_count, 0) AS totalCount,
+                 COALESCE(a.last_used_at, 0) AS lastUsedAt,
+                 COALESCE(recent.recentUseCount, 0) AS recentUseCount
+          FROM documents d
+          LEFT JOIN action_stats a ON a.action_id = d.id
+          LEFT JOIN (
+            SELECT action_id, COUNT(*) AS recentUseCount
+            FROM action_usage_events
+            WHERE created_at >= ?
+            GROUP BY action_id
+          ) recent ON recent.action_id = d.id
+          WHERE d.category <> 'files'
+          ORDER BY
+            COALESCE(recent.recentUseCount, 0) DESC,
+            CASE WHEN COALESCE(a.last_used_at, 0) > 0 THEN 0 ELSE 1 END ASC,
+            COALESCE(a.last_used_at, 0) DESC,
+            COALESCE(a.frequency, 0) DESC,
+            d.updated_at DESC
+          LIMIT ?
+        `
+    ).all(Date.now() - HOT_USAGE_WINDOW_MS, limit);
+  }
+  recordAction(actionId, success) {
+    const now = Date.now();
+    this.db.prepare(
+      `
+          INSERT INTO action_stats (action_id, frequency, success_count, total_count, last_used_at)
+          VALUES (?, 1, ?, 1, ?)
+          ON CONFLICT(action_id) DO UPDATE SET
+            frequency = action_stats.frequency + 1,
+            success_count = action_stats.success_count + excluded.success_count,
+            total_count = action_stats.total_count + 1,
+            last_used_at = excluded.last_used_at
+        `
+    ).run(actionId, success ? 1 : 0, now);
+    if (success) {
+      this.db.prepare("INSERT INTO action_usage_events (action_id, created_at) VALUES (?, ?)").run(actionId, now);
+    }
+  }
+  recordActionForQuery(query, actionId, success) {
+    const normalizedQuery = normalizeStoredQuery(query);
+    if (!normalizedQuery) return;
+    const now = Date.now();
+    this.db.prepare(
+      `
+          INSERT INTO query_action_stats (query, action_id, frequency, success_count, total_count, last_used_at)
+          VALUES (?, ?, 1, ?, 1, ?)
+          ON CONFLICT(query, action_id) DO UPDATE SET
+            frequency = query_action_stats.frequency + 1,
+            success_count = query_action_stats.success_count + excluded.success_count,
+            total_count = query_action_stats.total_count + 1,
+            last_used_at = excluded.last_used_at
+        `
+    ).run(normalizedQuery, actionId, success ? 1 : 0, now);
+  }
+  recordClick(query, resultId, rank, success) {
+    this.db.prepare(
+      "INSERT INTO click_events (created_at, query, result_id, rank, success) VALUES (?, ?, ?, ?, ?)"
+    ).run(Date.now(), query, resultId, rank, success ? 1 : 0);
+  }
+  readRecentClickAverage(limit = 200) {
+    const rows = this.db.prepare("SELECT rank FROM click_events ORDER BY id DESC LIMIT ?").all(limit);
+    if (rows.length === 0) return 0;
+    const sum = rows.reduce((acc, row) => acc + row.rank, 0);
+    return sum / rows.length;
+  }
+  writeBenchmarkSnapshot(precisionAt5, precisionAt10, benchmarkSize) {
+    this.db.prepare(
+      "INSERT INTO benchmark_snapshots (created_at, precision_at_5, precision_at_10, avg_click_rank, benchmark_size) VALUES (?, ?, ?, ?, ?)"
+    ).run(Date.now(), precisionAt5, precisionAt10, this.readRecentClickAverage(), benchmarkSize);
+  }
+  readBenchmarkHistory(limit = 40) {
+    return this.db.prepare(
+      `SELECT created_at AS createdAt,
+                precision_at_5 AS precisionAt5,
+                precision_at_10 AS precisionAt10,
+                avg_click_rank AS avgClickRank
+        FROM benchmark_snapshots
+        ORDER BY id DESC
+        LIMIT ?
+      `
+    ).all(limit);
+  }
+  // Session cache for search results
+  _searchCache = /* @__PURE__ */ new Map();
+  _cacheTimestamp = /* @__PURE__ */ new Map();
+  CACHE_TTL = 5 * 60 * 1e3;
+  // 5 minutes
+  getSearch(query, limit) {
+    const now = Date.now();
+    const cacheKey2 = `${query}:${limit}`;
+    const lastUpdate = this._cacheTimestamp.get(cacheKey2);
+    if (lastUpdate && now - lastUpdate < this.CACHE_TTL) {
+      return this._searchCache.get(cacheKey2) || [];
+    }
+    const results = this.search(query, limit);
+    this._searchCache.set(cacheKey2, results);
+    this._cacheTimestamp.set(cacheKey2, now);
+    return results;
+  }
+  clearSearchCache() {
+    this._searchCache.clear();
+    this._cacheTimestamp.clear();
+  }
+};
+
+// src/main/search/service.ts
+init_appsProvider();
+
+// src/main/search/providers/clipboardProvider.ts
+init_desktop_runtime();
+var import_node_crypto8 = require("node:crypto");
+var import_node_fs16 = require("node:fs");
+var import_node_path17 = require("node:path");
+init_configStore();
+var CLIPBOARD_LIMIT = 200;
+var CLIPBOARD_WATCH_ENABLED_KEY = "clipboardWatchEnabled";
+var CLIPBOARD_CAPTURE_IMAGES_KEY = "clipboardCaptureImages";
+var CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY = "clipboardMaxImageMegapixels";
+var DEFAULT_CLIPBOARD_WATCH_ENABLED = true;
+var DEFAULT_CLIPBOARD_CAPTURE_IMAGES = false;
+var DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS = 2;
+function getClipboardConfig() {
+  const raw = readRawConfig();
+  const watchEnabled = raw[CLIPBOARD_WATCH_ENABLED_KEY] ?? DEFAULT_CLIPBOARD_WATCH_ENABLED;
+  const captureImages = raw[CLIPBOARD_CAPTURE_IMAGES_KEY] ?? DEFAULT_CLIPBOARD_CAPTURE_IMAGES;
+  const maxImageMegapixels = Number(raw[CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY] ?? DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS);
+  return {
+    watchEnabled: watchEnabled !== false,
+    captureImages: captureImages === true,
+    maxImageMegapixels: Number.isFinite(maxImageMegapixels) && maxImageMegapixels > 0 ? maxImageMegapixels : DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS
+  };
+}
+function setClipboardConfig(patch) {
+  const next = {};
+  if (typeof patch.watchEnabled === "boolean") next[CLIPBOARD_WATCH_ENABLED_KEY] = patch.watchEnabled;
+  if (typeof patch.captureImages === "boolean") next[CLIPBOARD_CAPTURE_IMAGES_KEY] = patch.captureImages;
+  if (typeof patch.maxImageMegapixels === "number" && Number.isFinite(patch.maxImageMegapixels) && patch.maxImageMegapixels > 0) {
+    next[CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY] = patch.maxImageMegapixels;
+  }
+  writeConfigPatch(next);
+}
+function storeDir() {
+  const dir = (0, import_node_path17.join)(app.getPath("userData"), "search");
+  (0, import_node_fs16.mkdirSync)(dir, { recursive: true });
+  return dir;
+}
+function imagesDir() {
+  const dir = (0, import_node_path17.join)(storeDir(), "clipboard-images");
+  (0, import_node_fs16.mkdirSync)(dir, { recursive: true });
+  return dir;
+}
+function clipboardPath() {
+  return (0, import_node_path17.join)(storeDir(), "clipboard.json");
+}
+var _readClipboardDb = null;
+var _cacheTimestamp = 0;
+var CACHE_TTL = 10 * 1e3;
+async function ensureDbLoaded() {
+  if (_readClipboardDb && Date.now() - _cacheTimestamp < CACHE_TTL) {
+    return;
+  }
+  try {
+    const raw = (0, import_node_fs16.readFileSync)(clipboardPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    _readClipboardDb = {
+      items: Array.isArray(parsed.items) ? parsed.items : []
+    };
+  } catch {
+    _readClipboardDb = { items: [] };
+  }
+  _cacheTimestamp = Date.now();
+}
+function writeDb2(db) {
+  (0, import_node_fs16.writeFileSync)(clipboardPath(), `${JSON.stringify(db, null, 2)}
+`, "utf8");
+  _readClipboardDb = db;
+  _cacheTimestamp = Date.now();
+}
+function detectSensitiveValue(text2) {
+  const trimmed = text2.trim();
+  if (trimmed.length < 16) return false;
+  if (/^sk-[A-Za-z0-9]{16,}$/.test(trimmed)) return true;
+  if (/^gh[pousr]_[A-Za-z0-9_]{20,}$/.test(trimmed)) return true;
+  if (/password\s*[=:]/i.test(trimmed)) return true;
+  if (/api[_-]?key\s*[=:]/i.test(trimmed)) return true;
+  if (/token\s*[=:]/i.test(trimmed)) return true;
+  return false;
+}
+function sanitizeEntry(entry) {
+  const base = {
+    id: String(entry.id ?? ""),
+    createdAt: Number(entry.createdAt ?? 0),
+    pinned: Boolean(entry.pinned),
+    isSecret: Boolean(entry.isSecret)
+  };
+  if (!base.id || !Number.isFinite(base.createdAt)) return null;
+  switch (entry.kind) {
+    case "text": {
+      const text2 = String(entry.text ?? "");
+      if (!text2) return null;
+      return {
+        ...base,
+        kind: "text",
+        text: text2,
+        preview: String(entry.preview ?? previewFromText(text2)),
+        charCount: Number(entry.charCount ?? text2.length),
+        lineCount: Number(entry.lineCount ?? text2.split("\n").length)
+      };
+    }
+    case "image": {
+      const imagePath = String(entry.imagePath ?? "");
+      if (!imagePath || !(0, import_node_fs16.existsSync)(imagePath)) return null;
+      return {
+        ...base,
+        kind: "image",
+        imagePath,
+        width: Number(entry.width ?? 0),
+        height: Number(entry.height ?? 0),
+        byteSize: Number(entry.byteSize ?? 0)
+      };
+    }
+    case "file": {
+      const paths = Array.isArray(entry.paths) ? entry.paths.map((p) => String(p)).filter(Boolean) : [];
+      if (paths.length === 0) return null;
+      return {
+        ...base,
+        kind: "file",
+        paths,
+        preview: paths.length === 1 ? (0, import_node_path17.basename)(paths[0]) : `${(0, import_node_path17.basename)(paths[0])} + ${paths.length - 1} more`
+      };
+    }
+    default:
+      return null;
+  }
+}
+function normalizeDb(db) {
+  return {
+    items: db.items.map((item) => sanitizeEntry(item)).filter((item) => item !== null)
+  };
+}
+function previewFromText(text2) {
+  const firstLine = text2.split("\n").find((line) => line.trim().length > 0) ?? "";
+  return firstLine.slice(0, 140);
+}
+function insertEntry(db, entry) {
+  const pinned = db.items.filter((item) => item.pinned && item.id !== entry.id);
+  const rest = db.items.filter((item) => !item.pinned && item.id !== entry.id);
+  return { items: [...pinned, entry, ...rest].slice(0, CLIPBOARD_LIMIT) };
+}
+function hashKey(kind, payload) {
+  return (0, import_node_crypto8.createHash)("sha1").update(`${kind}|${payload}`).digest("hex").slice(0, 16);
+}
+function readFileUrls() {
+  if (process.platform !== "darwin") return [];
+  const formats = clipboard.availableFormats();
+  const hasFileUrl = formats.some(
+    (f) => f === "public.file-url" || f === "NSFilenamesPboardType" || f === "Files"
+  );
+  if (!hasFileUrl) return [];
+  try {
+    const raw = clipboard.read("public.file-url");
+    if (!raw) return [];
+    const parts = raw.split(/\0|\r?\n/g).map((part) => part.trim()).filter(Boolean);
+    const paths = parts.map((url) => {
+      try {
+        if (url.startsWith("file://")) {
+          return decodeURIComponent(new URL(url).pathname);
+        }
+        return url;
+      } catch {
+        return "";
+      }
+    }).filter(Boolean);
+    return Array.from(new Set(paths));
+  } catch {
+    return [];
+  }
+}
+function idForText(text2) {
+  return `text:${hashKey("text", text2).slice(0, 12)}`;
+}
+function idForFiles(paths) {
+  return `file:${hashKey("file", paths.slice().sort().join("|")).slice(0, 12)}`;
+}
+function idForImage(hash2) {
+  return `image:${hash2.slice(0, 12)}`;
+}
+function captureFileEntry(paths, now) {
+  if (paths.length === 0) return null;
+  return {
+    id: idForFiles(paths),
+    kind: "file",
+    createdAt: now,
+    pinned: false,
+    isSecret: false,
+    paths,
+    preview: paths.length === 1 ? (0, import_node_path17.basename)(paths[0]) : `${(0, import_node_path17.basename)(paths[0])} + ${paths.length - 1} more`
+  };
+}
+function resizeToMegapixels(image, maxMegapixels) {
+  if (maxMegapixels <= 0) return image;
+  const { width, height } = image.getSize();
+  const megapixels = width * height / 1e6;
+  if (megapixels <= maxMegapixels) return image;
+  const scale = Math.sqrt(maxMegapixels / megapixels);
+  const newWidth = Math.max(1, Math.round(width * scale));
+  const newHeight = Math.max(1, Math.round(height * scale));
+  return image.resize({ width: newWidth, height: newHeight, quality: "good" });
+}
+function captureImageEntry(now) {
+  const config = getClipboardConfig();
+  if (!config.captureImages) return null;
+  const image = clipboard.readImage();
+  if (image.isEmpty()) return null;
+  const resized = resizeToMegapixels(image, config.maxImageMegapixels);
+  const buffer = resized.toPNG();
+  if (buffer.length === 0) return null;
+  const hash2 = (0, import_node_crypto8.createHash)("sha1").update(buffer).digest("hex");
+  const id = idForImage(hash2);
+  const file = (0, import_node_path17.join)(imagesDir(), `${hash2}.png`);
+  if (!(0, import_node_fs16.existsSync)(file)) {
+    (0, import_node_fs16.writeFileSync)(file, buffer);
+  }
+  return {
+    id,
+    kind: "image",
+    createdAt: now,
+    pinned: false,
+    isSecret: false,
+    imagePath: file,
+    width: resized.getSize().width,
+    height: resized.getSize().height,
+    byteSize: buffer.length
+  };
+}
+function captureTextEntry(now) {
+  const text2 = clipboard.readText();
+  if (!text2 || !text2.trim()) return null;
+  return {
+    id: idForText(text2),
+    kind: "text",
+    createdAt: now,
+    pinned: false,
+    isSecret: detectSensitiveValue(text2),
+    text: text2,
+    preview: previewFromText(text2),
+    charCount: text2.length,
+    lineCount: text2.split("\n").length
+  };
+}
+function captureClipboardSnapshot() {
+  const now = Date.now();
+  ensureDbLoaded();
+  if (!_readClipboardDb) return;
+  const fileUrls = readFileUrls();
+  const candidate = captureFileEntry(fileUrls, now) ?? captureImageEntry(now) ?? captureTextEntry(now);
+  if (!candidate) return;
+  const existing = _readClipboardDb.items.find((item) => item.id === candidate.id);
+  const merged = existing ? {
+    ...candidate,
+    pinned: existing.pinned,
+    createdAt: now
+  } : candidate;
+  if (_readClipboardDb.items[0]?.id === candidate.id && !existing?.pinned) {
+    return;
+  }
+  const db = normalizeDb(insertEntry(_readClipboardDb, merged));
+  writeDb2(db);
+}
+function listClipboardEntries() {
+  return normalizeDb(_readClipboardDb || { items: [] }).items;
+}
+function getClipboardEntry(id) {
+  return listClipboardEntries().find((item) => item.id === id) ?? null;
+}
+function deleteClipboardEntry(id) {
+  const db = normalizeDb(_readClipboardDb || { items: [] });
+  const entry = db.items.find((item) => item.id === id);
+  if (!entry) return false;
+  const next = db.items.filter((item) => item.id !== id);
+  writeDb2({ items: next });
+  if (entry.kind === "image") {
+    const stillReferenced = next.some(
+      (item) => item.kind === "image" && item.imagePath === entry.imagePath
+    );
+    if (!stillReferenced && (0, import_node_fs16.existsSync)(entry.imagePath)) {
+      try {
+        (0, import_node_fs16.rmSync)(entry.imagePath, { force: true });
+      } catch {
+      }
+    }
+  }
+  return true;
+}
+function togglePinClipboardEntry(id) {
+  const db = normalizeDb(_readClipboardDb || { items: [] });
+  const entry = db.items.find((item) => item.id === id);
+  if (!entry) return false;
+  entry.pinned = !entry.pinned;
+  const pinned = db.items.filter((item) => item.pinned);
+  const rest = db.items.filter((item) => !item.pinned);
+  writeDb2({ items: [...pinned, ...rest] });
+  return true;
+}
+function clearClipboardHistory() {
+  const db = normalizeDb(_readClipboardDb || { items: [] });
+  for (const item of db.items) {
+    if (item.kind === "image" && (0, import_node_fs16.existsSync)(item.imagePath)) {
+      try {
+        (0, import_node_fs16.rmSync)(item.imagePath, { force: true });
+      } catch {
+      }
+    }
+  }
+  writeDb2({ items: [] });
+}
+async function cleanupOrphanClipboardImages() {
+  await ensureDbLoaded();
+  const dir = imagesDir();
+  const db = normalizeDb(_readClipboardDb || { items: [] });
+  const referenced = new Set(
+    db.items.filter((item) => item.kind === "image").map((item) => item.imagePath)
+  );
+  let removed = 0;
+  let freedBytes = 0;
+  for (const entry of (0, import_node_fs16.readdirSync)(dir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const ext = (0, import_node_path17.extname)(entry.name).toLowerCase();
+    if (ext !== ".png") continue;
+    const fullPath = (0, import_node_path17.join)(dir, entry.name);
+    if (referenced.has(fullPath)) continue;
+    try {
+      const stats = (0, import_node_fs16.statSync)(fullPath);
+      (0, import_node_fs16.rmSync)(fullPath, { force: true });
+      removed += 1;
+      freedBytes += stats.size;
+    } catch {
+    }
+  }
+  return { removed, freedBytes };
+}
+async function clearClipboardImageHistory() {
+  await ensureDbLoaded();
+  const db = normalizeDb(_readClipboardDb || { items: [] });
+  const imageEntries = db.items.filter((item) => item.kind === "image");
+  const remaining = db.items.filter((item) => item.kind !== "image");
+  writeDb2({ items: remaining });
+  const cleanup2 = await cleanupOrphanClipboardImages();
+  return {
+    removed: imageEntries.length,
+    freedBytes: cleanup2.freedBytes
+  };
+}
+function getClipboardImagesDir() {
+  return imagesDir();
+}
+function getClipboardStoreDir() {
+  return storeDir();
+}
+function restoreClipboardEntry(id) {
+  const entry = getClipboardEntry(id);
+  if (!entry) return false;
+  switch (entry.kind) {
+    case "text":
+      clipboard.writeText(entry.text);
+      return true;
+    case "image": {
+      if (!(0, import_node_fs16.existsSync)(entry.imagePath)) return false;
+      const img = nativeImage.createFromPath(entry.imagePath);
+      if (img.isEmpty()) return false;
+      clipboard.writeImage(img);
+      return true;
+    }
+    case "file": {
+      if (process.platform === "darwin") {
+        const url = `file://${encodeURI(entry.paths[0])}`;
+        clipboard.write({ text: entry.paths.join("\n"), bookmark: url });
+      } else {
+        clipboard.writeText(entry.paths.join("\n"));
+      }
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+function revealClipboardEntryInFinder(id) {
+  const entry = getClipboardEntry(id);
+  if (!entry) return false;
+  if (entry.kind === "image") {
+    shell.showItemInFolder(entry.imagePath);
+    return true;
+  }
+  if (entry.kind === "file" && entry.paths[0]) {
+    shell.showItemInFolder(entry.paths[0]);
+    return true;
+  }
+  return false;
+}
+function readClipboardImagePayload(id) {
+  const entry = getClipboardEntry(id);
+  if (!entry || entry.kind !== "image") return null;
+  if (!(0, import_node_fs16.existsSync)(entry.imagePath)) return null;
+  const bytes = (0, import_node_fs16.readFileSync)(entry.imagePath);
+  return {
+    dataUrl: `data:image/png;base64,${bytes.toString("base64")}`,
+    width: entry.width,
+    height: entry.height,
+    byteSize: entry.byteSize
+  };
+}
+var watcherHandle = null;
+var watcherInactiveTicks = 0;
+var WATCHER_DEFAULT_INTERVAL_MS = 750;
+var WATCHER_IDLE_INTERVAL_MS = 2e3;
+var WATCHER_IDLE_THRESHOLD_TICKS = 60;
+function startClipboardWatcher(intervalMs = WATCHER_DEFAULT_INTERVAL_MS) {
+  if (watcherHandle) return;
+  const config = getClipboardConfig();
+  if (!config.watchEnabled) return;
+  void cleanupOrphanClipboardImages().catch(() => {
+  });
+  let lastTopId = "";
+  watcherHandle = setInterval(() => {
+    try {
+      captureClipboardSnapshot();
+      const db = _readClipboardDb;
+      const topId = db?.items[0]?.id ?? "";
+      if (topId === lastTopId) {
+        watcherInactiveTicks += 1;
+      } else {
+        watcherInactiveTicks = 0;
+        lastTopId = topId;
+      }
+      if (watcherInactiveTicks > WATCHER_IDLE_THRESHOLD_TICKS && watcherHandle && intervalMs < WATCHER_IDLE_INTERVAL_MS) {
+        clearInterval(watcherHandle);
+        watcherHandle = null;
+        startClipboardWatcher(WATCHER_IDLE_INTERVAL_MS);
+      }
+    } catch {
+    }
+  }, intervalMs);
+  if (typeof watcherHandle.unref === "function") {
+    ;
+    watcherHandle.unref();
+  }
+}
+function stopClipboardWatcher() {
+  if (!watcherHandle) return;
+  clearInterval(watcherHandle);
+  watcherHandle = null;
+  watcherInactiveTicks = 0;
+}
+function restartClipboardWatcher() {
+  stopClipboardWatcher();
+  startClipboardWatcher();
+}
+var clipboardProvider = {
+  providerId: "clipboard",
+  async buildDocuments() {
+    return [];
+  }
+};
+
+// src/main/search/providers/commandsProvider.ts
+function buildNativeCommandDocuments() {
+  const now = Date.now();
+  return listNativeCommands().filter(
+    (descriptor) => descriptor.id !== "list-listening-ports" && descriptor.id !== "open-emoji-picker" && descriptor.id !== "open-quick-notes"
+  ).map((descriptor) => ({
+    id: `native:${descriptor.id}`,
+    category: "native-command",
+    title: descriptor.title,
+    subtitle: descriptor.subtitle,
+    tokens: [descriptor.title, descriptor.subtitle, descriptor.category, ...descriptor.keywords].join(" "),
+    action: { type: "run-native-command", commandId: descriptor.id },
+    updatedAt: now
+  }));
+}
+function buildRaymesSurfaceDocuments() {
+  const now = Date.now();
+  return [
+    {
+      id: "command:open-settings",
+      title: "Open Settings",
+      subtitle: "Tezbar settings",
+      keywords: ["settings", "preferences", "/settings"],
+      commandId: "open-settings"
+    },
+    {
+      id: "command:open-indexing",
+      title: "Indexing Status",
+      subtitle: "Knowledge index \xB7 progress, storage, and indexed files",
+      keywords: ["indexing", "index", "knowledge", "status", "progress", "files", "storage", "cache", "/indexing"],
+      commandId: "open-indexing"
+    },
+    {
+      id: "command:open-extensions-settings",
+      title: "Extensions",
+      subtitle: "Settings \xB7 Extensions tab",
+      keywords: ["extensions", "raycast", "/extensions"],
+      commandId: "open-extensions-settings"
+    },
+    {
+      id: "command:open-extensions",
+      title: "Extensions Store",
+      subtitle: "Browse and install extensions",
+      keywords: ["store", "extension store", "extensions store", "raycast store", "/store"],
+      commandId: "open-extensions"
+    },
+    {
+      id: "command:open-snippets",
+      title: "Open Snippets",
+      subtitle: "Tezbar snippets",
+      keywords: ["snippets", "text snippets", "/snippets"],
+      commandId: "open-snippets"
+    },
+    {
+      id: "command:open-notes",
+      title: "Open Notes",
+      subtitle: "Tezbar quick notes",
+      keywords: ["notes", "quick notes", "/notes"],
+      commandId: "open-notes"
+    },
+    {
+      id: "command:open-emoji-picker",
+      title: "Open Emoji Picker",
+      subtitle: "Tezbar emoji picker",
+      keywords: ["emoji", "symbols", "/emoji"],
+      commandId: "open-emoji-picker"
+    }
+  ].map((item) => ({
+    id: item.id,
+    category: "commands",
+    title: item.title,
+    subtitle: item.subtitle,
+    tokens: [item.title, item.subtitle, ...item.keywords].join(" "),
+    action: { type: "invoke-command", commandId: item.commandId },
+    updatedAt: now
+  }));
+}
+var commandsProvider = {
+  providerId: "commands",
+  async buildDocuments() {
+    return [...buildRaymesSurfaceDocuments(), ...buildNativeCommandDocuments()];
+  }
+};
+
+// src/main/search/providers/extensionsProvider.ts
+init_extension_registry();
+init_configStore();
+var extensionsProvider = {
+  providerId: "extensions",
+  async buildDocuments() {
+    const installed = listInstalledRegistryExtensions();
+    if (installed.length === 0) return [];
+    const disabled = getDisabledCommands();
+    const aliases = getCommandAliases();
+    const out = [];
+    for (const ext of installed.slice(0, 100)) {
+      for (const cmd of ext.commands) {
+        const commandId = `extcmd:${ext.id}:${cmd.name}`;
+        if (disabled[commandId]) continue;
+        let tokens2 = `${cmd.title} ${cmd.name} ${ext.name} ${ext.slug} ${ext.id} ${ext.description || ""}`;
+        const alias = aliases[commandId];
+        if (alias) tokens2 += ` ${alias}`;
+        out.push({
+          id: commandId,
+          category: "extensions",
+          title: cmd.title,
+          subtitle: ext.name,
+          tokens: tokens2,
+          action: {
+            type: "run-extension-command",
+            extensionId: ext.id,
+            commandName: cmd.name,
+            title: cmd.title,
+            iconPath: ext.iconPath,
+            commandArgumentDefinitions: cmd.argumentDefinitions
+          },
+          updatedAt: ext.installedAt,
+          popularity: ext.downloadCount || 0
+        });
+      }
+    }
+    return out;
+  }
+};
+
+// src/main/search/providers/filesProvider.ts
+var import_node_child_process11 = require("node:child_process");
+var import_node_fs17 = require("node:fs");
+var import_node_os8 = require("node:os");
+var import_node_path18 = require("node:path");
+var import_node_util9 = require("node:util");
+var execFileAsync10 = (0, import_node_util9.promisify)(import_node_child_process11.execFile);
+var ALLOWED_EXTENSIONS = /* @__PURE__ */ new Set([
+  "",
+  ".md",
+  ".txt",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".go",
+  ".py",
+  ".rs",
+  ".swift",
+  ".pdf",
+  ".png",
+  ".jpg"
+]);
+var SKIP_NAMES2 = /* @__PURE__ */ new Set([
+  "node_modules",
+  ".git",
+  ".next",
+  ".cache",
+  "Library",
+  "build",
+  "coverage",
+  "dist",
+  "out",
+  "target"
+]);
+function isAllowedFile(path7) {
+  const ext = (0, import_node_path18.extname)(path7).toLowerCase();
+  return ALLOWED_EXTENSIONS.has(ext);
+}
+function containsSkippedDirectory(path7) {
+  return path7.split(import_node_path18.sep).some((part) => SKIP_NAMES2.has(part));
+}
+function makeFileDocument(path7) {
+  try {
+    const stat2 = (0, import_node_fs17.statSync)(path7);
+    if (!stat2.isFile()) return null;
+    if (!isAllowedFile(path7)) return null;
+    const title = path7.split("/").pop() ?? path7;
+    return {
+      id: `file:${path7}`,
+      category: "files",
+      title,
+      subtitle: path7,
+      tokens: `${title} ${path7}`,
+      action: { type: "open-file", path: path7 },
+      updatedAt: stat2.mtimeMs,
+      sourcePath: path7,
+      sourceMtime: stat2.mtimeMs
+    };
+  } catch {
+    return null;
+  }
+}
+function initialRoots() {
+  const home = (0, import_node_os8.homedir)();
+  return [
+    (0, import_node_path18.join)(home, "Desktop"),
+    (0, import_node_path18.join)(home, "Documents"),
+    (0, import_node_path18.join)(home, "Downloads"),
+    (0, import_node_path18.join)(home, "Pictures")
+  ].filter((root) => (0, import_node_fs17.existsSync)(root));
+}
+async function collectInitialFileDocuments(limit = 75e3) {
+  const roots = initialRoots();
+  if (roots.length === 0) return [];
+  const out = [];
+  const queue = [...roots];
+  let visitedEntries = 0;
+  while (queue.length > 0 && out.length < limit) {
+    const current = queue.shift();
+    if (!current) continue;
+    try {
+      const entries = (0, import_node_fs17.readdirSync)(current, { withFileTypes: true });
+      for (const entry of entries) {
+        if (out.length >= limit) break;
+        visitedEntries += 1;
+        if (visitedEntries % 250 === 0) {
+          await new Promise((resolve5) => setImmediate(resolve5));
+        }
+        const absolute = (0, import_node_path18.join)(current, entry.name);
+        if (entry.isDirectory()) {
+          if (!SKIP_NAMES2.has(entry.name)) queue.push(absolute);
+          continue;
+        }
+        const doc = makeFileDocument(absolute);
+        if (doc) out.push(doc);
+      }
+    } catch {
+    }
+  }
+  return out;
+}
+function startFileWatcher(listener) {
+  const roots = initialRoots();
+  const unsubs = [];
+  const pendingUpserts = /* @__PURE__ */ new Map();
+  const pendingRemovals = /* @__PURE__ */ new Set();
+  let flushTimer = null;
+  const flush = () => {
+    flushTimer = null;
+    if (pendingUpserts.size === 0 && pendingRemovals.size === 0) return;
+    listener({
+      upserts: Array.from(pendingUpserts.values()),
+      removeIds: Array.from(pendingRemovals)
+    });
+    pendingUpserts.clear();
+    pendingRemovals.clear();
+  };
+  const scheduleFlush = () => {
+    if (flushTimer) return;
+    flushTimer = setTimeout(flush, 200);
+    flushTimer.unref();
+  };
+  for (const root of roots) {
+    try {
+      const watcher = (0, import_node_fs17.watch)(root, { recursive: true }, (_event, filename) => {
+        if (!filename) return;
+        const relative2 = filename.toString();
+        if (containsSkippedDirectory(relative2)) return;
+        const absolute = (0, import_node_path18.join)(root, relative2);
+        const doc = makeFileDocument(absolute);
+        if (doc) {
+          pendingRemovals.delete(doc.id);
+          pendingUpserts.set(doc.id, doc);
+          scheduleFlush();
+          return;
+        }
+        if (!(0, import_node_fs17.existsSync)(absolute)) {
+          const id = `file:${absolute}`;
+          pendingUpserts.delete(id);
+          pendingRemovals.add(id);
+          scheduleFlush();
+        }
+      });
+      unsubs.push(() => watcher.close());
+    } catch {
+    }
+  }
+  return () => {
+    if (flushTimer) clearTimeout(flushTimer);
+    flush();
+    for (const stop of unsubs) stop();
+  };
+}
+
+// src/main/search/providers/notesProvider.ts
+init_desktop_runtime();
+var import_node_fs18 = require("node:fs");
+var import_node_path19 = require("node:path");
+var NOTES_LIMIT = 250;
+function stripMarkdownSyntax(text2) {
+  return text2.replace(/\*\*([^*\n]+)\*\*/g, "$1").replace(/__([^_\n]+)__/g, "$1").replace(/\*([^*\n]+)\*/g, "$1").replace(/_([^_\n]+)_/g, "$1").replace(/`([^`\n]+)`/g, "$1").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/^#{1,6}\s+/gm, "").replace(/^\s*[-*+]\s+/gm, "").replace(/^\s*\d+\.\s+/gm, "");
+}
+function decodeBasicEntities(text2) {
+  return text2.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#039;/gi, "'");
+}
+function notePlainText(text2) {
+  const withoutHtml = text2.replace(/<br\s*\/?\s*>/gi, "\n").replace(/<\/(div|p|li|h[1-6])>/gi, "\n").replace(/<li>/gi, "- ").replace(/<[^>]+>/g, "");
+  return stripMarkdownSyntax(decodeBasicEntities(withoutHtml)).replace(/\r/g, "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+function notesPath() {
+  const dir = (0, import_node_path19.join)(app.getPath("userData"), "search");
+  (0, import_node_fs18.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path19.join)(dir, "notes.json");
+}
+function migrateNote(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw;
+  if (typeof o.text !== "string" || typeof o.createdAt !== "number") return null;
+  const updatedAt = typeof o.updatedAt === "number" ? o.updatedAt : o.createdAt;
+  return {
+    text: o.text,
+    createdAt: o.createdAt,
+    updatedAt
+  };
+}
+function readNotesDb() {
+  try {
+    const raw = (0, import_node_fs18.readFileSync)(notesPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    const notes = [];
+    if (Array.isArray(parsed.notes)) {
+      for (const row of parsed.notes) {
+        const m = migrateNote(row);
+        if (m) notes.push(m);
+      }
+    }
+    return { notes };
+  } catch {
+    return { notes: [] };
+  }
+}
+function writeNotesDb(db) {
+  (0, import_node_fs18.writeFileSync)(notesPath(), `${JSON.stringify(db, null, 2)}
+`, "utf8");
+}
+function listQuickNotes() {
+  return readNotesDb().notes;
+}
+function addQuickNote(text2) {
+  const trimmed = text2.trim();
+  if (!trimmed) return null;
+  const now = Date.now();
+  const entry = { text: trimmed, createdAt: now, updatedAt: now };
+  const db = readNotesDb();
+  db.notes = [entry, ...db.notes].slice(0, NOTES_LIMIT);
+  writeNotesDb(db);
+  return entry;
+}
+function updateQuickNote(createdAt, text2) {
+  const db = readNotesDb();
+  const idx = db.notes.findIndex((n) => n.createdAt === createdAt);
+  if (idx < 0) return false;
+  db.notes[idx] = {
+    ...db.notes[idx],
+    text: text2,
+    updatedAt: Date.now()
+  };
+  writeNotesDb(db);
+  return true;
+}
+function deleteQuickNote(createdAt) {
+  const db = readNotesDb();
+  const next = db.notes.filter((n) => n.createdAt !== createdAt);
+  if (next.length === db.notes.length) return false;
+  db.notes = next;
+  writeNotesDb(db);
+  return true;
+}
+var notesProvider = {
+  providerId: "notes",
+  async buildDocuments() {
+    return listQuickNotes().map((note) => {
+      const plain = notePlainText(note.text);
+      return {
+        id: `note:${note.createdAt}`,
+        category: "quick-notes",
+        title: plain.split("\n")[0]?.trim().slice(0, 100) || "(note)",
+        subtitle: "Quick note",
+        tokens: plain,
+        action: { type: "copy-text", text: plain },
+        updatedAt: note.updatedAt
+      };
+    });
+  }
+};
+
+// src/main/search/providers/quickLinksProvider.ts
+init_desktop_runtime();
+var import_node_fs19 = require("node:fs");
+var import_node_path20 = require("node:path");
+function quickLinksPath() {
+  const dir = (0, import_node_path20.join)(app.getPath("userData"), "search");
+  (0, import_node_fs19.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path20.join)(dir, "quick-links.json");
+}
+function readQuickLinksDb() {
+  try {
+    const raw = (0, import_node_fs19.readFileSync)(quickLinksPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.links)) return { links: [] };
+    return { links: parsed.links };
+  } catch {
+    const db = {
+      links: [
+        {
+          id: "ql:google",
+          name: "Google Search",
+          template: "https://www.google.com/search?q={query}",
+          createdAt: Date.now()
+        }
+      ]
+    };
+    (0, import_node_fs19.writeFileSync)(quickLinksPath(), `${JSON.stringify(db, null, 2)}
+`, "utf8");
+    return db;
+  }
+}
+function fillTemplate(template, query) {
+  const q = encodeURIComponent(query.trim());
+  return template.split("{query}").join(q);
+}
+var quickLinksProvider = {
+  providerId: "quick-links",
+  async buildDocuments() {
+    return readQuickLinksDb().links.map((link) => ({
+      id: link.id,
+      category: "quick-links",
+      title: link.name,
+      subtitle: link.profile ? `Quick link (${link.profile})` : "Quick link",
+      tokens: `${link.name} ${link.template}`,
+      action: { type: "open-url", url: fillTemplate(link.template, "") },
+      updatedAt: link.createdAt
+    }));
+  }
+};
+
+// src/main/search/providers/snippetsProvider.ts
+init_desktop_runtime();
+var import_node_crypto9 = require("node:crypto");
+var import_node_fs20 = require("node:fs");
+var import_node_os9 = require("node:os");
+var import_node_path21 = require("node:path");
+function snippetsPath() {
+  const dir = (0, import_node_path21.join)(app.getPath("userData"), "search");
+  (0, import_node_fs20.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path21.join)(dir, "snippets.json");
+}
+function defaultSnippets() {
+  const t = Date.now();
+  let i = 0;
+  const next = () => t - i++;
+  return [
+    {
+      id: "snippet:today",
+      label: "Get today's date",
+      trigger: "today",
+      body: "Today is ${date}.",
+      createdAt: next()
+    },
+    {
+      id: "snippet:time",
+      label: "Get current time",
+      trigger: "time",
+      body: "Current time: ${time}",
+      createdAt: next()
+    },
+    {
+      id: "snippet:datetime",
+      label: "Get date and time",
+      trigger: "datetime",
+      body: "${datetime}",
+      createdAt: next()
+    },
+    {
+      id: "snippet:iso",
+      label: "Insert ISO 8601 timestamp",
+      trigger: "iso",
+      body: "${iso}",
+      createdAt: next()
+    },
+    {
+      id: "snippet:year",
+      label: "Insert current year",
+      trigger: "year",
+      body: "${year}",
+      createdAt: next()
+    },
+    {
+      id: "snippet:epoch",
+      label: "Insert Unix timestamp (seconds)",
+      trigger: "epoch",
+      body: "${timestamp}",
+      createdAt: next()
+    },
+    {
+      id: "snippet:uuid",
+      label: "Insert random UUID",
+      trigger: "uuid",
+      body: "${uuid}",
+      createdAt: next()
+    },
+    {
+      id: "snippet:hostname",
+      label: "Insert this computer\u2019s hostname",
+      trigger: "hostname",
+      body: "${hostname}",
+      createdAt: next()
+    },
+    {
+      id: "snippet:public-ip",
+      label: "Show public IP (Terminal command)",
+      trigger: "myip",
+      body: "# Prints your public IPv4 \u2014 paste into Terminal and press Enter\ncurl -4s https://api.ipify.org\n\n# Alternative (IPv4 or IPv6 depending on your network)\n# curl -s https://ifconfig.me\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:local-ip",
+      label: "Show local IP on macOS (Terminal)",
+      trigger: "localip",
+      body: '# Wi\u2011Fi (usually en0 on MacBooks)\nipconfig getifaddr en0\n\n# If empty, try Ethernet or other interface\n# ipconfig getifaddr en1\n\n# List all IPv4 addresses on the machine\n# ifconfig | grep "inet "\n',
+      createdAt: next()
+    },
+    {
+      id: "snippet:signed",
+      label: "Email sign-off (professional)",
+      trigger: "signed",
+      body: "Thank you for your time and for looking into this.\n\nIf anything is unclear or you would like more detail, please let me know \u2014 I am happy to jump on a quick call or thread.\n\nBest regards,\n\n[Your name]\n[Role / team \u2014 optional]\n\n\u2014\n[Optional: direct line \xB7 Slack @handle \xB7 calendar link]\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:thanks",
+      label: "Short thank-you (chat / email)",
+      trigger: "thanks",
+      body: "Thanks a lot \u2014 I really appreciate the quick help on this.\n\n[Your name]\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:commit",
+      label: "Conventional commit message (full template)",
+      trigger: "commit",
+      body: "feat(your-scope): short imperative summary (aim for ~50\u201372 chars)\n\nExplain why this change exists and the approach you took. Wrap lines\naround ~72 characters so `git log` stays easy to read in a terminal.\n\n- user-visible or technical bullet\n- tests / docs / migration notes if relevant\n\nRefs: #123\n# Co-authored-by: Name <name@example.com>\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:mdtask",
+      label: "Markdown unchecked task",
+      trigger: "task",
+      body: "- [ ] ",
+      createdAt: next()
+    },
+    {
+      id: "snippet:mdcheck",
+      label: "Markdown checked task",
+      trigger: "done",
+      body: "- [x] ",
+      createdAt: next()
+    },
+    {
+      id: "snippet:standup",
+      label: "Daily stand-up update",
+      trigger: "standup",
+      body: "**Yesterday**\n- \n\n**Today**\n- \n\n**Blockers**\n- None\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:meeting",
+      label: "Meeting notes template",
+      trigger: "meeting",
+      body: "# Meeting \u2014 ${datetime}\n\n**Attendees:** \n**Goal:** \n\n## Agenda\n1. \n\n## Discussion & decisions\n- \n\n## Action items\n| Owner | Task | Due |\n|-------|------|-----|\n|       |      |     |\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:blocker",
+      label: "Slack / Teams \u2014 blocked message",
+      trigger: "blocked",
+      body: "Hi \u2014 I am blocked on **<short summary>**.\n\n**What I tried:**\n- \n\n**What I need from you:**\n- \n\nHappy to pair or jump on a quick call. Thanks!\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:pr",
+      label: "Pull request description (full)",
+      trigger: "pr",
+      body: "## Summary\nWhat does this PR change, and why should reviewers care?\n\n## Type of change\n- [ ] Bug fix (non-breaking)\n- [ ] New feature\n- [ ] Breaking change / migration\n- [ ] Docs only\n\n## How to test\n1. \n2. \n\n## Screenshots / recordings\n\n\n## Rollout & risk\n- Feature flags:\n- Database / cache / infra:\n\n## Checklist\n- [ ] I self-reviewed the diff\n- [ ] Tests added or updated where it matters\n- [ ] Docs / changelog updated if user-facing\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:issue",
+      label: "Bug report (GitHub / Jira style)",
+      trigger: "bugreport",
+      body: "## Summary\nOne sentence: what is broken or wrong?\n\n## Expected behavior\n\n\n## Actual behavior\n\n\n## Steps to reproduce\n1. \n2. \n3. \n\n## Environment\n| Item | Version / details |\n|------|-------------------|\n| OS / device | |\n| Browser (if web) | |\n| App / API / commit | |\n\n## Logs, screenshots, or recordings\n\n\n## Severity / impact\nWho is affected and how badly (blocks release, workaround exists, \u2026)?\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:changelog",
+      label: "Changelog unreleased entry",
+      trigger: "changelog",
+      body: "## [Unreleased]\n\n### Added\n- \n\n### Changed\n- \n\n### Fixed\n- \n\n### Removed\n- \n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:curl-json",
+      label: "curl POST with JSON (template)",
+      trigger: "curljson",
+      body: `curl -sS -X POST 'https://api.example.com/v1/resource' \\
+  -H 'Content-Type: application/json' \\
+  -H 'Authorization: Bearer YOUR_TOKEN_HERE' \\
+  -d '{"key": "value"}'
+`,
+      createdAt: next()
+    },
+    {
+      id: "snippet:sql-select",
+      label: "SQL SELECT skeleton",
+      trigger: "sql",
+      body: "SELECT\n  *\nFROM your_table\nWHERE 1 = 1\n  -- AND some_column = :value\nORDER BY created_at DESC\nLIMIT 100;\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:api-error-json",
+      label: "JSON API error shape",
+      trigger: "apierror",
+      body: '{\n  "error": {\n    "code": "VALIDATION_FAILED",\n    "message": "Human-readable summary for clients.",\n    "details": [\n      { "field": "email", "issue": "must be a valid email" }\n    ]\n  }\n}\n',
+      createdAt: next()
+    },
+    {
+      id: "snippet:review",
+      label: "Code review comment (constructive)",
+      trigger: "review",
+      body: "Nice work on this part \u2014 the approach reads clearly.\n\nOne suggestion: **<topic>** could be simplified by <idea>, because <reason>. Totally optional if you are tight on time.\n\nLet me know if you want to pair on it.\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:localhost",
+      label: "IPv4 localhost",
+      trigger: "localhost",
+      body: "127.0.0.1",
+      createdAt: next()
+    },
+    {
+      id: "snippet:localurl",
+      label: "Local dev URL (HTTPS)",
+      trigger: "localurl",
+      body: "https://127.0.0.1:3000",
+      createdAt: next()
+    },
+    {
+      id: "snippet:docker-logs",
+      label: "docker compose logs (follow)",
+      trigger: "dlogs",
+      body: "docker compose logs -f --tail=200 SERVICE_NAME\n",
+      createdAt: next()
+    },
+    {
+      id: "snippet:shrug",
+      label: "Shrug emoji",
+      trigger: "shrug",
+      body: "\xAF\\_(\u30C4)_/\xAF",
+      createdAt: next()
+    }
+  ];
+}
+function mergeMissingBuiltins(existing, builtins) {
+  const ids = new Set(existing.map((s) => s.id));
+  const merged = [...existing];
+  for (const b of builtins) {
+    if (!ids.has(b.id)) {
+      merged.push({ ...b, createdAt: Date.now() });
+      ids.add(b.id);
+    }
+  }
+  return merged;
+}
+function readSnippetsDb() {
+  const builtins = defaultSnippets();
+  try {
+    const raw = (0, import_node_fs20.readFileSync)(snippetsPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.snippets)) return { snippets: builtins };
+    return { snippets: mergeMissingBuiltins(parsed.snippets, builtins) };
+  } catch {
+    const db = { snippets: builtins };
+    (0, import_node_fs20.writeFileSync)(snippetsPath(), `${JSON.stringify(db, null, 2)}
+`, "utf8");
+    return db;
+  }
+}
+function getBuiltinSnippetIds() {
+  return new Set(defaultSnippets().map((s) => s.id));
+}
+function isBuiltinSnippetId(id) {
+  return getBuiltinSnippetIds().has(id);
+}
+function persistSnippetsDb(snippets) {
+  const dir = (0, import_node_path21.join)(app.getPath("userData"), "search");
+  (0, import_node_fs20.mkdirSync)(dir, { recursive: true });
+  (0, import_node_fs20.writeFileSync)(snippetsPath(), `${JSON.stringify({ snippets }, null, 2)}
+`, "utf8");
+}
+var SNIPPET_LABEL_MAX = 200;
+var SNIPPET_TRIGGER_MAX = 48;
+var SNIPPET_BODY_MAX = 1e5;
+function normalizeSnippetBody(body) {
+  return body.replace(/\r\n/g, "\n");
+}
+function validateSnippetWritePayload(label, trigger, body) {
+  const tLabel = label.trim();
+  const tTrigger = trigger.trim();
+  const tBody = normalizeSnippetBody(body);
+  if (tLabel.length === 0) return { ok: false, message: "Title is required" };
+  if (tLabel.length > SNIPPET_LABEL_MAX) return { ok: false, message: `Title must be at most ${SNIPPET_LABEL_MAX} characters` };
+  if (tTrigger.length === 0) return { ok: false, message: "Trigger is required" };
+  if (tTrigger.length > SNIPPET_TRIGGER_MAX) {
+    return { ok: false, message: `Trigger must be at most ${SNIPPET_TRIGGER_MAX} characters` };
+  }
+  if (/[\n\r]/.test(tTrigger)) return { ok: false, message: "Trigger must be a single line" };
+  if (tBody.trim().length === 0) return { ok: false, message: "Body cannot be empty" };
+  if (tBody.length > SNIPPET_BODY_MAX) return { ok: false, message: `Body must be at most ${SNIPPET_BODY_MAX} characters` };
+  return { ok: true };
+}
+function triggerTaken(snippets, trigger, excludeId) {
+  const want = trigger.trim().toLowerCase();
+  return snippets.some((s) => s.id !== excludeId && s.trigger.trim().toLowerCase() === want);
+}
+function addUserSnippet(payload) {
+  const v = validateSnippetWritePayload(payload.label, payload.trigger, payload.body);
+  if (!v.ok) return { ok: false, message: v.message };
+  const db = readSnippetsDb();
+  const label = payload.label.trim();
+  const trigger = payload.trigger.trim();
+  const body = normalizeSnippetBody(payload.body);
+  if (triggerTaken(db.snippets, trigger, null)) {
+    return { ok: false, message: "Another snippet already uses this trigger" };
+  }
+  const id = `snippet:user:${(0, import_node_crypto9.randomUUID)()}`;
+  const createdAt = Date.now();
+  const next = [...db.snippets, { id, label, trigger, body, createdAt }];
+  persistSnippetsDb(next);
+  return { ok: true, message: "Snippet saved", id };
+}
+function updateUserSnippet(id, payload) {
+  if (isBuiltinSnippetId(id)) {
+    return { ok: false, message: "Built-in snippets cannot be edited" };
+  }
+  const v = validateSnippetWritePayload(payload.label, payload.trigger, payload.body);
+  if (!v.ok) return { ok: false, message: v.message };
+  const db = readSnippetsDb();
+  const idx = db.snippets.findIndex((s) => s.id === id);
+  if (idx < 0) return { ok: false, message: "Snippet not found" };
+  const label = payload.label.trim();
+  const trigger = payload.trigger.trim();
+  const body = normalizeSnippetBody(payload.body);
+  if (triggerTaken(db.snippets, trigger, id)) {
+    return { ok: false, message: "Another snippet already uses this trigger" };
+  }
+  const next = db.snippets.map(
+    (s, i) => i === idx ? { ...s, label, trigger, body, createdAt: s.createdAt } : s
+  );
+  persistSnippetsDb(next);
+  return { ok: true, message: "Snippet updated" };
+}
+function deleteUserSnippet(id) {
+  if (isBuiltinSnippetId(id)) {
+    return { ok: false, message: "Built-in snippets cannot be deleted" };
+  }
+  const db = readSnippetsDb();
+  const next = db.snippets.filter((s) => s.id !== id);
+  if (next.length === db.snippets.length) return { ok: false, message: "Snippet not found" };
+  persistSnippetsDb(next);
+  return { ok: true, message: "Snippet removed" };
+}
+function formatDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+function formatTime(date) {
+  return date.toTimeString().slice(0, 8);
+}
+function interpolateSnippet(input, now = /* @__PURE__ */ new Date()) {
+  return input.split("${date}").join(formatDate(now)).split("${time}").join(formatTime(now)).split("${datetime}").join(`${formatDate(now)} ${formatTime(now)}`).split("${iso}").join(now.toISOString()).split("${year}").join(String(now.getFullYear())).split("${timestamp}").join(String(Math.floor(now.getTime() / 1e3))).split("${hostname}").join((0, import_node_os9.hostname)()).replace(/\$\{uuid\}/g, () => (0, import_node_crypto9.randomUUID)());
+}
+function friendlyTriggerDisplay(trigger) {
+  const stripped = trigger.replace(/^;/, "").trim();
+  if (!stripped) return trigger.trim();
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+function resolvedSnippetLabel(snippet) {
+  const fromFile = snippet.label?.trim();
+  if (fromFile) return fromFile;
+  if (snippet.id === "snippet:today") return "Get today's date";
+  if (snippet.id === "snippet:time") return "Get current time";
+  if (snippet.id === "snippet:issue") return "Bug report (GitHub / Jira issue template)";
+  return void 0;
+}
+function snippetBodyPreview(body) {
+  const oneLine = body.replace(/\s+/g, " ").trim();
+  return oneLine.length > 72 ? `${oneLine.slice(0, 69)}\u2026` : oneLine;
+}
+function snippetRowSubtitle(snippet, title) {
+  const preview = snippetBodyPreview(snippet.body);
+  const trigRaw = snippet.trigger.trim();
+  const trigHint = friendlyTriggerDisplay(snippet.trigger);
+  let line;
+  if (title === trigRaw) {
+    line = preview.length > 0 ? preview : "Copies text to the clipboard";
+  } else {
+    line = preview.length > 0 ? `${trigHint} \xB7 ${preview}` : trigHint;
+  }
+  if (snippet.scope && snippet.scope !== "global") {
+    line = line.length > 0 ? `${line} \xB7 ${snippet.scope}` : snippet.scope;
+  }
+  return line;
+}
+function listSnippetsForUi() {
+  const db = readSnippetsDb();
+  const builtinIds = getBuiltinSnippetIds();
+  return db.snippets.map((snippet) => {
+    const label = resolvedSnippetLabel(snippet);
+    const title = (label ?? snippet.trigger).trim() || snippet.trigger;
+    return {
+      id: snippet.id,
+      title,
+      subtitle: snippetRowSubtitle(snippet, title),
+      trigger: snippet.trigger,
+      bodyTemplate: snippet.body,
+      resolvedPreview: interpolateSnippet(snippet.body),
+      readonly: builtinIds.has(snippet.id)
+    };
+  });
+}
+function copySnippetById(id) {
+  const db = readSnippetsDb();
+  const snippet = db.snippets.find((s) => s.id === id);
+  if (!snippet) return { ok: false, message: "Snippet not found" };
+  const text2 = interpolateSnippet(snippet.body);
+  clipboard.writeText(text2);
+  captureClipboardSnapshot();
+  return { ok: true, message: "Copied to clipboard" };
+}
+var snippetsProvider = {
+  providerId: "snippets",
+  async buildDocuments() {
+    const db = readSnippetsDb();
+    return db.snippets.map((snippet) => {
+      const label = resolvedSnippetLabel(snippet);
+      const title = (label ?? snippet.trigger).trim() || snippet.trigger;
+      const tokens2 = [snippet.trigger, snippet.body, label].filter(Boolean).join(" ");
+      return {
+        id: snippet.id,
+        category: "snippets",
+        title,
+        subtitle: snippetRowSubtitle(snippet, title),
+        tokens: tokens2,
+        action: { type: "copy-text", text: interpolateSnippet(snippet.body) },
+        updatedAt: snippet.createdAt
+      };
+    });
+  }
+};
+
+// src/main/search/ranker.ts
+var CATEGORY_PRIOR = {
+  applications: 0.72,
+  files: 0.6,
+  knowledge: 0.64,
+  clipboard: 0.45,
+  /** Was 0.4 (lowest), which pushed real quick notes below random `*notes*` files. */
+  "quick-notes": 0.68,
+  extensions: 0.68,
+  store: 0.25,
+  "mac-cli": 0.46,
+  "native-command": 0.7,
+  commands: 0.66,
+  snippets: 0.58,
+  "quick-links": 0.55,
+  calculator: 0.9,
+  "color-converter": 0.9
+};
+function normalizeRecency(ms) {
+  if (ms <= 0) return 0;
+  const oneDay = 24 * 60 * 60 * 1e3;
+  const ageDays = ms / oneDay;
+  return 1 / (1 + ageDays);
+}
+function normalizeFrequency(frequency) {
+  if (frequency <= 0) return 0;
+  return Math.min(1, Math.log10(frequency + 1) / 2);
+}
+function fuzzyBonus(distance) {
+  if (distance === void 0) return 0;
+  if (distance <= 0) return 0.08;
+  if (distance === 1) return 0.05;
+  if (distance === 2) return 0.02;
+  return 0;
+}
+function isLearnedUsageCategory(category) {
+  return category === "applications" || category === "extensions" || category === "native-command" || category === "commands" || category === "quick-notes" || category === "snippets" || category === "quick-links";
+}
+function computeLearnedUsageBoost(input) {
+  if (!isLearnedUsageCategory(input.category) || input.frequency <= 0 || input.lastUsedAt <= 0) {
+    return 0;
+  }
+  const now = input.now ?? Date.now();
+  const ageMs = Math.max(0, now - input.lastUsedAt);
+  const oneDay = 24 * 60 * 60 * 1e3;
+  const recencyBoost = ageMs < oneDay ? 360 : ageMs < 7 * oneDay ? 220 : ageMs < 30 * oneDay ? 100 : 0;
+  const frequencyBoost = Math.min(900, Math.log2(input.frequency + 1) * 220);
+  const successBoost = input.successRate >= 0.5 ? 120 : 0;
+  return Math.round(recencyBoost + frequencyBoost + successBoost);
+}
+function computeQueryLearningBoost(input) {
+  if (input.frequency <= 0 || input.lastUsedAt <= 0) return 0;
+  const now = input.now ?? Date.now();
+  const ageMs = Math.max(0, now - input.lastUsedAt);
+  const oneDay = 24 * 60 * 60 * 1e3;
+  const recencyBoost = ageMs < oneDay ? 1250 : ageMs < 7 * oneDay ? 900 : ageMs < 30 * oneDay ? 550 : 250;
+  const frequencyBoost = Math.min(1200, Math.log2(input.frequency + 1) * 350);
+  const successBoost = input.successRate >= 0.5 ? 150 : 0;
+  return Math.round(recencyBoost + frequencyBoost + successBoost);
+}
+function computeHotUsageBoost(recentUseCount) {
+  if (recentUseCount <= 0) return 0;
+  if (recentUseCount === 1) return 180;
+  if (recentUseCount === 2) return 600;
+  return Math.min(3600, 2600 + (recentUseCount - 3) * 250);
+}
+function computeWeightedScore(input) {
+  const lexical = Math.max(0, Math.min(1, input.lexical));
+  const recency = normalizeRecency(input.recencyMs);
+  const frequency = normalizeFrequency(input.frequency);
+  const success = Math.max(0, Math.min(1, input.successRate));
+  const prior = CATEGORY_PRIOR[input.category] ?? 0.35;
+  const fuzzy = fuzzyBonus(input.fuzzyDistance);
+  const popularity = input.popularity ? Math.min(1, Math.log10(input.popularity + 1) / 7) : 0;
+  const weighted = lexical * 0.6 + recency * 0.1 + frequency * 0.1 + success * 0.05 + prior * 0.05 + fuzzy + popularity * 0.1;
+  return Math.round(weighted * 1e3);
+}
+function shouldPreferRecent(leftScore, leftAgeMs, rightScore, rightAgeMs) {
+  const gap = Math.abs(leftScore - rightScore);
+  if (gap > 20) return false;
+  return leftAgeMs < rightAgeMs;
+}
+
+// src/main/search/directoryRecommendations.ts
+var import_node_path22 = require("node:path");
+function visitScore(visit, now) {
+  const ageDays = Math.max(0, (now - visit.lastVisitedAt) / 864e5);
+  const recencyBoost = Math.max(0, 14 - ageDays);
+  return visit.count * 10 + recencyBoost;
+}
+function rankDirectoryRecommendations(visits, options = {}) {
+  const now = options.now ?? Date.now();
+  const limit = options.limit ?? 5;
+  const siblingThreshold = options.siblingThreshold ?? 3;
+  const excluded = new Set(options.excludedPaths ?? []);
+  const validVisits = Object.entries(visits).filter(
+    ([path7, visit]) => path7.startsWith("/") && visit !== null && typeof visit === "object" && Number.isFinite(visit.count) && visit.count > 0 && Number.isFinite(visit.lastVisitedAt)
+  );
+  const childrenByParent = /* @__PURE__ */ new Map();
+  for (const entry of validVisits) {
+    const parent = (0, import_node_path22.dirname)(entry[0]);
+    const siblings = childrenByParent.get(parent) ?? [];
+    siblings.push(entry);
+    childrenByParent.set(parent, siblings);
+  }
+  const collapsedParents = new Set(
+    Array.from(childrenByParent.entries()).filter(([parent, children]) => !excluded.has(parent) && children.length >= siblingThreshold).map(([parent]) => parent)
+  );
+  const recommendations = /* @__PURE__ */ new Map();
+  for (const [path7, visit] of validVisits) {
+    const parent = (0, import_node_path22.dirname)(path7);
+    const recommendationPath = collapsedParents.has(parent) ? parent : path7;
+    if (excluded.has(recommendationPath)) continue;
+    const existing = recommendations.get(recommendationPath);
+    const score = visitScore(visit, now);
+    recommendations.set(recommendationPath, {
+      path: recommendationPath,
+      count: (existing?.count ?? 0) + visit.count,
+      lastVisitedAt: Math.max(existing?.lastVisitedAt ?? 0, visit.lastVisitedAt),
+      score: (existing?.score ?? 0) + score
+    });
+  }
+  const ranked = Array.from(recommendations.values()).sort(
+    (a, b) => b.score - a.score || b.lastVisitedAt - a.lastVisitedAt || a.path.localeCompare(b.path)
+  );
+  return ranked.filter((candidate, index) => {
+    return !ranked.slice(0, index).some((stronger) => {
+      return candidate.path.startsWith(`${stronger.path}/`) || stronger.path.startsWith(`${candidate.path}/`);
+    });
+  }).slice(0, Math.max(0, limit));
+}
+
+// src/main/search/providerRefreshPolicy.ts
+var VOLATILE_SEARCH_PROVIDER_IDS = /* @__PURE__ */ new Set([
+  "commands",
+  "clipboard",
+  "notes",
+  "snippets",
+  "quick-links"
+]);
+function selectVolatileSearchProviders(providers) {
+  return providers.filter((provider) => VOLATILE_SEARCH_PROVIDER_IDS.has(provider.providerId));
+}
+
+// src/main/search/service.ts
+var execFileAsync11 = (0, import_node_util10.promisify)(import_node_child_process12.execFile);
+var MAX_RESULTS = 80;
+var PROVIDER_REFRESH_MIN_AGE_MS = 1e4;
+var FILE_INDEX_LIMIT = 75e3;
+var FILE_INDEX_WRITE_BATCH_SIZE = 400;
+var SHELL_METACHAR_RE = /[;|&`$(){}[\]\n\r<>\\]/;
+function validateShellCommand(command2) {
+  const trimmed = command2.trim();
+  if (!trimmed) return { ok: false, message: "Empty shell command" };
+  if (SHELL_METACHAR_RE.test(trimmed)) {
+    return {
+      ok: false,
+      message: "Shell metacharacters are not allowed in run-shell commands."
+    };
+  }
+  return { ok: true };
+}
+function safetyForAction(action) {
+  if (action.type === "run-shell") {
+    return { id: "shell.run", context: { command: action.command } };
+  }
+  if (action.type === "install-extension") {
+    return { id: "extension.install", context: { extensionId: action.extensionId } };
+  }
+  if (action.type === "run-native-command") {
+    if (action.commandId === "empty-trash") {
+      return { id: "trash.empty", context: { commandId: action.commandId } };
+    }
+    if (action.commandId === "sleep-system") {
+      return { id: "system.sleep", context: { commandId: action.commandId } };
+    }
+    if (action.commandId === "quit-tezbar") {
+      return { id: "app.quit", context: { commandId: action.commandId } };
+    }
+    return { id: "native.command", context: { commandId: action.commandId } };
+  }
+  return null;
+}
+async function runWithSafety(safetyId, context, run) {
+  const descriptor = getSafetyDescriptor(safetyId);
+  if (!descriptor) {
+    return { ok: false, message: `Safety descriptor missing: ${safetyId}` };
+  }
+  const dryRun = getSafetyDryRun();
+  const window2 = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
+  const { accepted } = await confirmSafetyAction(window2, descriptor, context, { dryRun });
+  if (!accepted) {
+    recordSafetyEntry({
+      action: safetyId,
+      title: descriptor.title,
+      risk: descriptor.risk,
+      ok: false,
+      message: "Cancelled by user",
+      context: { ...context, dryRun }
+    });
+    return { ok: false, message: "Cancelled" };
+  }
+  if (dryRun) {
+    const message = `Dry run: would have ${descriptor.title.toLowerCase()}.`;
+    recordSafetyEntry({
+      action: safetyId,
+      title: descriptor.title,
+      risk: descriptor.risk,
+      ok: true,
+      message,
+      context: { ...context, dryRun: true }
+    });
+    return { ok: true, message };
+  }
+  const result = await run();
+  recordSafetyEntry({
+    action: safetyId,
+    title: descriptor.title,
+    risk: descriptor.risk,
+    ok: result.ok,
+    message: result.message,
+    context
+  });
+  return result;
+}
+var indexDb = getInstance();
+var searchReadyPromise = null;
+var fileBootstrapPromise = null;
+var volatileRefreshPromise = null;
+var stopFileWatcher = null;
+var lastVolatileRefreshAt = 0;
+var initialProviderRefreshStarted = false;
+var volatileRefreshScheduled = false;
+var searchLifecycleRegistered = false;
+function isPresent(value) {
+  return value !== null && value !== void 0;
+}
+function uniqById(items) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
+function uniqRowsById(items) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
+function attachSearchResultIcons(items) {
+  return items.map(
+    (item) => item.action.type === "open-file" ? { ...item, iconDataUrl: fileIconDataUrl(item.action.path) } : item
+  );
+}
+function actionIdFromResult(action, resultId) {
+  if (resultId) return resultId;
+  switch (action.type) {
+    case "open-app":
+      return `open-app:${action.appName}`;
+    case "open-file":
+      return `open-file:${action.path}`;
+    case "open-with-app":
+      return `open-with-app:${action.appName ?? "default"}:${action.path}`;
+    case "copy-text":
+      return `copy-text:${action.text.slice(0, 64)}`;
+    case "copy-and-paste-text":
+      return `copy-and-paste-text:${action.text.slice(0, 64)}`;
+    case "add-note":
+      return `add-note:${action.text.slice(0, 64)}`;
+    case "open-url":
+      return `open-url:${action.url}`;
+    case "install-extension":
+      return `install-extension:${action.extensionId}`;
+    case "run-extension-command":
+      return `extcmd:${action.extensionId}:${action.commandName}`;
+    case "run-shell":
+      return `run-shell:${action.command}`;
+    case "invoke-command":
+      return `command:${action.commandId}`;
+    case "run-native-command":
+      return `native:${action.commandId}`;
+    default:
+      return "unknown-action";
+  }
+}
+async function upsertProvider(provider) {
+  const docs = await provider.buildDocuments();
+  if (provider.providerId === "commands") {
+    indexDb.removeDocumentsByCategory("commands");
+    indexDb.removeDocumentsByCategory("native-command");
+  } else if (provider.providerId === "clipboard") {
+    indexDb.removeDocumentsByCategory("clipboard");
+  } else if (provider.providerId === "notes") {
+    indexDb.removeDocumentsByCategory("quick-notes");
+  } else if (provider.providerId === "snippets") {
+    indexDb.removeDocumentsByCategory("snippets");
+  } else if (provider.providerId === "quick-links") {
+    indexDb.removeDocumentsByCategory("quick-links");
+  } else if (provider.providerId === "apps") {
+    indexDb.removeDocumentsByCategory("applications");
+  } else if (provider.providerId === "extensions") {
+    indexDb.removeDocumentsByCategory("extensions");
+  }
+  if (docs.length > 0) {
+    indexDb.upsertDocuments(docs);
+  }
+}
+async function refreshAllProviders() {
+  await Promise.all([
+    upsertProvider(commandsProvider),
+    upsertProvider(clipboardProvider),
+    upsertProvider(notesProvider),
+    upsertProvider(snippetsProvider),
+    upsertProvider(quickLinksProvider),
+    upsertProvider(appsProvider)
+  ]);
+  indexDb.clearSearchCache();
+  void upsertProvider(extensionsProvider).then(() => {
+    indexDb.clearSearchCache();
+  }).catch((error) => {
+    console.warn("[Search] Failed to build extension index:", error);
+  });
+}
+async function refreshVolatileProviders() {
+  if (volatileRefreshPromise) return volatileRefreshPromise;
+  volatileRefreshPromise = (async () => {
+    captureClipboardSnapshot();
+    const providers = selectVolatileSearchProviders([
+      commandsProvider,
+      clipboardProvider,
+      notesProvider,
+      snippetsProvider,
+      quickLinksProvider,
+      extensionsProvider
+    ]);
+    await Promise.all(providers.map((provider) => upsertProvider(provider)));
+    lastVolatileRefreshAt = Date.now();
+    indexDb.clearSearchCache();
+  })().finally(() => {
+    volatileRefreshPromise = null;
+  });
+  return volatileRefreshPromise;
+}
+function refreshVolatileProvidersIfStale() {
+  if (Date.now() - lastVolatileRefreshAt < PROVIDER_REFRESH_MIN_AGE_MS) return;
+  if (lastVolatileRefreshAt === 0 && initialProviderRefreshStarted) return;
+  if (volatileRefreshPromise || volatileRefreshScheduled) return;
+  volatileRefreshScheduled = true;
+  setImmediate(() => {
+    volatileRefreshScheduled = false;
+    if (Date.now() - lastVolatileRefreshAt < PROVIDER_REFRESH_MIN_AGE_MS) return;
+    void refreshVolatileProviders().catch((error) => {
+      console.warn("[Search] Failed to refresh providers:", error);
+    });
+  });
+}
+function startBackgroundFileIndexing() {
+  if (fileBootstrapPromise) return;
+  fileBootstrapPromise = (async () => {
+    const fileDocs = await collectInitialFileDocuments(FILE_INDEX_LIMIT);
+    const existing = new Map(
+      indexDb.listDocumentSyncState("files").map((row) => [row.id, row.sourceMtime])
+    );
+    const incomingIds = new Set(fileDocs.map((document) => document.id));
+    const removals = Array.from(existing.keys()).filter((id) => !incomingIds.has(id));
+    const upserts = fileDocs.filter((document) => {
+      const persistedMtime = existing.get(document.id);
+      return persistedMtime === void 0 || persistedMtime !== Math.round(document.sourceMtime ?? 0);
+    });
+    for (let offset = 0; offset < removals.length; offset += FILE_INDEX_WRITE_BATCH_SIZE) {
+      indexDb.removeDocumentsByIds(removals.slice(offset, offset + FILE_INDEX_WRITE_BATCH_SIZE));
+      await new Promise((resolve5) => setImmediate(resolve5));
+    }
+    for (let offset = 0; offset < upserts.length; offset += FILE_INDEX_WRITE_BATCH_SIZE) {
+      indexDb.upsertDocuments(upserts.slice(offset, offset + FILE_INDEX_WRITE_BATCH_SIZE));
+      await new Promise((resolve5) => setImmediate(resolve5));
+    }
+    if (removals.length > 0 || upserts.length > 0) indexDb.clearSearchCache();
+    stopFileWatcher = startFileWatcher(({ upserts: upserts2, removeIds }) => {
+      if (upserts2.length > 0) indexDb.upsertDocuments(upserts2);
+      for (const removeId of removeIds) {
+        indexDb.removeDocumentById(removeId);
+      }
+      if (upserts2.length > 0 || removeIds.length > 0) {
+        indexDb.clearSearchCache();
+      }
+    });
+  })().catch((error) => {
+    fileBootstrapPromise = null;
+    console.warn("[Search] Failed to build file index:", error);
+  });
+}
+function registerSearchLifecycle() {
+  if (searchLifecycleRegistered) return;
+  searchLifecycleRegistered = true;
+  app.once("before-quit", () => {
+    stopFileWatcher?.();
+    stopFileWatcher = null;
+  });
+}
+function startInitialProviderRefresh() {
+  if (initialProviderRefreshStarted) return;
+  initialProviderRefreshStarted = true;
+  setImmediate(() => {
+    void refreshAllProviders().then(() => {
+      lastVolatileRefreshAt = Date.now();
+      startBackgroundFileIndexing();
+    }).catch((error) => {
+      initialProviderRefreshStarted = false;
+      console.warn("[Search] Failed to refresh the cached search index:", error);
+    });
+  });
+}
+async function bootstrapSearchIndex() {
+  if (!searchReadyPromise) {
+    searchReadyPromise = (async () => {
+      await indexDb.ensureInitialized();
+      await upsertProvider(commandsProvider);
+      registerSearchLifecycle();
+    })().catch((error) => {
+      searchReadyPromise = null;
+      throw error;
+    });
+  }
+  await searchReadyPromise;
+  startInitialProviderRefresh();
+}
+async function warmSearchIndex() {
+  await bootstrapSearchIndex();
+}
+async function reindexQuickNotes() {
+  await bootstrapSearchIndex();
+  await upsertProvider(notesProvider);
+  indexDb.clearSearchCache();
+}
+async function reindexSnippets() {
+  await bootstrapSearchIndex();
+  await upsertProvider(snippetsProvider);
+  indexDb.clearSearchCache();
+}
+async function reindexExtensions() {
+  await bootstrapSearchIndex();
+  await upsertProvider(extensionsProvider);
+  indexDb?.clearSearchCache();
+}
+function internalSurfaceBoost(category, title, query, subtitle) {
+  const hit = category === "native-command" || category === "commands" || category === "extensions" || category === "applications" || category === "quick-notes";
+  if (!hit) return 0;
+  const normalizedTitle = title.toLowerCase();
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return 0;
+  if (category === "commands" && normalizedTitle === "extensions" && normalizedQuery === "extensions") {
+    return 1400;
+  }
+  if (category === "commands" && normalizedTitle === "extensions store" && ["store", "extension store", "extensions store"].includes(normalizedQuery)) {
+    return 1400;
+  }
+  let boost = 0;
+  if (normalizedTitle === normalizedQuery) {
+    boost = 600;
+  } else if (normalizedTitle.startsWith(normalizedQuery)) {
+    boost = 420;
+  } else {
+    const titleWords = normalizedTitle.split(/\s+/);
+    if (titleWords.some((word) => word.startsWith(normalizedQuery))) {
+      boost = 300;
+    } else if (normalizedTitle.includes(normalizedQuery)) {
+      boost = 150;
+    }
+  }
+  if (category === "extensions" && subtitle) {
+    const parts = subtitle.split(" \xB7 ");
+    const extName = parts[0]?.toLowerCase();
+    if (extName) {
+      const slugName = extName.replace(/\s+/g, "");
+      if (extName === normalizedQuery || slugName === normalizedQuery) boost = Math.max(boost, 1200);
+      else if (extName.startsWith(normalizedQuery) || slugName.startsWith(normalizedQuery))
+        boost = Math.max(boost, 800);
+      else if (extName.includes(normalizedQuery) || slugName.includes(normalizedQuery))
+        boost = Math.max(boost, 400);
+    }
+  }
+  return boost;
+}
+function recentQuickNoteBoost(category, updatedAt, now) {
+  if (category !== "quick-notes") return 0;
+  const ageMs = now - updatedAt;
+  if (ageMs < 9e4) return 1100;
+  if (ageMs < 5 * 60 * 1e3) return 520;
+  if (ageMs < 30 * 60 * 1e3) return 140;
+  return 0;
+}
+function exactRecentQuickNoteBoost(category, title, query, updatedAt, now) {
+  if (category !== "quick-notes") return 0;
+  const ageMs = now - updatedAt;
+  if (ageMs > 5 * 60 * 1e3) return 0;
+  const normalizedTitle = title.trim().toLowerCase();
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery || !normalizedTitle) return 0;
+  if (normalizedTitle === normalizedQuery) return 1800;
+  if (normalizedTitle.startsWith(normalizedQuery)) return 1400;
+  if (normalizedTitle.includes(normalizedQuery)) return 900;
+  return 0;
+}
+function fullTokenMatchBoost(query, title, subtitle) {
+  const tokens2 = query.trim().toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  if (tokens2.length < 2) return 0;
+  const text2 = `${title} ${subtitle}`.toLowerCase();
+  const allMatch = tokens2.every((t) => text2.includes(t));
+  return allMatch ? 200 : 0;
+}
+function rankRows(query, docs) {
+  const now = Date.now();
+  const queryStats = indexDb?.getQueryActionStats(
+    query,
+    docs.map((entry) => entry.doc.id)
+  ) ?? /* @__PURE__ */ new Map();
+  const ranked = docs.map((entry) => {
+    const queryStat = queryStats.get(entry.doc.id);
+    const queryTotalCount = queryStat?.totalCount ?? 0;
+    const querySuccessRate = queryTotalCount > 0 ? (queryStat?.successCount ?? 0) / queryTotalCount : 0;
+    const activityAt = entry.doc.updatedAt;
+    const score = computeWeightedScore({
+      lexical: entry.lexical,
+      recencyMs: now - activityAt,
+      frequency: 0,
+      successRate: 0,
+      category: entry.doc.category,
+      fuzzyDistance: entry.fuzzyDistance,
+      popularity: entry.doc.popularity
+    }) + // Typed searches learn only from this exact query. Global frequency and
+    // five-minute hot usage belong on the home screen; otherwise repeatedly
+    // opening Library can incorrectly dominate a later "gemini" search.
+    computeQueryLearningBoost({
+      frequency: queryStat?.frequency ?? 0,
+      successRate: querySuccessRate,
+      lastUsedAt: queryStat?.lastUsedAt ?? 0,
+      now
+    }) + internalSurfaceBoost(entry.doc.category, entry.doc.title, query, entry.doc.subtitle) + recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) + exactRecentQuickNoteBoost(
+      entry.doc.category,
+      entry.doc.title,
+      query,
+      entry.doc.updatedAt,
+      now
+    ) + (() => {
+      const q = query.trim().toLowerCase();
+      if (!q) return 120;
+      if (/\bnotes?\b/.test(q) || q.includes("quick note")) return 780;
+      return 120;
+    })() + fullTokenMatchBoost(query, entry.doc.title, entry.doc.subtitle);
+    return {
+      id: entry.doc.id,
+      title: entry.doc.title,
+      subtitle: entry.doc.subtitle,
+      category: entry.doc.category,
+      score,
+      action: entry.doc.action,
+      updatedAt: activityAt
+    };
+  });
+  ranked.sort((left, right) => {
+    if (left.score !== right.score) {
+      const preferRecent = shouldPreferRecent(
+        left.score,
+        now - left.updatedAt,
+        right.score,
+        now - right.updatedAt
+      );
+      if (preferRecent) return -1;
+      const reversePreferRecent = shouldPreferRecent(
+        right.score,
+        now - right.updatedAt,
+        left.score,
+        now - left.updatedAt
+      );
+      if (reversePreferRecent) return 1;
+      return right.score - left.score;
+    }
+    return right.updatedAt - left.updatedAt;
+  });
+  return ranked;
+}
+function recommendationBoost(id) {
+  if (id === "native:open-clipboard-history") return 900;
+  if (id === "native:open-snippets") return 880;
+  if (id === "extcmd:raycast.kill-process:index") return 860;
+  if (id === "extcmd:raycast.port-manager:kill-listening-process") return 760;
+  if (id === "extcmd:raycast.port-manager:open-ports") return 720;
+  if (id === "extcmd:raycast.port-manager:open-ports-menu-bar") return 700;
+  return 0;
+}
+function buildRecommendations() {
+  const now = Date.now();
+  const seeds = indexDb.listRecommendedDocuments(MAX_RESULTS).map((row) => {
+    const totalCount = row.totalCount > 0 ? row.totalCount : 0;
+    const successRate = totalCount > 0 ? row.successCount / totalCount : 0;
+    return {
+      id: row.id,
+      category: row.category,
+      title: row.title,
+      subtitle: row.subtitle,
+      action: indexDb.parseAction(row.actionJson),
+      updatedAt: row.updatedAt,
+      frequency: row.frequency,
+      successRate,
+      lastUsedAt: row.lastUsedAt,
+      recentUseCount: row.recentUseCount
+    };
+  });
+  const pinnedOrder = [
+    "native:open-clipboard-history",
+    "native:open-snippets",
+    "extcmd:raycast.port-manager:kill-listening-process",
+    "extcmd:raycast.kill-process:index",
+    "extcmd:raycast.port-manager:open-ports",
+    "extcmd:raycast.port-manager:open-ports-menu-bar"
+  ];
+  const pinnedRows = indexDb.getDocumentsByIds(pinnedOrder);
+  const existingIds = new Set(seeds.map((seed) => seed.id));
+  for (const row of pinnedRows) {
+    if (existingIds.has(row.id)) continue;
+    seeds.push({
+      id: row.id,
+      category: row.category,
+      title: row.title,
+      subtitle: row.subtitle,
+      action: indexDb.parseAction(row.actionJson),
+      updatedAt: row.updatedAt,
+      frequency: 0,
+      successRate: 0,
+      lastUsedAt: 0,
+      recentUseCount: 0
+    });
+  }
+  return seeds.map((seed) => {
+    const activityAt = seed.lastUsedAt > 0 ? seed.lastUsedAt : seed.updatedAt;
+    const score = computeWeightedScore({
+      lexical: 0.92,
+      recencyMs: now - activityAt,
+      frequency: seed.frequency,
+      successRate: seed.successRate,
+      category: seed.category
+    }) + computeLearnedUsageBoost({
+      category: seed.category,
+      frequency: seed.frequency,
+      successRate: seed.successRate,
+      lastUsedAt: seed.lastUsedAt,
+      now
+    }) + computeHotUsageBoost(seed.recentUseCount) + recommendationBoost(seed.id);
+    return {
+      id: seed.id,
+      title: seed.title,
+      subtitle: seed.subtitle,
+      category: seed.category,
+      score,
+      action: seed.action
+    };
+  }).sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS);
+}
+function decodeLsofCommandName(value) {
+  return value.replace(
+    /\\x([0-9a-fA-F]{2})/g,
+    (_, hex) => String.fromCharCode(Number.parseInt(hex, 16))
+  );
+}
+function displayProcessNameFromCommand(command2) {
+  const trimmed = command2.trim();
+  if (!trimmed) return "";
+  const parts = trimmed.split("/").filter(Boolean);
+  return decodeLsofCommandName(parts.at(-1) ?? trimmed);
+}
+function appPathFromCommand(command2) {
+  const decoded = decodeLsofCommandName(command2);
+  const match = decoded.match(/(\/.*?\.app)(?:\/|$)/);
+  return match?.[1];
+}
+function parseProcessNameMap(stdout) {
+  const names = /* @__PURE__ */ new Map();
+  for (const line of stdout.split("\n")) {
+    const match = line.match(/^\s*(\d+)\s+(.+?)\s*$/);
+    if (!match) continue;
+    const name = displayProcessNameFromCommand(match[2]);
+    if (name) names.set(match[1], { name, appPath: appPathFromCommand(match[2]) });
+  }
+  return names;
+}
+async function readProcessNameMap() {
+  try {
+    const { stdout } = await execFileAsync11("/bin/ps", ["-axo", "pid=,comm="]);
+    return parseProcessNameMap(stdout);
+  } catch {
+    return /* @__PURE__ */ new Map();
+  }
+}
+function parseOpenPortProcesses(stdout, processNames = /* @__PURE__ */ new Map()) {
+  const lines = stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length <= 1) return [];
+  const grouped = /* @__PURE__ */ new Map();
+  for (const line of lines) {
+    const parts = line.split(/\s+/);
+    if (parts.length < 3) continue;
+    const match = line.match(/:(\d+)\s+\(LISTEN\)$/);
+    if (!match) continue;
+    const port = Number(match[1]);
+    if (!Number.isFinite(port)) continue;
+    const pid = parts[1] ?? "?";
+    const identity = processNames.get(pid);
+    const process2 = identity?.name ?? decodeLsofCommandName(parts[0] ?? "unknown");
+    const user = parts[2] ?? "unknown";
+    const key = `${process2}:${pid}:${user}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.ports.add(port);
+      continue;
+    }
+    grouped.set(key, {
+      process: process2,
+      user,
+      pid,
+      ports: /* @__PURE__ */ new Set([port]),
+      appPath: identity?.appPath
+    });
+  }
+  return Array.from(grouped.values()).map((entry) => ({
+    process: entry.process,
+    user: entry.user,
+    pid: entry.pid,
+    ports: Array.from(entry.ports).sort((a, b) => a - b),
+    appPath: entry.appPath
+  })).sort((a, b) => a.process.localeCompare(b.process) || a.pid.localeCompare(b.pid));
+}
+async function attachOpenPortProcessIcons(rows) {
+  const uniqueAppPaths = Array.from(
+    new Set(rows.map((row) => row.appPath).filter((path7) => Boolean(path7)))
+  );
+  const icons = /* @__PURE__ */ new Map();
+  await Promise.all(
+    uniqueAppPaths.map(async (appPath) => {
+      const icon = await appIconDataUrl(appPath);
+      if (icon) icons.set(appPath, icon);
+    })
+  );
+  return rows.map(({ appPath, ...row }) => {
+    const iconDataUrl = appPath ? icons.get(appPath) : void 0;
+    return iconDataUrl ? { ...row, iconDataUrl } : row;
+  });
+}
+async function searchEverything(query) {
+  getKnowledgeService().notifyInteractiveActivity();
+  await bootstrapSearchIndex();
+  refreshVolatileProvidersIfStale();
+  const parsedQuery = parseSearchQuery(query);
+  const trimmed = parsedQuery.query;
+  const isDeepSearch = parsedQuery.mode === "deep";
+  if (!trimmed && !isDeepSearch) {
+    return attachSearchResultIcons(buildRecommendations());
+  }
+  if (!trimmed) {
+    return [
+      {
+        id: `${DEEP_SEARCH_RESULT_PREFIX}prompt`,
+        title: "Deep Search",
+        subtitle: "Type after ! to search inside the contents of indexed files",
+        category: "knowledge",
+        score: 1e4,
+        action: {
+          type: "invoke-command",
+          commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
+          payload: { query: "" }
+        }
+      }
+    ];
+  }
+  if (isDeepSearch && trimmed.length < 3) {
+    return [
+      {
+        id: `${DEEP_SEARCH_RESULT_PREFIX}keep-typing`,
+        title: "Keep typing to search file contents",
+        subtitle: "Deep Search starts after 3 characters",
+        category: "knowledge",
+        score: 1e4,
+        action: {
+          type: "invoke-command",
+          commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
+          payload: { query: trimmed }
+        }
+      }
+    ];
+  }
+  const learnedRows = indexDb.getDocumentsByIds(indexDb.listQueryActionIds(trimmed, 20));
+  const rows = uniqRowsById([...indexDb.getSearch(trimmed, MAX_RESULTS), ...learnedRows]);
+  const docs = rows.map(
+    (row) => ({
+      doc: {
+        id: row.id,
+        category: row.category,
+        title: row.title,
+        subtitle: row.subtitle,
+        tokens: `${row.title} ${row.subtitle}`,
+        action: indexDb.parseAction(row.actionJson),
+        updatedAt: row.updatedAt,
+        popularity: row.popularity
+      },
+      lexical: row.lexical,
+      fuzzyDistance: row.fuzzyDistance
+    })
+  );
+  const ranked = rankRows(trimmed, docs);
+  const asResults = ranked.map((item) => ({
+    id: item.id,
+    title: item.title,
+    subtitle: item.subtitle,
+    category: item.category,
+    score: item.score,
+    action: item.action
+  }));
+  const resultsWithoutFiles = asResults.filter((result) => {
+    if (result.category === "files") return false;
+    return true;
+  });
+  const fileResults = asResults.filter((result) => result.category === "files");
+  const indexedSourceResults = getKnowledgeService().searchMetadata(trimmed, 24).map(
+    (hit, index) => ({
+      id: `file:${hit.path}`,
+      title: hit.title,
+      subtitle: hit.path,
+      category: "files",
+      score: 760 + Math.round(hit.score * 160) - index,
+      action: { type: "open-file", path: hit.path }
+    })
+  );
+  const allFileResults = uniqById([...fileResults, ...indexedSourceResults]);
+  const openPortResults = isDeepSearch ? [] : await searchPortManagerOpenPorts(trimmed);
+  const knowledgeHits = isDeepSearch ? getKnowledgeService().search(trimmed, 16) : [];
+  const seenKnowledgeSources = /* @__PURE__ */ new Set();
+  const knowledgeResults = knowledgeHits.flatMap((hit) => {
+    if (seenKnowledgeSources.has(hit.sourceId)) return [];
+    seenKnowledgeSources.add(hit.sourceId);
+    const location = hit.pageNumber ? ` \xB7 page ${hit.pageNumber}` : "";
+    const excerpt = hit.text.replace(/\s+/g, " ").trim();
+    return [
+      {
+        id: `knowledge:${hit.chunkId}`,
+        title: hit.title,
+        subtitle: `Knowledge${location} \xB7 ${excerpt.slice(0, 180)}`,
+        category: "knowledge",
+        score: 520 + Math.round(hit.score * 430),
+        action: { type: "open-file", path: hit.path }
+      }
+    ];
+  });
+  function quickNoteAddScore(query2) {
+    const q = query2.trim().toLowerCase();
+    if (!q) return 120;
+    if (/\bnotes?\b/.test(q) || q.includes("quick note")) return 780;
+    return 120;
+  }
+  const noteAdd = trimmed && !isDeepSearch ? [
+    {
+      id: `note-add:${trimmed}`,
+      title: `Add quick note: ${trimmed.slice(0, 64)}`,
+      subtitle: "Quick notes",
+      category: "quick-notes",
+      score: quickNoteAddScore(trimmed),
+      action: { type: "add-note", text: trimmed }
+    }
+  ] : [];
+  const deepMatchedPaths = new Set(
+    knowledgeResults.flatMap(
+      (result) => result.action.type === "open-file" ? [result.action.path] : []
+    )
+  );
+  const metadataFileResults = allFileResults.filter(
+    (result) => result.action.type !== "open-file" || !deepMatchedPaths.has(result.action.path)
+  );
+  const basicCandidates = [...resultsWithoutFiles, ...allFileResults, ...openPortResults];
+  const deepSearchRecommendation = isDeepSearch ? null : buildDeepSearchRecommendation(trimmed, basicCandidates);
+  const results = uniqById(
+    isDeepSearch ? [...knowledgeResults, ...metadataFileResults] : [
+      ...deepSearchRecommendation ? [deepSearchRecommendation] : [],
+      ...basicCandidates,
+      ...noteAdd
+    ]
+  ).sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS);
+  return attachSearchResultIcons(results);
+}
+async function listSearchCandidates() {
+  await bootstrapSearchIndex();
+  const rows = indexDb.listRecommendedDocuments(1e3);
+  return rows.map((row, index) => ({
+    id: row.id,
+    title: row.title,
+    subtitle: row.subtitle,
+    category: row.category,
+    score: rows.length - index,
+    action: indexDb.parseAction(row.actionJson)
+  }));
+}
+function expandUserPath(input) {
+  if (input === "~") return (0, import_node_os10.homedir)();
+  if (input.startsWith("~/")) return (0, import_node_path23.join)((0, import_node_os10.homedir)(), input.slice(2));
+  return input;
+}
+function resolveSlashPathInput(input) {
+  if (!input.startsWith("/")) return expandUserPath(input);
+  const absolutePrefixes = [
+    "/Users/",
+    "/Volumes/",
+    "/private/",
+    "/tmp/",
+    "/var/",
+    "/System/",
+    "/Library/"
+  ];
+  if (absolutePrefixes.some((prefix) => input.startsWith(prefix))) {
+    return input;
+  }
+  if (input === "/Users" || input === "/Volumes") {
+    return input;
+  }
+  return (0, import_node_path23.join)((0, import_node_os10.homedir)(), input.slice(1));
+}
+function displayUserPath(path7) {
+  const home = (0, import_node_os10.homedir)();
+  if (path7 === home) return "~";
+  if (path7.startsWith(`${home}/`)) return `~/${path7.slice(home.length + 1)}`;
+  return path7;
+}
+function splitPathCompletionQuery(raw) {
+  const query = raw.trimStart();
+  const body = query === "/" ? "" : query;
+  const expandedBody = resolveSlashPathInput(body);
+  let appMode = false;
+  let targetPart = expandedBody;
+  let appTerm = "";
+  const trimmedBody = expandedBody.trimEnd();
+  if (expandedBody.endsWith(" ") && trimmedBody && (0, import_node_fs21.existsSync)(trimmedBody)) {
+    appMode = true;
+    targetPart = trimmedBody;
+    appTerm = "";
+  } else if (!(0, import_node_fs21.existsSync)(expandedBody)) {
+    let splitAt = -1;
+    for (let index = expandedBody.length - 1; index >= 0; index--) {
+      if (expandedBody[index] !== " ") continue;
+      const beforeSpace = expandedBody.slice(0, index).trimEnd();
+      if (beforeSpace && (0, import_node_fs21.existsSync)(beforeSpace)) {
+        splitAt = index;
+        break;
+      }
+    }
+    if (splitAt >= 0) {
+      appMode = true;
+      targetPart = expandedBody.slice(0, splitAt).trimEnd();
+      appTerm = expandedBody.slice(splitAt + 1).trimStart();
+    }
+  }
+  if (!targetPart) {
+    return { targetPath: (0, import_node_os10.homedir)(), appTerm, appMode };
+  }
+  if (targetPart.startsWith("/")) {
+    return { targetPath: targetPart, appTerm, appMode };
+  }
+  if (targetPart.startsWith("~")) {
+    return { targetPath: expandUserPath(targetPart), appTerm, appMode };
+  }
+  return { targetPath: (0, import_node_path23.resolve)((0, import_node_os10.homedir)(), targetPart), appTerm, appMode };
+}
+function pathCompletionBase(targetPath) {
+  if (targetPath.endsWith("/")) return { directory: targetPath, prefix: "" };
+  try {
+    if ((0, import_node_fs21.existsSync)(targetPath) && (0, import_node_fs21.statSync)(targetPath).isDirectory()) {
+      return { directory: targetPath, prefix: "" };
+    }
+  } catch {
+  }
+  return { directory: (0, import_node_path23.dirname)(targetPath), prefix: (0, import_node_path23.basename)(targetPath) };
+}
+function directoryVisitStorePath() {
+  return (0, import_node_path23.join)(app.getPath("userData"), "directory-visits.json");
+}
+function readDirectoryVisitStore() {
+  try {
+    const parsed = JSON.parse((0, import_node_fs21.readFileSync)(directoryVisitStorePath(), "utf8"));
+    if (!parsed || parsed.version !== 1 || typeof parsed.visits !== "object") {
+      return { version: 1, visits: {} };
+    }
+    return parsed;
+  } catch {
+    return { version: 1, visits: {} };
+  }
+}
+function recordDirectoryVisit(path7) {
+  try {
+    const normalized = (0, import_node_path23.resolve)(path7);
+    if (!(0, import_node_fs21.statSync)(normalized).isDirectory()) return;
+    const store2 = readDirectoryVisitStore();
+    const existing = store2.visits[normalized];
+    store2.visits[normalized] = {
+      count: (existing?.count ?? 0) + 1,
+      lastVisitedAt: Date.now()
+    };
+    const storePath2 = directoryVisitStorePath();
+    (0, import_node_fs21.mkdirSync)((0, import_node_path23.dirname)(storePath2), { recursive: true });
+    (0, import_node_fs21.writeFileSync)(storePath2, JSON.stringify(store2), "utf8");
+  } catch (error) {
+    console.warn("[Search] Failed to record directory visit:", error);
+  }
+}
+function recommendedDirectories() {
+  return rankDirectoryRecommendations(readDirectoryVisitStore().visits, {
+    limit: 50,
+    excludedPaths: [(0, import_node_os10.homedir)()]
+  }).filter((item) => {
+    try {
+      return (0, import_node_fs21.statSync)(item.path).isDirectory();
+    } catch {
+      return false;
+    }
+  }).slice(0, 5).map((item, index) => ({
+    id: `path-recommended:${item.path}`,
+    title: (0, import_node_path23.basename)(item.path),
+    subtitle: displayUserPath(item.path),
+    kind: "directory",
+    section: "recommended",
+    badge: "Recommended",
+    iconDataUrl: folderIconDataUrl,
+    value: `${item.path}/`,
+    path: item.path,
+    score: 5e3 - index
+  }));
+}
+function openWithUsageStorePath() {
+  return (0, import_node_path23.join)(app.getPath("userData"), "open-with-usage.json");
+}
+function readOpenWithUsageStore() {
+  try {
+    const parsed = JSON.parse((0, import_node_fs21.readFileSync)(openWithUsageStorePath(), "utf8"));
+    if (!parsed || typeof parsed !== "object" || parsed.version !== 1 || typeof parsed.keys !== "object") {
+      return { version: 1, keys: {} };
+    }
+    if (!parsed.aliases || typeof parsed.aliases !== "object") {
+      parsed.aliases = {};
+    }
+    return parsed;
+  } catch {
+    return { version: 1, keys: {} };
+  }
+}
+function writeOpenWithUsageStore(store2) {
+  const path7 = openWithUsageStorePath();
+  (0, import_node_fs21.mkdirSync)((0, import_node_path23.dirname)(path7), { recursive: true });
+  (0, import_node_fs21.writeFileSync)(path7, JSON.stringify(store2), "utf8");
+}
+function openWithUsageKeysForPath(targetPath) {
+  try {
+    const stat2 = (0, import_node_fs21.statSync)(targetPath);
+    if (stat2.isDirectory()) {
+      return [`folder:${targetPath}`, `sibling-folder:${(0, import_node_path23.dirname)(targetPath)}`];
+    }
+  } catch {
+  }
+  const ext = (0, import_node_path23.extname)(targetPath).toLowerCase();
+  const parent = (0, import_node_path23.dirname)(targetPath);
+  const keys = [`parent:${parent}`];
+  if (ext) {
+    keys.push(`parent-ext:${parent}:${ext}`, `ext:${ext}`);
+  }
+  return keys;
+}
+function recordOpenWithUsage(targetPath, appName) {
+  const cleanAppName = appName.trim();
+  if (!targetPath || !cleanAppName) return;
+  try {
+    const store2 = readOpenWithUsageStore();
+    const now = Date.now();
+    for (const key of openWithUsageKeysForPath(targetPath)) {
+      const bucket = store2.keys[key] ??= {};
+      const existing = bucket[cleanAppName];
+      bucket[cleanAppName] = {
+        count: (existing?.count ?? 0) + 1,
+        lastUsedAt: now
+      };
+    }
+    writeOpenWithUsageStore(store2);
+  } catch (error) {
+    console.warn("[Search] Failed to record open-with usage:", error);
+  }
+}
+function normalizeAppSearchTerm(value) {
+  return value.trim().toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "");
+}
+function appAcronym(name) {
+  return name.split(/[^a-zA-Z0-9]+/).filter(Boolean).map((part) => part[0]?.toLowerCase() ?? "").join("");
+}
+function builtInAppAliases(appName) {
+  const n = appName.toLowerCase();
+  if (n === "visual studio code") return ["vscode", "vsc", "code", "vs code"];
+  if (n === "quicktime player") return ["quicktime", "qt", "qtp"];
+  if (n === "activity monitor") return ["activity", "taskmanager", "task monitor"];
+  if (n === "terminal") return ["term", "shell"];
+  if (n === "finder") return ["files", "filemanager"];
+  return [];
+}
+function appMatchesTerm(appName, term, learnedAliases) {
+  const normalizedTerm = normalizeAppSearchTerm(term);
+  if (!normalizedTerm) return true;
+  const normalizedName = normalizeAppSearchTerm(appName);
+  if (normalizedName.includes(normalizedTerm)) return true;
+  if (appAcronym(appName).includes(normalizedTerm)) return true;
+  if (builtInAppAliases(appName).some(
+    (alias) => normalizeAppSearchTerm(alias).includes(normalizedTerm)
+  )) {
+    return true;
+  }
+  return Boolean(learnedAliases?.[appName]);
+}
+function recordOpenWithAlias(term, appName) {
+  const alias = normalizeAppSearchTerm(term);
+  const cleanAppName = appName.trim();
+  if (!alias || !cleanAppName) return;
+  if (normalizeAppSearchTerm(cleanAppName).includes(alias)) return;
+  try {
+    const store2 = readOpenWithUsageStore();
+    const aliases = store2.aliases ??= {};
+    const bucket = aliases[alias] ??= {};
+    const existing = bucket[cleanAppName];
+    bucket[cleanAppName] = {
+      count: (existing?.count ?? 0) + 1,
+      lastUsedAt: Date.now()
+    };
+    writeOpenWithUsageStore(store2);
+  } catch (error) {
+    console.warn("[Search] Failed to record open-with alias:", error);
+  }
+}
+function learnedAliasScores(term) {
+  const alias = normalizeAppSearchTerm(term);
+  if (!alias) return void 0;
+  return readOpenWithUsageStore().aliases?.[alias];
+}
+function recommendedOpenWithApps(targetPath) {
+  const store2 = readOpenWithUsageStore();
+  const weights = /* @__PURE__ */ new Map();
+  const now = Date.now();
+  openWithUsageKeysForPath(targetPath).forEach((key, index) => {
+    const bucket = store2.keys[key];
+    if (!bucket) return;
+    const keyWeight = index === 0 ? 5 : index === 1 ? 3 : 1;
+    for (const [appName, entry] of Object.entries(bucket)) {
+      const ageDays = Math.max(0, (now - entry.lastUsedAt) / 864e5);
+      const recencyBoost = Math.max(0, 14 - ageDays);
+      weights.set(appName, (weights.get(appName) ?? 0) + keyWeight * entry.count + recencyBoost);
+    }
+  });
+  return Array.from(weights.entries()).map(([appName, score]) => ({ appName, score })).sort((a, b) => b.score - a.score || a.appName.localeCompare(b.appName));
+}
+function isApplicationsDirectory(path7) {
+  const normalized = path7.replace(/\/+$/, "");
+  return normalized === "/Applications" || normalized === "/System/Applications" || normalized === "/System/Applications/Utilities" || normalized === (0, import_node_path23.join)((0, import_node_os10.homedir)(), "Applications");
+}
+function inferredDefaultAppName(targetPath) {
+  try {
+    if ((0, import_node_fs21.statSync)(targetPath).isDirectory())
+      return process.platform === "win32" ? "File Explorer" : "Finder";
+  } catch {
+  }
+  const ext = (0, import_node_path23.extname)(targetPath).toLowerCase();
+  const parent = (0, import_node_path23.dirname)(targetPath).toLowerCase();
+  if (/\b(movie|movies|video|videos)\b/.test(parent) && [".ts", ".m2ts", ".mts"].includes(ext)) {
+    return "QuickTime Player";
+  }
+  if ([".png", ".jpg", ".jpeg", ".gif", ".heic", ".webp", ".tiff", ".bmp", ".pdf"].includes(ext)) {
+    return "Preview";
+  }
+  if ([".mov", ".mp4", ".m4v", ".avi", ".mkv", ".m2ts", ".mts"].includes(ext)) {
+    return "QuickTime Player";
+  }
+  return "Default App";
+}
+function applicationCompletionItem(targetPath, appInfo, index, section, score) {
+  return {
+    id: `path-app:${section}:${appInfo.path}`,
+    title: appInfo.name,
+    subtitle: `Open ${displayUserPath(targetPath)} with ${appInfo.name}`,
+    kind: "application",
+    section,
+    badge: section === "recommended" ? "Recommended" : "Open With",
+    value: `${targetPath} ${appInfo.name}`,
+    path: targetPath,
+    appPath: appInfo.path,
+    appName: appInfo.name,
+    applicationAction: "open-with",
+    score: score - index
+  };
+}
+function installedApplicationItem(appInfo, index) {
+  return {
+    id: `path-installed-app:${appInfo.path}`,
+    title: appInfo.name,
+    subtitle: displayUserPath(appInfo.path),
+    kind: "application",
+    badge: "Application",
+    value: appInfo.path,
+    path: appInfo.path,
+    appPath: appInfo.path,
+    appName: appInfo.name,
+    applicationAction: "open",
+    score: 2e3 - index
+  };
+}
+async function completePath(query, limit = 50) {
+  const applicationQuery = query.trimStart();
+  if (applicationQuery.startsWith("`")) {
+    const appTerm2 = applicationQuery.slice(1).trim();
+    const apps = listApplications().filter((item) => appMatchesTerm(item.name, appTerm2)).sort((a, b) => a.name.localeCompare(b.name));
+    return apps.map((item, index) => installedApplicationItem(item, index));
+  }
+  const { targetPath, appTerm, appMode } = splitPathCompletionQuery(query);
+  if (!appMode && isApplicationsDirectory(targetPath)) {
+    const apps = listApplications().sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
+    return apps.map((item, index) => installedApplicationItem(item, index));
+  }
+  if (appMode) {
+    const learnedAliases = learnedAliasScores(appTerm);
+    const allApps = listApplications().sort((a, b) => a.name.localeCompare(b.name)).filter((item) => appMatchesTerm(item.name, appTerm, learnedAliases));
+    const appsByName = new Map(allApps.map((item) => [item.name, item]));
+    const learnedRecommended = Object.entries(learnedAliases ?? {}).sort((a, b) => b[1].count - a[1].count || b[1].lastUsedAt - a[1].lastUsedAt).map(([appName]) => appsByName.get(appName)).filter(isPresent);
+    const usageRecommended = recommendedOpenWithApps(targetPath).map((item) => appsByName.get(item.appName)).filter(isPresent);
+    const recommended = [...learnedRecommended, ...usageRecommended].filter(
+      (item, index, items) => items.findIndex((other) => other.name === item.name) === index
+    ).slice(0, 5);
+    const recommendedNames = new Set(recommended.map((item) => item.name));
+    const rest = allApps.filter((item) => !recommendedNames.has(item.name)).slice(0, limit);
+    const recommendedItems = recommended.map(
+      (item, index) => applicationCompletionItem(targetPath, item, index, "recommended", 4e3)
+    );
+    const appItems = rest.slice(0, Math.max(0, limit - recommendedItems.length - 1)).map(
+      (item, index) => applicationCompletionItem(targetPath, item, index, "applications", 1e3)
+    );
+    const defaultItem = {
+      id: `path-default:${targetPath}`,
+      title: `Open in ${inferredDefaultAppName(targetPath)}`,
+      subtitle: `Open ${displayUserPath(targetPath)}`,
+      kind: "application",
+      section: "default",
+      badge: "Default",
+      value: `${targetPath} `,
+      path: targetPath,
+      applicationAction: "open-with",
+      score: 2e3
+    };
+    if (appTerm.trim()) {
+      return [...recommendedItems, ...appItems, defaultItem];
+    }
+    return [...recommendedItems, defaultItem, ...appItems];
+  }
+  const { directory, prefix } = pathCompletionBase(targetPath);
+  const normalizedPrefix = prefix.toLowerCase();
+  try {
+    const entries = (0, import_node_fs21.readdirSync)(directory, { withFileTypes: true });
+    const recommended = query.trim() === "/" ? recommendedDirectories() : [];
+    const recommendedPaths = new Set(recommended.map((item) => item.path));
+    const regular = entries.filter((entry) => !entry.name.startsWith(".")).filter((entry) => !normalizedPrefix || entry.name.toLowerCase().includes(normalizedPrefix)).map((entry) => {
+      const absolute = (0, import_node_path23.join)(directory, entry.name);
+      const isDirectory = entry.isDirectory();
+      const isFile = entry.isFile();
+      if (!isDirectory && !isFile) return null;
+      const kind = isDirectory ? "directory" : "file";
+      const lowerName = entry.name.toLowerCase();
+      return {
+        id: `path:${absolute}`,
+        title: entry.name,
+        subtitle: displayUserPath(absolute),
+        kind,
+        value: isDirectory ? `${absolute}/` : absolute,
+        path: absolute,
+        iconDataUrl: isDirectory ? folderIconDataUrl : fileIconDataUrl(absolute),
+        score: (isDirectory ? 1e3 : 500) + (lowerName === normalizedPrefix ? 1e3 : lowerName.startsWith(normalizedPrefix) ? 100 : 0)
+      };
+    }).filter(isPresent).filter((item) => !recommendedPaths.has(item.path)).sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
+      return b.score - a.score || a.title.localeCompare(b.title);
+    }).slice(0, Math.max(0, limit - recommended.length));
+    return [...recommended, ...regular];
+  } catch {
+    return [];
+  }
+}
+async function searchPortManagerOpenPorts(query) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return [];
+  const mentionsPort = /(port|ports|open|listen|listening)/.test(normalizedQuery);
+  const mentionsKill = /(kill|stop|terminate|process)/.test(normalizedQuery);
+  if (!/(port|ports|open|listen|kill|\d{2,5})/.test(normalizedQuery)) {
+    return [];
+  }
+  const processes = await listOpenPorts();
+  if (processes.length === 0) return [];
+  return processes.flatMap(
+    (entry) => entry.ports.map((port) => {
+      let score = -1;
+      const processName = entry.process.toLowerCase();
+      const userName = entry.user.toLowerCase();
+      if (normalizedQuery.includes(String(port))) {
+        score = 430;
+      } else if (mentionsPort || mentionsKill) {
+        score = 280;
+      } else if (processName.includes(normalizedQuery) || userName.includes(normalizedQuery)) {
+        score = 220;
+      }
+      if (score < 0) return null;
+      return {
+        id: `port-listener:${entry.pid}:${port}`,
+        title: `Open Port ${port}`,
+        subtitle: `${entry.process} (PID ${entry.pid}) \xB7 ${entry.user} \xB7 Enter to kill listener`,
+        category: "extensions",
+        score,
+        action: {
+          type: "run-extension-command",
+          extensionId: "raycast.port-manager",
+          commandName: "kill-listening-process",
+          title: "Kill Process Listening On",
+          argumentValues: { port: String(port) }
+        }
+      };
+    })
+  ).filter(isPresent).sort((a, b) => b.score - a.score).slice(0, 12);
+}
+async function listOpenPorts() {
+  if (process.platform === "win32") {
+    try {
+      const { stdout } = await execFileAsync11("netstat.exe", ["-ano", "-p", "tcp"]);
+      const pids = Array.from(
+        new Set(
+          stdout.split(/\r?\n/).map((line) => line.trim().split(/\s+/).at(-1) ?? "").filter((pid) => /^\d+$/.test(pid))
+        )
+      );
+      const names = /* @__PURE__ */ new Map();
+      await Promise.all(
+        pids.map(async (pid) => {
+          try {
+            const { stdout: task } = await execFileAsync11("tasklist.exe", [
+              "/fi",
+              `PID eq ${pid}`,
+              "/fo",
+              "csv",
+              "/nh"
+            ]);
+            const match = task.match(/^"([^"]+)"/);
+            if (match) names.set(pid, match[1]);
+          } catch {
+          }
+        })
+      );
+      const grouped = /* @__PURE__ */ new Map();
+      for (const line of stdout.split(/\r?\n/)) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length < 5 || parts[0]?.toUpperCase() !== "TCP" || parts[3]?.toUpperCase() !== "LISTENING")
+          continue;
+        const port = Number(parts[1]?.match(/:(\d+)$/)?.[1]);
+        const pid = parts[4];
+        if (!Number.isFinite(port) || !pid) continue;
+        const key = `${pid}:${names.get(pid) ?? "unknown"}`;
+        const row = grouped.get(key) ?? {
+          process: names.get(pid) ?? "unknown",
+          pid,
+          ports: /* @__PURE__ */ new Set()
+        };
+        row.ports.add(port);
+        grouped.set(key, row);
+      }
+      return Array.from(grouped.values()).map((row) => ({
+        process: row.process,
+        user: "current user",
+        pid: row.pid,
+        ports: Array.from(row.ports).sort((a, b) => a - b)
+      })).sort((a, b) => a.process.localeCompare(b.process) || a.pid.localeCompare(b.pid));
+    } catch (error) {
+      console.error("[OpenPorts] Failed to list Windows listening ports:", error);
+      return [];
+    }
+  }
+  try {
+    const { stdout } = await execFileAsync11("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
+    const processNames = await readProcessNameMap();
+    return attachOpenPortProcessIcons(parseOpenPortProcesses(stdout, processNames));
+  } catch (error) {
+    console.error("[OpenPorts] Failed to list listening ports:", error);
+    try {
+      const { stdout } = await execFileAsync11("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
+      return attachOpenPortProcessIcons(parseOpenPortProcesses(stdout));
+    } catch (fallbackError) {
+      console.error("[OpenPorts] Fallback listing failed:", fallbackError);
+      return [];
+    }
+  }
+}
+async function executeActionInner(action) {
+  switch (action.type) {
+    case "open-app": {
+      if (process.platform === "win32" && action.appPath) {
+        if (action.appPath.startsWith("shell:AppsFolder\\")) {
+          await execFileAsync11("explorer.exe", [action.appPath]);
+          return { ok: true, message: `Opened ${action.appName}` };
+        }
+        const opened = await shell.openPath(action.appPath);
+        return opened ? { ok: false, message: opened } : { ok: true, message: `Opened ${action.appName}` };
+      }
+      await execFileAsync11("open", ["-a", action.appName]);
+      return { ok: true, message: `Opened ${action.appName}` };
+    }
+    case "open-file": {
+      const opened = await shell.openPath(action.path);
+      if (opened) {
+        return { ok: false, message: opened };
+      }
+      return { ok: true, message: "Opened file" };
+    }
+    case "open-with-app": {
+      if (action.appName) {
+        if (process.platform === "win32") {
+          const application = listApplications().find(
+            (item) => item.name.toLowerCase() === action.appName?.toLowerCase()
+          );
+          if (!application || application.path.startsWith("shell:AppsFolder\\")) {
+            const opened2 = await shell.openPath(action.path);
+            return opened2 ? { ok: false, message: opened2 } : { ok: true, message: "Opened with the default application" };
+          }
+          await execFileAsync11(
+            "powershell.exe",
+            [
+              "-NoLogo",
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "Start-Process -FilePath $env:TEZBAR_APP_PATH -ArgumentList (, $env:TEZBAR_TARGET_PATH)"
+            ],
+            {
+              windowsHide: true,
+              env: {
+                ...process.env,
+                TEZBAR_APP_PATH: application.path,
+                TEZBAR_TARGET_PATH: action.path
+              }
+            }
+          );
+          recordOpenWithUsage(action.path, action.appName);
+          return { ok: true, message: `Opened with ${action.appName}` };
+        }
+        await execFileAsync11("open", ["-a", action.appName, action.path]);
+        recordOpenWithUsage(action.path, action.appName);
+        return { ok: true, message: `Opened with ${action.appName}` };
+      }
+      const opened = await shell.openPath(action.path);
+      if (opened) {
+        return { ok: false, message: opened };
+      }
+      return { ok: true, message: "Opened" };
+    }
+    case "copy-text": {
+      clipboard.writeText(action.text);
+      return { ok: true, message: "Copied to clipboard" };
+    }
+    case "copy-and-paste-text": {
+      clipboard.writeText(action.text);
+      await new Promise((resolve5) => setTimeout(resolve5, 120));
+      app.hide();
+      await new Promise((resolve5) => setTimeout(resolve5, 50));
+      if (process.platform === "win32") {
+        await execFileAsync11("powershell.exe", [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          '(New-Object -ComObject WScript.Shell).SendKeys("^v")'
+        ]);
+      } else {
+        await execFileAsync11("osascript", [
+          "-e",
+          'tell application "System Events" to keystroke "v" using {command down}'
+        ]);
+      }
+      return { ok: true, message: "Pasted emoji" };
+    }
+    case "add-note": {
+      const entry = addQuickNote(action.text);
+      await reindexQuickNotes();
+      return entry ? { ok: true, message: "Saved to Quick Notes" } : { ok: false, message: "Could not save quick note" };
+    }
+    case "open-url": {
+      await shell.openExternal(action.url);
+      return { ok: true, message: "Opened URL" };
+    }
+    case "install-extension": {
+      await installExtension(action.extensionId);
+      return { ok: true, message: `Installing ${action.extensionId}` };
+    }
+    case "run-extension-command": {
+      const argumentValues = {
+        ...action.argumentValues ?? {}
+      };
+      if (action.argumentName && action.argumentValue && !argumentValues[action.argumentName]) {
+        argumentValues[action.argumentName] = action.argumentValue;
+      }
+      try {
+        const result = await executeExtensionCommandRuntime(
+          action.extensionId,
+          action.commandName,
+          argumentValues
+        );
+        return result;
+      } catch (error) {
+        if (isUnsupportedRuntimeModeError(error)) {
+          return {
+            ok: false,
+            message: "This extension command requires view runtime support. Use extension:run-command to render it in the Tezbar extension surface."
+          };
+        }
+        throw error;
+      }
+    }
+    case "invoke-command": {
+      return commandBus.execute({
+        commandId: action.commandId,
+        payload: action.payload
+      });
+    }
+    case "run-shell": {
+      const command2 = String(action.command ?? "").trim();
+      const validation = validateShellCommand(command2);
+      if (!validation.ok) {
+        return { ok: false, message: validation.message };
+      }
+      const { stdout } = await execFileAsync11("bash", ["-lc", command2]);
+      const message = stdout.trim();
+      return { ok: true, message: message || "Command completed" };
+    }
+    case "run-native-command": {
+      return executeNativeCommand(action.commandId);
+    }
+    default: {
+      return { ok: false, message: "Unsupported action type" };
+    }
+  }
+}
+var _benchmarkPromise = null;
+async function runSearchBenchmarks() {
+  if (_benchmarkPromise) {
+    return _benchmarkPromise;
+  }
+  _benchmarkPromise = (async () => {
+    await indexDb.ensureInitialized();
+    await runOfflineBenchmarks(searchEverything, indexDb);
+  })();
+  return _benchmarkPromise;
+}
+async function getSearchBenchmarkHistory() {
+  return readBenchmarkHistory();
+}
+async function executeSearchAction(action, context) {
+  let result;
+  try {
+    const safety = safetyForAction(action);
+    result = safety ? await runWithSafety(safety.id, safety.context, () => executeActionInner(action)) : await executeActionInner(action);
+  } catch (error) {
+    result = {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+  const actionId = actionIdFromResult(action, context?.resultId);
+  indexDb.recordAction(actionId, result.ok);
+  if (context?.query && result.ok) {
+    indexDb.recordActionForQuery(context.query, actionId, true);
+  }
+  if (result.ok && action.type === "open-with-app" && action.appName && context?.query) {
+    const parsed = splitPathCompletionQuery(context.query);
+    if (parsed.appMode && parsed.appTerm) {
+      recordOpenWithAlias(parsed.appTerm, action.appName);
+    }
+  }
+  if (context?.query && typeof context.rank === "number" && Number.isFinite(context.rank)) {
+    indexDb.recordClick(context.query, actionId, context.rank, result.ok);
+  }
+  return result;
+}
+async function recordSearchActionUsage(action, context) {
+  await indexDb.ensureInitialized();
+  const actionId = actionIdFromResult(action, context?.resultId);
+  indexDb.recordAction(actionId, true);
+  if (context?.query) {
+    indexDb.recordActionForQuery(context.query, actionId, true);
+  }
+  if (context?.query && typeof context.rank === "number" && Number.isFinite(context.rank)) {
+    indexDb.recordClick(context.query, actionId, context.rank, true);
+  }
+}
+
 // src/main/knowledge/agent/gateway.ts
 var gatewayPromise = null;
+function searchActionTarget(action) {
+  switch (action.type) {
+    case "open-file":
+    case "open-with-app":
+      return action.path;
+    case "open-app":
+      return action.appPath ?? action.appName;
+    case "open-url":
+      return action.url;
+    case "run-extension-command":
+      return `${action.extensionId}/${action.commandName}`;
+    case "invoke-command":
+    case "run-native-command":
+      return action.commandId;
+    case "run-shell":
+      return action.command;
+    default:
+      return void 0;
+  }
+}
 function readBody(request) {
   return new Promise((resolve5, reject) => {
     let body = "";
@@ -17229,7 +25168,7 @@ function readBody(request) {
 function ensureKnowledgeAgentGateway() {
   if (!gatewayPromise) {
     gatewayPromise = new Promise((resolve5, reject) => {
-      const token = (0, import_node_crypto5.randomBytes)(32).toString("hex");
+      const token = (0, import_node_crypto10.randomBytes)(32).toString("hex");
       const server = (0, import_node_http.createServer)(async (request, response) => {
         response.setHeader("Content-Type", "application/json; charset=utf-8");
         if (request.method !== "POST" || request.headers.authorization !== `Bearer ${token}`) {
@@ -17245,6 +25184,23 @@ function ensureKnowledgeAgentGateway() {
             if (!query) throw new Error("query is required");
             const hits = getKnowledgeService().search(query, limit);
             response.end(JSON.stringify({ hits }));
+            return;
+          }
+          if (request.url === "/launcher-search") {
+            const query = typeof parsed.query === "string" ? parsed.query.trim() : "";
+            const limit = typeof parsed.limit === "number" ? Math.max(1, Math.min(20, Math.round(parsed.limit))) : 10;
+            if (!query) throw new Error("query is required");
+            const results = (await searchEverything(query)).filter(
+              (result) => !result.id.startsWith(DEEP_SEARCH_RESULT_PREFIX) && !result.id.startsWith("note-add:")
+            ).slice(0, limit).map((result) => ({
+              id: result.id,
+              title: result.title,
+              subtitle: result.subtitle,
+              category: result.category,
+              score: result.score,
+              target: searchActionTarget(result.action)
+            }));
+            response.end(JSON.stringify({ results }));
             return;
           }
           if (request.url === "/read") {
@@ -17264,7 +25220,9 @@ function ensureKnowledgeAgentGateway() {
           response.end(JSON.stringify({ error: "Not found" }));
         } catch (error) {
           response.statusCode = 400;
-          response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+          response.end(
+            JSON.stringify({ error: error instanceof Error ? error.message : String(error) })
+          );
         }
       });
       server.once("error", reject);
@@ -17293,11 +25251,11 @@ var PI_BIN_CANDIDATES = [
   // Where pnpm installs global bins for this user (matches `which pi`
   // at the time this bridge was written). We resolve at runtime so a
   // reinstall or version bump does not require a rebuild.
-  import_node_path8.default.join((0, import_node_os3.homedir)(), "Library", "pnpm", "pi"),
-  import_node_path8.default.join((0, import_node_os3.homedir)(), ".local", "share", "pnpm", "pi")
+  import_node_path24.default.join((0, import_node_os11.homedir)(), "Library", "pnpm", "pi"),
+  import_node_path24.default.join((0, import_node_os11.homedir)(), ".local", "share", "pnpm", "pi")
 ];
-var OPENCODE_PI_EXTENSION = import_node_path8.default.join(
-  (0, import_node_os3.homedir)(),
+var OPENCODE_PI_EXTENSION = import_node_path24.default.join(
+  (0, import_node_os11.homedir)(),
   ".pi",
   "agent",
   "extensions",
@@ -17308,11 +25266,11 @@ function resolveRaymesPiExtension() {
   const resourcesPath = process.resourcesPath;
   const candidates = [
     process.env["RAYMES_PI_EXTENSION"],
-    import_node_path8.default.join(process.cwd(), "src", "main", "agent", "raymes-pi-policy.ts"),
-    ...app.isPackaged && resourcesPath ? [import_node_path8.default.join(resourcesPath, "agent", "raymes-pi-policy.ts")] : []
+    import_node_path24.default.join(process.cwd(), "src", "main", "agent", "raymes-pi-policy.ts"),
+    ...app.isPackaged && resourcesPath ? [import_node_path24.default.join(resourcesPath, "agent", "raymes-pi-policy.ts")] : []
   ];
   return candidates.find(
-    (candidate) => Boolean(candidate && (0, import_node_fs8.existsSync)(candidate))
+    (candidate) => Boolean(candidate && (0, import_node_fs22.existsSync)(candidate))
   );
 }
 function resolvePiBinary(override) {
@@ -17320,15 +25278,15 @@ function resolvePiBinary(override) {
   const envOverride = process.env["RAYMES_PI_BIN"];
   if (envOverride && envOverride.trim()) return envOverride.trim();
   for (const candidate of PI_BIN_CANDIDATES) {
-    if ((0, import_node_fs8.existsSync)(candidate)) return candidate;
+    if ((0, import_node_fs22.existsSync)(candidate)) return candidate;
   }
   return "pi";
 }
 function makeId() {
-  return (0, import_node_crypto6.randomUUID)();
+  return (0, import_node_crypto11.randomUUID)();
 }
-function writeCommand(child, command) {
-  const line = `${JSON.stringify(command)}
+function writeCommand(child, command2) {
+  const line = `${JSON.stringify(command2)}
 `;
   child.stdin.write(line);
 }
@@ -17339,16 +25297,17 @@ function spawnRpc(options) {
   if (options.model) args.push("--model", options.model);
   const raymesPiExtension = resolveRaymesPiExtension();
   if (raymesPiExtension) args.push("--extension", raymesPiExtension);
-  if (options.model?.startsWith("opencode/") && (0, import_node_fs8.existsSync)(OPENCODE_PI_EXTENSION)) {
+  if (options.model?.startsWith("opencode/") && (0, import_node_fs22.existsSync)(OPENCODE_PI_EXTENSION)) {
     args.push("--extension", OPENCODE_PI_EXTENSION);
   }
   args.push(...options.extraArgs);
-  const child = (0, import_node_child_process5.spawn)(options.piBin, args, {
+  const child = (0, import_node_child_process13.spawn)(options.piBin, args, {
     cwd: options.cwd,
     env: {
       ...process.env,
       ...options.raymesProviderJson ? { RAYMES_PI_PROVIDER_JSON: options.raymesProviderJson } : {},
       ...options.raymesAlwaysAllowJson ? { RAYMES_PI_ALWAYS_ALLOW_JSON: options.raymesAlwaysAllowJson } : {},
+      ...options.raymesAlwaysAllowExactJson ? { RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON: options.raymesAlwaysAllowExactJson } : {},
       ...options.knowledgeEndpoint ? { TEZBAR_KNOWLEDGE_ENDPOINT: options.knowledgeEndpoint } : {},
       ...options.knowledgeToken ? { TEZBAR_KNOWLEDGE_TOKEN: options.knowledgeToken } : {}
     },
@@ -17368,10 +25327,10 @@ async function handleExtensionUiRequest(handle, msg) {
   if (typeof id !== "string") return;
   if (msg.method === "confirm") {
     const title = msg.title || "Allow command?";
-    const command = msg.message || "";
+    const command2 = msg.message || "";
     let confirmed = false;
     try {
-      confirmed = await handle.requestApproval?.({ title, command }) ?? false;
+      confirmed = await handle.requestApproval?.({ title, command: command2 }) ?? false;
     } catch {
       confirmed = false;
     }
@@ -17452,13 +25411,13 @@ function attachHandlers(handle, onStderrLine) {
     handle.pending.clear();
   });
 }
-async function sendAndAwait(handle, command, timeoutMs) {
+async function sendAndAwait(handle, command2, timeoutMs) {
   if (handle.closed) throw new Error("pi rpc session already closed");
   const id = makeId();
   return new Promise((resolve5, reject) => {
     const timer = setTimeout(() => {
       handle.pending.delete(id);
-      reject(new Error(`pi rpc command timed out after ${timeoutMs}ms: ${command.type}`));
+      reject(new Error(`pi rpc command timed out after ${timeoutMs}ms: ${command2.type}`));
     }, timeoutMs);
     handle.pending.set(id, {
       resolve: (value) => {
@@ -17470,7 +25429,7 @@ async function sendAndAwait(handle, command, timeoutMs) {
         reject(err);
       }
     });
-    writeCommand(handle.child, { ...command, id });
+    writeCommand(handle.child, { ...command2, id });
   });
 }
 function createBridge() {
@@ -17501,9 +25460,9 @@ function createBridge() {
         onMessageDelta: (delta) => {
           options.onMessageDelta?.(delta);
         },
-        onAnswer: (text) => {
-          finalAnswer = text;
-          options.onAnswer?.(text);
+        onAnswer: (text2) => {
+          finalAnswer = text2;
+          options.onAnswer?.(text2);
         },
         onDone: () => {
         },
@@ -17518,6 +25477,7 @@ function createBridge() {
         model: options.model,
         raymesProviderJson: options.raymesProviderJson,
         raymesAlwaysAllowJson: options.raymesAlwaysAllowJson,
+        raymesAlwaysAllowExactJson: options.raymesAlwaysAllowExactJson,
         knowledgeEndpoint: knowledgeGateway?.endpoint,
         knowledgeToken: knowledgeGateway?.token,
         extraArgs: options.extraArgs ?? []
@@ -17612,7 +25572,7 @@ ${tail}` : message);
       }
       return { runId, answer: finalAnswer, stages };
     },
-    async query(command, queryOptions = {}) {
+    async query(command2, queryOptions = {}) {
       const cwd = queryOptions.cwd ?? process.cwd();
       const piBin = resolvePiBinary(queryOptions.piBin);
       const timeoutMs = queryOptions.timeoutMs ?? 1e4;
@@ -17628,7 +25588,7 @@ ${tail}` : message);
       };
       attachHandlers(handle);
       try {
-        const result = await sendAndAwait(handle, command, timeoutMs);
+        const result = await sendAndAwait(handle, command2, timeoutMs);
         return result;
       } finally {
         try {
@@ -17644,7 +25604,7 @@ ${tail}` : message);
     async observe(observeOptions = {}) {
       const cwd = observeOptions.cwd ?? process.cwd();
       const piBin = resolvePiBinary(observeOptions.piBin);
-      return observe(cwd, (command) => this.query(command, { cwd, piBin, timeoutMs: 5e3 }));
+      return observe(cwd, (command2) => this.query(command2, { cwd, piBin, timeoutMs: 5e3 }));
     },
     dispose() {
       const children = Array.from(ownedChildren.values());
@@ -17667,23 +25627,23 @@ function disposeSharedBridge() {
 }
 
 // src/main/agent/imageContext.ts
-var import_node_child_process6 = require("node:child_process");
-var import_node_fs9 = require("node:fs");
+var import_node_child_process14 = require("node:child_process");
+var import_node_fs23 = require("node:fs");
 var import_promises2 = require("node:fs/promises");
-var import_node_os4 = require("node:os");
-var import_node_path9 = __toESM(require("node:path"));
-var import_node_util4 = require("node:util");
+var import_node_os12 = require("node:os");
+var import_node_path25 = __toESM(require("node:path"));
+var import_node_util11 = require("node:util");
 init_desktop_runtime();
-var execFileAsync4 = (0, import_node_util4.promisify)(import_node_child_process6.execFile);
+var execFileAsync12 = (0, import_node_util11.promisify)(import_node_child_process14.execFile);
 var MAX_OCR_CHARS = 4e4;
 function screenOcrHelperPath2() {
   const resourcesPath = process.resourcesPath;
   const candidates = [
     process.env["SCREENOCR_HELPER_PATH"],
-    app.isPackaged && resourcesPath ? import_node_path9.default.join(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper") : void 0,
-    import_node_path9.default.join(process.cwd(), "native", "screenocr", "screenocr-helper")
+    app.isPackaged && resourcesPath ? import_node_path25.default.join(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper") : void 0,
+    import_node_path25.default.join(process.cwd(), "native", "screenocr", "screenocr-helper")
   ];
-  return candidates.find((candidate) => Boolean(candidate && (0, import_node_fs9.existsSync)(candidate)));
+  return candidates.find((candidate) => Boolean(candidate && (0, import_node_fs23.existsSync)(candidate)));
 }
 function imageExtension(mimeType) {
   if (mimeType === "image/jpeg") return "jpg";
@@ -17694,15 +25654,15 @@ async function extractTextFromAgentImages(images) {
   if (process.platform !== "darwin" || images.length === 0) return "";
   const helperPath = screenOcrHelperPath2();
   if (!helperPath) return "";
-  const workDir = await (0, import_promises2.mkdtemp)(import_node_path9.default.join((0, import_node_os4.tmpdir)(), "raymes-agent-image-"));
+  const workDir = await (0, import_promises2.mkdtemp)(import_node_path25.default.join((0, import_node_os12.tmpdir)(), "raymes-agent-image-"));
   try {
     const textBlocks = [];
     for (let index = 0; index < images.length; index += 1) {
       const image = images[index];
       if (!image) continue;
-      const imagePath = import_node_path9.default.join(workDir, `attachment-${index}.${imageExtension(image.mimeType)}`);
+      const imagePath = import_node_path25.default.join(workDir, `attachment-${index}.${imageExtension(image.mimeType)}`);
       await (0, import_promises2.writeFile)(imagePath, Buffer.from(image.data, "base64"));
-      const { stdout } = await execFileAsync4(
+      const { stdout } = await execFileAsync12(
         helperPath,
         [
           "recognize-text",
@@ -17727,8 +25687,8 @@ async function extractTextFromAgentImages(images) {
 
 // src/main/chat/sessionStore.ts
 init_desktop_runtime();
-var import_node_fs10 = require("node:fs");
-var import_node_path10 = require("node:path");
+var import_node_fs24 = require("node:fs");
+var import_node_path26 = require("node:path");
 function safeParseResponseMeta(raw) {
   if (!raw) return void 0;
   try {
@@ -17778,10 +25738,10 @@ function safeParseAttachments(raw) {
     return void 0;
   }
 }
-function dbPath() {
-  const dir = (0, import_node_path10.join)(app.getPath("userData"), "chat");
-  (0, import_node_fs10.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path10.join)(dir, "sessions.sqlite3");
+function dbPath2() {
+  const dir = (0, import_node_path26.join)(app.getPath("userData"), "chat");
+  (0, import_node_fs24.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path26.join)(dir, "sessions.sqlite3");
 }
 var ChatSessionDatabase = class {
   _db = null;
@@ -17796,7 +25756,7 @@ var ChatSessionDatabase = class {
     if (this._initPromise) return this._initPromise;
     this._initPromise = new Promise((resolve5) => {
       setImmediate(() => {
-        this._db = new better_sqlite3_shim_default(dbPath());
+        this._db = new better_sqlite3_shim_default(dbPath2());
         this._db.pragma("journal_mode = WAL");
         this._db.pragma("synchronous = NORMAL");
         this._db.pragma("foreign_keys = ON");
@@ -17983,6 +25943,7 @@ var IPC_CHANNELS = {
   SEARCH_CANDIDATES: "search:candidates",
   PATH_COMPLETE: "path:complete",
   DIRECTORY_VISIT_RECORD: "directory-visit:record",
+  QUICK_LOOK_FILE: "file:quick-look",
   SEARCH_EXECUTE: "search:execute",
   SEARCH_RECORD_USAGE: "search:record-usage",
   SEARCH_BENCHMARK_RUN: "search:benchmark:run",
@@ -18061,241 +26022,117 @@ function parseAiActionRequest(payload) {
   };
 }
 
-// src/main/appIcon.ts
-init_desktop_runtime();
-var import_node_child_process7 = require("node:child_process");
-var import_node_crypto7 = require("node:crypto");
-var import_node_fs11 = require("node:fs");
-var import_node_path11 = require("node:path");
-var import_node_util5 = require("node:util");
-var execFileAsync5 = (0, import_node_util5.promisify)(import_node_child_process7.execFile);
-var appIconCache = /* @__PURE__ */ new Map();
-async function appIconDataUrl(appPath) {
-  if (appIconCache.has(appPath)) return appIconCache.get(appPath) ?? void 0;
-  try {
-    if (process.platform === "win32") {
-      if (appPath.startsWith("shell:AppsFolder\\")) {
-        appIconCache.set(appPath, null);
-        return void 0;
-      }
-      const cacheDir2 = (0, import_node_path11.join)(app.getPath("userData"), "icon-cache", "applications");
-      (0, import_node_fs11.mkdirSync)(cacheDir2, { recursive: true });
-      const pngPath2 = (0, import_node_path11.join)(cacheDir2, `${(0, import_node_crypto7.createHash)("sha1").update(appPath).digest("hex")}-64.png`);
-      if (!(0, import_node_fs11.existsSync)(pngPath2)) {
-        await execFileAsync5(
-          "powershell.exe",
-          [
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Drawing; $icon=[System.Drawing.Icon]::ExtractAssociatedIcon($env:TEZBAR_ICON_SOURCE); if ($null -eq $icon) { exit 2 }; try { $bitmap=$icon.ToBitmap(); try { $bitmap.Save($env:TEZBAR_ICON_DEST,[System.Drawing.Imaging.ImageFormat]::Png) } finally { $bitmap.Dispose() } } finally { $icon.Dispose() }"
-          ],
-          {
-            timeout: 5e3,
-            windowsHide: true,
-            env: {
-              ...process.env,
-              TEZBAR_ICON_SOURCE: appPath,
-              TEZBAR_ICON_DEST: pngPath2
-            }
-          }
-        );
-      }
-      const dataUrl2 = `data:image/png;base64,${(0, import_node_fs11.readFileSync)(pngPath2).toString("base64")}`;
-      appIconCache.set(appPath, dataUrl2);
-      return dataUrl2;
-    }
-    const resourceDir = (0, import_node_path11.join)(appPath, "Contents", "Resources");
-    let iconName;
-    try {
-      const { stdout } = await execFileAsync5("/usr/bin/plutil", [
-        "-extract",
-        "CFBundleIconFile",
-        "raw",
-        "-o",
-        "-",
-        (0, import_node_path11.join)(appPath, "Contents", "Info.plist")
-      ]);
-      const configured = stdout.trim();
-      if (configured) iconName = (0, import_node_path11.extname)(configured) ? configured : `${configured}.icns`;
-    } catch {
-    }
-    const resourceEntries = (0, import_node_fs11.readdirSync)(resourceDir);
-    if (!iconName || !(0, import_node_fs11.existsSync)((0, import_node_path11.join)(resourceDir, iconName))) {
-      const appName = (0, import_node_path11.basename)(appPath, ".app").toLowerCase();
-      iconName = resourceEntries.find((entry) => entry.toLowerCase() === `${appName}.icns`) ?? resourceEntries.find((entry) => entry.toLowerCase().endsWith(".icns"));
-    }
-    if (!iconName) {
-      appIconCache.set(appPath, null);
-      return void 0;
-    }
-    const iconPath = (0, import_node_path11.join)(resourceDir, iconName);
-    const cacheDir = (0, import_node_path11.join)(app.getPath("userData"), "icon-cache");
-    (0, import_node_fs11.mkdirSync)(cacheDir, { recursive: true });
-    const cacheName = `${(0, import_node_crypto7.createHash)("sha1").update(iconPath).digest("hex")}-64.png`;
-    const pngPath = (0, import_node_path11.join)(cacheDir, cacheName);
-    if (!(0, import_node_fs11.existsSync)(pngPath)) {
-      await execFileAsync5("/usr/bin/sips", [
-        "-Z",
-        "64",
-        "-s",
-        "format",
-        "png",
-        iconPath,
-        "--out",
-        pngPath
-      ]);
-    }
-    const dataUrl = `data:image/png;base64,${(0, import_node_fs11.readFileSync)(pngPath).toString("base64")}`;
-    appIconCache.set(appPath, dataUrl);
-    return dataUrl;
-  } catch {
-    appIconCache.set(appPath, null);
-    return void 0;
-  }
-}
+// src/main/quickLook.ts
+var import_node_child_process15 = require("node:child_process");
+var import_promises3 = require("node:fs/promises");
+var import_node_path27 = require("node:path");
+var import_node_util12 = require("node:util");
 
-// src/main/pathIcons.ts
-init_desktop_runtime();
-var import_node_child_process8 = require("node:child_process");
-var import_node_crypto8 = require("node:crypto");
-var import_node_fs12 = require("node:fs");
-var import_node_path12 = require("node:path");
-var import_node_util6 = require("node:util");
-var execFileAsync6 = (0, import_node_util6.promisify)(import_node_child_process8.execFile);
-var FILE_ICON_STYLES = {
-  ".c": { label: "C", color: "#6b8dd6" },
-  ".cpp": { label: "C++", color: "#5e74c9" },
-  ".css": { label: "CSS", color: "#4a90e2" },
-  ".go": { label: "GO", color: "#45b8d8" },
-  ".html": { label: "HTML", color: "#e66b3d" },
-  ".java": { label: "JAVA", color: "#d95d54" },
-  ".js": { label: "JS", color: "#e5c441" },
-  ".jsx": { label: "JSX", color: "#5fc9e8" },
-  ".json": { label: "{}", color: "#d2b84c" },
-  ".kt": { label: "KT", color: "#8c6bd1" },
-  ".md": { label: "MD", color: "#778195" },
-  ".pdf": { label: "PDF", color: "#df5b5b" },
-  ".php": { label: "PHP", color: "#777bb3" },
-  ".py": { label: "PY", color: "#4d8fbd" },
-  ".rb": { label: "RB", color: "#c95151" },
-  ".rs": { label: "RS", color: "#c7764d" },
-  ".scss": { label: "SASS", color: "#cc6699" },
-  ".sh": { label: ">_", color: "#58a36b" },
-  ".sql": { label: "SQL", color: "#527fa5" },
-  ".swift": { label: "SW", color: "#ef704f" },
-  ".ts": { label: "TS", color: "#3178c6" },
-  ".tsx": { label: "TSX", color: "#4ba6c8" },
-  ".txt": { label: "TXT", color: "#7d8798" },
-  ".xml": { label: "XML", color: "#d58945" },
-  ".yaml": { label: "YML", color: "#c85a67" },
-  ".yml": { label: "YML", color: "#c85a67" },
-  ".zip": { label: "ZIP", color: "#a78a55" }
-};
-var IMAGE_EXTENSIONS2 = /* @__PURE__ */ new Set([
+// src/shared/quickLook.ts
+var QUICK_LOOK_PREVIEWABLE_EXTENSIONS = /* @__PURE__ */ new Set([
   ".avif",
+  ".aiff",
+  ".avi",
   ".bmp",
+  ".csv",
+  ".doc",
+  ".docx",
+  ".flac",
   ".gif",
   ".heic",
+  ".heif",
+  ".htm",
+  ".html",
+  ".ico",
   ".jpeg",
   ".jpg",
+  ".jfif",
+  ".key",
+  ".m4a",
+  ".m4v",
+  ".md",
+  ".mov",
+  ".mp3",
+  ".mp4",
+  ".numbers",
+  ".odp",
+  ".ods",
+  ".odt",
+  ".pages",
+  ".pdf",
   ".png",
+  ".ppt",
+  ".pptx",
+  ".rtf",
+  ".rtfd",
   ".svg",
-  ".webp"
+  ".tsv",
+  ".tif",
+  ".tiff",
+  ".txt",
+  ".wav",
+  ".webm",
+  ".webp",
+  ".xls",
+  ".xlsm",
+  ".xlsx"
 ]);
-var ARCHIVE_EXTENSIONS = /* @__PURE__ */ new Set([".7z", ".bz2", ".gz", ".rar", ".tar", ".tgz"]);
-var nativeFileIconCache = /* @__PURE__ */ new Map();
-function svgDataUrl(svg) {
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+function isQuickLookPreviewablePath(path7) {
+  const fileName = path7.split(/[\\/]/).pop() ?? "";
+  const dot = fileName.lastIndexOf(".");
+  const extension = dot >= 0 ? fileName.slice(dot).toLowerCase() : "";
+  return QUICK_LOOK_PREVIEWABLE_EXTENSIONS.has(extension);
 }
-function documentSvg(label, color) {
-  const safeLabel = label.replace(/[&<>"']/g, "");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path fill="#f5f6f8" d="M13 5h25l13 13v41H13z"/><path fill="#d9dde5" d="M38 5v14h13z"/><rect x="17" y="36" width="30" height="17" rx="4" fill="${color}"/><text x="32" y="48" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="10" font-weight="800" fill="white">${safeLabel}</text></svg>`;
-}
-var folderIconDataUrl = svgDataUrl(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path fill="#62a8ed" d="M5 15a6 6 0 0 1 6-6h15l6 7h21a6 6 0 0 1 6 6v29a6 6 0 0 1-6 6H11a6 6 0 0 1-6-6z"/><path fill="#8bc4f7" d="M5 25h54v26a6 6 0 0 1-6 6H11a6 6 0 0 1-6-6z"/></svg>'
-);
-function fileIconDataUrl(path7) {
-  const extension = (0, import_node_path12.extname)(path7).toLowerCase();
-  const style = FILE_ICON_STYLES[extension];
-  if (style) return svgDataUrl(documentSvg(style.label, style.color));
-  if (IMAGE_EXTENSIONS2.has(extension)) return svgDataUrl(documentSvg("IMG", "#8b6fc0"));
-  if (ARCHIVE_EXTENSIONS.has(extension)) return svgDataUrl(documentSvg("ZIP", "#a78a55"));
-  return svgDataUrl(
-    documentSvg(extension ? extension.slice(1, 5).toUpperCase() : "FILE", "#7d8798")
+
+// src/main/quickLook.ts
+var execFileAsync13 = (0, import_node_util12.promisify)(import_node_child_process15.execFile);
+async function quickLookFiles(paths) {
+  const requestedTargets = [...new Set(paths.map((path7) => path7.trim()))].filter(
+    (path7) => path7 && isQuickLookPreviewablePath(path7)
   );
-}
-function imageFileDataUrl(path7) {
-  if (!(0, import_node_fs12.existsSync)(path7)) return void 0;
-  const mimeType = (0, import_node_path12.extname)(path7).toLowerCase() === ".svg" ? "image/svg+xml" : (0, import_node_path12.extname)(path7).toLowerCase() === ".jpg" || (0, import_node_path12.extname)(path7).toLowerCase() === ".jpeg" ? "image/jpeg" : (0, import_node_path12.extname)(path7).toLowerCase() === ".webp" ? "image/webp" : "image/png";
-  try {
-    return `data:${mimeType};base64,${(0, import_node_fs12.readFileSync)(path7).toString("base64")}`;
-  } catch {
-    return void 0;
+  if (requestedTargets.length === 0) {
+    return { ok: false, message: "The selected item cannot be previewed with Quick Look" };
   }
-}
-async function nativeFileIconDataUrl(path7) {
-  if (nativeFileIconCache.has(path7)) return nativeFileIconCache.get(path7) ?? void 0;
-  if (!(0, import_node_fs12.existsSync)(path7)) return void 0;
-  try {
-    const stats = (0, import_node_fs12.statSync)(path7);
-    const cacheKey2 = (0, import_node_crypto8.createHash)("sha1").update(`${path7}:${stats.mtimeMs}:${stats.size}`).digest("hex");
-    const outputDir = (0, import_node_path12.join)(app.getPath("userData"), "icon-cache", "files", cacheKey2);
-    const outputPath = (0, import_node_path12.join)(outputDir, `${(0, import_node_path12.basename)(path7)}.png`);
-    (0, import_node_fs12.mkdirSync)(outputDir, { recursive: true });
-    if (!(0, import_node_fs12.existsSync)(outputPath)) {
-      if (process.platform === "win32") {
-        await execFileAsync6(
-          "powershell.exe",
-          [
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Drawing; $icon=[System.Drawing.Icon]::ExtractAssociatedIcon($env:TEZBAR_ICON_SOURCE); if($null-eq $icon){exit 2}; try{$bitmap=$icon.ToBitmap(); try{$bitmap.Save($env:TEZBAR_ICON_DEST,[System.Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}}finally{$icon.Dispose()}"
-          ],
-          {
-            timeout: 3e3,
-            windowsHide: true,
-            env: {
-              ...process.env,
-              TEZBAR_ICON_SOURCE: path7,
-              TEZBAR_ICON_DEST: outputPath
-            }
-          }
-        );
-      } else {
-        await execFileAsync6("/usr/bin/qlmanage", ["-t", "-i", "-s", "64", "-o", outputDir, path7], {
-          timeout: 3e3
-        });
+  if (process.platform !== "darwin") {
+    return { ok: false, message: "Quick Look is only available on macOS" };
+  }
+  const availableTargets = (await Promise.all(
+    requestedTargets.map(async (target) => {
+      try {
+        await (0, import_promises3.access)(target);
+        return target;
+      } catch {
+        return null;
       }
-    }
-    if (!(0, import_node_fs12.existsSync)(outputPath)) {
-      nativeFileIconCache.set(path7, null);
-      return void 0;
-    }
-    const dataUrl = `data:image/png;base64,${(0, import_node_fs12.readFileSync)(outputPath).toString("base64")}`;
-    nativeFileIconCache.set(path7, dataUrl);
-    return dataUrl;
-  } catch {
-    nativeFileIconCache.set(path7, null);
-    return void 0;
+    })
+  )).filter((target) => target !== null);
+  if (availableTargets.length === 0) {
+    return { ok: false, message: "The selected file no longer exists" };
+  }
+  try {
+    await execFileAsync13("/usr/bin/qlmanage", ["-p", ...availableTargets]);
+    return { ok: true, message: `Previewed ${(0, import_node_path27.basename)(availableTargets[0])}` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "");
+    return {
+      ok: false,
+      message: message.trim() ? `Could not preview file: ${message}` : "Could not preview file"
+    };
   }
 }
 
 // src/main/llm/memoryStore.ts
 init_desktop_runtime();
-var import_node_fs13 = require("node:fs");
-var import_node_path13 = require("node:path");
+var import_node_fs25 = require("node:fs");
+var import_node_path28 = require("node:path");
 function memoryPath() {
-  const dir = (0, import_node_path13.join)(app.getPath("userData"), "llm");
-  (0, import_node_fs13.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path13.join)(dir, "memory.json");
+  const dir = (0, import_node_path28.join)(app.getPath("userData"), "llm");
+  (0, import_node_fs25.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path28.join)(dir, "memory.json");
 }
-function readDb() {
+function readDb2() {
   try {
-    const raw = (0, import_node_fs13.readFileSync)(memoryPath(), "utf8");
+    const raw = (0, import_node_fs25.readFileSync)(memoryPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.entries)) return { entries: [] };
     return { entries: parsed.entries };
@@ -18303,27 +26140,27 @@ function readDb() {
     return { entries: [] };
   }
 }
-function writeDb(db) {
-  (0, import_node_fs13.writeFileSync)(memoryPath(), `${JSON.stringify(db, null, 2)}
+function writeDb3(db) {
+  (0, import_node_fs25.writeFileSync)(memoryPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
 }
-function tokenize(input) {
+function tokenize2(input) {
   return new Set(
     input.toLowerCase().split(/\s+/).map((token) => token.replace(/[^a-z0-9_-]/g, "")).filter((token) => token.length > 2)
   );
 }
-function overlapScore(query, text) {
-  if (query.size === 0 || text.size === 0) return 0;
+function overlapScore(query, text2) {
+  if (query.size === 0 || text2.size === 0) return 0;
   let overlap = 0;
   query.forEach((token) => {
-    if (text.has(token)) overlap += 1;
+    if (text2.has(token)) overlap += 1;
   });
   return overlap / query.size;
 }
-function rememberMemory(text, source, isPrivate = false) {
-  const cleaned = text.trim();
+function rememberMemory(text2, source, isPrivate = false) {
+  const cleaned = text2.trim();
   if (!cleaned) return;
-  const db = readDb();
+  const db = readDb2();
   db.entries = [
     {
       id: `mem:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
@@ -18334,15 +26171,15 @@ function rememberMemory(text, source, isPrivate = false) {
     },
     ...db.entries
   ].slice(0, 500);
-  writeDb(db);
+  writeDb3(db);
 }
 function retrieveMemories(query, policy) {
   if (!policy.enabled || policy.maxItems <= 0) return [];
-  const queryTokens = tokenize(query);
-  const db = readDb();
+  const queryTokens = tokenize2(query);
+  const db = readDb2();
   return db.entries.filter((entry) => policy.includePrivate || !entry.private).map((entry) => ({
     text: entry.text,
-    score: overlapScore(queryTokens, tokenize(entry.text)),
+    score: overlapScore(queryTokens, tokenize2(entry.text)),
     createdAt: entry.createdAt
   })).filter((entry) => entry.score > 0).sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
@@ -18354,8 +26191,8 @@ function retrieveMemories(query, policy) {
 init_registry();
 var HERMES_ANSWER_SYSTEM = "You are Hermes, a helpful assistant. Answer briefly and clearly unless the user asks for more detail.";
 async function streamAnswerToRenderer(sender, userText, signal) {
-  const token = (text) => {
-    if (!sender.isDestroyed()) sender.send("stream-token", text);
+  const token = (text2) => {
+    if (!sender.isDestroyed()) sender.send("stream-token", text2);
   };
   const done = () => {
     if (!sender.isDestroyed()) sender.send("stream-done");
@@ -18607,10 +26444,10 @@ async function listModelsForProvider(id, signal) {
     }
     case "opencode": {
       try {
-        const { execFile: execFile15 } = await import("node:child_process");
-        const { promisify: promisify16 } = await import("node:util");
-        const execFileAsync15 = promisify16(execFile15);
-        const { stdout } = await execFileAsync15("opencode", ["models"], { timeout: 12e3, signal });
+        const { execFile: execFile17 } = await import("node:child_process");
+        const { promisify: promisify18 } = await import("node:util");
+        const execFileAsync17 = promisify18(execFile17);
+        const { stdout } = await execFileAsync17("opencode", ["models"], { timeout: 12e3, signal });
         const models = stdout.replace(/\x1b\[[0-9;]*m/g, "").split("\n").map((line) => line.trim()).filter((line) => line.startsWith("opencode/") || line.startsWith("opencode-go/"));
         return models.length > 0 ? models : ["opencode/big-pickle"];
       } catch {
@@ -18736,7512 +26573,9 @@ async function classifyIntent(raw) {
   return { type: "agent", input };
 }
 
-// src/main/extensions/service.ts
-init_desktop_runtime();
-var import_node_crypto9 = require("node:crypto");
-var import_node_module = require("node:module");
-var import_node_path17 = require("node:path");
-var import_node_fs17 = require("node:fs");
-var import_node_os8 = require("node:os");
-
-// node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs
-function isArray2(value) {
-  return !Array.isArray ? getTag(value) === "[object Array]" : Array.isArray(value);
-}
-function baseToString(value) {
-  if (typeof value == "string") {
-    return value;
-  }
-  if (typeof value === "bigint") {
-    return value.toString();
-  }
-  const result = value + "";
-  return result == "0" && 1 / value == -Infinity ? "-0" : result;
-}
-function toString(value) {
-  return value == null ? "" : baseToString(value);
-}
-function isString(value) {
-  return typeof value === "string";
-}
-function isNumber(value) {
-  return typeof value === "number";
-}
-function isBoolean(value) {
-  return value === true || value === false || isObjectLike(value) && getTag(value) == "[object Boolean]";
-}
-function isObject(value) {
-  return typeof value === "object";
-}
-function isObjectLike(value) {
-  return isObject(value) && value !== null;
-}
-function isDefined(value) {
-  return value !== void 0 && value !== null;
-}
-function isBlank(value) {
-  return !value.trim().length;
-}
-function getTag(value) {
-  return value == null ? value === void 0 ? "[object Undefined]" : "[object Null]" : Object.prototype.toString.call(value);
-}
-var INCORRECT_INDEX_TYPE = "Incorrect 'index' type";
-var LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY = (key) => `Invalid value for key ${key}`;
-var PATTERN_LENGTH_TOO_LARGE = (max) => `Pattern length exceeds max of ${max}.`;
-var MISSING_KEY_PROPERTY = (name) => `Missing ${name} property in key`;
-var INVALID_KEY_WEIGHT_VALUE = (key) => `Property 'weight' in key '${key}' must be a positive integer`;
-var hasOwn2 = Object.prototype.hasOwnProperty;
-var KeyStore = class {
-  constructor(keys) {
-    this._keys = [];
-    this._keyMap = {};
-    let totalWeight = 0;
-    keys.forEach((key) => {
-      const obj = createKey(key);
-      this._keys.push(obj);
-      this._keyMap[obj.id] = obj;
-      totalWeight += obj.weight;
-    });
-    this._keys.forEach((key) => {
-      key.weight /= totalWeight;
-    });
-  }
-  get(keyId) {
-    return this._keyMap[keyId];
-  }
-  keys() {
-    return this._keys;
-  }
-  toJSON() {
-    return JSON.stringify(this._keys);
-  }
-};
-function createKey(key) {
-  let path7 = null;
-  let id = null;
-  let src = null;
-  let weight = 1;
-  let getFn = null;
-  if (isString(key) || isArray2(key)) {
-    src = key;
-    path7 = createKeyPath(key);
-    id = createKeyId(key);
-  } else {
-    if (!hasOwn2.call(key, "name")) {
-      throw new Error(MISSING_KEY_PROPERTY("name"));
-    }
-    const name = key.name;
-    src = name;
-    if (hasOwn2.call(key, "weight")) {
-      weight = key.weight;
-      if (weight <= 0) {
-        throw new Error(INVALID_KEY_WEIGHT_VALUE(name));
-      }
-    }
-    path7 = createKeyPath(name);
-    id = createKeyId(name);
-    getFn = key.getFn;
-  }
-  return {
-    path: path7,
-    id,
-    weight,
-    src,
-    getFn
-  };
-}
-function createKeyPath(key) {
-  return isArray2(key) ? key : key.split(".");
-}
-function createKeyId(key) {
-  return isArray2(key) ? key.join(".") : key;
-}
-function get(obj, path7) {
-  const list = [];
-  let arr = false;
-  const deepGet = (obj2, path8, index, arrayIndex) => {
-    if (!isDefined(obj2)) {
-      return;
-    }
-    if (!path8[index]) {
-      list.push(arrayIndex !== void 0 ? {
-        v: obj2,
-        i: arrayIndex
-      } : obj2);
-    } else {
-      const key = path8[index];
-      const value = obj2[key];
-      if (!isDefined(value)) {
-        return;
-      }
-      if (index === path8.length - 1 && (isString(value) || isNumber(value) || isBoolean(value) || typeof value === "bigint")) {
-        list.push(arrayIndex !== void 0 ? {
-          v: toString(value),
-          i: arrayIndex
-        } : toString(value));
-      } else if (isArray2(value)) {
-        arr = true;
-        for (let i = 0, len = value.length; i < len; i += 1) {
-          deepGet(value[i], path8, index + 1, i);
-        }
-      } else if (path8.length) {
-        deepGet(value, path8, index + 1, arrayIndex);
-      }
-    }
-  };
-  deepGet(obj, isString(path7) ? path7.split(".") : path7, 0);
-  return arr ? list : list[0];
-}
-var MatchOptions = {
-  includeMatches: false,
-  findAllMatches: false,
-  minMatchCharLength: 1
-};
-var BasicOptions = {
-  isCaseSensitive: false,
-  ignoreDiacritics: false,
-  includeScore: false,
-  keys: [],
-  shouldSort: true,
-  sortFn: (a, b) => a.score === b.score ? a.idx < b.idx ? -1 : 1 : a.score < b.score ? -1 : 1
-};
-var FuzzyOptions = {
-  location: 0,
-  threshold: 0.6,
-  distance: 100
-};
-var AdvancedOptions = {
-  useExtendedSearch: false,
-  useTokenSearch: false,
-  getFn: get,
-  ignoreLocation: false,
-  ignoreFieldNorm: false,
-  fieldNormWeight: 1
-};
-var Config = Object.freeze({
-  ...BasicOptions,
-  ...MatchOptions,
-  ...FuzzyOptions,
-  ...AdvancedOptions
-});
-var SPACE = /[^ ]+/g;
-function norm(weight = 1, mantissa = 3) {
-  const cache2 = /* @__PURE__ */ new Map();
-  const m = Math.pow(10, mantissa);
-  return {
-    get(value) {
-      const numTokens = value.match(SPACE).length;
-      if (cache2.has(numTokens)) {
-        return cache2.get(numTokens);
-      }
-      const norm2 = 1 / Math.pow(numTokens, 0.5 * weight);
-      const n = parseFloat(Math.round(norm2 * m) / m);
-      cache2.set(numTokens, n);
-      return n;
-    },
-    clear() {
-      cache2.clear();
-    }
-  };
-}
-var FuseIndex = class {
-  constructor({
-    getFn = Config.getFn,
-    fieldNormWeight = Config.fieldNormWeight
-  } = {}) {
-    this.norm = norm(fieldNormWeight, 3);
-    this.getFn = getFn;
-    this.isCreated = false;
-    this.docs = [];
-    this.keys = [];
-    this._keysMap = {};
-    this.setIndexRecords();
-  }
-  setSources(docs = []) {
-    this.docs = docs;
-  }
-  setIndexRecords(records = []) {
-    this.records = records;
-  }
-  setKeys(keys = []) {
-    this.keys = keys;
-    this._keysMap = {};
-    keys.forEach((key, idx) => {
-      this._keysMap[key.id] = idx;
-    });
-  }
-  create() {
-    if (this.isCreated || !this.docs.length) {
-      return;
-    }
-    this.isCreated = true;
-    if (isString(this.docs[0])) {
-      this.docs.forEach((doc, docIndex) => {
-        this._addString(doc, docIndex);
-      });
-    } else {
-      this.docs.forEach((doc, docIndex) => {
-        this._addObject(doc, docIndex);
-      });
-    }
-    this.norm.clear();
-  }
-  // Adds a doc to the end of the index
-  add(doc) {
-    const idx = this.size();
-    if (isString(doc)) {
-      this._addString(doc, idx);
-    } else {
-      this._addObject(doc, idx);
-    }
-  }
-  // Removes the doc at the specified index of the index
-  removeAt(idx) {
-    this.records.splice(idx, 1);
-    for (let i = idx, len = this.size(); i < len; i += 1) {
-      this.records[i].i -= 1;
-    }
-  }
-  // Removes docs at the specified indices (must be sorted ascending)
-  removeAll(indices) {
-    for (let i = indices.length - 1; i >= 0; i -= 1) {
-      this.records.splice(indices[i], 1);
-    }
-    for (let i = 0, len = this.records.length; i < len; i += 1) {
-      this.records[i].i = i;
-    }
-  }
-  getValueForItemAtKeyId(item, keyId) {
-    return item[this._keysMap[keyId]];
-  }
-  size() {
-    return this.records.length;
-  }
-  _addString(doc, docIndex) {
-    if (!isDefined(doc) || isBlank(doc)) {
-      return;
-    }
-    const record = {
-      v: doc,
-      i: docIndex,
-      n: this.norm.get(doc)
-    };
-    this.records.push(record);
-  }
-  _addObject(doc, docIndex) {
-    const record = {
-      i: docIndex,
-      $: {}
-    };
-    this.keys.forEach((key, keyIndex) => {
-      const value = key.getFn ? key.getFn(doc) : this.getFn(doc, key.path);
-      if (!isDefined(value)) {
-        return;
-      }
-      if (isArray2(value)) {
-        const subRecords = [];
-        for (let i = 0, len = value.length; i < len; i += 1) {
-          const item = value[i];
-          if (!isDefined(item)) {
-            continue;
-          }
-          if (isString(item)) {
-            if (!isBlank(item)) {
-              const subRecord = {
-                v: item,
-                i,
-                n: this.norm.get(item)
-              };
-              subRecords.push(subRecord);
-            }
-          } else if (isDefined(item.v)) {
-            const text = isString(item.v) ? item.v : toString(item.v);
-            if (!isBlank(text)) {
-              const subRecord = {
-                v: text,
-                i: item.i,
-                n: this.norm.get(text)
-              };
-              subRecords.push(subRecord);
-            }
-          }
-        }
-        record.$[keyIndex] = subRecords;
-      } else if (isString(value) && !isBlank(value)) {
-        const subRecord = {
-          v: value,
-          n: this.norm.get(value)
-        };
-        record.$[keyIndex] = subRecord;
-      }
-    });
-    this.records.push(record);
-  }
-  toJSON() {
-    return {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      keys: this.keys.map(({
-        getFn,
-        ...key
-      }) => key),
-      records: this.records
-    };
-  }
-};
-function createIndex(keys, docs, {
-  getFn = Config.getFn,
-  fieldNormWeight = Config.fieldNormWeight
-} = {}) {
-  const myIndex = new FuseIndex({
-    getFn,
-    fieldNormWeight
-  });
-  myIndex.setKeys(keys.map(createKey));
-  myIndex.setSources(docs);
-  myIndex.create();
-  return myIndex;
-}
-function parseIndex(data, {
-  getFn = Config.getFn,
-  fieldNormWeight = Config.fieldNormWeight
-} = {}) {
-  const {
-    keys,
-    records
-  } = data;
-  const myIndex = new FuseIndex({
-    getFn,
-    fieldNormWeight
-  });
-  myIndex.setKeys(keys);
-  myIndex.setIndexRecords(records);
-  return myIndex;
-}
-function convertMaskToIndices(matchmask = [], minMatchCharLength = Config.minMatchCharLength) {
-  const indices = [];
-  let start = -1;
-  let end = -1;
-  let i = 0;
-  for (let len = matchmask.length; i < len; i += 1) {
-    const match = matchmask[i];
-    if (match && start === -1) {
-      start = i;
-    } else if (!match && start !== -1) {
-      end = i - 1;
-      if (end - start + 1 >= minMatchCharLength) {
-        indices.push([start, end]);
-      }
-      start = -1;
-    }
-  }
-  if (matchmask[i - 1] && i - start >= minMatchCharLength) {
-    indices.push([start, i - 1]);
-  }
-  return indices;
-}
-var MAX_BITS = 32;
-function search(text, pattern, patternAlphabet, {
-  location = Config.location,
-  distance = Config.distance,
-  threshold = Config.threshold,
-  findAllMatches = Config.findAllMatches,
-  minMatchCharLength = Config.minMatchCharLength,
-  includeMatches = Config.includeMatches,
-  ignoreLocation = Config.ignoreLocation
-} = {}) {
-  if (pattern.length > MAX_BITS) {
-    throw new Error(PATTERN_LENGTH_TOO_LARGE(MAX_BITS));
-  }
-  const patternLen = pattern.length;
-  const textLen = text.length;
-  const expectedLocation = Math.max(0, Math.min(location, textLen));
-  let currentThreshold = threshold;
-  let bestLocation = expectedLocation;
-  const calcScore = (errors, currentLocation) => {
-    const accuracy = errors / patternLen;
-    if (ignoreLocation) return accuracy;
-    const proximity = Math.abs(expectedLocation - currentLocation);
-    if (!distance) return proximity ? 1 : accuracy;
-    return accuracy + proximity / distance;
-  };
-  const computeMatches = minMatchCharLength > 1 || includeMatches;
-  const matchMask = computeMatches ? Array(textLen) : [];
-  let index;
-  while ((index = text.indexOf(pattern, bestLocation)) > -1) {
-    const score = calcScore(0, index);
-    currentThreshold = Math.min(score, currentThreshold);
-    bestLocation = index + patternLen;
-    if (computeMatches) {
-      let i = 0;
-      while (i < patternLen) {
-        matchMask[index + i] = 1;
-        i += 1;
-      }
-    }
-  }
-  bestLocation = -1;
-  let lastBitArr = [];
-  let finalScore = 1;
-  let binMax = patternLen + textLen;
-  const mask = 1 << patternLen - 1;
-  for (let i = 0; i < patternLen; i += 1) {
-    let binMin = 0;
-    let binMid = binMax;
-    while (binMin < binMid) {
-      const score2 = calcScore(i, expectedLocation + binMid);
-      if (score2 <= currentThreshold) {
-        binMin = binMid;
-      } else {
-        binMax = binMid;
-      }
-      binMid = Math.floor((binMax - binMin) / 2 + binMin);
-    }
-    binMax = binMid;
-    let start = Math.max(1, expectedLocation - binMid + 1);
-    const finish = findAllMatches ? textLen : Math.min(expectedLocation + binMid, textLen) + patternLen;
-    const bitArr = Array(finish + 2);
-    bitArr[finish + 1] = (1 << i) - 1;
-    for (let j = finish; j >= start; j -= 1) {
-      const currentLocation = j - 1;
-      const charMatch = patternAlphabet[text[currentLocation]];
-      if (computeMatches) {
-        matchMask[currentLocation] = +!!charMatch;
-      }
-      bitArr[j] = (bitArr[j + 1] << 1 | 1) & charMatch;
-      if (i) {
-        bitArr[j] |= (lastBitArr[j + 1] | lastBitArr[j]) << 1 | 1 | lastBitArr[j + 1];
-      }
-      if (bitArr[j] & mask) {
-        finalScore = calcScore(i, currentLocation);
-        if (finalScore <= currentThreshold) {
-          currentThreshold = finalScore;
-          bestLocation = currentLocation;
-          if (bestLocation <= expectedLocation) {
-            break;
-          }
-          start = Math.max(1, 2 * expectedLocation - bestLocation);
-        }
-      }
-    }
-    const score = calcScore(i + 1, expectedLocation);
-    if (score > currentThreshold) {
-      break;
-    }
-    lastBitArr = bitArr;
-  }
-  const result = {
-    isMatch: bestLocation >= 0,
-    // Count exact matches (those with a score of 0) to be "almost" exact
-    score: Math.max(1e-3, finalScore)
-  };
-  if (computeMatches) {
-    const indices = convertMaskToIndices(matchMask, minMatchCharLength);
-    if (!indices.length) {
-      result.isMatch = false;
-    } else if (includeMatches) {
-      result.indices = indices;
-    }
-  }
-  return result;
-}
-function createPatternAlphabet(pattern) {
-  const mask = {};
-  for (let i = 0, len = pattern.length; i < len; i += 1) {
-    const char = pattern.charAt(i);
-    mask[char] = (mask[char] || 0) | 1 << len - i - 1;
-  }
-  return mask;
-}
-function mergeIndices(indices) {
-  if (indices.length <= 1) return indices;
-  indices.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const merged = [indices[0]];
-  for (let i = 1, len = indices.length; i < len; i += 1) {
-    const last = merged[merged.length - 1];
-    const curr = indices[i];
-    if (curr[0] <= last[1] + 1) {
-      last[1] = Math.max(last[1], curr[1]);
-    } else {
-      merged.push(curr);
-    }
-  }
-  return merged;
-}
-var NON_DECOMPOSABLE_MAP = {
-  "\u0142": "l",
-  // ł
-  "\u0141": "L",
-  // Ł
-  "\u0111": "d",
-  // đ
-  "\u0110": "D",
-  // Đ
-  "\xF8": "o",
-  // ø
-  "\xD8": "O",
-  // Ø
-  "\u0127": "h",
-  // ħ
-  "\u0126": "H",
-  // Ħ
-  "\u0167": "t",
-  // ŧ
-  "\u0166": "T",
-  // Ŧ
-  "\u0131": "i",
-  // ı
-  "\xDF": "ss"
-  // ß
-};
-var NON_DECOMPOSABLE_RE = new RegExp("[" + Object.keys(NON_DECOMPOSABLE_MAP).join("") + "]", "g");
-var stripDiacritics = String.prototype.normalize ? (str2) => str2.normalize("NFD").replace(/[\u0300-\u036F\u0483-\u0489\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED\u0711\u0730-\u074A\u07A6-\u07B0\u07EB-\u07F3\u07FD\u0816-\u0819\u081B-\u0823\u0825-\u0827\u0829-\u082D\u0859-\u085B\u08D3-\u08E1\u08E3-\u0903\u093A-\u093C\u093E-\u094F\u0951-\u0957\u0962\u0963\u0981-\u0983\u09BC\u09BE-\u09C4\u09C7\u09C8\u09CB-\u09CD\u09D7\u09E2\u09E3\u09FE\u0A01-\u0A03\u0A3C\u0A3E-\u0A42\u0A47\u0A48\u0A4B-\u0A4D\u0A51\u0A70\u0A71\u0A75\u0A81-\u0A83\u0ABC\u0ABE-\u0AC5\u0AC7-\u0AC9\u0ACB-\u0ACD\u0AE2\u0AE3\u0AFA-\u0AFF\u0B01-\u0B03\u0B3C\u0B3E-\u0B44\u0B47\u0B48\u0B4B-\u0B4D\u0B56\u0B57\u0B62\u0B63\u0B82\u0BBE-\u0BC2\u0BC6-\u0BC8\u0BCA-\u0BCD\u0BD7\u0C00-\u0C04\u0C3E-\u0C44\u0C46-\u0C48\u0C4A-\u0C4D\u0C55\u0C56\u0C62\u0C63\u0C81-\u0C83\u0CBC\u0CBE-\u0CC4\u0CC6-\u0CC8\u0CCA-\u0CCD\u0CD5\u0CD6\u0CE2\u0CE3\u0D00-\u0D03\u0D3B\u0D3C\u0D3E-\u0D44\u0D46-\u0D48\u0D4A-\u0D4D\u0D57\u0D62\u0D63\u0D82\u0D83\u0DCA\u0DCF-\u0DD4\u0DD6\u0DD8-\u0DDF\u0DF2\u0DF3\u0E31\u0E34-\u0E3A\u0E47-\u0E4E\u0EB1\u0EB4-\u0EB9\u0EBB\u0EBC\u0EC8-\u0ECD\u0F18\u0F19\u0F35\u0F37\u0F39\u0F3E\u0F3F\u0F71-\u0F84\u0F86\u0F87\u0F8D-\u0F97\u0F99-\u0FBC\u0FC6\u102B-\u103E\u1056-\u1059\u105E-\u1060\u1062-\u1064\u1067-\u106D\u1071-\u1074\u1082-\u108D\u108F\u109A-\u109D\u135D-\u135F\u1712-\u1714\u1732-\u1734\u1752\u1753\u1772\u1773\u17B4-\u17D3\u17DD\u180B-\u180D\u1885\u1886\u18A9\u1920-\u192B\u1930-\u193B\u1A17-\u1A1B\u1A55-\u1A5E\u1A60-\u1A7C\u1A7F\u1AB0-\u1ABE\u1B00-\u1B04\u1B34-\u1B44\u1B6B-\u1B73\u1B80-\u1B82\u1BA1-\u1BAD\u1BE6-\u1BF3\u1C24-\u1C37\u1CD0-\u1CD2\u1CD4-\u1CE8\u1CED\u1CF2-\u1CF4\u1CF7-\u1CF9\u1DC0-\u1DF9\u1DFB-\u1DFF\u20D0-\u20F0\u2CEF-\u2CF1\u2D7F\u2DE0-\u2DFF\u302A-\u302F\u3099\u309A\uA66F-\uA672\uA674-\uA67D\uA69E\uA69F\uA6F0\uA6F1\uA802\uA806\uA80B\uA823-\uA827\uA880\uA881\uA8B4-\uA8C5\uA8E0-\uA8F1\uA8FF\uA926-\uA92D\uA947-\uA953\uA980-\uA983\uA9B3-\uA9C0\uA9E5\uAA29-\uAA36\uAA43\uAA4C\uAA4D\uAA7B-\uAA7D\uAAB0\uAAB2-\uAAB4\uAAB7\uAAB8\uAABE\uAABF\uAAC1\uAAEB-\uAAEF\uAAF5\uAAF6\uABE3-\uABEA\uABEC\uABED\uFB1E\uFE00-\uFE0F\uFE20-\uFE2F]/g, "").replace(NON_DECOMPOSABLE_RE, (ch) => NON_DECOMPOSABLE_MAP[ch]) : (str2) => str2;
-var BitapSearch = class {
-  constructor(pattern, {
-    location = Config.location,
-    threshold = Config.threshold,
-    distance = Config.distance,
-    includeMatches = Config.includeMatches,
-    findAllMatches = Config.findAllMatches,
-    minMatchCharLength = Config.minMatchCharLength,
-    isCaseSensitive = Config.isCaseSensitive,
-    ignoreDiacritics = Config.ignoreDiacritics,
-    ignoreLocation = Config.ignoreLocation
-  } = {}) {
-    this.options = {
-      location,
-      threshold,
-      distance,
-      includeMatches,
-      findAllMatches,
-      minMatchCharLength,
-      isCaseSensitive,
-      ignoreDiacritics,
-      ignoreLocation
-    };
-    pattern = isCaseSensitive ? pattern : pattern.toLowerCase();
-    pattern = ignoreDiacritics ? stripDiacritics(pattern) : pattern;
-    this.pattern = pattern;
-    this.chunks = [];
-    if (!this.pattern.length) {
-      return;
-    }
-    const addChunk = (pattern2, startIndex) => {
-      this.chunks.push({
-        pattern: pattern2,
-        alphabet: createPatternAlphabet(pattern2),
-        startIndex
-      });
-    };
-    const len = this.pattern.length;
-    if (len > MAX_BITS) {
-      let i = 0;
-      const remainder = len % MAX_BITS;
-      const end = len - remainder;
-      while (i < end) {
-        addChunk(this.pattern.substr(i, MAX_BITS), i);
-        i += MAX_BITS;
-      }
-      if (remainder) {
-        const startIndex = len - MAX_BITS;
-        addChunk(this.pattern.substr(startIndex), startIndex);
-      }
-    } else {
-      addChunk(this.pattern, 0);
-    }
-  }
-  searchIn(text) {
-    const {
-      isCaseSensitive,
-      ignoreDiacritics,
-      includeMatches
-    } = this.options;
-    text = isCaseSensitive ? text : text.toLowerCase();
-    text = ignoreDiacritics ? stripDiacritics(text) : text;
-    if (this.pattern === text) {
-      const result2 = {
-        isMatch: true,
-        score: 0
-      };
-      if (includeMatches) {
-        result2.indices = [[0, text.length - 1]];
-      }
-      return result2;
-    }
-    const {
-      location,
-      distance,
-      threshold,
-      findAllMatches,
-      minMatchCharLength,
-      ignoreLocation
-    } = this.options;
-    const allIndices = [];
-    let totalScore = 0;
-    let hasMatches = false;
-    this.chunks.forEach(({
-      pattern,
-      alphabet,
-      startIndex
-    }) => {
-      const {
-        isMatch,
-        score,
-        indices
-      } = search(text, pattern, alphabet, {
-        location: location + startIndex,
-        distance,
-        threshold,
-        findAllMatches,
-        minMatchCharLength,
-        includeMatches,
-        ignoreLocation
-      });
-      if (isMatch) {
-        hasMatches = true;
-      }
-      totalScore += score;
-      if (isMatch && indices) {
-        allIndices.push(...indices);
-      }
-    });
-    const result = {
-      isMatch: hasMatches,
-      score: hasMatches ? totalScore / this.chunks.length : 1
-    };
-    if (hasMatches && includeMatches) {
-      result.indices = mergeIndices(allIndices);
-    }
-    return result;
-  }
-};
-var BaseMatch = class {
-  constructor(pattern) {
-    this.pattern = pattern;
-  }
-  static isMultiMatch(pattern) {
-    return getMatch(pattern, this.multiRegex);
-  }
-  static isSingleMatch(pattern) {
-    return getMatch(pattern, this.singleRegex);
-  }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  search(_text) {
-    return {
-      isMatch: false,
-      score: 1
-    };
-  }
-};
-function getMatch(pattern, exp) {
-  const matches = pattern.match(exp);
-  return matches ? matches[1] : null;
-}
-var ExactMatch = class extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "exact";
-  }
-  static get multiRegex() {
-    return /^="(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^=(.*)$/;
-  }
-  search(text) {
-    const isMatch = text === this.pattern;
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [0, this.pattern.length - 1]
-    };
-  }
-};
-var InverseExactMatch = class extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "inverse-exact";
-  }
-  static get multiRegex() {
-    return /^!"(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^!(.*)$/;
-  }
-  search(text) {
-    const index = text.indexOf(this.pattern);
-    const isMatch = index === -1;
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [0, text.length - 1]
-    };
-  }
-};
-var PrefixExactMatch = class extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "prefix-exact";
-  }
-  static get multiRegex() {
-    return /^\^"(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^\^(.*)$/;
-  }
-  search(text) {
-    const isMatch = text.startsWith(this.pattern);
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [0, this.pattern.length - 1]
-    };
-  }
-};
-var InversePrefixExactMatch = class extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "inverse-prefix-exact";
-  }
-  static get multiRegex() {
-    return /^!\^"(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^!\^(.*)$/;
-  }
-  search(text) {
-    const isMatch = !text.startsWith(this.pattern);
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [0, text.length - 1]
-    };
-  }
-};
-var SuffixExactMatch = class extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "suffix-exact";
-  }
-  static get multiRegex() {
-    return /^"(.*)"\$$/;
-  }
-  static get singleRegex() {
-    return /^(.*)\$$/;
-  }
-  search(text) {
-    const isMatch = text.endsWith(this.pattern);
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [text.length - this.pattern.length, text.length - 1]
-    };
-  }
-};
-var InverseSuffixExactMatch = class extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "inverse-suffix-exact";
-  }
-  static get multiRegex() {
-    return /^!"(.*)"\$$/;
-  }
-  static get singleRegex() {
-    return /^!(.*)\$$/;
-  }
-  search(text) {
-    const isMatch = !text.endsWith(this.pattern);
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [0, text.length - 1]
-    };
-  }
-};
-var FuzzyMatch = class extends BaseMatch {
-  constructor(pattern, {
-    location = Config.location,
-    threshold = Config.threshold,
-    distance = Config.distance,
-    includeMatches = Config.includeMatches,
-    findAllMatches = Config.findAllMatches,
-    minMatchCharLength = Config.minMatchCharLength,
-    isCaseSensitive = Config.isCaseSensitive,
-    ignoreDiacritics = Config.ignoreDiacritics,
-    ignoreLocation = Config.ignoreLocation
-  } = {}) {
-    super(pattern);
-    this._bitapSearch = new BitapSearch(pattern, {
-      location,
-      threshold,
-      distance,
-      includeMatches,
-      findAllMatches,
-      minMatchCharLength,
-      isCaseSensitive,
-      ignoreDiacritics,
-      ignoreLocation
-    });
-  }
-  static get type() {
-    return "fuzzy";
-  }
-  static get multiRegex() {
-    return /^"(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^(.*)$/;
-  }
-  search(text) {
-    return this._bitapSearch.searchIn(text);
-  }
-};
-var IncludeMatch = class extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "include";
-  }
-  static get multiRegex() {
-    return /^'"(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^'(.*)$/;
-  }
-  search(text) {
-    let location = 0;
-    let index;
-    const indices = [];
-    const patternLen = this.pattern.length;
-    while ((index = text.indexOf(this.pattern, location)) > -1) {
-      location = index + patternLen;
-      indices.push([index, location - 1]);
-    }
-    const isMatch = !!indices.length;
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices
-    };
-  }
-};
-var searchers = [ExactMatch, IncludeMatch, PrefixExactMatch, InversePrefixExactMatch, InverseSuffixExactMatch, SuffixExactMatch, InverseExactMatch, FuzzyMatch];
-var searchersLen = searchers.length;
-var ESCAPED_PIPE = "\0";
-var OR_TOKEN = "|";
-function tokenize3(pattern) {
-  const tokens2 = [];
-  const len = pattern.length;
-  let i = 0;
-  while (i < len) {
-    while (i < len && pattern[i] === " ") i++;
-    if (i >= len) break;
-    let j = i;
-    while (j < len && pattern[j] !== " " && pattern[j] !== '"') j++;
-    if (j < len && pattern[j] === '"') {
-      j++;
-      while (j < len) {
-        if (pattern[j] === '"') {
-          const next = j + 1;
-          if (next >= len || pattern[next] === " ") {
-            j++;
-            break;
-          }
-          if (pattern[next] === "$" && (next + 1 >= len || pattern[next + 1] === " ")) {
-            j += 2;
-            break;
-          }
-        }
-        j++;
-      }
-      tokens2.push(pattern.substring(i, j));
-      i = j;
-    } else {
-      while (j < len && pattern[j] !== " ") j++;
-      tokens2.push(pattern.substring(i, j));
-      i = j;
-    }
-  }
-  return tokens2;
-}
-function parseQuery(pattern, options = {}) {
-  const escaped = pattern.replace(/\\\|/g, ESCAPED_PIPE);
-  return escaped.split(OR_TOKEN).map((item) => {
-    const restored = item.replace(/\u0000/g, "|");
-    const query = tokenize3(restored.trim()).filter((item2) => item2 && !!item2.trim());
-    const results = [];
-    for (let i = 0, len = query.length; i < len; i += 1) {
-      const queryItem = query[i];
-      let found = false;
-      let idx = -1;
-      while (!found && ++idx < searchersLen) {
-        const searcher = searchers[idx];
-        const token = searcher.isMultiMatch(queryItem);
-        if (token) {
-          results.push(new searcher(token, options));
-          found = true;
-        }
-      }
-      if (found) {
-        continue;
-      }
-      idx = -1;
-      while (++idx < searchersLen) {
-        const searcher = searchers[idx];
-        const token = searcher.isSingleMatch(queryItem);
-        if (token) {
-          results.push(new searcher(token, options));
-          break;
-        }
-      }
-    }
-    return results;
-  });
-}
-var MultiMatchSet = /* @__PURE__ */ new Set([FuzzyMatch.type, IncludeMatch.type]);
-var ExtendedSearch = class {
-  constructor(pattern, {
-    isCaseSensitive = Config.isCaseSensitive,
-    ignoreDiacritics = Config.ignoreDiacritics,
-    includeMatches = Config.includeMatches,
-    minMatchCharLength = Config.minMatchCharLength,
-    ignoreLocation = Config.ignoreLocation,
-    findAllMatches = Config.findAllMatches,
-    location = Config.location,
-    threshold = Config.threshold,
-    distance = Config.distance
-  } = {}) {
-    this.query = null;
-    this.options = {
-      isCaseSensitive,
-      ignoreDiacritics,
-      includeMatches,
-      minMatchCharLength,
-      findAllMatches,
-      ignoreLocation,
-      location,
-      threshold,
-      distance
-    };
-    pattern = isCaseSensitive ? pattern : pattern.toLowerCase();
-    pattern = ignoreDiacritics ? stripDiacritics(pattern) : pattern;
-    this.pattern = pattern;
-    this.query = parseQuery(this.pattern, this.options);
-  }
-  static condition(_, options) {
-    return options.useExtendedSearch;
-  }
-  // Note: searchIn operates on a single text value and sets hasInverse on the
-  // result when inverse patterns are involved. _searchObjectList uses this to
-  // switch from "ANY key" to "ALL keys" aggregation. See #712.
-  searchIn(text) {
-    const query = this.query;
-    if (!query) {
-      return {
-        isMatch: false,
-        score: 1
-      };
-    }
-    const {
-      includeMatches,
-      isCaseSensitive,
-      ignoreDiacritics
-    } = this.options;
-    text = isCaseSensitive ? text : text.toLowerCase();
-    text = ignoreDiacritics ? stripDiacritics(text) : text;
-    let numMatches = 0;
-    const allIndices = [];
-    let totalScore = 0;
-    let hasInverse = false;
-    for (let i = 0, qLen = query.length; i < qLen; i += 1) {
-      const searchers2 = query[i];
-      allIndices.length = 0;
-      numMatches = 0;
-      hasInverse = false;
-      for (let j = 0, pLen = searchers2.length; j < pLen; j += 1) {
-        const searcher = searchers2[j];
-        const {
-          isMatch,
-          indices,
-          score
-        } = searcher.search(text);
-        if (isMatch) {
-          numMatches += 1;
-          totalScore += score;
-          const type = searcher.constructor.type;
-          if (type.startsWith("inverse")) {
-            hasInverse = true;
-          }
-          if (includeMatches) {
-            if (MultiMatchSet.has(type)) {
-              allIndices.push(...indices);
-            } else {
-              allIndices.push(indices);
-            }
-          }
-        } else {
-          totalScore = 0;
-          numMatches = 0;
-          allIndices.length = 0;
-          hasInverse = false;
-          break;
-        }
-      }
-      if (numMatches) {
-        const result = {
-          isMatch: true,
-          score: totalScore / numMatches
-        };
-        if (hasInverse) {
-          result.hasInverse = true;
-        }
-        if (includeMatches) {
-          result.indices = mergeIndices(allIndices);
-        }
-        return result;
-      }
-    }
-    return {
-      isMatch: false,
-      score: 1
-    };
-  }
-};
-var registeredSearchers = [];
-function register(...args) {
-  registeredSearchers.push(...args);
-}
-function createSearcher(pattern, options) {
-  for (let i = 0, len = registeredSearchers.length; i < len; i += 1) {
-    const searcherClass = registeredSearchers[i];
-    if (searcherClass.condition(pattern, options)) {
-      return new searcherClass(pattern, options);
-    }
-  }
-  return new BitapSearch(pattern, options);
-}
-var LogicalOperator = {
-  AND: "$and",
-  OR: "$or"
-};
-var KeyType = {
-  PATH: "$path",
-  PATTERN: "$val"
-};
-var isExpression = (query) => !!(query[LogicalOperator.AND] || query[LogicalOperator.OR]);
-var isPath = (query) => !!query[KeyType.PATH];
-var isLeaf = (query) => !isArray2(query) && isObject(query) && !isExpression(query);
-var convertToExplicit = (query) => ({
-  [LogicalOperator.AND]: Object.keys(query).map((key) => ({
-    [key]: query[key]
-  }))
-});
-function parse(query, options, {
-  auto = true
-} = {}) {
-  const next = (query2) => {
-    if (isString(query2)) {
-      const obj = {
-        keyId: null,
-        pattern: query2
-      };
-      if (auto) {
-        obj.searcher = createSearcher(query2, options);
-      }
-      return obj;
-    }
-    const keys = Object.keys(query2);
-    const isQueryPath = isPath(query2);
-    if (!isQueryPath && keys.length > 1 && !isExpression(query2)) {
-      return next(convertToExplicit(query2));
-    }
-    if (isLeaf(query2)) {
-      const key = isQueryPath ? query2[KeyType.PATH] : keys[0];
-      const pattern = isQueryPath ? query2[KeyType.PATTERN] : query2[key];
-      if (!isString(pattern)) {
-        throw new Error(LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY(key));
-      }
-      const obj = {
-        keyId: createKeyId(key),
-        pattern
-      };
-      if (auto) {
-        obj.searcher = createSearcher(pattern, options);
-      }
-      return obj;
-    }
-    const node = {
-      children: [],
-      operator: keys[0]
-    };
-    keys.forEach((key) => {
-      const value = query2[key];
-      if (isArray2(value)) {
-        value.forEach((item) => {
-          node.children.push(next(item));
-        });
-      }
-    });
-    return node;
-  };
-  if (!isExpression(query)) {
-    query = convertToExplicit(query);
-  }
-  return next(query);
-}
-function computeScoreSingle(matches, {
-  ignoreFieldNorm = Config.ignoreFieldNorm
-}) {
-  let totalScore = 1;
-  matches.forEach(({
-    key,
-    norm: norm2,
-    score
-  }) => {
-    const weight = key ? key.weight : null;
-    totalScore *= Math.pow(score === 0 && weight ? Number.EPSILON : score, (weight || 1) * (ignoreFieldNorm ? 1 : norm2));
-  });
-  return totalScore;
-}
-function computeScore(results, {
-  ignoreFieldNorm = Config.ignoreFieldNorm
-}) {
-  results.forEach((result) => {
-    result.score = computeScoreSingle(result.matches, {
-      ignoreFieldNorm
-    });
-  });
-}
-var MaxHeap = class {
-  constructor(limit) {
-    this.limit = limit;
-    this.heap = [];
-  }
-  get size() {
-    return this.heap.length;
-  }
-  shouldInsert(score) {
-    return this.size < this.limit || score < this.heap[0].score;
-  }
-  insert(item) {
-    if (this.size < this.limit) {
-      this.heap.push(item);
-      this._bubbleUp(this.size - 1);
-    } else if (item.score < this.heap[0].score) {
-      this.heap[0] = item;
-      this._sinkDown(0);
-    }
-  }
-  extractSorted(sortFn) {
-    return this.heap.sort(sortFn);
-  }
-  _bubbleUp(i) {
-    const heap = this.heap;
-    while (i > 0) {
-      const parent = i - 1 >> 1;
-      if (heap[i].score <= heap[parent].score) break;
-      const tmp = heap[i];
-      heap[i] = heap[parent];
-      heap[parent] = tmp;
-      i = parent;
-    }
-  }
-  _sinkDown(i) {
-    const heap = this.heap;
-    const len = heap.length;
-    let largest = i;
-    do {
-      i = largest;
-      const left = 2 * i + 1;
-      const right = 2 * i + 2;
-      if (left < len && heap[left].score > heap[largest].score) {
-        largest = left;
-      }
-      if (right < len && heap[right].score > heap[largest].score) {
-        largest = right;
-      }
-      if (largest !== i) {
-        const tmp = heap[i];
-        heap[i] = heap[largest];
-        heap[largest] = tmp;
-      }
-    } while (largest !== i);
-  }
-};
-function transformMatches(result, data) {
-  const matches = result.matches;
-  data.matches = [];
-  if (!isDefined(matches)) {
-    return;
-  }
-  matches.forEach((match) => {
-    if (!isDefined(match.indices) || !match.indices.length) {
-      return;
-    }
-    const {
-      indices,
-      value
-    } = match;
-    const obj = {
-      indices,
-      value
-    };
-    if (match.key) {
-      obj.key = match.key.src;
-    }
-    if (match.idx > -1) {
-      obj.refIndex = match.idx;
-    }
-    data.matches.push(obj);
-  });
-}
-function transformScore(result, data) {
-  data.score = result.score;
-}
-function format(results, docs, {
-  includeMatches = Config.includeMatches,
-  includeScore = Config.includeScore
-} = {}) {
-  const transformers = [];
-  if (includeMatches) transformers.push(transformMatches);
-  if (includeScore) transformers.push(transformScore);
-  return results.map((result) => {
-    const {
-      idx
-    } = result;
-    const data = {
-      item: docs[idx],
-      refIndex: idx
-    };
-    if (transformers.length) {
-      transformers.forEach((transformer) => {
-        transformer(result, data);
-      });
-    }
-    return data;
-  });
-}
-var WORD = /\b\w+\b/g;
-function createAnalyzer({
-  isCaseSensitive = false,
-  ignoreDiacritics = false
-} = {}) {
-  return {
-    tokenize(text) {
-      if (!isCaseSensitive) {
-        text = text.toLowerCase();
-      }
-      if (ignoreDiacritics) {
-        text = stripDiacritics(text);
-      }
-      return text.match(WORD) || [];
-    }
-  };
-}
-function buildInvertedIndex(records, keyCount, analyzer) {
-  const terms = /* @__PURE__ */ new Map();
-  const df = /* @__PURE__ */ new Map();
-  let fieldCount = 0;
-  function addField(text, docIdx, keyIdx, subIdx) {
-    const tokens2 = analyzer.tokenize(text);
-    if (!tokens2.length) return;
-    fieldCount++;
-    const termFreqs = /* @__PURE__ */ new Map();
-    for (const token of tokens2) {
-      termFreqs.set(token, (termFreqs.get(token) || 0) + 1);
-    }
-    for (const [term, tf] of termFreqs) {
-      const posting = {
-        docIdx,
-        keyIdx,
-        subIdx,
-        tf
-      };
-      let postings = terms.get(term);
-      if (!postings) {
-        postings = [];
-        terms.set(term, postings);
-      }
-      postings.push(posting);
-      df.set(term, (df.get(term) || 0) + 1);
-    }
-  }
-  for (const record of records) {
-    const {
-      i: docIdx,
-      v,
-      $: fields
-    } = record;
-    if (v !== void 0) {
-      addField(v, docIdx, -1, -1);
-      continue;
-    }
-    if (fields) {
-      for (let keyIdx = 0; keyIdx < keyCount; keyIdx++) {
-        const value = fields[keyIdx];
-        if (!value) continue;
-        if (Array.isArray(value)) {
-          for (const sub of value) {
-            addField(sub.v, docIdx, keyIdx, sub.i ?? -1);
-          }
-        } else {
-          addField(value.v, docIdx, keyIdx, -1);
-        }
-      }
-    }
-  }
-  return {
-    terms,
-    fieldCount,
-    df
-  };
-}
-function addToInvertedIndex(index, record, keyCount, analyzer) {
-  const {
-    i: docIdx,
-    v,
-    $: fields
-  } = record;
-  function addField(text, keyIdx, subIdx) {
-    const tokens2 = analyzer.tokenize(text);
-    if (!tokens2.length) return;
-    index.fieldCount++;
-    const termFreqs = /* @__PURE__ */ new Map();
-    for (const token of tokens2) {
-      termFreqs.set(token, (termFreqs.get(token) || 0) + 1);
-    }
-    for (const [term, tf] of termFreqs) {
-      const posting = {
-        docIdx,
-        keyIdx,
-        subIdx,
-        tf
-      };
-      let postings = index.terms.get(term);
-      if (!postings) {
-        postings = [];
-        index.terms.set(term, postings);
-      }
-      postings.push(posting);
-      index.df.set(term, (index.df.get(term) || 0) + 1);
-    }
-  }
-  if (v !== void 0) {
-    addField(v, -1, -1);
-    return;
-  }
-  if (fields) {
-    for (let keyIdx = 0; keyIdx < keyCount; keyIdx++) {
-      const value = fields[keyIdx];
-      if (!value) continue;
-      if (Array.isArray(value)) {
-        for (const sub of value) {
-          addField(sub.v, keyIdx, sub.i ?? -1);
-        }
-      } else {
-        addField(value.v, keyIdx, -1);
-      }
-    }
-  }
-}
-function removeFromInvertedIndex(index, docIdx) {
-  for (const [term, postings] of index.terms) {
-    const filtered = postings.filter((p) => p.docIdx !== docIdx);
-    const removed = postings.length - filtered.length;
-    if (removed > 0) {
-      index.fieldCount -= removed;
-      index.df.set(term, (index.df.get(term) || 0) - removed);
-      if (filtered.length === 0) {
-        index.terms.delete(term);
-        index.df.delete(term);
-      } else {
-        index.terms.set(term, filtered);
-      }
-    }
-  }
-}
-var Fuse = class {
-  // Statics are assigned in entry.ts
-  constructor(docs, options, index) {
-    this.options = {
-      ...Config,
-      ...options
-    };
-    if (this.options.useExtendedSearch && false) ;
-    if (this.options.useTokenSearch && false) ;
-    this._keyStore = new KeyStore(this.options.keys);
-    this._docs = docs;
-    this._myIndex = null;
-    this._invertedIndex = null;
-    this.setCollection(docs, index);
-    this._lastQuery = null;
-    this._lastSearcher = null;
-  }
-  _getSearcher(query) {
-    if (this._lastQuery === query) {
-      return this._lastSearcher;
-    }
-    const opts = this._invertedIndex ? {
-      ...this.options,
-      _invertedIndex: this._invertedIndex
-    } : this.options;
-    const searcher = createSearcher(query, opts);
-    this._lastQuery = query;
-    this._lastSearcher = searcher;
-    return searcher;
-  }
-  setCollection(docs, index) {
-    this._docs = docs;
-    if (index && !(index instanceof FuseIndex)) {
-      throw new Error(INCORRECT_INDEX_TYPE);
-    }
-    this._myIndex = index || createIndex(this.options.keys, this._docs, {
-      getFn: this.options.getFn,
-      fieldNormWeight: this.options.fieldNormWeight
-    });
-    if (this.options.useTokenSearch) {
-      const analyzer = createAnalyzer({
-        isCaseSensitive: this.options.isCaseSensitive,
-        ignoreDiacritics: this.options.ignoreDiacritics
-      });
-      this._invertedIndex = buildInvertedIndex(this._myIndex.records, this._myIndex.keys.length, analyzer);
-    }
-  }
-  add(doc) {
-    if (!isDefined(doc)) {
-      return;
-    }
-    this._docs.push(doc);
-    this._myIndex.add(doc);
-    if (this._invertedIndex) {
-      const record = this._myIndex.records[this._myIndex.records.length - 1];
-      const analyzer = createAnalyzer({
-        isCaseSensitive: this.options.isCaseSensitive,
-        ignoreDiacritics: this.options.ignoreDiacritics
-      });
-      addToInvertedIndex(this._invertedIndex, record, this._myIndex.keys.length, analyzer);
-    }
-  }
-  remove(predicate = () => false) {
-    const results = [];
-    const indicesToRemove = [];
-    for (let i = 0, len = this._docs.length; i < len; i += 1) {
-      if (predicate(this._docs[i], i)) {
-        results.push(this._docs[i]);
-        indicesToRemove.push(i);
-      }
-    }
-    if (indicesToRemove.length) {
-      if (this._invertedIndex) {
-        for (const idx of indicesToRemove) {
-          removeFromInvertedIndex(this._invertedIndex, idx);
-        }
-      }
-      for (let i = indicesToRemove.length - 1; i >= 0; i -= 1) {
-        this._docs.splice(indicesToRemove[i], 1);
-      }
-      this._myIndex.removeAll(indicesToRemove);
-    }
-    return results;
-  }
-  removeAt(idx) {
-    if (this._invertedIndex) {
-      removeFromInvertedIndex(this._invertedIndex, idx);
-    }
-    const doc = this._docs.splice(idx, 1)[0];
-    this._myIndex.removeAt(idx);
-    return doc;
-  }
-  getIndex() {
-    return this._myIndex;
-  }
-  search(query, options) {
-    const {
-      limit = -1
-    } = options || {};
-    const {
-      includeMatches,
-      includeScore,
-      shouldSort,
-      sortFn,
-      ignoreFieldNorm
-    } = this.options;
-    if (isString(query) && !query.trim()) {
-      let docs = this._docs.map((item, idx) => ({
-        item,
-        refIndex: idx
-      }));
-      if (isNumber(limit) && limit > -1) {
-        docs = docs.slice(0, limit);
-      }
-      return docs;
-    }
-    const useHeap = isNumber(limit) && limit > 0 && isString(query);
-    let results;
-    if (useHeap) {
-      const heap = new MaxHeap(limit);
-      if (isString(this._docs[0])) {
-        this._searchStringList(query, {
-          heap,
-          ignoreFieldNorm
-        });
-      } else {
-        this._searchObjectList(query, {
-          heap,
-          ignoreFieldNorm
-        });
-      }
-      results = heap.extractSorted(sortFn);
-    } else {
-      results = isString(query) ? isString(this._docs[0]) ? this._searchStringList(query) : this._searchObjectList(query) : this._searchLogical(query);
-      computeScore(results, {
-        ignoreFieldNorm
-      });
-      if (shouldSort) {
-        results.sort(sortFn);
-      }
-      if (isNumber(limit) && limit > -1) {
-        results = results.slice(0, limit);
-      }
-    }
-    return format(results, this._docs, {
-      includeMatches,
-      includeScore
-    });
-  }
-  _searchStringList(query, {
-    heap,
-    ignoreFieldNorm
-  } = {}) {
-    const searcher = this._getSearcher(query);
-    const {
-      records
-    } = this._myIndex;
-    const results = heap ? null : [];
-    records.forEach(({
-      v: text,
-      i: idx,
-      n: norm2
-    }) => {
-      if (!isDefined(text)) {
-        return;
-      }
-      const {
-        isMatch,
-        score,
-        indices
-      } = searcher.searchIn(text);
-      if (isMatch) {
-        const result = {
-          item: text,
-          idx,
-          matches: [{
-            score,
-            value: text,
-            norm: norm2,
-            indices
-          }]
-        };
-        if (heap) {
-          result.score = computeScoreSingle(result.matches, {
-            ignoreFieldNorm
-          });
-          if (heap.shouldInsert(result.score)) {
-            heap.insert(result);
-          }
-        } else {
-          results.push(result);
-        }
-      }
-    });
-    return results;
-  }
-  _searchLogical(query) {
-    const expression = parse(query, this.options);
-    const evaluate = (node, item, idx) => {
-      if (!("children" in node)) {
-        const {
-          keyId,
-          searcher
-        } = node;
-        let matches;
-        if (keyId === null) {
-          matches = [];
-          this._myIndex.keys.forEach((key, keyIndex) => {
-            matches.push(...this._findMatches({
-              key,
-              value: item[keyIndex],
-              searcher
-            }));
-          });
-        } else {
-          matches = this._findMatches({
-            key: this._keyStore.get(keyId),
-            value: this._myIndex.getValueForItemAtKeyId(item, keyId),
-            searcher
-          });
-        }
-        if (matches && matches.length) {
-          return [{
-            idx,
-            item,
-            matches
-          }];
-        }
-        return [];
-      }
-      const {
-        children,
-        operator
-      } = node;
-      const res = [];
-      for (let i = 0, len = children.length; i < len; i += 1) {
-        const child = children[i];
-        const result = evaluate(child, item, idx);
-        if (result.length) {
-          res.push(...result);
-        } else if (operator === LogicalOperator.AND) {
-          return [];
-        }
-      }
-      return res;
-    };
-    const records = this._myIndex.records;
-    const resultMap = /* @__PURE__ */ new Map();
-    const results = [];
-    records.forEach(({
-      $: item,
-      i: idx
-    }) => {
-      if (isDefined(item)) {
-        const expResults = evaluate(expression, item, idx);
-        if (expResults.length) {
-          if (!resultMap.has(idx)) {
-            resultMap.set(idx, {
-              idx,
-              item,
-              matches: []
-            });
-            results.push(resultMap.get(idx));
-          }
-          expResults.forEach(({
-            matches
-          }) => {
-            resultMap.get(idx).matches.push(...matches);
-          });
-        }
-      }
-    });
-    return results;
-  }
-  // When a search involves inverse patterns (e.g. !Syrup), the aggregation
-  // across keys switches from "ANY key matches" to "ALL keys must match."
-  // This is signaled by hasInverse on the SearchResult from ExtendedSearch.
-  //
-  // For mixed patterns like "^hello !Syrup", a key failure is ambiguous —
-  // it could be the positive or inverse term that failed. In that case we
-  // conservatively exclude the item, which is strictly better than the old
-  // behavior of including it. See: https://github.com/krisk/Fuse/issues/712
-  _searchObjectList(query, {
-    heap,
-    ignoreFieldNorm
-  } = {}) {
-    const searcher = this._getSearcher(query);
-    const {
-      keys,
-      records
-    } = this._myIndex;
-    const results = heap ? null : [];
-    records.forEach(({
-      $: item,
-      i: idx
-    }) => {
-      if (!isDefined(item)) {
-        return;
-      }
-      const matches = [];
-      let anyKeyFailed = false;
-      let hasInverse = false;
-      keys.forEach((key, keyIndex) => {
-        const keyMatches = this._findMatches({
-          key,
-          value: item[keyIndex],
-          searcher
-        });
-        if (keyMatches.length) {
-          matches.push(...keyMatches);
-          if (keyMatches[0].hasInverse) {
-            hasInverse = true;
-          }
-        } else {
-          anyKeyFailed = true;
-        }
-      });
-      if (hasInverse && anyKeyFailed) {
-        return;
-      }
-      if (matches.length) {
-        const result = {
-          idx,
-          item,
-          matches
-        };
-        if (heap) {
-          result.score = computeScoreSingle(result.matches, {
-            ignoreFieldNorm
-          });
-          if (heap.shouldInsert(result.score)) {
-            heap.insert(result);
-          }
-        } else {
-          results.push(result);
-        }
-      }
-    });
-    return results;
-  }
-  _findMatches({
-    key,
-    value,
-    searcher
-  }) {
-    if (!isDefined(value)) {
-      return [];
-    }
-    const matches = [];
-    if (isArray2(value)) {
-      value.forEach(({
-        v: text,
-        i: idx,
-        n: norm2
-      }) => {
-        if (!isDefined(text)) {
-          return;
-        }
-        const {
-          isMatch,
-          score,
-          indices,
-          hasInverse
-        } = searcher.searchIn(text);
-        if (isMatch) {
-          matches.push({
-            score,
-            key,
-            value: text,
-            idx,
-            norm: norm2,
-            indices,
-            hasInverse
-          });
-        }
-      });
-    } else {
-      const {
-        v: text,
-        n: norm2
-      } = value;
-      const {
-        isMatch,
-        score,
-        indices,
-        hasInverse
-      } = searcher.searchIn(text);
-      if (isMatch) {
-        matches.push({
-          score,
-          key,
-          value: text,
-          norm: norm2,
-          indices,
-          hasInverse
-        });
-      }
-    }
-    return matches;
-  }
-};
-var TokenSearch = class {
-  static condition(_, options) {
-    return options.useTokenSearch;
-  }
-  constructor(pattern, options) {
-    this.options = options;
-    this.analyzer = createAnalyzer({
-      isCaseSensitive: options.isCaseSensitive,
-      ignoreDiacritics: options.ignoreDiacritics
-    });
-    const queryTerms = this.analyzer.tokenize(pattern);
-    const invertedIndex = options._invertedIndex;
-    const {
-      df,
-      fieldCount
-    } = invertedIndex;
-    this.termSearchers = [];
-    this.idfWeights = [];
-    for (const term of queryTerms) {
-      this.termSearchers.push(new BitapSearch(term, {
-        location: options.location,
-        threshold: options.threshold,
-        distance: options.distance,
-        includeMatches: options.includeMatches,
-        findAllMatches: options.findAllMatches,
-        minMatchCharLength: options.minMatchCharLength,
-        isCaseSensitive: options.isCaseSensitive,
-        ignoreDiacritics: options.ignoreDiacritics,
-        ignoreLocation: true
-      }));
-      const docFreq = df.get(term) || 0;
-      const idf = Math.log(1 + (fieldCount - docFreq + 0.5) / (docFreq + 0.5));
-      this.idfWeights.push(idf);
-    }
-  }
-  searchIn(text) {
-    if (!this.termSearchers.length) {
-      return {
-        isMatch: false,
-        score: 1
-      };
-    }
-    const allIndices = [];
-    let weightedScore = 0;
-    let maxPossibleScore = 0;
-    let matchedCount = 0;
-    for (let i = 0; i < this.termSearchers.length; i++) {
-      const result = this.termSearchers[i].searchIn(text);
-      const idf = this.idfWeights[i];
-      maxPossibleScore += idf;
-      if (result.isMatch) {
-        matchedCount++;
-        weightedScore += idf * (1 - result.score);
-        if (result.indices) {
-          allIndices.push(...result.indices);
-        }
-      }
-    }
-    if (matchedCount === 0) {
-      return {
-        isMatch: false,
-        score: 1
-      };
-    }
-    const normalized = maxPossibleScore > 0 ? 1 - weightedScore / maxPossibleScore : 0;
-    const searchResult = {
-      isMatch: true,
-      score: Math.max(1e-3, normalized)
-    };
-    if (this.options.includeMatches && allIndices.length) {
-      searchResult.indices = mergeIndices(allIndices);
-    }
-    return searchResult;
-  }
-};
-Fuse.version = "7.3.0";
-Fuse.createIndex = createIndex;
-Fuse.parseIndex = parseIndex;
-Fuse.config = Config;
-Fuse.match = function(pattern, text, options) {
-  const searcher = createSearcher(pattern, {
-    ...Config,
-    ...options
-  });
-  return searcher.searchIn(text);
-};
-{
-  Fuse.parseQuery = parse;
-}
-{
-  register(ExtendedSearch);
-}
-{
-  register(TokenSearch);
-}
-Fuse.use = function(...plugins) {
-  plugins.forEach((plugin) => register(plugin));
-};
-
-// src/main/extensions/raycastShim.ts
-init_desktop_runtime();
-var import_node_child_process11 = require("node:child_process");
-var import_node_fs16 = require("node:fs");
-var import_node_os7 = require("node:os");
-var import_node_path16 = require("node:path");
-var import_node_util8 = require("node:util");
-init_appsProvider();
-var TOAST_STYLE = {
-  Success: "success",
-  Failure: "failure",
-  Animated: "animated"
-};
-var IMAGE_MASK = {
-  Circle: "circle",
-  RoundedRectangle: "roundedRectangle"
-};
-var execFileAsync8 = (0, import_node_util8.promisify)(import_node_child_process11.execFile);
-async function runAppleScript(source) {
-  if (process.platform !== "darwin") {
-    throw new Error("AppleScript is only available on macOS");
-  }
-  if (typeof source !== "string" || source.trim().length === 0) {
-    return "";
-  }
-  const { stdout } = await execFileAsync8("/usr/bin/osascript", ["-e", source], {
-    encoding: "utf8",
-    maxBuffer: 10 * 1024 * 1024
-  });
-  return String(stdout).replace(/\r?\n$/, "");
-}
-function createRenderProxy(name) {
-  const target = function() {
-    return void 0;
-  };
-  Object.defineProperty(target, "name", { value: name });
-  return new Proxy(target, {
-    get(t, prop) {
-      if (prop === Symbol.toPrimitive) return () => `[Raycast:${name}]`;
-      if (prop === "displayName") return name;
-      if (prop === "prototype") return {};
-      if (typeof prop === "symbol") return void 0;
-      if (prop in t) return Reflect.get(t, prop);
-      return createRenderProxy(`${name}.${String(prop)}`);
-    },
-    apply() {
-      return void 0;
-    },
-    construct() {
-      return {};
-    }
-  });
-}
-function createLocalStorage(packageRoot) {
-  const file = (0, import_node_path16.join)(packageRoot, "localStorage.json");
-  const readAll2 = () => {
-    try {
-      const raw = (0, import_node_fs16.readFileSync)(file, "utf8");
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? parsed : {};
-    } catch {
-      return {};
-    }
-  };
-  const writeAll2 = (value) => {
-    (0, import_node_fs16.mkdirSync)(packageRoot, { recursive: true });
-    (0, import_node_fs16.writeFileSync)(file, JSON.stringify(value, null, 2), "utf8");
-  };
-  return {
-    getItem: async (key) => readAll2()[key],
-    setItem: async (key, value) => {
-      const all = readAll2();
-      all[key] = value;
-      writeAll2(all);
-    },
-    removeItem: async (key) => {
-      const all = readAll2();
-      delete all[key];
-      writeAll2(all);
-    },
-    clear: async () => {
-      writeAll2({});
-    },
-    allItems: async () => readAll2()
-  };
-}
-function readPreferences(packageRoot) {
-  const file = (0, import_node_path16.join)(packageRoot, "preferences.json");
-  try {
-    const raw = (0, import_node_fs16.readFileSync)(file, "utf8");
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-function createClipboardShim() {
-  return {
-    copy: async (value) => {
-      if (value && typeof value === "object" && "text" in value) {
-        const v = value.text;
-        if (typeof v === "string") {
-          clipboard.writeText(v);
-          return;
-        }
-      }
-      if (typeof value === "string") clipboard.writeText(value);
-      else clipboard.writeText(String(value));
-    },
-    paste: async (value) => {
-      if (typeof value === "string") clipboard.writeText(value);
-      else if (value && typeof value === "object" && "text" in value) {
-        const v = value.text;
-        if (typeof v === "string") clipboard.writeText(v);
-      }
-    },
-    readText: async () => clipboard.readText(),
-    read: async () => ({
-      text: clipboard.readText() || void 0
-    }),
-    clear: async () => clipboard.clear()
-  };
-}
-function createEnvironment(ctx) {
-  const supportPath = (0, import_node_path16.join)(ctx.packageRoot, "support");
-  try {
-    (0, import_node_fs16.mkdirSync)(supportPath, { recursive: true });
-  } catch {
-  }
-  return {
-    appearance: "dark",
-    commandName: ctx.commandName,
-    commandMode: "no-view",
-    extensionName: ctx.extensionId,
-    raycastVersion: "1.77.0",
-    isDevelopment: !app.isPackaged,
-    supportPath,
-    assetsPath: (0, import_node_path16.join)(ctx.packageRoot, "assets"),
-    launchType: "userInitiated",
-    textSize: "medium"
-  };
-}
-function createRaycastApi(ctx) {
-  const Image = Object.assign(createRenderProxy("Image"), {
-    Mask: IMAGE_MASK
-  });
-  return {
-    Toast: { Style: TOAST_STYLE },
-    Icon: createRenderProxy("Icon"),
-    Color: createRenderProxy("Color"),
-    Image,
-    ImageMask: IMAGE_MASK,
-    List: createRenderProxy("List"),
-    Form: createRenderProxy("Form"),
-    Detail: createRenderProxy("Detail"),
-    Grid: createRenderProxy("Grid"),
-    Action: createRenderProxy("Action"),
-    ActionPanel: createRenderProxy("ActionPanel"),
-    MenuBarExtra: createRenderProxy("MenuBarExtra"),
-    Alert: {
-      ActionStyle: { Destructive: "destructive", Cancel: "cancel", Default: "default" }
-    },
-    Keyboard: {
-      Shortcut: { Common: {} }
-    },
-    OAuth: createRenderProxy("OAuth"),
-    BrowserExtension: createRenderProxy("BrowserExtension"),
-    AI: {
-      ask: async (prompt) => {
-        return prompt;
-      }
-    },
-    environment: createEnvironment(ctx),
-    LocalStorage: createLocalStorage(ctx.packageRoot),
-    Cache: class {
-      store = /* @__PURE__ */ new Map();
-      get(key) {
-        return this.store.get(key);
-      }
-      set(key, value) {
-        this.store.set(key, value);
-      }
-      has(key) {
-        return this.store.has(key);
-      }
-      remove(key) {
-        this.store.delete(key);
-      }
-      clear() {
-        this.store.clear();
-      }
-    },
-    Clipboard: createClipboardShim(),
-    getPreferenceValues: () => readPreferences(ctx.packageRoot),
-    getSelectedText: async () => "",
-    getApplications: async () => listApplications(),
-    runAppleScript,
-    open: async (target) => {
-      if (typeof target !== "string") return;
-      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target) || target.startsWith("mailto:")) {
-        await shell.openExternal(target);
-      } else {
-        const resolved = target.startsWith("~") ? target.replace(/^~/, (0, import_node_os7.homedir)()) : target;
-        await shell.openPath(resolved);
-      }
-    },
-    openExtensionPreferences: async () => {
-    },
-    openCommandPreferences: async () => {
-    },
-    showToast: (opts) => {
-      const obj = opts && typeof opts === "object" ? opts : {};
-      ctx.feedback.push({
-        kind: "toast",
-        style: typeof obj.style === "string" ? obj.style : void 0,
-        title: typeof obj.title === "string" ? obj.title : void 0,
-        message: typeof obj.message === "string" ? obj.message : void 0
-      });
-      return {
-        hide: async () => {
-        },
-        set title(_v) {
-        },
-        set message(_v) {
-        },
-        set style(_v) {
-        }
-      };
-    },
-    showHUD: async (message) => {
-      ctx.feedback.push({ kind: "hud", message: String(message ?? "") });
-    },
-    showInFinder: async (path7) => {
-      if (typeof path7 !== "string") return;
-      shell.showItemInFolder(path7);
-    },
-    confirmAlert: async () => true,
-    closeMainWindow: async () => {
-    },
-    popToRoot: async () => {
-    },
-    updateCommandMetadata: async () => {
-    },
-    captureException: () => {
-    },
-    useNavigation: () => ({ push: () => {
-    }, pop: () => {
-    } }),
-    /** Image helper. Electron has its own `nativeImage`; extensions mainly
-     *  use this for sizing/base64 conversion. */
-    createImage: (buffer) => nativeImage.createFromBuffer(buffer)
-  };
-}
-function createRaycastUtils(ctx) {
-  const localStorage = createLocalStorage(ctx.packageRoot);
-  return {
-    useCachedState: (_, initialValue) => {
-      let state = initialValue;
-      const setState = (next) => {
-        state = typeof next === "function" ? next(state) : next;
-      };
-      return [state, setState];
-    },
-    useCachedPromise: () => ({
-      data: void 0,
-      revalidate: async () => {
-      },
-      isLoading: false,
-      mutate: async () => {
-      },
-      error: void 0,
-      pagination: void 0
-    }),
-    usePromise: () => ({
-      data: void 0,
-      isLoading: false,
-      revalidate: async () => {
-      },
-      mutate: async () => {
-      },
-      error: void 0
-    }),
-    useFetch: () => ({
-      data: void 0,
-      isLoading: false,
-      revalidate: async () => {
-      },
-      error: void 0
-    }),
-    useExec: () => ({
-      data: void 0,
-      isLoading: false,
-      error: void 0,
-      revalidate: async () => {
-      }
-    }),
-    useLocalStorage: (key, initialValue) => {
-      let current = initialValue;
-      void localStorage.getItem(key).then((raw) => {
-        if (typeof raw === "string") {
-          try {
-            current = JSON.parse(raw);
-          } catch {
-          }
-        }
-      });
-      return {
-        value: current,
-        setValue: async (next) => {
-          current = next;
-          await localStorage.setItem(key, JSON.stringify(next));
-        },
-        removeValue: async () => {
-          await localStorage.setItem(key, "null");
-        },
-        isLoading: false
-      };
-    },
-    useForm: () => ({
-      itemProps: new Proxy(
-        {},
-        {
-          get: () => ({ value: "", onChange: () => {
-          } })
-        }
-      ),
-      values: {},
-      setValue: () => {
-      },
-      setValidationError: () => {
-      },
-      reset: () => {
-      },
-      focus: () => {
-      },
-      handleSubmit: () => async () => true
-    }),
-    FormValidation: { Required: () => void 0 },
-    runAppleScript,
-    showFailureToast: (error) => {
-      ctx.feedback.push({
-        kind: "toast",
-        style: "failure",
-        title: error instanceof Error ? error.message : String(error)
-      });
-    },
-    getFavicon: () => createRenderProxy("Icon")
-  };
-}
-function formatRuntimeFeedback(feedback) {
-  if (feedback.kind === "hud") {
-    return feedback.message ?? "Extension command completed.";
-  }
-  const title = feedback.title?.trim() ?? "";
-  const message = feedback.message?.trim() ?? "";
-  if (title && message) return `${title}: ${message}`;
-  return title || message || "Extension command completed.";
-}
-
-// src/main/extensions/service.ts
-var RAYCAST_EXTENSIONS_REPO = "https://github.com/raycast/extensions";
-var RAYCAST_EXTENSIONS_REF = "c0e624ee0420679ed3aa296c25c1a6f29938c56a";
-var RAYCAST_EXTENSIONS_PATH = "extensions";
-var CATALOG_CACHE_TTL_MS = 10 * 6e4;
-var RUNTIME_UNSUPPORTED_MODE = "RUNTIME_UNSUPPORTED_MODE";
-var DEFAULT_DB = {
-  installed: []
-};
-var catalogCache2 = null;
-var commandCache = /* @__PURE__ */ new Map();
-function getDbPath() {
-  const dir = (0, import_node_path17.join)(app.getPath("userData"), "extensions");
-  (0, import_node_fs17.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path17.join)(dir, "installed.json");
-}
-function extensionsRootDir() {
-  const dir = (0, import_node_path17.join)(app.getPath("userData"), "extensions");
-  (0, import_node_fs17.mkdirSync)(dir, { recursive: true });
-  return dir;
-}
-function installedPackageRoot(extensionId) {
-  return (0, import_node_path17.join)(extensionsRootDir(), "packages", extensionId);
-}
-function packageJsonPathForInstalledExtension(extensionId) {
-  return (0, import_node_path17.join)(installedPackageRoot(extensionId), "package.json");
-}
-function scriptPathForInstalledExtensionCommand(extensionId, commandName2) {
-  return (0, import_node_path17.join)(installedPackageRoot(extensionId), ".sc-build", `${commandName2}.js`);
-}
-function metaPathForInstalledExtension(extensionId) {
-  return (0, import_node_path17.join)(installedPackageRoot(extensionId), "meta.json");
-}
-function backupPackageRoot(extensionId) {
-  return (0, import_node_path17.join)(extensionsRootDir(), "packages", `${extensionId}.backup`);
-}
-function readInstallMeta(extensionId) {
-  const p = metaPathForInstalledExtension(extensionId);
-  if (!(0, import_node_fs17.existsSync)(p)) return null;
-  try {
-    return JSON.parse((0, import_node_fs17.readFileSync)(p, "utf8"));
-  } catch {
-    return null;
-  }
-}
-function writeInstallMeta(meta) {
-  const p = metaPathForInstalledExtension(meta.extensionId);
-  (0, import_node_fs17.mkdirSync)((0, import_node_path17.dirname)(p), { recursive: true });
-  (0, import_node_fs17.writeFileSync)(p, JSON.stringify(meta, null, 2), "utf8");
-}
-function hashText(text) {
-  return (0, import_node_crypto9.createHash)("sha256").update(text).digest("hex");
-}
-function inspectIntegrity(extensionId) {
-  const meta = readInstallMeta(extensionId);
-  if (!meta) {
-    return {
-      extensionId,
-      installed: false,
-      missingScripts: [],
-      tamperedScripts: [],
-      healthy: false
-    };
-  }
-  const missing = [...meta.missingScripts];
-  const tampered = [];
-  for (const name of meta.commandNames) {
-    if (meta.missingScripts.includes(name)) continue;
-    const scriptPath = scriptPathForInstalledExtensionCommand(extensionId, name);
-    if (!(0, import_node_fs17.existsSync)(scriptPath)) {
-      missing.push(name);
-      continue;
-    }
-    const expected = meta.scriptHashes[name];
-    if (!expected) continue;
-    try {
-      const actual = hashText((0, import_node_fs17.readFileSync)(scriptPath, "utf8"));
-      if (actual !== expected) tampered.push(name);
-    } catch {
-      missing.push(name);
-    }
-  }
-  return {
-    extensionId,
-    installed: true,
-    commitRef: meta.commitRef,
-    missingScripts: Array.from(new Set(missing)),
-    tamperedScripts: tampered,
-    healthy: missing.length === 0 && tampered.length === 0,
-    lastError: meta.lastError
-  };
-}
-function parseJsonSafe(raw) {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-function readInstalledPackageJson(extensionId) {
-  const p = packageJsonPathForInstalledExtension(extensionId);
-  if (!(0, import_node_fs17.existsSync)(p)) return null;
-  try {
-    const raw = (0, import_node_fs17.readFileSync)(p, "utf8");
-    return parseJsonSafe(raw);
-  } catch {
-    return null;
-  }
-}
-function extensionSlugFromId(extensionId) {
-  return extensionId.startsWith("raycast.") ? extensionId.slice("raycast.".length) : extensionId;
-}
-function readDb2() {
-  const p = getDbPath();
-  try {
-    const raw = (0, import_node_fs17.readFileSync)(p, "utf8");
-    const parsed = JSON.parse(raw);
-    return {
-      installed: Array.isArray(parsed.installed) ? parsed.installed : []
-    };
-  } catch {
-    return DEFAULT_DB;
-  }
-}
-function writeDb2(db) {
-  const p = getDbPath();
-  (0, import_node_fs17.writeFileSync)(p, JSON.stringify(db, null, 2), "utf8");
-}
-function byName(a, b) {
-  return a.name.localeCompare(b.name);
-}
-function normalizeNameFromSlug(slug) {
-  return slug.split(/[-_]/g).filter(Boolean).map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" ");
-}
-async function fetchGithubJson(url) {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "tezbar-extension-indexer"
-    }
-  });
-  if (!response.ok) {
-    throw new Error(`GitHub API request failed (${response.status}): ${url}`);
-  }
-  return await response.json();
-}
-async function fetchText(url) {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "tezbar-extension-indexer"
-    }
-  });
-  if (!response.ok) {
-    throw new Error(`Request failed (${response.status}): ${url}`);
-  }
-  return await response.text();
-}
-async function fetchRaycastPackage(slug) {
-  const url = `https://raw.githubusercontent.com/raycast/extensions/${RAYCAST_EXTENSIONS_REF}/${RAYCAST_EXTENSIONS_PATH}/${slug}/package.json`;
-  const raw = await fetchText(url);
-  const parsed = parseJsonSafe(raw);
-  if (!parsed || typeof parsed !== "object") {
-    throw new Error(`Invalid package.json for extension: ${slug}`);
-  }
-  return parsed;
-}
-var AWESOME_RAYCAST_DATA = "https://raw.githubusercontent.com/j3lte/awesome-raycast/main/data/data.json";
-async function fetchRaycastCatalogFromAwesome() {
-  const raw = await fetchText(AWESOME_RAYCAST_DATA);
-  const data = JSON.parse(raw);
-  return data.map((item) => ({
-    id: `raycast.${item.name}`,
-    name: item.title || normalizeNameFromSlug(item.name),
-    description: item.description || `Raycast extension: ${item.title}`,
-    author: item.author || "Raycast Community",
-    version: "latest",
-    repository: `${RAYCAST_EXTENSIONS_REPO}/tree/main/${RAYCAST_EXTENSIONS_PATH}/${item.name}`,
-    downloadCount: item.download_count,
-    owner: item.owner
-  }));
-}
-async function fetchRaycastCatalogFromGithub() {
-  try {
-    const commit = await fetchGithubJson(
-      `https://api.github.com/repos/raycast/extensions/git/commits/${RAYCAST_EXTENSIONS_REF}`
-    );
-    const rootTree = await fetchGithubJson(
-      `https://api.github.com/repos/raycast/extensions/git/trees/${commit.tree.sha}`
-    );
-    const extensionsDir = rootTree.tree.find(
-      (entry) => entry.type === "tree" && entry.path === RAYCAST_EXTENSIONS_PATH
-    );
-    if (!extensionsDir) return [];
-    const extensionsTree = await fetchGithubJson(
-      `https://api.github.com/repos/raycast/extensions/git/trees/${extensionsDir.sha}`
-    );
-    return extensionsTree.tree.filter((entry) => entry.type === "tree").map((entry) => {
-      const slug = entry.path;
-      const name = normalizeNameFromSlug(slug);
-      return {
-        id: `raycast.${slug}`,
-        name,
-        description: `Raycast extension: ${name}`,
-        author: "Raycast Community",
-        version: RAYCAST_EXTENSIONS_REF.slice(0, 7),
-        repository: `${RAYCAST_EXTENSIONS_REPO}/tree/${RAYCAST_EXTENSIONS_REF}/${RAYCAST_EXTENSIONS_PATH}/${slug}`
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-async function stageAndInstallExtension(extensionId, slug) {
-  const pkg = await fetchRaycastPackage(slug);
-  const staging = (0, import_node_fs17.mkdtempSync)((0, import_node_path17.join)((0, import_node_os8.tmpdir)(), `tezbar-ext-${extensionId}-`));
-  const stagingBuild = (0, import_node_path17.join)(staging, ".sc-build");
-  (0, import_node_fs17.mkdirSync)(stagingBuild, { recursive: true });
-  (0, import_node_fs17.writeFileSync)((0, import_node_path17.join)(staging, "package.json"), JSON.stringify(pkg, null, 2), "utf8");
-  const commandEntries = (pkg.commands ?? []).map((cmd) => ({
-    name: typeof cmd.name === "string" ? cmd.name.trim() : "",
-    mode: typeof cmd.mode === "string" ? cmd.mode.trim() : ""
-  })).filter((entry) => entry.name.length > 0);
-  const missingScripts = [];
-  const scriptHashes = {};
-  await Promise.all(
-    commandEntries.map(async (entry) => {
-      const url = `https://raw.githubusercontent.com/raycast/extensions/${RAYCAST_EXTENSIONS_REF}/${RAYCAST_EXTENSIONS_PATH}/${slug}/.sc-build/${entry.name}.js`;
-      try {
-        const js = await fetchText(url);
-        (0, import_node_fs17.writeFileSync)((0, import_node_path17.join)(stagingBuild, `${entry.name}.js`), js, "utf8");
-        scriptHashes[entry.name] = hashText(js);
-      } catch {
-        missingScripts.push(entry.name);
-      }
-    })
-  );
-  const root = installedPackageRoot(extensionId);
-  const backup = backupPackageRoot(extensionId);
-  if ((0, import_node_fs17.existsSync)(backup)) (0, import_node_fs17.rmSync)(backup, { recursive: true, force: true });
-  try {
-    if ((0, import_node_fs17.existsSync)(root)) (0, import_node_fs17.renameSync)(root, backup);
-    (0, import_node_fs17.mkdirSync)((0, import_node_path17.dirname)(root), { recursive: true });
-    (0, import_node_fs17.renameSync)(staging, root);
-  } catch (error) {
-    if ((0, import_node_fs17.existsSync)(backup) && !(0, import_node_fs17.existsSync)(root)) {
-      try {
-        (0, import_node_fs17.renameSync)(backup, root);
-      } catch {
-      }
-    }
-    (0, import_node_fs17.rmSync)(staging, { recursive: true, force: true });
-    throw error;
-  } finally {
-    if ((0, import_node_fs17.existsSync)(backup)) (0, import_node_fs17.rmSync)(backup, { recursive: true, force: true });
-  }
-  writeInstallMeta({
-    extensionId,
-    commitRef: RAYCAST_EXTENSIONS_REF,
-    installedAt: Date.now(),
-    commandNames: commandEntries.map((entry) => entry.name),
-    missingScripts,
-    scriptHashes
-  });
-  return pkg;
-}
-async function ensureRaycastExtensionBundle(extensionId) {
-  const meta = readInstallMeta(extensionId);
-  const existing = readInstalledPackageJson(extensionId);
-  if (meta && existing && meta.commitRef === RAYCAST_EXTENSIONS_REF) {
-    const report = inspectIntegrity(extensionId);
-    if (report.healthy) return existing;
-  }
-  const slug = extensionSlugFromId(extensionId);
-  return await stageAndInstallExtension(extensionId, slug);
-}
-var installErrors = /* @__PURE__ */ new Map();
-async function ensureExtensionBundle(extensionId) {
-  if (!extensionId.startsWith("raycast.")) return null;
-  try {
-    const pkg = await ensureRaycastExtensionBundle(extensionId);
-    installErrors.delete(extensionId);
-    return pkg;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    installErrors.set(extensionId, message);
-    const existingMeta = readInstallMeta(extensionId);
-    if (existingMeta) {
-      writeInstallMeta({ ...existingMeta, lastError: message });
-    }
-    console.warn("[extensions] failed to ensure extension bundle:", extensionId, error);
-    return readInstalledPackageJson(extensionId);
-  }
-}
-function inspectExtensionIntegrity(extensionId) {
-  return inspectIntegrity(extensionId);
-}
-function getExtensionInstallError(extensionId) {
-  return installErrors.get(extensionId) ?? null;
-}
-async function reinstallExtension(extensionId) {
-  const slug = extensionSlugFromId(extensionId);
-  try {
-    await stageAndInstallExtension(extensionId, slug);
-    installErrors.delete(extensionId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    installErrors.set(extensionId, message);
-    throw error;
-  }
-  commandCache.delete(extensionId);
-  return inspectIntegrity(extensionId);
-}
-async function executeNoViewScript(extensionId, commandName2, scriptPath, argumentValues) {
-  const fileRequire = (0, import_node_module.createRequire)(scriptPath);
-  const feedback = [];
-  const packageRoot = installedPackageRoot(extensionId);
-  const shimCtx = { extensionId, commandName: commandName2, packageRoot, feedback };
-  const raycastApiShim = createRaycastApi(shimCtx);
-  const raycastUtilsShim = createRaycastUtils(shimCtx);
-  const builtinSet = new Set(import_node_module.builtinModules);
-  const customRequire = (specifier) => {
-    if (specifier === "@raycast/api") return raycastApiShim;
-    if (specifier === "@raycast/utils") return raycastUtilsShim;
-    if (specifier.startsWith("./") || specifier.startsWith("../") || specifier.startsWith("/")) {
-      return fileRequire(specifier);
-    }
-    if (specifier.startsWith("node:") || builtinSet.has(specifier)) {
-      return fileRequire(specifier);
-    }
-    throw new Error(`Unsupported runtime dependency: ${specifier}`);
-  };
-  const mod = { exports: {} };
-  const wrapper = new Function(
-    "exports",
-    "require",
-    "module",
-    "__filename",
-    "__dirname",
-    (0, import_node_fs17.readFileSync)(scriptPath, "utf8")
-  );
-  wrapper(mod.exports, customRequire, mod, scriptPath, (0, import_node_path17.dirname)(scriptPath));
-  const exported = mod.exports;
-  const command = typeof exported.default === "function" ? exported.default : typeof mod.exports === "function" ? mod.exports : null;
-  if (!command) {
-    throw new Error("Extension command entry is not executable");
-  }
-  await Promise.resolve(command({ arguments: argumentValues }));
-  const last = feedback.at(-1);
-  if (!last) {
-    return { ok: true, message: "Extension command completed." };
-  }
-  const style = (last.style ?? "").toLowerCase();
-  const ok = style !== "failure";
-  return {
-    ok,
-    message: formatRuntimeFeedback(last)
-  };
-}
-function unsupportedModeError() {
-  const err = new Error("Only no-view extension commands are executable in this runtime.");
-  err.code = RUNTIME_UNSUPPORTED_MODE;
-  return err;
-}
-function isUnsupportedRuntimeModeError(error) {
-  if (!error || typeof error !== "object") return false;
-  return error.code === RUNTIME_UNSUPPORTED_MODE;
-}
-async function executeExtensionCommandRuntime(extensionId, commandName2, argumentValues) {
-  const pkg = await ensureExtensionBundle(extensionId);
-  if (!pkg) {
-    throw new Error(`Runtime bundle not available for extension: ${extensionId}`);
-  }
-  const commandMeta = (pkg.commands ?? []).find((command) => command.name === commandName2);
-  if (!commandMeta) {
-    throw new Error(`Command not found: ${commandName2}`);
-  }
-  const mode = (commandMeta.mode ?? "").toLowerCase();
-  if (mode && mode !== "no-view") {
-    throw unsupportedModeError();
-  }
-  const meta = readInstallMeta(extensionId);
-  if (meta?.missingScripts.includes(commandName2)) {
-    throw new Error(
-      `No prebuilt script for ${commandName2}. This extension doesn't ship an executable .sc-build file for this command.`
-    );
-  }
-  const scriptPath = scriptPathForInstalledExtensionCommand(extensionId, commandName2);
-  if (!(0, import_node_fs17.existsSync)(scriptPath)) {
-    throw new Error(`Missing command script: ${commandName2}.js`);
-  }
-  return await executeNoViewScript(extensionId, commandName2, scriptPath, argumentValues);
-}
-async function getStoreCatalog() {
-  const now = Date.now();
-  if (catalogCache2 && now - catalogCache2.fetchedAt < CATALOG_CACHE_TTL_MS) {
-    return catalogCache2.catalog;
-  }
-  try {
-    const catalog = await fetchRaycastCatalogFromAwesome();
-    catalogCache2 = { fetchedAt: now, catalog };
-    return catalog;
-  } catch (error) {
-    console.warn("[extensions] failed to refresh Raycast catalog from Awesome:", error);
-    try {
-      const catalog = await fetchRaycastCatalogFromGithub();
-      if (catalog.length > 0) {
-        catalogCache2 = { fetchedAt: now, catalog };
-        return catalog;
-      }
-    } catch (innerError) {
-      console.warn("[extensions] failed to refresh Raycast catalog from Github:", innerError);
-    }
-    return catalogCache2?.catalog ?? [];
-  }
-}
-function scoreMatch(item, q) {
-  const name = item.name.toLowerCase();
-  const description = item.description.toLowerCase();
-  const slug = item.id.startsWith("raycast.") ? item.id.slice("raycast.".length).toLowerCase() : item.id.toLowerCase();
-  let score = 0;
-  if (name === q || slug === q) score += 1e3;
-  else if (name.startsWith(q) || slug.startsWith(q)) score += 800;
-  const nameWords = name.split(/[-_\s.]/g);
-  if (nameWords.some((word) => word.startsWith(q))) score += 600;
-  const descWords = description.split(/[-_\s.]/g);
-  if (descWords.some((word) => word.startsWith(q))) score += 500;
-  if (name.includes(q) || slug.includes(q)) score += 200;
-  if (description.includes(q)) score += 100;
-  if (item.downloadCount && item.downloadCount > 0) {
-    score += Math.log10(item.downloadCount) * 50;
-  }
-  return score;
-}
-function listInstalledExtensions() {
-  const db = readDb2();
-  return [...db.installed].sort(byName);
-}
-async function searchStoreExtensions(query) {
-  const q = query.trim().toLowerCase();
-  const catalog = await getStoreCatalog();
-  if (!q) {
-    return catalog.sort((a, b) => (b.downloadCount ?? 0) - (a.downloadCount ?? 0));
-  }
-  const scored = catalog.map((item) => ({ item, score: scoreMatch(item, q) })).filter((entry) => entry.score > 0);
-  const fuse = new Fuse(catalog, {
-    keys: [
-      { name: "name", weight: 0.7 },
-      { name: "description", weight: 0.3 }
-    ],
-    threshold: 0.4,
-    includeScore: true
-  });
-  const fuzzyResults = fuse.search(q);
-  const fuzzyMap = /* @__PURE__ */ new Map();
-  fuzzyResults.forEach((res) => {
-    if (res.score !== void 0) {
-      fuzzyMap.set(res.item.id, (1 - res.score) * 500);
-    }
-  });
-  const finalResults = catalog.map((item) => {
-    let score = scoreMatch(item, q);
-    const fuzzyBoost = fuzzyMap.get(item.id) ?? 0;
-    score += fuzzyBoost;
-    return { item, score };
-  }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score || byName(a.item, b.item));
-  return finalResults.map((entry) => entry.item);
-}
-async function installExtension2(extensionId) {
-  const catalog = await getStoreCatalog();
-  const manifest = catalog.find((item) => item.id === extensionId);
-  if (!manifest) {
-    throw new Error(`Extension not found in store: ${extensionId}`);
-  }
-  const db = readDb2();
-  const existing = db.installed.find((item) => item.id === extensionId);
-  if (existing) {
-    void ensureExtensionBundle(extensionId);
-    return existing;
-  }
-  const next = {
-    ...manifest,
-    installedAt: Date.now()
-  };
-  db.installed.push(next);
-  writeDb2(db);
-  void ensureExtensionBundle(extensionId);
-  return next;
-}
-function uninstallExtension2(extensionId) {
-  const db = readDb2();
-  const before = db.installed.length;
-  db.installed = db.installed.filter((item) => item.id !== extensionId);
-  if (db.installed.length === before) return false;
-  writeDb2(db);
-  commandCache.delete(extensionId);
-  installErrors.delete(extensionId);
-  (0, import_node_fs17.rmSync)(installedPackageRoot(extensionId), { recursive: true, force: true });
-  (0, import_node_fs17.rmSync)(backupPackageRoot(extensionId), { recursive: true, force: true });
-  return true;
-}
-
 // src/main/ipc.ts
 init_extension_registry();
 init_extension_runner();
-
-// src/main/search/service.ts
-init_desktop_runtime();
-var import_node_child_process16 = require("node:child_process");
-var import_node_fs26 = require("node:fs");
-var import_node_os13 = require("node:os");
-var import_node_path28 = require("node:path");
-var import_node_util13 = require("node:util");
-
-// src/shared/searchMode.ts
-var DEEP_SEARCH_PREFIX = "!";
-var ACTIVATE_DEEP_SEARCH_COMMAND = "activate-deep-search";
-var DEEP_SEARCH_RESULT_PREFIX = "deep-search:";
-function parseSearchQuery(input) {
-  if (input.startsWith(DEEP_SEARCH_PREFIX)) {
-    return {
-      mode: "deep",
-      query: input.slice(DEEP_SEARCH_PREFIX.length).trim()
-    };
-  }
-  return { mode: "basic", query: input.trim() };
-}
-function tokens(value) {
-  return value.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-}
-function metadataTokenMatchesQuery(metadataToken, queryToken) {
-  if (metadataToken === queryToken || metadataToken.startsWith(queryToken)) return true;
-  if (!queryToken.startsWith(metadataToken)) return false;
-  const requiredPrefixLength = Math.max(3, Math.ceil(queryToken.length * 0.7));
-  return metadataToken.length >= requiredPrefixLength;
-}
-function hasGoodMetadataMatch(query, results) {
-  const normalizedQuery = query.trim().toLowerCase();
-  const queryTokens = tokens(normalizedQuery);
-  if (normalizedQuery.length < 2 || queryTokens.length === 0) return true;
-  return results.slice(0, 10).some((result) => {
-    if (result.category === "knowledge" || result.id.startsWith(DEEP_SEARCH_RESULT_PREFIX) || result.id.startsWith("note-add:")) {
-      return false;
-    }
-    const title = result.title.trim().toLowerCase();
-    const metadata = `${title} ${result.subtitle.trim().toLowerCase()}`.trim();
-    if (title === normalizedQuery || title.startsWith(normalizedQuery)) return true;
-    if (metadata.includes(normalizedQuery)) return true;
-    const metadataTokens = tokens(metadata);
-    const coversEveryTerm = queryTokens.every(
-      (queryToken) => metadataTokens.some((metadataToken) => metadataTokenMatchesQuery(metadataToken, queryToken))
-    );
-    if (!coversEveryTerm) return false;
-    return queryTokens.length > 1 || result.score >= 650;
-  });
-}
-
-// src/main/nativeCommands/executor.ts
-var import_node_child_process13 = require("node:child_process");
-init_desktop_runtime();
-var import_node_os10 = require("node:os");
-var import_node_path19 = require("node:path");
-var import_node_util10 = require("node:util");
-
-// src/main/nativeCommands/registry.ts
-var WINDOWS = process.platform === "win32";
-var DESCRIPTORS = {
-  "toggle-dark-mode": {
-    id: "toggle-dark-mode",
-    title: "Toggle Dark Mode",
-    subtitle: "Switch between light and dark appearance.",
-    category: "display",
-    strategy: "applescript",
-    keywords: ["dark", "light", "appearance", "theme", "mode"],
-    macOnly: false
-  },
-  "start-screen-saver": {
-    id: "start-screen-saver",
-    title: "Start Screen Saver",
-    subtitle: "Launch the screen saver now.",
-    category: "display",
-    strategy: "shell",
-    keywords: ["screensaver", "screen", "saver", "lock"],
-    macOnly: false
-  },
-  "sleep-display": {
-    id: "sleep-display",
-    title: "Sleep Display",
-    subtitle: "Put just the display to sleep.",
-    category: "power",
-    strategy: "shell",
-    keywords: ["sleep", "display", "screen", "off"],
-    macOnly: false
-  },
-  "toggle-mute": {
-    id: "toggle-mute",
-    title: "Toggle Mute",
-    subtitle: "Mute or unmute the system output volume.",
-    category: "audio",
-    strategy: "applescript",
-    keywords: ["mute", "unmute", "sound", "audio", "volume"],
-    macOnly: false
-  },
-  "volume-up": {
-    id: "volume-up",
-    title: "Volume Up",
-    subtitle: "Raise system output volume by one step.",
-    category: "audio",
-    strategy: "applescript",
-    keywords: ["volume", "louder", "up"],
-    macOnly: false
-  },
-  "volume-down": {
-    id: "volume-down",
-    title: "Volume Down",
-    subtitle: "Lower system output volume by one step.",
-    category: "audio",
-    strategy: "applescript",
-    keywords: ["volume", "quieter", "down"],
-    macOnly: false
-  },
-  "toggle-hide-desktop-icons": {
-    id: "toggle-hide-desktop-icons",
-    title: "Toggle Hide Desktop Icons",
-    subtitle: "Hide or show files on the Finder desktop.",
-    category: "desktop",
-    strategy: "shell",
-    keywords: ["hide", "desktop", "icons", "clean", "finder"],
-    macOnly: true
-  },
-  "toggle-autohide-dock": {
-    id: "toggle-autohide-dock",
-    title: "Toggle Autohide Dock",
-    subtitle: "Flip the Dock auto-hide preference.",
-    category: "desktop",
-    strategy: "shell",
-    keywords: ["dock", "autohide", "hide", "bar"],
-    macOnly: true
-  },
-  "toggle-autohide-menu-bar": {
-    id: "toggle-autohide-menu-bar",
-    title: "Toggle Autohide Menu Bar",
-    subtitle: "Flip the macOS menu-bar auto-hide preference.",
-    category: "desktop",
-    strategy: "shell",
-    keywords: ["menu", "bar", "autohide", "notch"],
-    macOnly: true
-  },
-  "restart-dock": {
-    id: "restart-dock",
-    title: "Restart Dock",
-    subtitle: "Relaunch the Dock process.",
-    category: "desktop",
-    strategy: "shell",
-    keywords: ["dock", "restart", "relaunch"],
-    macOnly: true
-  },
-  "restart-finder": {
-    id: "restart-finder",
-    title: "Restart Finder",
-    subtitle: "Relaunch the Finder process.",
-    category: "desktop",
-    strategy: "shell",
-    keywords: ["finder", "restart", "relaunch"],
-    macOnly: true
-  },
-  "restart-menu-bar": {
-    id: "restart-menu-bar",
-    title: "Restart Menu Bar",
-    subtitle: "Relaunch SystemUIServer (fixes frozen menu bar).",
-    category: "desktop",
-    strategy: "shell",
-    keywords: ["menu", "bar", "restart", "systemuiserver"],
-    macOnly: true
-  },
-  "start-keep-awake": {
-    id: "start-keep-awake",
-    title: "Keep Awake",
-    subtitle: "Prevent system sleep until you stop it.",
-    category: "power",
-    strategy: "shell",
-    keywords: ["keep", "awake", "caffeinate", "no", "sleep"],
-    restoreId: "stop-keep-awake",
-    macOnly: false
-  },
-  "stop-keep-awake": {
-    id: "stop-keep-awake",
-    title: "Stop Keep Awake",
-    subtitle: "Allow the system to sleep again.",
-    category: "power",
-    strategy: "shell",
-    keywords: ["stop", "awake", "caffeinate", "sleep"],
-    macOnly: false
-  },
-  "sleep-system": {
-    id: "sleep-system",
-    title: "Sleep Computer",
-    subtitle: "Put the computer to sleep now.",
-    category: "power",
-    strategy: "applescript",
-    keywords: ["sleep", "mac", "suspend", "idle"],
-    macOnly: false
-  },
-  "toggle-bluetooth": {
-    id: "toggle-bluetooth",
-    title: "Toggle Bluetooth",
-    subtitle: "Turn Bluetooth on or off (requires blueutil).",
-    category: "network",
-    strategy: "shell",
-    keywords: ["bluetooth", "bt", "airpods", "wireless"],
-    macOnly: true
-  },
-  "toggle-wifi": {
-    id: "toggle-wifi",
-    title: "Toggle Wi-Fi",
-    subtitle: "Turn Wi-Fi on or off on the default interface.",
-    category: "network",
-    strategy: "shell",
-    keywords: ["wifi", "wireless", "network", "toggle"],
-    macOnly: false
-  },
-  "show-network-info": {
-    id: "show-network-info",
-    title: "Show Network Info",
-    subtitle: "Display current IP addresses and Wi-Fi SSID.",
-    category: "network",
-    strategy: "shell",
-    keywords: ["network", "ip", "wifi", "ssid", "info"],
-    macOnly: false
-  },
-  "show-public-ip": {
-    id: "show-public-ip",
-    title: "Show Public IP",
-    subtitle: "Look up the public IPv4 address of this connection.",
-    category: "network",
-    strategy: "shell",
-    keywords: ["ip", "public", "external", "wan"],
-    macOnly: false
-  },
-  "flush-dns-cache": {
-    id: "flush-dns-cache",
-    title: "Flush DNS Cache",
-    subtitle: WINDOWS ? "Clear the Windows DNS resolver cache." : "Clear the macOS resolver and mDNSResponder caches.",
-    category: "network",
-    strategy: "shell",
-    keywords: ["dns", "flush", "cache", "network", "resolver"],
-    macOnly: false
-  },
-  "toggle-vpn-menu": {
-    id: "toggle-vpn-menu",
-    title: "Open VPN Settings",
-    subtitle: WINDOWS ? "Open Windows VPN settings." : "Open the VPN/Network control.",
-    category: "network",
-    strategy: "shell",
-    keywords: ["vpn", "network", "menu"],
-    macOnly: false
-  },
-  "empty-trash": {
-    id: "empty-trash",
-    title: "Empty Trash",
-    subtitle: "Permanently delete everything in the Trash.",
-    category: "system",
-    strategy: "applescript",
-    keywords: ["trash", "empty", "delete", "clean"],
-    destructive: true,
-    macOnly: false
-  },
-  "lock-screen": {
-    id: "lock-screen",
-    title: "Lock Screen",
-    subtitle: "Lock the current session.",
-    category: "system",
-    strategy: "applescript",
-    keywords: ["lock", "screen", "session", "away"],
-    macOnly: false
-  },
-  "open-downloads": {
-    id: "open-downloads",
-    title: "Open Downloads Folder",
-    subtitle: "Open the Downloads folder.",
-    category: "files",
-    strategy: "shell",
-    keywords: ["downloads", "folder", "finder", "explorer"],
-    macOnly: false
-  },
-  "open-applications": {
-    id: "open-applications",
-    title: WINDOWS ? "Open All Apps" : "Open Applications Folder",
-    subtitle: WINDOWS ? "Open the Windows Apps folder." : "Reveal /Applications in Finder.",
-    category: "files",
-    strategy: "shell",
-    keywords: ["applications", "apps", "finder"],
-    macOnly: false
-  },
-  "reveal-library": {
-    id: "reveal-library",
-    title: WINDOWS ? "Open AppData" : "Open ~/Library",
-    subtitle: WINDOWS ? "Open the current user AppData folder in Explorer." : "Reveal the hidden Library folder in Finder.",
-    category: "files",
-    strategy: "shell",
-    keywords: ["library", "hidden", "finder"],
-    macOnly: false
-  },
-  "copy-current-path": {
-    id: "copy-current-path",
-    title: `Copy Path of Frontmost ${WINDOWS ? "Explorer" : "Finder"} Window`,
-    subtitle: `Copy the path of the folder open in ${WINDOWS ? "Explorer" : "Finder"}.`,
-    category: "files",
-    strategy: "applescript",
-    keywords: ["path", "finder", "copy", "directory"],
-    macOnly: false
-  },
-  "quit-tezbar": {
-    id: "quit-tezbar",
-    title: "Quit Tezbar",
-    subtitle: "Quit Tezbar and terminate all background processes.",
-    category: "system",
-    strategy: "native-helper",
-    keywords: ["quit", "tezbar", "exit", "close", "shutdown", "terminate", "app"],
-    macOnly: false
-  },
-  "show-macos-version": {
-    id: "show-macos-version",
-    title: WINDOWS ? "Show Windows Version" : "Show macOS Version",
-    subtitle: WINDOWS ? "Print the Windows product name, version, and build." : "Print kernel, build, and macOS version.",
-    category: "dev",
-    strategy: "shell",
-    keywords: ["macos", "windows", "version", "kernel", "build", "os"],
-    macOnly: false
-  },
-  "show-cpu-info": {
-    id: "show-cpu-info",
-    title: "Show CPU Info",
-    subtitle: "Display CPU brand, cores, and load averages.",
-    category: "dev",
-    strategy: "shell",
-    keywords: ["cpu", "processor", "cores", "load"],
-    macOnly: false
-  },
-  "show-memory-info": {
-    id: "show-memory-info",
-    title: "Show Memory Pressure",
-    subtitle: "Display current memory pressure and free memory.",
-    category: "dev",
-    strategy: "shell",
-    keywords: ["memory", "ram", "pressure", "free"],
-    macOnly: false
-  },
-  "show-disk-usage": {
-    id: "show-disk-usage",
-    title: "Show Disk Usage",
-    subtitle: "Display disk capacity and free space.",
-    category: "dev",
-    strategy: "shell",
-    keywords: ["disk", "storage", "free", "usage"],
-    macOnly: false
-  },
-  "show-battery-status": {
-    id: "show-battery-status",
-    title: "Show Battery Status",
-    subtitle: "Display battery capacity and charging state.",
-    category: "dev",
-    strategy: "shell",
-    keywords: ["battery", "charge", "power", "percent"],
-    macOnly: false
-  },
-  "list-listening-ports": {
-    id: "list-listening-ports",
-    title: "List Listening Ports",
-    subtitle: "Open Port Manager with a structured list (same as Open Ports).",
-    category: "dev",
-    strategy: "shell",
-    keywords: ["ports", "lsof", "listen", "listening", "tcp", "dev", "port manager"],
-    macOnly: false
-  },
-  "git-root": {
-    id: "git-root",
-    title: "Git: Copy Repo Root",
-    subtitle: `Copy the root of the git repo open in ${WINDOWS ? "Explorer" : "Finder"}.`,
-    category: "dev",
-    strategy: "applescript",
-    keywords: ["git", "root", "repo", "copy"],
-    macOnly: false
-  },
-  "brew-outdated": {
-    id: "brew-outdated",
-    title: "Homebrew: Show Outdated",
-    subtitle: "List formulae that have updates available.",
-    category: "dev",
-    strategy: "shell",
-    keywords: ["brew", "homebrew", "outdated", "updates"],
-    macOnly: true
-  },
-  "brew-update": {
-    id: "brew-update",
-    title: "Homebrew: Update",
-    subtitle: "Refresh Homebrew formula metadata.",
-    category: "dev",
-    strategy: "shell",
-    keywords: ["brew", "homebrew", "update", "refresh"],
-    macOnly: true
-  },
-  // This command has no main-process implementation — it's intercepted in
-  // the renderer and navigates to the dedicated clipboard surface. Keeping
-  // it in the registry means it participates in ranking, intent routing,
-  // and fuzzy search like every other command.
-  "open-clipboard-history": {
-    id: "open-clipboard-history",
-    title: "Clipboard History",
-    subtitle: "Browse everything you have copied \u2014 text, images, files.",
-    category: "productivity",
-    strategy: "native-helper",
-    keywords: ["clipboard", "history", "paste", "copy", "pasteboard"],
-    macOnly: false
-  },
-  "open-snippets": {
-    id: "open-snippets",
-    title: "Snippets",
-    subtitle: "Browse, copy, and create your own text snippets (dates, UUIDs, templates, \u2026).",
-    category: "productivity",
-    strategy: "native-helper",
-    keywords: [
-      "snippet",
-      "snippets",
-      "template",
-      "templates",
-      "text",
-      "boilerplate",
-      "expander",
-      "macro"
-    ],
-    macOnly: false
-  },
-  "open-quick-notes": {
-    id: "open-quick-notes",
-    title: "Quick Notes",
-    subtitle: "View and edit saved notes with rich text; first line is the title.",
-    category: "productivity",
-    strategy: "native-helper",
-    keywords: ["notes", "quick notes", "notepad", "rich text", "memo", "jot"],
-    macOnly: false
-  },
-  "open-emoji-picker": {
-    id: "open-emoji-picker",
-    title: "Emoji Picker",
-    subtitle: "Browse and copy emojis by name, mood, and category.",
-    category: "productivity",
-    strategy: "native-helper",
-    keywords: ["emoji", "smiley", "symbol", "icon", "face", "emoticon"],
-    macOnly: false
-  }
-};
-function getNativeCommand(id) {
-  return Object.prototype.hasOwnProperty.call(DESCRIPTORS, id) ? DESCRIPTORS[id] : null;
-}
-function listNativeCommands() {
-  return Object.values(DESCRIPTORS);
-}
-
-// src/main/nativeCommands/executor.ts
-var execFileAsync10 = (0, import_node_util10.promisify)(import_node_child_process13.execFile);
-async function runAppleScript3(source) {
-  const { stdout } = await execFileAsync10("osascript", ["-e", source]);
-  return stdout.trim();
-}
-async function runShell(script) {
-  const { stdout } = await execFileAsync10("bash", ["-lc", script]);
-  return stdout.trim();
-}
-async function runPowerShell(script) {
-  const { stdout } = await execFileAsync10("powershell.exe", [
-    "-NoLogo",
-    "-NoProfile",
-    "-NonInteractive",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-Command",
-    script
-  ]);
-  return stdout.trim();
-}
-async function runElevatedPowerShell(script) {
-  const encoded = Buffer.from(`$ErrorActionPreference = 'Stop'; ${script}`, "utf16le").toString(
-    "base64"
-  );
-  const launcher = `$process = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'); if ($process.ExitCode -ne 0) { exit $process.ExitCode }`;
-  await execFileAsync10("powershell.exe", [
-    "-NoLogo",
-    "-NoProfile",
-    "-NonInteractive",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-Command",
-    launcher
-  ]);
-}
-async function executeWindowsCommand(id) {
-  switch (id) {
-    case "toggle-dark-mode":
-      await runPowerShell(
-        "$p='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'; $v=(Get-ItemPropertyValue -Path $p -Name AppsUseLightTheme -ErrorAction SilentlyContinue); $n=if($v -eq 0){1}else{0}; Set-ItemProperty -Path $p -Name AppsUseLightTheme -Value $n; Set-ItemProperty -Path $p -Name SystemUsesLightTheme -Value $n"
-      );
-      return { ok: true, message: "Toggled Windows dark mode" };
-    case "start-screen-saver":
-      await execFileAsync10("rundll32.exe", ["user32.dll,LockWorkStation"]);
-      return { ok: true, message: "Screen locked" };
-    case "sleep-display":
-      await runPowerShell(
-        `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class TezbarDisplay { [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l); }'; [TezbarDisplay]::SendMessage([IntPtr]0xffff,0x0112,[IntPtr]0xF170,[IntPtr]2) | Out-Null`
-      );
-      return { ok: true, message: "Display sleeping" };
-    case "toggle-mute":
-    case "volume-up":
-    case "volume-down": {
-      const virtualKey = id === "toggle-mute" ? 173 : id === "volume-up" ? 175 : 174;
-      await runPowerShell(
-        `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class TezbarAudio { [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra); }'; [TezbarAudio]::keybd_event(${virtualKey}, 0, 0, [UIntPtr]::Zero); [TezbarAudio]::keybd_event(${virtualKey}, 0, 2, [UIntPtr]::Zero)`
-      );
-      return {
-        ok: true,
-        message: id === "toggle-mute" ? "Toggled system mute" : id === "volume-up" ? "Volume up" : "Volume down"
-      };
-    }
-    case "start-keep-awake":
-      startBackground("keep-awake", "powershell.exe", [
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        '$wshell=New-Object -ComObject WScript.Shell; while($true){$wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Milliseconds 50; $wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Seconds 240}'
-      ]);
-      return { ok: true, message: "Keep Awake is on." };
-    case "stop-keep-awake":
-      return {
-        ok: true,
-        message: stopBackground("keep-awake") ? "Keep Awake turned off." : "Keep Awake was not running."
-      };
-    case "sleep-system":
-      await runPowerShell(
-        "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)"
-      );
-      return { ok: true, message: "System sleeping" };
-    case "show-network-info": {
-      const out = await runPowerShell(
-        "Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*'} | Select-Object -First 3 -ExpandProperty IPAddress"
-      );
-      return {
-        ok: true,
-        message: out ? `IP: ${out.replace(/\r?\n/g, ", ")}` : "No network info available"
-      };
-    }
-    case "show-public-ip": {
-      const out = await runPowerShell(
-        "(Invoke-RestMethod -UseBasicParsing -TimeoutSec 5 -Uri 'https://api.ipify.org').Trim()"
-      );
-      return { ok: true, message: `Public IP: ${out}` };
-    }
-    case "flush-dns-cache":
-      await execFileAsync10("ipconfig.exe", ["/flushdns"]);
-      return { ok: true, message: "Flushed DNS cache" };
-    case "toggle-vpn-menu":
-      await execFileAsync10("explorer.exe", ["ms-settings:network-vpn"]);
-      return { ok: true, message: "Opened VPN settings" };
-    case "toggle-wifi": {
-      const adapterState = await runPowerShell(
-        "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; $adapter.AdminStatus"
-      );
-      const disabling = adapterState === "Up";
-      await runElevatedPowerShell(
-        "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; if($adapter.AdminStatus -eq 'Up'){Disable-NetAdapter -Name $adapter.Name -Confirm:$false}else{Enable-NetAdapter -Name $adapter.Name -Confirm:$false}"
-      );
-      return { ok: true, message: `Wi-Fi ${disabling ? "disabled" : "enabled"}` };
-    }
-    case "lock-screen":
-      await execFileAsync10("rundll32.exe", ["user32.dll,LockWorkStation"]);
-      return { ok: true, message: "Screen locked" };
-    case "open-downloads":
-      await execFileAsync10("explorer.exe", [(0, import_node_path19.join)((0, import_node_os10.homedir)(), "Downloads")]);
-      return { ok: true, message: "Opened Downloads" };
-    case "open-applications":
-      await execFileAsync10("explorer.exe", ["shell:AppsFolder"]);
-      return { ok: true, message: "Opened All Apps" };
-    case "reveal-library":
-      await execFileAsync10("explorer.exe", [
-        process.env.APPDATA ?? (0, import_node_path19.join)((0, import_node_os10.homedir)(), "AppData", "Roaming")
-      ]);
-      return { ok: true, message: "Opened AppData" };
-    case "copy-current-path": {
-      const out = await runPowerShell(
-        "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path } | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $path=$window.Document.Folder.Self.Path; Set-Clipboard -Value $path; $path"
-      );
-      return { ok: true, message: `Copied: ${out}` };
-    }
-    case "empty-trash":
-      await runPowerShell("Clear-RecycleBin -Force -ErrorAction Stop");
-      return { ok: true, message: "Emptied Recycle Bin" };
-    case "show-macos-version":
-      return {
-        ok: true,
-        message: await runPowerShell(
-          "$os=Get-CimInstance Win32_OperatingSystem; '{0} \u2014 version {1}, build {2}' -f $os.Caption,$os.Version,$os.BuildNumber"
-        )
-      };
-    case "show-cpu-info":
-      return {
-        ok: true,
-        message: await runPowerShell(
-          'Get-CimInstance Win32_Processor | ForEach-Object { "$($_.Name) \u2014 $($_.NumberOfCores) cores" }'
-        )
-      };
-    case "show-memory-info":
-      return {
-        ok: true,
-        message: await runPowerShell(
-          "$os=Get-CimInstance Win32_OperatingSystem; 'Free: {0:N1} GB / Total: {1:N1} GB' -f ($os.FreePhysicalMemory/1MB),($os.TotalVisibleMemorySize/1MB)"
-        )
-      };
-    case "show-disk-usage":
-      return {
-        ok: true,
-        message: await runPowerShell(
-          "Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object { '{0} Free: {1:N1} GB / {2:N1} GB' -f $_.DeviceID,($_.FreeSpace/1GB),($_.Size/1GB) }"
-        )
-      };
-    case "show-battery-status": {
-      const out = await runPowerShell(
-        "Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | ForEach-Object { 'Battery: {0}%' -f $_.EstimatedChargeRemaining }"
-      );
-      return { ok: true, message: out || "No battery detected" };
-    }
-    case "list-listening-ports":
-      return {
-        ok: true,
-        message: "Use Port Manager \u2192 Open Ports in Tezbar for a structured, filterable list."
-      };
-    case "git-root": {
-      const path7 = await runPowerShell(
-        "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path } | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $window.Document.Folder.Self.Path"
-      );
-      const { stdout } = await execFileAsync10("git.exe", ["rev-parse", "--show-toplevel"], {
-        cwd: path7
-      });
-      const root = stdout.trim();
-      clipboard.writeText(root);
-      return { ok: true, message: `Copied repo root: ${root}` };
-    }
-    default:
-      return null;
-  }
-}
-var backgroundProcesses = /* @__PURE__ */ new Map();
-function startBackground(key, command, args) {
-  const existing = backgroundProcesses.get(key);
-  if (existing && isProcessAlive(existing)) return;
-  const child = (0, import_node_child_process13.spawn)(command, args, { detached: true, stdio: "ignore" });
-  child.unref();
-  if (child.pid) backgroundProcesses.set(key, child.pid);
-}
-function stopBackground(key) {
-  const pid = backgroundProcesses.get(key);
-  if (!pid) return false;
-  try {
-    process.kill(pid, "SIGTERM");
-    backgroundProcesses.delete(key);
-    return true;
-  } catch {
-    backgroundProcesses.delete(key);
-    return false;
-  }
-}
-function isProcessAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-async function executeNativeCommand(id) {
-  const descriptor = getNativeCommand(id);
-  if (!descriptor) {
-    return { ok: false, message: `Unknown command: ${id}` };
-  }
-  if (descriptor.macOnly && process.platform !== "darwin") {
-    return { ok: false, message: `${descriptor.title} is only available on macOS.` };
-  }
-  if (process.platform === "win32") {
-    try {
-      const result = await executeWindowsCommand(id);
-      if (result) return result;
-    } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : String(error) };
-    }
-  }
-  try {
-    switch (id) {
-      case "toggle-dark-mode": {
-        const script = 'tell application "System Events" to tell appearance preferences to set dark mode to not dark mode';
-        await runAppleScript3(script);
-        return { ok: true, message: "Toggled Dark Mode" };
-      }
-      case "toggle-mute": {
-        await runAppleScript3(
-          "set volume output muted (not (output muted of (get volume settings)))"
-        );
-        return { ok: true, message: "Toggled system mute" };
-      }
-      case "toggle-hide-desktop-icons": {
-        const script = `current=$(defaults read com.apple.finder CreateDesktop 2>/dev/null || echo true); if [ "$current" = "false" ]; then defaults write com.apple.finder CreateDesktop true; else defaults write com.apple.finder CreateDesktop false; fi; killall Finder`;
-        await runShell(script);
-        return { ok: true, message: "Toggled desktop icons" };
-      }
-      case "toggle-autohide-dock": {
-        const script = `current=$(defaults read com.apple.dock autohide 2>/dev/null || echo 0); if [ "$current" = "1" ]; then defaults write com.apple.dock autohide -bool false; else defaults write com.apple.dock autohide -bool true; fi; killall Dock`;
-        await runShell(script);
-        return { ok: true, message: "Toggled Dock auto-hide" };
-      }
-      case "toggle-autohide-menu-bar": {
-        const script = `current=$(defaults read NSGlobalDomain _HIHideMenuBar 2>/dev/null || echo 0); if [ "$current" = "1" ]; then defaults write NSGlobalDomain _HIHideMenuBar -bool false; else defaults write NSGlobalDomain _HIHideMenuBar -bool true; fi; killall SystemUIServer`;
-        await runShell(script);
-        return { ok: true, message: "Toggled menu bar auto-hide" };
-      }
-      case "start-keep-awake": {
-        startBackground("caffeinate", "caffeinate", ["-di"]);
-        return { ok: true, message: "Keep Awake is on \u2014 system will not sleep." };
-      }
-      case "stop-keep-awake": {
-        const stopped = stopBackground("caffeinate");
-        return {
-          ok: true,
-          message: stopped ? "Keep Awake turned off." : "Keep Awake was not running."
-        };
-      }
-      case "start-screen-saver": {
-        await runShell("open -a ScreenSaverEngine");
-        return { ok: true, message: "Started screen saver" };
-      }
-      case "toggle-bluetooth": {
-        try {
-          const current = await runShell("blueutil -p");
-          const next = current === "1" ? "0" : "1";
-          await runShell(`blueutil -p ${next}`);
-          return { ok: true, message: `Bluetooth ${next === "1" ? "enabled" : "disabled"}` };
-        } catch {
-          return {
-            ok: false,
-            message: "Bluetooth control requires `blueutil`. Install with `brew install blueutil`."
-          };
-        }
-      }
-      case "show-network-info": {
-        const script = `echo "IP: $(ipconfig getifaddr en0 2>/dev/null || echo n/a)"; echo "Wi-Fi: $(networksetup -getairportnetwork en0 2>/dev/null | sed 's/Current Wi-Fi Network: //')"`;
-        const out = await runShell(script);
-        return { ok: true, message: out || "No network info available" };
-      }
-      case "flush-dns-cache": {
-        try {
-          await runShell("sudo -n dscacheutil -flushcache && sudo -n killall -HUP mDNSResponder");
-          return { ok: true, message: "Flushed DNS cache" };
-        } catch {
-          return {
-            ok: false,
-            message: "DNS flush requires `sudo`. Run `sudo dscacheutil -flushcache` in Terminal."
-          };
-        }
-      }
-      case "empty-trash": {
-        await runAppleScript3('tell application "Finder" to empty the trash');
-        return { ok: true, message: "Emptied Trash" };
-      }
-      case "lock-screen": {
-        await runAppleScript3(
-          'tell application "System Events" to keystroke "q" using {command down, control down}'
-        );
-        return { ok: true, message: "Screen locked" };
-      }
-      case "sleep-display": {
-        await runShell("pmset displaysleepnow");
-        return { ok: true, message: "Display sleeping" };
-      }
-      case "volume-up": {
-        await runAppleScript3(
-          "set volume output volume (output volume of (get volume settings) + 10)"
-        );
-        return { ok: true, message: "Volume up" };
-      }
-      case "volume-down": {
-        await runAppleScript3(
-          "set volume output volume (output volume of (get volume settings) - 10)"
-        );
-        return { ok: true, message: "Volume down" };
-      }
-      case "restart-dock": {
-        await runShell("killall Dock");
-        return { ok: true, message: "Dock relaunched" };
-      }
-      case "restart-finder": {
-        await runShell("killall Finder");
-        return { ok: true, message: "Finder relaunched" };
-      }
-      case "restart-menu-bar": {
-        await runShell("killall SystemUIServer");
-        return { ok: true, message: "Menu bar relaunched" };
-      }
-      case "sleep-system": {
-        await runAppleScript3('tell application "System Events" to sleep');
-        return { ok: true, message: "System sleeping" };
-      }
-      case "toggle-wifi": {
-        const script = `iface=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2; exit}'); if [ -z "$iface" ]; then exit 1; fi; state=$(networksetup -getairportpower "$iface" | awk '{print $NF}'); if [ "$state" = "On" ]; then networksetup -setairportpower "$iface" off; echo off; else networksetup -setairportpower "$iface" on; echo on; fi`;
-        const out = await runShell(script);
-        return { ok: true, message: `Wi-Fi ${out || "toggled"}` };
-      }
-      case "show-public-ip": {
-        const out = await runShell('curl -m 4 -fsS https://api.ipify.org || echo "(unreachable)"');
-        return { ok: true, message: `Public IP: ${out}` };
-      }
-      case "toggle-vpn-menu": {
-        await runShell('open "x-apple.systempreferences:com.apple.preference.network"');
-        return { ok: true, message: "Opened Network preferences" };
-      }
-      case "open-downloads": {
-        await runShell("open ~/Downloads");
-        return { ok: true, message: "Opened Downloads" };
-      }
-      case "open-applications": {
-        await runShell("open /Applications");
-        return { ok: true, message: "Opened Applications" };
-      }
-      case "reveal-library": {
-        await runShell("open ~/Library");
-        return { ok: true, message: "Opened ~/Library" };
-      }
-      case "copy-current-path": {
-        const path7 = await runAppleScript3(
-          'tell application "Finder" to try\nset thePath to POSIX path of (target of front Finder window as alias)\nset the clipboard to thePath\nreturn thePath\non error\nreturn ""\nend try'
-        );
-        if (!path7) {
-          return { ok: false, message: "No Finder window is open." };
-        }
-        return { ok: true, message: `Copied: ${path7}` };
-      }
-      case "show-macos-version": {
-        const out = await runShell("sw_vers && uname -v");
-        return { ok: true, message: out };
-      }
-      case "show-cpu-info": {
-        const out = await runShell(
-          `sysctl -n machdep.cpu.brand_string 2>/dev/null; echo "Cores: $(sysctl -n hw.ncpu)"; uptime | awk -F'load averages:' '{print "Load:"$2}'`
-        );
-        return { ok: true, message: out };
-      }
-      case "show-memory-info": {
-        const out = await runShell("memory_pressure | head -n 6; echo; vm_stat | awk 'NR<=6'");
-        return { ok: true, message: out };
-      }
-      case "show-disk-usage": {
-        const out = await runShell("df -h / | tail -n 1");
-        return { ok: true, message: out };
-      }
-      case "show-battery-status": {
-        const out = await runShell("pmset -g batt | tail -n +2");
-        return { ok: true, message: out || "No battery detected" };
-      }
-      case "list-listening-ports": {
-        return {
-          ok: true,
-          message: "Use Port Manager \u2192 Open Ports in Tezbar for a structured, filterable list. (Raw lsof output is intentionally not shown here.)"
-        };
-      }
-      case "git-root": {
-        const path7 = await runAppleScript3(
-          'tell application "Finder" to try\nset thePath to POSIX path of (target of front Finder window as alias)\nreturn thePath\non error\nreturn ""\nend try'
-        );
-        if (!path7) {
-          return { ok: false, message: "No Finder window is open." };
-        }
-        try {
-          const root = await runShell(`cd ${JSON.stringify(path7)} && git rev-parse --show-toplevel`);
-          await runShell(`printf %s ${JSON.stringify(root)} | pbcopy`);
-          return { ok: true, message: `Copied repo root: ${root}` };
-        } catch {
-          return { ok: false, message: `${path7} is not inside a git repo.` };
-        }
-      }
-      case "brew-outdated": {
-        try {
-          const out = await runShell("brew outdated --quiet");
-          return {
-            ok: true,
-            message: out.trim().length === 0 ? "All Homebrew formulae are up to date." : out
-          };
-        } catch {
-          return { ok: false, message: "Homebrew is not installed or not in PATH." };
-        }
-      }
-      case "open-clipboard-history": {
-        return {
-          ok: false,
-          message: "Clipboard History is a UI navigation \u2014 open the launcher to browse it."
-        };
-      }
-      case "open-snippets": {
-        return {
-          ok: false,
-          message: "Snippets is a UI navigation \u2014 open the launcher to browse it."
-        };
-      }
-      case "open-quick-notes": {
-        return {
-          ok: false,
-          message: "Quick Notes is a UI navigation \u2014 open the launcher to browse it."
-        };
-      }
-      case "open-emoji-picker": {
-        return {
-          ok: false,
-          message: "Emoji Picker is a UI navigation \u2014 open the launcher to browse it."
-        };
-      }
-      case "quit-tezbar": {
-        return {
-          ok: false,
-          message: "Quit Tezbar is handled by the launcher so it can show the confirmation dialog."
-        };
-      }
-      case "brew-update": {
-        try {
-          const out = await runShell("brew update");
-          return { ok: true, message: out.slice(-400) || "Homebrew updated." };
-        } catch {
-          return { ok: false, message: "Homebrew is not installed or not in PATH." };
-        }
-      }
-      default: {
-        return {
-          ok: false,
-          message: `Command ${descriptor.title} is registered but has no executor yet.`
-        };
-      }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, message: `${descriptor.title} failed: ${message}` };
-  }
-}
-
-// src/main/search/service.ts
-init_configStore();
-
-// src/main/safety/confirm.ts
-init_desktop_runtime();
-
-// src/main/safety/registry.ts
-var DESCRIPTORS2 = {
-  "shell.run": {
-    id: "shell.run",
-    title: "Run shell command",
-    summary: "Execute a shell command in your user environment.",
-    risk: "high",
-    requiresConfirmation: true
-  },
-  "process.kill": {
-    id: "process.kill",
-    title: "Kill process",
-    summary: "Forcibly terminate a running process.",
-    risk: "high",
-    requiresConfirmation: true
-  },
-  "port.kill": {
-    id: "port.kill",
-    title: "Kill listener on port",
-    summary: "Terminate the process listening on this TCP port.",
-    risk: "medium",
-    requiresConfirmation: true
-  },
-  "system.shutdown": {
-    id: "system.shutdown",
-    title: "Shut down Mac",
-    summary: "Shut the computer down immediately.",
-    risk: "high",
-    requiresConfirmation: true
-  },
-  "system.restart": {
-    id: "system.restart",
-    title: "Restart Mac",
-    summary: "Restart the computer immediately.",
-    risk: "high",
-    requiresConfirmation: true
-  },
-  "system.sleep": {
-    id: "system.sleep",
-    title: "Sleep Mac",
-    summary: "Put the computer to sleep.",
-    risk: "low",
-    requiresConfirmation: false
-  },
-  "system.logout": {
-    id: "system.logout",
-    title: "Log out",
-    summary: "Log out of the current macOS user.",
-    risk: "high",
-    requiresConfirmation: true
-  },
-  "trash.empty": {
-    id: "trash.empty",
-    title: "Empty Trash",
-    summary: "Permanently delete everything in the Trash.",
-    risk: "high",
-    requiresConfirmation: true
-  },
-  "app.quit": {
-    id: "app.quit",
-    title: "Quit application",
-    summary: "Quit a running application.",
-    risk: "low",
-    requiresConfirmation: false
-  },
-  "extension.install": {
-    id: "extension.install",
-    title: "Install extension",
-    summary: "Download and install a Raycast extension.",
-    risk: "medium",
-    requiresConfirmation: false
-  },
-  "extension.uninstall": {
-    id: "extension.uninstall",
-    title: "Uninstall extension",
-    summary: "Remove an installed extension and its files.",
-    risk: "medium",
-    requiresConfirmation: true
-  },
-  "native.command": {
-    id: "native.command",
-    title: "Run system command",
-    summary: "Execute a built-in macOS control (toggle, query, helper).",
-    risk: "low",
-    requiresConfirmation: false
-  }
-};
-function getSafetyDescriptor(id) {
-  return Object.prototype.hasOwnProperty.call(DESCRIPTORS2, id) ? DESCRIPTORS2[id] : null;
-}
-function listSafetyDescriptors() {
-  return Object.values(DESCRIPTORS2);
-}
-
-// src/main/safety/confirm.ts
-var RISK_LABEL = {
-  low: "Low risk",
-  medium: "Use with care",
-  high: "Destructive"
-};
-async function confirmSafetyAction(window2, descriptor, context, options) {
-  if (!getSafetyDescriptor(descriptor.id)) {
-    return { accepted: false };
-  }
-  if (!descriptor.requiresConfirmation && !options?.dryRun) {
-    return { accepted: true };
-  }
-  const detailLines = [];
-  if (options?.dryRun) {
-    detailLines.push("Dry-run mode: no changes will be made.");
-  }
-  if (descriptor.details) detailLines.push(descriptor.details);
-  if (context) {
-    for (const [key, value] of Object.entries(context)) {
-      if (value === void 0 || value === null || value === "") continue;
-      detailLines.push(`${key}: ${String(value)}`);
-    }
-  }
-  detailLines.push(`Risk: ${RISK_LABEL[descriptor.risk]}`);
-  const primaryLabel = options?.dryRun ? `Preview: ${descriptor.title}` : descriptor.title;
-  const opts = {
-    type: descriptor.risk === "high" && !options?.dryRun ? "warning" : "question",
-    buttons: ["Cancel", primaryLabel],
-    defaultId: 0,
-    cancelId: 0,
-    title: primaryLabel,
-    message: descriptor.summary,
-    detail: detailLines.join("\n"),
-    noLink: true
-  };
-  const response = window2 && !window2.isDestroyed() ? await dialog.showMessageBox(window2, opts) : await dialog.showMessageBox(opts);
-  return { accepted: response.response === 1 };
-}
-
-// src/main/safety/log.ts
-init_desktop_runtime();
-var import_node_fs19 = require("node:fs");
-var import_node_path20 = require("node:path");
-var MAX_ENTRIES = 200;
-var cache = null;
-function logPath() {
-  const dir = (0, import_node_path20.join)(app.getPath("userData"), "safety");
-  (0, import_node_fs19.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path20.join)(dir, "action-log.json");
-}
-function load2() {
-  if (cache) return cache;
-  try {
-    const raw = (0, import_node_fs19.readFileSync)(logPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    cache = Array.isArray(parsed.entries) ? parsed.entries : [];
-  } catch {
-    cache = [];
-  }
-  return cache;
-}
-function persist() {
-  if (!cache) return;
-  try {
-    (0, import_node_fs19.writeFileSync)(logPath(), JSON.stringify({ entries: cache }, null, 2), "utf8");
-  } catch {
-  }
-}
-function truncateContext(context) {
-  if (!context) return void 0;
-  const out = {};
-  for (const [key, value] of Object.entries(context)) {
-    if (typeof value === "string") {
-      out[key] = value.length > 200 ? `${value.slice(0, 200)}\u2026` : value;
-    } else if (value === null || ["number", "boolean"].includes(typeof value)) {
-      out[key] = value;
-    } else {
-      try {
-        const serialised = JSON.stringify(value);
-        out[key] = serialised.length > 200 ? `${serialised.slice(0, 200)}\u2026` : serialised;
-      } catch {
-        out[key] = "[unserializable]";
-      }
-    }
-  }
-  return out;
-}
-function recordSafetyEntry(entry) {
-  const full = {
-    ...entry,
-    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    at: Date.now(),
-    context: truncateContext(entry.context)
-  };
-  const list = load2();
-  list.unshift(full);
-  if (list.length > MAX_ENTRIES) list.length = MAX_ENTRIES;
-  persist();
-  return full;
-}
-function listSafetyLog() {
-  return load2().slice();
-}
-function clearSafetyLog() {
-  cache = [];
-  persist();
-}
-
-// src/main/search/commandBus.ts
-var import_node_child_process14 = require("node:child_process");
-var import_node_util11 = require("node:util");
-var execFileAsync11 = (0, import_node_util11.promisify)(import_node_child_process14.execFile);
-function osascriptCommandHandler(script, successMessage) {
-  return async () => {
-    await execFileAsync11("/usr/bin/osascript", ["-e", script]);
-    return { ok: true, message: successMessage };
-  };
-}
-function darkModeCommandHandler(enabled) {
-  if (process.platform !== "win32") {
-    return osascriptCommandHandler(
-      `tell application "System Events" to tell appearance preferences to set dark mode to ${enabled}`,
-      `Dark mode ${enabled ? "enabled" : "disabled"}`
-    );
-  }
-  return async () => {
-    const lightTheme = enabled ? "0" : "1";
-    await execFileAsync11("powershell.exe", [
-      "-NoLogo",
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      `$path='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'; Set-ItemProperty -Path $path -Name AppsUseLightTheme -Value ${lightTheme}; Set-ItemProperty -Path $path -Name SystemUsesLightTheme -Value ${lightTheme}`
-    ]);
-    return { ok: true, message: `Dark mode ${enabled ? "enabled" : "disabled"}` };
-  };
-}
-var CommandBus = class {
-  commands = /* @__PURE__ */ new Map();
-  constructor() {
-    this.registerBuiltins();
-  }
-  register(def) {
-    this.commands.set(def.id, def);
-  }
-  registerBuiltins() {
-    this.register({
-      id: "system.dark-mode.on",
-      title: "Enable dark mode",
-      permission: "system-control",
-      confirmation: "recommended",
-      analyticsKey: "system.dark_mode_on",
-      handler: darkModeCommandHandler(true)
-    });
-    this.register({
-      id: "system.dark-mode.off",
-      title: "Disable dark mode",
-      permission: "system-control",
-      confirmation: "recommended",
-      analyticsKey: "system.dark_mode_off",
-      handler: darkModeCommandHandler(false)
-    });
-    this.register({
-      id: "speech.read-aloud",
-      title: "Read text aloud",
-      permission: "none",
-      confirmation: "never",
-      analyticsKey: "speech.read_aloud",
-      handler: async (payload) => {
-        const text = String(payload?.text ?? "").trim();
-        if (!text) {
-          return { ok: false, message: "No text provided for read-aloud" };
-        }
-        if (process.platform === "win32") {
-          await execFileAsync11(
-            "powershell.exe",
-            [
-              "-NoLogo",
-              "-NoProfile",
-              "-NonInteractive",
-              "-Command",
-              "Add-Type -AssemblyName System.Speech; $voice=New-Object System.Speech.Synthesis.SpeechSynthesizer; try { $voice.Speak($env:TEZBAR_SPEECH_TEXT) } finally { $voice.Dispose() }"
-            ],
-            { windowsHide: true, env: { ...process.env, TEZBAR_SPEECH_TEXT: text } }
-          );
-        } else {
-          await execFileAsync11("say", [text]);
-        }
-        return { ok: true, message: "Reading aloud" };
-      }
-    });
-  }
-  async execute(context) {
-    const command = this.commands.get(context.commandId);
-    if (!command) {
-      return { ok: false, message: `Unknown command: ${context.commandId}` };
-    }
-    return command.handler(context.payload);
-  }
-};
-var commandBus = new CommandBus();
-
-// src/main/search/indexDb.ts
-init_desktop_runtime();
-var import_node_fs20 = require("node:fs");
-var import_node_path21 = require("node:path");
-function normalizeStoredQuery(query) {
-  return query.trim().toLowerCase().replace(/\s+/g, " ");
-}
-function dbPath2() {
-  const dir = (0, import_node_path21.join)(app.getPath("userData"), "search");
-  (0, import_node_fs20.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path21.join)(dir, "index.sqlite3");
-}
-function safeJsonParse(value, fallback) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-var CLICK_EVENTS_RETAIN = 1e3;
-var ACTION_USAGE_EVENTS_RETAIN = 5e3;
-var BENCHMARK_SNAPSHOTS_RETAIN = 50;
-var HOT_USAGE_WINDOW_MS = 5 * 60 * 1e3;
-async function readBenchmarkHistory() {
-  return [];
-}
-async function runOfflineBenchmarks(_searchFn, _db) {
-}
-var _instance = null;
-function getInstance() {
-  if (!_instance) {
-    _instance = new SearchIndexDatabase();
-  }
-  return _instance;
-}
-var SearchIndexDatabase = class {
-  _db = null;
-  _initPromise = null;
-  get db() {
-    if (!this._db) {
-      throw new Error("Database not initialized - call ensureInitialized() first");
-    }
-    return this._db;
-  }
-  async ensureInitialized() {
-    if (this._initPromise) return this._initPromise;
-    this._initPromise = new Promise((resolve5) => {
-      setImmediate(() => {
-        this._db = new better_sqlite3_shim_default(dbPath2());
-        this._db.pragma("journal_mode = WAL");
-        this._db.pragma("synchronous = NORMAL");
-        this.bootstrap();
-        resolve5();
-      });
-    });
-    return this._initPromise;
-  }
-  bootstrap() {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS documents (
-        id TEXT PRIMARY KEY,
-        category TEXT NOT NULL,
-        title TEXT NOT NULL,
-        subtitle TEXT NOT NULL,
-        tokens TEXT NOT NULL,
-        action_json TEXT NOT NULL,
-        updated_at INTEGER NOT NULL,
-        source_path TEXT,
-        source_mtime INTEGER,
-        popularity REAL NOT NULL DEFAULT 0
-      );
-
-      CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
-        id UNINDEXED,
-        title,
-        subtitle,
-        tokens,
-        tokenize = 'unicode61'
-      );
-
-      CREATE TABLE IF NOT EXISTS action_stats (
-        action_id TEXT PRIMARY KEY,
-        frequency INTEGER NOT NULL DEFAULT 0,
-        success_count INTEGER NOT NULL DEFAULT 0,
-        total_count INTEGER NOT NULL DEFAULT 0,
-        last_used_at INTEGER NOT NULL DEFAULT 0
-      );
-
-      CREATE TABLE IF NOT EXISTS query_action_stats (
-        query TEXT NOT NULL,
-        action_id TEXT NOT NULL,
-        frequency INTEGER NOT NULL DEFAULT 0,
-        success_count INTEGER NOT NULL DEFAULT 0,
-        total_count INTEGER NOT NULL DEFAULT 0,
-        last_used_at INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (query, action_id)
-      );
-
-      CREATE TABLE IF NOT EXISTS action_usage_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        action_id TEXT NOT NULL,
-        created_at INTEGER NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_action_usage_events_action_time
-      ON action_usage_events(action_id, created_at DESC);
-
-      CREATE TABLE IF NOT EXISTS benchmark_snapshots (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        created_at INTEGER NOT NULL,
-        precision_at_5 REAL NOT NULL,
-        precision_at_10 REAL NOT NULL,
-        avg_click_rank REAL NOT NULL,
-        benchmark_size INTEGER NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS click_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        created_at INTEGER NOT NULL,
-        query TEXT NOT NULL,
-        result_id TEXT NOT NULL,
-        rank INTEGER NOT NULL,
-        success INTEGER NOT NULL
-      );
-    `);
-    this.ensureDocumentsSchema();
-    this.pruneTelemetry();
-  }
-  /** Remove old click-events and benchmark snapshots so the DB doesn't grow
-   *  without bound. Retention limits are conservative — enough for ranking
-   *  learning and debugging without unbounded disk use. */
-  pruneTelemetry() {
-    try {
-      this.db.prepare(
-        `DELETE FROM click_events WHERE id NOT IN (
-            SELECT id FROM click_events ORDER BY id DESC LIMIT ?
-          )`
-      ).run(CLICK_EVENTS_RETAIN);
-      this.db.prepare(
-        `DELETE FROM action_usage_events WHERE id NOT IN (
-            SELECT id FROM action_usage_events ORDER BY id DESC LIMIT ?
-          )`
-      ).run(ACTION_USAGE_EVENTS_RETAIN);
-      this.db.prepare(
-        `DELETE FROM benchmark_snapshots WHERE id NOT IN (
-            SELECT id FROM benchmark_snapshots ORDER BY id DESC LIMIT ?
-          )`
-      ).run(BENCHMARK_SNAPSHOTS_RETAIN);
-    } catch (error) {
-      console.warn("[SearchIndex] Telemetry pruning failed:", error);
-    }
-  }
-  /** Run WAL checkpoint and VACUUM to reclaim disk space. */
-  vacuum() {
-    this.db.exec("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;");
-  }
-  /** Forward-compatible schema patching for users with older local DBs. */
-  ensureDocumentsSchema() {
-    const rows = this.db.prepare("PRAGMA table_info(documents)").all();
-    const columns = new Set(rows.map((row) => row.name));
-    if (!columns.has("source_path")) {
-      this.db.exec("ALTER TABLE documents ADD COLUMN source_path TEXT");
-    }
-    if (!columns.has("source_mtime")) {
-      this.db.exec("ALTER TABLE documents ADD COLUMN source_mtime INTEGER");
-    }
-    if (!columns.has("popularity")) {
-      this.db.exec("ALTER TABLE documents ADD COLUMN popularity REAL NOT NULL DEFAULT 0");
-    }
-  }
-  upsertDocuments(documents) {
-    if (documents.length === 0) return;
-    const upsertDoc = this.db.prepare(`
-      INSERT INTO documents (id, category, title, subtitle, tokens, action_json, updated_at, source_path, source_mtime, popularity)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        category = excluded.category,
-        title = excluded.title,
-        subtitle = excluded.subtitle,
-        tokens = excluded.tokens,
-        action_json = excluded.action_json,
-        updated_at = excluded.updated_at,
-        source_path = excluded.source_path,
-        source_mtime = excluded.source_mtime,
-        popularity = excluded.popularity
-    `);
-    const deleteFts = this.db.prepare("DELETE FROM documents_fts WHERE id = ?");
-    const insertFts = this.db.prepare(
-      "INSERT INTO documents_fts (id, title, subtitle, tokens) VALUES (?, ?, ?, ?)"
-    );
-    const upsertTx = this.db.transaction((rows) => {
-      for (const row of rows) {
-        upsertDoc.run(
-          row.id,
-          row.category,
-          row.title,
-          row.subtitle,
-          row.tokens,
-          JSON.stringify(row.action),
-          Math.round(row.updatedAt || Date.now()),
-          row.sourcePath ?? null,
-          row.sourceMtime ? Math.round(row.sourceMtime) : null,
-          row.popularity ?? 0
-        );
-        deleteFts.run(row.id);
-        insertFts.run(row.id, row.title, row.subtitle, row.tokens);
-      }
-    });
-    upsertTx(documents);
-  }
-  removeDocumentById(id) {
-    this.db.prepare("DELETE FROM documents WHERE id = ?").run(id);
-    this.db.prepare("DELETE FROM documents_fts WHERE id = ?").run(id);
-  }
-  removeDocumentsByCategory(category) {
-    const ids = this.db.prepare("SELECT id FROM documents WHERE category = ?").all(category);
-    if (ids.length === 0) return 0;
-    const delDoc = this.db.prepare("DELETE FROM documents WHERE id = ?");
-    const delFts = this.db.prepare("DELETE FROM documents_fts WHERE id = ?");
-    const removeTx = this.db.transaction((rows) => {
-      for (const row of rows) {
-        delDoc.run(row.id);
-        delFts.run(row.id);
-      }
-    });
-    removeTx(ids);
-    return ids.length;
-  }
-  replaceDocumentsByCategory(category, documents) {
-    const deleteFts = this.db.prepare(
-      "DELETE FROM documents_fts WHERE id IN (SELECT id FROM documents WHERE category = ?)"
-    );
-    const deleteDocuments = this.db.prepare("DELETE FROM documents WHERE category = ?");
-    const replaceTx = this.db.transaction(() => {
-      deleteFts.run(category);
-      deleteDocuments.run(category);
-      this.upsertDocuments(documents);
-    });
-    replaceTx();
-    this.clearSearchCache();
-  }
-  search(query, limit) {
-    const ftsQuery = buildFtsQuery(query);
-    const trimmed = query.trim();
-    if (!trimmed) return [];
-    const candidateLimit = Math.max(limit * 2, 20);
-    const rows = ftsQuery.length > 0 ? this.db.prepare(
-      `
-                SELECT d.id AS id,
-                       d.category AS category,
-                       d.title AS title,
-                       d.subtitle AS subtitle,
-                       d.action_json AS actionJson,
-                       d.updated_at AS updatedAt,
-                       d.popularity AS popularity,
-                       bm25(documents_fts, 5.0, 2.0, 1.0) AS bm25Score
-                FROM documents_fts
-                JOIN documents d ON d.id = documents_fts.id
-                WHERE documents_fts MATCH ?
-                ORDER BY bm25Score ASC
-                LIMIT ?
-              `
-    ).all(ftsQuery, candidateLimit) : [];
-    const mapped = rows.map((row) => {
-      const inverseBm25 = Number.isFinite(row.bm25Score) ? (() => {
-        const negBm25 = Math.max(-row.bm25Score, 0);
-        return negBm25 / (1 + negBm25);
-      })() : 0.5;
-      const searchableText = `${row.title} ${row.subtitle}`;
-      const lexical = Math.max(
-        inverseBm25,
-        lexicalScore(searchableText, trimmed),
-        fuzzySimilarityScore(searchableText, trimmed)
-      );
-      return {
-        id: row.id,
-        category: row.category,
-        title: row.title,
-        subtitle: row.subtitle,
-        actionJson: row.actionJson,
-        updatedAt: row.updatedAt,
-        lexical,
-        popularity: row.popularity
-      };
-    });
-    const fuzzyRows = this.fuzzySearch(trimmed, candidateLimit);
-    const byId = /* @__PURE__ */ new Map();
-    for (const row of [...mapped, ...fuzzyRows]) {
-      const existing = byId.get(row.id);
-      if (!existing || row.lexical > existing.lexical) {
-        byId.set(row.id, row);
-      }
-    }
-    const result = Array.from(byId.values()).sort((a, b) => b.lexical - a.lexical).slice(0, candidateLimit);
-    if (trimmed === "process kill" || trimmed === "timer stop" || trimmed === "stop timer") {
-      const lines = [];
-      lines.push(
-        `[Search DEBUG] query="${trimmed}" ftsQuery="${ftsQuery}" FTS rows=${rows.length} mapped=${mapped.length} fuzzyRows=${fuzzyRows.length}`
-      );
-      for (const r of result.slice(0, 10)) {
-        lines.push(`  [DEBUG] lex=${r.lexical.toFixed(3)} cat=${r.category} title="${r.title}"`);
-      }
-      try {
-        const fs5 = require("fs");
-        fs5.appendFileSync("/tmp/search_debug.log", lines.join("\n") + "\n\n");
-      } catch {
-      }
-    }
-    return result;
-  }
-  fuzzySearch(query, limit) {
-    if (limit <= 0) return [];
-    const rows = this.db.prepare(
-      `
-          SELECT id, category, title, subtitle, tokens, action_json AS actionJson, updated_at AS updatedAt, popularity
-          FROM documents
-          ORDER BY updated_at DESC
-          LIMIT ?
-        `
-    ).all(Math.max(1e3, limit * 50));
-    const scored = [];
-    for (const row of rows) {
-      const searchableText = `${row.title} ${row.subtitle} ${row.tokens}`;
-      const lexical = Math.max(
-        lexicalScore(searchableText, query),
-        fuzzySimilarityScore(searchableText, query)
-      );
-      if (lexical <= 0) continue;
-      const distance = levenshteinDistance(row.title.toLowerCase(), query.toLowerCase());
-      scored.push({
-        id: row.id,
-        category: row.category,
-        title: row.title,
-        subtitle: row.subtitle,
-        actionJson: row.actionJson,
-        updatedAt: row.updatedAt,
-        lexical,
-        fuzzyDistance: distance,
-        popularity: row.popularity
-      });
-    }
-    scored.sort((a, b) => {
-      if (a.lexical !== b.lexical) {
-        return b.lexical - a.lexical;
-      }
-      if (a.fuzzyDistance !== void 0 && b.fuzzyDistance !== void 0 && a.fuzzyDistance !== b.fuzzyDistance) {
-        return a.fuzzyDistance - b.fuzzyDistance;
-      }
-      return b.updatedAt - a.updatedAt;
-    });
-    return scored.slice(0, limit);
-  }
-  parseAction(actionJson) {
-    return safeJsonParse(actionJson, { type: "copy-text", text: "" });
-  }
-  getActionStats(actionIds) {
-    if (actionIds.length === 0) return /* @__PURE__ */ new Map();
-    const placeholders = actionIds.map(() => "?").join(",");
-    const rows = this.db.prepare(
-      `
-          SELECT a.action_id AS actionId,
-                 a.frequency AS frequency,
-                 a.success_count AS successCount,
-                 a.total_count AS totalCount,
-                 a.last_used_at AS lastUsedAt,
-                 COUNT(recent.id) AS recentUseCount
-          FROM action_stats a
-          LEFT JOIN action_usage_events recent
-            ON recent.action_id = a.action_id AND recent.created_at >= ?
-          WHERE a.action_id IN (${placeholders})
-          GROUP BY a.action_id
-        `
-    ).all(Date.now() - HOT_USAGE_WINDOW_MS, ...actionIds);
-    return new Map(rows.map((row) => [row.actionId, row]));
-  }
-  getQueryActionStats(query, actionIds) {
-    const normalizedQuery = normalizeStoredQuery(query);
-    if (!normalizedQuery || actionIds.length === 0) return /* @__PURE__ */ new Map();
-    const placeholders = actionIds.map(() => "?").join(",");
-    const rows = this.db.prepare(
-      `
-          SELECT query AS query,
-                 action_id AS actionId,
-                 frequency AS frequency,
-                 success_count AS successCount,
-                 total_count AS totalCount,
-                 last_used_at AS lastUsedAt
-          FROM query_action_stats
-          WHERE query = ? AND action_id IN (${placeholders})
-        `
-    ).all(normalizedQuery, ...actionIds);
-    return new Map(rows.map((row) => [row.actionId, row]));
-  }
-  listQueryActionIds(query, limit) {
-    const normalizedQuery = normalizeStoredQuery(query);
-    if (!normalizedQuery || limit <= 0) return [];
-    const rows = this.db.prepare(
-      `
-          SELECT action_id AS actionId
-          FROM query_action_stats
-          WHERE query = ? AND success_count > 0
-          ORDER BY last_used_at DESC, frequency DESC
-          LIMIT ?
-        `
-    ).all(normalizedQuery, limit);
-    return rows.map((row) => row.actionId);
-  }
-  getDocumentsByIds(ids) {
-    if (ids.length === 0) return [];
-    const placeholders = ids.map(() => "?").join(",");
-    const rows = this.db.prepare(
-      `
-          SELECT id,
-                 category,
-                 title,
-                 subtitle,
-                 action_json AS actionJson,
-                 updated_at AS updatedAt,
-                 popularity
-          FROM documents
-          WHERE id IN (${placeholders})
-        `
-    ).all(...ids);
-    return rows.map((row) => ({
-      id: row.id,
-      category: row.category,
-      title: row.title,
-      subtitle: row.subtitle,
-      actionJson: row.actionJson,
-      updatedAt: row.updatedAt,
-      lexical: 0,
-      popularity: row.popularity
-    }));
-  }
-  listRecommendedDocuments(limit) {
-    if (limit <= 0) return [];
-    return this.db.prepare(
-      `
-          SELECT d.id AS id,
-                 d.category AS category,
-                 d.title AS title,
-                 d.subtitle AS subtitle,
-                 d.action_json AS actionJson,
-                 d.updated_at AS updatedAt,
-                 COALESCE(a.frequency, 0) AS frequency,
-                 COALESCE(a.success_count, 0) AS successCount,
-                 COALESCE(a.total_count, 0) AS totalCount,
-                 COALESCE(a.last_used_at, 0) AS lastUsedAt,
-                 COALESCE(recent.recentUseCount, 0) AS recentUseCount
-          FROM documents d
-          LEFT JOIN action_stats a ON a.action_id = d.id
-          LEFT JOIN (
-            SELECT action_id, COUNT(*) AS recentUseCount
-            FROM action_usage_events
-            WHERE created_at >= ?
-            GROUP BY action_id
-          ) recent ON recent.action_id = d.id
-          WHERE d.category <> 'files'
-          ORDER BY
-            COALESCE(recent.recentUseCount, 0) DESC,
-            CASE WHEN COALESCE(a.last_used_at, 0) > 0 THEN 0 ELSE 1 END ASC,
-            COALESCE(a.last_used_at, 0) DESC,
-            COALESCE(a.frequency, 0) DESC,
-            d.updated_at DESC
-          LIMIT ?
-        `
-    ).all(Date.now() - HOT_USAGE_WINDOW_MS, limit);
-  }
-  recordAction(actionId, success) {
-    const now = Date.now();
-    this.db.prepare(
-      `
-          INSERT INTO action_stats (action_id, frequency, success_count, total_count, last_used_at)
-          VALUES (?, 1, ?, 1, ?)
-          ON CONFLICT(action_id) DO UPDATE SET
-            frequency = action_stats.frequency + 1,
-            success_count = action_stats.success_count + excluded.success_count,
-            total_count = action_stats.total_count + 1,
-            last_used_at = excluded.last_used_at
-        `
-    ).run(actionId, success ? 1 : 0, now);
-    if (success) {
-      this.db.prepare("INSERT INTO action_usage_events (action_id, created_at) VALUES (?, ?)").run(actionId, now);
-    }
-  }
-  recordActionForQuery(query, actionId, success) {
-    const normalizedQuery = normalizeStoredQuery(query);
-    if (!normalizedQuery) return;
-    const now = Date.now();
-    this.db.prepare(
-      `
-          INSERT INTO query_action_stats (query, action_id, frequency, success_count, total_count, last_used_at)
-          VALUES (?, ?, 1, ?, 1, ?)
-          ON CONFLICT(query, action_id) DO UPDATE SET
-            frequency = query_action_stats.frequency + 1,
-            success_count = query_action_stats.success_count + excluded.success_count,
-            total_count = query_action_stats.total_count + 1,
-            last_used_at = excluded.last_used_at
-        `
-    ).run(normalizedQuery, actionId, success ? 1 : 0, now);
-  }
-  recordClick(query, resultId, rank, success) {
-    this.db.prepare(
-      "INSERT INTO click_events (created_at, query, result_id, rank, success) VALUES (?, ?, ?, ?, ?)"
-    ).run(Date.now(), query, resultId, rank, success ? 1 : 0);
-  }
-  readRecentClickAverage(limit = 200) {
-    const rows = this.db.prepare("SELECT rank FROM click_events ORDER BY id DESC LIMIT ?").all(limit);
-    if (rows.length === 0) return 0;
-    const sum = rows.reduce((acc, row) => acc + row.rank, 0);
-    return sum / rows.length;
-  }
-  writeBenchmarkSnapshot(precisionAt5, precisionAt10, benchmarkSize) {
-    this.db.prepare(
-      "INSERT INTO benchmark_snapshots (created_at, precision_at_5, precision_at_10, avg_click_rank, benchmark_size) VALUES (?, ?, ?, ?, ?)"
-    ).run(Date.now(), precisionAt5, precisionAt10, this.readRecentClickAverage(), benchmarkSize);
-  }
-  readBenchmarkHistory(limit = 40) {
-    return this.db.prepare(
-      `SELECT created_at AS createdAt,
-                precision_at_5 AS precisionAt5,
-                precision_at_10 AS precisionAt10,
-                avg_click_rank AS avgClickRank
-        FROM benchmark_snapshots
-        ORDER BY id DESC
-        LIMIT ?
-      `
-    ).all(limit);
-  }
-  // Session cache for search results
-  _searchCache = /* @__PURE__ */ new Map();
-  _cacheTimestamp = /* @__PURE__ */ new Map();
-  CACHE_TTL = 5 * 60 * 1e3;
-  // 5 minutes
-  getSearch(query, limit) {
-    const now = Date.now();
-    const cacheKey2 = `${query}:${limit}`;
-    const lastUpdate = this._cacheTimestamp.get(cacheKey2);
-    if (lastUpdate && now - lastUpdate < this.CACHE_TTL) {
-      return this._searchCache.get(cacheKey2) || [];
-    }
-    const results = this.search(query, limit);
-    this._searchCache.set(cacheKey2, results);
-    this._cacheTimestamp.set(cacheKey2, now);
-    return results;
-  }
-  clearSearchCache() {
-    this._searchCache.clear();
-    this._cacheTimestamp.clear();
-  }
-};
-
-// src/main/search/service.ts
-init_appsProvider();
-
-// src/main/search/providers/clipboardProvider.ts
-init_desktop_runtime();
-var import_node_crypto11 = require("node:crypto");
-var import_node_fs21 = require("node:fs");
-var import_node_path22 = require("node:path");
-init_configStore();
-var CLIPBOARD_LIMIT = 200;
-var CLIPBOARD_WATCH_ENABLED_KEY = "clipboardWatchEnabled";
-var CLIPBOARD_CAPTURE_IMAGES_KEY = "clipboardCaptureImages";
-var CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY = "clipboardMaxImageMegapixels";
-var DEFAULT_CLIPBOARD_WATCH_ENABLED = true;
-var DEFAULT_CLIPBOARD_CAPTURE_IMAGES = false;
-var DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS = 2;
-function getClipboardConfig() {
-  const raw = readRawConfig();
-  const watchEnabled = raw[CLIPBOARD_WATCH_ENABLED_KEY] ?? DEFAULT_CLIPBOARD_WATCH_ENABLED;
-  const captureImages = raw[CLIPBOARD_CAPTURE_IMAGES_KEY] ?? DEFAULT_CLIPBOARD_CAPTURE_IMAGES;
-  const maxImageMegapixels = Number(raw[CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY] ?? DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS);
-  return {
-    watchEnabled: watchEnabled !== false,
-    captureImages: captureImages === true,
-    maxImageMegapixels: Number.isFinite(maxImageMegapixels) && maxImageMegapixels > 0 ? maxImageMegapixels : DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS
-  };
-}
-function setClipboardConfig(patch) {
-  const next = {};
-  if (typeof patch.watchEnabled === "boolean") next[CLIPBOARD_WATCH_ENABLED_KEY] = patch.watchEnabled;
-  if (typeof patch.captureImages === "boolean") next[CLIPBOARD_CAPTURE_IMAGES_KEY] = patch.captureImages;
-  if (typeof patch.maxImageMegapixels === "number" && Number.isFinite(patch.maxImageMegapixels) && patch.maxImageMegapixels > 0) {
-    next[CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY] = patch.maxImageMegapixels;
-  }
-  writeConfigPatch(next);
-}
-function storeDir() {
-  const dir = (0, import_node_path22.join)(app.getPath("userData"), "search");
-  (0, import_node_fs21.mkdirSync)(dir, { recursive: true });
-  return dir;
-}
-function imagesDir() {
-  const dir = (0, import_node_path22.join)(storeDir(), "clipboard-images");
-  (0, import_node_fs21.mkdirSync)(dir, { recursive: true });
-  return dir;
-}
-function clipboardPath() {
-  return (0, import_node_path22.join)(storeDir(), "clipboard.json");
-}
-var _readClipboardDb = null;
-var _cacheTimestamp = 0;
-var CACHE_TTL = 10 * 1e3;
-async function ensureDbLoaded() {
-  if (_readClipboardDb && Date.now() - _cacheTimestamp < CACHE_TTL) {
-    return;
-  }
-  try {
-    const raw = (0, import_node_fs21.readFileSync)(clipboardPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    _readClipboardDb = {
-      items: Array.isArray(parsed.items) ? parsed.items : []
-    };
-  } catch {
-    _readClipboardDb = { items: [] };
-  }
-  _cacheTimestamp = Date.now();
-}
-function writeDb3(db) {
-  (0, import_node_fs21.writeFileSync)(clipboardPath(), `${JSON.stringify(db, null, 2)}
-`, "utf8");
-  _readClipboardDb = db;
-  _cacheTimestamp = Date.now();
-}
-function detectSensitiveValue(text) {
-  const trimmed = text.trim();
-  if (trimmed.length < 16) return false;
-  if (/^sk-[A-Za-z0-9]{16,}$/.test(trimmed)) return true;
-  if (/^gh[pousr]_[A-Za-z0-9_]{20,}$/.test(trimmed)) return true;
-  if (/password\s*[=:]/i.test(trimmed)) return true;
-  if (/api[_-]?key\s*[=:]/i.test(trimmed)) return true;
-  if (/token\s*[=:]/i.test(trimmed)) return true;
-  return false;
-}
-function sanitizeEntry(entry) {
-  const base = {
-    id: String(entry.id ?? ""),
-    createdAt: Number(entry.createdAt ?? 0),
-    pinned: Boolean(entry.pinned),
-    isSecret: Boolean(entry.isSecret)
-  };
-  if (!base.id || !Number.isFinite(base.createdAt)) return null;
-  switch (entry.kind) {
-    case "text": {
-      const text = String(entry.text ?? "");
-      if (!text) return null;
-      return {
-        ...base,
-        kind: "text",
-        text,
-        preview: String(entry.preview ?? previewFromText(text)),
-        charCount: Number(entry.charCount ?? text.length),
-        lineCount: Number(entry.lineCount ?? text.split("\n").length)
-      };
-    }
-    case "image": {
-      const imagePath = String(entry.imagePath ?? "");
-      if (!imagePath || !(0, import_node_fs21.existsSync)(imagePath)) return null;
-      return {
-        ...base,
-        kind: "image",
-        imagePath,
-        width: Number(entry.width ?? 0),
-        height: Number(entry.height ?? 0),
-        byteSize: Number(entry.byteSize ?? 0)
-      };
-    }
-    case "file": {
-      const paths = Array.isArray(entry.paths) ? entry.paths.map((p) => String(p)).filter(Boolean) : [];
-      if (paths.length === 0) return null;
-      return {
-        ...base,
-        kind: "file",
-        paths,
-        preview: paths.length === 1 ? (0, import_node_path22.basename)(paths[0]) : `${(0, import_node_path22.basename)(paths[0])} + ${paths.length - 1} more`
-      };
-    }
-    default:
-      return null;
-  }
-}
-function normalizeDb(db) {
-  return {
-    items: db.items.map((item) => sanitizeEntry(item)).filter((item) => item !== null)
-  };
-}
-function previewFromText(text) {
-  const firstLine = text.split("\n").find((line) => line.trim().length > 0) ?? "";
-  return firstLine.slice(0, 140);
-}
-function insertEntry(db, entry) {
-  const pinned = db.items.filter((item) => item.pinned && item.id !== entry.id);
-  const rest = db.items.filter((item) => !item.pinned && item.id !== entry.id);
-  return { items: [...pinned, entry, ...rest].slice(0, CLIPBOARD_LIMIT) };
-}
-function hashKey(kind, payload) {
-  return (0, import_node_crypto11.createHash)("sha1").update(`${kind}|${payload}`).digest("hex").slice(0, 16);
-}
-function readFileUrls() {
-  if (process.platform !== "darwin") return [];
-  const formats = clipboard.availableFormats();
-  const hasFileUrl = formats.some(
-    (f) => f === "public.file-url" || f === "NSFilenamesPboardType" || f === "Files"
-  );
-  if (!hasFileUrl) return [];
-  try {
-    const raw = clipboard.read("public.file-url");
-    if (!raw) return [];
-    const parts = raw.split(/\0|\r?\n/g).map((part) => part.trim()).filter(Boolean);
-    const paths = parts.map((url) => {
-      try {
-        if (url.startsWith("file://")) {
-          return decodeURIComponent(new URL(url).pathname);
-        }
-        return url;
-      } catch {
-        return "";
-      }
-    }).filter(Boolean);
-    return Array.from(new Set(paths));
-  } catch {
-    return [];
-  }
-}
-function idForText(text) {
-  return `text:${hashKey("text", text).slice(0, 12)}`;
-}
-function idForFiles(paths) {
-  return `file:${hashKey("file", paths.slice().sort().join("|")).slice(0, 12)}`;
-}
-function idForImage(hash2) {
-  return `image:${hash2.slice(0, 12)}`;
-}
-function captureFileEntry(paths, now) {
-  if (paths.length === 0) return null;
-  return {
-    id: idForFiles(paths),
-    kind: "file",
-    createdAt: now,
-    pinned: false,
-    isSecret: false,
-    paths,
-    preview: paths.length === 1 ? (0, import_node_path22.basename)(paths[0]) : `${(0, import_node_path22.basename)(paths[0])} + ${paths.length - 1} more`
-  };
-}
-function resizeToMegapixels(image, maxMegapixels) {
-  if (maxMegapixels <= 0) return image;
-  const { width, height } = image.getSize();
-  const megapixels = width * height / 1e6;
-  if (megapixels <= maxMegapixels) return image;
-  const scale = Math.sqrt(maxMegapixels / megapixels);
-  const newWidth = Math.max(1, Math.round(width * scale));
-  const newHeight = Math.max(1, Math.round(height * scale));
-  return image.resize({ width: newWidth, height: newHeight, quality: "good" });
-}
-function captureImageEntry(now) {
-  const config = getClipboardConfig();
-  if (!config.captureImages) return null;
-  const image = clipboard.readImage();
-  if (image.isEmpty()) return null;
-  const resized = resizeToMegapixels(image, config.maxImageMegapixels);
-  const buffer = resized.toPNG();
-  if (buffer.length === 0) return null;
-  const hash2 = (0, import_node_crypto11.createHash)("sha1").update(buffer).digest("hex");
-  const id = idForImage(hash2);
-  const file = (0, import_node_path22.join)(imagesDir(), `${hash2}.png`);
-  if (!(0, import_node_fs21.existsSync)(file)) {
-    (0, import_node_fs21.writeFileSync)(file, buffer);
-  }
-  return {
-    id,
-    kind: "image",
-    createdAt: now,
-    pinned: false,
-    isSecret: false,
-    imagePath: file,
-    width: resized.getSize().width,
-    height: resized.getSize().height,
-    byteSize: buffer.length
-  };
-}
-function captureTextEntry(now) {
-  const text = clipboard.readText();
-  if (!text || !text.trim()) return null;
-  return {
-    id: idForText(text),
-    kind: "text",
-    createdAt: now,
-    pinned: false,
-    isSecret: detectSensitiveValue(text),
-    text,
-    preview: previewFromText(text),
-    charCount: text.length,
-    lineCount: text.split("\n").length
-  };
-}
-function captureClipboardSnapshot() {
-  const now = Date.now();
-  ensureDbLoaded();
-  if (!_readClipboardDb) return;
-  const fileUrls = readFileUrls();
-  const candidate = captureFileEntry(fileUrls, now) ?? captureImageEntry(now) ?? captureTextEntry(now);
-  if (!candidate) return;
-  const existing = _readClipboardDb.items.find((item) => item.id === candidate.id);
-  const merged = existing ? {
-    ...candidate,
-    pinned: existing.pinned,
-    createdAt: now
-  } : candidate;
-  if (_readClipboardDb.items[0]?.id === candidate.id && !existing?.pinned) {
-    return;
-  }
-  const db = normalizeDb(insertEntry(_readClipboardDb, merged));
-  writeDb3(db);
-}
-function listClipboardEntries() {
-  return normalizeDb(_readClipboardDb || { items: [] }).items;
-}
-function getClipboardEntry(id) {
-  return listClipboardEntries().find((item) => item.id === id) ?? null;
-}
-function deleteClipboardEntry(id) {
-  const db = normalizeDb(_readClipboardDb || { items: [] });
-  const entry = db.items.find((item) => item.id === id);
-  if (!entry) return false;
-  const next = db.items.filter((item) => item.id !== id);
-  writeDb3({ items: next });
-  if (entry.kind === "image") {
-    const stillReferenced = next.some(
-      (item) => item.kind === "image" && item.imagePath === entry.imagePath
-    );
-    if (!stillReferenced && (0, import_node_fs21.existsSync)(entry.imagePath)) {
-      try {
-        (0, import_node_fs21.rmSync)(entry.imagePath, { force: true });
-      } catch {
-      }
-    }
-  }
-  return true;
-}
-function togglePinClipboardEntry(id) {
-  const db = normalizeDb(_readClipboardDb || { items: [] });
-  const entry = db.items.find((item) => item.id === id);
-  if (!entry) return false;
-  entry.pinned = !entry.pinned;
-  const pinned = db.items.filter((item) => item.pinned);
-  const rest = db.items.filter((item) => !item.pinned);
-  writeDb3({ items: [...pinned, ...rest] });
-  return true;
-}
-function clearClipboardHistory() {
-  const db = normalizeDb(_readClipboardDb || { items: [] });
-  for (const item of db.items) {
-    if (item.kind === "image" && (0, import_node_fs21.existsSync)(item.imagePath)) {
-      try {
-        (0, import_node_fs21.rmSync)(item.imagePath, { force: true });
-      } catch {
-      }
-    }
-  }
-  writeDb3({ items: [] });
-}
-async function cleanupOrphanClipboardImages() {
-  await ensureDbLoaded();
-  const dir = imagesDir();
-  const db = normalizeDb(_readClipboardDb || { items: [] });
-  const referenced = new Set(
-    db.items.filter((item) => item.kind === "image").map((item) => item.imagePath)
-  );
-  let removed = 0;
-  let freedBytes = 0;
-  for (const entry of (0, import_node_fs21.readdirSync)(dir, { withFileTypes: true })) {
-    if (!entry.isFile()) continue;
-    const ext = (0, import_node_path22.extname)(entry.name).toLowerCase();
-    if (ext !== ".png") continue;
-    const fullPath = (0, import_node_path22.join)(dir, entry.name);
-    if (referenced.has(fullPath)) continue;
-    try {
-      const stats = (0, import_node_fs21.statSync)(fullPath);
-      (0, import_node_fs21.rmSync)(fullPath, { force: true });
-      removed += 1;
-      freedBytes += stats.size;
-    } catch {
-    }
-  }
-  return { removed, freedBytes };
-}
-async function clearClipboardImageHistory() {
-  await ensureDbLoaded();
-  const db = normalizeDb(_readClipboardDb || { items: [] });
-  const imageEntries = db.items.filter((item) => item.kind === "image");
-  const remaining = db.items.filter((item) => item.kind !== "image");
-  writeDb3({ items: remaining });
-  const cleanup2 = await cleanupOrphanClipboardImages();
-  return {
-    removed: imageEntries.length,
-    freedBytes: cleanup2.freedBytes
-  };
-}
-function getClipboardImagesDir() {
-  return imagesDir();
-}
-function getClipboardStoreDir() {
-  return storeDir();
-}
-function restoreClipboardEntry(id) {
-  const entry = getClipboardEntry(id);
-  if (!entry) return false;
-  switch (entry.kind) {
-    case "text":
-      clipboard.writeText(entry.text);
-      return true;
-    case "image": {
-      if (!(0, import_node_fs21.existsSync)(entry.imagePath)) return false;
-      const img = nativeImage.createFromPath(entry.imagePath);
-      if (img.isEmpty()) return false;
-      clipboard.writeImage(img);
-      return true;
-    }
-    case "file": {
-      if (process.platform === "darwin") {
-        const url = `file://${encodeURI(entry.paths[0])}`;
-        clipboard.write({ text: entry.paths.join("\n"), bookmark: url });
-      } else {
-        clipboard.writeText(entry.paths.join("\n"));
-      }
-      return true;
-    }
-    default:
-      return false;
-  }
-}
-function revealClipboardEntryInFinder(id) {
-  const entry = getClipboardEntry(id);
-  if (!entry) return false;
-  if (entry.kind === "image") {
-    shell.showItemInFolder(entry.imagePath);
-    return true;
-  }
-  if (entry.kind === "file" && entry.paths[0]) {
-    shell.showItemInFolder(entry.paths[0]);
-    return true;
-  }
-  return false;
-}
-function readClipboardImagePayload(id) {
-  const entry = getClipboardEntry(id);
-  if (!entry || entry.kind !== "image") return null;
-  if (!(0, import_node_fs21.existsSync)(entry.imagePath)) return null;
-  const bytes = (0, import_node_fs21.readFileSync)(entry.imagePath);
-  return {
-    dataUrl: `data:image/png;base64,${bytes.toString("base64")}`,
-    width: entry.width,
-    height: entry.height,
-    byteSize: entry.byteSize
-  };
-}
-var watcherHandle = null;
-var watcherInactiveTicks = 0;
-var WATCHER_DEFAULT_INTERVAL_MS = 750;
-var WATCHER_IDLE_INTERVAL_MS = 2e3;
-var WATCHER_IDLE_THRESHOLD_TICKS = 60;
-function startClipboardWatcher(intervalMs = WATCHER_DEFAULT_INTERVAL_MS) {
-  if (watcherHandle) return;
-  const config = getClipboardConfig();
-  if (!config.watchEnabled) return;
-  void cleanupOrphanClipboardImages().catch(() => {
-  });
-  let lastTopId = "";
-  watcherHandle = setInterval(() => {
-    try {
-      captureClipboardSnapshot();
-      const db = _readClipboardDb;
-      const topId = db?.items[0]?.id ?? "";
-      if (topId === lastTopId) {
-        watcherInactiveTicks += 1;
-      } else {
-        watcherInactiveTicks = 0;
-        lastTopId = topId;
-      }
-      if (watcherInactiveTicks > WATCHER_IDLE_THRESHOLD_TICKS && watcherHandle && intervalMs < WATCHER_IDLE_INTERVAL_MS) {
-        clearInterval(watcherHandle);
-        watcherHandle = null;
-        startClipboardWatcher(WATCHER_IDLE_INTERVAL_MS);
-      }
-    } catch {
-    }
-  }, intervalMs);
-  if (typeof watcherHandle.unref === "function") {
-    ;
-    watcherHandle.unref();
-  }
-}
-function stopClipboardWatcher() {
-  if (!watcherHandle) return;
-  clearInterval(watcherHandle);
-  watcherHandle = null;
-  watcherInactiveTicks = 0;
-}
-function restartClipboardWatcher() {
-  stopClipboardWatcher();
-  startClipboardWatcher();
-}
-var clipboardProvider = {
-  providerId: "clipboard",
-  async buildDocuments() {
-    return [];
-  }
-};
-
-// src/main/search/providers/commandsProvider.ts
-function buildNativeCommandDocuments() {
-  const now = Date.now();
-  return listNativeCommands().filter(
-    (descriptor) => descriptor.id !== "list-listening-ports" && descriptor.id !== "open-emoji-picker"
-  ).map((descriptor) => ({
-    id: `native:${descriptor.id}`,
-    category: "native-command",
-    title: descriptor.title,
-    subtitle: descriptor.subtitle,
-    tokens: [descriptor.title, descriptor.subtitle, descriptor.category, ...descriptor.keywords].join(" "),
-    action: { type: "run-native-command", commandId: descriptor.id },
-    updatedAt: now
-  }));
-}
-function buildRaymesSurfaceDocuments() {
-  const now = Date.now();
-  return [
-    {
-      id: "command:open-settings",
-      title: "Open Settings",
-      subtitle: "Tezbar settings",
-      keywords: ["settings", "preferences", "/settings"],
-      commandId: "open-settings"
-    },
-    {
-      id: "command:open-indexing",
-      title: "Indexing Status",
-      subtitle: "Knowledge index \xB7 progress, storage, and indexed files",
-      keywords: ["indexing", "index", "knowledge", "status", "progress", "files", "storage", "cache", "/indexing"],
-      commandId: "open-indexing"
-    },
-    {
-      id: "command:open-extensions-settings",
-      title: "Extensions",
-      subtitle: "Settings \xB7 Extensions tab",
-      keywords: ["extensions", "raycast", "/extensions"],
-      commandId: "open-extensions-settings"
-    },
-    {
-      id: "command:open-extensions",
-      title: "Extensions Store",
-      subtitle: "Browse and install extensions",
-      keywords: ["store", "extension store", "extensions store", "raycast store", "/store"],
-      commandId: "open-extensions"
-    },
-    {
-      id: "command:open-snippets",
-      title: "Open Snippets",
-      subtitle: "Tezbar snippets",
-      keywords: ["snippets", "text snippets", "/snippets"],
-      commandId: "open-snippets"
-    },
-    {
-      id: "command:open-notes",
-      title: "Open Notes",
-      subtitle: "Tezbar quick notes",
-      keywords: ["notes", "quick notes", "/notes"],
-      commandId: "open-notes"
-    },
-    {
-      id: "command:open-emoji-picker",
-      title: "Open Emoji Picker",
-      subtitle: "Tezbar emoji picker",
-      keywords: ["emoji", "symbols", "/emoji"],
-      commandId: "open-emoji-picker"
-    }
-  ].map((item) => ({
-    id: item.id,
-    category: "commands",
-    title: item.title,
-    subtitle: item.subtitle,
-    tokens: [item.title, item.subtitle, ...item.keywords].join(" "),
-    action: { type: "invoke-command", commandId: item.commandId },
-    updatedAt: now
-  }));
-}
-var commandsProvider = {
-  providerId: "commands",
-  async buildDocuments() {
-    return [...buildRaymesSurfaceDocuments(), ...buildNativeCommandDocuments()];
-  }
-};
-
-// src/main/search/providers/extensionsProvider.ts
-init_extension_registry();
-init_configStore();
-var extensionsProvider = {
-  providerId: "extensions",
-  async buildDocuments() {
-    const installed = listInstalledRegistryExtensions();
-    if (installed.length === 0) return [];
-    const disabled = getDisabledCommands();
-    const aliases = getCommandAliases();
-    const out = [];
-    for (const ext of installed.slice(0, 100)) {
-      for (const cmd of ext.commands) {
-        const commandId = `extcmd:${ext.id}:${cmd.name}`;
-        if (disabled[commandId]) continue;
-        let tokens2 = `${cmd.title} ${cmd.name} ${ext.name} ${ext.slug} ${ext.id} ${ext.description || ""}`;
-        const alias = aliases[commandId];
-        if (alias) tokens2 += ` ${alias}`;
-        out.push({
-          id: commandId,
-          category: "extensions",
-          title: cmd.title,
-          subtitle: ext.name,
-          tokens: tokens2,
-          action: {
-            type: "run-extension-command",
-            extensionId: ext.id,
-            commandName: cmd.name,
-            title: cmd.title,
-            iconPath: ext.iconPath,
-            commandArgumentDefinitions: cmd.argumentDefinitions
-          },
-          updatedAt: ext.installedAt,
-          popularity: ext.downloadCount || 0
-        });
-      }
-    }
-    return out;
-  }
-};
-
-// src/main/search/providers/filesProvider.ts
-var import_node_child_process15 = require("node:child_process");
-var import_node_fs22 = require("node:fs");
-var import_node_os11 = require("node:os");
-var import_node_path23 = require("node:path");
-var import_node_util12 = require("node:util");
-var execFileAsync12 = (0, import_node_util12.promisify)(import_node_child_process15.execFile);
-var ALLOWED_EXTENSIONS = /* @__PURE__ */ new Set([
-  "",
-  ".md",
-  ".txt",
-  ".json",
-  ".yaml",
-  ".yml",
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-  ".go",
-  ".py",
-  ".rs",
-  ".swift",
-  ".pdf",
-  ".png",
-  ".jpg"
-]);
-var SKIP_NAMES2 = /* @__PURE__ */ new Set([
-  "node_modules",
-  ".git",
-  ".next",
-  ".cache",
-  "Library",
-  "build",
-  "coverage",
-  "dist",
-  "out",
-  "target"
-]);
-function isAllowedFile(path7) {
-  const ext = (0, import_node_path23.extname)(path7).toLowerCase();
-  return ALLOWED_EXTENSIONS.has(ext);
-}
-function containsSkippedDirectory(path7) {
-  return path7.split(import_node_path23.sep).some((part) => SKIP_NAMES2.has(part));
-}
-function makeFileDocument(path7) {
-  try {
-    const stat2 = (0, import_node_fs22.statSync)(path7);
-    if (!stat2.isFile()) return null;
-    if (!isAllowedFile(path7)) return null;
-    const title = path7.split("/").pop() ?? path7;
-    return {
-      id: `file:${path7}`,
-      category: "files",
-      title,
-      subtitle: path7,
-      tokens: `${title} ${path7}`,
-      action: { type: "open-file", path: path7 },
-      updatedAt: stat2.mtimeMs,
-      sourcePath: path7,
-      sourceMtime: stat2.mtimeMs
-    };
-  } catch {
-    return null;
-  }
-}
-function initialRoots() {
-  const home = (0, import_node_os11.homedir)();
-  return [
-    (0, import_node_path23.join)(home, "Desktop"),
-    (0, import_node_path23.join)(home, "Documents"),
-    (0, import_node_path23.join)(home, "Downloads"),
-    (0, import_node_path23.join)(home, "Pictures")
-  ].filter((root) => (0, import_node_fs22.existsSync)(root));
-}
-async function collectInitialFileDocuments(limit = 75e3) {
-  const roots = initialRoots();
-  if (roots.length === 0) return [];
-  const out = [];
-  const queue = [...roots];
-  let visitedEntries = 0;
-  while (queue.length > 0 && out.length < limit) {
-    const current = queue.shift();
-    if (!current) continue;
-    try {
-      const entries = (0, import_node_fs22.readdirSync)(current, { withFileTypes: true });
-      for (const entry of entries) {
-        if (out.length >= limit) break;
-        visitedEntries += 1;
-        if (visitedEntries % 250 === 0) {
-          await new Promise((resolve5) => setImmediate(resolve5));
-        }
-        const absolute = (0, import_node_path23.join)(current, entry.name);
-        if (entry.isDirectory()) {
-          if (!SKIP_NAMES2.has(entry.name)) queue.push(absolute);
-          continue;
-        }
-        const doc = makeFileDocument(absolute);
-        if (doc) out.push(doc);
-      }
-    } catch {
-    }
-  }
-  return out;
-}
-function startFileWatcher(listener) {
-  const roots = initialRoots();
-  const unsubs = [];
-  const pendingUpserts = /* @__PURE__ */ new Map();
-  const pendingRemovals = /* @__PURE__ */ new Set();
-  let flushTimer = null;
-  const flush = () => {
-    flushTimer = null;
-    if (pendingUpserts.size === 0 && pendingRemovals.size === 0) return;
-    listener({
-      upserts: Array.from(pendingUpserts.values()),
-      removeIds: Array.from(pendingRemovals)
-    });
-    pendingUpserts.clear();
-    pendingRemovals.clear();
-  };
-  const scheduleFlush = () => {
-    if (flushTimer) return;
-    flushTimer = setTimeout(flush, 200);
-    flushTimer.unref();
-  };
-  for (const root of roots) {
-    try {
-      const watcher = (0, import_node_fs22.watch)(root, { recursive: true }, (_event, filename) => {
-        if (!filename) return;
-        const relative2 = filename.toString();
-        if (containsSkippedDirectory(relative2)) return;
-        const absolute = (0, import_node_path23.join)(root, relative2);
-        const doc = makeFileDocument(absolute);
-        if (doc) {
-          pendingRemovals.delete(doc.id);
-          pendingUpserts.set(doc.id, doc);
-          scheduleFlush();
-          return;
-        }
-        if (!(0, import_node_fs22.existsSync)(absolute)) {
-          const id = `file:${absolute}`;
-          pendingUpserts.delete(id);
-          pendingRemovals.add(id);
-          scheduleFlush();
-        }
-      });
-      unsubs.push(() => watcher.close());
-    } catch {
-    }
-  }
-  return () => {
-    if (flushTimer) clearTimeout(flushTimer);
-    flush();
-    for (const stop of unsubs) stop();
-  };
-}
-
-// src/main/search/providers/notesProvider.ts
-init_desktop_runtime();
-var import_node_fs23 = require("node:fs");
-var import_node_path24 = require("node:path");
-var NOTES_LIMIT = 250;
-function stripMarkdownSyntax(text) {
-  return text.replace(/\*\*([^*\n]+)\*\*/g, "$1").replace(/__([^_\n]+)__/g, "$1").replace(/\*([^*\n]+)\*/g, "$1").replace(/_([^_\n]+)_/g, "$1").replace(/`([^`\n]+)`/g, "$1").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/^#{1,6}\s+/gm, "").replace(/^\s*[-*+]\s+/gm, "").replace(/^\s*\d+\.\s+/gm, "");
-}
-function decodeBasicEntities(text) {
-  return text.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#039;/gi, "'");
-}
-function notePlainText(text) {
-  const withoutHtml = text.replace(/<br\s*\/?\s*>/gi, "\n").replace(/<\/(div|p|li|h[1-6])>/gi, "\n").replace(/<li>/gi, "- ").replace(/<[^>]+>/g, "");
-  return stripMarkdownSyntax(decodeBasicEntities(withoutHtml)).replace(/\r/g, "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-function notesPath() {
-  const dir = (0, import_node_path24.join)(app.getPath("userData"), "search");
-  (0, import_node_fs23.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path24.join)(dir, "notes.json");
-}
-function migrateNote(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw;
-  if (typeof o.text !== "string" || typeof o.createdAt !== "number") return null;
-  const updatedAt = typeof o.updatedAt === "number" ? o.updatedAt : o.createdAt;
-  return {
-    text: o.text,
-    createdAt: o.createdAt,
-    updatedAt
-  };
-}
-function readNotesDb() {
-  try {
-    const raw = (0, import_node_fs23.readFileSync)(notesPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    const notes = [];
-    if (Array.isArray(parsed.notes)) {
-      for (const row of parsed.notes) {
-        const m = migrateNote(row);
-        if (m) notes.push(m);
-      }
-    }
-    return { notes };
-  } catch {
-    return { notes: [] };
-  }
-}
-function writeNotesDb(db) {
-  (0, import_node_fs23.writeFileSync)(notesPath(), `${JSON.stringify(db, null, 2)}
-`, "utf8");
-}
-function listQuickNotes() {
-  return readNotesDb().notes;
-}
-function addQuickNote(text) {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  const now = Date.now();
-  const entry = { text: trimmed, createdAt: now, updatedAt: now };
-  const db = readNotesDb();
-  db.notes = [entry, ...db.notes].slice(0, NOTES_LIMIT);
-  writeNotesDb(db);
-  return entry;
-}
-function updateQuickNote(createdAt, text) {
-  const db = readNotesDb();
-  const idx = db.notes.findIndex((n) => n.createdAt === createdAt);
-  if (idx < 0) return false;
-  db.notes[idx] = {
-    ...db.notes[idx],
-    text,
-    updatedAt: Date.now()
-  };
-  writeNotesDb(db);
-  return true;
-}
-function deleteQuickNote(createdAt) {
-  const db = readNotesDb();
-  const next = db.notes.filter((n) => n.createdAt !== createdAt);
-  if (next.length === db.notes.length) return false;
-  db.notes = next;
-  writeNotesDb(db);
-  return true;
-}
-var notesProvider = {
-  providerId: "notes",
-  async buildDocuments() {
-    return listQuickNotes().map((note) => {
-      const plain = notePlainText(note.text);
-      return {
-        id: `note:${note.createdAt}`,
-        category: "quick-notes",
-        title: plain.split("\n")[0]?.trim().slice(0, 100) || "(note)",
-        subtitle: "Quick note",
-        tokens: plain,
-        action: { type: "copy-text", text: plain },
-        updatedAt: note.updatedAt
-      };
-    });
-  }
-};
-
-// src/main/search/providers/quickLinksProvider.ts
-init_desktop_runtime();
-var import_node_fs24 = require("node:fs");
-var import_node_path25 = require("node:path");
-function quickLinksPath() {
-  const dir = (0, import_node_path25.join)(app.getPath("userData"), "search");
-  (0, import_node_fs24.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path25.join)(dir, "quick-links.json");
-}
-function readQuickLinksDb() {
-  try {
-    const raw = (0, import_node_fs24.readFileSync)(quickLinksPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.links)) return { links: [] };
-    return { links: parsed.links };
-  } catch {
-    const db = {
-      links: [
-        {
-          id: "ql:google",
-          name: "Google Search",
-          template: "https://www.google.com/search?q={query}",
-          createdAt: Date.now()
-        }
-      ]
-    };
-    (0, import_node_fs24.writeFileSync)(quickLinksPath(), `${JSON.stringify(db, null, 2)}
-`, "utf8");
-    return db;
-  }
-}
-function fillTemplate(template, query) {
-  const q = encodeURIComponent(query.trim());
-  return template.split("{query}").join(q);
-}
-var quickLinksProvider = {
-  providerId: "quick-links",
-  async buildDocuments() {
-    return readQuickLinksDb().links.map((link) => ({
-      id: link.id,
-      category: "quick-links",
-      title: link.name,
-      subtitle: link.profile ? `Quick link (${link.profile})` : "Quick link",
-      tokens: `${link.name} ${link.template}`,
-      action: { type: "open-url", url: fillTemplate(link.template, "") },
-      updatedAt: link.createdAt
-    }));
-  }
-};
-
-// src/main/search/providers/snippetsProvider.ts
-init_desktop_runtime();
-var import_node_crypto12 = require("node:crypto");
-var import_node_fs25 = require("node:fs");
-var import_node_os12 = require("node:os");
-var import_node_path26 = require("node:path");
-function snippetsPath() {
-  const dir = (0, import_node_path26.join)(app.getPath("userData"), "search");
-  (0, import_node_fs25.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path26.join)(dir, "snippets.json");
-}
-function defaultSnippets() {
-  const t = Date.now();
-  let i = 0;
-  const next = () => t - i++;
-  return [
-    {
-      id: "snippet:today",
-      label: "Get today's date",
-      trigger: "today",
-      body: "Today is ${date}.",
-      createdAt: next()
-    },
-    {
-      id: "snippet:time",
-      label: "Get current time",
-      trigger: "time",
-      body: "Current time: ${time}",
-      createdAt: next()
-    },
-    {
-      id: "snippet:datetime",
-      label: "Get date and time",
-      trigger: "datetime",
-      body: "${datetime}",
-      createdAt: next()
-    },
-    {
-      id: "snippet:iso",
-      label: "Insert ISO 8601 timestamp",
-      trigger: "iso",
-      body: "${iso}",
-      createdAt: next()
-    },
-    {
-      id: "snippet:year",
-      label: "Insert current year",
-      trigger: "year",
-      body: "${year}",
-      createdAt: next()
-    },
-    {
-      id: "snippet:epoch",
-      label: "Insert Unix timestamp (seconds)",
-      trigger: "epoch",
-      body: "${timestamp}",
-      createdAt: next()
-    },
-    {
-      id: "snippet:uuid",
-      label: "Insert random UUID",
-      trigger: "uuid",
-      body: "${uuid}",
-      createdAt: next()
-    },
-    {
-      id: "snippet:hostname",
-      label: "Insert this computer\u2019s hostname",
-      trigger: "hostname",
-      body: "${hostname}",
-      createdAt: next()
-    },
-    {
-      id: "snippet:public-ip",
-      label: "Show public IP (Terminal command)",
-      trigger: "myip",
-      body: "# Prints your public IPv4 \u2014 paste into Terminal and press Enter\ncurl -4s https://api.ipify.org\n\n# Alternative (IPv4 or IPv6 depending on your network)\n# curl -s https://ifconfig.me\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:local-ip",
-      label: "Show local IP on macOS (Terminal)",
-      trigger: "localip",
-      body: '# Wi\u2011Fi (usually en0 on MacBooks)\nipconfig getifaddr en0\n\n# If empty, try Ethernet or other interface\n# ipconfig getifaddr en1\n\n# List all IPv4 addresses on the machine\n# ifconfig | grep "inet "\n',
-      createdAt: next()
-    },
-    {
-      id: "snippet:signed",
-      label: "Email sign-off (professional)",
-      trigger: "signed",
-      body: "Thank you for your time and for looking into this.\n\nIf anything is unclear or you would like more detail, please let me know \u2014 I am happy to jump on a quick call or thread.\n\nBest regards,\n\n[Your name]\n[Role / team \u2014 optional]\n\n\u2014\n[Optional: direct line \xB7 Slack @handle \xB7 calendar link]\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:thanks",
-      label: "Short thank-you (chat / email)",
-      trigger: "thanks",
-      body: "Thanks a lot \u2014 I really appreciate the quick help on this.\n\n[Your name]\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:commit",
-      label: "Conventional commit message (full template)",
-      trigger: "commit",
-      body: "feat(your-scope): short imperative summary (aim for ~50\u201372 chars)\n\nExplain why this change exists and the approach you took. Wrap lines\naround ~72 characters so `git log` stays easy to read in a terminal.\n\n- user-visible or technical bullet\n- tests / docs / migration notes if relevant\n\nRefs: #123\n# Co-authored-by: Name <name@example.com>\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:mdtask",
-      label: "Markdown unchecked task",
-      trigger: "task",
-      body: "- [ ] ",
-      createdAt: next()
-    },
-    {
-      id: "snippet:mdcheck",
-      label: "Markdown checked task",
-      trigger: "done",
-      body: "- [x] ",
-      createdAt: next()
-    },
-    {
-      id: "snippet:standup",
-      label: "Daily stand-up update",
-      trigger: "standup",
-      body: "**Yesterday**\n- \n\n**Today**\n- \n\n**Blockers**\n- None\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:meeting",
-      label: "Meeting notes template",
-      trigger: "meeting",
-      body: "# Meeting \u2014 ${datetime}\n\n**Attendees:** \n**Goal:** \n\n## Agenda\n1. \n\n## Discussion & decisions\n- \n\n## Action items\n| Owner | Task | Due |\n|-------|------|-----|\n|       |      |     |\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:blocker",
-      label: "Slack / Teams \u2014 blocked message",
-      trigger: "blocked",
-      body: "Hi \u2014 I am blocked on **<short summary>**.\n\n**What I tried:**\n- \n\n**What I need from you:**\n- \n\nHappy to pair or jump on a quick call. Thanks!\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:pr",
-      label: "Pull request description (full)",
-      trigger: "pr",
-      body: "## Summary\nWhat does this PR change, and why should reviewers care?\n\n## Type of change\n- [ ] Bug fix (non-breaking)\n- [ ] New feature\n- [ ] Breaking change / migration\n- [ ] Docs only\n\n## How to test\n1. \n2. \n\n## Screenshots / recordings\n\n\n## Rollout & risk\n- Feature flags:\n- Database / cache / infra:\n\n## Checklist\n- [ ] I self-reviewed the diff\n- [ ] Tests added or updated where it matters\n- [ ] Docs / changelog updated if user-facing\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:issue",
-      label: "Bug report (GitHub / Jira style)",
-      trigger: "bugreport",
-      body: "## Summary\nOne sentence: what is broken or wrong?\n\n## Expected behavior\n\n\n## Actual behavior\n\n\n## Steps to reproduce\n1. \n2. \n3. \n\n## Environment\n| Item | Version / details |\n|------|-------------------|\n| OS / device | |\n| Browser (if web) | |\n| App / API / commit | |\n\n## Logs, screenshots, or recordings\n\n\n## Severity / impact\nWho is affected and how badly (blocks release, workaround exists, \u2026)?\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:changelog",
-      label: "Changelog unreleased entry",
-      trigger: "changelog",
-      body: "## [Unreleased]\n\n### Added\n- \n\n### Changed\n- \n\n### Fixed\n- \n\n### Removed\n- \n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:curl-json",
-      label: "curl POST with JSON (template)",
-      trigger: "curljson",
-      body: `curl -sS -X POST 'https://api.example.com/v1/resource' \\
-  -H 'Content-Type: application/json' \\
-  -H 'Authorization: Bearer YOUR_TOKEN_HERE' \\
-  -d '{"key": "value"}'
-`,
-      createdAt: next()
-    },
-    {
-      id: "snippet:sql-select",
-      label: "SQL SELECT skeleton",
-      trigger: "sql",
-      body: "SELECT\n  *\nFROM your_table\nWHERE 1 = 1\n  -- AND some_column = :value\nORDER BY created_at DESC\nLIMIT 100;\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:api-error-json",
-      label: "JSON API error shape",
-      trigger: "apierror",
-      body: '{\n  "error": {\n    "code": "VALIDATION_FAILED",\n    "message": "Human-readable summary for clients.",\n    "details": [\n      { "field": "email", "issue": "must be a valid email" }\n    ]\n  }\n}\n',
-      createdAt: next()
-    },
-    {
-      id: "snippet:review",
-      label: "Code review comment (constructive)",
-      trigger: "review",
-      body: "Nice work on this part \u2014 the approach reads clearly.\n\nOne suggestion: **<topic>** could be simplified by <idea>, because <reason>. Totally optional if you are tight on time.\n\nLet me know if you want to pair on it.\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:localhost",
-      label: "IPv4 localhost",
-      trigger: "localhost",
-      body: "127.0.0.1",
-      createdAt: next()
-    },
-    {
-      id: "snippet:localurl",
-      label: "Local dev URL (HTTPS)",
-      trigger: "localurl",
-      body: "https://127.0.0.1:3000",
-      createdAt: next()
-    },
-    {
-      id: "snippet:docker-logs",
-      label: "docker compose logs (follow)",
-      trigger: "dlogs",
-      body: "docker compose logs -f --tail=200 SERVICE_NAME\n",
-      createdAt: next()
-    },
-    {
-      id: "snippet:shrug",
-      label: "Shrug emoji",
-      trigger: "shrug",
-      body: "\xAF\\_(\u30C4)_/\xAF",
-      createdAt: next()
-    }
-  ];
-}
-function mergeMissingBuiltins(existing, builtins) {
-  const ids = new Set(existing.map((s) => s.id));
-  const merged = [...existing];
-  for (const b of builtins) {
-    if (!ids.has(b.id)) {
-      merged.push({ ...b, createdAt: Date.now() });
-      ids.add(b.id);
-    }
-  }
-  return merged;
-}
-function readSnippetsDb() {
-  const builtins = defaultSnippets();
-  try {
-    const raw = (0, import_node_fs25.readFileSync)(snippetsPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.snippets)) return { snippets: builtins };
-    return { snippets: mergeMissingBuiltins(parsed.snippets, builtins) };
-  } catch {
-    const db = { snippets: builtins };
-    (0, import_node_fs25.writeFileSync)(snippetsPath(), `${JSON.stringify(db, null, 2)}
-`, "utf8");
-    return db;
-  }
-}
-function getBuiltinSnippetIds() {
-  return new Set(defaultSnippets().map((s) => s.id));
-}
-function isBuiltinSnippetId(id) {
-  return getBuiltinSnippetIds().has(id);
-}
-function persistSnippetsDb(snippets) {
-  const dir = (0, import_node_path26.join)(app.getPath("userData"), "search");
-  (0, import_node_fs25.mkdirSync)(dir, { recursive: true });
-  (0, import_node_fs25.writeFileSync)(snippetsPath(), `${JSON.stringify({ snippets }, null, 2)}
-`, "utf8");
-}
-var SNIPPET_LABEL_MAX = 200;
-var SNIPPET_TRIGGER_MAX = 48;
-var SNIPPET_BODY_MAX = 1e5;
-function normalizeSnippetBody(body) {
-  return body.replace(/\r\n/g, "\n");
-}
-function validateSnippetWritePayload(label, trigger, body) {
-  const tLabel = label.trim();
-  const tTrigger = trigger.trim();
-  const tBody = normalizeSnippetBody(body);
-  if (tLabel.length === 0) return { ok: false, message: "Title is required" };
-  if (tLabel.length > SNIPPET_LABEL_MAX) return { ok: false, message: `Title must be at most ${SNIPPET_LABEL_MAX} characters` };
-  if (tTrigger.length === 0) return { ok: false, message: "Trigger is required" };
-  if (tTrigger.length > SNIPPET_TRIGGER_MAX) {
-    return { ok: false, message: `Trigger must be at most ${SNIPPET_TRIGGER_MAX} characters` };
-  }
-  if (/[\n\r]/.test(tTrigger)) return { ok: false, message: "Trigger must be a single line" };
-  if (tBody.trim().length === 0) return { ok: false, message: "Body cannot be empty" };
-  if (tBody.length > SNIPPET_BODY_MAX) return { ok: false, message: `Body must be at most ${SNIPPET_BODY_MAX} characters` };
-  return { ok: true };
-}
-function triggerTaken(snippets, trigger, excludeId) {
-  const want = trigger.trim().toLowerCase();
-  return snippets.some((s) => s.id !== excludeId && s.trigger.trim().toLowerCase() === want);
-}
-function addUserSnippet(payload) {
-  const v = validateSnippetWritePayload(payload.label, payload.trigger, payload.body);
-  if (!v.ok) return { ok: false, message: v.message };
-  const db = readSnippetsDb();
-  const label = payload.label.trim();
-  const trigger = payload.trigger.trim();
-  const body = normalizeSnippetBody(payload.body);
-  if (triggerTaken(db.snippets, trigger, null)) {
-    return { ok: false, message: "Another snippet already uses this trigger" };
-  }
-  const id = `snippet:user:${(0, import_node_crypto12.randomUUID)()}`;
-  const createdAt = Date.now();
-  const next = [...db.snippets, { id, label, trigger, body, createdAt }];
-  persistSnippetsDb(next);
-  return { ok: true, message: "Snippet saved", id };
-}
-function updateUserSnippet(id, payload) {
-  if (isBuiltinSnippetId(id)) {
-    return { ok: false, message: "Built-in snippets cannot be edited" };
-  }
-  const v = validateSnippetWritePayload(payload.label, payload.trigger, payload.body);
-  if (!v.ok) return { ok: false, message: v.message };
-  const db = readSnippetsDb();
-  const idx = db.snippets.findIndex((s) => s.id === id);
-  if (idx < 0) return { ok: false, message: "Snippet not found" };
-  const label = payload.label.trim();
-  const trigger = payload.trigger.trim();
-  const body = normalizeSnippetBody(payload.body);
-  if (triggerTaken(db.snippets, trigger, id)) {
-    return { ok: false, message: "Another snippet already uses this trigger" };
-  }
-  const next = db.snippets.map(
-    (s, i) => i === idx ? { ...s, label, trigger, body, createdAt: s.createdAt } : s
-  );
-  persistSnippetsDb(next);
-  return { ok: true, message: "Snippet updated" };
-}
-function deleteUserSnippet(id) {
-  if (isBuiltinSnippetId(id)) {
-    return { ok: false, message: "Built-in snippets cannot be deleted" };
-  }
-  const db = readSnippetsDb();
-  const next = db.snippets.filter((s) => s.id !== id);
-  if (next.length === db.snippets.length) return { ok: false, message: "Snippet not found" };
-  persistSnippetsDb(next);
-  return { ok: true, message: "Snippet removed" };
-}
-function formatDate(date) {
-  return date.toISOString().slice(0, 10);
-}
-function formatTime(date) {
-  return date.toTimeString().slice(0, 8);
-}
-function interpolateSnippet(input, now = /* @__PURE__ */ new Date()) {
-  return input.split("${date}").join(formatDate(now)).split("${time}").join(formatTime(now)).split("${datetime}").join(`${formatDate(now)} ${formatTime(now)}`).split("${iso}").join(now.toISOString()).split("${year}").join(String(now.getFullYear())).split("${timestamp}").join(String(Math.floor(now.getTime() / 1e3))).split("${hostname}").join((0, import_node_os12.hostname)()).replace(/\$\{uuid\}/g, () => (0, import_node_crypto12.randomUUID)());
-}
-function friendlyTriggerDisplay(trigger) {
-  const stripped = trigger.replace(/^;/, "").trim();
-  if (!stripped) return trigger.trim();
-  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
-}
-function resolvedSnippetLabel(snippet) {
-  const fromFile = snippet.label?.trim();
-  if (fromFile) return fromFile;
-  if (snippet.id === "snippet:today") return "Get today's date";
-  if (snippet.id === "snippet:time") return "Get current time";
-  if (snippet.id === "snippet:issue") return "Bug report (GitHub / Jira issue template)";
-  return void 0;
-}
-function snippetBodyPreview(body) {
-  const oneLine = body.replace(/\s+/g, " ").trim();
-  return oneLine.length > 72 ? `${oneLine.slice(0, 69)}\u2026` : oneLine;
-}
-function snippetRowSubtitle(snippet, title) {
-  const preview = snippetBodyPreview(snippet.body);
-  const trigRaw = snippet.trigger.trim();
-  const trigHint = friendlyTriggerDisplay(snippet.trigger);
-  let line;
-  if (title === trigRaw) {
-    line = preview.length > 0 ? preview : "Copies text to the clipboard";
-  } else {
-    line = preview.length > 0 ? `${trigHint} \xB7 ${preview}` : trigHint;
-  }
-  if (snippet.scope && snippet.scope !== "global") {
-    line = line.length > 0 ? `${line} \xB7 ${snippet.scope}` : snippet.scope;
-  }
-  return line;
-}
-function listSnippetsForUi() {
-  const db = readSnippetsDb();
-  const builtinIds = getBuiltinSnippetIds();
-  return db.snippets.map((snippet) => {
-    const label = resolvedSnippetLabel(snippet);
-    const title = (label ?? snippet.trigger).trim() || snippet.trigger;
-    return {
-      id: snippet.id,
-      title,
-      subtitle: snippetRowSubtitle(snippet, title),
-      trigger: snippet.trigger,
-      bodyTemplate: snippet.body,
-      resolvedPreview: interpolateSnippet(snippet.body),
-      readonly: builtinIds.has(snippet.id)
-    };
-  });
-}
-function copySnippetById(id) {
-  const db = readSnippetsDb();
-  const snippet = db.snippets.find((s) => s.id === id);
-  if (!snippet) return { ok: false, message: "Snippet not found" };
-  const text = interpolateSnippet(snippet.body);
-  clipboard.writeText(text);
-  captureClipboardSnapshot();
-  return { ok: true, message: "Copied to clipboard" };
-}
-var snippetsProvider = {
-  providerId: "snippets",
-  async buildDocuments() {
-    const db = readSnippetsDb();
-    return db.snippets.map((snippet) => {
-      const label = resolvedSnippetLabel(snippet);
-      const title = (label ?? snippet.trigger).trim() || snippet.trigger;
-      const tokens2 = [snippet.trigger, snippet.body, label].filter(Boolean).join(" ");
-      return {
-        id: snippet.id,
-        category: "snippets",
-        title,
-        subtitle: snippetRowSubtitle(snippet, title),
-        tokens: tokens2,
-        action: { type: "copy-text", text: interpolateSnippet(snippet.body) },
-        updatedAt: snippet.createdAt
-      };
-    });
-  }
-};
-
-// src/main/search/ranker.ts
-var CATEGORY_PRIOR = {
-  applications: 0.72,
-  files: 0.6,
-  knowledge: 0.64,
-  clipboard: 0.45,
-  /** Was 0.4 (lowest), which pushed real quick notes below random `*notes*` files. */
-  "quick-notes": 0.68,
-  extensions: 0.68,
-  store: 0.25,
-  "mac-cli": 0.46,
-  "native-command": 0.7,
-  commands: 0.66,
-  snippets: 0.58,
-  "quick-links": 0.55,
-  calculator: 0.9,
-  "color-converter": 0.9
-};
-function normalizeRecency(ms) {
-  if (ms <= 0) return 0;
-  const oneDay = 24 * 60 * 60 * 1e3;
-  const ageDays = ms / oneDay;
-  return 1 / (1 + ageDays);
-}
-function normalizeFrequency(frequency) {
-  if (frequency <= 0) return 0;
-  return Math.min(1, Math.log10(frequency + 1) / 2);
-}
-function fuzzyBonus(distance) {
-  if (distance === void 0) return 0;
-  if (distance <= 0) return 0.08;
-  if (distance === 1) return 0.05;
-  if (distance === 2) return 0.02;
-  return 0;
-}
-function isLearnedUsageCategory(category) {
-  return category === "applications" || category === "extensions" || category === "native-command" || category === "commands" || category === "quick-notes" || category === "snippets" || category === "quick-links";
-}
-function computeLearnedUsageBoost(input) {
-  if (!isLearnedUsageCategory(input.category) || input.frequency <= 0 || input.lastUsedAt <= 0) {
-    return 0;
-  }
-  const now = input.now ?? Date.now();
-  const ageMs = Math.max(0, now - input.lastUsedAt);
-  const oneDay = 24 * 60 * 60 * 1e3;
-  const recencyBoost = ageMs < oneDay ? 360 : ageMs < 7 * oneDay ? 220 : ageMs < 30 * oneDay ? 100 : 0;
-  const frequencyBoost = Math.min(900, Math.log2(input.frequency + 1) * 220);
-  const successBoost = input.successRate >= 0.5 ? 120 : 0;
-  return Math.round(recencyBoost + frequencyBoost + successBoost);
-}
-function computeQueryLearningBoost(input) {
-  if (input.frequency <= 0 || input.lastUsedAt <= 0) return 0;
-  const now = input.now ?? Date.now();
-  const ageMs = Math.max(0, now - input.lastUsedAt);
-  const oneDay = 24 * 60 * 60 * 1e3;
-  const recencyBoost = ageMs < oneDay ? 1250 : ageMs < 7 * oneDay ? 900 : ageMs < 30 * oneDay ? 550 : 250;
-  const frequencyBoost = Math.min(1200, Math.log2(input.frequency + 1) * 350);
-  const successBoost = input.successRate >= 0.5 ? 150 : 0;
-  return Math.round(recencyBoost + frequencyBoost + successBoost);
-}
-function computeHotUsageBoost(recentUseCount) {
-  if (recentUseCount <= 0) return 0;
-  if (recentUseCount === 1) return 180;
-  if (recentUseCount === 2) return 600;
-  return Math.min(3600, 2600 + (recentUseCount - 3) * 250);
-}
-function computeWeightedScore(input) {
-  const lexical = Math.max(0, Math.min(1, input.lexical));
-  const recency = normalizeRecency(input.recencyMs);
-  const frequency = normalizeFrequency(input.frequency);
-  const success = Math.max(0, Math.min(1, input.successRate));
-  const prior = CATEGORY_PRIOR[input.category] ?? 0.35;
-  const fuzzy = fuzzyBonus(input.fuzzyDistance);
-  const popularity = input.popularity ? Math.min(1, Math.log10(input.popularity + 1) / 7) : 0;
-  const weighted = lexical * 0.6 + recency * 0.1 + frequency * 0.1 + success * 0.05 + prior * 0.05 + fuzzy + popularity * 0.1;
-  return Math.round(weighted * 1e3);
-}
-function shouldPreferRecent(leftScore, leftAgeMs, rightScore, rightAgeMs) {
-  const gap = Math.abs(leftScore - rightScore);
-  if (gap > 20) return false;
-  return leftAgeMs < rightAgeMs;
-}
-
-// src/main/search/directoryRecommendations.ts
-var import_node_path27 = require("node:path");
-function visitScore(visit, now) {
-  const ageDays = Math.max(0, (now - visit.lastVisitedAt) / 864e5);
-  const recencyBoost = Math.max(0, 14 - ageDays);
-  return visit.count * 10 + recencyBoost;
-}
-function rankDirectoryRecommendations(visits, options = {}) {
-  const now = options.now ?? Date.now();
-  const limit = options.limit ?? 5;
-  const siblingThreshold = options.siblingThreshold ?? 3;
-  const excluded = new Set(options.excludedPaths ?? []);
-  const validVisits = Object.entries(visits).filter(
-    ([path7, visit]) => path7.startsWith("/") && visit !== null && typeof visit === "object" && Number.isFinite(visit.count) && visit.count > 0 && Number.isFinite(visit.lastVisitedAt)
-  );
-  const childrenByParent = /* @__PURE__ */ new Map();
-  for (const entry of validVisits) {
-    const parent = (0, import_node_path27.dirname)(entry[0]);
-    const siblings = childrenByParent.get(parent) ?? [];
-    siblings.push(entry);
-    childrenByParent.set(parent, siblings);
-  }
-  const collapsedParents = new Set(
-    Array.from(childrenByParent.entries()).filter(([parent, children]) => !excluded.has(parent) && children.length >= siblingThreshold).map(([parent]) => parent)
-  );
-  const recommendations = /* @__PURE__ */ new Map();
-  for (const [path7, visit] of validVisits) {
-    const parent = (0, import_node_path27.dirname)(path7);
-    const recommendationPath = collapsedParents.has(parent) ? parent : path7;
-    if (excluded.has(recommendationPath)) continue;
-    const existing = recommendations.get(recommendationPath);
-    const score = visitScore(visit, now);
-    recommendations.set(recommendationPath, {
-      path: recommendationPath,
-      count: (existing?.count ?? 0) + visit.count,
-      lastVisitedAt: Math.max(existing?.lastVisitedAt ?? 0, visit.lastVisitedAt),
-      score: (existing?.score ?? 0) + score
-    });
-  }
-  const ranked = Array.from(recommendations.values()).sort(
-    (a, b) => b.score - a.score || b.lastVisitedAt - a.lastVisitedAt || a.path.localeCompare(b.path)
-  );
-  return ranked.filter((candidate, index) => {
-    return !ranked.slice(0, index).some((stronger) => {
-      return candidate.path.startsWith(`${stronger.path}/`) || stronger.path.startsWith(`${candidate.path}/`);
-    });
-  }).slice(0, Math.max(0, limit));
-}
-
-// src/main/search/service.ts
-var execFileAsync13 = (0, import_node_util13.promisify)(import_node_child_process16.execFile);
-var MAX_RESULTS = 80;
-var PROVIDER_REFRESH_MIN_AGE_MS = 1e4;
-var FILE_INDEX_LIMIT = 75e3;
-var SHELL_METACHAR_RE = /[;|&`$(){}[\]\n\r<>\\]/;
-function validateShellCommand(command) {
-  const trimmed = command.trim();
-  if (!trimmed) return { ok: false, message: "Empty shell command" };
-  if (SHELL_METACHAR_RE.test(trimmed)) {
-    return {
-      ok: false,
-      message: "Shell metacharacters are not allowed in run-shell commands."
-    };
-  }
-  return { ok: true };
-}
-function safetyForAction(action) {
-  if (action.type === "run-shell") {
-    return { id: "shell.run", context: { command: action.command } };
-  }
-  if (action.type === "install-extension") {
-    return { id: "extension.install", context: { extensionId: action.extensionId } };
-  }
-  if (action.type === "run-native-command") {
-    if (action.commandId === "empty-trash") {
-      return { id: "trash.empty", context: { commandId: action.commandId } };
-    }
-    if (action.commandId === "sleep-system") {
-      return { id: "system.sleep", context: { commandId: action.commandId } };
-    }
-    if (action.commandId === "quit-tezbar") {
-      return { id: "app.quit", context: { commandId: action.commandId } };
-    }
-    return { id: "native.command", context: { commandId: action.commandId } };
-  }
-  return null;
-}
-async function runWithSafety(safetyId, context, run) {
-  const descriptor = getSafetyDescriptor(safetyId);
-  if (!descriptor) {
-    return { ok: false, message: `Safety descriptor missing: ${safetyId}` };
-  }
-  const dryRun = getSafetyDryRun();
-  const window2 = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
-  const { accepted } = await confirmSafetyAction(window2, descriptor, context, { dryRun });
-  if (!accepted) {
-    recordSafetyEntry({
-      action: safetyId,
-      title: descriptor.title,
-      risk: descriptor.risk,
-      ok: false,
-      message: "Cancelled by user",
-      context: { ...context, dryRun }
-    });
-    return { ok: false, message: "Cancelled" };
-  }
-  if (dryRun) {
-    const message = `Dry run: would have ${descriptor.title.toLowerCase()}.`;
-    recordSafetyEntry({
-      action: safetyId,
-      title: descriptor.title,
-      risk: descriptor.risk,
-      ok: true,
-      message,
-      context: { ...context, dryRun: true }
-    });
-    return { ok: true, message };
-  }
-  const result = await run();
-  recordSafetyEntry({
-    action: safetyId,
-    title: descriptor.title,
-    risk: descriptor.risk,
-    ok: result.ok,
-    message: result.message,
-    context
-  });
-  return result;
-}
-var indexDb = getInstance();
-var searchReadyPromise = null;
-var fileBootstrapPromise = null;
-var volatileRefreshPromise = null;
-var stopFileWatcher = null;
-var lastExtensionRefreshAt = 0;
-var lastVolatileRefreshAt = 0;
-var initialProviderRefreshStarted = false;
-var volatileRefreshScheduled = false;
-var searchLifecycleRegistered = false;
-function isPresent(value) {
-  return value !== null && value !== void 0;
-}
-function uniqById(items) {
-  const seen = /* @__PURE__ */ new Set();
-  const out = [];
-  for (const item of items) {
-    if (seen.has(item.id)) continue;
-    seen.add(item.id);
-    out.push(item);
-  }
-  return out;
-}
-function uniqRowsById(items) {
-  const seen = /* @__PURE__ */ new Set();
-  const out = [];
-  for (const item of items) {
-    if (seen.has(item.id)) continue;
-    seen.add(item.id);
-    out.push(item);
-  }
-  return out;
-}
-function attachSearchResultIcons(items) {
-  return items.map(
-    (item) => item.action.type === "open-file" ? { ...item, iconDataUrl: fileIconDataUrl(item.action.path) } : item
-  );
-}
-function actionIdFromResult(action, resultId) {
-  if (resultId) return resultId;
-  switch (action.type) {
-    case "open-app":
-      return `open-app:${action.appName}`;
-    case "open-file":
-      return `open-file:${action.path}`;
-    case "open-with-app":
-      return `open-with-app:${action.appName ?? "default"}:${action.path}`;
-    case "copy-text":
-      return `copy-text:${action.text.slice(0, 64)}`;
-    case "copy-and-paste-text":
-      return `copy-and-paste-text:${action.text.slice(0, 64)}`;
-    case "add-note":
-      return `add-note:${action.text.slice(0, 64)}`;
-    case "open-url":
-      return `open-url:${action.url}`;
-    case "install-extension":
-      return `install-extension:${action.extensionId}`;
-    case "run-extension-command":
-      return `extcmd:${action.extensionId}:${action.commandName}`;
-    case "run-shell":
-      return `run-shell:${action.command}`;
-    case "invoke-command":
-      return `command:${action.commandId}`;
-    case "run-native-command":
-      return `native:${action.commandId}`;
-    default:
-      return "unknown-action";
-  }
-}
-async function upsertProvider(provider) {
-  const docs = await provider.buildDocuments();
-  if (provider.providerId === "commands") {
-    indexDb.removeDocumentsByCategory("commands");
-    indexDb.removeDocumentsByCategory("native-command");
-  } else if (provider.providerId === "clipboard") {
-    indexDb.removeDocumentsByCategory("clipboard");
-  } else if (provider.providerId === "notes") {
-    indexDb.removeDocumentsByCategory("quick-notes");
-  } else if (provider.providerId === "snippets") {
-    indexDb.removeDocumentsByCategory("snippets");
-  } else if (provider.providerId === "quick-links") {
-    indexDb.removeDocumentsByCategory("quick-links");
-  } else if (provider.providerId === "apps") {
-    indexDb.removeDocumentsByCategory("applications");
-  } else if (provider.providerId === "extensions") {
-    indexDb.removeDocumentsByCategory("extensions");
-  }
-  if (docs.length > 0) {
-    indexDb.upsertDocuments(docs);
-  }
-}
-async function refreshAllProviders() {
-  await Promise.all([
-    upsertProvider(commandsProvider),
-    upsertProvider(clipboardProvider),
-    upsertProvider(notesProvider),
-    upsertProvider(snippetsProvider),
-    upsertProvider(quickLinksProvider),
-    upsertProvider(appsProvider)
-  ]);
-  indexDb.clearSearchCache();
-  void upsertProvider(extensionsProvider).then(() => {
-    lastExtensionRefreshAt = Date.now();
-    indexDb.clearSearchCache();
-  }).catch((error) => {
-    console.warn("[Search] Failed to build extension index:", error);
-  });
-}
-async function refreshVolatileProviders() {
-  if (volatileRefreshPromise) return volatileRefreshPromise;
-  volatileRefreshPromise = (async () => {
-    captureClipboardSnapshot();
-    await Promise.all([
-      upsertProvider(commandsProvider),
-      upsertProvider(clipboardProvider),
-      upsertProvider(notesProvider),
-      upsertProvider(snippetsProvider),
-      upsertProvider(quickLinksProvider)
-    ]);
-    const now = Date.now();
-    if (now - lastExtensionRefreshAt > 3e4) {
-      lastExtensionRefreshAt = now;
-      await upsertProvider(extensionsProvider);
-    }
-    lastVolatileRefreshAt = Date.now();
-    indexDb.clearSearchCache();
-  })().finally(() => {
-    volatileRefreshPromise = null;
-  });
-  return volatileRefreshPromise;
-}
-function refreshVolatileProvidersIfStale() {
-  if (Date.now() - lastVolatileRefreshAt < PROVIDER_REFRESH_MIN_AGE_MS) return;
-  if (lastVolatileRefreshAt === 0 && initialProviderRefreshStarted) return;
-  if (volatileRefreshPromise || volatileRefreshScheduled) return;
-  volatileRefreshScheduled = true;
-  setImmediate(() => {
-    volatileRefreshScheduled = false;
-    if (Date.now() - lastVolatileRefreshAt < PROVIDER_REFRESH_MIN_AGE_MS) return;
-    void refreshVolatileProviders().catch((error) => {
-      console.warn("[Search] Failed to refresh providers:", error);
-    });
-  });
-}
-function startBackgroundFileIndexing() {
-  if (fileBootstrapPromise) return;
-  fileBootstrapPromise = (async () => {
-    const fileDocs = await collectInitialFileDocuments(FILE_INDEX_LIMIT);
-    indexDb.replaceDocumentsByCategory("files", fileDocs);
-    stopFileWatcher = startFileWatcher(({ upserts, removeIds }) => {
-      if (upserts.length > 0) indexDb.upsertDocuments(upserts);
-      for (const removeId of removeIds) {
-        indexDb.removeDocumentById(removeId);
-      }
-      if (upserts.length > 0 || removeIds.length > 0) {
-        indexDb.clearSearchCache();
-      }
-    });
-  })().catch((error) => {
-    fileBootstrapPromise = null;
-    console.warn("[Search] Failed to build file index:", error);
-  });
-}
-function registerSearchLifecycle() {
-  if (searchLifecycleRegistered) return;
-  searchLifecycleRegistered = true;
-  app.once("before-quit", () => {
-    stopFileWatcher?.();
-    stopFileWatcher = null;
-  });
-}
-function startInitialProviderRefresh() {
-  if (initialProviderRefreshStarted) return;
-  initialProviderRefreshStarted = true;
-  setImmediate(() => {
-    void refreshAllProviders().then(() => {
-      lastVolatileRefreshAt = Date.now();
-      startBackgroundFileIndexing();
-    }).catch((error) => {
-      initialProviderRefreshStarted = false;
-      console.warn("[Search] Failed to refresh the cached search index:", error);
-    });
-  });
-}
-async function bootstrapSearchIndex() {
-  if (!searchReadyPromise) {
-    searchReadyPromise = (async () => {
-      await indexDb.ensureInitialized();
-      await upsertProvider(commandsProvider);
-      registerSearchLifecycle();
-    })().catch((error) => {
-      searchReadyPromise = null;
-      throw error;
-    });
-  }
-  await searchReadyPromise;
-  startInitialProviderRefresh();
-}
-async function warmSearchIndex() {
-  await bootstrapSearchIndex();
-}
-async function reindexQuickNotes() {
-  await bootstrapSearchIndex();
-  await upsertProvider(notesProvider);
-  indexDb.clearSearchCache();
-}
-async function reindexSnippets() {
-  await bootstrapSearchIndex();
-  await upsertProvider(snippetsProvider);
-  indexDb.clearSearchCache();
-}
-async function reindexExtensions() {
-  await bootstrapSearchIndex();
-  await upsertProvider(extensionsProvider);
-  lastExtensionRefreshAt = Date.now();
-  indexDb?.clearSearchCache();
-}
-function internalSurfaceBoost(category, title, query, subtitle) {
-  const hit = category === "native-command" || category === "commands" || category === "extensions" || category === "applications" || category === "quick-notes";
-  if (!hit) return 0;
-  const normalizedTitle = title.toLowerCase();
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return 0;
-  if (category === "commands" && normalizedTitle === "extensions" && normalizedQuery === "extensions") {
-    return 1400;
-  }
-  if (category === "commands" && normalizedTitle === "extensions store" && ["store", "extension store", "extensions store"].includes(normalizedQuery)) {
-    return 1400;
-  }
-  let boost = 0;
-  if (normalizedTitle === normalizedQuery) {
-    boost = 600;
-  } else if (normalizedTitle.startsWith(normalizedQuery)) {
-    boost = 420;
-  } else {
-    const titleWords = normalizedTitle.split(/\s+/);
-    if (titleWords.some((word) => word.startsWith(normalizedQuery))) {
-      boost = 300;
-    } else if (normalizedTitle.includes(normalizedQuery)) {
-      boost = 150;
-    }
-  }
-  if (category === "extensions" && subtitle) {
-    const parts = subtitle.split(" \xB7 ");
-    const extName = parts[0]?.toLowerCase();
-    if (extName) {
-      const slugName = extName.replace(/\s+/g, "");
-      if (extName === normalizedQuery || slugName === normalizedQuery) boost = Math.max(boost, 1200);
-      else if (extName.startsWith(normalizedQuery) || slugName.startsWith(normalizedQuery))
-        boost = Math.max(boost, 800);
-      else if (extName.includes(normalizedQuery) || slugName.includes(normalizedQuery))
-        boost = Math.max(boost, 400);
-    }
-  }
-  return boost;
-}
-function recentQuickNoteBoost(category, updatedAt, now) {
-  if (category !== "quick-notes") return 0;
-  const ageMs = now - updatedAt;
-  if (ageMs < 9e4) return 1100;
-  if (ageMs < 5 * 60 * 1e3) return 520;
-  if (ageMs < 30 * 60 * 1e3) return 140;
-  return 0;
-}
-function exactRecentQuickNoteBoost(category, title, query, updatedAt, now) {
-  if (category !== "quick-notes") return 0;
-  const ageMs = now - updatedAt;
-  if (ageMs > 5 * 60 * 1e3) return 0;
-  const normalizedTitle = title.trim().toLowerCase();
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery || !normalizedTitle) return 0;
-  if (normalizedTitle === normalizedQuery) return 1800;
-  if (normalizedTitle.startsWith(normalizedQuery)) return 1400;
-  if (normalizedTitle.includes(normalizedQuery)) return 900;
-  return 0;
-}
-function fullTokenMatchBoost(query, title, subtitle) {
-  const tokens2 = query.trim().toLowerCase().match(/[a-z0-9]+/g) ?? [];
-  if (tokens2.length < 2) return 0;
-  const text = `${title} ${subtitle}`.toLowerCase();
-  const allMatch = tokens2.every((t) => text.includes(t));
-  return allMatch ? 200 : 0;
-}
-function rankRows(query, docs) {
-  const now = Date.now();
-  const queryStats = indexDb?.getQueryActionStats(
-    query,
-    docs.map((entry) => entry.doc.id)
-  ) ?? /* @__PURE__ */ new Map();
-  const ranked = docs.map((entry) => {
-    const queryStat = queryStats.get(entry.doc.id);
-    const queryTotalCount = queryStat?.totalCount ?? 0;
-    const querySuccessRate = queryTotalCount > 0 ? (queryStat?.successCount ?? 0) / queryTotalCount : 0;
-    const activityAt = entry.doc.updatedAt;
-    const score = computeWeightedScore({
-      lexical: entry.lexical,
-      recencyMs: now - activityAt,
-      frequency: 0,
-      successRate: 0,
-      category: entry.doc.category,
-      fuzzyDistance: entry.fuzzyDistance,
-      popularity: entry.doc.popularity
-    }) + // Typed searches learn only from this exact query. Global frequency and
-    // five-minute hot usage belong on the home screen; otherwise repeatedly
-    // opening Library can incorrectly dominate a later "gemini" search.
-    computeQueryLearningBoost({
-      frequency: queryStat?.frequency ?? 0,
-      successRate: querySuccessRate,
-      lastUsedAt: queryStat?.lastUsedAt ?? 0,
-      now
-    }) + internalSurfaceBoost(entry.doc.category, entry.doc.title, query, entry.doc.subtitle) + recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) + exactRecentQuickNoteBoost(
-      entry.doc.category,
-      entry.doc.title,
-      query,
-      entry.doc.updatedAt,
-      now
-    ) + (() => {
-      const q = query.trim().toLowerCase();
-      if (!q) return 120;
-      if (/\bnotes?\b/.test(q) || q.includes("quick note")) return 780;
-      return 120;
-    })() + fullTokenMatchBoost(query, entry.doc.title, entry.doc.subtitle);
-    return {
-      id: entry.doc.id,
-      title: entry.doc.title,
-      subtitle: entry.doc.subtitle,
-      category: entry.doc.category,
-      score,
-      action: entry.doc.action,
-      updatedAt: activityAt
-    };
-  });
-  ranked.sort((left, right) => {
-    if (left.score !== right.score) {
-      const preferRecent = shouldPreferRecent(
-        left.score,
-        now - left.updatedAt,
-        right.score,
-        now - right.updatedAt
-      );
-      if (preferRecent) return -1;
-      const reversePreferRecent = shouldPreferRecent(
-        right.score,
-        now - right.updatedAt,
-        left.score,
-        now - left.updatedAt
-      );
-      if (reversePreferRecent) return 1;
-      return right.score - left.score;
-    }
-    return right.updatedAt - left.updatedAt;
-  });
-  return ranked;
-}
-function recommendationBoost(id) {
-  if (id === "native:open-clipboard-history") return 900;
-  if (id === "native:open-snippets") return 880;
-  if (id === "extcmd:raycast.kill-process:index") return 860;
-  if (id === "extcmd:raycast.port-manager:kill-listening-process") return 760;
-  if (id === "extcmd:raycast.port-manager:open-ports") return 720;
-  if (id === "extcmd:raycast.port-manager:open-ports-menu-bar") return 700;
-  return 0;
-}
-function buildRecommendations() {
-  const now = Date.now();
-  const seeds = indexDb.listRecommendedDocuments(MAX_RESULTS).map((row) => {
-    const totalCount = row.totalCount > 0 ? row.totalCount : 0;
-    const successRate = totalCount > 0 ? row.successCount / totalCount : 0;
-    return {
-      id: row.id,
-      category: row.category,
-      title: row.title,
-      subtitle: row.subtitle,
-      action: indexDb.parseAction(row.actionJson),
-      updatedAt: row.updatedAt,
-      frequency: row.frequency,
-      successRate,
-      lastUsedAt: row.lastUsedAt,
-      recentUseCount: row.recentUseCount
-    };
-  });
-  const pinnedOrder = [
-    "native:open-clipboard-history",
-    "native:open-snippets",
-    "extcmd:raycast.port-manager:kill-listening-process",
-    "extcmd:raycast.kill-process:index",
-    "extcmd:raycast.port-manager:open-ports",
-    "extcmd:raycast.port-manager:open-ports-menu-bar"
-  ];
-  const pinnedRows = indexDb.getDocumentsByIds(pinnedOrder);
-  const existingIds = new Set(seeds.map((seed) => seed.id));
-  for (const row of pinnedRows) {
-    if (existingIds.has(row.id)) continue;
-    seeds.push({
-      id: row.id,
-      category: row.category,
-      title: row.title,
-      subtitle: row.subtitle,
-      action: indexDb.parseAction(row.actionJson),
-      updatedAt: row.updatedAt,
-      frequency: 0,
-      successRate: 0,
-      lastUsedAt: 0,
-      recentUseCount: 0
-    });
-  }
-  return seeds.map((seed) => {
-    const activityAt = seed.lastUsedAt > 0 ? seed.lastUsedAt : seed.updatedAt;
-    const score = computeWeightedScore({
-      lexical: 0.92,
-      recencyMs: now - activityAt,
-      frequency: seed.frequency,
-      successRate: seed.successRate,
-      category: seed.category
-    }) + computeLearnedUsageBoost({
-      category: seed.category,
-      frequency: seed.frequency,
-      successRate: seed.successRate,
-      lastUsedAt: seed.lastUsedAt,
-      now
-    }) + computeHotUsageBoost(seed.recentUseCount) + recommendationBoost(seed.id);
-    return {
-      id: seed.id,
-      title: seed.title,
-      subtitle: seed.subtitle,
-      category: seed.category,
-      score,
-      action: seed.action
-    };
-  }).sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS);
-}
-function decodeLsofCommandName(value) {
-  return value.replace(
-    /\\x([0-9a-fA-F]{2})/g,
-    (_, hex) => String.fromCharCode(Number.parseInt(hex, 16))
-  );
-}
-function displayProcessNameFromCommand(command) {
-  const trimmed = command.trim();
-  if (!trimmed) return "";
-  const parts = trimmed.split("/").filter(Boolean);
-  return decodeLsofCommandName(parts.at(-1) ?? trimmed);
-}
-function appPathFromCommand(command) {
-  const decoded = decodeLsofCommandName(command);
-  const match = decoded.match(/(\/.*?\.app)(?:\/|$)/);
-  return match?.[1];
-}
-function parseProcessNameMap(stdout) {
-  const names = /* @__PURE__ */ new Map();
-  for (const line of stdout.split("\n")) {
-    const match = line.match(/^\s*(\d+)\s+(.+?)\s*$/);
-    if (!match) continue;
-    const name = displayProcessNameFromCommand(match[2]);
-    if (name) names.set(match[1], { name, appPath: appPathFromCommand(match[2]) });
-  }
-  return names;
-}
-async function readProcessNameMap() {
-  try {
-    const { stdout } = await execFileAsync13("/bin/ps", ["-axo", "pid=,comm="]);
-    return parseProcessNameMap(stdout);
-  } catch {
-    return /* @__PURE__ */ new Map();
-  }
-}
-function parseOpenPortProcesses(stdout, processNames = /* @__PURE__ */ new Map()) {
-  const lines = stdout.split("\n").map((line) => line.trim()).filter(Boolean);
-  if (lines.length <= 1) return [];
-  const grouped = /* @__PURE__ */ new Map();
-  for (const line of lines) {
-    const parts = line.split(/\s+/);
-    if (parts.length < 3) continue;
-    const match = line.match(/:(\d+)\s+\(LISTEN\)$/);
-    if (!match) continue;
-    const port = Number(match[1]);
-    if (!Number.isFinite(port)) continue;
-    const pid = parts[1] ?? "?";
-    const identity = processNames.get(pid);
-    const process2 = identity?.name ?? decodeLsofCommandName(parts[0] ?? "unknown");
-    const user = parts[2] ?? "unknown";
-    const key = `${process2}:${pid}:${user}`;
-    const existing = grouped.get(key);
-    if (existing) {
-      existing.ports.add(port);
-      continue;
-    }
-    grouped.set(key, {
-      process: process2,
-      user,
-      pid,
-      ports: /* @__PURE__ */ new Set([port]),
-      appPath: identity?.appPath
-    });
-  }
-  return Array.from(grouped.values()).map((entry) => ({
-    process: entry.process,
-    user: entry.user,
-    pid: entry.pid,
-    ports: Array.from(entry.ports).sort((a, b) => a - b),
-    appPath: entry.appPath
-  })).sort((a, b) => a.process.localeCompare(b.process) || a.pid.localeCompare(b.pid));
-}
-async function attachOpenPortProcessIcons(rows) {
-  const uniqueAppPaths = Array.from(
-    new Set(rows.map((row) => row.appPath).filter((path7) => Boolean(path7)))
-  );
-  const icons = /* @__PURE__ */ new Map();
-  await Promise.all(
-    uniqueAppPaths.map(async (appPath) => {
-      const icon = await appIconDataUrl(appPath);
-      if (icon) icons.set(appPath, icon);
-    })
-  );
-  return rows.map(({ appPath, ...row }) => {
-    const iconDataUrl = appPath ? icons.get(appPath) : void 0;
-    return iconDataUrl ? { ...row, iconDataUrl } : row;
-  });
-}
-async function searchEverything(query) {
-  getKnowledgeService().notifyInteractiveActivity();
-  await bootstrapSearchIndex();
-  refreshVolatileProvidersIfStale();
-  const parsedQuery = parseSearchQuery(query);
-  const trimmed = parsedQuery.query;
-  const isDeepSearch = parsedQuery.mode === "deep";
-  if (!trimmed && !isDeepSearch) {
-    return attachSearchResultIcons(buildRecommendations());
-  }
-  if (!trimmed) {
-    return [
-      {
-        id: `${DEEP_SEARCH_RESULT_PREFIX}prompt`,
-        title: "Deep Search",
-        subtitle: "Type after ! to search inside the contents of indexed files",
-        category: "knowledge",
-        score: 1e4,
-        action: {
-          type: "invoke-command",
-          commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
-          payload: { query: "" }
-        }
-      }
-    ];
-  }
-  if (isDeepSearch && trimmed.length < 3) {
-    return [
-      {
-        id: `${DEEP_SEARCH_RESULT_PREFIX}keep-typing`,
-        title: "Keep typing to search file contents",
-        subtitle: "Deep Search starts after 3 characters",
-        category: "knowledge",
-        score: 1e4,
-        action: {
-          type: "invoke-command",
-          commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
-          payload: { query: trimmed }
-        }
-      }
-    ];
-  }
-  const learnedRows = indexDb.getDocumentsByIds(indexDb.listQueryActionIds(trimmed, 20));
-  const rows = uniqRowsById([...indexDb.getSearch(trimmed, MAX_RESULTS), ...learnedRows]);
-  const docs = rows.map(
-    (row) => ({
-      doc: {
-        id: row.id,
-        category: row.category,
-        title: row.title,
-        subtitle: row.subtitle,
-        tokens: `${row.title} ${row.subtitle}`,
-        action: indexDb.parseAction(row.actionJson),
-        updatedAt: row.updatedAt,
-        popularity: row.popularity
-      },
-      lexical: row.lexical,
-      fuzzyDistance: row.fuzzyDistance
-    })
-  );
-  const ranked = rankRows(trimmed, docs);
-  const asResults = ranked.map((item) => ({
-    id: item.id,
-    title: item.title,
-    subtitle: item.subtitle,
-    category: item.category,
-    score: item.score,
-    action: item.action
-  }));
-  const resultsWithoutFiles = asResults.filter((result) => {
-    if (result.category === "files") return false;
-    return true;
-  });
-  const fileResults = asResults.filter((result) => result.category === "files");
-  const indexedSourceResults = getKnowledgeService().searchMetadata(trimmed, 24).map(
-    (hit, index) => ({
-      id: `file:${hit.path}`,
-      title: hit.title,
-      subtitle: hit.path,
-      category: "files",
-      score: 760 + Math.round(hit.score * 160) - index,
-      action: { type: "open-file", path: hit.path }
-    })
-  );
-  const allFileResults = uniqById([...fileResults, ...indexedSourceResults]);
-  const openPortResults = isDeepSearch ? [] : await searchPortManagerOpenPorts(trimmed);
-  const knowledgeHits = isDeepSearch ? getKnowledgeService().search(trimmed, 16) : [];
-  const seenKnowledgeSources = /* @__PURE__ */ new Set();
-  const knowledgeResults = knowledgeHits.flatMap((hit) => {
-    if (seenKnowledgeSources.has(hit.sourceId)) return [];
-    seenKnowledgeSources.add(hit.sourceId);
-    const location = hit.pageNumber ? ` \xB7 page ${hit.pageNumber}` : "";
-    const excerpt = hit.text.replace(/\s+/g, " ").trim();
-    return [
-      {
-        id: `knowledge:${hit.chunkId}`,
-        title: hit.title,
-        subtitle: `Knowledge${location} \xB7 ${excerpt.slice(0, 180)}`,
-        category: "knowledge",
-        score: 520 + Math.round(hit.score * 430),
-        action: { type: "open-file", path: hit.path }
-      }
-    ];
-  });
-  function quickNoteAddScore(query2) {
-    const q = query2.trim().toLowerCase();
-    if (!q) return 120;
-    if (/\bnotes?\b/.test(q) || q.includes("quick note")) return 780;
-    return 120;
-  }
-  const noteAdd = trimmed && !isDeepSearch ? [
-    {
-      id: `note-add:${trimmed}`,
-      title: `Add quick note: ${trimmed.slice(0, 64)}`,
-      subtitle: "Quick notes",
-      category: "quick-notes",
-      score: quickNoteAddScore(trimmed),
-      action: { type: "add-note", text: trimmed }
-    }
-  ] : [];
-  const deepMatchedPaths = new Set(
-    knowledgeResults.flatMap(
-      (result) => result.action.type === "open-file" ? [result.action.path] : []
-    )
-  );
-  const metadataFileResults = allFileResults.filter(
-    (result) => result.action.type !== "open-file" || !deepMatchedPaths.has(result.action.path)
-  );
-  const basicCandidates = [...resultsWithoutFiles, ...allFileResults, ...openPortResults];
-  const shouldRecommendDeepSearch = !isDeepSearch && trimmed.length >= 3 && !hasGoodMetadataMatch(trimmed, basicCandidates);
-  const bestBasicCandidateScore = basicCandidates.reduce(
-    (best, candidate) => Math.max(best, candidate.score),
-    0
-  );
-  const deepSearchRecommendation = shouldRecommendDeepSearch ? [
-    {
-      id: `${DEEP_SEARCH_RESULT_PREFIX}${encodeURIComponent(trimmed.toLowerCase())}`,
-      title: `Deep Search \u201C${trimmed.slice(0, 72)}\u201D`,
-      subtitle: "No strong metadata match \xB7 Search inside indexed file contents",
-      category: "knowledge",
-      score: Math.max(1200, bestBasicCandidateScore + 1),
-      action: {
-        type: "invoke-command",
-        commandId: ACTIVATE_DEEP_SEARCH_COMMAND,
-        payload: { query: trimmed }
-      }
-    }
-  ] : [];
-  const results = uniqById(
-    isDeepSearch ? [...knowledgeResults, ...metadataFileResults] : [...deepSearchRecommendation, ...basicCandidates, ...noteAdd]
-  ).sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS);
-  return attachSearchResultIcons(results);
-}
-async function listSearchCandidates() {
-  await bootstrapSearchIndex();
-  const rows = indexDb.listRecommendedDocuments(1e3);
-  return rows.map((row, index) => ({
-    id: row.id,
-    title: row.title,
-    subtitle: row.subtitle,
-    category: row.category,
-    score: rows.length - index,
-    action: indexDb.parseAction(row.actionJson)
-  }));
-}
-function expandUserPath(input) {
-  if (input === "~") return (0, import_node_os13.homedir)();
-  if (input.startsWith("~/")) return (0, import_node_path28.join)((0, import_node_os13.homedir)(), input.slice(2));
-  return input;
-}
-function resolveSlashPathInput(input) {
-  if (!input.startsWith("/")) return expandUserPath(input);
-  const absolutePrefixes = [
-    "/Users/",
-    "/Volumes/",
-    "/private/",
-    "/tmp/",
-    "/var/",
-    "/System/",
-    "/Library/"
-  ];
-  if (absolutePrefixes.some((prefix) => input.startsWith(prefix))) {
-    return input;
-  }
-  if (input === "/Users" || input === "/Volumes") {
-    return input;
-  }
-  return (0, import_node_path28.join)((0, import_node_os13.homedir)(), input.slice(1));
-}
-function displayUserPath(path7) {
-  const home = (0, import_node_os13.homedir)();
-  if (path7 === home) return "~";
-  if (path7.startsWith(`${home}/`)) return `~/${path7.slice(home.length + 1)}`;
-  return path7;
-}
-function splitPathCompletionQuery(raw) {
-  const query = raw.trimStart();
-  const body = query === "/" ? "" : query;
-  const expandedBody = resolveSlashPathInput(body);
-  let appMode = false;
-  let targetPart = expandedBody;
-  let appTerm = "";
-  const trimmedBody = expandedBody.trimEnd();
-  if (expandedBody.endsWith(" ") && trimmedBody && (0, import_node_fs26.existsSync)(trimmedBody)) {
-    appMode = true;
-    targetPart = trimmedBody;
-    appTerm = "";
-  } else if (!(0, import_node_fs26.existsSync)(expandedBody)) {
-    let splitAt = -1;
-    for (let index = expandedBody.length - 1; index >= 0; index--) {
-      if (expandedBody[index] !== " ") continue;
-      const beforeSpace = expandedBody.slice(0, index).trimEnd();
-      if (beforeSpace && (0, import_node_fs26.existsSync)(beforeSpace)) {
-        splitAt = index;
-        break;
-      }
-    }
-    if (splitAt >= 0) {
-      appMode = true;
-      targetPart = expandedBody.slice(0, splitAt).trimEnd();
-      appTerm = expandedBody.slice(splitAt + 1).trimStart();
-    }
-  }
-  if (!targetPart) {
-    return { targetPath: (0, import_node_os13.homedir)(), appTerm, appMode };
-  }
-  if (targetPart.startsWith("/")) {
-    return { targetPath: targetPart, appTerm, appMode };
-  }
-  if (targetPart.startsWith("~")) {
-    return { targetPath: expandUserPath(targetPart), appTerm, appMode };
-  }
-  return { targetPath: (0, import_node_path28.resolve)((0, import_node_os13.homedir)(), targetPart), appTerm, appMode };
-}
-function pathCompletionBase(targetPath) {
-  if (targetPath.endsWith("/")) return { directory: targetPath, prefix: "" };
-  try {
-    if ((0, import_node_fs26.existsSync)(targetPath) && (0, import_node_fs26.statSync)(targetPath).isDirectory()) {
-      return { directory: targetPath, prefix: "" };
-    }
-  } catch {
-  }
-  return { directory: (0, import_node_path28.dirname)(targetPath), prefix: (0, import_node_path28.basename)(targetPath) };
-}
-function directoryVisitStorePath() {
-  return (0, import_node_path28.join)(app.getPath("userData"), "directory-visits.json");
-}
-function readDirectoryVisitStore() {
-  try {
-    const parsed = JSON.parse((0, import_node_fs26.readFileSync)(directoryVisitStorePath(), "utf8"));
-    if (!parsed || parsed.version !== 1 || typeof parsed.visits !== "object") {
-      return { version: 1, visits: {} };
-    }
-    return parsed;
-  } catch {
-    return { version: 1, visits: {} };
-  }
-}
-function recordDirectoryVisit(path7) {
-  try {
-    const normalized = (0, import_node_path28.resolve)(path7);
-    if (!(0, import_node_fs26.statSync)(normalized).isDirectory()) return;
-    const store2 = readDirectoryVisitStore();
-    const existing = store2.visits[normalized];
-    store2.visits[normalized] = {
-      count: (existing?.count ?? 0) + 1,
-      lastVisitedAt: Date.now()
-    };
-    const storePath2 = directoryVisitStorePath();
-    (0, import_node_fs26.mkdirSync)((0, import_node_path28.dirname)(storePath2), { recursive: true });
-    (0, import_node_fs26.writeFileSync)(storePath2, JSON.stringify(store2), "utf8");
-  } catch (error) {
-    console.warn("[Search] Failed to record directory visit:", error);
-  }
-}
-function recommendedDirectories() {
-  return rankDirectoryRecommendations(readDirectoryVisitStore().visits, {
-    limit: 50,
-    excludedPaths: [(0, import_node_os13.homedir)()]
-  }).filter((item) => {
-    try {
-      return (0, import_node_fs26.statSync)(item.path).isDirectory();
-    } catch {
-      return false;
-    }
-  }).slice(0, 5).map((item, index) => ({
-    id: `path-recommended:${item.path}`,
-    title: (0, import_node_path28.basename)(item.path),
-    subtitle: displayUserPath(item.path),
-    kind: "directory",
-    section: "recommended",
-    badge: "Recommended",
-    iconDataUrl: folderIconDataUrl,
-    value: `${item.path}/`,
-    path: item.path,
-    score: 5e3 - index
-  }));
-}
-function openWithUsageStorePath() {
-  return (0, import_node_path28.join)(app.getPath("userData"), "open-with-usage.json");
-}
-function readOpenWithUsageStore() {
-  try {
-    const parsed = JSON.parse((0, import_node_fs26.readFileSync)(openWithUsageStorePath(), "utf8"));
-    if (!parsed || typeof parsed !== "object" || parsed.version !== 1 || typeof parsed.keys !== "object") {
-      return { version: 1, keys: {} };
-    }
-    if (!parsed.aliases || typeof parsed.aliases !== "object") {
-      parsed.aliases = {};
-    }
-    return parsed;
-  } catch {
-    return { version: 1, keys: {} };
-  }
-}
-function writeOpenWithUsageStore(store2) {
-  const path7 = openWithUsageStorePath();
-  (0, import_node_fs26.mkdirSync)((0, import_node_path28.dirname)(path7), { recursive: true });
-  (0, import_node_fs26.writeFileSync)(path7, JSON.stringify(store2), "utf8");
-}
-function openWithUsageKeysForPath(targetPath) {
-  try {
-    const stat2 = (0, import_node_fs26.statSync)(targetPath);
-    if (stat2.isDirectory()) {
-      return [`folder:${targetPath}`, `sibling-folder:${(0, import_node_path28.dirname)(targetPath)}`];
-    }
-  } catch {
-  }
-  const ext = (0, import_node_path28.extname)(targetPath).toLowerCase();
-  const parent = (0, import_node_path28.dirname)(targetPath);
-  const keys = [`parent:${parent}`];
-  if (ext) {
-    keys.push(`parent-ext:${parent}:${ext}`, `ext:${ext}`);
-  }
-  return keys;
-}
-function recordOpenWithUsage(targetPath, appName) {
-  const cleanAppName = appName.trim();
-  if (!targetPath || !cleanAppName) return;
-  try {
-    const store2 = readOpenWithUsageStore();
-    const now = Date.now();
-    for (const key of openWithUsageKeysForPath(targetPath)) {
-      const bucket = store2.keys[key] ??= {};
-      const existing = bucket[cleanAppName];
-      bucket[cleanAppName] = {
-        count: (existing?.count ?? 0) + 1,
-        lastUsedAt: now
-      };
-    }
-    writeOpenWithUsageStore(store2);
-  } catch (error) {
-    console.warn("[Search] Failed to record open-with usage:", error);
-  }
-}
-function normalizeAppSearchTerm(value) {
-  return value.trim().toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "");
-}
-function appAcronym(name) {
-  return name.split(/[^a-zA-Z0-9]+/).filter(Boolean).map((part) => part[0]?.toLowerCase() ?? "").join("");
-}
-function builtInAppAliases(appName) {
-  const n = appName.toLowerCase();
-  if (n === "visual studio code") return ["vscode", "vsc", "code", "vs code"];
-  if (n === "quicktime player") return ["quicktime", "qt", "qtp"];
-  if (n === "activity monitor") return ["activity", "taskmanager", "task monitor"];
-  if (n === "terminal") return ["term", "shell"];
-  if (n === "finder") return ["files", "filemanager"];
-  return [];
-}
-function appMatchesTerm(appName, term, learnedAliases) {
-  const normalizedTerm = normalizeAppSearchTerm(term);
-  if (!normalizedTerm) return true;
-  const normalizedName = normalizeAppSearchTerm(appName);
-  if (normalizedName.includes(normalizedTerm)) return true;
-  if (appAcronym(appName).includes(normalizedTerm)) return true;
-  if (builtInAppAliases(appName).some(
-    (alias) => normalizeAppSearchTerm(alias).includes(normalizedTerm)
-  )) {
-    return true;
-  }
-  return Boolean(learnedAliases?.[appName]);
-}
-function recordOpenWithAlias(term, appName) {
-  const alias = normalizeAppSearchTerm(term);
-  const cleanAppName = appName.trim();
-  if (!alias || !cleanAppName) return;
-  if (normalizeAppSearchTerm(cleanAppName).includes(alias)) return;
-  try {
-    const store2 = readOpenWithUsageStore();
-    const aliases = store2.aliases ??= {};
-    const bucket = aliases[alias] ??= {};
-    const existing = bucket[cleanAppName];
-    bucket[cleanAppName] = {
-      count: (existing?.count ?? 0) + 1,
-      lastUsedAt: Date.now()
-    };
-    writeOpenWithUsageStore(store2);
-  } catch (error) {
-    console.warn("[Search] Failed to record open-with alias:", error);
-  }
-}
-function learnedAliasScores(term) {
-  const alias = normalizeAppSearchTerm(term);
-  if (!alias) return void 0;
-  return readOpenWithUsageStore().aliases?.[alias];
-}
-function recommendedOpenWithApps(targetPath) {
-  const store2 = readOpenWithUsageStore();
-  const weights = /* @__PURE__ */ new Map();
-  const now = Date.now();
-  openWithUsageKeysForPath(targetPath).forEach((key, index) => {
-    const bucket = store2.keys[key];
-    if (!bucket) return;
-    const keyWeight = index === 0 ? 5 : index === 1 ? 3 : 1;
-    for (const [appName, entry] of Object.entries(bucket)) {
-      const ageDays = Math.max(0, (now - entry.lastUsedAt) / 864e5);
-      const recencyBoost = Math.max(0, 14 - ageDays);
-      weights.set(appName, (weights.get(appName) ?? 0) + keyWeight * entry.count + recencyBoost);
-    }
-  });
-  return Array.from(weights.entries()).map(([appName, score]) => ({ appName, score })).sort((a, b) => b.score - a.score || a.appName.localeCompare(b.appName));
-}
-function isApplicationsDirectory(path7) {
-  const normalized = path7.replace(/\/+$/, "");
-  return normalized === "/Applications" || normalized === "/System/Applications" || normalized === "/System/Applications/Utilities" || normalized === (0, import_node_path28.join)((0, import_node_os13.homedir)(), "Applications");
-}
-function inferredDefaultAppName(targetPath) {
-  try {
-    if ((0, import_node_fs26.statSync)(targetPath).isDirectory())
-      return process.platform === "win32" ? "File Explorer" : "Finder";
-  } catch {
-  }
-  const ext = (0, import_node_path28.extname)(targetPath).toLowerCase();
-  const parent = (0, import_node_path28.dirname)(targetPath).toLowerCase();
-  if (/\b(movie|movies|video|videos)\b/.test(parent) && [".ts", ".m2ts", ".mts"].includes(ext)) {
-    return "QuickTime Player";
-  }
-  if ([".png", ".jpg", ".jpeg", ".gif", ".heic", ".webp", ".tiff", ".bmp", ".pdf"].includes(ext)) {
-    return "Preview";
-  }
-  if ([".mov", ".mp4", ".m4v", ".avi", ".mkv", ".m2ts", ".mts"].includes(ext)) {
-    return "QuickTime Player";
-  }
-  return "Default App";
-}
-function applicationCompletionItem(targetPath, appInfo, index, section, score) {
-  return {
-    id: `path-app:${section}:${appInfo.path}`,
-    title: appInfo.name,
-    subtitle: `Open ${displayUserPath(targetPath)} with ${appInfo.name}`,
-    kind: "application",
-    section,
-    badge: section === "recommended" ? "Recommended" : "Open With",
-    value: `${targetPath} ${appInfo.name}`,
-    path: targetPath,
-    appPath: appInfo.path,
-    appName: appInfo.name,
-    applicationAction: "open-with",
-    score: score - index
-  };
-}
-function installedApplicationItem(appInfo, index) {
-  return {
-    id: `path-installed-app:${appInfo.path}`,
-    title: appInfo.name,
-    subtitle: displayUserPath(appInfo.path),
-    kind: "application",
-    badge: "Application",
-    value: appInfo.path,
-    path: appInfo.path,
-    appPath: appInfo.path,
-    appName: appInfo.name,
-    applicationAction: "open",
-    score: 2e3 - index
-  };
-}
-async function completePath(query, limit = 50) {
-  const applicationQuery = query.trimStart();
-  if (applicationQuery.startsWith("`")) {
-    const appTerm2 = applicationQuery.slice(1).trim();
-    const apps = listApplications().filter((item) => appMatchesTerm(item.name, appTerm2)).sort((a, b) => a.name.localeCompare(b.name));
-    return apps.map((item, index) => installedApplicationItem(item, index));
-  }
-  const { targetPath, appTerm, appMode } = splitPathCompletionQuery(query);
-  if (!appMode && isApplicationsDirectory(targetPath)) {
-    const apps = listApplications().sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
-    return apps.map((item, index) => installedApplicationItem(item, index));
-  }
-  if (appMode) {
-    const learnedAliases = learnedAliasScores(appTerm);
-    const allApps = listApplications().sort((a, b) => a.name.localeCompare(b.name)).filter((item) => appMatchesTerm(item.name, appTerm, learnedAliases));
-    const appsByName = new Map(allApps.map((item) => [item.name, item]));
-    const learnedRecommended = Object.entries(learnedAliases ?? {}).sort((a, b) => b[1].count - a[1].count || b[1].lastUsedAt - a[1].lastUsedAt).map(([appName]) => appsByName.get(appName)).filter(isPresent);
-    const usageRecommended = recommendedOpenWithApps(targetPath).map((item) => appsByName.get(item.appName)).filter(isPresent);
-    const recommended = [...learnedRecommended, ...usageRecommended].filter(
-      (item, index, items) => items.findIndex((other) => other.name === item.name) === index
-    ).slice(0, 5);
-    const recommendedNames = new Set(recommended.map((item) => item.name));
-    const rest = allApps.filter((item) => !recommendedNames.has(item.name)).slice(0, limit);
-    const recommendedItems = recommended.map(
-      (item, index) => applicationCompletionItem(targetPath, item, index, "recommended", 4e3)
-    );
-    const appItems = rest.slice(0, Math.max(0, limit - recommendedItems.length - 1)).map(
-      (item, index) => applicationCompletionItem(targetPath, item, index, "applications", 1e3)
-    );
-    const defaultItem = {
-      id: `path-default:${targetPath}`,
-      title: `Open in ${inferredDefaultAppName(targetPath)}`,
-      subtitle: `Open ${displayUserPath(targetPath)}`,
-      kind: "application",
-      section: "default",
-      badge: "Default",
-      value: `${targetPath} `,
-      path: targetPath,
-      applicationAction: "open-with",
-      score: 2e3
-    };
-    if (appTerm.trim()) {
-      return [...recommendedItems, ...appItems, defaultItem];
-    }
-    return [...recommendedItems, defaultItem, ...appItems];
-  }
-  const { directory, prefix } = pathCompletionBase(targetPath);
-  const normalizedPrefix = prefix.toLowerCase();
-  try {
-    const entries = (0, import_node_fs26.readdirSync)(directory, { withFileTypes: true });
-    const recommended = query.trim() === "/" ? recommendedDirectories() : [];
-    const recommendedPaths = new Set(recommended.map((item) => item.path));
-    const regular = entries.filter((entry) => !entry.name.startsWith(".")).filter((entry) => !normalizedPrefix || entry.name.toLowerCase().includes(normalizedPrefix)).map((entry) => {
-      const absolute = (0, import_node_path28.join)(directory, entry.name);
-      const isDirectory = entry.isDirectory();
-      const isFile = entry.isFile();
-      if (!isDirectory && !isFile) return null;
-      const kind = isDirectory ? "directory" : "file";
-      const lowerName = entry.name.toLowerCase();
-      return {
-        id: `path:${absolute}`,
-        title: entry.name,
-        subtitle: displayUserPath(absolute),
-        kind,
-        value: isDirectory ? `${absolute}/` : absolute,
-        path: absolute,
-        iconDataUrl: isDirectory ? folderIconDataUrl : fileIconDataUrl(absolute),
-        score: (isDirectory ? 1e3 : 500) + (lowerName === normalizedPrefix ? 1e3 : lowerName.startsWith(normalizedPrefix) ? 100 : 0)
-      };
-    }).filter(isPresent).filter((item) => !recommendedPaths.has(item.path)).sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
-      return b.score - a.score || a.title.localeCompare(b.title);
-    }).slice(0, Math.max(0, limit - recommended.length));
-    return [...recommended, ...regular];
-  } catch {
-    return [];
-  }
-}
-async function searchPortManagerOpenPorts(query) {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return [];
-  const mentionsPort = /(port|ports|open|listen|listening)/.test(normalizedQuery);
-  const mentionsKill = /(kill|stop|terminate|process)/.test(normalizedQuery);
-  if (!/(port|ports|open|listen|kill|\d{2,5})/.test(normalizedQuery)) {
-    return [];
-  }
-  const processes = await listOpenPorts();
-  if (processes.length === 0) return [];
-  return processes.flatMap(
-    (entry) => entry.ports.map((port) => {
-      let score = -1;
-      const processName = entry.process.toLowerCase();
-      const userName = entry.user.toLowerCase();
-      if (normalizedQuery.includes(String(port))) {
-        score = 430;
-      } else if (mentionsPort || mentionsKill) {
-        score = 280;
-      } else if (processName.includes(normalizedQuery) || userName.includes(normalizedQuery)) {
-        score = 220;
-      }
-      if (score < 0) return null;
-      return {
-        id: `port-listener:${entry.pid}:${port}`,
-        title: `Open Port ${port}`,
-        subtitle: `${entry.process} (PID ${entry.pid}) \xB7 ${entry.user} \xB7 Enter to kill listener`,
-        category: "extensions",
-        score,
-        action: {
-          type: "run-extension-command",
-          extensionId: "raycast.port-manager",
-          commandName: "kill-listening-process",
-          title: "Kill Process Listening On",
-          argumentValues: { port: String(port) }
-        }
-      };
-    })
-  ).filter(isPresent).sort((a, b) => b.score - a.score).slice(0, 12);
-}
-async function listOpenPorts() {
-  if (process.platform === "win32") {
-    try {
-      const { stdout } = await execFileAsync13("netstat.exe", ["-ano", "-p", "tcp"]);
-      const pids = Array.from(
-        new Set(
-          stdout.split(/\r?\n/).map((line) => line.trim().split(/\s+/).at(-1) ?? "").filter((pid) => /^\d+$/.test(pid))
-        )
-      );
-      const names = /* @__PURE__ */ new Map();
-      await Promise.all(
-        pids.map(async (pid) => {
-          try {
-            const { stdout: task } = await execFileAsync13("tasklist.exe", [
-              "/fi",
-              `PID eq ${pid}`,
-              "/fo",
-              "csv",
-              "/nh"
-            ]);
-            const match = task.match(/^"([^"]+)"/);
-            if (match) names.set(pid, match[1]);
-          } catch {
-          }
-        })
-      );
-      const grouped = /* @__PURE__ */ new Map();
-      for (const line of stdout.split(/\r?\n/)) {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length < 5 || parts[0]?.toUpperCase() !== "TCP" || parts[3]?.toUpperCase() !== "LISTENING")
-          continue;
-        const port = Number(parts[1]?.match(/:(\d+)$/)?.[1]);
-        const pid = parts[4];
-        if (!Number.isFinite(port) || !pid) continue;
-        const key = `${pid}:${names.get(pid) ?? "unknown"}`;
-        const row = grouped.get(key) ?? {
-          process: names.get(pid) ?? "unknown",
-          pid,
-          ports: /* @__PURE__ */ new Set()
-        };
-        row.ports.add(port);
-        grouped.set(key, row);
-      }
-      return Array.from(grouped.values()).map((row) => ({
-        process: row.process,
-        user: "current user",
-        pid: row.pid,
-        ports: Array.from(row.ports).sort((a, b) => a - b)
-      })).sort((a, b) => a.process.localeCompare(b.process) || a.pid.localeCompare(b.pid));
-    } catch (error) {
-      console.error("[OpenPorts] Failed to list Windows listening ports:", error);
-      return [];
-    }
-  }
-  try {
-    const { stdout } = await execFileAsync13("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
-    const processNames = await readProcessNameMap();
-    return attachOpenPortProcessIcons(parseOpenPortProcesses(stdout, processNames));
-  } catch (error) {
-    console.error("[OpenPorts] Failed to list listening ports:", error);
-    try {
-      const { stdout } = await execFileAsync13("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
-      return attachOpenPortProcessIcons(parseOpenPortProcesses(stdout));
-    } catch (fallbackError) {
-      console.error("[OpenPorts] Fallback listing failed:", fallbackError);
-      return [];
-    }
-  }
-}
-async function executeActionInner(action) {
-  switch (action.type) {
-    case "open-app": {
-      if (process.platform === "win32" && action.appPath) {
-        if (action.appPath.startsWith("shell:AppsFolder\\")) {
-          await execFileAsync13("explorer.exe", [action.appPath]);
-          return { ok: true, message: `Opened ${action.appName}` };
-        }
-        const opened = await shell.openPath(action.appPath);
-        return opened ? { ok: false, message: opened } : { ok: true, message: `Opened ${action.appName}` };
-      }
-      await execFileAsync13("open", ["-a", action.appName]);
-      return { ok: true, message: `Opened ${action.appName}` };
-    }
-    case "open-file": {
-      const opened = await shell.openPath(action.path);
-      if (opened) {
-        return { ok: false, message: opened };
-      }
-      return { ok: true, message: "Opened file" };
-    }
-    case "open-with-app": {
-      if (action.appName) {
-        if (process.platform === "win32") {
-          const application = listApplications().find(
-            (item) => item.name.toLowerCase() === action.appName?.toLowerCase()
-          );
-          if (!application || application.path.startsWith("shell:AppsFolder\\")) {
-            const opened2 = await shell.openPath(action.path);
-            return opened2 ? { ok: false, message: opened2 } : { ok: true, message: "Opened with the default application" };
-          }
-          await execFileAsync13(
-            "powershell.exe",
-            [
-              "-NoLogo",
-              "-NoProfile",
-              "-NonInteractive",
-              "-Command",
-              "Start-Process -FilePath $env:TEZBAR_APP_PATH -ArgumentList (, $env:TEZBAR_TARGET_PATH)"
-            ],
-            {
-              windowsHide: true,
-              env: {
-                ...process.env,
-                TEZBAR_APP_PATH: application.path,
-                TEZBAR_TARGET_PATH: action.path
-              }
-            }
-          );
-          recordOpenWithUsage(action.path, action.appName);
-          return { ok: true, message: `Opened with ${action.appName}` };
-        }
-        await execFileAsync13("open", ["-a", action.appName, action.path]);
-        recordOpenWithUsage(action.path, action.appName);
-        return { ok: true, message: `Opened with ${action.appName}` };
-      }
-      const opened = await shell.openPath(action.path);
-      if (opened) {
-        return { ok: false, message: opened };
-      }
-      return { ok: true, message: "Opened" };
-    }
-    case "copy-text": {
-      clipboard.writeText(action.text);
-      return { ok: true, message: "Copied to clipboard" };
-    }
-    case "copy-and-paste-text": {
-      clipboard.writeText(action.text);
-      await new Promise((resolve5) => setTimeout(resolve5, 120));
-      app.hide();
-      await new Promise((resolve5) => setTimeout(resolve5, 50));
-      if (process.platform === "win32") {
-        await execFileAsync13("powershell.exe", [
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          '(New-Object -ComObject WScript.Shell).SendKeys("^v")'
-        ]);
-      } else {
-        await execFileAsync13("osascript", [
-          "-e",
-          'tell application "System Events" to keystroke "v" using {command down}'
-        ]);
-      }
-      return { ok: true, message: "Pasted emoji" };
-    }
-    case "add-note": {
-      const entry = addQuickNote(action.text);
-      await reindexQuickNotes();
-      return entry ? { ok: true, message: "Saved to Quick Notes" } : { ok: false, message: "Could not save quick note" };
-    }
-    case "open-url": {
-      await shell.openExternal(action.url);
-      return { ok: true, message: "Opened URL" };
-    }
-    case "install-extension": {
-      await installExtension2(action.extensionId);
-      return { ok: true, message: `Installing ${action.extensionId}` };
-    }
-    case "run-extension-command": {
-      const argumentValues = {
-        ...action.argumentValues ?? {}
-      };
-      if (action.argumentName && action.argumentValue && !argumentValues[action.argumentName]) {
-        argumentValues[action.argumentName] = action.argumentValue;
-      }
-      try {
-        const result = await executeExtensionCommandRuntime(
-          action.extensionId,
-          action.commandName,
-          argumentValues
-        );
-        return result;
-      } catch (error) {
-        if (isUnsupportedRuntimeModeError(error)) {
-          return {
-            ok: false,
-            message: "This extension command requires view runtime support. Use extension:run-command to render it in the Tezbar extension surface."
-          };
-        }
-        throw error;
-      }
-    }
-    case "invoke-command": {
-      return commandBus.execute({
-        commandId: action.commandId,
-        payload: action.payload
-      });
-    }
-    case "run-shell": {
-      const command = String(action.command ?? "").trim();
-      const validation = validateShellCommand(command);
-      if (!validation.ok) {
-        return { ok: false, message: validation.message };
-      }
-      const { stdout } = await execFileAsync13("bash", ["-lc", command]);
-      const message = stdout.trim();
-      return { ok: true, message: message || "Command completed" };
-    }
-    case "run-native-command": {
-      return executeNativeCommand(action.commandId);
-    }
-    default: {
-      return { ok: false, message: "Unsupported action type" };
-    }
-  }
-}
-var _benchmarkPromise = null;
-async function runSearchBenchmarks() {
-  if (_benchmarkPromise) {
-    return _benchmarkPromise;
-  }
-  _benchmarkPromise = (async () => {
-    await indexDb.ensureInitialized();
-    await runOfflineBenchmarks(searchEverything, indexDb);
-  })();
-  return _benchmarkPromise;
-}
-async function getSearchBenchmarkHistory() {
-  return readBenchmarkHistory();
-}
-async function executeSearchAction(action, context) {
-  let result;
-  try {
-    const safety = safetyForAction(action);
-    result = safety ? await runWithSafety(safety.id, safety.context, () => executeActionInner(action)) : await executeActionInner(action);
-  } catch (error) {
-    result = {
-      ok: false,
-      message: error instanceof Error ? error.message : String(error)
-    };
-  }
-  const actionId = actionIdFromResult(action, context?.resultId);
-  indexDb.recordAction(actionId, result.ok);
-  if (context?.query && result.ok) {
-    indexDb.recordActionForQuery(context.query, actionId, true);
-  }
-  if (result.ok && action.type === "open-with-app" && action.appName && context?.query) {
-    const parsed = splitPathCompletionQuery(context.query);
-    if (parsed.appMode && parsed.appTerm) {
-      recordOpenWithAlias(parsed.appTerm, action.appName);
-    }
-  }
-  if (context?.query && typeof context.rank === "number" && Number.isFinite(context.rank)) {
-    indexDb.recordClick(context.query, actionId, context.rank, result.ok);
-  }
-  return result;
-}
-async function recordSearchActionUsage(action, context) {
-  await indexDb.ensureInitialized();
-  const actionId = actionIdFromResult(action, context?.resultId);
-  indexDb.recordAction(actionId, true);
-  if (context?.query) {
-    indexDb.recordActionForQuery(context.query, actionId, true);
-  }
-  if (context?.query && typeof context.rank === "number" && Number.isFinite(context.rank)) {
-    indexDb.recordClick(context.query, actionId, context.rank, true);
-  }
-}
 
 // src/main/currency/frankfurter.ts
 var cachedBase = null;
@@ -26322,7 +26656,7 @@ async function fetchFrankfurterLatest(from) {
 // src/main/portManager/namedPortsStore.ts
 var import_node_crypto13 = require("node:crypto");
 var import_node_fs27 = require("node:fs");
-var import_node_path29 = require("node:path");
+var import_node_path30 = require("node:path");
 init_desktop_runtime();
 function storePath() {
   return `${app.getPath("userData")}/named-ports.json`;
@@ -26349,7 +26683,7 @@ function readAll() {
 }
 function writeAll(entries) {
   const path7 = storePath();
-  (0, import_node_fs27.mkdirSync)((0, import_node_path29.dirname)(path7), { recursive: true });
+  (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(path7), { recursive: true });
   (0, import_node_fs27.writeFileSync)(path7, `${JSON.stringify(entries, null, 2)}
 `, "utf8");
 }
@@ -26409,13 +26743,13 @@ ${appContext}` : "App context: (none)"
 
 // src/main/voice/service.ts
 init_desktop_runtime();
-var import_node_child_process17 = require("node:child_process");
+var import_node_child_process18 = require("node:child_process");
 var import_node_fs28 = require("node:fs");
 var import_node_fs29 = require("node:fs");
 var import_node_os14 = require("node:os");
-var import_node_path30 = require("node:path");
+var import_node_path31 = require("node:path");
 var import_node_events2 = require("node:events");
-var import_node_util14 = require("node:util");
+var import_node_util15 = require("node:util");
 init_configStore();
 
 // src/shared/voice.ts
@@ -26431,7 +26765,7 @@ var VOICE_MODEL_IDS = [
 ];
 
 // src/main/voice/service.ts
-var execFileAsync14 = (0, import_node_util14.promisify)(import_node_child_process17.execFile);
+var execFileAsync15 = (0, import_node_util15.promisify)(import_node_child_process18.execFile);
 var activeSpeech = null;
 var cachedLoginPath = null;
 async function getLoginPath() {
@@ -26441,7 +26775,7 @@ async function getLoginPath() {
     return cachedLoginPath;
   }
   try {
-    const { stdout } = await execFileAsync14("bash", ["-lc", 'echo -n "$PATH"']);
+    const { stdout } = await execFileAsync15("bash", ["-lc", 'echo -n "$PATH"']);
     const fromShell = stdout.trim();
     cachedLoginPath = fromShell || process.env["PATH"] || "";
   } catch {
@@ -26456,7 +26790,7 @@ async function getLoginPath() {
 }
 async function execWithUserPath(file, args, options = {}) {
   const path7 = await getLoginPath();
-  return execFileAsync14(file, args, {
+  return execFileAsync15(file, args, {
     maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
     env: { ...process.env, PATH: path7 }
   });
@@ -26626,15 +26960,15 @@ var MODEL_CATALOG = [
 var activeDownloads = /* @__PURE__ */ new Map();
 var VOICE_MODEL_CONFIG_KEY = "voiceSttModelId";
 function voiceModelsRootDir() {
-  const dir = (0, import_node_path30.join)(app.getPath("userData"), "voice-models");
+  const dir = (0, import_node_path31.join)(app.getPath("userData"), "voice-models");
   (0, import_node_fs28.mkdirSync)(dir, { recursive: true });
   return dir;
 }
 function modelDir(modelId) {
-  return (0, import_node_path30.join)(voiceModelsRootDir(), modelId);
+  return (0, import_node_path31.join)(voiceModelsRootDir(), modelId);
 }
 function modelAssetPath(modelId, fileName) {
-  return (0, import_node_path30.join)(modelDir(modelId), fileName);
+  return (0, import_node_path31.join)(modelDir(modelId), fileName);
 }
 function findModel(modelId) {
   const model = MODEL_CATALOG.find((entry) => entry.id === modelId);
@@ -26698,9 +27032,9 @@ async function probeRuntime(kind) {
     installCommand: "python3 -m pip install --user moonshine-voice onnxruntime"
   };
 }
-async function runLoginShell(command) {
+async function runLoginShell(command2) {
   const path7 = await getLoginPath();
-  const { stdout, stderr } = await execFileAsync14("bash", ["-lc", command], {
+  const { stdout, stderr } = await execFileAsync15("bash", ["-lc", command2], {
     maxBuffer: 32 * 1024 * 1024,
     env: {
       ...process.env,
@@ -26845,7 +27179,7 @@ async function downloadAssetWithProgress(url, destinationPath, onProgress) {
   if (!response.ok || !response.body) {
     throw new Error(`Download failed (${response.status}): ${url}`);
   }
-  await import_node_fs29.promises.mkdir((0, import_node_path30.dirname)(destinationPath), { recursive: true });
+  await import_node_fs29.promises.mkdir((0, import_node_path31.dirname)(destinationPath), { recursive: true });
   const tempPath = `${destinationPath}.part`;
   const total = Number(response.headers.get("content-length") ?? "");
   const totalBytes = Number.isFinite(total) && total > 0 ? total : null;
@@ -27047,11 +27381,11 @@ async function deleteVoiceModel(modelId) {
   writeConfigPatch({ [VOICE_MODEL_CONFIG_KEY]: nextSelected });
   return nextSelected;
 }
-async function speakText(text) {
-  const trimmed = text.trim();
+async function speakText(text2) {
+  const trimmed = text2.trim();
   if (!trimmed) return;
   stopSpeaking();
-  activeSpeech = process.platform === "win32" ? (0, import_node_child_process17.spawn)(
+  activeSpeech = process.platform === "win32" ? (0, import_node_child_process18.spawn)(
     "powershell.exe",
     [
       "-NoLogo",
@@ -27065,7 +27399,7 @@ async function speakText(text) {
       windowsHide: true,
       env: { ...process.env, TEZBAR_SPEECH_TEXT: trimmed }
     }
-  ) : (0, import_node_child_process17.spawn)("say", [trimmed], {
+  ) : (0, import_node_child_process18.spawn)("say", [trimmed], {
     stdio: "ignore"
   });
   activeSpeech.on("exit", () => {
@@ -27081,11 +27415,11 @@ async function hasBinary(binary) {
   try {
     const path7 = await getLoginPath();
     if (process.platform === "win32") {
-      await execFileAsync14("where.exe", [binary], {
+      await execFileAsync15("where.exe", [binary], {
         env: { ...process.env, Path: path7, PATH: path7 }
       });
     } else {
-      await execFileAsync14("bash", ["-lc", `command -v ${binary}`], {
+      await execFileAsync15("bash", ["-lc", `command -v ${binary}`], {
         env: { ...process.env, PATH: path7 }
       });
     }
@@ -27133,7 +27467,7 @@ function preferredMoonshineModelPath() {
   throw new Error("Moonshine model files are not downloaded yet. Download a Moonshine model first.");
 }
 async function convertToWav(inputPath, outputPath) {
-  await execFileAsync14("ffmpeg", [
+  await execFileAsync15("ffmpeg", [
     "-y",
     "-i",
     inputPath,
@@ -27300,9 +27634,9 @@ async function runWhisperCli(wavPath, language) {
     const { stderr } = await execWithUserPath(binary, args);
     if (stderr.trim()) console.info("[stt][main] whisper-cli stderr:\n" + stderr.trim());
     const txtPath = wavPath.replace(/\.wav$/, ".txt");
-    const text = await import_node_fs29.promises.readFile(txtPath, "utf-8").catch(() => "");
+    const text2 = await import_node_fs29.promises.readFile(txtPath, "utf-8").catch(() => "");
     await import_node_fs29.promises.rm(txtPath, { force: true }).catch(() => void 0);
-    return text.trim();
+    return text2.trim();
   } catch (err) {
     const e = err;
     const detail = (e.stderr ?? "").trim() || e.message || String(err);
@@ -27333,12 +27667,12 @@ async function probeEngineBinaries() {
   return cachedEngineProbe;
 }
 async function transcribeAudio(req) {
-  const tempRoot = (0, import_node_path30.join)(app.getPath("temp"), "tezbar-voice");
+  const tempRoot = (0, import_node_path31.join)(app.getPath("temp"), "tezbar-voice");
   await import_node_fs29.promises.mkdir(tempRoot, { recursive: true });
   const token = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const ext = extensionFromMime(req.mimeType);
-  const sourcePath = (0, import_node_path30.join)(tempRoot, `input-${token}.${ext}`);
-  const wavPath = ext === "wav" ? sourcePath : (0, import_node_path30.join)(tempRoot, `input-${token}.wav`);
+  const sourcePath = (0, import_node_path31.join)(tempRoot, `input-${token}.${ext}`);
+  const wavPath = ext === "wav" ? sourcePath : (0, import_node_path31.join)(tempRoot, `input-${token}.wav`);
   try {
     await import_node_fs29.promises.writeFile(sourcePath, Buffer.from(req.audioBytes));
     console.info(
@@ -27386,10 +27720,10 @@ async function transcribeAudio(req) {
     const moonshineAvailable = await hasBinary("python3") && await hasMoonshinePython();
     if (moonshineAvailable) {
       try {
-        const text = await runMoonshineTranscription(wavPath, req.language);
-        if (text.length > 0) {
-          console.info("[stt][main] moonshine produced", text.length, "chars");
-          return { ok: true, text, engine: "moonshine-python" };
+        const text2 = await runMoonshineTranscription(wavPath, req.language);
+        if (text2.length > 0) {
+          console.info("[stt][main] moonshine produced", text2.length, "chars");
+          return { ok: true, text: text2, engine: "moonshine-python" };
         }
         if (!firstFailure) {
           firstFailure = { engine: "Moonshine", message: "Moonshine returned no text." };
@@ -27426,7 +27760,7 @@ async function transcribeAudio(req) {
 
 // src/main/backgroundTasks.ts
 var import_node_fs30 = require("node:fs");
-var import_node_path31 = require("node:path");
+var import_node_path32 = require("node:path");
 init_extension_registry();
 function clampProgress(value) {
   return Math.max(0, Math.min(1, value));
@@ -27474,15 +27808,15 @@ function timerBackgroundTask(fileName, rawContents, now = Date.now()) {
 function listRunningTimers(now = Date.now()) {
   const packageJsonPath = resolveInstalledPackageJsonPath("timers");
   if (!packageJsonPath) return [];
-  const supportPath = (0, import_node_path31.join)((0, import_node_path31.dirname)(packageJsonPath), ".tezbar-support");
+  const supportPath = (0, import_node_path32.join)((0, import_node_path32.dirname)(packageJsonPath), ".tezbar-support");
   if (!(0, import_node_fs30.existsSync)(supportPath)) return [];
   const tasks = [];
   for (const fileName of (0, import_node_fs30.readdirSync)(supportPath)) {
-    if ((0, import_node_path31.extname)(fileName) !== ".timer") continue;
+    if ((0, import_node_path32.extname)(fileName) !== ".timer") continue;
     try {
       const task = timerBackgroundTask(
         fileName,
-        (0, import_node_fs30.readFileSync)((0, import_node_path31.join)(supportPath, fileName), "utf8"),
+        (0, import_node_fs30.readFileSync)((0, import_node_path32.join)(supportPath, fileName), "utf8"),
         now
       );
       if (task) tasks.push(task);
@@ -27653,12 +27987,337 @@ async function requestPermission(id) {
   return { descriptor, state: probePermission(id), checkedAt: Date.now() };
 }
 
+// src/main/systemStats/service.ts
+var import_node_child_process19 = require("node:child_process");
+var import_node_os15 = require("node:os");
+var import_node_util16 = require("node:util");
+var execFileAsync16 = (0, import_node_util16.promisify)(import_node_child_process19.execFile);
+var staticStatsPromise = null;
+var previousNetworkSample = null;
+async function command(file, args) {
+  const { stdout } = await execFileAsync16(file, args, {
+    timeout: 8e3,
+    maxBuffer: 8 * 1024 * 1024
+  });
+  return stdout.trim();
+}
+async function optionalCommand(file, args) {
+  try {
+    return await command(file, args);
+  } catch {
+    return "";
+  }
+}
+function record(value) {
+  return value && typeof value === "object" ? value : {};
+}
+function firstRecord(value) {
+  return Array.isArray(value) ? record(value[0]) : {};
+}
+function text(value, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+function finiteNumber(value, fallback = 0) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+function percent(value) {
+  const match = String(value ?? "").match(/([\d.]+)\s*%/);
+  if (!match) return void 0;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : void 0;
+}
+function normalizeProfilerLabel(value) {
+  const raw = text(value);
+  if (!raw) return void 0;
+  const aliases = {
+    Good: "Normal",
+    sppower_battery_health_good: "Normal",
+    Verified: "Verified"
+  };
+  return aliases[raw] ?? raw.replace(/^sp[a-z]+_/, "").replaceAll("_", " ");
+}
+async function loadStaticStats() {
+  const raw = await command("system_profiler", [
+    "SPHardwareDataType",
+    "SPDisplaysDataType",
+    "SPPowerDataType",
+    "SPStorageDataType",
+    "-json"
+  ]);
+  const payload = record(JSON.parse(raw));
+  const hardware = firstRecord(payload.SPHardwareDataType);
+  const display = firstRecord(payload.SPDisplaysDataType);
+  const builtInDisplay = firstRecord(display.spdisplays_ndrvs);
+  const powerRows = Array.isArray(payload.SPPowerDataType) ? payload.SPPowerDataType : [];
+  const batteryRow = record(
+    powerRows.find((item) => record(item)._name === "spbattery_information")
+  );
+  const batteryHealth = record(batteryRow.sppower_battery_health_info);
+  const powerSettings = record(
+    powerRows.find((item) => record(item)._name === "sppower_information")
+  );
+  const batteryPower = record(powerSettings["Battery Power"]);
+  const storageRows = Array.isArray(payload.SPStorageDataType) ? payload.SPStorageDataType : [];
+  const rootStorage = record(
+    storageRows.find((item) => record(item).mount_point === "/") ?? storageRows[0]
+  );
+  const physicalDrive = record(rootStorage.physical_drive);
+  const processorMatch = text(hardware.number_processors).match(/proc\s+(\d+):(\d+):(\d+)/);
+  const totalCores = processorMatch ? Number(processorMatch[1]) : 0;
+  const performanceCores = processorMatch ? Number(processorMatch[2]) : void 0;
+  const efficiencyCores = processorMatch ? Number(processorMatch[3]) : void 0;
+  const totalBytes = finiteNumber(rootStorage.size_in_bytes);
+  const freeBytes = finiteNumber(rootStorage.free_space_in_bytes);
+  return {
+    device: {
+      name: text(hardware.machine_name, (0, import_node_os15.hostname)()),
+      model: text(hardware.machine_model, "Mac"),
+      chip: text(hardware.chip_type, "Apple Silicon"),
+      osVersion: "",
+      uptimeSeconds: 0
+    },
+    cpu: {
+      model: text(hardware.chip_type, "Apple Silicon"),
+      totalCores,
+      performanceCores,
+      efficiencyCores
+    },
+    gpu: {
+      model: text(display.sppci_model, text(display._name, "Apple GPU")),
+      cores: finiteNumber(display.sppci_cores) || void 0,
+      display: text(builtInDisplay._spdisplays_pixels) || void 0
+    },
+    storage: {
+      name: text(rootStorage._name, "Macintosh HD"),
+      device: text(physicalDrive.device_name) || void 0,
+      totalBytes,
+      usedBytes: Math.max(0, totalBytes - freeBytes),
+      freeBytes,
+      smartStatus: normalizeProfilerLabel(physicalDrive.smart_status)
+    },
+    batteryHealth: {
+      maximumCapacityPercent: percent(batteryHealth.sppower_battery_health_maximum_capacity),
+      cycleCount: finiteNumber(batteryHealth.sppower_battery_cycle_count) || void 0,
+      condition: normalizeProfilerLabel(batteryHealth.sppower_battery_health),
+      lowPowerMode: batteryPower.LowPowerMode === "Yes"
+    }
+  };
+}
+function staticStats() {
+  if (!staticStatsPromise) {
+    staticStatsPromise = loadStaticStats().catch((error) => {
+      staticStatsPromise = null;
+      throw error;
+    });
+  }
+  return staticStatsPromise;
+}
+function parseTopOutput(output) {
+  const cpuMatch = output.match(/CPU usage:\s*([\d.]+)% user,\s*([\d.]+)% sys,\s*([\d.]+)% idle/i);
+  const loadMatch = output.match(/Load Avg:\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)/i);
+  const processMatch = output.match(/Processes:\s*(\d+) total,\s*(\d+) running/i);
+  const memoryMatch = output.match(/PhysMem:\s*([\d.]+)([KMG]) used.*?,\s*([\d.]+)([KMG]) unused/i);
+  const userPercent = finiteNumber(cpuMatch?.[1]);
+  const systemPercent = finiteNumber(cpuMatch?.[2]);
+  return {
+    cpu: {
+      userPercent,
+      systemPercent,
+      idlePercent: finiteNumber(cpuMatch?.[3], 100),
+      usagePercent: Math.min(100, userPercent + systemPercent),
+      loadAverage: [
+        finiteNumber(loadMatch?.[1]),
+        finiteNumber(loadMatch?.[2]),
+        finiteNumber(loadMatch?.[3])
+      ]
+    },
+    memory: {
+      usedBytes: parseBinaryUnit(memoryMatch?.[1], memoryMatch?.[2]),
+      freeBytes: parseBinaryUnit(memoryMatch?.[3], memoryMatch?.[4])
+    },
+    processes: {
+      total: finiteNumber(processMatch?.[1]),
+      running: finiteNumber(processMatch?.[2])
+    }
+  };
+}
+function parseBinaryUnit(value, unit) {
+  const amount = finiteNumber(value);
+  const multiplier = unit === "G" ? 1024 ** 3 : unit === "M" ? 1024 ** 2 : 1024;
+  return amount * multiplier;
+}
+function matchIoregNumber(output, key) {
+  const match = output.match(new RegExp(`"${key}"\\s*=\\s*(\\d+)`));
+  if (!match) return void 0;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : void 0;
+}
+function matchIoregBoolean(output, key) {
+  return new RegExp(`"${key}"\\s*=\\s*Yes`, "i").test(output);
+}
+function parseBattery(output, health) {
+  if (!/AppleSmartBattery/.test(output)) return null;
+  const temperature = matchIoregNumber(output, "Temperature");
+  return {
+    chargePercent: matchIoregNumber(output, "CurrentCapacity") ?? 0,
+    maximumCapacityPercent: health.maximumCapacityPercent,
+    cycleCount: matchIoregNumber(output, "CycleCount") ?? health.cycleCount,
+    condition: health.condition,
+    isCharging: matchIoregBoolean(output, "IsCharging"),
+    isPluggedIn: matchIoregBoolean(output, "ExternalConnected"),
+    timeRemainingMinutes: matchIoregNumber(output, "TimeRemaining"),
+    temperatureCelsius: temperature === void 0 ? void 0 : temperature / 100,
+    lowPowerMode: health.lowPowerMode
+  };
+}
+function parseVmStat(output, totalBytes) {
+  const pageSize = finiteNumber(output.match(/page size of (\d+) bytes/i)?.[1], 16384);
+  const pages = (label) => finiteNumber(output.match(new RegExp(`${label}:\\s+(\\d+)\\.`))?.[1]);
+  return {
+    wiredBytes: Math.min(totalBytes, pages("Pages wired down") * pageSize),
+    compressedBytes: Math.min(totalBytes, pages("Pages occupied by compressor") * pageSize)
+  };
+}
+function parseSwap(output) {
+  const match = output.match(/total = ([\d.]+)([MG])\s+used = ([\d.]+)([MG])/i);
+  return {
+    swapTotalBytes: parseBinaryUnit(match?.[1], match?.[2]),
+    swapUsedBytes: parseBinaryUnit(match?.[3], match?.[4])
+  };
+}
+function parseDiskFree(output, fallback) {
+  const dataLine = output.split("\n").map((line) => line.trim()).find((line) => line.startsWith("/dev/"));
+  if (!dataLine) return fallback;
+  const availableKilobytes = finiteNumber(dataLine.split(/\s+/)[3], Number.NaN);
+  return Number.isFinite(availableKilobytes) ? availableKilobytes * 1024 : fallback;
+}
+function parseNetworkBytes(output, interfaceName) {
+  const line = output.split("\n").find((row) => row.trim().startsWith(`${interfaceName} `) && row.includes("<Link#"));
+  if (!line) return null;
+  const columns = line.trim().split(/\s+/);
+  const linkIndex = columns.findIndex((value) => value.startsWith("<Link#"));
+  if (linkIndex < 0) return null;
+  const receivedBytes = finiteNumber(columns[linkIndex + 4], Number.NaN);
+  const sentBytes = finiteNumber(columns[linkIndex + 7], Number.NaN);
+  if (!Number.isFinite(receivedBytes) || !Number.isFinite(sentBytes)) return null;
+  return { interfaceName, receivedBytes, sentBytes, sampledAt: Date.now() };
+}
+function networkRates(sample) {
+  if (!sample) return {};
+  const previous = previousNetworkSample;
+  previousNetworkSample = sample;
+  if (!previous || previous.interfaceName !== sample.interfaceName) return {};
+  const elapsedSeconds = (sample.sampledAt - previous.sampledAt) / 1e3;
+  if (elapsedSeconds <= 0) return {};
+  return {
+    downloadBytesPerSecond: Math.max(
+      0,
+      (sample.receivedBytes - previous.receivedBytes) / elapsedSeconds
+    ),
+    uploadBytesPerSecond: Math.max(0, (sample.sentBytes - previous.sentBytes) / elapsedSeconds)
+  };
+}
+function parseFans(output) {
+  const rpms = [...output.matchAll(/"F\d+Ac"\s*=\s*(\d+)/g)].map((match) => Number(match[1])).filter((rpm) => Number.isFinite(rpm) && rpm > 0);
+  if (rpms.length > 0) {
+    return { available: true, status: "Active", rpms };
+  }
+  return {
+    available: false,
+    status: "Managed automatically",
+    rpms: [],
+    note: "Fan RPM is not exposed by macOS on this Mac without a privileged sensor helper."
+  };
+}
+function parseNetworkSummary(output) {
+  const value = (key) => {
+    const raw = output.match(new RegExp(`^\\s*${key}\\s*:\\s*(.+)$`, "m"))?.[1]?.trim();
+    return raw && raw !== "<redacted>" ? raw : void 0;
+  };
+  return {
+    connectionType: value("InterfaceType"),
+    localIp: output.match(/^\s*0\s*:\s*((?:\d{1,3}\.){3}\d{1,3})\s*$/m)?.[1],
+    ssid: value("SSID")
+  };
+}
+async function getSystemStats() {
+  if (process.platform !== "darwin") {
+    throw new Error("System Monitor is currently available on macOS only.");
+  }
+  const fixed = await staticStats();
+  const [
+    top,
+    vmStat,
+    memorySize,
+    swap,
+    battery,
+    defaultRoute,
+    networkRows,
+    osVersion,
+    fans,
+    diskUsage
+  ] = await Promise.all([
+    command("top", ["-l", "1", "-n", "0", "-stats", "cpu"]),
+    command("vm_stat", []),
+    command("sysctl", ["-n", "hw.memsize"]),
+    optionalCommand("sysctl", ["-n", "vm.swapusage"]),
+    optionalCommand("ioreg", ["-r", "-n", "AppleSmartBattery", "-d", "1"]),
+    optionalCommand("route", ["-n", "get", "default"]),
+    optionalCommand("netstat", ["-ibn"]),
+    optionalCommand("sw_vers", ["-productVersion"]),
+    optionalCommand("ioreg", ["-r", "-c", "AppleSMC", "-d", "1"]),
+    optionalCommand("df", ["-k", "/"])
+  ]);
+  const totalBytes = finiteNumber(memorySize);
+  const live = parseTopOutput(top);
+  const interfaceName = defaultRoute.match(/interface:\s*(\S+)/)?.[1];
+  const networkSummary = interfaceName ? parseNetworkSummary(await optionalCommand("ipconfig", ["getsummary", interfaceName])) : {};
+  const sample = interfaceName ? parseNetworkBytes(networkRows, interfaceName) : null;
+  const freeBytes = Math.min(totalBytes, live.memory.freeBytes);
+  const usedBytes = Math.max(0, totalBytes - freeBytes);
+  const storageFreeBytes = Math.min(
+    fixed.storage.totalBytes,
+    parseDiskFree(diskUsage, fixed.storage.freeBytes)
+  );
+  return {
+    collectedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    device: {
+      ...fixed.device,
+      osVersion,
+      uptimeSeconds: (0, import_node_os15.uptime)()
+    },
+    cpu: { ...fixed.cpu, ...live.cpu },
+    gpu: fixed.gpu,
+    memory: {
+      totalBytes,
+      usedBytes,
+      freeBytes,
+      ...parseVmStat(vmStat, totalBytes),
+      ...parseSwap(swap)
+    },
+    storage: {
+      ...fixed.storage,
+      freeBytes: storageFreeBytes,
+      usedBytes: Math.max(0, fixed.storage.totalBytes - storageFreeBytes)
+    },
+    battery: parseBattery(battery, fixed.batteryHealth),
+    network: {
+      interface: interfaceName,
+      ...networkSummary,
+      ...networkRates(sample)
+    },
+    fans: parseFans(fans),
+    processes: live.processes
+  };
+}
+
 // src/main/terminal/service.ts
 var import_node_fs31 = require("node:fs");
-var import_node_os15 = require("node:os");
-var import_node_path32 = require("node:path");
+var import_node_os16 = require("node:os");
+var import_node_path33 = require("node:path");
 var import_node_crypto14 = require("node:crypto");
-var import_node_child_process18 = require("node:child_process");
+var import_node_child_process20 = require("node:child_process");
 
 // src/shared/terminal.ts
 var TERMINAL_IPC = {
@@ -27683,13 +28342,13 @@ function terminalDirectoryLabel(cwd) {
   if (parts.length === 0) return "/";
   return parts.slice(-2).join("/");
 }
-function normalizeTerminalCommand(command) {
-  return command?.trim().replace(/\s+/g, " ") ?? "";
+function normalizeTerminalCommand(command2) {
+  return command2?.trim().replace(/\s+/g, " ") ?? "";
 }
 function formatTerminalSessionName(cwd, lastCommand) {
   const directory = terminalDirectoryLabel(cwd);
-  const command = normalizeTerminalCommand(lastCommand);
-  return command ? `${directory} \xB7 ${command}` : directory;
+  const command2 = normalizeTerminalCommand(lastCommand);
+  return command2 ? `${directory} \xB7 ${command2}` : directory;
 }
 
 // src/main/terminal/service.ts
@@ -27712,8 +28371,8 @@ function spawnBunPipeTerminal(shell2, args, cwd, env, cols, rows) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const text = decoder.decode(value, { stream: true });
-        if (text) dataListeners.forEach((listener) => listener(text));
+        const text2 = decoder.decode(value, { stream: true });
+        if (text2) dataListeners.forEach((listener) => listener(text2));
       }
     } catch {
     } finally {
@@ -27753,7 +28412,7 @@ function spawnBunPipeTerminal(shell2, args, cwd, env, cols, rows) {
   };
 }
 function spawnPipeTerminal(shell2, args, cwd, env, cols, rows) {
-  const child = (0, import_node_child_process18.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+  const child = (0, import_node_child_process20.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
   return {
     pid: child.pid ?? -1,
     process: shell2,
@@ -27794,7 +28453,7 @@ var persistedSummaries = /* @__PURE__ */ new Map();
 var persistedLoaded = false;
 var OUTPUT_REPLAY_LIMIT_BYTES = 512 * 1024;
 var TERMINAL_CONFIG_KEY = "terminalSessions";
-var TERMINAL_HISTORY_DIR = (0, import_node_path32.join)((0, import_node_os15.homedir)(), ".openray", "terminal-history");
+var TERMINAL_HISTORY_DIR = (0, import_node_path33.join)((0, import_node_os16.homedir)(), ".openray", "terminal-history");
 var SAVE_FOR_MS = {
   day: 24 * 60 * 60 * 1e3,
   week: 7 * 24 * 60 * 60 * 1e3,
@@ -27811,19 +28470,19 @@ function clampDimension(value, min, max) {
 }
 function resolveWorkingDirectory(raw) {
   const requested = raw?.trim();
-  const expanded = requested === "~" ? (0, import_node_os15.homedir)() : requested?.startsWith("~/") ? (0, import_node_path32.join)((0, import_node_os15.homedir)(), requested.slice(2)) : requested;
-  const candidate = expanded ? (0, import_node_path32.resolve)(expanded) : (0, import_node_os15.homedir)();
+  const expanded = requested === "~" ? (0, import_node_os16.homedir)() : requested?.startsWith("~/") ? (0, import_node_path33.join)((0, import_node_os16.homedir)(), requested.slice(2)) : requested;
+  const candidate = expanded ? (0, import_node_path33.resolve)(expanded) : (0, import_node_os16.homedir)();
   try {
-    return (0, import_node_fs31.existsSync)(candidate) && (0, import_node_fs31.statSync)(candidate).isDirectory() ? candidate : (0, import_node_os15.homedir)();
+    return (0, import_node_fs31.existsSync)(candidate) && (0, import_node_fs31.statSync)(candidate).isDirectory() ? candidate : (0, import_node_os16.homedir)();
   } catch {
-    return (0, import_node_os15.homedir)();
+    return (0, import_node_os16.homedir)();
   }
 }
 function resolveExistingWorkingDirectory(raw) {
   const requested = raw.trim();
   if (!requested) return null;
-  const expanded = requested === "~" ? (0, import_node_os15.homedir)() : requested.startsWith("~/") ? (0, import_node_path32.join)((0, import_node_os15.homedir)(), requested.slice(2)) : requested;
-  const candidate = (0, import_node_path32.resolve)(expanded);
+  const expanded = requested === "~" ? (0, import_node_os16.homedir)() : requested.startsWith("~/") ? (0, import_node_path33.join)((0, import_node_os16.homedir)(), requested.slice(2)) : requested;
+  const candidate = (0, import_node_path33.resolve)(expanded);
   try {
     return (0, import_node_fs31.existsSync)(candidate) && (0, import_node_fs31.statSync)(candidate).isDirectory() ? candidate : null;
   } catch {
@@ -27833,7 +28492,7 @@ function resolveExistingWorkingDirectory(raw) {
 function processWorkingDirectory(pid) {
   try {
     if (process.platform === "darwin") {
-      const output = (0, import_node_child_process18.execFileSync)(
+      const output = (0, import_node_child_process20.execFileSync)(
         "/usr/sbin/lsof",
         ["-a", "-p", String(pid), "-d", "cwd", "-Fn"],
         { encoding: "utf8", timeout: 1e3 }
@@ -27849,8 +28508,8 @@ function processWorkingDirectory(pid) {
   return null;
 }
 function normalizeLastCommand(raw) {
-  const command = raw.trim().replace(/\s+/g, " ");
-  return command ? command.slice(0, 4096) : void 0;
+  const command2 = raw.trim().replace(/\s+/g, " ");
+  return command2 ? command2.slice(0, 4096) : void 0;
 }
 function validHistorySessionId(sessionId) {
   return /^[a-zA-Z0-9_-]{1,200}$/.test(sessionId);
@@ -27858,7 +28517,7 @@ function validHistorySessionId(sessionId) {
 function terminalHistoryPath(sessionId) {
   if (!validHistorySessionId(sessionId)) throw new Error("Invalid terminal session id");
   (0, import_node_fs31.mkdirSync)(TERMINAL_HISTORY_DIR, { recursive: true, mode: 448 });
-  return (0, import_node_path32.join)(TERMINAL_HISTORY_DIR, `${sessionId}.log`);
+  return (0, import_node_path33.join)(TERMINAL_HISTORY_DIR, `${sessionId}.log`);
 }
 function readTerminalHistory(session2) {
   try {
@@ -27874,8 +28533,8 @@ function removeTerminalHistory(sessionId) {
   } catch {
   }
 }
-function legacyTerminalHistory(command) {
-  const safeCommand = command?.replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, 4096);
+function legacyTerminalHistory(command2) {
+  const safeCommand = command2?.replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, 4096);
   if (!safeCommand) return "";
   return `[Previous output was not recorded by this app version]
 $ ${safeCommand}
@@ -28354,8 +29013,8 @@ function deleteTerminalSession(ownerId, sessionId) {
   return deleted;
 }
 function getTerminalPromptInfo() {
-  const user = (0, import_node_os15.userInfo)().username;
-  const host = (0, import_node_os15.hostname)().split(".")[0];
+  const user = (0, import_node_os16.userInfo)().username;
+  const host = (0, import_node_os16.hostname)().split(".")[0];
   const dir = "~";
   return { user, host, dir };
 }
@@ -28378,8 +29037,8 @@ function shutdownTerminalSessions() {
 
 // src/main/storage/service.ts
 init_desktop_runtime();
-var import_promises4 = require("node:fs/promises");
-var import_node_path33 = require("node:path");
+var import_promises5 = require("node:fs/promises");
+var import_node_path34 = require("node:path");
 async function dirSize(root) {
   let total = 0;
   const pending = [root];
@@ -28387,16 +29046,16 @@ async function dirSize(root) {
     const path7 = pending.pop();
     if (!path7) continue;
     try {
-      const stats = await (0, import_promises4.lstat)(path7);
+      const stats = await (0, import_promises5.lstat)(path7);
       if (stats.isSymbolicLink()) continue;
       if (stats.isFile()) {
         total += stats.size;
         continue;
       }
       if (stats.isDirectory()) {
-        const entries = await (0, import_promises4.readdir)(path7, { withFileTypes: true });
+        const entries = await (0, import_promises5.readdir)(path7, { withFileTypes: true });
         for (const entry of entries) {
-          pending.push((0, import_node_path33.join)(path7, entry.name));
+          pending.push((0, import_node_path34.join)(path7, entry.name));
         }
       }
     } catch {
@@ -28406,13 +29065,13 @@ async function dirSize(root) {
 }
 async function fileSize(path7) {
   try {
-    return (await (0, import_promises4.stat)(path7)).size;
+    return (await (0, import_promises5.stat)(path7)).size;
   } catch {
     return 0;
   }
 }
 function userData(...segments) {
-  return (0, import_node_path33.join)(app.getPath("userData"), ...segments);
+  return (0, import_node_path34.join)(app.getPath("userData"), ...segments);
 }
 async function getStorageBreakdown() {
   const searchDir = getClipboardStoreDir();
@@ -28436,10 +29095,10 @@ async function getStorageBreakdown() {
     codeCacheBytes,
     knowledgeBytes
   ] = await Promise.all([
-    fileSize((0, import_node_path33.join)(searchDir, "index.sqlite3")),
-    fileSize((0, import_node_path33.join)(searchDir, "index.sqlite3-wal")),
-    fileSize((0, import_node_path33.join)(searchDir, "index.sqlite3-shm")),
-    fileSize((0, import_node_path33.join)(searchDir, "clipboard.json")),
+    fileSize((0, import_node_path34.join)(searchDir, "index.sqlite3")),
+    fileSize((0, import_node_path34.join)(searchDir, "index.sqlite3-wal")),
+    fileSize((0, import_node_path34.join)(searchDir, "index.sqlite3-shm")),
+    fileSize((0, import_node_path34.join)(searchDir, "clipboard.json")),
     dirSize(clipboardImagesDir),
     dirSize(voiceModelsDir),
     dirSize(bunDir),
@@ -28501,13 +29160,13 @@ async function clearChromiumCache() {
   await defaultSession.clearStorageData({ storages: ["shadercache"] });
   await Promise.all(
     ["Code Cache", "GPUCache", "DawnCache", "GrShaderCache", "ShaderCache"].map(
-      (name) => (0, import_promises4.rm)(userData(name), { recursive: true, force: true })
+      (name) => (0, import_promises5.rm)(userData(name), { recursive: true, force: true })
     )
   );
 }
 async function vacuumSearchDatabase() {
   const searchDir = getClipboardStoreDir();
-  const walPath = (0, import_node_path33.join)(searchDir, "index.sqlite3-wal");
+  const walPath = (0, import_node_path34.join)(searchDir, "index.sqlite3-wal");
   const beforeBytes = await fileSize(walPath);
   try {
     const db = getInstance();
@@ -28591,11 +29250,11 @@ function commandName(part) {
   const token = part.trim().split(/\s+/, 1)[0] ?? "";
   return token.slice(token.lastIndexOf("/") + 1).toLowerCase();
 }
-function suggestedApprovalRule(command) {
-  if (/[;<>`\n]/.test(command) || command.includes("$(") || command.includes("||")) {
+function suggestedApprovalRule(command2) {
+  if (/[;<>`\n]/.test(command2) || command2.includes("$(") || command2.includes("||")) {
     return void 0;
   }
-  const names = command.split(/\s*(?:&&|\|)\s*/).map(commandName).filter((name) => name && name !== "cd" && !SAFE_PIPELINE_COMMANDS.has(name));
+  const names = command2.split(/\s*(?:&&|\|)\s*/).map(commandName).filter((name) => name && name !== "cd" && !SAFE_PIPELINE_COMMANDS.has(name));
   return names.find((name) => PERSISTABLE_READ_COMMANDS.has(name));
 }
 function cancelPendingAgentApprovals(runId) {
@@ -28606,6 +29265,10 @@ function cancelPendingAgentApprovals(runId) {
   }
 }
 function requestAgentApproval(sender, runId, signal, request) {
+  const exactCommand = request.command.trim();
+  if (exactCommand && getAgentAlwaysAllowedExactCommands().includes(exactCommand)) {
+    return Promise.resolve(true);
+  }
   const approvalId = `approval-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const suggestedRule = suggestedApprovalRule(request.command);
   return new Promise((resolve5) => {
@@ -28618,7 +29281,12 @@ function requestAgentApproval(sender, runId, signal, request) {
       pendingAgentApprovals.delete(approvalId);
       resolve5(approved);
     };
-    pendingAgentApprovals.set(approvalId, { runId, suggestedRule, settle });
+    pendingAgentApprovals.set(approvalId, {
+      runId,
+      command: request.command,
+      suggestedRule,
+      settle
+    });
     signal.addEventListener("abort", () => settle(false), { once: true });
     sendAgentEvent(sender, {
       type: "approval",
@@ -28667,9 +29335,9 @@ function startAgentRun(sender, task, images = []) {
     emittedOutput = true;
     sendAgentEvent(sender, { type: "message", runId, delta });
   };
-  const onAnswer = (text) => {
+  const onAnswer = (text2) => {
     emittedOutput = true;
-    sendAgentEvent(sender, { type: "answer", runId, text });
+    sendAgentEvent(sender, { type: "answer", runId, text: text2 });
   };
   const onStderrLine = (line) => {
     sendAgentEvent(sender, { type: "log", runId, source: "stderr", line });
@@ -28698,6 +29366,7 @@ ${extractedText}`;
       model: piProvider?.modelPattern ?? getSelectedPiModelPattern("chat"),
       raymesProviderJson: piProvider?.providerJson,
       raymesAlwaysAllowJson: JSON.stringify(getAgentAlwaysAllowedCommands()),
+      raymesAlwaysAllowExactJson: JSON.stringify(getAgentAlwaysAllowedExactCommands()),
       requestApproval: (request) => requestAgentApproval(sender, runId, ac.signal, request),
       signal: ac.signal,
       onStage,
@@ -28917,6 +29586,7 @@ function registerIpcHandlers(getWindow, controls) {
     return getSafetyDryRun();
   });
   ipcMain.handle("native-commands:list", async () => listNativeCommands());
+  ipcMain.handle("system-stats:get", async () => getSystemStats());
   ipcMain.handle("clipboard:list", async () => listClipboardEntries());
   ipcMain.handle("clipboard:restore", async (_event, id) => {
     if (typeof id !== "string" || !id) return false;
@@ -29002,9 +29672,9 @@ function registerIpcHandlers(getWindow, controls) {
     return r;
   });
   ipcMain.handle("notes:list", async () => listQuickNotes());
-  ipcMain.handle("notes:append", async (_event, text) => {
-    if (typeof text !== "string" || !text.trim()) return null;
-    const entry = addQuickNote(text);
+  ipcMain.handle("notes:append", async (_event, text2) => {
+    if (typeof text2 !== "string" || !text2.trim()) return null;
+    const entry = addQuickNote(text2);
     await reindexQuickNotes();
     return entry;
   });
@@ -29186,9 +29856,9 @@ function registerIpcHandlers(getWindow, controls) {
     clearDeviceSession();
   });
   ipcMain.handle(IPC_CHANNELS.QUERY, async (event, input) => {
-    const text = typeof input === "string" ? input : String(input ?? "");
-    console.log("[IPC_CHANNELS.QUERY] received input:", text);
-    const intent = await classifyIntent(text);
+    const text2 = typeof input === "string" ? input : String(input ?? "");
+    console.log("[IPC_CHANNELS.QUERY] received input:", text2);
+    const intent = await classifyIntent(text2);
     console.log("[IPC_CHANNELS.QUERY] classified intent:", intent);
     if (intent.type === "answer" || intent.type === "ai") {
       console.log("[IPC_CHANNELS.QUERY] starting streamAnswerToRenderer");
@@ -29272,10 +29942,7 @@ function registerIpcHandlers(getWindow, controls) {
       return { ok: false, error: "This approval is no longer active" };
     }
     if (decision === "always") {
-      if (!pending.suggestedRule) {
-        return { ok: false, error: "This command cannot be permanently allowed" };
-      }
-      addAgentAlwaysAllowedCommand(pending.suggestedRule);
+      addAgentAlwaysAllowedExactCommand(pending.command);
     }
     pending.settle(decision !== "deny");
     return { ok: true };
@@ -29401,7 +30068,7 @@ function registerIpcHandlers(getWindow, controls) {
     if (typeof extensionId !== "string" || !extensionId.trim()) {
       throw new Error("A valid extension id is required");
     }
-    const result = await installExtension2(extensionId);
+    const result = await installExtension(extensionId);
     await reindexExtensions();
     return result;
   });
@@ -29409,7 +30076,7 @@ function registerIpcHandlers(getWindow, controls) {
     if (typeof extensionId !== "string" || !extensionId.trim()) {
       throw new Error("A valid extension id is required");
     }
-    const result = await uninstallExtension2(extensionId);
+    const result = await uninstallExtension(extensionId);
     await reindexExtensions();
     return result;
   });
@@ -29536,8 +30203,8 @@ function registerIpcHandlers(getWindow, controls) {
     return clipboard.readText();
   });
   ipcMain.handle("clipboard:write", async (_event, raw) => {
-    const text = typeof raw === "string" ? raw : String(raw ?? "");
-    clipboard.writeText(text);
+    const text2 = typeof raw === "string" ? raw : String(raw ?? "");
+    clipboard.writeText(text2);
     return { ok: true };
   });
   ipcMain.handle("shell:open", async (_event, raw) => {
@@ -29666,6 +30333,10 @@ function registerIpcHandlers(getWindow, controls) {
   });
   ipcMain.handle(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path7) => {
     if (typeof path7 === "string") recordDirectoryVisit(path7);
+  });
+  ipcMain.handle(IPC_CHANNELS.QUICK_LOOK_FILE, async (_event, input) => {
+    const paths = Array.isArray(input) ? input.filter((path7) => typeof path7 === "string") : typeof input === "string" ? [input] : [];
+    return quickLookFiles(paths);
   });
   ipcMain.handle(IPC_CHANNELS.SEARCH_BENCHMARK_RUN, async () => {
     return runSearchBenchmarks();
@@ -29824,17 +30495,17 @@ function registerIpcHandlers(getWindow, controls) {
 init_configStore();
 init_desktop_runtime();
 var import_node_fs32 = require("node:fs");
-var import_node_path34 = require("node:path");
-var import_node_child_process19 = require("node:child_process");
+var import_node_path35 = require("node:path");
+var import_node_child_process21 = require("node:child_process");
 var import_node_net = require("node:net");
 function materializePiPolicy() {
   const root = process.env.APPDATA_DIR;
   if (!root || false) return;
   try {
-    const runtimeDir = (0, import_node_path34.join)(root, "runtime");
-    const extensionPath = (0, import_node_path34.join)(runtimeDir, "raymes-pi-policy.ts");
+    const runtimeDir = (0, import_node_path35.join)(root, "runtime");
+    const extensionPath = (0, import_node_path35.join)(runtimeDir, "raymes-pi-policy.ts");
     (0, import_node_fs32.mkdirSync)(runtimeDir, { recursive: true });
-    (0, import_node_fs32.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\n\ntype ToolCallEvent = {\n  toolName: string\n  input?: {\n    command?: unknown\n  }\n}\n\ntype ToolCallResult = {\n  block?: boolean\n  reason?: string\n}\n\ntype ExtensionContext = {\n  ui: {\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\n  }\n}\n\ntype ExtensionAPI = {\n  on(\n    event: 'tool_call',\n    handler: (event: ToolCallEvent, ctx: ExtensionContext) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>,\n  ): void\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\n  registerTool(definition: {\n    name: string\n    label: string\n    description: string\n    promptSnippet?: string\n    promptGuidelines?: string[]\n    parameters: unknown\n    execute: (\n      toolCallId: string,\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\n      signal?: AbortSignal,\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\n  }): void\n}\n\ntype RaymesPiProviderConfig = {\n  baseUrl: string\n  apiKey: string\n  api: 'openai-completions' | 'anthropic-messages'\n  authHeader?: boolean\n  models: Array<{\n    id: string\n    name: string\n    reasoning: boolean\n    input: Array<'text' | 'image'>\n    cost: {\n      input: number\n      output: number\n      cacheRead: number\n      cacheWrite: number\n    }\n    contextWindow: number\n    maxTokens: number\n    compat?: Record<string, unknown>\n  }>\n}\n\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\n  if (!raw) return\n  try {\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\n    pi.registerProvider('tezbar', parsed)\n  } catch {\n    /* Ignore malformed bridge env so pi can still start with its own config. */\n  }\n}\n\nfunction hasUnsafeShellSyntax(command: string): boolean {\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\n}\n\nfunction persistedAllowedCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter(\n          (entry): entry is string =>\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\n        )\n        .map((entry) => entry.toLowerCase())\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction executableName(command: string): string {\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\n}\n\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\n\nexport function isPersistentlyAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string>\n): boolean {\n  const trimmed = command.trim()\n  if (\n    !trimmed ||\n    /[;<>`\\n]/.test(trimmed) ||\n    trimmed.includes('$(') ||\n    trimmed.includes('||')\n  ) {\n    return false\n  }\n\n  const commands = trimmed\n    .split(/\\s*(?:&&|\\|)\\s*/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (commands.length === 0) return false\n\n  return commands.every((part) => {\n    if (isSimpleCd(part)) return true\n    const executable = executableName(part)\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\n  })\n}\n\nfunction isSimpleCd(command: string): boolean {\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\n}\n\nfunction isSafeGitStatus(command: string): boolean {\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\n}\n\nfunction isSafeGitClone(command: string): boolean {\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\n}\n\nfunction isSafeDirectoryRead(command: string): boolean {\n  const trimmed = command.trim()\n  return (\n    trimmed === 'pwd' ||\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\n  )\n}\n\nexport function isAutoAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands()\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed) return false\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\n  if (hasUnsafeShellSyntax(trimmed)) return false\n\n  const parts = trimmed.split(/\\s+&&\\s+/).map((part) => part.trim()).filter(Boolean)\n  if (parts.length === 0) return false\n\n  const commandToRun = parts[parts.length - 1]\n  if (\n    !commandToRun ||\n    !(isSafeGitStatus(commandToRun) || isSafeGitClone(commandToRun) || isSafeDirectoryRead(commandToRun))\n  ) {\n    return false\n  }\n\n  return parts.slice(0, -1).every(isSimpleCd)\n}\n\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\n  registerRaymesProvider(pi)\n\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\n  if (knowledgeEndpoint && knowledgeToken && /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)) {\n    pi.registerTool({\n      name: 'pc_search',\n      label: 'Search PC Knowledge',\n      description: 'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\n      promptSnippet: 'Search user-approved local documents, PDFs, images, and notes indexed by Tezbar',\n      promptGuidelines: [\n        'Use pc_search when the user asks about information that may be in their documents, PDFs, screenshots, images, or knowledge folders.',\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\n        limit: Type.Optional(Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint, {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\n          signal,\n        })\n        const result = await response.json() as {\n          hits?: Array<{ chunkId: string; path: string; pageNumber?: number; text: string; score: number }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\n        const hits = result.hits ?? []\n        const text = hits.length === 0\n          ? 'No indexed knowledge matched this query.'\n          : hits.map((hit, index) => {\n              const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\n              return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\n            }).join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { hits } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_read',\n      label: 'Read PC Knowledge Result',\n      description: 'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\n      parameters: Type.Object({\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\n        maxChars: Type.Optional(Type.Number({ minimum: 500, maximum: 50_000, description: 'Maximum text characters to return' })),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({\n            resultId: params.resultId ?? '',\n            maxChars: params.maxChars ?? 12_000,\n          }),\n          signal,\n        })\n        const payload = await response.json() as {\n          result?: { path: string; pageNumber?: number; text: string }\n          error?: string\n        }\n        if (!response.ok || !payload.result) {\n          throw new Error(payload.error || 'Knowledge result could not be read')\n        }\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\n        return {\n          content: [{ type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` }],\n          details: payload.result,\n        }\n      },\n    })\n  }\n\n  pi.on('tool_call', async (event, ctx) => {\n    if (event.toolName !== 'bash') return undefined\n\n    const command = event.input?.command\n    if (typeof command !== 'string') {\n      return { block: true, reason: 'Missing bash command.' }\n    }\n\n    if (isAutoAllowedBash(command)) return undefined\n\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\n    if (confirmed) return undefined\n\n    return { block: true, reason: 'Bash command was not approved.' }\n  })\n}\n", "utf8");
+    (0, import_node_fs32.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\n\ntype ToolCallEvent = {\n  toolName: string\n  input?: Record<string, unknown> & { command?: unknown }\n}\n\ntype ToolCallResult = {\n  block?: boolean\n  reason?: string\n}\n\ntype ExtensionContext = {\n  ui: {\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\n  }\n}\n\ntype ExtensionAPI = {\n  on(\n    event: 'tool_call',\n    handler: (\n      event: ToolCallEvent,\n      ctx: ExtensionContext\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\n  ): void\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\n  registerTool(definition: {\n    name: string\n    label: string\n    description: string\n    promptSnippet?: string\n    promptGuidelines?: string[]\n    parameters: unknown\n    execute: (\n      toolCallId: string,\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\n      signal?: AbortSignal\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\n  }): void\n}\n\ntype RaymesPiProviderConfig = {\n  baseUrl: string\n  apiKey: string\n  api: 'openai-completions' | 'anthropic-messages'\n  authHeader?: boolean\n  models: Array<{\n    id: string\n    name: string\n    reasoning: boolean\n    input: Array<'text' | 'image'>\n    cost: {\n      input: number\n      output: number\n      cacheRead: number\n      cacheWrite: number\n    }\n    contextWindow: number\n    maxTokens: number\n    compat?: Record<string, unknown>\n  }>\n}\n\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\n  if (!raw) return\n  try {\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\n    pi.registerProvider('tezbar', parsed)\n  } catch {\n    /* Ignore malformed bridge env so pi can still start with its own config. */\n  }\n}\n\nfunction hasUnsafeShellSyntax(command: string): boolean {\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\n}\n\nfunction persistedAllowedCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter(\n          (entry): entry is string =>\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\n        )\n        .map((entry) => entry.toLowerCase())\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction persistedAllowedExactCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter((entry): entry is string => typeof entry === 'string')\n        .map((entry) => entry.trim())\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction executableName(command: string): string {\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\n}\n\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\n\nexport function isPersistentlyAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string>\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\n    return false\n  }\n\n  const commands = trimmed\n    .split(/\\s*(?:&&|\\|)\\s*/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (commands.length === 0) return false\n\n  return commands.every((part) => {\n    if (isSimpleCd(part)) return true\n    const executable = executableName(part)\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\n  })\n}\n\nfunction isSimpleCd(command: string): boolean {\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\n}\n\nfunction isSafeGitStatus(command: string): boolean {\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\n}\n\nfunction isSafeGitClone(command: string): boolean {\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\n}\n\nfunction isSafeDirectoryRead(command: string): boolean {\n  const trimmed = command.trim()\n  return (\n    trimmed === 'pwd' ||\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\n  )\n}\n\nexport type IndexedSearchKind = 'launcher' | 'deep'\n\nconst MAJOR_HOME_FOLDER_PATTERN =\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\n\nfunction hasBroadHomeScope(command: string): boolean {\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\n    return true\n  }\n\n  const roots = new Set<string>()\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\n    const root = match[1]?.toLowerCase()\n    if (root) roots.add(root)\n  }\n  return roots.size >= 2\n}\n\n/**\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\n * inside the active project remain valid shell work.\n */\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\n  const trimmed = command.trim()\n  if (!trimmed) return null\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\n  if (!hasBroadHomeScope(trimmed)) return null\n\n  if (\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\n  ) {\n    return 'deep'\n  }\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\n  return null\n}\n\nexport function isAutoAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed) return false\n  if (allowedExactCommands.has(trimmed)) return true\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\n  if (hasUnsafeShellSyntax(trimmed)) return false\n\n  const parts = trimmed\n    .split(/\\s+&&\\s+/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (parts.length === 0) return false\n\n  const commandToRun = parts[parts.length - 1]\n  if (\n    !commandToRun ||\n    !(\n      isSafeGitStatus(commandToRun) ||\n      isSafeGitClone(commandToRun) ||\n      isSafeDirectoryRead(commandToRun)\n    )\n  ) {\n    return false\n  }\n\n  return parts.slice(0, -1).every(isSimpleCd)\n}\n\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\n  registerRaymesProvider(pi)\n\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\n  const hasIndexedSearchTools = Boolean(\n    knowledgeEndpoint &&\n    knowledgeToken &&\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\n  )\n  let launcherSearchAttempted = false\n  let deepSearchAttempted = false\n\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\n    pi.registerTool({\n      name: 'launcher_search',\n      label: 'Search Tezbar',\n      description:\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\n      promptGuidelines: [\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({\n          description: 'The file, app, command, note, or other local item to find',\n        }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          results?: Array<{\n            id: string\n            title: string\n            subtitle: string\n            category: string\n            score: number\n            target?: string\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\n        const results = payload.results ?? []\n        const text =\n          results.length === 0\n            ? 'No Tezbar launcher results matched this query.'\n            : results\n                .map((result, index) => {\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { results } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_search',\n      label: 'Deep Search PC Knowledge',\n      description:\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\n      promptSnippet:\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\n      promptGuidelines: [\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint, {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\n          signal,\n        })\n        const result = (await response.json()) as {\n          hits?: Array<{\n            chunkId: string\n            path: string\n            pageNumber?: number\n            text: string\n            score: number\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\n        const hits = result.hits ?? []\n        const text =\n          hits.length === 0\n            ? 'No indexed knowledge matched this query.'\n            : hits\n                .map((hit, index) => {\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { hits } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_read',\n      label: 'Read PC Knowledge Result',\n      description:\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\n      parameters: Type.Object({\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\n        maxChars: Type.Optional(\n          Type.Number({\n            minimum: 500,\n            maximum: 50_000,\n            description: 'Maximum text characters to return',\n          })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({\n            resultId: params.resultId ?? '',\n            maxChars: params.maxChars ?? 12_000,\n          }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          result?: { path: string; pageNumber?: number; text: string }\n          error?: string\n        }\n        if (!response.ok || !payload.result) {\n          throw new Error(payload.error || 'Knowledge result could not be read')\n        }\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\n        return {\n          content: [\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\n          ],\n          details: payload.result,\n        }\n      },\n    })\n  }\n\n  pi.on('tool_call', async (event, ctx) => {\n    if (event.toolName === 'launcher_search') {\n      launcherSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName === 'pc_search') {\n      deepSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName !== 'bash') return undefined\n\n    const command = event.input?.command\n    if (typeof command !== 'string') {\n      return { block: true, reason: 'Missing bash command.' }\n    }\n\n    if (hasIndexedSearchTools) {\n      const preferredSearch = preferredIndexedSearchForBash(command)\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\n        }\n      }\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\n        }\n      }\n    }\n\n    if (isAutoAllowedBash(command)) return undefined\n\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\n    if (confirmed) return undefined\n\n    return { block: true, reason: 'Bash command was not approved.' }\n  })\n}\n", "utf8");
     process.env.RAYMES_PI_EXTENSION = extensionPath;
   } catch (error) {
     console.error("[server] failed to materialize Pi policy:", error);
@@ -29843,7 +30514,7 @@ function materializePiPolicy() {
 function fixPathSync() {
   if (process.platform === "win32") return;
   try {
-    const stdout = (0, import_node_child_process19.execFileSync)("bash", ["-lc", "echo -n $PATH"], {
+    const stdout = (0, import_node_child_process21.execFileSync)("bash", ["-lc", "echo -n $PATH"], {
       encoding: "utf8",
       timeout: 2e3
     });

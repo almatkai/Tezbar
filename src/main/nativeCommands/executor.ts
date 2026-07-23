@@ -465,6 +465,13 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
         return { ok: true, message: out }
       }
 
+      case 'show-system-monitor': {
+        return {
+          ok: true,
+          message: 'Open System Monitor from the launcher to view live hardware information.',
+        }
+      }
+
       case 'show-memory-info': {
         const out = await runShell("memory_pressure | head -n 6; echo; vm_stat | awk 'NR<=6'")
         return { ok: true, message: out }

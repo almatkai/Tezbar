@@ -466,6 +466,55 @@ describe('extension runtime list pagination', () => {
     }
   })
 
+  it('bridges native image color extraction for extension commands', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-image-colors-extension-'))
+    const helperPath = join(extensionRoot, 'image-colors-helper')
+    const imagePath = join(extensionRoot, 'selected.png')
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    writeFileSync(imagePath, 'fixture')
+    writeFileSync(
+      helperPath,
+      '#!/bin/sh\nprintf \'%s\\n\' \'[{"hex":"#12AB34","red":18,"green":171,"blue":52,"area":1,"hue":134,"saturation":81,"lightness":37,"intensity":80}]\'\n'
+    )
+    chmodSync(helperPath, 0o755)
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({
+        name: 'image-colors-fixture',
+        title: 'Image Colors Fixture',
+        commands: [{ name: 'index', title: 'Index', mode: 'no-view' }],
+      })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'index.js'),
+      `const { Clipboard } = require('@raycast/api')
+       const { extractColor } = require('swift:../swift/extract-color')
+       module.exports.default = async function Command() {
+         const colors = await extractColor(${JSON.stringify(imagePath)}, 40, false)
+         await Clipboard.copy(colors[0].hex)
+       }`
+    )
+
+    const previousHelperPath = process.env.IMAGE_COLORS_HELPER_PATH
+    process.env.IMAGE_COLORS_HELPER_PATH = helperPath
+    try {
+      const result = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index',
+        undefined,
+        undefined,
+        { effectMode: 'record' }
+      )
+      expect(result.ok, JSON.stringify(result)).toBe(true)
+      if (!result.ok || result.mode !== 'no-view') return
+      expect(result.effects).toContainEqual({ kind: 'clipboard', value: '#12AB34' })
+    } finally {
+      if (previousHelperPath === undefined) delete process.env.IMAGE_COLORS_HELPER_PATH
+      else process.env.IMAGE_COLORS_HELPER_PATH = previousHelperPath
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
   it('supports form, frecency, Google OAuth, and SQL utility APIs', async () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-utils-extension-'))
     const databasePath = join(extensionRoot, 'fixture.sqlite')
@@ -1010,7 +1059,9 @@ describe('extension runtime list pagination', () => {
        import { AI, Detail } from '@raycast/api'
        import { useAI } from '@raycast/utils'
        export default function Command() {
-         const hook = useAI('hook prompt') as { data?: string; isLoading: boolean }
+         const hook = useAI('hook prompt', {
+           model: AI.Model['OpenAI_GPT-5_mini'],
+         }) as { data?: string; isLoading: boolean }
          void AI.ask('direct prompt')
          return <Detail markdown={hook.isLoading ? 'loading' : hook.data} />
        }`

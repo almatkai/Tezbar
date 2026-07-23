@@ -227,6 +227,7 @@ export function createRaycastApi(ctx: ShimContext): Record<string, unknown> {
     OAuth: createRenderProxy('OAuth'),
     BrowserExtension: createRenderProxy('BrowserExtension'),
     AI: {
+      Model: createRenderProxy('AI.Model'),
       ask: async (prompt: string): Promise<string> => {
         // We don't ship a Raycast-AI equivalent. Return the prompt itself so
         // extensions relying on ask() don't crash; they usually only use it

@@ -46,10 +46,12 @@ import type { IconAssetKind, SearchAction } from '../shared/search'
 import type { Message } from './llm/provider'
 import { appIconDataUrl } from './appIcon'
 import { imageFileDataUrl, nativeFileIconDataUrl } from './pathIcons'
+import { quickLookFiles } from './quickLook'
 import { streamAnswerToRenderer } from './llm/answerStream'
 import { setLauncherContentHeight } from './windowBounds'
 import {
-  addAgentAlwaysAllowedCommand,
+  addAgentAlwaysAllowedExactCommand,
+  getAgentAlwaysAllowedExactCommands,
   getAgentAlwaysAllowedCommands,
   getSafetyDryRun,
   getUiStateRetentionMs,
@@ -150,6 +152,7 @@ import type { PermissionId } from '../shared/permissions'
 import { clearSafetyLog, listSafetyLog } from './safety/log'
 import { listSafetyDescriptors } from './safety/registry'
 import { listNativeCommands } from './nativeCommands/registry'
+import { getSystemStats } from './systemStats/service'
 import {
   clearClipboardHistory,
   deleteClipboardEntry,
@@ -212,6 +215,7 @@ const pendingAgentApprovals = new Map<
   string,
   {
     runId: string
+    command: string
     suggestedRule?: string
     settle: (approved: boolean) => void
   }
@@ -337,6 +341,11 @@ function requestAgentApproval(
   signal: AbortSignal,
   request: { title: string; command: string }
 ): Promise<boolean> {
+  const exactCommand = request.command.trim()
+  if (exactCommand && getAgentAlwaysAllowedExactCommands().includes(exactCommand)) {
+    return Promise.resolve(true)
+  }
+
   const approvalId = `approval-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   const suggestedRule = suggestedApprovalRule(request.command)
 
@@ -350,7 +359,12 @@ function requestAgentApproval(
       pendingAgentApprovals.delete(approvalId)
       resolve(approved)
     }
-    pendingAgentApprovals.set(approvalId, { runId, suggestedRule, settle })
+    pendingAgentApprovals.set(approvalId, {
+      runId,
+      command: request.command,
+      suggestedRule,
+      settle,
+    })
     signal.addEventListener('abort', () => settle(false), { once: true })
     sendAgentEvent(sender, {
       type: 'approval',
@@ -440,6 +454,7 @@ function startAgentRun(
       model: piProvider?.modelPattern ?? getSelectedPiModelPattern('chat'),
       raymesProviderJson: piProvider?.providerJson,
       raymesAlwaysAllowJson: JSON.stringify(getAgentAlwaysAllowedCommands()),
+      raymesAlwaysAllowExactJson: JSON.stringify(getAgentAlwaysAllowedExactCommands()),
       requestApproval: (request: { title: string; command: string }) =>
         requestAgentApproval(sender, runId, ac.signal, request),
       signal: ac.signal,
@@ -722,6 +737,7 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle('native-commands:list', async () => listNativeCommands())
+  ipcMain.handle('system-stats:get', async () => getSystemStats())
 
   ipcMain.handle('clipboard:list', async () => listClipboardEntries())
 
@@ -1186,10 +1202,7 @@ export function registerIpcHandlers(
       return { ok: false, error: 'This approval is no longer active' }
     }
     if (decision === 'always') {
-      if (!pending.suggestedRule) {
-        return { ok: false, error: 'This command cannot be permanently allowed' }
-      }
-      addAgentAlwaysAllowedCommand(pending.suggestedRule)
+      addAgentAlwaysAllowedExactCommand(pending.command)
     }
     pending.settle(decision !== 'deny')
     return { ok: true }
@@ -1719,6 +1732,15 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path: unknown) => {
     if (typeof path === 'string') recordDirectoryVisit(path)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.QUICK_LOOK_FILE, async (_event, input: unknown) => {
+    const paths = Array.isArray(input)
+      ? input.filter((path): path is string => typeof path === 'string')
+      : typeof input === 'string'
+        ? [input]
+        : []
+    return quickLookFiles(paths)
   })
 
   ipcMain.handle(IPC_CHANNELS.SEARCH_BENCHMARK_RUN, async () => {

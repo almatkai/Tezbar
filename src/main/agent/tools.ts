@@ -85,15 +85,7 @@ export const PI_TOOLS: Record<PiToolName, PiToolDescriptor> = {
   grep: {
     name: 'grep',
     description: 'Ripgrep-backed content search (glob / literal / context)',
-    argKeys: [
-      'pattern',
-      'path',
-      'glob',
-      'ignoreCase',
-      'literal',
-      'context',
-      'limit',
-    ] as const,
+    argKeys: ['pattern', 'path', 'glob', 'ignoreCase', 'literal', 'context', 'limit'] as const,
     mutates: false,
     label: (args) => `grep ${truncate(str(args.pattern, '<pattern>'))}`,
   },
@@ -133,9 +125,17 @@ export const RAYMES_DEFAULT_TOOLS: readonly PiToolName[] = [
  * tools still render sensibly.
  */
 export function labelForToolCall(toolName: string, args: unknown): string {
-  if (toolName === 'search_knowledge') {
+  if (toolName === 'launcher_search') {
     const safeArgs = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
-    return `search knowledge: ${truncate(str(safeArgs.query, '<query>'))}`
+    return `search Tezbar: ${truncate(str(safeArgs.query, '<query>'))}`
+  }
+  if (toolName === 'pc_search' || toolName === 'search_knowledge') {
+    const safeArgs = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
+    return `deep search: ${truncate(str(safeArgs.query, '<query>'))}`
+  }
+  if (toolName === 'pc_read') {
+    const safeArgs = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
+    return `read deep-search result: ${truncate(str(safeArgs.resultId, '<result>'))}`
   }
   const descriptor = PI_TOOLS[toolName as PiToolName]
   if (!descriptor) return `${toolName}`

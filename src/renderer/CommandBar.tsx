@@ -8,7 +8,11 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { defaultModels, normalizeProviderModelList } from '../shared/aiProviders'
+import {
+  defaultModels,
+  normalizeProviderModelList,
+  recommendedModel,
+} from '../shared/aiProviders'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { IconAssetKind, PathCompletionItem, SearchResult } from '../shared/search'
 import type { NativeCommandId } from '../shared/nativeCommands'
@@ -40,20 +44,29 @@ import {
 import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 import { ModelPicker } from './ModelPicker'
-import { formatShortcutForDisplay } from './HotkeyRecorder'
 import { moveTerminalSelectionDown, terminalSessionAtIndex } from './terminalSessionSelection'
 import BackgroundTaskStatus from './BackgroundTaskStatus'
 import {
   addLauncherQueryHistoryEntry,
   launcherQueryHistoryEntry,
   parseLauncherQueryHistory,
+  shouldRecallLastLauncherQuery,
 } from './launcherQueryHistory'
 import { optimisticSearchResults } from './optimisticSearch'
 import {
+  canQuickLookSearchResult,
+  isPlainSpaceKey,
+  quickLookPathsForSearchResults,
+  toggleDeepSearchResultNavigation,
+} from './searchResultPreview'
+import {
   ACTIVATE_DEEP_SEARCH_COMMAND,
+  buildDeepSearchRecommendation,
   DEEP_SEARCH_RESULT_PREFIX,
+  deepSearchDraftInput,
   deepSearchInput,
   parseSearchQuery,
+  searchRequestInput,
 } from '../shared/searchMode'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
@@ -167,6 +180,12 @@ type ExtensionRuntimeViewPayload = Extract<ExtensionRunCommandResult, { ok: true
 function isPendingColorConversionAction(action: { commandName: string; title: string }): boolean {
   const haystack = `${action.title} ${action.commandName}`.toLowerCase()
   return haystack.includes('convert') && haystack.includes('color')
+}
+
+function isAiPoweredExtensionAction(action: { commandName: string; title: string }): boolean {
+  const commandName = action.commandName.toLowerCase()
+  const title = action.title.toLowerCase()
+  return commandName === 'generate-colors' || title === 'generate colors'
 }
 
 function buildRecentExtensionCommandId(extensionId: string, commandName: string): string {
@@ -597,6 +616,18 @@ function PortArgumentChip(): ReactNode {
   )
 }
 
+function InlineArgumentChip({ label }: { label: string }): ReactNode {
+  return (
+    <span
+      aria-hidden
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+      {label}
+    </span>
+  )
+}
+
 /* AI Mode Icon */
 function AiIcon(): JSX.Element {
   return (
@@ -726,6 +757,7 @@ const NATIVE_COMMAND_ICON_BY_ID: Record<NativeCommandId, CommandIconKind> = {
   'quit-tezbar': 'quit',
   'show-macos-version': 'macos',
   'show-cpu-info': 'cpu',
+  'show-system-monitor': 'cpu',
   'show-memory-info': 'memory',
   'show-disk-usage': 'disk',
   'show-battery-status': 'battery',
@@ -1336,6 +1368,7 @@ export default function CommandBar({
   onOpenExtensions,
   onOpenExtensionRuntime,
   onOpenPortsPage,
+  onOpenSystemMonitor,
   onOpenIndexingPage,
   onOpenClipboardPage,
   onOpenSnippetsPage,
@@ -1352,6 +1385,7 @@ export default function CommandBar({
   onOpenExtensions: () => void
   onOpenExtensionRuntime: (initial: ExtensionRuntimeViewPayload) => void
   onOpenPortsPage: (opts?: { tab?: 'listen' | 'named' }) => void
+  onOpenSystemMonitor: () => void
   onOpenIndexingPage: () => void
   onOpenClipboardPage: () => void
   onOpenSnippetsPage: () => void
@@ -1398,12 +1432,16 @@ export default function CommandBar({
   const queryResultsCacheRef = useRef<Map<string, { items: SearchResult[]; cachedAt: number }>>(
     new Map()
   )
-  const [selectedSearch, setSelectedSearch] = useState(
-    initialValue.startsWith('>') || initialValue.startsWith(' ') || initialValue.endsWith('  ')
+  const [selectedSearch, setSelectedSearch] = useState(() =>
+    initialValue.startsWith('>') ||
+    initialValue.startsWith(' ') ||
+    initialValue.endsWith('  ') ||
+    parseSearchQuery(initialValue).mode === 'deep'
       ? -1
       : 0
   )
   const [followSearchSelection, setFollowSearchSelection] = useState(false)
+  const [searchResultNavigationActive, setSearchResultNavigationActive] = useState(false)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
   const actionMsgTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -1420,26 +1458,53 @@ export default function CommandBar({
       }, 4000)
     }
   }
+  const [terminalMode, setTerminalMode] = useState(() => initialValue.startsWith('>'))
   // Space prefix = AI mode in the launcher; the full chat UI lives on the
   // dedicated AI Chat surface (see App.tsx + AgentChatView).
   // Trigger AI mode if input starts with a space, or if it ends with exactly two spaces.
-  const isAiMode = value.startsWith(' ') || value.endsWith('  ')
-  const isDeepSearchMode = parseSearchQuery(value).mode === 'deep'
-  const deepSearchQuery = isDeepSearchMode ? parseSearchQuery(value).query : ''
+  const parsedSearchQuery = parseSearchQuery(value)
+  const isDeepSearchMode = parsedSearchQuery.mode === 'deep'
+  const isAiMode =
+    !terminalMode && !isDeepSearchMode && (value.startsWith(' ') || value.endsWith('  '))
+  const deepSearchQuery = isDeepSearchMode ? parsedSearchQuery.query : ''
+  const normalizedSearchValue = searchRequestInput(value)
   const agentTask = isAiMode ? value.trim() : ''
 
   const [pendingAction, setPendingAction] = useState<{
     extensionId: string
     commandName: string
     title: string
+    subtitle?: string
+    iconDataUrl?: string
+    iconPath?: string
     commandArgumentDefinitions: PendingExtensionArgument[]
   } | null>(null)
   const [argumentValues, setArgumentValues] = useState<Record<string, string>>({})
+  const pendingInlineArgument =
+    pendingAction?.commandArgumentDefinitions.length === 1 &&
+    pendingAction.commandArgumentDefinitions[0]?.type !== 'dropdown'
+      ? pendingAction.commandArgumentDefinitions[0]
+      : null
+  const pendingActionUsesAi = pendingAction ? isAiPoweredExtensionAction(pendingAction) : false
+  const actionProvider = (cfg.taskProviderOverrides?.action ?? cfg.provider ?? 'ollama') as ProviderId
+  const actionModel =
+    cfg.taskModelOverrides?.action ??
+    cfg.providerSelectedModels?.[actionProvider] ??
+    (cfg.provider === actionProvider ? cfg.model : undefined) ??
+    recommendedModel(actionProvider)
+  const actionModelConfig: LlmConfigRecord = {
+    ...cfg,
+    provider: actionProvider,
+    model: actionModel,
+    providerSelectedModels: {
+      ...cfg.providerSelectedModels,
+      [actionProvider]: actionModel,
+    },
+  }
   const [killPortMode, setKillPortMode] = useState(false)
   const [killPortQuery, setKillPortQuery] = useState('')
   const [killPortValue, setKillPortValue] = useState('')
   const [killPortArgumentDismissed, setKillPortArgumentDismissed] = useState(false)
-  const [terminalMode, setTerminalMode] = useState(() => initialValue.startsWith('>'))
   const [terminalPrompt, setTerminalPrompt] = useState('')
   const [terminalSessions, setTerminalSessions] = useState<TerminalSessionSummary[]>([])
   const [pinnedTerminalSessionIds, setPinnedTerminalSessionIds] = useState<string[]>([])
@@ -1472,6 +1537,8 @@ export default function CommandBar({
   const resultPointerStartRef = useRef({ x: 0, y: 0 })
   const draggingSearchResultRef = useRef<SearchResult | null>(null)
   const suppressNextSearchResultClickRef = useRef(false)
+  const quickLookPendingRef = useRef(false)
+  const searchResultsNavigationRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     valueRef.current = value
@@ -1522,7 +1589,10 @@ export default function CommandBar({
     setTerminalMode(initialValue.startsWith('>'))
     setValue(normalizedInitialValue)
     setSelectedSearch(
-      initialValue.startsWith('>') || initialValue.startsWith(' ') || initialValue.endsWith('  ')
+      initialValue.startsWith('>') ||
+        initialValue.startsWith(' ') ||
+        initialValue.endsWith('  ') ||
+        parseSearchQuery(initialValue).mode === 'deep'
         ? -1
         : 0
     )
@@ -1567,7 +1637,9 @@ export default function CommandBar({
   }, [terminalMode])
 
   useEffect(() => {
-    launcherQueryHistoryRef.current = readLauncherQueryHistory()
+    const launcherQueryHistory = readLauncherQueryHistory()
+    launcherQueryHistoryRef.current = launcherQueryHistory
+    writeLauncherQueryHistory(launcherQueryHistory)
     setRecentExtensionCommands(readRecentExtensionCommands())
     setPinnedTerminalSessionIds(readPinnedTerminalSessionIds())
     void window.tezbar.chatList(40).then(setChatHistory)
@@ -1627,9 +1699,11 @@ export default function CommandBar({
             return
           }
           void window.tezbar.searchAll(valueRef.current).then((items) => {
+            const deepSearchActive = parseSearchQuery(valueRef.current).mode === 'deep'
             setSearchResults(items)
-            setSelectedSearch(0)
-            setFollowSearchSelection(true)
+            setSearchResultNavigationActive(false)
+            setSelectedSearch(deepSearchActive ? -1 : 0)
+            setFollowSearchSelection(!deepSearchActive)
           })
           showActionMsg('Saved to Quick Notes')
         })
@@ -1760,6 +1834,26 @@ export default function CommandBar({
     if (!pendingColorArgumentName) return []
     return buildColorConversionResults(argumentValues[pendingColorArgumentName] ?? '')
   }, [argumentValues, pendingColorArgumentName])
+  const pendingInlineActionResult = useMemo<SearchResult | null>(() => {
+    if (!pendingAction || !pendingInlineArgument) return null
+    return {
+      id: `pending:${pendingAction.extensionId}:${pendingAction.commandName}`,
+      title: pendingAction.title,
+      subtitle: pendingAction.subtitle ?? '',
+      category: 'extensions',
+      score: 20_000,
+      iconDataUrl: pendingAction.iconDataUrl,
+      action: {
+        type: 'run-extension-command',
+        extensionId: pendingAction.extensionId,
+        commandName: pendingAction.commandName,
+        title: pendingAction.title,
+        iconPath: pendingAction.iconPath,
+        commandArgumentDefinitions: pendingAction.commandArgumentDefinitions,
+        argumentValues,
+      },
+    }
+  }, [argumentValues, pendingAction, pendingInlineArgument])
 
   const shouldOfferKillPortCommand = useMemo(() => {
     const q = value.trim().toLowerCase()
@@ -1808,12 +1902,26 @@ export default function CommandBar({
       ]
     }
     if (pendingAction) {
-      return pendingColorConversionRows
+      if (pendingColorConversionRows.length > 0) return pendingColorConversionRows
+      return pendingInlineActionResult ? [pendingInlineActionResult] : []
     }
+    const searchRowsWithoutDeepRecommendation = isDeepSearchMode
+      ? searchResults
+      : searchResults.filter((item) => !item.id.startsWith(DEEP_SEARCH_RESULT_PREFIX))
+    const instantDeepSearchRecommendation =
+      !isDeepSearchMode && !calcResultRow && colorConversionRows.length === 0
+        ? buildDeepSearchRecommendation(
+            parsedSearchQuery.query,
+            searchRowsWithoutDeepRecommendation
+          )
+        : null
+    const searchRows = instantDeepSearchRecommendation
+      ? [instantDeepSearchRecommendation, ...searchRowsWithoutDeepRecommendation]
+      : searchRowsWithoutDeepRecommendation
     const pinnedIds = new Set(pinnedCommands.map((pin) => pin.id))
     const homeRankedResults = value.trim()
-      ? searchResults
-      : [...searchResults].sort((left, right) => {
+      ? searchRows
+      : [...searchRows].sort((left, right) => {
           const leftScore =
             left.score - (pinnedIds.has(left.id) ? PINNED_HOME_RESULT_SCORE_PENALTY : 0)
           const rightScore =
@@ -1821,7 +1929,7 @@ export default function CommandBar({
           return rightScore - leftScore
         })
     const withoutDuplicatePort = killPortCommandResult
-      ? searchResults.filter(
+      ? searchRows.filter(
           (item) => item.id !== 'extcmd:raycast.port-manager:kill-listening-process'
         )
       : homeRankedResults
@@ -1840,15 +1948,23 @@ export default function CommandBar({
     colorConversionRows,
     killPortCommandResult,
     killPortMode,
+    isDeepSearchMode,
     pendingAction,
     pendingColorConversionRows,
+    pendingInlineActionResult,
     pinnedCommands,
+    parsedSearchQuery.query,
     searchResults,
     value,
   ])
   const visibleSearchCount = visibleSearchResults.length
   const topResult = visibleSearchResults[0] ?? null
   const activeSearchResult = visibleSearchResults[selectedSearch] ?? topResult
+  const selectedQuickLookPaths = useMemo(
+    () => quickLookPathsForSearchResults(visibleSearchResults, Math.max(selectedSearch, 0)),
+    [selectedSearch, visibleSearchResults]
+  )
+  const selectedQuickLookPath = selectedQuickLookPaths[0] ?? null
   const isKillPortCommandActive =
     activeSearchResult?.id === 'extcmd:raycast.port-manager:kill-listening-process'
   const densePinRail = pinnedCommands.length >= 10
@@ -1860,6 +1976,26 @@ export default function CommandBar({
     !terminalMode &&
     !killPortArgumentDismissed &&
     isKillPortCommandActive
+  const inlineExtensionResult =
+    activeSearchResult?.action.type === 'run-extension-command' &&
+    activeSearchResult.action.commandArgumentDefinitions?.length === 1 &&
+    activeSearchResult.action.commandArgumentDefinitions[0]?.type !== 'dropdown'
+      ? activeSearchResult
+      : null
+  const inlineExtensionArgument =
+    inlineExtensionResult?.action.type === 'run-extension-command'
+      ? inlineExtensionResult.action.commandArgumentDefinitions?.[0]
+      : null
+  const canEnterInlineArgumentMode = Boolean(
+    inlineExtensionResult &&
+      inlineExtensionArgument &&
+      !isKillPortCommandActive &&
+      !killPortMode &&
+      !pendingAction &&
+      !isCompletionInput &&
+      !isAiMode &&
+      !terminalMode
+  )
   const pinnedMetaById = useMemo(() => {
     const out = new Map<string, { slot: number }>()
     pinnedCommands.forEach((pin) => {
@@ -1897,20 +2033,28 @@ export default function CommandBar({
     }
 
     let cancelled = false
-    const t = setTimeout(() => {
-      void window.tezbar.completePath(value).then((items) => {
-        if (!cancelled) setPathCompletions(items)
-      })
-    }, 45)
+    // Completion reads only the current directory. Send it immediately so the
+    // mode switch never waits behind an artificial typing debounce; cleanup
+    // below prevents a stale response from replacing a newer query.
+    void window.tezbar.completePath(value).then((items) => {
+      if (!cancelled) setPathCompletions(items)
+    })
+
     return () => {
       cancelled = true
-      clearTimeout(t)
     }
   }, [isCompletionInput, value])
 
   useEffect(() => {
     let cancelled = false
     const requestId = ++lastSearchRequestId.current
+    // The local candidate cache already renders useful one-character matches.
+    // Avoid launching a broad SQLite prefix query for a value that is almost
+    // always replaced by the next keystroke a few milliseconds later.
+    if (!isDeepSearchMode && normalizedSearchValue.length === 1) {
+      setError(null)
+      return
+    }
     const t = setTimeout(
       () => {
         if (isAiMode || isCompletionInput || terminalMode) {
@@ -1921,10 +2065,10 @@ export default function CommandBar({
           setError(null)
         }
         void window.tezbar
-          .searchAll(value)
+          .searchAll(normalizedSearchValue)
           .then((items) => {
             if (!cancelled && requestId === lastSearchRequestId.current) {
-              const isHome = !value.trim()
+              const isHome = !normalizedSearchValue
               if (isHome && items.length > 0) {
                 homeSearchResultsRef.current = items
                 searchCandidatesRef.current = mergeSearchCandidates(
@@ -1935,7 +2079,7 @@ export default function CommandBar({
                 writeCachedHomeSearchResults(items)
               } else {
                 if (!isHome) {
-                  queryResultsCacheRef.current.set(value.trim().toLowerCase(), {
+                  queryResultsCacheRef.current.set(normalizedSearchValue.toLowerCase(), {
                     items,
                     cachedAt: Date.now(),
                   })
@@ -1961,13 +2105,20 @@ export default function CommandBar({
             }
           })
       },
-      isDeepSearchMode && deepSearchQuery.length >= 3 ? 180 : 20
+      isDeepSearchMode && deepSearchQuery.length >= 3 ? 180 : 80
     )
     return () => {
       cancelled = true
       clearTimeout(t)
     }
-  }, [deepSearchQuery, isAiMode, isCompletionInput, isDeepSearchMode, terminalMode, value])
+  }, [
+    deepSearchQuery,
+    isAiMode,
+    isCompletionInput,
+    isDeepSearchMode,
+    normalizedSearchValue,
+    terminalMode,
+  ])
 
   useEffect(() => {
     if (
@@ -2347,15 +2498,6 @@ export default function CommandBar({
   const dictationSupported = holdToSpeak.supported
   const startDictation = holdToSpeak.press
   const stopDictation = holdToSpeak.release
-  const pushToTalkShortcut = formatShortcutForDisplay(cfg.raymesHotkey ?? 'Alt+Space')
-
-  useEffect(() => {
-    if (!dictationSupported) return undefined
-    return window.tezbar.onVoiceHotkeyHold(({ phase }) => {
-      if (phase === 'press') startDictation()
-      else stopDictation()
-    })
-  }, [dictationSupported, startDictation, stopDictation])
 
   const speakAnswerText = async (): Promise<void> => {
     if (!streamText.trim()) return
@@ -2372,13 +2514,15 @@ export default function CommandBar({
   const clearPendingAction = (): void => {
     setPendingAction(null)
     setArgumentValues({})
+    setModelMenuOpen(false)
   }
 
   const activateDeepSearch = (): void => {
     const query = parseSearchQuery(valueRef.current).query
     setValue(deepSearchInput(query))
-    setSelectedSearch(0)
-    setFollowSearchSelection(true)
+    setSearchResultNavigationActive(false)
+    setSelectedSearch(-1)
+    setFollowSearchSelection(false)
     showActionMsg(query ? 'Deep Search · searching indexed file contents' : null)
     requestAnimationFrame(() => focusCommandInput())
   }
@@ -2490,6 +2634,10 @@ export default function CommandBar({
       return
     }
 
+    if (isAiPoweredExtensionAction(pendingAction)) {
+      await modelSelectionSaveRef.current
+    }
+
     await executeExtensionCommandViaRuntime({
       extensionId: pendingAction.extensionId,
       commandName: pendingAction.commandName,
@@ -2502,6 +2650,14 @@ export default function CommandBar({
     rank = selectedSearch + 1
   ): Promise<void> {
     rememberCurrentLauncherQuery()
+
+    if (
+      pendingAction &&
+      result.id === `pending:${pendingAction.extensionId}:${pendingAction.commandName}`
+    ) {
+      requestAnimationFrame(() => focusCommandInput())
+      return
+    }
 
     if (
       result.action.type === 'invoke-command' &&
@@ -2631,6 +2787,18 @@ export default function CommandBar({
       return
     }
 
+    if (
+      result.action.type === 'run-native-command' &&
+      result.action.commandId === 'show-system-monitor'
+    ) {
+      clearPendingAction()
+      showActionMsg(null)
+      setValue('')
+      await recordHandledSearchUsage()
+      onOpenSystemMonitor()
+      return
+    }
+
     // The clipboard-history command is a pure UI navigation — we hijack
     // it before it round-trips to main so the launcher flips to the
     // dedicated surface instead of trying to execute a native command.
@@ -2745,10 +2913,18 @@ export default function CommandBar({
           extensionId: result.action.extensionId,
           commandName: result.action.commandName,
           title: result.action.title,
+          subtitle: result.subtitle,
+          iconDataUrl: result.iconDataUrl,
+          iconPath: result.action.iconPath,
           commandArgumentDefinitions: defs,
         })
         setArgumentValues(initialValues)
-        showActionMsg('Fill arguments · Enter to run · Esc to cancel')
+        setSelectedSearch(0)
+        setFollowSearchSelection(true)
+        const usesInlineArgument =
+          defs.length === 1 && defs[0]?.type !== 'dropdown'
+        showActionMsg(usesInlineArgument ? null : 'Fill arguments · Enter to run · Esc to cancel')
+        if (usesInlineArgument) requestAnimationFrame(() => focusCommandInput())
         return
       }
 
@@ -2779,6 +2955,22 @@ export default function CommandBar({
 
   const focusCommandInput = (): void => {
     document.getElementById('command-input')?.focus()
+  }
+
+  const previewSelectedSearchResult = (): void => {
+    if (selectedQuickLookPaths.length === 0 || quickLookPendingRef.current) return
+    quickLookPendingRef.current = true
+    void window.tezbar
+      .quickLookFiles(selectedQuickLookPaths)
+      .then((result) => {
+        if (!result.ok) showActionMsg(result.message)
+      })
+      .catch((error: unknown) => {
+        showActionMsg(error instanceof Error ? error.message : 'Could not preview file')
+      })
+      .finally(() => {
+        quickLookPendingRef.current = false
+      })
   }
 
   const openTerminalSession = (session: TerminalSessionSummary): void => {
@@ -2950,8 +3142,11 @@ export default function CommandBar({
 
   useEffect(() => {
     if (!pendingAction) return
-    requestAnimationFrame(() => argInputRefs.current[0]?.focus())
-  }, [pendingAction])
+    requestAnimationFrame(() => {
+      if (pendingInlineArgument) focusCommandInput()
+      else argInputRefs.current[0]?.focus()
+    })
+  }, [pendingAction, pendingInlineArgument])
 
   useEffect(() => {
     const onGlobalKeyDown = (event: KeyboardEvent): void => {
@@ -3027,7 +3222,7 @@ export default function CommandBar({
     const entry = launcherQueryHistoryEntry(valueRef.current, terminalModeRef.current)
     if (!entry) return
 
-    const history = addLauncherQueryHistoryEntry(launcherQueryHistoryRef.current ?? [], entry)
+    const history = addLauncherQueryHistoryEntry(entry)
     launcherQueryHistoryRef.current = history
     writeLauncherQueryHistory(history)
   }
@@ -3045,6 +3240,10 @@ export default function CommandBar({
       return
     }
     if (pendingAction) {
+      if (pendingInlineArgument) {
+        await submitPendingAction()
+        return
+      }
       const pendingFieldFocused = argInputRefs.current.some((el) => el === document.activeElement)
       if (pendingFieldFocused) {
         if (pendingColorConversionRows.length > 0) {
@@ -3172,10 +3371,43 @@ export default function CommandBar({
     !isAiMode &&
     !terminalMode &&
     visibleSearchCount > 0
+  const canQuickLookSelectedResult =
+    showSearchResults &&
+    (!isDeepSearchMode || searchResultNavigationActive) &&
+    canQuickLookSearchResult(
+      visibleSearchCount,
+      searchResultNavigationActive,
+      selectedQuickLookPath
+    )
   const terminalSelectedIndex =
     selectedSearch >= 0 && selectedSearch < terminalSessionCount ? selectedSearch : -1
 
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLElement>): void => {
+    if (isDeepSearchMode && searchResultNavigationActive && e.key === 'Escape') {
+      e.preventDefault()
+      setSearchResultNavigationActive(false)
+      setFollowSearchSelection(false)
+      setSelectedSearch(-1)
+      requestAnimationFrame(() => focusCommandInput())
+      return
+    }
+
+    if (isDeepSearchMode && searchResultNavigationActive && e.key === 'Enter') {
+      const selected = visibleSearchResults[selectedSearch]
+      if (selected) {
+        e.preventDefault()
+        void runSelectedSearchResult(selected, selectedSearch + 1)
+      }
+      return
+    }
+
+    if (isPlainSpaceKey(e) && canQuickLookSelectedResult) {
+      e.preventDefault()
+      e.stopPropagation()
+      previewSelectedSearchResult()
+      return
+    }
+
     if (isAiMode && (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
       e.preventDefault()
       onOpenAiChat({ kind: 'screen' })
@@ -3277,25 +3509,42 @@ export default function CommandBar({
     }
 
     if (
-      e.key === 'ArrowUp' &&
-      !value &&
       !terminalMode &&
       !pendingAction &&
+      (!isDeepSearchMode || !searchResultNavigationActive) &&
       !e.metaKey &&
       !e.ctrlKey &&
       !e.altKey &&
-      !e.shiftKey
+      !e.shiftKey &&
+      shouldRecallLastLauncherQuery({
+        isDeepSearchMode,
+        key: e.key,
+        selectedResultIndex: selectedSearch,
+        value,
+        visibleResultCount: visibleSearchCount,
+      })
     ) {
-      const previousQuery = launcherQueryHistoryRef.current?.[0]
-      if (previousQuery) {
+      const lastQuery = launcherQueryHistoryRef.current[0]
+      if (lastQuery) {
         e.preventDefault()
-        setValue(previousQuery)
+        setValue(lastQuery)
+        setSearchResultNavigationActive(false)
         setFollowSuggestionSelection(true)
         setSelectedSuggestion(0)
-        setFollowSearchSelection(true)
-        setSelectedSearch(previousQuery.startsWith(' ') ? -1 : 0)
+        const nextDeepSearchMode = parseSearchQuery(lastQuery).mode === 'deep'
+        setFollowSearchSelection(!nextDeepSearchMode)
+        setSelectedSearch(lastQuery.startsWith(' ') || nextDeepSearchMode ? -1 : 0)
         return
       }
+    }
+
+    if (
+      isDeepSearchMode &&
+      !searchResultNavigationActive &&
+      (e.key === 'ArrowUp' || e.key === 'ArrowDown')
+    ) {
+      e.preventDefault()
+      return
     }
 
     if (isCompletionInput && suggestions.length) {
@@ -3365,14 +3614,16 @@ export default function CommandBar({
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.max(i - 1, 0))
       }
-    } else if (visibleSearchCount) {
+    } else if (visibleSearchCount && (!isDeepSearchMode || searchResultNavigationActive)) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
+        setSearchResultNavigationActive(true)
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.min(i + 1, visibleSearchCount - 1))
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault()
+        setSearchResultNavigationActive(true)
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.max(i - 1, 0))
       }
@@ -3386,13 +3637,29 @@ export default function CommandBar({
     if (e.key === 'Tab') {
       if (pendingAction) {
         e.preventDefault()
-        argInputRefs.current[0]?.focus()
+        if (pendingInlineArgument) focusCommandInput()
+        else argInputRefs.current[0]?.focus()
         return
       }
       if (isCompletionInput) {
         e.preventDefault()
         const item = suggestions[selectedSuggestion]
         if (item) completePathInput(item)
+        return
+      }
+      if (isDeepSearchMode) {
+        e.preventDefault()
+        const next = toggleDeepSearchResultNavigation(
+          searchResultNavigationActive,
+          visibleSearchCount
+        )
+        setSearchResultNavigationActive(next.navigationActive)
+        setFollowSearchSelection(next.navigationActive)
+        setSelectedSearch(next.selectedIndex)
+        requestAnimationFrame(() => {
+          if (next.navigationActive) searchResultsNavigationRef.current?.focus()
+          else focusCommandInput()
+        })
         return
       }
       if (showChatHistory) {
@@ -3406,13 +3673,22 @@ export default function CommandBar({
       if (canEnterKillPortMode) {
         e.preventDefault()
         enterKillPortMode()
+        return
+      }
+      if (canEnterInlineArgumentMode && inlineExtensionResult) {
+        e.preventDefault()
+        void runSelectedSearchResult(inlineExtensionResult, selectedSearch + 1)
       }
     }
     // Enter with completion suggestions: let the form `onSubmit` run so
     // one keypress executes the highlighted file or application.
   }
 
-  async function selectAiModel(nextProvider: ProviderId, nextModel: string): Promise<void> {
+  async function selectTaskModel(
+    task: 'chat' | 'action',
+    nextProvider: ProviderId,
+    nextModel: string
+  ): Promise<void> {
     const providerModels = {
       ...cfg.providerModels,
       [nextProvider]: normalizeProviderModelList(
@@ -3425,12 +3701,11 @@ export default function CommandBar({
       [nextProvider]: nextModel,
     }
     const patch: LlmConfigRecord = {
-      provider: nextProvider,
-      model: nextModel,
+      ...(task === 'chat' ? { provider: nextProvider, model: nextModel } : {}),
       providerModels,
       providerSelectedModels,
-      taskProviderOverrides: { ...cfg.taskProviderOverrides, chat: nextProvider },
-      taskModelOverrides: { ...cfg.taskModelOverrides, chat: nextModel },
+      taskProviderOverrides: { ...cfg.taskProviderOverrides, [task]: nextProvider },
+      taskModelOverrides: { ...cfg.taskModelOverrides, [task]: nextModel },
     }
     setCfg((current) => ({ ...current, ...patch }))
     setModelMenuOpen(false)
@@ -3446,6 +3721,17 @@ export default function CommandBar({
     if (modelSelectionSaveRef.current === save) {
       modelSelectionSaveRef.current = null
     }
+  }
+
+  async function selectAiModel(nextProvider: ProviderId, nextModel: string): Promise<void> {
+    await selectTaskModel('chat', nextProvider, nextModel)
+  }
+
+  async function selectExtensionAiModel(
+    nextProvider: ProviderId,
+    nextModel: string
+  ): Promise<void> {
+    await selectTaskModel('action', nextProvider, nextModel)
   }
 
   return (
@@ -3500,13 +3786,23 @@ export default function CommandBar({
                 <PortArgumentChip />
               </>
             ) : null}
+            {pendingInlineArgument ? (
+              <>
+                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1">
+                  {value.trim() || pendingAction?.title}
+                </span>
+                <InlineArgumentChip
+                  label={pendingInlineArgument.title || pendingInlineArgument.name}
+                />
+              </>
+            ) : null}
             <div className="relative min-w-0 flex-1 flex items-center">
               {terminalMode ? (
                 <span className="shrink-0 font-mono text-[13px] text-emerald-300/80 mr-1 select-none pointer-events-none">
                   {terminalPrompt}
                 </span>
               ) : null}
-              {!killPortMode && !isAiMode && !terminalMode && !value ? (
+              {!killPortMode && !pendingInlineArgument && !isAiMode && !terminalMode && !value ? (
                 <RollingText items={COMMAND_HINTS} />
               ) : null}
               {isSlashInput && !isAiMode ? (
@@ -3520,15 +3816,25 @@ export default function CommandBar({
                 id="command-input"
                 type="text"
                 value={
-                  killPortMode
+                  pendingInlineArgument
+                    ? argumentValues[pendingInlineArgument.name] ?? ''
+                    : killPortMode
                     ? killPortValue
                     : isApplicationInput
                       ? slashQuery.slice(1)
                       : isDeepSearchMode
-                        ? parseSearchQuery(value).query
+                        ? value.slice(1)
                         : value
                 }
                 onChange={(e) => {
+                  if (pendingInlineArgument) {
+                    setArgumentValues((current) => ({
+                      ...current,
+                      [pendingInlineArgument.name]: e.target.value,
+                    }))
+                    setSelectedSearch(0)
+                    return
+                  }
                   if (killPortMode) {
                     const nextPort = e.target.value.replace(/[^\d]/g, '').slice(0, 5)
                     killPortValueRef.current = nextPort
@@ -3539,12 +3845,14 @@ export default function CommandBar({
                     clearPendingAction()
                     showActionMsg(null)
                   }
+                  setSearchResultNavigationActive(false)
+                  const currentSearchValue = searchRequestInput(value)
                   // Keep mode sentinels in state for the search backends, but
                   // never render them beside the visible mode badge.
                   let newValue = isApplicationInput
                     ? `\`${e.target.value}`
                     : isDeepSearchMode
-                      ? deepSearchInput(e.target.value)
+                      ? deepSearchDraftInput(e.target.value)
                       : e.target.value
                   let nextTerminalMode = terminalMode
                   if (!terminalMode) {
@@ -3558,61 +3866,84 @@ export default function CommandBar({
                     }
                   }
                   const nextSearchQuery = parseSearchQuery(newValue)
-                  if (
-                    !nextTerminalMode &&
-                    nextSearchQuery.mode === 'deep' &&
-                    nextSearchQuery.query.length >= 3
-                  ) {
-                    setDeepSearchLoadingQuery(nextSearchQuery.query)
-                    setError(null)
-                  } else {
-                    setDeepSearchLoadingQuery(null)
+                  const nextSearchValue = searchRequestInput(newValue)
+                  const searchMeaningChanged = currentSearchValue !== nextSearchValue
+                  if (searchMeaningChanged) {
+                    if (
+                      !nextTerminalMode &&
+                      nextSearchQuery.mode === 'deep' &&
+                      nextSearchQuery.query.length >= 3
+                    ) {
+                      setDeepSearchLoadingQuery(nextSearchQuery.query)
+                      setError(null)
+                    } else {
+                      setDeepSearchLoadingQuery(null)
+                    }
                   }
                   setKillPortArgumentDismissed(false)
-                  if (!nextTerminalMode && newValue.length === 0) {
-                    const homeResults = homeSearchResultsRef.current
-                    if (homeResults.length > 0) setSearchResults(homeResults)
-                  } else if (
-                    !nextTerminalMode &&
-                    nextSearchQuery.mode === 'deep' &&
-                    nextSearchQuery.query
-                  ) {
-                    setSearchResults([])
-                  } else if (
-                    !nextTerminalMode &&
-                    newValue.trim() &&
-                    !newValue.trimStart().startsWith('!') &&
-                    !newValue.startsWith(' ') &&
-                    !newValue.startsWith('/') &&
-                    !newValue.startsWith('`') &&
-                    !newValue.endsWith('  ')
-                  ) {
-                    const normalizedQuery = newValue.trim().toLowerCase()
-                    const cachedEntry = queryResultsCacheRef.current.get(normalizedQuery)
-                    const cachedResults =
-                      cachedEntry && Date.now() - cachedEntry.cachedAt <= QUERY_RESULTS_CACHE_TTL_MS
-                        ? cachedEntry.items
-                        : undefined
-                    if (cachedEntry && !cachedResults) {
-                      queryResultsCacheRef.current.delete(normalizedQuery)
+                  if (searchMeaningChanged) {
+                    if (!nextTerminalMode && newValue.length === 0) {
+                      const homeResults = homeSearchResultsRef.current
+                      if (homeResults.length > 0) setSearchResults(homeResults)
+                    } else if (
+                      !nextTerminalMode &&
+                      nextSearchQuery.mode === 'deep' &&
+                      nextSearchQuery.query
+                    ) {
+                      setSearchResults([])
+                    } else if (
+                      !nextTerminalMode &&
+                      nextSearchValue &&
+                      !newValue.trimStart().startsWith('!') &&
+                      !newValue.startsWith(' ') &&
+                      !newValue.startsWith('/') &&
+                      !newValue.startsWith('`') &&
+                      !newValue.endsWith('  ')
+                    ) {
+                      const normalizedQuery = nextSearchValue.toLowerCase()
+                      const cachedEntry = queryResultsCacheRef.current.get(normalizedQuery)
+                      const cachedResults =
+                        cachedEntry &&
+                        Date.now() - cachedEntry.cachedAt <= QUERY_RESULTS_CACHE_TTL_MS
+                          ? cachedEntry.items
+                          : undefined
+                      if (cachedEntry && !cachedResults) {
+                        queryResultsCacheRef.current.delete(normalizedQuery)
+                      }
+                      const immediateResults =
+                        cachedResults ??
+                        optimisticSearchResults(searchCandidatesRef.current, normalizedQuery)
+                      setSearchResults(immediateResults)
                     }
-                    const immediateResults =
-                      cachedResults ??
-                      optimisticSearchResults(searchCandidatesRef.current, normalizedQuery)
-                    if (immediateResults.length > 0) setSearchResults(immediateResults)
                   }
                   setValue(newValue)
-                  setFollowSuggestionSelection(true)
-                  setSelectedSuggestion(0)
-                  setFollowSearchSelection(true)
-                  setSelectedSearch(
-                    nextTerminalMode || newValue.startsWith(' ') || newValue.endsWith('  ') ? -1 : 0
-                  )
+                  const nextIsAiMode =
+                    !nextTerminalMode &&
+                    nextSearchQuery.mode !== 'deep' &&
+                    (newValue.startsWith(' ') || newValue.endsWith('  '))
+                  if (
+                    searchMeaningChanged ||
+                    nextTerminalMode !== terminalMode ||
+                    nextIsAiMode !== isAiMode
+                  ) {
+                    setFollowSuggestionSelection(true)
+                    setSelectedSuggestion(0)
+                    const nextDeepSearchMode = nextSearchQuery.mode === 'deep'
+                    setSearchResultNavigationActive(false)
+                    setFollowSearchSelection(!nextDeepSearchMode)
+                    setSelectedSearch(
+                      nextTerminalMode || nextIsAiMode || nextDeepSearchMode ? -1 : 0
+                    )
+                  }
                 }}
                 onKeyDown={handleInputKeyDown}
                 aria-label="Search Tezbar or use a shortcut"
                 placeholder={
-                  killPortMode
+                  pendingInlineArgument
+                    ? pendingInlineArgument.placeholder ||
+                      pendingInlineArgument.title ||
+                      pendingInlineArgument.name
+                    : killPortMode
                     ? 'Port'
                     : isAiMode
                       ? 'Ask or command the agent…'
@@ -3639,17 +3970,35 @@ export default function CommandBar({
                 </span>
               </button>
             ) : null}
-            {isAiMode ? (
+            {canEnterInlineArgumentMode && inlineExtensionResult && inlineExtensionArgument ? (
+              <button
+                type="button"
+                aria-label={`Enter ${inlineExtensionArgument.title || inlineExtensionArgument.name}`}
+                className="group inline-flex h-7 shrink-0 items-center gap-2 rounded-tezbar-chip px-1 text-left transition hover:bg-white/[0.035]"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  void runSelectedSearchResult(inlineExtensionResult, selectedSearch + 1)
+                }}
+              >
+                <InlineArgumentChip
+                  label={inlineExtensionArgument.title || inlineExtensionArgument.name}
+                />
+                <span className="min-w-[52px] font-display text-[15px] text-ink-4 transition group-hover:text-ink-3">
+                  {inlineExtensionArgument.title || inlineExtensionArgument.name}
+                </span>
+              </button>
+            ) : null}
+            {isAiMode || pendingActionUsesAi ? (
               <ModelPicker
-                config={cfg}
+                config={pendingActionUsesAi ? actionModelConfig : cfg}
                 open={modelMenuOpen}
                 onOpenChange={setModelMenuOpen}
-                onSelect={selectAiModel}
+                onSelect={pendingActionUsesAi ? selectExtensionAiModel : selectAiModel}
                 onConfigure={onConfigureAi}
                 triggerClassName="font-mono leading-none tabular-nums tracking-normal"
               />
             ) : null}
-            {dictationSupported && !terminalMode ? (
+            {dictationSupported && !terminalMode && !pendingInlineArgument ? (
               <button
                 type="button"
                 className={cx(
@@ -3672,17 +4021,14 @@ export default function CommandBar({
                   startDictation()
                 }}
                 onTouchEnd={stopDictation}
-                title={`Hold to speak — or keep ${pushToTalkShortcut} held after opening Tezbar`}
+                title="Hold to speak"
               >
                 {isDictating ? (
                   'Listening'
                 ) : isTranscribing ? (
                   'Transcribing…'
                 ) : (
-                  <span className="group">
-                    <span className="group-hover:hidden">Hold to speak</span>
-                    <span className="hidden group-hover:inline">hold {pushToTalkShortcut}</span>
-                  </span>
+                  'Hold to speak'
                 )}
               </button>
             ) : null}
@@ -3987,126 +4333,159 @@ export default function CommandBar({
           ) : null}
 
           {/* Pending extension action form */}
-          {pendingAction ? (
+          {pendingAction && !pendingInlineArgument ? (
             <form
               onSubmit={(ev) => {
                 ev.preventDefault()
                 void submitPendingAction()
               }}
-              className="glass-card animate-tezbar-scale-in px-3 py-2.5"
-              style={{
-                boxShadow:
-                  'inset 0 1px 0 rgba(52, 211, 153, 0.12), inset 0 0 0 1px rgba(52, 211, 153, 0.25)',
-              }}
+              className="glass-card relative z-20 animate-tezbar-scale-in p-2"
             >
-              <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-tight text-emerald-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                {pendingAction.title}
-                <span className="text-ink-4">·</span>
-                <span className="font-normal text-ink-3">
-                  {pendingAction.commandArgumentDefinitions.length} field
-                  {pendingAction.commandArgumentDefinitions.length === 1 ? '' : 's'}
-                </span>
-              </p>
-              <div className="space-y-2">
-                {pendingAction.commandArgumentDefinitions.map((arg, index) => {
-                  const fieldType = arg.type === 'dropdown' ? 'dropdown' : 'text'
-                  const label = arg.title || arg.name
-                  const placeholder = arg.placeholder || arg.title || arg.name
-                  const currentValue = argumentValues[arg.name] ?? ''
+              <div className="relative rounded-tezbar-row border border-white/[0.17] bg-white/[0.065] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.055),0_14px_30px_rgba(0,0,0,0.16)]">
+                <span
+                  aria-hidden
+                  className="absolute bottom-3 left-0 top-3 w-[3px] rounded-full bg-emerald-300/85 shadow-[0_0_12px_rgba(110,231,183,0.3)]"
+                />
 
-                  const onKeyDown = (
-                    e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>
-                  ): void => {
-                    if (e.key === 'Escape') {
-                      e.preventDefault()
-                      cancelPendingAction()
-                      return
-                    }
-                    if (e.key === 'Tab') {
-                      e.preventDefault()
-                      const nextIndex = e.shiftKey ? index - 1 : index + 1
-                      if (
-                        nextIndex >= 0 &&
-                        nextIndex < pendingAction.commandArgumentDefinitions.length
-                      ) {
-                        argInputRefs.current[nextIndex]?.focus()
-                      } else {
-                        focusCommandInput()
-                      }
-                      return
-                    }
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      if (pendingColorConversionRows.length > 0) {
-                        const selected =
-                          pendingColorConversionRows[selectedSearch] ??
-                          pendingColorConversionRows[0]
-                        if (selected) {
-                          void runSelectedSearchResult(selected, selectedSearch + 1)
-                          return
-                        }
-                      }
-                      void submitPendingAction()
-                    }
-                  }
-
-                  return (
-                    <div
-                      key={`${pendingAction.commandName}:${arg.name}`}
-                      className="flex items-center gap-3"
-                    >
-                      <span className="w-[88px] shrink-0 text-[11px] font-medium text-ink-3">
-                        {label}
-                        {arg.required ? <span className="text-emerald-400/80"> *</span> : null}
+                <div className="flex min-w-0 items-center gap-3">
+                  <ListItemIcon kind="extensions" iconDataUrl={pendingAction.iconDataUrl} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium text-ink-1">
+                      {pendingAction.title}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11px] text-ink-3">
+                      <span className="text-ink-4">extensions</span>
+                      {pendingAction.subtitle ? (
+                        <>
+                          <span className="mx-1.5 text-ink-4">·</span>
+                          {pendingAction.subtitle}
+                        </>
+                      ) : null}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {pendingActionUsesAi ? (
+                      <span className="inline-flex h-6 items-center gap-1.5 rounded-tezbar-chip border border-violet-300/15 bg-violet-300/[0.07] px-2 text-[9px] font-semibold uppercase tracking-[0.11em] text-violet-200/80">
+                        <span className="h-1.5 w-1.5 rounded-full bg-violet-300/80" />
+                        AI powered
                       </span>
-                      {fieldType === 'dropdown' ? (
-                        <SelectField
-                          ref={(el) => {
-                            argInputRefs.current[index] = el
-                          }}
-                          value={currentValue}
-                          onChange={(e) => {
-                            const next = e.target.value
-                            setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
-                            if (arg.name === pendingColorArgumentName) setSelectedSearch(0)
-                          }}
-                          onKeyDown={onKeyDown}
-                          className="min-w-0 flex-1"
-                        >
-                          <option value="">Select…</option>
-                          {(arg.data || []).map((option) => {
-                            const optionValue = String(option?.value ?? '')
-                            const optionTitle = option?.title || optionValue
-                            return (
-                              <option key={`${arg.name}:${optionValue}`} value={optionValue}>
-                                {optionTitle}
-                              </option>
-                            )
-                          })}
-                        </SelectField>
-                      ) : (
-                        <TextField
-                          ref={(el) => {
-                            argInputRefs.current[index] = el
-                          }}
-                          type={fieldType}
-                          value={currentValue}
-                          onChange={(e) => {
-                            const next = e.target.value
-                            setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
-                            if (arg.name === pendingColorArgumentName) setSelectedSearch(0)
-                          }}
-                          onKeyDown={onKeyDown}
-                          placeholder={placeholder}
-                          autoComplete="off"
-                          spellCheck={false}
-                          className="min-w-0 flex-1"
-                        />
-                      )}
-                    </div>
-                  )
-                })}
+                    ) : null}
+                    <Kbd>↵</Kbd>
+                  </span>
+                </div>
+
+                <div className="mt-3 space-y-2.5 rounded-tezbar-row border border-white/[0.075] bg-black/20 p-3 shadow-[inset_0_1px_8px_rgba(0,0,0,0.18)]">
+                  {pendingAction.commandArgumentDefinitions.map((arg, index) => {
+                    const fieldType = arg.type === 'dropdown' ? 'dropdown' : 'text'
+                    const label = arg.title || arg.name
+                    const placeholder = arg.placeholder || arg.title || arg.name
+                    const currentValue = argumentValues[arg.name] ?? ''
+
+                    const onKeyDown = (
+                      e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>
+                    ): void => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault()
+                        cancelPendingAction()
+                        return
+                      }
+                      if (e.key === 'Tab') {
+                        e.preventDefault()
+                        const nextIndex = e.shiftKey ? index - 1 : index + 1
+                        if (
+                          nextIndex >= 0 &&
+                          nextIndex < pendingAction.commandArgumentDefinitions.length
+                        ) {
+                          argInputRefs.current[nextIndex]?.focus()
+                        } else {
+                          focusCommandInput()
+                        }
+                        return
+                      }
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (pendingColorConversionRows.length > 0) {
+                          const selected =
+                            pendingColorConversionRows[selectedSearch] ??
+                            pendingColorConversionRows[0]
+                          if (selected) {
+                            void runSelectedSearchResult(selected, selectedSearch + 1)
+                            return
+                          }
+                        }
+                        void submitPendingAction()
+                      }
+                    }
+
+                    return (
+                      <label
+                        key={`${pendingAction.commandName}:${arg.name}`}
+                        className="block min-w-0"
+                      >
+                        <span className="mb-1.5 flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[0.13em] text-ink-3">
+                          {label}
+                          {arg.required ? (
+                            <span className="text-emerald-300" aria-label="required">
+                              •
+                            </span>
+                          ) : null}
+                        </span>
+                        {fieldType === 'dropdown' ? (
+                          <SelectField
+                            ref={(el) => {
+                              argInputRefs.current[index] = el
+                            }}
+                            value={currentValue}
+                            onChange={(e) => {
+                              const next = e.target.value
+                              setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
+                              if (arg.name === pendingColorArgumentName) setSelectedSearch(0)
+                            }}
+                            onKeyDown={onKeyDown}
+                            className="h-10 min-w-0 bg-black/25 px-3 text-[13px]"
+                          >
+                            <option value="">Select…</option>
+                            {(arg.data || []).map((option) => {
+                              const optionValue = String(option?.value ?? '')
+                              const optionTitle = option?.title || optionValue
+                              return (
+                                <option key={`${arg.name}:${optionValue}`} value={optionValue}>
+                                  {optionTitle}
+                                </option>
+                              )
+                            })}
+                          </SelectField>
+                        ) : (
+                          <TextField
+                            ref={(el) => {
+                              argInputRefs.current[index] = el
+                            }}
+                            type={fieldType}
+                            value={currentValue}
+                            onChange={(e) => {
+                              const next = e.target.value
+                              setArgumentValues((prev) => ({ ...prev, [arg.name]: next }))
+                              if (arg.name === pendingColorArgumentName) setSelectedSearch(0)
+                            }}
+                            onKeyDown={onKeyDown}
+                            placeholder={placeholder}
+                            autoComplete="off"
+                            spellCheck={false}
+                            className="h-10 min-w-0 bg-black/25 px-3 text-[13px]"
+                          />
+                        )}
+                      </label>
+                    )
+                  })}
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between gap-3 px-0.5 text-[10px] text-ink-4">
+                  <span>Enter to run this command</span>
+                  <span className="flex items-center gap-1.5">
+                    <Kbd>Esc</Kbd>
+                    <span>cancel</span>
+                  </span>
+                </div>
               </div>
             </form>
           ) : null}
@@ -4299,11 +4678,16 @@ export default function CommandBar({
           {/* Search results — grows to fill space below pinned / other chrome */}
           {showSearchResults ? (
             <div
-              className="flex min-h-0 flex-1 flex-col"
+              ref={searchResultsNavigationRef}
+              tabIndex={isDeepSearchMode ? -1 : undefined}
+              role={isDeepSearchMode ? 'region' : undefined}
+              aria-label={isDeepSearchMode ? 'Deep Search results' : undefined}
+              onKeyDown={isDeepSearchMode ? handleInputKeyDown : undefined}
+              className="flex min-h-0 flex-1 flex-col focus:outline-none"
               onWheelCapture={() => setFollowSearchSelection(false)}
               onMouseLeave={() => {
                 setFollowSearchSelection(false)
-                setSelectedSearch(-1)
+                if (!searchResultNavigationActive) setSelectedSearch(-1)
               }}
             >
               <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
@@ -4348,6 +4732,7 @@ export default function CommandBar({
                             updatePinDropIndex(null)
                           }}
                           onMouseMove={() => {
+                            if (!isDeepSearchMode) setSearchResultNavigationActive(false)
                             setFollowSearchSelection(false)
                             setSelectedSearch(i)
                           }}
@@ -4675,6 +5060,15 @@ export default function CommandBar({
                         </>
                       }
                     />
+                    {isDeepSearchMode && showSearchResults ? (
+                      <Hint
+                        label={searchResultNavigationActive ? 'Search input' : 'Results'}
+                        keys={<Kbd>Tab</Kbd>}
+                      />
+                    ) : null}
+                    {canQuickLookSelectedResult ? (
+                      <Hint label="Quick Look" keys={<Kbd>Space</Kbd>} />
+                    ) : null}
                   </>
                 )}
                 {!isCompletionInput ? (

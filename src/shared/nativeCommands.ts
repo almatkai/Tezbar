@@ -15,10 +15,7 @@ export type NativeCommandCategory =
   | 'files'
   | 'productivity'
 
-export type NativeCommandStrategy =
-  | 'applescript'
-  | 'shell'
-  | 'native-helper'
+export type NativeCommandStrategy = 'applescript' | 'shell' | 'native-helper'
 
 export type NativeCommandId =
   // display / appearance
@@ -58,6 +55,7 @@ export type NativeCommandId =
   // dev helpers
   | 'show-macos-version'
   | 'show-cpu-info'
+  | 'show-system-monitor'
   | 'show-memory-info'
   | 'show-disk-usage'
   | 'show-battery-status'

@@ -9,7 +9,7 @@ if (process.platform !== 'darwin') {
   process.exit(0)
 }
 
-for (const helper of ['axhelper', 'screenocr', 'color-picker']) {
+for (const helper of ['axhelper', 'screenocr', 'color-picker', 'image-colors']) {
   const script = join(root, 'native', helper, 'build.sh')
   const result = spawnSync(script, { cwd: root, stdio: 'inherit' })
   if (result.error) throw result.error
