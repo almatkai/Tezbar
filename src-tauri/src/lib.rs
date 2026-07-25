@@ -69,10 +69,16 @@ struct WindowBehaviorState {
     backend_hidden_windows: Mutex<Vec<String>>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 struct PersistedWindowPosition {
     x: f64,
     y: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct MonitorGeometry {
+    bounds: (f64, f64, f64, f64),
+    work_area: (f64, f64, f64, f64),
 }
 
 fn set_backend_app_visibility(app: &AppHandle, visible: bool) {
@@ -549,6 +555,74 @@ fn physical_monitor_work_area(monitor: &Monitor) -> (f64, f64, f64, f64) {
     )
 }
 
+fn monitor_geometry(monitor: &Monitor) -> MonitorGeometry {
+    let position = monitor.position();
+    let size = monitor.size();
+    MonitorGeometry {
+        bounds: (
+            position.x as f64,
+            position.y as f64,
+            size.width as f64,
+            size.height as f64,
+        ),
+        work_area: physical_monitor_work_area(monitor),
+    }
+}
+
+fn position_is_in_bounds(position: PersistedWindowPosition, bounds: (f64, f64, f64, f64)) -> bool {
+    let (x, y, width, height) = bounds;
+    position.x >= x && position.x < x + width && position.y >= y && position.y < y + height
+}
+
+fn clamp_position_to_work_area(
+    position: PersistedWindowPosition,
+    work_area: (f64, f64, f64, f64),
+    window_width: f64,
+    window_height: f64,
+) -> PersistedWindowPosition {
+    let (work_x, work_y, work_width, work_height) = work_area;
+    let max_x = work_x + (work_width - window_width).max(0.0);
+    let max_y = work_y + (work_height - window_height).max(0.0);
+    PersistedWindowPosition {
+        x: position.x.round().clamp(work_x, max_x),
+        y: position.y.round().clamp(work_y, max_y),
+    }
+}
+
+fn plan_window_position(
+    active_monitor: MonitorGeometry,
+    window_width: f64,
+    window_height: f64,
+    saved_for_active_monitor: Option<PersistedWindowPosition>,
+    legacy_saved_position: Option<PersistedWindowPosition>,
+) -> PersistedWindowPosition {
+    if let Some(position) = saved_for_active_monitor {
+        return clamp_position_to_work_area(
+            position,
+            active_monitor.work_area,
+            window_width,
+            window_height,
+        );
+    }
+
+    if let Some(position) = legacy_saved_position {
+        if position_is_in_bounds(position, active_monitor.bounds) {
+            return clamp_position_to_work_area(
+                position,
+                active_monitor.work_area,
+                window_width,
+                window_height,
+            );
+        }
+    }
+
+    let (work_x, work_y, work_width, work_height) = active_monitor.work_area;
+    PersistedWindowPosition {
+        x: work_x + ((work_width - window_width) / 2.0).max(0.0),
+        y: work_y + ((work_height - window_height) / 2.0).max(0.0),
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn cf_type_for_static_key(key: CFStringRef) -> CFType {
     unsafe { CFString::wrap_under_get_rule(key).as_CFType() }
@@ -706,31 +780,6 @@ fn window_size_for_monitor(window: &WebviewWindow, monitor: &Monitor) -> (f64, f
     }
 }
 
-fn clamp_position_to_monitor(
-    position: PersistedWindowPosition,
-    monitor: &Monitor,
-    window_width: f64,
-    window_height: f64,
-) -> PersistedWindowPosition {
-    let (work_x, work_y, work_width, work_height) = physical_monitor_work_area(monitor);
-    let max_x = work_x + (work_width - window_width).max(0.0);
-    let max_y = work_y + (work_height - window_height).max(0.0);
-    PersistedWindowPosition {
-        x: position.x.round().clamp(work_x, max_x),
-        y: position.y.round().clamp(work_y, max_y),
-    }
-}
-
-fn position_is_on_monitor(position: PersistedWindowPosition, monitor: &Monitor) -> bool {
-    let bounds_position = monitor.position();
-    let bounds_size = monitor.size();
-    let x = bounds_position.x as f64;
-    let y = bounds_position.y as f64;
-    let width = bounds_size.width as f64;
-    let height = bounds_size.height as f64;
-    position.x >= x && position.x < x + width && position.y >= y && position.y < y + height
-}
-
 fn persist_window_position_at(window: &WebviewWindow, position: PersistedWindowPosition) {
     let Ok(size) = window.outer_size() else {
         return;
@@ -762,25 +811,6 @@ fn persist_current_window_position(window: &WebviewWindow) {
     );
 }
 
-fn monitor_for_position(
-    window: &WebviewWindow,
-    position: PersistedWindowPosition,
-) -> Option<Monitor> {
-    if let Ok(monitors) = window.available_monitors() {
-        if let Some(monitor) = monitors
-            .into_iter()
-            .find(|monitor| position_is_on_monitor(position, monitor))
-        {
-            return Some(monitor);
-        }
-    }
-
-    window
-        .monitor_from_point(position.x, position.y)
-        .ok()
-        .flatten()
-}
-
 fn set_window_position(
     window: &WebviewWindow,
     position: PersistedWindowPosition,
@@ -797,34 +827,103 @@ fn place_window(window: &WebviewWindow) -> Result<(), String> {
     let monitor = active_monitor(window)?;
     let (window_width, window_height) = window_size_for_monitor(window, &monitor);
     let monitor_keys = monitor_storage_keys(&monitor);
+    let position = plan_window_position(
+        monitor_geometry(&monitor),
+        window_width,
+        window_height,
+        persisted_window_position_for_monitor(&monitor_keys, &monitor),
+        persisted_window_position(&monitor),
+    );
 
-    if let Some(position) = persisted_window_position_for_monitor(&monitor_keys, &monitor) {
-        let position = clamp_position_to_monitor(position, &monitor, window_width, window_height);
-        set_window_position(window, position)?;
-        return Ok(());
-    }
-
-    if let Some(position) = persisted_window_position(&monitor) {
-        let position_monitor =
-            monitor_for_position(window, position).unwrap_or_else(|| monitor.clone());
-        let (position_window_width, position_window_height) =
-            window_size_for_monitor(window, &position_monitor);
-        let position = clamp_position_to_monitor(
-            position,
-            &position_monitor,
-            position_window_width,
-            position_window_height,
-        );
-        set_window_position(window, position)?;
-        return Ok(());
-    }
-
-    let (work_x, work_y, work_width, work_height) = physical_monitor_work_area(&monitor);
-    let x = work_x + ((work_width - window_width) / 2.0).max(0.0);
-    let y = work_y + ((work_height - window_height) / 2.0).max(0.0);
-
-    set_window_position(window, PersistedWindowPosition { x, y })?;
+    set_window_position(window, position)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod window_placement_tests {
+    use super::*;
+
+    #[test]
+    fn missing_active_monitor_position_never_reuses_another_monitors_position() {
+        let external = MonitorGeometry {
+            bounds: (1920.0, -180.0, 2560.0, 1440.0),
+            work_area: (1920.0, -156.0, 2560.0, 1416.0),
+        };
+
+        let position = plan_window_position(
+            external,
+            760.0,
+            640.0,
+            None,
+            Some(PersistedWindowPosition { x: 420.0, y: 180.0 }),
+        );
+
+        assert!(
+            position_is_in_bounds(position, external.bounds),
+            "launcher must be placed on the active external monitor, got {position:?}"
+        );
+        assert_eq!(
+            position,
+            PersistedWindowPosition {
+                x: 2820.0,
+                y: 232.0
+            }
+        );
+    }
+
+    #[test]
+    fn active_monitor_restores_and_clamps_its_own_saved_position() {
+        let external = MonitorGeometry {
+            bounds: (-2560.0, -180.0, 2560.0, 1440.0),
+            work_area: (-2560.0, -156.0, 2560.0, 1416.0),
+        };
+
+        let position = plan_window_position(
+            external,
+            760.0,
+            640.0,
+            Some(PersistedWindowPosition {
+                x: -3000.0,
+                y: -500.0,
+            }),
+            Some(PersistedWindowPosition { x: 420.0, y: 180.0 }),
+        );
+
+        assert_eq!(
+            position,
+            PersistedWindowPosition {
+                x: -2560.0,
+                y: -156.0,
+            }
+        );
+    }
+
+    #[test]
+    fn legacy_position_is_only_reused_when_it_belongs_to_active_monitor() {
+        let active = MonitorGeometry {
+            bounds: (1920.0, 0.0, 2560.0, 1440.0),
+            work_area: (1920.0, 24.0, 2560.0, 1416.0),
+        };
+
+        let position = plan_window_position(
+            active,
+            760.0,
+            640.0,
+            None,
+            Some(PersistedWindowPosition {
+                x: 2400.0,
+                y: 160.0,
+            }),
+        );
+
+        assert_eq!(
+            position,
+            PersistedWindowPosition {
+                x: 2400.0,
+                y: 160.0,
+            }
+        );
+    }
 }
 
 fn schedule_drag_position_persistence(window: WebviewWindow) {
