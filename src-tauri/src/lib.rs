@@ -29,7 +29,8 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{
-    AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, State, WebviewWindow,
+    AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, PhysicalSize, State,
+    WebviewWindow,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tokio::sync::oneshot;
@@ -45,6 +46,11 @@ const TERMINAL_SESSIONS_LEFT_OVERHANG: f64 = 266.0;
 const TERMINAL_SESSIONS_TOP_OFFSET: f64 = 96.0;
 const TERMINAL_SESSIONS_BOTTOM_OFFSET: f64 = 86.0;
 const TERMINAL_SESSIONS_MIN_HEIGHT: f64 = 260.0;
+const SNAP_OVERLAY_LABEL: &str = "window-snap-overlay";
+const SNAP_THRESHOLD: f64 = 32.0;
+const SNAP_RELEASE_THRESHOLD: f64 = 32.0;
+const SNAP_SLOW_SPEED_THRESHOLD: f64 = 420.0;
+const SNAP_DWELL_DURATION: Duration = Duration::from_millis(130);
 const TAURI_WINDOW_POSITION_KEY: &str = "tauriWindowPosition";
 const TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "tauriWindowPositionsByDisplay";
 const LEGACY_WINDOW_POSITION_KEY: &str = "windowPosition";
@@ -67,6 +73,10 @@ struct BackendLaunchConfig {
 struct WindowBehaviorState {
     suppress_blur_hide: Mutex<bool>,
     backend_hidden_windows: Mutex<Vec<String>>,
+    snap_drag_active: Mutex<bool>,
+    snap_locked: Mutex<SnapLockState>,
+    snap_motion: Mutex<SnapMotionState>,
+    snap_drag_generation: Mutex<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
@@ -79,6 +89,60 @@ struct PersistedWindowPosition {
 struct MonitorGeometry {
     bounds: (f64, f64, f64, f64),
     work_area: (f64, f64, f64, f64),
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+struct SnapLockState {
+    x: bool,
+    y: bool,
+}
+
+#[derive(Debug)]
+struct SnapMotionState {
+    generation: u64,
+    last_raw_position: Option<PersistedWindowPosition>,
+    last_raw_at: Option<Instant>,
+    slow_x_since: Option<Instant>,
+    slow_y_since: Option<Instant>,
+    programmatic_position: Option<(PersistedWindowPosition, Instant)>,
+    settle_timer_active: bool,
+    snap_anchor: PersistedWindowPosition,
+    snap_escape: PersistedWindowPosition,
+}
+
+impl Default for SnapMotionState {
+    fn default() -> Self {
+        Self {
+            generation: 0,
+            last_raw_position: None,
+            last_raw_at: None,
+            slow_x_since: None,
+            slow_y_since: None,
+            programmatic_position: None,
+            settle_timer_active: false,
+            snap_anchor: PersistedWindowPosition { x: 0.0, y: 0.0 },
+            snap_escape: PersistedWindowPosition { x: 0.0, y: 0.0 },
+        }
+    }
+}
+
+struct SnapAcquireContext {
+    position: PersistedWindowPosition,
+    window_width: f64,
+    window_height: f64,
+    monitor: MonitorGeometry,
+    locked: SnapLockState,
+    now: Instant,
+    from_timer: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SnapTargetRect {
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
 }
 
 fn set_backend_app_visibility(app: &AppHandle, visible: bool) {
@@ -103,6 +167,99 @@ fn set_backend_app_visibility(app: &AppHandle, visible: bool) {
             hidden.push(label);
             let _ = window.hide();
         }
+    }
+}
+
+fn emit_snap_guides(
+    window: &WebviewWindow,
+    app: &AppHandle,
+    visible: bool,
+    locked: SnapLockState,
+    target_rect: Option<SnapTargetRect>,
+) {
+    let payload = json!({
+        "visible": visible,
+        "snapX": locked.x,
+        "snapY": locked.y,
+        "centered": locked.x && locked.y,
+        "targetRect": target_rect,
+    });
+    let _ = window.emit("window:snap-guides", &payload);
+    if let Some(overlay) = app.get_webview_window(SNAP_OVERLAY_LABEL) {
+        let _ = overlay.emit("window:snap-guides", payload);
+    }
+}
+
+fn ensure_snap_overlay_window(app: &AppHandle) -> Result<WebviewWindow, String> {
+    if let Some(window) = app.get_webview_window(SNAP_OVERLAY_LABEL) {
+        return Ok(window);
+    }
+
+    let builder = tauri::WebviewWindowBuilder::new(
+        app,
+        SNAP_OVERLAY_LABEL,
+        tauri::WebviewUrl::App("index.html?window=snap-overlay".into()),
+    )
+    .title("Tezbar Snap Guides")
+    .resizable(false)
+    .decorations(false)
+    .always_on_top(true)
+    .transparent(true)
+    .skip_taskbar(true)
+    .visible(false)
+    .focusable(false)
+    .shadow(false);
+    let window = builder.build().map_err(|error| error.to_string())?;
+    window
+        .set_ignore_cursor_events(true)
+        .map_err(|error| error.to_string())?;
+    Ok(window)
+}
+
+fn sync_snap_overlay(
+    app: &AppHandle,
+    main_window: &WebviewWindow,
+    monitor: &Monitor,
+    window_width: f64,
+    window_height: f64,
+    locked: SnapLockState,
+) -> Result<(), String> {
+    let overlay = ensure_snap_overlay_window(app)?;
+    let work_area = monitor.work_area();
+    let position = work_area.position;
+    let size = work_area.size;
+    let needs_position_update = overlay
+        .outer_position()
+        .map(|current| current.x != position.x || current.y != position.y)
+        .unwrap_or(true);
+    let needs_size_update = overlay
+        .outer_size()
+        .map(|current| current.width != size.width || current.height != size.height)
+        .unwrap_or(true);
+    if needs_position_update {
+        overlay
+            .set_position(PhysicalPosition::new(position.x, position.y))
+            .map_err(|error| error.to_string())?;
+    }
+    if needs_size_update {
+        overlay
+            .set_size(PhysicalSize::new(size.width, size.height))
+            .map_err(|error| error.to_string())?;
+    }
+    if !overlay.is_visible().unwrap_or(false) {
+        overlay.show().map_err(|error| error.to_string())?;
+    }
+    let target_rect = snap_target_rect(window_width, window_height, monitor_geometry(monitor));
+    emit_snap_guides(main_window, app, true, locked, Some(target_rect));
+    Ok(())
+}
+
+fn hide_snap_overlay(app: &AppHandle, main_window: Option<&WebviewWindow>) {
+    if let Some(overlay) = app.get_webview_window(SNAP_OVERLAY_LABEL) {
+        let _ = overlay.hide();
+    }
+    if let Some(window) = main_window {
+        emit_snap_guides(window, app, false, SnapLockState::default(), None);
     }
 }
 
@@ -623,6 +780,364 @@ fn plan_window_position(
     }
 }
 
+fn snap_axis(
+    window_start: f64,
+    window_extent: f64,
+    target: f64,
+    distance: f64,
+    locked: bool,
+    acquire: bool,
+) -> (f64, bool, bool) {
+    let still_locked = locked && distance <= SNAP_RELEASE_THRESHOLD;
+    let should_lock = !locked && acquire && distance <= SNAP_THRESHOLD;
+    if !still_locked && !should_lock {
+        return (window_start, false, false);
+    }
+    (target - window_extent / 2.0, true, true)
+}
+
+fn snap_window_position(
+    position: PersistedWindowPosition,
+    window_width: f64,
+    window_height: f64,
+    monitor: MonitorGeometry,
+    locked: SnapLockState,
+    acquire: SnapLockState,
+) -> (PersistedWindowPosition, SnapLockState, bool) {
+    let (work_x, work_y, work_width, work_height) = monitor.work_area;
+    let window_center_x = position.x + window_width / 2.0;
+    let window_center_y = position.y + window_height / 2.0;
+    let monitor_center_x = work_x + work_width / 2.0;
+    let monitor_center_y = work_y + work_height / 2.0;
+    let dx = (window_center_x - monitor_center_x).abs();
+    let dy = (window_center_y - monitor_center_y).abs();
+    let (x, x_locked, x_active) = snap_axis(
+        position.x,
+        window_width,
+        monitor_center_x,
+        dx,
+        locked.x,
+        acquire.x,
+    );
+    let (y, y_locked, y_active) = snap_axis(
+        position.y,
+        window_height,
+        monitor_center_y,
+        dy,
+        locked.y,
+        acquire.y,
+    );
+
+    (
+        PersistedWindowPosition { x, y },
+        SnapLockState {
+            x: x_locked,
+            y: y_locked,
+        },
+        x_active || y_active,
+    )
+}
+
+fn snap_target_rect(
+    window_width: f64,
+    window_height: f64,
+    monitor: MonitorGeometry,
+) -> SnapTargetRect {
+    let (work_x, work_y, work_width, work_height) = monitor.work_area;
+    let target_x = work_x + (work_width - window_width) / 2.0;
+    let target_y = work_y + (work_height - window_height) / 2.0;
+    SnapTargetRect {
+        left: ((target_x - work_x) / work_width * 100.0).clamp(0.0, 100.0),
+        top: ((target_y - work_y) / work_height * 100.0).clamp(0.0, 100.0),
+        right: ((target_x + window_width - work_x) / work_width * 100.0).clamp(0.0, 100.0),
+        bottom: ((target_y + window_height - work_y) / work_height * 100.0).clamp(0.0, 100.0),
+    }
+}
+
+fn monitor_for_position(
+    window: &WebviewWindow,
+    position: PersistedWindowPosition,
+    window_width: f64,
+    window_height: f64,
+) -> Result<Monitor, String> {
+    let center_x = position.x + window_width / 2.0;
+    let center_y = position.y + window_height / 2.0;
+    window
+        .monitor_from_point(center_x, center_y)
+        .map_err(|error| error.to_string())?
+        .or_else(|| window.current_monitor().ok().flatten())
+        .or_else(|| window.primary_monitor().ok().flatten())
+        .ok_or_else(|| "No monitor found for window".to_string())
+}
+
+fn monitor_for_window(window: &WebviewWindow) -> Result<Monitor, String> {
+    let position = window.outer_position().map_err(|error| error.to_string())?;
+    let size = window.outer_size().map_err(|error| error.to_string())?;
+    monitor_for_position(
+        window,
+        PersistedWindowPosition {
+            x: position.x as f64,
+            y: position.y as f64,
+        },
+        size.width as f64,
+        size.height as f64,
+    )
+}
+
+fn update_snap_candidate(
+    since: &mut Option<Instant>,
+    eligible: bool,
+    now: Instant,
+) -> (bool, bool) {
+    if !eligible {
+        *since = None;
+        return (false, false);
+    }
+    let started = since.is_none();
+    let started_at = *since.get_or_insert(now);
+    (
+        now.duration_since(started_at) >= SNAP_DWELL_DURATION,
+        started,
+    )
+}
+
+fn snap_acquire_state(
+    motion: &mut SnapMotionState,
+    context: SnapAcquireContext,
+) -> (SnapLockState, bool, bool) {
+    let SnapAcquireContext {
+        position,
+        window_width,
+        window_height,
+        monitor,
+        locked,
+        now,
+        from_timer,
+    } = context;
+    let speed = if from_timer {
+        0.0
+    } else {
+        match (motion.last_raw_position, motion.last_raw_at) {
+            (Some(previous), Some(previous_at)) => {
+                let elapsed = now.duration_since(previous_at).as_secs_f64();
+                if elapsed > 0.0 {
+                    ((position.x - previous.x).hypot(position.y - previous.y)) / elapsed
+                } else {
+                    f64::INFINITY
+                }
+            }
+            _ => f64::INFINITY,
+        }
+    };
+    if !from_timer {
+        motion.last_raw_position = Some(position);
+        motion.last_raw_at = Some(now);
+    }
+
+    let (work_x, work_y, work_width, work_height) = monitor.work_area;
+    let dx = (position.x + window_width / 2.0 - (work_x + work_width / 2.0)).abs();
+    let dy = (position.y + window_height / 2.0 - (work_y + work_height / 2.0)).abs();
+    let stationary = from_timer
+        && motion
+            .last_raw_at
+            .map(|last| now.duration_since(last) >= SNAP_DWELL_DURATION)
+            .unwrap_or(false);
+    let moving_slowly = speed <= SNAP_SLOW_SPEED_THRESHOLD || stationary;
+    let near_x = !locked.x && dx <= SNAP_THRESHOLD;
+    let near_y = !locked.y && dy <= SNAP_THRESHOLD;
+    let should_schedule_timer = if from_timer {
+        motion.settle_timer_active = false;
+        false
+    } else if (near_x || near_y) && !motion.settle_timer_active {
+        motion.settle_timer_active = true;
+        true
+    } else {
+        false
+    };
+    if stationary {
+        if near_x && motion.slow_x_since.is_none() {
+            motion.slow_x_since = Some(now - SNAP_DWELL_DURATION);
+        }
+        if near_y && motion.slow_y_since.is_none() {
+            motion.slow_y_since = Some(now - SNAP_DWELL_DURATION);
+        }
+    }
+    let x_eligible = !locked.x
+        && near_x
+        && moving_slowly
+        && (!from_timer || motion.slow_x_since.is_some() || stationary);
+    let y_eligible = !locked.y
+        && near_y
+        && moving_slowly
+        && (!from_timer || motion.slow_y_since.is_some() || stationary);
+    let (acquire_x, started_x) = update_snap_candidate(&mut motion.slow_x_since, x_eligible, now);
+    let (acquire_y, started_y) = update_snap_candidate(&mut motion.slow_y_since, y_eligible, now);
+
+    (
+        SnapLockState {
+            x: acquire_x,
+            y: acquire_y,
+        },
+        started_x || started_y,
+        should_schedule_timer,
+    )
+}
+
+fn update_window_snap_state(
+    window: &WebviewWindow,
+    app: &AppHandle,
+    state: &WindowBehaviorState,
+    raw_position: PersistedWindowPosition,
+    from_timer: bool,
+) -> Result<bool, String> {
+    if !*state.snap_drag_active.lock().unwrap() {
+        return Ok(false);
+    }
+
+    let now = Instant::now();
+    if !from_timer {
+        let mut motion = state.snap_motion.lock().unwrap();
+        if let Some((programmatic, set_at)) = motion.programmatic_position {
+            if now.duration_since(set_at) <= Duration::from_millis(100)
+                && (raw_position.x - programmatic.x).abs() <= 1.0
+                && (raw_position.y - programmatic.y).abs() <= 1.0
+            {
+                motion.programmatic_position = None;
+                return Ok(false);
+            }
+            if now.duration_since(set_at) > Duration::from_millis(100) {
+                motion.programmatic_position = None;
+            }
+        }
+    }
+
+    let size = window.outer_size().map_err(|error| error.to_string())?;
+    let window_width = size.width as f64;
+    let window_height = size.height as f64;
+    let monitor = monitor_for_position(window, raw_position, window_width, window_height)?;
+    let monitor_geometry = monitor_geometry(&monitor);
+    let locked = *state.snap_locked.lock().unwrap();
+    let (acquire, started_candidate, should_schedule_timer, previous_raw_position) = {
+        let mut motion = state.snap_motion.lock().unwrap();
+        let previous_raw_position = motion.last_raw_position;
+        let (acquire, started_candidate, should_schedule_timer) = snap_acquire_state(
+            &mut motion,
+            SnapAcquireContext {
+                position: raw_position,
+                window_width,
+                window_height,
+                monitor: monitor_geometry,
+                locked,
+                now,
+                from_timer,
+            },
+        );
+        (
+            acquire,
+            started_candidate,
+            should_schedule_timer,
+            previous_raw_position,
+        )
+    };
+    let (snapped_position, snapped_locked, _active) = snap_window_position(
+        raw_position,
+        window_width,
+        window_height,
+        monitor_geometry,
+        locked,
+        acquire,
+    );
+    let mut next_position = snapped_position;
+    let mut next_locked = snapped_locked;
+    {
+        let mut motion = state.snap_motion.lock().unwrap();
+        if locked.x {
+            if let Some(previous_raw_position) = previous_raw_position {
+                motion.snap_escape.x += raw_position.x - previous_raw_position.x;
+            }
+        } else {
+            motion.snap_escape.x = 0.0;
+        }
+        if locked.y {
+            if let Some(previous_raw_position) = previous_raw_position {
+                motion.snap_escape.y += raw_position.y - previous_raw_position.y;
+            }
+        } else {
+            motion.snap_escape.y = 0.0;
+        }
+        if !locked.x && snapped_locked.x {
+            motion.snap_anchor.x = snapped_position.x;
+            motion.snap_escape.x = 0.0;
+        }
+        if !locked.y && snapped_locked.y {
+            motion.snap_anchor.y = snapped_position.y;
+            motion.snap_escape.y = 0.0;
+        }
+        if locked.x && motion.snap_escape.x.abs() >= SNAP_RELEASE_THRESHOLD {
+            next_locked.x = false;
+            next_position.x = motion.snap_anchor.x + motion.snap_escape.x;
+            motion.snap_escape.x = 0.0;
+        }
+        if locked.y && motion.snap_escape.y.abs() >= SNAP_RELEASE_THRESHOLD {
+            next_locked.y = false;
+            next_position.y = motion.snap_anchor.y + motion.snap_escape.y;
+            motion.snap_escape.y = 0.0;
+        }
+        if next_locked.x {
+            motion.slow_x_since = None;
+        } else {
+            motion.snap_escape.x = 0.0;
+        }
+        if next_locked.y {
+            motion.slow_y_since = None;
+        } else {
+            motion.snap_escape.y = 0.0;
+        }
+    }
+    *state.snap_locked.lock().unwrap() = next_locked;
+
+    if next_position != raw_position {
+        state.snap_motion.lock().unwrap().programmatic_position = Some((
+            PersistedWindowPosition {
+                x: next_position.x.round(),
+                y: next_position.y.round(),
+            },
+            now,
+        ));
+        set_window_position(window, next_position)?;
+    }
+    sync_snap_overlay(
+        app,
+        window,
+        &monitor,
+        window_width,
+        window_height,
+        next_locked,
+    )?;
+    Ok(started_candidate || should_schedule_timer)
+}
+
+fn schedule_snap_dwell(window: WebviewWindow, generation: u64) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(SNAP_DWELL_DURATION).await;
+        let app = window.app_handle().clone();
+        let state = app.state::<WindowBehaviorState>();
+        if !*state.snap_drag_active.lock().unwrap() {
+            return;
+        }
+        if state.snap_motion.lock().unwrap().generation != generation {
+            return;
+        }
+        let raw_position = state.snap_motion.lock().unwrap().last_raw_position;
+        if let Some(raw_position) = raw_position {
+            if let Err(error) = update_window_snap_state(&window, &app, &state, raw_position, true)
+            {
+                log::debug!("delayed window snap update failed: {error}");
+            }
+        }
+    });
+}
+
 #[cfg(target_os = "macos")]
 fn cf_type_for_static_key(key: CFStringRef) -> CFType {
     unsafe { CFString::wrap_under_get_rule(key).as_CFType() }
@@ -924,6 +1439,160 @@ mod window_placement_tests {
             }
         );
     }
+
+    #[test]
+    fn window_snaps_to_monitor_center_when_both_axes_are_near() {
+        let monitor = MonitorGeometry {
+            bounds: (0.0, 0.0, 1920.0, 1080.0),
+            work_area: (0.0, 24.0, 1920.0, 1056.0),
+        };
+        let (position, locked, active) = snap_window_position(
+            PersistedWindowPosition { x: 572.0, y: 208.0 },
+            760.0,
+            640.0,
+            monitor,
+            SnapLockState::default(),
+            SnapLockState { x: true, y: true },
+        );
+
+        assert_eq!(position, PersistedWindowPosition { x: 580.0, y: 232.0 });
+        assert!(locked.x);
+        assert!(locked.y);
+        assert!(active);
+    }
+
+    #[test]
+    fn window_snaps_each_axis_independently() {
+        let monitor = MonitorGeometry {
+            bounds: (0.0, 0.0, 1920.0, 1080.0),
+            work_area: (0.0, 24.0, 1920.0, 1056.0),
+        };
+        let (position, locked, active) = snap_window_position(
+            PersistedWindowPosition { x: 572.0, y: 320.0 },
+            760.0,
+            640.0,
+            monitor,
+            SnapLockState::default(),
+            SnapLockState { x: true, y: true },
+        );
+
+        assert_eq!(position.x, 580.0);
+        assert_eq!(position.y, 320.0);
+        assert!(locked.x);
+        assert!(!locked.y);
+        assert!(active);
+    }
+
+    #[test]
+    fn window_snap_waits_for_a_slow_dwell_before_acquiring() {
+        let monitor = MonitorGeometry {
+            bounds: (0.0, 0.0, 1920.0, 1080.0),
+            work_area: (0.0, 24.0, 1920.0, 1056.0),
+        };
+        let position = PersistedWindowPosition { x: 580.0, y: 320.0 };
+        let now = Instant::now();
+        let mut motion = SnapMotionState {
+            last_raw_position: Some(position),
+            last_raw_at: Some(now),
+            ..SnapMotionState::default()
+        };
+
+        let (acquire, started, _) = snap_acquire_state(
+            &mut motion,
+            SnapAcquireContext {
+                position,
+                window_width: 760.0,
+                window_height: 640.0,
+                monitor,
+                locked: SnapLockState::default(),
+                now: now + Duration::from_millis(1),
+                from_timer: false,
+            },
+        );
+        assert!(started);
+        assert!(!acquire.x);
+
+        let (acquire, _, _) = snap_acquire_state(
+            &mut motion,
+            SnapAcquireContext {
+                position,
+                window_width: 760.0,
+                window_height: 640.0,
+                monitor,
+                locked: SnapLockState::default(),
+                now: now + SNAP_DWELL_DURATION + Duration::from_millis(1),
+                from_timer: true,
+            },
+        );
+        assert!(acquire.x);
+    }
+
+    #[test]
+    fn window_does_not_snap_just_outside_the_soft_capture_radius() {
+        let monitor = MonitorGeometry {
+            bounds: (0.0, 0.0, 1920.0, 1080.0),
+            work_area: (0.0, 24.0, 1920.0, 1056.0),
+        };
+        let (position, locked, active) = snap_window_position(
+            PersistedWindowPosition { x: 616.0, y: 268.0 },
+            760.0,
+            640.0,
+            monitor,
+            SnapLockState::default(),
+            SnapLockState { x: true, y: true },
+        );
+
+        assert_eq!(position, PersistedWindowPosition { x: 616.0, y: 268.0 });
+        assert!(!locked.x);
+        assert!(!locked.y);
+        assert!(!active);
+    }
+
+    #[test]
+    fn snap_guides_describe_a_fixed_centered_target_frame() {
+        let monitor = MonitorGeometry {
+            bounds: (-1920.0, 0.0, 1920.0, 1080.0),
+            work_area: (-1920.0, 24.0, 1920.0, 1056.0),
+        };
+        let target = snap_target_rect(760.0, 640.0, monitor);
+
+        assert!((target.left - 30.208_333).abs() < 0.000_01);
+        assert!((target.right - 69.791_667).abs() < 0.000_01);
+        assert!((target.top - 19.696_970).abs() < 0.000_01);
+        assert!((target.bottom - 80.303_030).abs() < 0.000_01);
+    }
+
+    #[test]
+    fn window_snap_uses_hysteresis_before_releasing() {
+        let monitor = MonitorGeometry {
+            bounds: (0.0, 0.0, 1920.0, 1080.0),
+            work_area: (0.0, 24.0, 1920.0, 1056.0),
+        };
+
+        let (_, locked, active) = snap_window_position(
+            PersistedWindowPosition { x: 600.0, y: 250.0 },
+            760.0,
+            640.0,
+            monitor,
+            SnapLockState { x: true, y: true },
+            SnapLockState::default(),
+        );
+        assert!(locked.x);
+        assert!(locked.y);
+        assert!(active);
+
+        let (_, locked, active) = snap_window_position(
+            PersistedWindowPosition { x: 700.0, y: 340.0 },
+            760.0,
+            640.0,
+            monitor,
+            SnapLockState { x: true, y: true },
+            SnapLockState::default(),
+        );
+        assert!(!locked.x);
+        assert!(!locked.y);
+        assert!(!active);
+    }
 }
 
 fn schedule_drag_position_persistence(window: WebviewWindow) {
@@ -1121,11 +1790,47 @@ fn quit_app(app: AppHandle) {
 #[tauri::command]
 fn start_window_snap_drag(
     window: WebviewWindow,
+    app: AppHandle,
     state: State<'_, WindowBehaviorState>,
 ) -> Result<(), String> {
     *state.suppress_blur_hide.lock().unwrap() = true;
+    *state.snap_drag_active.lock().unwrap() = true;
+    *state.snap_locked.lock().unwrap() = SnapLockState::default();
+    let generation = {
+        let mut generation = state.snap_drag_generation.lock().unwrap();
+        *generation = generation.wrapping_add(1);
+        *generation
+    };
+    let initial_position = window.outer_position().map_err(|error| error.to_string())?;
+    *state.snap_motion.lock().unwrap() = SnapMotionState {
+        generation,
+        last_raw_position: Some(PersistedWindowPosition {
+            x: initial_position.x as f64,
+            y: initial_position.y as f64,
+        }),
+        last_raw_at: Some(Instant::now()),
+        ..SnapMotionState::default()
+    };
+    if let Ok(monitor) = monitor_for_window(&window) {
+        if let Ok(size) = window.outer_size() {
+            if let Err(error) = sync_snap_overlay(
+                &app,
+                &window,
+                &monitor,
+                size.width as f64,
+                size.height as f64,
+                SnapLockState::default(),
+            ) {
+                log::warn!("failed to show snap overlay: {error}");
+            }
+        }
+    }
     if let Err(error) = window.start_dragging() {
         *state.suppress_blur_hide.lock().unwrap() = false;
+        *state.snap_drag_active.lock().unwrap() = false;
+        *state.snap_locked.lock().unwrap() = SnapLockState::default();
+        *state.snap_motion.lock().unwrap() = SnapMotionState::default();
+        hide_snap_overlay(&app, Some(&window));
         return Err(error.to_string());
     }
     schedule_drag_position_persistence(window);
@@ -1133,8 +1838,16 @@ fn start_window_snap_drag(
 }
 
 #[tauri::command]
-fn end_window_snap_drag(window: WebviewWindow, state: State<'_, WindowBehaviorState>) {
+fn end_window_snap_drag(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, WindowBehaviorState>,
+) {
     persist_current_window_position(&window);
+    *state.snap_drag_active.lock().unwrap() = false;
+    *state.snap_locked.lock().unwrap() = SnapLockState::default();
+    *state.snap_motion.lock().unwrap() = SnapMotionState::default();
+    hide_snap_overlay(&app, Some(&window));
     *state.suppress_blur_hide.lock().unwrap() = false;
 }
 
@@ -1358,13 +2071,30 @@ pub fn run() {
             match event {
                 tauri::WindowEvent::Moved(position) => {
                     if let Some(main_window) = window.app_handle().get_webview_window("main") {
-                        persist_window_position_at(
-                            &main_window,
-                            PersistedWindowPosition {
+                        let state = main_window.state::<WindowBehaviorState>();
+                        if *state.snap_drag_active.lock().unwrap() {
+                            let raw_position = PersistedWindowPosition {
                                 x: position.x as f64,
                                 y: position.y as f64,
-                            },
-                        );
+                            };
+                            match update_window_snap_state(
+                                &main_window,
+                                window.app_handle(),
+                                &state,
+                                raw_position,
+                                false,
+                            ) {
+                                Ok(true) => {
+                                    let generation = state.snap_motion.lock().unwrap().generation;
+                                    schedule_snap_dwell(main_window.clone(), generation);
+                                }
+                                Ok(false) => {}
+                                Err(error) => {
+                                    log::debug!("window snap update failed: {error}");
+                                }
+                            }
+                        }
+                        persist_current_window_position(&main_window);
                         let _ = sync_terminal_sessions_window(window.app_handle());
                     }
                 }

@@ -519,9 +519,14 @@ export function readClipboardImagePayload(id: string): ClipboardImagePayload | n
 
 let watcherHandle: ReturnType<typeof setInterval> | null = null
 let watcherInactiveTicks = 0
-const WATCHER_DEFAULT_INTERVAL_MS = 750
-const WATCHER_IDLE_INTERVAL_MS = 2000
-const WATCHER_IDLE_THRESHOLD_TICKS = 60
+// Clipboard polling invokes a native process on every tick (pbpaste on macOS
+// and PowerShell on Windows). A 750ms cadence kept the history feeling
+// responsive, but it also created needless background CPU/process churn while
+// the app was idle. Two checks per three seconds are still fast enough for a
+// clipboard history tool and materially reduce that idle overhead.
+const WATCHER_DEFAULT_INTERVAL_MS = 1_500
+const WATCHER_IDLE_INTERVAL_MS = 5_000
+const WATCHER_IDLE_THRESHOLD_TICKS = 12
 
 /** Start polling the pasteboard when the user has enabled clipboard history.
  *  macOS doesn't expose a clipboard-change event, so polling is pragmatic.

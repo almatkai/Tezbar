@@ -19,14 +19,15 @@ import {
   providerTitle,
   recommendedModel,
 } from '../shared/aiProviders'
-import type {
-  AiModelCapability,
-  AiProviderConfig,
-  AiProviderModel,
-  CustomAiProvider,
-  LlmConfigRecord,
-  LlmTask,
-  ProviderId,
+import {
+  DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS,
+  type AiModelCapability,
+  type AiProviderConfig,
+  type AiProviderModel,
+  type CustomAiProvider,
+  type LlmConfigRecord,
+  type LlmTask,
+  type ProviderId,
 } from '../shared/llmConfig'
 import type { VoiceModel, VoiceModelId } from '../shared/voice'
 import type {
@@ -49,6 +50,11 @@ import { CurrencySettings } from './CurrencySettings'
 import ExtensionsSettingsTab from './ExtensionsSettingsTab'
 
 type SettingsTab = 'general' | 'ai' | 'voice' | 'knowledge' | 'extensions' | 'permissions' | 'storage' | 'advanced'
+
+type ModeTimeoutField =
+  | 'extensionRuntimeTimeoutMs'
+  | 'aiModeTimeoutMs'
+  | 'terminalModeTimeoutMs'
 
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'general', label: 'General', icon: 'gear' },
@@ -297,6 +303,31 @@ function SettingsRow({
 
 function Divider(): JSX.Element {
   return <div className="-mx-5 border-t border-white/[0.07]" />
+}
+
+function TimeoutSelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string
+  value: string
+  onChange: (value: string) => void
+}): JSX.Element {
+  return (
+    <select
+      id={id}
+      aria-label={`${id} timeout`}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="glass-field h-9 min-w-[180px] px-3 text-[12.5px]"
+    >
+      <option value="5">After 5 minutes</option>
+      <option value="10">After 10 minutes</option>
+      <option value="30">After 30 minutes</option>
+      <option value="0">Never</option>
+    </select>
+  )
 }
 
 const FALLBACK_VOICE_MODELS: VoiceModel[] = [
@@ -570,6 +601,10 @@ export default function SettingsView({
 }): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const [retentionSec, setRetentionSec] = useState('60')
+  const [extensionRuntimeTimeoutMinutes, setExtensionRuntimeTimeoutMinutes] = useState('5')
+  const [aiModeTimeoutMinutes, setAiModeTimeoutMinutes] = useState('5')
+  const [terminalModeTimeoutMinutes, setTerminalModeTimeoutMinutes] = useState('5')
+  const [timeoutMsg, setTimeoutMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [memoryMaxItems, setMemoryMaxItems] = useState('3')
   const [actionPermissionRequired, setActionPermissionRequired] = useState(true)
@@ -700,6 +735,23 @@ export default function SettingsView({
     const configuredProviders = c.customProviders ?? []
     const ms = typeof c.uiStateRetentionMs === 'number' ? c.uiStateRetentionMs : 60_000
     setRetentionSec(String(Math.max(0, Math.round(ms / 1000))))
+    const extensionTimeoutMs =
+      typeof c.extensionRuntimeTimeoutMs === 'number'
+        ? c.extensionRuntimeTimeoutMs
+        : DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS
+    setExtensionRuntimeTimeoutMinutes(
+      extensionTimeoutMs === 0 ? '0' : String(Math.max(1, Math.round(extensionTimeoutMs / 60_000)))
+    )
+    const aiTimeoutMs =
+      typeof c.aiModeTimeoutMs === 'number' ? c.aiModeTimeoutMs : DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS
+    setAiModeTimeoutMinutes(aiTimeoutMs === 0 ? '0' : String(Math.max(1, Math.round(aiTimeoutMs / 60_000))))
+    const terminalTimeoutMs =
+      typeof c.terminalModeTimeoutMs === 'number'
+        ? c.terminalModeTimeoutMs
+        : DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS
+    setTerminalModeTimeoutMinutes(
+      terminalTimeoutMs === 0 ? '0' : String(Math.max(1, Math.round(terminalTimeoutMs / 60_000)))
+    )
     setMemoryEnabled(c.memoryEnabled !== false)
     setMemoryMaxItems(String(Math.max(0, Math.round(c.memoryMaxItems ?? 3))))
     setActionPermissionRequired(c.aiActionRequirePermission !== false)
@@ -1104,6 +1156,19 @@ export default function SettingsView({
       .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
   }
 
+  const saveModeTimeout = (field: ModeTimeoutField, minutesValue: string, label: string): void => {
+    const minutes = Number(minutesValue)
+    if (!Number.isFinite(minutes) || minutes < 0) {
+      setTimeoutMsg({ tone: 'error', text: `Choose a valid ${label.toLowerCase()} timeout.` })
+      return
+    }
+
+    void window.tezbar
+      .setLlmConfig({ [field]: Math.round(minutes * 60_000) })
+      .then(() => setTimeoutMsg({ tone: 'success', text: `${label} timeout saved.` }))
+      .catch(() => setTimeoutMsg({ tone: 'error', text: `Could not save ${label.toLowerCase()} timeout.` }))
+  }
+
   const renderVoiceModels = (): JSX.Element => (
     <ul className="space-y-2">
       {voiceModels.map((model) => {
@@ -1359,6 +1424,85 @@ export default function SettingsView({
                   </div>
                 ) : null}
               </SettingsRow>
+              <Divider />
+              <SettingsRow
+                label="Extension Return"
+                detail="Return to the main CommandBar after this much inactivity inside an extension. Choose Never to stay in the extension until you leave it yourself."
+              >
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <FieldLabel htmlFor="extension-runtime-timeout" className="sr-only">
+                    Extension inactivity timeout
+                  </FieldLabel>
+                  <TimeoutSelect
+                    id="extension-runtime-timeout"
+                    value={extensionRuntimeTimeoutMinutes}
+                    onChange={setExtensionRuntimeTimeoutMinutes}
+                  />
+                  <Button
+                    variant="primary"
+                    onClick={() =>
+                      saveModeTimeout(
+                        'extensionRuntimeTimeoutMs',
+                        extensionRuntimeTimeoutMinutes,
+                        'Extension'
+                      )
+                    }
+                  >
+                    Save
+                  </Button>
+                </div>
+              </SettingsRow>
+              <Divider />
+              <SettingsRow
+                label="AI Return"
+                detail="Return from AI mode to the main CommandBar after this much inactivity. This timer is independent from Extension and Terminal."
+              >
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <FieldLabel htmlFor="ai-mode-timeout" className="sr-only">
+                    AI mode inactivity timeout
+                  </FieldLabel>
+                  <TimeoutSelect
+                    id="ai-mode-timeout"
+                    value={aiModeTimeoutMinutes}
+                    onChange={setAiModeTimeoutMinutes}
+                  />
+                  <Button
+                    variant="primary"
+                    onClick={() => saveModeTimeout('aiModeTimeoutMs', aiModeTimeoutMinutes, 'AI')}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </SettingsRow>
+              <Divider />
+              <SettingsRow
+                label="Terminal Return"
+                detail="Return from Terminal mode to the main CommandBar after this much inactivity. This timer is independent from Extension and AI."
+              >
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <FieldLabel htmlFor="terminal-mode-timeout" className="sr-only">
+                    Terminal mode inactivity timeout
+                  </FieldLabel>
+                  <TimeoutSelect
+                    id="terminal-mode-timeout"
+                    value={terminalModeTimeoutMinutes}
+                    onChange={setTerminalModeTimeoutMinutes}
+                  />
+                  <Button
+                    variant="primary"
+                    onClick={() =>
+                      saveModeTimeout('terminalModeTimeoutMs', terminalModeTimeoutMinutes, 'Terminal')
+                    }
+                  >
+                    Save
+                  </Button>
+                </div>
+              </SettingsRow>
+              {timeoutMsg ? (
+                <div className="mt-2">
+                  <Message tone={timeoutMsg.tone}>{timeoutMsg.text}</Message>
+                </div>
+              ) : null}
               <Divider />
               <SettingsRow label="Appearance">
                 <div className="flex gap-3">

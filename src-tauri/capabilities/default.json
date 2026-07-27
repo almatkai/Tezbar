@@ -5,7 +5,8 @@
   "windows": [
     "main",
     "settings",
-    "terminal-sessions"
+    "terminal-sessions",
+    "window-snap-overlay"
   ],
   "permissions": [
     "core:default"

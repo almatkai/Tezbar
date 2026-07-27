@@ -221,7 +221,13 @@ export type RaymesApi = {
   startWindowSnapDrag: () => Promise<void>
   endWindowSnapDrag: () => Promise<void>
   onWindowSnapGuides: (
-    listener: (payload: { visible: boolean; active: boolean }) => void
+    listener: (payload: {
+      visible: boolean
+      snapX: boolean
+      snapY: boolean
+      centered: boolean
+      targetRect: { left: number; top: number; right: number; bottom: number } | null
+    }) => void
   ) => () => void
   getPermissions: () => Promise<PermissionsSnapshot>
   requestPermission: (id: PermissionId) => Promise<PermissionStatus>

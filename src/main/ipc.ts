@@ -18,6 +18,7 @@ import {
   type AgentInputImage,
   type AgentRunEvent,
   type AgentRunRequest,
+  type AgentTimelineItem,
   type Stage,
 } from '../shared/agent'
 import { CHAT_CONTEXT_MAX_TURNS, CHAT_IPC, type ChatSession, type ChatTurn } from '../shared/chat'
@@ -64,6 +65,8 @@ import {
   setCommandAliases,
   getDisabledCommands,
   setDisabledCommands,
+  getCommandSurfaceTimeoutMs,
+  getExtensionRuntimeTimeoutMs,
 } from './llm/configStore'
 import { getInstalledExtensionsSettingsSchema } from './extension-builder'
 import {
@@ -627,6 +630,9 @@ export function registerIpcHandlers(
     ...readLLMConfig(),
     ...readRawConfig(),
     uiStateRetentionMs: getUiStateRetentionMs(),
+    extensionRuntimeTimeoutMs: getExtensionRuntimeTimeoutMs(),
+    aiModeTimeoutMs: getCommandSurfaceTimeoutMs('aiModeTimeoutMs'),
+    terminalModeTimeoutMs: getCommandSurfaceTimeoutMs('terminalModeTimeoutMs'),
   }))
 
   ipcMain.handle('llm-config-set', async (_event, patch: unknown) => {
@@ -1289,6 +1295,7 @@ export function registerIpcHandlers(
               }
             : undefined,
         stages: Array.isArray(t.stages) ? (t.stages as Stage[]) : undefined,
+        timeline: Array.isArray(t.timeline) ? (t.timeline as AgentTimelineItem[]) : undefined,
         error: typeof t.error === 'string' ? t.error : undefined,
         attachments: normalizeChatAttachments(t.attachments),
         createdAt: t.createdAt,

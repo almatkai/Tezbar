@@ -10,7 +10,7 @@
  * `chat:*` IPC channels below.
  */
 
-import type { AgentInputImage, Stage } from './agent'
+import type { AgentInputImage, AgentTimelineItem, Stage } from './agent'
 
 export type ChatRole = 'user' | 'assistant'
 
@@ -40,6 +40,8 @@ export interface ChatTurn {
   responseMeta?: ChatResponseMeta
   /** Stages captured while this assistant turn ran, for replay in history. */
   stages?: Stage[]
+  /** Text and tool stages in the order the user experienced them. */
+  timeline?: AgentTimelineItem[]
   /** Optional error string if the assistant turn failed. */
   error?: string
   attachments?: ChatAttachment[]

@@ -451,7 +451,15 @@ export async function initTauriBridge(): Promise<void> {
       setupEventListener('stream-error', listener),
     onWindowShown: (listener: (payload: { resetUi: boolean }) => void) =>
       setupEventListener('window-shown', listener),
-    onWindowSnapGuides: (listener: (payload: { visible: boolean; active: boolean }) => void) =>
+    onWindowSnapGuides: (
+      listener: (payload: {
+        visible: boolean
+        snapX: boolean
+        snapY: boolean
+        centered: boolean
+        targetRect: { left: number; top: number; right: number; bottom: number } | null
+      }) => void
+    ) =>
       setupEventListener('window:snap-guides', listener),
     onTerminalData: (listener: (event: any) => void) =>
       setupEventListener('terminal:data', listener),

@@ -3,7 +3,7 @@ import Database from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { Stage } from '../../shared/agent'
+import type { AgentTimelineItem, Stage } from '../../shared/agent'
 import type {
   ChatAttachment,
   ChatResponseMeta,
@@ -27,6 +27,7 @@ type TurnRow = {
   text: string
   response_meta_json: string | null
   stages_json: string | null
+  timeline_json: string | null
   attachments_json: string | null
   error: string | null
   created_at: number
@@ -74,6 +75,29 @@ function safeParseStages(raw: string | null): Stage[] | undefined {
       )
     })
     return stages.length > 0 ? stages : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function safeParseTimeline(raw: string | null): AgentTimelineItem[] | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return undefined
+    const timeline = parsed.filter((item): item is AgentTimelineItem => {
+      if (!item || typeof item !== 'object') return false
+      const entry = item as { type?: unknown; text?: unknown; stage?: unknown }
+      if (entry.type === 'text') return typeof entry.text === 'string' && entry.text.length > 0
+      if (entry.type !== 'stage' || !entry.stage || typeof entry.stage !== 'object') return false
+      const stage = entry.stage as Partial<Stage>
+      return (
+        typeof stage.index === 'number' &&
+        typeof stage.label === 'string' &&
+        (stage.status === 'running' || stage.status === 'done' || stage.status === 'failed')
+      )
+    })
+    return timeline.length > 0 ? timeline : undefined
   } catch {
     return undefined
   }
@@ -151,6 +175,7 @@ class ChatSessionDatabase {
         text TEXT NOT NULL,
         response_meta_json TEXT,
         stages_json TEXT,
+        timeline_json TEXT,
         attachments_json TEXT,
         error TEXT,
         created_at INTEGER NOT NULL,
@@ -168,6 +193,11 @@ class ChatSessionDatabase {
       this.db.exec(`ALTER TABLE chat_turns ADD COLUMN response_meta_json TEXT;`)
     } catch {
       // Existing and newly-created databases already have the column.
+    }
+    try {
+      this.db.exec(`ALTER TABLE chat_turns ADD COLUMN timeline_json TEXT;`)
+    } catch {
+      // Existing databases are upgraded in place.
     }
   }
 
@@ -201,7 +231,7 @@ class ChatSessionDatabase {
     if (!sessionRow) return null
     const turnRows = this.db
       .prepare(
-        `SELECT id, session_id, role, text, response_meta_json, stages_json, attachments_json, error, created_at
+        `SELECT id, session_id, role, text, response_meta_json, stages_json, timeline_json, attachments_json, error, created_at
          FROM chat_turns WHERE session_id = ? ORDER BY created_at ASC`
       )
       .all(id) as TurnRow[]
@@ -216,6 +246,7 @@ class ChatSessionDatabase {
         text: t.text,
         responseMeta: safeParseResponseMeta(t.response_meta_json),
         stages: safeParseStages(t.stages_json),
+        timeline: safeParseTimeline(t.timeline_json),
         attachments: safeParseAttachments(t.attachments_json),
         error: t.error ?? undefined,
         createdAt: t.created_at,
@@ -238,12 +269,13 @@ class ChatSessionDatabase {
   appendTurn(sessionId: string, turn: ChatTurn): void {
     this.db
       .prepare(
-        `INSERT INTO chat_turns(id, session_id, role, text, response_meta_json, stages_json, attachments_json, error, created_at)
-         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO chat_turns(id, session_id, role, text, response_meta_json, stages_json, timeline_json, attachments_json, error, created_at)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            text = excluded.text,
            response_meta_json = excluded.response_meta_json,
            stages_json = excluded.stages_json,
+           timeline_json = excluded.timeline_json,
            attachments_json = excluded.attachments_json,
            error = excluded.error`
       )
@@ -254,6 +286,7 @@ class ChatSessionDatabase {
         turn.text,
         turn.responseMeta ? JSON.stringify(turn.responseMeta) : null,
         turn.stages ? JSON.stringify(turn.stages) : null,
+        turn.timeline ? JSON.stringify(turn.timeline) : null,
         turn.attachments
           ? JSON.stringify(
               turn.attachments.map((attachment) => {

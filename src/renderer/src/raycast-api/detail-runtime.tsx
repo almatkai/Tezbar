@@ -203,6 +203,9 @@ function parseImageOnlyMarkdown(markdown: string, assetsPath: string): {
   }
 }
 
+const COLOR_WHEEL_BACKGROUND =
+  'radial-gradient(circle at center, #ffffff 0%, rgba(255, 255, 255, 0) 70%), conic-gradient(from 0deg, #ff0000 0deg, #ffff00 60deg, #00ff00 120deg, #00ffff 180deg, #0000ff 240deg, #ff00ff 300deg, #ff0000 360deg)'
+
 function hsvToRgb(h: number, s: number, v: number): Rgba {
   const c = v * s
   const x = c * (1 - Math.abs((h / 60) % 2 - 1))
@@ -312,7 +315,7 @@ function ColorWheelDetail({
         <button
           type="button"
           className="relative aspect-square max-h-full w-full max-w-[720px] cursor-crosshair rounded-full bg-center bg-contain bg-no-repeat outline-none"
-          style={{ backgroundImage: `url("${image.src}")` }}
+          style={{ backgroundImage: COLOR_WHEEL_BACKGROUND }}
           aria-label={image.alt}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId)

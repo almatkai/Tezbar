@@ -7,7 +7,13 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { AgentApprovalDecision, AgentInputImage, AgentRunEvent, Stage } from '../shared/agent'
+import type {
+  AgentApprovalDecision,
+  AgentInputImage,
+  AgentRunEvent,
+  AgentTimelineItem,
+  Stage,
+} from '../shared/agent'
 import {
   defaultModels,
   inferCapabilities,
@@ -28,7 +34,7 @@ import type { AiProviderModel, LlmConfigRecord, ProviderId } from '../shared/llm
 import { Hint, HintBar, Kbd, cx } from './ui/primitives'
 import { Markdown } from './ui/Markdown'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
-import { AgentStageList } from './agentChat/shared'
+import { AgentStageList, AgentStageRow } from './agentChat/shared'
 import { ModelPicker } from './ModelPicker'
 import { buildAgentPromptFromChat, makeChatId, summarizeChatTitle } from './agentChat/model'
 
@@ -104,6 +110,29 @@ function chatResponseMetaForConfig(config: LlmConfigRecord): ChatResponseMeta {
 function formatTokenCount(count: number): string {
   if (count >= 1000) return `~${(count / 1000).toFixed(count >= 10_000 ? 0 : 1)}k tokens`
   return `~${count} tokens`
+}
+
+function appendTimelineText(items: AgentTimelineItem[], delta: string): AgentTimelineItem[] {
+  if (!delta) return items
+  const next = items.slice()
+  const last = next[next.length - 1]
+  if (last?.type === 'text') {
+    next[next.length - 1] = { type: 'text', text: last.text + delta }
+  } else {
+    next.push({ type: 'text', text: delta })
+  }
+  return next
+}
+
+function upsertTimelineStage(items: AgentTimelineItem[], stage: Stage): AgentTimelineItem[] {
+  const next = items.slice()
+  const index = next.findIndex((item) => item.type === 'stage' && item.stage.index === stage.index)
+  if (index >= 0) {
+    next[index] = { type: 'stage', stage }
+  } else {
+    next.push({ type: 'stage', stage })
+  }
+  return next
 }
 
 function ResponseToolbar({
@@ -184,6 +213,7 @@ export default function AgentChatView({
   const llmConfigRef = useRef<LlmConfigRecord>({})
   const agentStreamTextRef = useRef('')
   const agentStagesRef = useRef<Stage[]>([])
+  const agentTimelineRef = useRef<AgentTimelineItem[]>([])
   const agentStatusRef = useRef<'idle' | 'running' | 'done' | 'error'>('idle')
   const agentErrorRef = useRef<string | null>(null)
   const responseMetaRef = useRef<ChatResponseMeta | null>(null)
@@ -195,6 +225,7 @@ export default function AgentChatView({
   const modelSelectionSaveRef = useRef<Promise<void> | null>(null)
 
   const [agentStages, setAgentStages] = useState<Stage[]>([])
+  const [agentTimeline, setAgentTimeline] = useState<AgentTimelineItem[]>([])
   const [agentStreamText, setAgentStreamText] = useState('')
   const [agentStatus, setAgentStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [agentError, setAgentError] = useState<string | null>(null)
@@ -278,12 +309,14 @@ export default function AgentChatView({
     agentErrorRef.current = null
     agentStreamTextRef.current = ''
     agentStagesRef.current = []
+    agentTimelineRef.current = []
     responseMetaRef.current = null
     pendingApprovalRef.current = null
     setAgentStatus('idle')
     setAgentError(null)
     setAgentStreamText('')
     setAgentStages([])
+    setAgentTimeline([])
     setPendingApproval(null)
     focusChatInput()
   }, [])
@@ -294,7 +327,9 @@ export default function AgentChatView({
     }
     setChatSession(null)
     chatSessionRef.current = null
+    agentTimelineRef.current = []
     setAgentStages([])
+    setAgentTimeline([])
     setAgentStreamText('')
     setAgentError(null)
     setAgentStatus('idle')
@@ -338,7 +373,9 @@ export default function AgentChatView({
         stopRun()
         setChatSession(full)
         chatSessionRef.current = full
+        agentTimelineRef.current = []
         setAgentStages([])
+        setAgentTimeline([])
         setAgentStreamText('')
         setAgentError(null)
         setAgentStatus('idle')
@@ -361,7 +398,9 @@ export default function AgentChatView({
         if (chatSessionRef.current?.id === id) {
           setChatSession(null)
           chatSessionRef.current = null
+          agentTimelineRef.current = []
           setAgentStages([])
+          setAgentTimeline([])
           setAgentStreamText('')
           setAgentError(null)
           setAgentStatus('idle')
@@ -475,7 +514,9 @@ export default function AgentChatView({
         .then(() => refreshChatHistory())
 
       setAgentError(null)
+      agentTimelineRef.current = []
       setAgentStages([])
+      setAgentTimeline([])
       setAgentStreamText('')
       setAgentStatus('running')
       setRunLogs([])
@@ -616,6 +657,7 @@ export default function AgentChatView({
           currentAgentRunIdRef.current = event.runId
           pendingApprovalRef.current = null
           agentStagesRef.current = []
+          agentTimelineRef.current = []
           agentStreamTextRef.current = ''
           agentErrorRef.current = null
           agentStatusRef.current = 'running'
@@ -626,6 +668,7 @@ export default function AgentChatView({
           setRunLogs([])
           setLogsOpen(false)
           setAgentStages([])
+          setAgentTimeline([])
           setAgentStreamText('')
           setAgentError(null)
           setPendingApproval(null)
@@ -647,17 +690,28 @@ export default function AgentChatView({
           if (idx >= 0) next[idx] = event.stage
           agentStagesRef.current = next
           setAgentStages(next)
+          const nextTimeline = upsertTimelineStage(agentTimelineRef.current, event.stage)
+          agentTimelineRef.current = nextTimeline
+          setAgentTimeline(nextTimeline)
           return
         }
         case 'message': {
           const next = agentStreamTextRef.current + event.delta
           agentStreamTextRef.current = next
           setAgentStreamText(next)
+          const nextTimeline = appendTimelineText(agentTimelineRef.current, event.delta)
+          agentTimelineRef.current = nextTimeline
+          setAgentTimeline(nextTimeline)
           return
         }
         case 'answer':
           agentStreamTextRef.current = event.text
           setAgentStreamText(event.text)
+          if (!agentTimelineRef.current.some((item) => item.type === 'text')) {
+            const nextTimeline = appendTimelineText(agentTimelineRef.current, event.text)
+            agentTimelineRef.current = nextTimeline
+            setAgentTimeline(nextTimeline)
+          }
           return
         case 'error':
           pendingApprovalRef.current = null
@@ -672,6 +726,7 @@ export default function AgentChatView({
           completedRunIdsRef.current.add(event.runId)
           const finalText = agentStreamTextRef.current
           const finalStages = agentStagesRef.current.slice()
+          const finalTimeline = agentTimelineRef.current.slice()
           const activeSession = chatSessionRef.current
           const hadError = agentStatusRef.current === 'error' || agentErrorRef.current !== null
           const nextStatus: 'done' | 'error' = hadError ? 'error' : 'done'
@@ -682,7 +737,7 @@ export default function AgentChatView({
           setPendingApproval(null)
 
           if (activeSession) {
-            const hasPayload = finalText.trim() || finalStages.length > 0 || hadError
+            const hasPayload = finalText.trim() || finalTimeline.length > 0 || hadError
             const errorText = hadError
               ? (agentErrorRef.current ?? 'Agent finished without a response.')
               : undefined
@@ -699,6 +754,7 @@ export default function AgentChatView({
               text: finalText,
               responseMeta: finalResponseMeta,
               stages: finalStages.length > 0 ? finalStages : undefined,
+              timeline: finalTimeline.length > 0 ? finalTimeline : undefined,
               error: fallbackError,
               createdAt: Date.now(),
             }
@@ -722,10 +778,12 @@ export default function AgentChatView({
               .then(() => refreshChatHistory())
             agentStreamTextRef.current = ''
             agentStagesRef.current = []
+            agentTimelineRef.current = []
             agentErrorRef.current = null
             responseMetaRef.current = null
             setAgentStreamText('')
             setAgentStages([])
+            setAgentTimeline([])
             setAgentError(null)
           }
           if (!activeSession) {
@@ -1087,13 +1145,28 @@ export default function AgentChatView({
                   </div>
                 ) : (
                   <div key={turn.id} className="flex flex-col gap-1.5">
-                    {turn.stages && turn.stages.length > 0 ? (
-                      <AgentStageList stages={turn.stages} compact />
-                    ) : null}
-                    {turn.text ? (
-                      <Markdown text={turn.text} />
-                    ) : turn.error ? null : (
-                      <p className="text-[12.5px] italic text-ink-4">(no text response)</p>
+                    {turn.timeline && turn.timeline.length > 0 ? (
+                      turn.timeline.map((item, index) =>
+                        item.type === 'stage' ? (
+                          <AgentStageRow
+                            key={`timeline-stage:${item.stage.index}`}
+                            stage={item.stage}
+                          />
+                        ) : (
+                          <Markdown key={`timeline-text:${index}`} text={item.text} />
+                        )
+                      )
+                    ) : (
+                      <>
+                        {turn.stages && turn.stages.length > 0 ? (
+                          <AgentStageList stages={turn.stages} compact />
+                        ) : null}
+                        {turn.text ? (
+                          <Markdown text={turn.text} />
+                        ) : turn.error ? null : (
+                          <p className="text-[12.5px] italic text-ink-4">(no text response)</p>
+                        )}
+                      </>
                     )}
                     {turn.error ? (
                       <p className="text-[11.5px] text-rose-300" role="alert">
@@ -1115,10 +1188,21 @@ export default function AgentChatView({
               )
             : null}
 
-          {agentStatus === 'running' || agentStages.length > 0 || agentStreamText ? (
+          {agentStatus === 'running' || agentTimeline.length > 0 || agentStreamText ? (
             <div className="flex flex-col gap-1.5">
-              {agentStages.length > 0 ? <AgentStageList stages={agentStages} /> : null}
-              {agentStreamText ? (
+              {agentTimeline.length > 0 ? (
+                agentTimeline.map((item, index) =>
+                  item.type === 'stage' ? (
+                    <AgentStageRow key={`live-stage:${item.stage.index}`} stage={item.stage} />
+                  ) : (
+                    <Markdown
+                      key={`live-text:${index}`}
+                      text={item.text}
+                      streaming={agentStatus === 'running' && index === agentTimeline.length - 1}
+                    />
+                  )
+                )
+              ) : agentStreamText ? (
                 <Markdown text={agentStreamText} streaming={agentStatus === 'running'} />
               ) : agentStatus === 'running' ? (
                 <p className="tezbar-thinking flex items-center gap-2 text-[12px] text-ink-3">

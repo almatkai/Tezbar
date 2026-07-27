@@ -69,6 +69,7 @@ const MAX_RESULTS = 80
 const PROVIDER_REFRESH_MIN_AGE_MS = 10_000
 const FILE_INDEX_LIMIT = 75_000
 const FILE_INDEX_WRITE_BATCH_SIZE = 400
+const BACKGROUND_FILE_INDEX_START_DELAY_MS = 5_000
 
 type ProcessIdentity = {
   name: string
@@ -178,6 +179,7 @@ let lastVolatileRefreshAt = 0
 let initialProviderRefreshStarted = false
 let volatileRefreshScheduled = false
 let searchLifecycleRegistered = false
+let fileIndexStartTimer: NodeJS.Timeout | null = null
 
 type OpenWithUsageEntry = {
   count: number
@@ -352,6 +354,10 @@ function refreshVolatileProvidersIfStale(): void {
 
 function startBackgroundFileIndexing(): void {
   if (fileBootstrapPromise) return
+  if (fileIndexStartTimer) {
+    clearTimeout(fileIndexStartTimer)
+    fileIndexStartTimer = null
+  }
 
   fileBootstrapPromise = (async () => {
     const fileDocs = await collectInitialFileDocuments(FILE_INDEX_LIMIT)
@@ -398,9 +404,23 @@ function registerSearchLifecycle(): void {
   if (searchLifecycleRegistered) return
   searchLifecycleRegistered = true
   app.once('before-quit', () => {
+    if (fileIndexStartTimer) clearTimeout(fileIndexStartTimer)
+    fileIndexStartTimer = null
     stopFileWatcher?.()
     stopFileWatcher = null
   })
+}
+
+function scheduleBackgroundFileIndexing(): void {
+  if (fileBootstrapPromise || fileIndexStartTimer) return
+  // The persisted file index is immediately queryable. Delay the first full
+  // filesystem walk until the launcher has settled so startup stays cheap on
+  // machines with large Documents/Downloads folders.
+  fileIndexStartTimer = setTimeout(() => {
+    fileIndexStartTimer = null
+    startBackgroundFileIndexing()
+  }, BACKGROUND_FILE_INDEX_START_DELAY_MS)
+  fileIndexStartTimer.unref()
 }
 
 function startInitialProviderRefresh(): void {
@@ -410,7 +430,7 @@ function startInitialProviderRefresh(): void {
     void refreshAllProviders()
       .then(() => {
         lastVolatileRefreshAt = Date.now()
-        startBackgroundFileIndexing()
+        scheduleBackgroundFileIndexing()
       })
       .catch((error: unknown) => {
         // The persisted index remains usable. A later explicit provider update

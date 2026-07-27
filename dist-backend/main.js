@@ -562,6 +562,15 @@ var init_appsProvider = __esm({
   }
 });
 
+// src/shared/llmConfig.ts
+var DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS;
+var init_llmConfig = __esm({
+  "src/shared/llmConfig.ts"() {
+    "use strict";
+    DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS = 5 * 60 * 1e3;
+  }
+});
+
 // src/main/llm/configStore.ts
 function readRawConfig() {
   if (configCache) return configCache;
@@ -608,6 +617,13 @@ function getUiStateRetentionMs() {
     return v;
   }
   return 6e4;
+}
+function getExtensionRuntimeTimeoutMs() {
+  const raw = readRawConfig().extensionRuntimeTimeoutMs;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) {
+    return raw;
+  }
+  return DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS;
 }
 function getSafetyDryRun() {
   const raw = readRawConfig();
@@ -684,6 +700,7 @@ var init_configStore = __esm({
     import_node_fs5 = require("node:fs");
     import_node_os6 = require("node:os");
     import_node_path6 = require("node:path");
+    init_llmConfig();
     OPENRAY_CONFIG_DIR = (0, import_node_path6.join)((0, import_node_os6.homedir)(), ".openray");
     OPENRAY_CONFIG_PATH = (0, import_node_path6.join)(OPENRAY_CONFIG_DIR, "config.json");
     configCache = null;
@@ -20665,6 +20682,8 @@ var STATUS_PERSIST_INTERVAL_MS = 1e3;
 var BACKGROUND_FILE_DELAY_MS = 12;
 var VECTOR_BACKFILL_BATCH_SIZE = 512;
 var VECTOR_BACKFILL_DELAY_MS = 25;
+var STARTUP_INDEXING_DELAY_MS = 8e3;
+var STARTUP_VECTOR_BACKFILL_DELAY_MS = 5e3;
 var SKIP_NAMES = /* @__PURE__ */ new Set([
   ".git",
   ".svn",
@@ -20848,12 +20867,12 @@ var KnowledgeService = class {
     this.refreshCounts();
     this.initialized = true;
     if (this.mode !== "worker") this.syncWatchers();
-    if (this.mode !== "worker") this.scheduleVectorBackfill(1e3);
+    if (this.mode !== "worker") this.scheduleVectorBackfill(STARTUP_VECTOR_BACKFILL_DELAY_MS);
     if (this.mode !== "worker" && !this.manuallyPaused && this.activeRoots().length > 0) {
       this.startupTimer = setTimeout(() => {
         this.startupTimer = null;
         void this.startIndexing();
-      }, 2500);
+      }, STARTUP_INDEXING_DELAY_MS);
       this.startupTimer.unref();
     }
   }
@@ -22618,9 +22637,9 @@ function readClipboardImagePayload(id) {
 }
 var watcherHandle = null;
 var watcherInactiveTicks = 0;
-var WATCHER_DEFAULT_INTERVAL_MS = 750;
-var WATCHER_IDLE_INTERVAL_MS = 2e3;
-var WATCHER_IDLE_THRESHOLD_TICKS = 60;
+var WATCHER_DEFAULT_INTERVAL_MS = 1500;
+var WATCHER_IDLE_INTERVAL_MS = 5e3;
+var WATCHER_IDLE_THRESHOLD_TICKS = 12;
 function startClipboardWatcher(intervalMs = WATCHER_DEFAULT_INTERVAL_MS) {
   if (watcherHandle) return;
   const config = getClipboardConfig();
@@ -23676,6 +23695,7 @@ var MAX_RESULTS = 80;
 var PROVIDER_REFRESH_MIN_AGE_MS = 1e4;
 var FILE_INDEX_LIMIT = 75e3;
 var FILE_INDEX_WRITE_BATCH_SIZE = 400;
+var BACKGROUND_FILE_INDEX_START_DELAY_MS = 5e3;
 var SHELL_METACHAR_RE = /[;|&`$(){}[\]\n\r<>\\]/;
 function validateShellCommand(command2) {
   const trimmed = command2.trim();
@@ -23760,6 +23780,7 @@ var lastVolatileRefreshAt = 0;
 var initialProviderRefreshStarted = false;
 var volatileRefreshScheduled = false;
 var searchLifecycleRegistered = false;
+var fileIndexStartTimer = null;
 function isPresent(value) {
   return value !== null && value !== void 0;
 }
@@ -23892,6 +23913,10 @@ function refreshVolatileProvidersIfStale() {
 }
 function startBackgroundFileIndexing() {
   if (fileBootstrapPromise) return;
+  if (fileIndexStartTimer) {
+    clearTimeout(fileIndexStartTimer);
+    fileIndexStartTimer = null;
+  }
   fileBootstrapPromise = (async () => {
     const fileDocs = await collectInitialFileDocuments(FILE_INDEX_LIMIT);
     const existing = new Map(
@@ -23930,9 +23955,19 @@ function registerSearchLifecycle() {
   if (searchLifecycleRegistered) return;
   searchLifecycleRegistered = true;
   app.once("before-quit", () => {
+    if (fileIndexStartTimer) clearTimeout(fileIndexStartTimer);
+    fileIndexStartTimer = null;
     stopFileWatcher?.();
     stopFileWatcher = null;
   });
+}
+function scheduleBackgroundFileIndexing() {
+  if (fileBootstrapPromise || fileIndexStartTimer) return;
+  fileIndexStartTimer = setTimeout(() => {
+    fileIndexStartTimer = null;
+    startBackgroundFileIndexing();
+  }, BACKGROUND_FILE_INDEX_START_DELAY_MS);
+  fileIndexStartTimer.unref();
 }
 function startInitialProviderRefresh() {
   if (initialProviderRefreshStarted) return;
@@ -23940,7 +23975,7 @@ function startInitialProviderRefresh() {
   setImmediate(() => {
     void refreshAllProviders().then(() => {
       lastVolatileRefreshAt = Date.now();
-      startBackgroundFileIndexing();
+      scheduleBackgroundFileIndexing();
     }).catch((error) => {
       initialProviderRefreshStarted = false;
       console.warn("[Search] Failed to refresh the cached search index:", error);
@@ -25723,6 +25758,24 @@ function safeParseStages(raw) {
     return void 0;
   }
 }
+function safeParseTimeline(raw) {
+  if (!raw) return void 0;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return void 0;
+    const timeline = parsed.filter((item) => {
+      if (!item || typeof item !== "object") return false;
+      const entry = item;
+      if (entry.type === "text") return typeof entry.text === "string" && entry.text.length > 0;
+      if (entry.type !== "stage" || !entry.stage || typeof entry.stage !== "object") return false;
+      const stage = entry.stage;
+      return typeof stage.index === "number" && typeof stage.label === "string" && (stage.status === "running" || stage.status === "done" || stage.status === "failed");
+    });
+    return timeline.length > 0 ? timeline : void 0;
+  } catch {
+    return void 0;
+  }
+}
 function safeParseAttachments(raw) {
   if (!raw) return void 0;
   try {
@@ -25781,6 +25834,7 @@ var ChatSessionDatabase = class {
         text TEXT NOT NULL,
         response_meta_json TEXT,
         stages_json TEXT,
+        timeline_json TEXT,
         attachments_json TEXT,
         error TEXT,
         created_at INTEGER NOT NULL,
@@ -25795,6 +25849,10 @@ var ChatSessionDatabase = class {
     }
     try {
       this.db.exec(`ALTER TABLE chat_turns ADD COLUMN response_meta_json TEXT;`);
+    } catch {
+    }
+    try {
+      this.db.exec(`ALTER TABLE chat_turns ADD COLUMN timeline_json TEXT;`);
     } catch {
     }
   }
@@ -25822,7 +25880,7 @@ var ChatSessionDatabase = class {
     const sessionRow = this.db.prepare(`SELECT id, title, created_at, updated_at FROM chat_sessions WHERE id = ?`).get(id);
     if (!sessionRow) return null;
     const turnRows = this.db.prepare(
-      `SELECT id, session_id, role, text, response_meta_json, stages_json, attachments_json, error, created_at
+      `SELECT id, session_id, role, text, response_meta_json, stages_json, timeline_json, attachments_json, error, created_at
          FROM chat_turns WHERE session_id = ? ORDER BY created_at ASC`
     ).all(id);
     return {
@@ -25836,6 +25894,7 @@ var ChatSessionDatabase = class {
         text: t.text,
         responseMeta: safeParseResponseMeta(t.response_meta_json),
         stages: safeParseStages(t.stages_json),
+        timeline: safeParseTimeline(t.timeline_json),
         attachments: safeParseAttachments(t.attachments_json),
         error: t.error ?? void 0,
         createdAt: t.created_at
@@ -25853,12 +25912,13 @@ var ChatSessionDatabase = class {
   }
   appendTurn(sessionId, turn) {
     this.db.prepare(
-      `INSERT INTO chat_turns(id, session_id, role, text, response_meta_json, stages_json, attachments_json, error, created_at)
-         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO chat_turns(id, session_id, role, text, response_meta_json, stages_json, timeline_json, attachments_json, error, created_at)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            text = excluded.text,
            response_meta_json = excluded.response_meta_json,
            stages_json = excluded.stages_json,
+           timeline_json = excluded.timeline_json,
            attachments_json = excluded.attachments_json,
            error = excluded.error`
     ).run(
@@ -25868,6 +25928,7 @@ var ChatSessionDatabase = class {
       turn.text,
       turn.responseMeta ? JSON.stringify(turn.responseMeta) : null,
       turn.stages ? JSON.stringify(turn.stages) : null,
+      turn.timeline ? JSON.stringify(turn.timeline) : null,
       turn.attachments ? JSON.stringify(
         turn.attachments.map((attachment) => {
           const metadata = { ...attachment };
@@ -29507,7 +29568,8 @@ function registerIpcHandlers(getWindow, controls) {
     ...LLM_DEFAULTS,
     ...readLLMConfig(),
     ...readRawConfig(),
-    uiStateRetentionMs: getUiStateRetentionMs()
+    uiStateRetentionMs: getUiStateRetentionMs(),
+    extensionRuntimeTimeoutMs: getExtensionRuntimeTimeoutMs()
   }));
   ipcMain.handle("llm-config-set", async (_event, patch) => {
     if (!patch || typeof patch !== "object") return;
@@ -29994,6 +30056,7 @@ function registerIpcHandlers(getWindow, controls) {
           tokenCount: typeof t.responseMeta.tokenCount === "number" ? Math.max(0, Math.round(t.responseMeta.tokenCount)) : void 0
         } : void 0,
         stages: Array.isArray(t.stages) ? t.stages : void 0,
+        timeline: Array.isArray(t.timeline) ? t.timeline : void 0,
         error: typeof t.error === "string" ? t.error : void 0,
         attachments: normalizeChatAttachments(t.attachments),
         createdAt: t.createdAt

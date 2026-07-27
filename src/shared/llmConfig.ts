@@ -1,5 +1,7 @@
 import type { VoiceModelId } from './voice'
 
+export const DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS = 5 * 60 * 1000
+
 export type BuiltInProviderId = 'openai' | 'openai-compatible' | 'anthropic' | 'ollama' | 'copilot' | 'gemini' | 'opencode' | 'deepseek'
 
 export type ProviderId = BuiltInProviderId | `custom:${string}`
@@ -55,5 +57,11 @@ export type LlmConfigRecord = {
   raymesHotkey?: string
   /** Milliseconds to remember palette UI (e.g. Providers) after hide. Default 60000. Use 0 to always reset. */
   uiStateRetentionMs?: number
+  /** Milliseconds of inactivity before an extension view returns to the main CommandBar. 0 disables it. */
+  extensionRuntimeTimeoutMs?: number
+  /** Milliseconds of inactivity before AI mode returns to the main CommandBar. 0 disables it. */
+  aiModeTimeoutMs?: number
+  /** Milliseconds of inactivity before terminal mode returns to the main CommandBar. 0 disables it. */
+  terminalModeTimeoutMs?: number
   settingsInitialTab?: 'general' | 'ai' | 'voice' | 'knowledge' | 'extensions' | 'permissions' | 'storage' | 'advanced'
 }

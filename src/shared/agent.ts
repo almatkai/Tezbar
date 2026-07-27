@@ -23,6 +23,8 @@ export interface Stage {
   detail?: string
 }
 
+export type AgentTimelineItem = { type: 'text'; text: string } | { type: 'stage'; stage: Stage }
+
 export interface AgentInputImage {
   type: 'image'
   /** Raw base64 bytes. Data-URL prefixes are accepted and stripped before RPC. */

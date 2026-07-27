@@ -2004,6 +2004,8 @@ var STATUS_PERSIST_INTERVAL_MS = 1e3;
 var BACKGROUND_FILE_DELAY_MS = 12;
 var VECTOR_BACKFILL_BATCH_SIZE = 512;
 var VECTOR_BACKFILL_DELAY_MS = 25;
+var STARTUP_INDEXING_DELAY_MS = 8e3;
+var STARTUP_VECTOR_BACKFILL_DELAY_MS = 5e3;
 var SKIP_NAMES = /* @__PURE__ */ new Set([
   ".git",
   ".svn",
@@ -2187,12 +2189,12 @@ var KnowledgeService = class {
     this.refreshCounts();
     this.initialized = true;
     if (this.mode !== "worker") this.syncWatchers();
-    if (this.mode !== "worker") this.scheduleVectorBackfill(1e3);
+    if (this.mode !== "worker") this.scheduleVectorBackfill(STARTUP_VECTOR_BACKFILL_DELAY_MS);
     if (this.mode !== "worker" && !this.manuallyPaused && this.activeRoots().length > 0) {
       this.startupTimer = setTimeout(() => {
         this.startupTimer = null;
         void this.startIndexing();
-      }, 2500);
+      }, STARTUP_INDEXING_DELAY_MS);
       this.startupTimer.unref();
     }
   }

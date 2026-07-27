@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../../shared/llmConfig'
 
 export const OPENRAY_CONFIG_DIR = join(homedir(), '.openray')
 export const OPENRAY_CONFIG_PATH = join(OPENRAY_CONFIG_DIR, 'config.json')
@@ -60,6 +61,24 @@ export function getUiStateRetentionMs(): number {
     return v
   }
   return 60_000
+}
+
+/** How long an extension view may stay idle before returning to CommandBar. */
+export type CommandSurfaceTimeoutKey =
+  | 'extensionRuntimeTimeoutMs'
+  | 'aiModeTimeoutMs'
+  | 'terminalModeTimeoutMs'
+
+export function getCommandSurfaceTimeoutMs(key: CommandSurfaceTimeoutKey): number {
+  const raw = readRawConfig()[key]
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) {
+    return raw
+  }
+  return DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS
+}
+
+export function getExtensionRuntimeTimeoutMs(): number {
+  return getCommandSurfaceTimeoutMs('extensionRuntimeTimeoutMs')
 }
 
 export function getSafetyDryRun(): boolean {

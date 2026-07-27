@@ -5,6 +5,7 @@ import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_AI_NEW_CHAT_EVENT, RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
+import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../shared/llmConfig'
 import type { TerminalSessionsAction } from '../shared/terminal'
 import type { TerminalDefaults } from './terminalPreferences'
 
@@ -97,6 +98,21 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
  *  main process (otherwise the window would be 16px too short). */
 const OUTER_PADDING_PX = 16
 
+const TIMED_SURFACE_CONFIG = {
+  'extension-runtime': {
+    configKey: 'extensionRuntimeTimeoutMs',
+    defaultMs: DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS,
+  },
+  'ai-chat': {
+    configKey: 'aiModeTimeoutMs',
+    defaultMs: DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS,
+  },
+  terminal: {
+    configKey: 'terminalModeTimeoutMs',
+    defaultMs: DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS,
+  },
+} as const
+
 function isSettingsWindow(): boolean {
   return (
     new URLSearchParams(window.location.search).get('window') === 'settings' ||
@@ -108,6 +124,72 @@ function isTerminalSessionsWindow(): boolean {
   return (
     new URLSearchParams(window.location.search).get('window') === 'terminal-sessions' ||
     window.__TEZBAR_WINDOW_LABEL__ === 'terminal-sessions'
+  )
+}
+
+function isSnapOverlayWindow(): boolean {
+  return new URLSearchParams(window.location.search).get('window') === 'snap-overlay'
+}
+
+type SnapGuidesState = {
+  visible: boolean
+  snapX: boolean
+  snapY: boolean
+  centered: boolean
+  targetRect: {
+    left: number
+    top: number
+    right: number
+    bottom: number
+  } | null
+}
+
+function SnapOverlayApp(): JSX.Element {
+  const [snapGuides, setSnapGuides] = useState<SnapGuidesState>({
+    visible: true,
+    snapX: false,
+    snapY: false,
+    centered: false,
+    targetRect: null,
+  })
+
+  useEffect(() => window.tezbar.onWindowSnapGuides(setSnapGuides), [])
+
+  return (
+    <div
+      aria-hidden
+      className={[
+        'snap-overlay',
+        snapGuides.visible ? 'is-visible' : '',
+        snapGuides.snapX ? 'is-snapped-x' : '',
+        snapGuides.snapY ? 'is-snapped-y' : '',
+        snapGuides.centered ? 'is-centered' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {snapGuides.targetRect ? (
+        <>
+          <div
+            className="snap-overlay__edge snap-overlay__edge--left"
+            style={{ left: `${snapGuides.targetRect.left}%` }}
+          />
+          <div
+            className="snap-overlay__edge snap-overlay__edge--top"
+            style={{ top: `${snapGuides.targetRect.top}%` }}
+          />
+          <div
+            className="snap-overlay__edge snap-overlay__edge--right"
+            style={{ left: `${snapGuides.targetRect.right}%` }}
+          />
+          <div
+            className="snap-overlay__edge snap-overlay__edge--bottom"
+            style={{ top: `${snapGuides.targetRect.bottom}%` }}
+          />
+        </>
+      ) : null}
+      <div className="snap-overlay__center-indicator" />
+    </div>
   )
 }
 
@@ -170,10 +252,6 @@ function SettingsWindowApp(): JSX.Element {
 }
 
 function LauncherApp(): JSX.Element {
-  const [snapGuides, setSnapGuides] = useState<{ visible: boolean; active: boolean }>({
-    visible: false,
-    active: false,
-  })
   const [surface, setSurface] = useState<Surface>('command')
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   const [openPortsInitialTab, setOpenPortsInitialTab] = useState<'listen' | 'named'>('listen')
@@ -229,11 +307,58 @@ function LauncherApp(): JSX.Element {
   }, [surface])
 
   useEffect(() => {
-    const off = window.tezbar.onWindowSnapGuides((payload) => {
-      setSnapGuides(payload)
-    })
-    return off
-  }, [])
+    const timeoutConfig = TIMED_SURFACE_CONFIG[surface as keyof typeof TIMED_SURFACE_CONFIG]
+    if (!timeoutConfig) return
+
+    let timeoutId: number | null = null
+    let cancelled = false
+    let timeoutMs = timeoutConfig.defaultMs
+
+    const returnToCommandBar = (): void => {
+      if (cancelled) return
+      setCommandInitialValue('')
+      setExtensionRuntimeInitial(null)
+      setCommandInitialSelectedChatId(null)
+      setTerminalInitialCommand(undefined)
+      setTerminalInitialSessionId(undefined)
+      setTerminalWorkingDirectory(undefined)
+      setTerminalDefaults(undefined)
+      setSurface('command')
+    }
+
+    const scheduleReturn = (): void => {
+      if (timeoutId !== null) window.clearTimeout(timeoutId)
+      if (timeoutMs <= 0) return
+      timeoutId = window.setTimeout(returnToCommandBar, timeoutMs)
+    }
+
+    const onActivity = (): void => scheduleReturn()
+    window.addEventListener('pointerdown', onActivity, true)
+    window.addEventListener('keydown', onActivity, true)
+    window.addEventListener('input', onActivity, true)
+    window.addEventListener('wheel', onActivity, true)
+
+    void window.tezbar
+      .getLlmConfig()
+      .then((config) => {
+        if (cancelled) return
+        const configured = config[timeoutConfig.configKey]
+        if (typeof configured === 'number' && Number.isFinite(configured) && configured >= 0) {
+          timeoutMs = configured
+        }
+        scheduleReturn()
+      })
+      .catch(() => scheduleReturn())
+
+    return () => {
+      cancelled = true
+      if (timeoutId !== null) window.clearTimeout(timeoutId)
+      window.removeEventListener('pointerdown', onActivity, true)
+      window.removeEventListener('keydown', onActivity, true)
+      window.removeEventListener('input', onActivity, true)
+      window.removeEventListener('wheel', onActivity, true)
+    }
+  }, [surface])
 
   useEffect(() => {
     return window.tezbar.onAppSurfaceOpen((nextSurface) => {
@@ -432,23 +557,6 @@ function LauncherApp(): JSX.Element {
         .join(' ')}
     >
       <div
-        aria-hidden
-        className={[
-          'window-snap-guides',
-          snapGuides.visible ? 'is-visible' : '',
-          snapGuides.active ? 'is-active' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
-        <div className="window-snap-guides__zone window-snap-guides__zone--horizontal" />
-        <div className="window-snap-guides__zone window-snap-guides__zone--vertical" />
-        <div className="window-snap-guides__horizontal" />
-        <div className="window-snap-guides__tick window-snap-guides__tick--top" />
-        <div className="window-snap-guides__tick window-snap-guides__tick--bottom" />
-        <div className="window-snap-guides__label">Snap zone</div>
-      </div>
-      <div
         ref={contentRef}
         key={surface}
         className="relative z-0 flex h-full w-full animate-tezbar-fade-in flex-col"
@@ -595,6 +703,9 @@ function LauncherApp(): JSX.Element {
 }
 
 export default function App(): JSX.Element {
+  if (isSnapOverlayWindow()) {
+    return <SnapOverlayApp />
+  }
   if (isTerminalSessionsWindow()) {
     return (
       <Suspense fallback={<SurfaceFallback />}>

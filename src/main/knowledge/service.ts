@@ -38,6 +38,8 @@ const STATUS_PERSIST_INTERVAL_MS = 1_000
 const BACKGROUND_FILE_DELAY_MS = 12
 const VECTOR_BACKFILL_BATCH_SIZE = 512
 const VECTOR_BACKFILL_DELAY_MS = 25
+const STARTUP_INDEXING_DELAY_MS = 8_000
+const STARTUP_VECTOR_BACKFILL_DELAY_MS = 5_000
 const SKIP_NAMES = new Set([
   '.git',
   '.svn',
@@ -246,12 +248,14 @@ export class KnowledgeService {
     this.refreshCounts()
     this.initialized = true
     if (this.mode !== 'worker') this.syncWatchers()
-    if (this.mode !== 'worker') this.scheduleVectorBackfill(1_000)
+    // Let the launcher and its IPC channel settle before touching the local
+    // vector index. This work is useful but never needed for the first paint.
+    if (this.mode !== 'worker') this.scheduleVectorBackfill(STARTUP_VECTOR_BACKFILL_DELAY_MS)
     if (this.mode !== 'worker' && !this.manuallyPaused && this.activeRoots().length > 0) {
       this.startupTimer = setTimeout(() => {
         this.startupTimer = null
         void this.startIndexing()
-      }, 2_500)
+      }, STARTUP_INDEXING_DELAY_MS)
       this.startupTimer.unref()
     }
   }

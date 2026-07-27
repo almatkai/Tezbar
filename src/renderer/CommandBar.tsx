@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   type FormEvent,
   type PointerEvent,
   type ReactNode,
@@ -20,7 +22,6 @@ import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
 import { Hint, HintBar, Kbd, Message, SelectField, TextField, cx } from './ui/primitives'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { GlideList } from './ui/GlideList'
-import { Markdown } from './ui/Markdown'
 import { RollingText } from './ui/RollingText'
 import { useHoldToSpeak } from './hooks/useHoldToSpeak'
 import { evaluateExpression, type CalcResult } from './calculator'
@@ -94,6 +95,9 @@ const COMMAND_HINTS = [
 const APPLICATIONS_GRID_COLUMNS = 7
 
 const TERMINAL_PINNED_SESSIONS_KEY = 'tezbar:terminal-pinned-sessions'
+const Markdown = lazy(() =>
+  import('./ui/Markdown').then(({ Markdown: MarkdownView }) => ({ default: MarkdownView }))
+)
 
 function readPinnedTerminalSessionIds(): string[] {
   try {
@@ -4913,7 +4917,15 @@ export default function CommandBar({
               ) : (
                 <div className="max-h-48 overflow-y-auto">
                   {streamText ? (
-                    <Markdown text={streamText} streaming={isStreaming} />
+                    <Suspense
+                      fallback={
+                        <p className="whitespace-pre-wrap text-[13.5px] leading-[1.55] text-ink-1">
+                          {streamText}
+                        </p>
+                      }
+                    >
+                      <Markdown text={streamText} streaming={isStreaming} />
+                    </Suspense>
                   ) : emptyAnswer ? (
                     <p className="text-[13.5px] leading-[1.55] text-ink-1">
                       No response from the selected provider. Check your provider settings and try
