@@ -24,6 +24,25 @@ const execFileAsync = promisify(execFile)
 
 const BUN_VERSION = '1.2.5'
 
+/**
+ * Extension package lifecycle scripts must resolve their own native binaries.
+ * Tezbar pins ESBUILD_BINARY_PATH for its bundled compiler, but passing that
+ * value to an extension with another esbuild version breaks its postinstall.
+ */
+export function createBunInstallEnvironment(
+  bunPath: string,
+  sourceEnv: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  const env = { ...sourceEnv }
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === 'ESBUILD_BINARY_PATH') delete env[key]
+  }
+
+  const pathKey = Object.keys(env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH'
+  env[pathKey] = [path.dirname(bunPath), env[pathKey]].filter(Boolean).join(path.delimiter)
+  return env
+}
+
 /** Broadcast install status to all renderer windows. */
 function broadcastInstallStatus(message: string): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -227,10 +246,7 @@ export async function installDepsWithBun(extPath: string): Promise<boolean> {
     await execFileAsync(bunPath, ['install', '--production', '--no-save'], {
       cwd: extPath,
       timeout: 120_000,
-      env: {
-        ...process.env,
-        PATH: `${path.dirname(bunPath)}:${process.env.PATH || ''}`,
-      },
+      env: createBunInstallEnvironment(bunPath),
     })
 
     // Restore original package.json
@@ -287,10 +303,7 @@ export async function installSpecificPackagesWithBun(
     await execFileAsync(bunPath, ['add', '--no-save', ...unique], {
       cwd: extPath,
       timeout: 300_000,
-      env: {
-        ...process.env,
-        PATH: `${path.dirname(bunPath)}:${process.env.PATH || ''}`,
-      },
+      env: createBunInstallEnvironment(bunPath),
     })
     return fs.existsSync(path.join(extPath, 'node_modules'))
   } catch (error: any) {

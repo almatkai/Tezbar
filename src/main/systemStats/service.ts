@@ -2,6 +2,10 @@ import { execFile } from 'node:child_process'
 import { hostname, uptime } from 'node:os'
 import { promisify } from 'node:util'
 import type { SystemStatsSnapshot } from '../../shared/systemStats'
+import {
+  clearWindowsSystemStatsCacheForTests,
+  getWindowsSystemStats,
+} from './windows'
 
 const execFileAsync = promisify(execFile)
 
@@ -116,6 +120,7 @@ async function loadStaticStats(): Promise<StaticSystemStats> {
 
   return {
     device: {
+      platform: 'macOS',
       name: text(hardware.machine_name, hostname()),
       model: text(hardware.machine_model, 'Mac'),
       chip: text(hardware.chip_type, 'Apple Silicon'),
@@ -330,8 +335,12 @@ function parseNetworkSummary(
 }
 
 export async function getSystemStats(): Promise<SystemStatsSnapshot> {
+  if (process.platform === 'win32') {
+    return getWindowsSystemStats()
+  }
+
   if (process.platform !== 'darwin') {
-    throw new Error('System Monitor is currently available on macOS only.')
+    throw new Error('System Monitor is currently available on macOS and Windows only.')
   }
 
   const fixed = await staticStats()
@@ -408,4 +417,5 @@ export async function getSystemStats(): Promise<SystemStatsSnapshot> {
 export function clearSystemStatsCacheForTests(): void {
   staticStatsPromise = null
   previousNetworkSample = null
+  clearWindowsSystemStatsCacheForTests()
 }

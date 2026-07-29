@@ -55,6 +55,20 @@ function legacyCheerioInteropPlugin(): any {
   };
 }
 
+function nativeExtensionModulePlugin(): any {
+  return {
+    name: 'native-extension-module-external',
+    setup(build: any) {
+      // Raycast emits both native module schemes. The Tezbar runtime replaces
+      // their dynamic imports and supplies a platform implementation.
+      build.onResolve({ filter: /^(?:swift|rust):/ }, (args: any) => ({
+        path: args.path,
+        external: true,
+      }));
+    },
+  };
+}
+
 export interface ExtensionPreferenceSchema {
   scope: 'extension' | 'command';
   name: string;
@@ -718,16 +732,7 @@ export async function buildAllCommands(extName: string, extPathOverride?: string
           outfile: outFile,
           plugins: [
             legacyCheerioInteropPlugin(),
-            // Mark swift: imports as external so fakeRequire can handle them at runtime
-            {
-              name: 'swift-external',
-              setup(build: any) {
-                build.onResolve({ filter: /^swift:/ }, (args: any) => ({
-                  path: args.path,
-                  external: true,
-                }));
-              },
-            },
+            nativeExtensionModulePlugin(),
           ],
           external: [
             // React — provided by the renderer at runtime
@@ -1012,15 +1017,7 @@ export async function buildSingleCommand(extName: string, cmdName: string): Prom
         outfile: outFile,
         plugins: [
           legacyCheerioInteropPlugin(),
-          {
-            name: 'swift-external',
-            setup(build: any) {
-              build.onResolve({ filter: /^swift:/ }, (args: any) => ({
-                path: args.path,
-                external: true,
-              }));
-            },
-          },
+          nativeExtensionModulePlugin(),
         ],
         external: [
           'react', 'react-dom', 'react-dom/*', 'react/jsx-runtime', 'react/jsx-dev-runtime',

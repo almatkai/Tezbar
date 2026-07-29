@@ -30,11 +30,7 @@ import {
   type ProviderId,
 } from '../shared/llmConfig'
 import type { VoiceModel, VoiceModelId } from '../shared/voice'
-import type {
-  KnowledgeDepth,
-  KnowledgeRootDepth,
-  KnowledgeSnapshot,
-} from '../shared/knowledge'
+import type { KnowledgeDepth, KnowledgeRootDepth, KnowledgeSnapshot } from '../shared/knowledge'
 import {
   Button,
   cx,
@@ -49,12 +45,17 @@ import {
 import { CurrencySettings } from './CurrencySettings'
 import ExtensionsSettingsTab from './ExtensionsSettingsTab'
 
-type SettingsTab = 'general' | 'ai' | 'voice' | 'knowledge' | 'extensions' | 'permissions' | 'storage' | 'advanced'
+type SettingsTab =
+  | 'general'
+  | 'ai'
+  | 'voice'
+  | 'knowledge'
+  | 'extensions'
+  | 'permissions'
+  | 'storage'
+  | 'advanced'
 
-type ModeTimeoutField =
-  | 'extensionRuntimeTimeoutMs'
-  | 'aiModeTimeoutMs'
-  | 'terminalModeTimeoutMs'
+type ModeTimeoutField = 'extensionRuntimeTimeoutMs' | 'aiModeTimeoutMs' | 'terminalModeTimeoutMs'
 
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'general', label: 'General', icon: 'gear' },
@@ -67,7 +68,7 @@ const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'advanced', label: 'Advanced', icon: 'tool' },
 ]
 
-const DEFAULT_RAYMES_HOTKEY = 'Alt+Space'
+const DEFAULT_RAYMES_HOTKEY = navigator.platform.includes('Win') ? 'Control+Space' : 'Alt+Space'
 
 const KNOWLEDGE_DEPTH_OPTIONS: Array<{
   id: KnowledgeDepth
@@ -572,7 +573,12 @@ function checkProviderConfigured(
   return hasModel && Boolean(key.trim())
 }
 
-function isProviderConfigured(provider: ProviderId, apiKey: string, _baseURL: string, models: AiProviderModel[]): boolean {
+function isProviderConfigured(
+  provider: ProviderId,
+  apiKey: string,
+  _baseURL: string,
+  models: AiProviderModel[]
+): boolean {
   const hasModel = models.length > 0
   if (provider === 'ollama' || provider === 'opencode') return hasModel
   return hasModel && Boolean(apiKey.trim())
@@ -604,7 +610,9 @@ export default function SettingsView({
   const [extensionRuntimeTimeoutMinutes, setExtensionRuntimeTimeoutMinutes] = useState('5')
   const [aiModeTimeoutMinutes, setAiModeTimeoutMinutes] = useState('5')
   const [terminalModeTimeoutMinutes, setTerminalModeTimeoutMinutes] = useState('5')
-  const [timeoutMsg, setTimeoutMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
+  const [timeoutMsg, setTimeoutMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(
+    null
+  )
   const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [memoryMaxItems, setMemoryMaxItems] = useState('3')
   const [actionPermissionRequired, setActionPermissionRequired] = useState(true)
@@ -612,13 +620,15 @@ export default function SettingsView({
   const [aiProvider, setAiProvider] = useState<ProviderId>('ollama')
   const [aiApiKey, setAiApiKey] = useState('')
   const [aiBaseURL, setAiBaseURL] = useState('')
-  const [aiProviderConfigs, setAiProviderConfigs] =
-    useState<Partial<Record<ProviderId, AiProviderConfig>>>({})
+  const [aiProviderConfigs, setAiProviderConfigs] = useState<
+    Partial<Record<ProviderId, AiProviderConfig>>
+  >({})
   const [aiModel, setAiModel] = useState(RECOMMENDED_AI_MODEL.ollama)
   const [aiProviderModels, setAiProviderModels] =
     useState<Partial<Record<ProviderId, AiProviderModel[]>>>(DEFAULT_PROVIDER_MODELS)
-  const [aiProviderSelectedModels, setAiProviderSelectedModels] =
-    useState<Partial<Record<ProviderId, string>>>({})
+  const [aiProviderSelectedModels, setAiProviderSelectedModels] = useState<
+    Partial<Record<ProviderId, string>>
+  >({})
   const [customProviders, setCustomProviders] = useState<CustomAiProvider[]>([])
   const [addProviderOpen, setAddProviderOpen] = useState(false)
   const [activeAiProvider, setActiveAiProvider] = useState<ProviderId>('ollama')
@@ -628,10 +638,12 @@ export default function SettingsView({
   const [newProviderName, setNewProviderName] = useState('')
   const [newProviderBaseURL, setNewProviderBaseURL] = useState('')
   const [newProviderModel, setNewProviderModel] = useState('')
-  const [aiTaskProviderOverrides, setAiTaskProviderOverrides] =
-    useState<Partial<Record<LlmTask, ProviderId>>>({})
-  const [aiTaskModelOverrides, setAiTaskModelOverrides] =
-    useState<Partial<Record<LlmTask, string>>>({})
+  const [aiTaskProviderOverrides, setAiTaskProviderOverrides] = useState<
+    Partial<Record<LlmTask, ProviderId>>
+  >({})
+  const [aiTaskModelOverrides, setAiTaskModelOverrides] = useState<
+    Partial<Record<LlmTask, string>>
+  >({})
   const [aiNewModelId, setAiNewModelId] = useState('')
   const [aiModelsLoading, setAiModelsLoading] = useState(false)
   const [safetyDryRun, setSafetyDryRunState] = useState(false)
@@ -723,7 +735,9 @@ export default function SettingsView({
       setKnowledge(await window.tezbar.getKnowledgeSnapshot())
       setKnowledgeMessage(null)
     } catch (error) {
-      setKnowledgeMessage(error instanceof Error ? error.message : 'Could not load Knowledge settings.')
+      setKnowledgeMessage(
+        error instanceof Error ? error.message : 'Could not load Knowledge settings.'
+      )
     } finally {
       setKnowledgeBusy(false)
     }
@@ -743,8 +757,12 @@ export default function SettingsView({
       extensionTimeoutMs === 0 ? '0' : String(Math.max(1, Math.round(extensionTimeoutMs / 60_000)))
     )
     const aiTimeoutMs =
-      typeof c.aiModeTimeoutMs === 'number' ? c.aiModeTimeoutMs : DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS
-    setAiModeTimeoutMinutes(aiTimeoutMs === 0 ? '0' : String(Math.max(1, Math.round(aiTimeoutMs / 60_000))))
+      typeof c.aiModeTimeoutMs === 'number'
+        ? c.aiModeTimeoutMs
+        : DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS
+    setAiModeTimeoutMinutes(
+      aiTimeoutMs === 0 ? '0' : String(Math.max(1, Math.round(aiTimeoutMs / 60_000)))
+    )
     const terminalTimeoutMs =
       typeof c.terminalModeTimeoutMs === 'number'
         ? c.terminalModeTimeoutMs
@@ -770,15 +788,18 @@ export default function SettingsView({
     )
     setAiBaseURL(
       provider === 'openai-compatible'
-        ? (providerConfig.openaiCompatibleBaseURL ?? c.openaiCompatibleBaseURL ?? c.baseURL ?? defaultBaseUrl(provider))
+        ? (providerConfig.openaiCompatibleBaseURL ??
+            c.openaiCompatibleBaseURL ??
+            c.baseURL ??
+            defaultBaseUrl(provider))
         : isCustomProvider(provider)
           ? (providerConfig.openaiCompatibleBaseURL ?? providerConfig.baseURL ?? '')
           : (providerConfig.baseURL ?? c.baseURL ?? defaultBaseUrl(provider))
     )
-    setGithubOAuthClientId(
-      providerConfig.githubOAuthClientId ?? c.githubOAuthClientId ?? ''
-    )
-    const providerModels: Partial<Record<ProviderId, AiProviderModel[]>> = { ...DEFAULT_PROVIDER_MODELS }
+    setGithubOAuthClientId(providerConfig.githubOAuthClientId ?? c.githubOAuthClientId ?? '')
+    const providerModels: Partial<Record<ProviderId, AiProviderModel[]>> = {
+      ...DEFAULT_PROVIDER_MODELS,
+    }
     for (const row of providerRows(c)) {
       providerModels[row.id] = normalizeProviderModelList(
         row.id,
@@ -787,7 +808,10 @@ export default function SettingsView({
     }
     const selectedModels = c.providerSelectedModels ?? {}
     const selectedModel =
-      selectedModels[provider] ?? c.model ?? providerModels[provider]?.[0]?.id ?? recommendedModel(provider)
+      selectedModels[provider] ??
+      c.model ??
+      providerModels[provider]?.[0]?.id ??
+      recommendedModel(provider)
     setAiProviderModels(providerModels)
     setAiProviderSelectedModels(selectedModels)
     setAiTaskProviderOverrides(c.taskProviderOverrides ?? {})
@@ -846,7 +870,7 @@ export default function SettingsView({
 
   useEffect(() => {
     return window.tezbar.onKnowledgeStatus((status) => {
-      setKnowledge((current) => current ? { ...current, status } : current)
+      setKnowledge((current) => (current ? { ...current, status } : current))
     })
   }, [])
 
@@ -898,13 +922,21 @@ export default function SettingsView({
         : aiProvider === 'copilot'
           ? { ...aiProviderConfigs[aiProvider], copilotGithubToken: aiApiKey, githubOAuthClientId }
           : aiProvider === 'openai-compatible' || isCustomProvider(aiProvider)
-            ? { ...aiProviderConfigs[aiProvider], apiKey: aiApiKey, openaiCompatibleBaseURL: aiBaseURL }
+            ? {
+                ...aiProviderConfigs[aiProvider],
+                apiKey: aiApiKey,
+                openaiCompatibleBaseURL: aiBaseURL,
+              }
             : { ...aiProviderConfigs[aiProvider], apiKey: aiApiKey, baseURL: aiBaseURL }
     const nextProviderConfig = aiProviderConfigs[provider] ?? {}
     setAiProviderSelectedModels((prev) => ({ ...prev, [aiProvider]: aiModel }))
     setAiProviderConfigs((prev) => ({ ...prev, [aiProvider]: currentProviderConfig }))
     setAiProvider(provider)
-    setAiModel(aiProviderSelectedModels[provider] ?? aiProviderModels[provider]?.[0]?.id ?? recommendedModel(provider))
+    setAiModel(
+      aiProviderSelectedModels[provider] ??
+        aiProviderModels[provider]?.[0]?.id ??
+        recommendedModel(provider)
+    )
     setAiApiKey(
       provider === 'gemini'
         ? (nextProviderConfig.geminiApiKey ?? '')
@@ -929,22 +961,43 @@ export default function SettingsView({
     const apiKey = aiApiKey.trim()
     const providerModels = {
       ...aiProviderModels,
-      [provider]: normalizeProviderModelList(provider, aiProviderModels[provider] ?? defaultModels(provider)),
+      [provider]: normalizeProviderModelList(
+        provider,
+        aiProviderModels[provider] ?? defaultModels(provider)
+      ),
     }
-    const providerSelectedModels: Partial<Record<ProviderId, string>> = { ...aiProviderSelectedModels, [provider]: model }
+    const providerSelectedModels: Partial<Record<ProviderId, string>> = {
+      ...aiProviderSelectedModels,
+      [provider]: model,
+    }
     const providerConfig: AiProviderConfig =
       provider === 'gemini'
-        ? { ...aiProviderConfigs[provider], geminiApiKey: apiKey, baseURL: baseURL || defaultBaseUrl(provider) }
+        ? {
+            ...aiProviderConfigs[provider],
+            geminiApiKey: apiKey,
+            baseURL: baseURL || defaultBaseUrl(provider),
+          }
         : provider === 'copilot'
-          ? { ...aiProviderConfigs[provider], copilotGithubToken: apiKey, githubOAuthClientId: githubOAuthClientId }
+          ? {
+              ...aiProviderConfigs[provider],
+              copilotGithubToken: apiKey,
+              githubOAuthClientId: githubOAuthClientId,
+            }
           : provider === 'openai-compatible' || isCustomProvider(provider)
             ? {
-              ...aiProviderConfigs[provider],
-              apiKey,
-              openaiCompatibleBaseURL: baseURL || defaultBaseUrl(provider),
-            }
-            : { ...aiProviderConfigs[provider], apiKey, baseURL: baseURL || defaultBaseUrl(provider) }
-    const providerConfigs: Partial<Record<ProviderId, AiProviderConfig>> = { ...aiProviderConfigs, [provider]: providerConfig }
+                ...aiProviderConfigs[provider],
+                apiKey,
+                openaiCompatibleBaseURL: baseURL || defaultBaseUrl(provider),
+              }
+            : {
+                ...aiProviderConfigs[provider],
+                apiKey,
+                baseURL: baseURL || defaultBaseUrl(provider),
+              }
+    const providerConfigs: Partial<Record<ProviderId, AiProviderConfig>> = {
+      ...aiProviderConfigs,
+      [provider]: providerConfig,
+    }
 
     const activeProvider = activeAiProvider
     const activeModel = providerSelectedModels[activeProvider] ?? recommendedModel(activeProvider)
@@ -961,13 +1014,18 @@ export default function SettingsView({
     }
 
     const activeCfg = providerConfigs[activeProvider] ?? {}
-    if (activeProvider === 'openai' || activeProvider === 'anthropic' || activeProvider === 'deepseek') {
+    if (
+      activeProvider === 'openai' ||
+      activeProvider === 'anthropic' ||
+      activeProvider === 'deepseek'
+    ) {
       patch.apiKey = activeCfg.apiKey ?? ''
       if (activeCfg.baseURL) patch.baseURL = activeCfg.baseURL
     }
     if (activeProvider === 'openai-compatible') {
       patch.apiKey = activeCfg.apiKey ?? ''
-      patch.openaiCompatibleBaseURL = activeCfg.openaiCompatibleBaseURL ?? defaultBaseUrl(activeProvider)
+      patch.openaiCompatibleBaseURL =
+        activeCfg.openaiCompatibleBaseURL ?? defaultBaseUrl(activeProvider)
     }
     if (activeProvider === 'gemini') {
       patch.geminiApiKey = activeCfg.geminiApiKey ?? ''
@@ -1019,8 +1077,8 @@ export default function SettingsView({
             copilot: {
               ...prev.copilot,
               copilotGithubToken: r.access_token,
-              githubOAuthClientId: cid || r.client_id
-            }
+              githubOAuthClientId: cid || r.client_id,
+            },
           }))
           finished = true
           break
@@ -1105,7 +1163,11 @@ export default function SettingsView({
       setMsg({ tone: 'error', text: 'Provider name, endpoint, and initial model are required' })
       return
     }
-    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'provider'
+    const slug =
+      title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'provider'
     let id: `custom:${string}` = `custom:${slug}`
     let suffix = 2
     while (customProviders.some((provider) => provider.id === id)) {
@@ -1113,11 +1175,16 @@ export default function SettingsView({
       suffix += 1
     }
     const provider: CustomAiProvider = { id, title, subtitle: 'Custom OpenAI-compatible endpoint' }
-    const models = normalizeProviderModelList(id, [{ id: modelId, capabilities: inferCapabilities(modelId) }])
+    const models = normalizeProviderModelList(id, [
+      { id: modelId, capabilities: inferCapabilities(modelId) },
+    ])
     setCustomProviders((prev) => [...prev, provider])
     setAiProviderModels((prev) => ({ ...prev, [id]: models }))
     setAiProviderSelectedModels((prev) => ({ ...prev, [id]: modelId }))
-    setAiProviderConfigs((prev) => ({ ...prev, [id]: { apiKey: '', openaiCompatibleBaseURL: baseURL } }))
+    setAiProviderConfigs((prev) => ({
+      ...prev,
+      [id]: { apiKey: '', openaiCompatibleBaseURL: baseURL },
+    }))
     setAiProvider(id)
     setAiApiKey('')
     setAiBaseURL(baseURL)
@@ -1126,7 +1193,10 @@ export default function SettingsView({
     setNewProviderName('')
     setNewProviderBaseURL('')
     setNewProviderModel('')
-    setMsg({ tone: 'success', text: 'Custom provider added. Add its API key, then save AI Settings.' })
+    setMsg({
+      tone: 'success',
+      text: 'Custom provider added. Add its API key, then save AI Settings.',
+    })
   }
 
   const save = (): void => {
@@ -1166,7 +1236,9 @@ export default function SettingsView({
     void window.tezbar
       .setLlmConfig({ [field]: Math.round(minutes * 60_000) })
       .then(() => setTimeoutMsg({ tone: 'success', text: `${label} timeout saved.` }))
-      .catch(() => setTimeoutMsg({ tone: 'error', text: `Could not save ${label.toLowerCase()} timeout.` }))
+      .catch(() =>
+        setTimeoutMsg({ tone: 'error', text: `Could not save ${label.toLowerCase()} timeout.` })
+      )
   }
 
   const renderVoiceModels = (): JSX.Element => (
@@ -1189,7 +1261,8 @@ export default function SettingsView({
               <div className="min-w-0">
                 <p className="truncate text-[12.5px] font-medium text-ink-1">{model.name}</p>
                 <p className="mt-0.5 truncate text-[11px] text-ink-3">
-                  {model.family} · {model.language === 'multilingual' ? 'multilingual' : 'English'} · {model.tier} · {model.sizeLabel}
+                  {model.family} · {model.language === 'multilingual' ? 'multilingual' : 'English'}{' '}
+                  · {model.tier} · {model.sizeLabel}
                   {weightsOnDisk ? ` · ${formatBytes(model.downloadedBytes)} on disk` : ''}
                 </p>
               </div>
@@ -1491,7 +1564,11 @@ export default function SettingsView({
                   <Button
                     variant="primary"
                     onClick={() =>
-                      saveModeTimeout('terminalModeTimeoutMs', terminalModeTimeoutMinutes, 'Terminal')
+                      saveModeTimeout(
+                        'terminalModeTimeoutMs',
+                        terminalModeTimeoutMinutes,
+                        'Terminal'
+                      )
                     }
                   >
                     Save
@@ -1546,9 +1623,18 @@ export default function SettingsView({
                         const isSelected = provider.id === aiProvider
                         const isConfig = (() => {
                           if (provider.id === aiProvider) {
-                            return isProviderConfigured(aiProvider, aiApiKey, aiBaseURL, currentAiModels)
+                            return isProviderConfigured(
+                              aiProvider,
+                              aiApiKey,
+                              aiBaseURL,
+                              currentAiModels
+                            )
                           }
-                          return checkProviderConfigured(provider.id, aiProviderConfigs, aiProviderModels)
+                          return checkProviderConfigured(
+                            provider.id,
+                            aiProviderConfigs,
+                            aiProviderModels
+                          )
                         })()
 
                         return (
@@ -1572,7 +1658,9 @@ export default function SettingsView({
                                   </span>
                                 ) : null}
                               </div>
-                              <span className="text-[10px] text-ink-4 block truncate mt-0.5">{provider.subtitle}</span>
+                              <span className="text-[10px] text-ink-4 block truncate mt-0.5">
+                                {provider.subtitle}
+                              </span>
                             </div>
 
                             <span
@@ -1673,7 +1761,11 @@ export default function SettingsView({
                     <div className="space-y-3">
                       {aiProvider === 'opencode' ? (
                         <div className="p-3 rounded-tezbar-row border border-blue-500/10 bg-blue-500/5 text-[12px] text-ink-2">
-                          Uses the local <code className="font-mono bg-white/[0.05] px-1 py-0.5 rounded">opencode</code> CLI. Ensure that you have it installed and configured on your machine.
+                          Uses the local{' '}
+                          <code className="font-mono bg-white/[0.05] px-1 py-0.5 rounded">
+                            opencode
+                          </code>{' '}
+                          CLI. Ensure that you have it installed and configured on your machine.
                         </div>
                       ) : null}
 
@@ -1695,7 +1787,9 @@ export default function SettingsView({
                                 spellCheck={false}
                               />
                               <div className="border-t border-white/[0.05] pt-3 mt-2 space-y-2">
-                                <div className="text-[11px] font-semibold text-ink-3">GitHub Device Flow</div>
+                                <div className="text-[11px] font-semibold text-ink-3">
+                                  GitHub Device Flow
+                                </div>
                                 <div className="flex gap-2">
                                   <TextField
                                     value={githubOAuthClientId}
@@ -1814,7 +1908,10 @@ export default function SettingsView({
                                     className="min-w-0 flex-1 text-left"
                                     onClick={() => {
                                       setAiModel(model.id)
-                                      setAiProviderSelectedModels((prev) => ({ ...prev, [aiProvider]: model.id }))
+                                      setAiProviderSelectedModels((prev) => ({
+                                        ...prev,
+                                        [aiProvider]: model.id,
+                                      }))
                                     }}
                                   >
                                     <span className="block truncate text-[12.5px] font-semibold text-ink-1">
@@ -1849,7 +1946,9 @@ export default function SettingsView({
                                       <input
                                         type="checkbox"
                                         checked={model.capabilities.includes(capability.id)}
-                                        onChange={() => toggleAiModelCapability(model.id, capability.id)}
+                                        onChange={() =>
+                                          toggleAiModelCapability(model.id, capability.id)
+                                        }
                                       />
                                       {capability.label}
                                     </label>
@@ -1919,11 +2018,7 @@ export default function SettingsView({
 
               {/* Global Save Button */}
               <div className="mt-4 flex items-center justify-between">
-                <div>
-                  {msg ? (
-                    <Message tone={msg.tone}>{msg.text}</Message>
-                  ) : null}
-                </div>
+                <div>{msg ? <Message tone={msg.tone}>{msg.text}</Message> : null}</div>
                 <Button variant="primary" onClick={save}>
                   Save AI Settings
                 </Button>
@@ -2015,7 +2110,9 @@ export default function SettingsView({
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-400/15 text-sky-200">
                         <SettingsIcon name="knowledge" className="h-4 w-4" />
                       </span>
-                      <h3 className="text-[13.5px] font-semibold text-ink-1">Local knowledge index</h3>
+                      <h3 className="text-[13.5px] font-semibold text-ink-1">
+                        Local knowledge index
+                      </h3>
                     </div>
                     <p className="mt-2 max-w-[460px] text-[11.5px] leading-relaxed text-ink-3">
                       Tezbar extracts text, recognizes text in images and scanned PDFs, and stores
@@ -2049,11 +2146,14 @@ export default function SettingsView({
                         onClick={() => {
                           setKnowledgeBusy(true)
                           setKnowledgeMessage(null)
-                          void window.tezbar.setKnowledgeDepth(option.id)
+                          void window.tezbar
+                            .setKnowledgeDepth(option.id)
                             .then(setKnowledge)
-                            .catch((error: unknown) => setKnowledgeMessage(
-                              error instanceof Error ? error.message : String(error)
-                            ))
+                            .catch((error: unknown) =>
+                              setKnowledgeMessage(
+                                error instanceof Error ? error.message : String(error)
+                              )
+                            )
                             .finally(() => setKnowledgeBusy(false))
                         }}
                         className={cx(
@@ -2068,12 +2168,16 @@ export default function SettingsView({
                         <span className="flex items-center justify-between gap-2">
                           <span className="flex items-center gap-2">
                             <span className={cx('h-1.5 w-1.5 rounded-full', option.accent)} />
-                            <span className="text-[12.5px] font-semibold text-ink-1">{option.title}</span>
+                            <span className="text-[12.5px] font-semibold text-ink-1">
+                              {option.title}
+                            </span>
                           </span>
-                          <span className={cx(
-                            'text-[9.5px] font-medium uppercase tracking-[0.08em]',
-                            selected ? 'text-cyan-200' : 'text-ink-4'
-                          )}>
+                          <span
+                            className={cx(
+                              'text-[9.5px] font-medium uppercase tracking-[0.08em]',
+                              selected ? 'text-cyan-200' : 'text-ink-4'
+                            )}
+                          >
                             {option.summary}
                           </span>
                         </span>
@@ -2095,78 +2199,103 @@ export default function SettingsView({
                 detail="Only folders added here are content-indexed. Existing filename search remains separate."
               >
                 <div className="space-y-2.5">
-                  {knowledge?.roots.length ? knowledge.roots.map((root) => {
-                    const title = root.path.split('/').filter(Boolean).at(-1) ?? root.path
-                    return (
-                      <div
-                        key={root.id}
-                        className="group flex items-center gap-3 rounded-tezbar-row border border-white/[0.08] bg-white/[0.035] px-3 py-2.5"
-                      >
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={root.enabled}
-                          onClick={() => {
-                            setKnowledgeBusy(true)
-                            void window.tezbar.setKnowledgeRootEnabled(root.id, !root.enabled)
-                              .then(setKnowledge)
-                              .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
-                              .finally(() => setKnowledgeBusy(false))
-                          }}
-                          className={cx(
-                            'relative h-5 w-9 shrink-0 rounded-full transition',
-                            root.enabled ? 'bg-sky-400/80' : 'bg-white/15'
-                          )}
+                  {knowledge?.roots.length ? (
+                    knowledge.roots.map((root) => {
+                      const title = root.path.split('/').filter(Boolean).at(-1) ?? root.path
+                      return (
+                        <div
+                          key={root.id}
+                          className="group flex items-center gap-3 rounded-tezbar-row border border-white/[0.08] bg-white/[0.035] px-3 py-2.5"
                         >
-                          <span className={cx(
-                            'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition',
-                            root.enabled ? 'left-[18px]' : 'left-0.5'
-                          )} />
-                        </button>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[12.5px] font-medium text-ink-1">{title}</p>
-                          <p className="truncate font-mono text-[10.5px] text-ink-4">{root.path}</p>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={root.enabled}
+                            onClick={() => {
+                              setKnowledgeBusy(true)
+                              void window.tezbar
+                                .setKnowledgeRootEnabled(root.id, !root.enabled)
+                                .then(setKnowledge)
+                                .catch((error: unknown) =>
+                                  setKnowledgeMessage(
+                                    error instanceof Error ? error.message : String(error)
+                                  )
+                                )
+                                .finally(() => setKnowledgeBusy(false))
+                            }}
+                            className={cx(
+                              'relative h-5 w-9 shrink-0 rounded-full transition',
+                              root.enabled ? 'bg-sky-400/80' : 'bg-white/15'
+                            )}
+                          >
+                            <span
+                              className={cx(
+                                'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition',
+                                root.enabled ? 'left-[18px]' : 'left-0.5'
+                              )}
+                            />
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[12.5px] font-medium text-ink-1">{title}</p>
+                            <p className="truncate font-mono text-[10.5px] text-ink-4">
+                              {root.path}
+                            </p>
+                          </div>
+                          <select
+                            aria-label={`Knowledge Depth for ${title}`}
+                            value={root.depth}
+                            disabled={knowledgeBusy}
+                            onChange={(event) => {
+                              const depth = event.target.value as KnowledgeRootDepth
+                              setKnowledgeBusy(true)
+                              setKnowledgeMessage(null)
+                              void window.tezbar
+                                .setKnowledgeRootDepth(root.id, depth)
+                                .then(setKnowledge)
+                                .catch((error: unknown) =>
+                                  setKnowledgeMessage(
+                                    error instanceof Error ? error.message : String(error)
+                                  )
+                                )
+                                .finally(() => setKnowledgeBusy(false))
+                            }}
+                            className="h-7 max-w-[108px] rounded-lg border border-white/[0.09] bg-[#191b24] px-2 text-[10.5px] text-ink-2 outline-none transition focus:border-cyan-300/35 disabled:opacity-50"
+                          >
+                            {KNOWLEDGE_ROOT_DEPTH_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-ink-3">
+                            Local
+                          </span>
+                          <Button
+                            variant="quiet"
+                            disabled={knowledgeBusy}
+                            onClick={() => {
+                              setKnowledgeBusy(true)
+                              void window.tezbar
+                                .removeKnowledgeRoot(root.id)
+                                .then(setKnowledge)
+                                .catch((error: unknown) =>
+                                  setKnowledgeMessage(
+                                    error instanceof Error ? error.message : String(error)
+                                  )
+                                )
+                                .finally(() => setKnowledgeBusy(false))
+                            }}
+                          >
+                            Remove
+                          </Button>
                         </div>
-                        <select
-                          aria-label={`Knowledge Depth for ${title}`}
-                          value={root.depth}
-                          disabled={knowledgeBusy}
-                          onChange={(event) => {
-                            const depth = event.target.value as KnowledgeRootDepth
-                            setKnowledgeBusy(true)
-                            setKnowledgeMessage(null)
-                            void window.tezbar.setKnowledgeRootDepth(root.id, depth)
-                              .then(setKnowledge)
-                              .catch((error: unknown) => setKnowledgeMessage(
-                                error instanceof Error ? error.message : String(error)
-                              ))
-                              .finally(() => setKnowledgeBusy(false))
-                          }}
-                          className="h-7 max-w-[108px] rounded-lg border border-white/[0.09] bg-[#191b24] px-2 text-[10.5px] text-ink-2 outline-none transition focus:border-cyan-300/35 disabled:opacity-50"
-                        >
-                          {KNOWLEDGE_ROOT_DEPTH_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                        <span className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-ink-3">Local</span>
-                        <Button
-                          variant="quiet"
-                          disabled={knowledgeBusy}
-                          onClick={() => {
-                            setKnowledgeBusy(true)
-                            void window.tezbar.removeKnowledgeRoot(root.id)
-                              .then(setKnowledge)
-                              .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
-                              .finally(() => setKnowledgeBusy(false))
-                          }}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    )
-                  }) : (
+                      )
+                    })
+                  ) : (
                     <div className="rounded-tezbar-row border border-dashed border-white/[0.12] px-4 py-5 text-center">
-                      <p className="text-[12px] text-ink-3">No folders are being content-indexed.</p>
+                      <p className="text-[12px] text-ink-3">
+                        No folders are being content-indexed.
+                      </p>
                       <p className="mt-1 text-[10.5px] text-ink-4">Nothing leaves this computer.</p>
                     </div>
                   )}
@@ -2177,9 +2306,14 @@ export default function SettingsView({
                       onClick={() => {
                         setKnowledgeBusy(true)
                         setKnowledgeMessage(null)
-                        void window.tezbar.addMajorKnowledgeRoots()
+                        void window.tezbar
+                          .addMajorKnowledgeRoots()
                           .then(setKnowledge)
-                          .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                          .catch((error: unknown) =>
+                            setKnowledgeMessage(
+                              error instanceof Error ? error.message : String(error)
+                            )
+                          )
                           .finally(() => setKnowledgeBusy(false))
                       }}
                     >
@@ -2191,10 +2325,17 @@ export default function SettingsView({
                       onClick={() => {
                         setKnowledgeBusy(true)
                         setKnowledgeMessage(null)
-                        void window.tezbar.chooseKnowledgeFolder()
-                          .then((path) => path ? window.tezbar.addKnowledgeRoot(path) : null)
-                          .then((snapshot) => { if (snapshot) setKnowledge(snapshot) })
-                          .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                        void window.tezbar
+                          .chooseKnowledgeFolder()
+                          .then((path) => (path ? window.tezbar.addKnowledgeRoot(path) : null))
+                          .then((snapshot) => {
+                            if (snapshot) setKnowledge(snapshot)
+                          })
+                          .catch((error: unknown) =>
+                            setKnowledgeMessage(
+                              error instanceof Error ? error.message : String(error)
+                            )
+                          )
                           .finally(() => setKnowledgeBusy(false))
                       }}
                     >
@@ -2213,20 +2354,24 @@ export default function SettingsView({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3 text-[11.5px]">
                     <span className="flex items-center gap-2 capitalize text-ink-2">
-                      <span className={cx(
-                        'h-1.5 w-1.5 rounded-full',
-                        knowledge?.status.state === 'indexing' || knowledge?.status.state === 'scanning'
-                          ? 'animate-pulse bg-cyan-300'
-                          : knowledge?.status.state === 'failed'
-                            ? 'bg-red-300'
-                            : knowledge?.status.state === 'paused'
-                              ? 'bg-amber-300'
-                              : 'bg-emerald-300'
-                      )} />
+                      <span
+                        className={cx(
+                          'h-1.5 w-1.5 rounded-full',
+                          knowledge?.status.state === 'indexing' ||
+                            knowledge?.status.state === 'scanning'
+                            ? 'animate-pulse bg-cyan-300'
+                            : knowledge?.status.state === 'failed'
+                              ? 'bg-red-300'
+                              : knowledge?.status.state === 'paused'
+                                ? 'bg-amber-300'
+                                : 'bg-emerald-300'
+                        )}
+                      />
                       {knowledge?.status.state ?? 'Loading'}
                     </span>
                     <span className="font-mono text-ink-4">
-                      {knowledge?.status.sourceCount ?? 0} files · {knowledge?.status.chunkCount ?? 0} chunks
+                      {knowledge?.status.sourceCount ?? 0} files ·{' '}
+                      {knowledge?.status.chunkCount ?? 0} chunks
                       {(knowledge?.status.totalPageCount ?? 0) > 0
                         ? ` · ${knowledge?.status.indexedPageCount ?? 0}/${knowledge?.status.totalPageCount ?? 0} pages`
                         : ''}
@@ -2241,7 +2386,8 @@ export default function SettingsView({
                     </div>
                     <div className="flex items-center justify-between gap-3 font-mono text-[10px] text-ink-4">
                       <span>
-                        {knowledge?.status.processedSources ?? 0} processed · {knowledge?.status.queuedSources ?? 0} remaining
+                        {knowledge?.status.processedSources ?? 0} processed ·{' '}
+                        {knowledge?.status.queuedSources ?? 0} remaining
                         {(knowledge?.status.failedSources ?? 0) > 0
                           ? ` · ${knowledge?.status.failedSources ?? 0} failed`
                           : ''}
@@ -2254,24 +2400,40 @@ export default function SettingsView({
                   </p>
                   {(knowledge?.status.partialSourceCount ?? 0) > 0 ? (
                     <p className="text-[10.5px] text-amber-200/80">
-                      {knowledge?.status.partialSourceCount} large document{knowledge?.status.partialSourceCount === 1 ? '' : 's'} partially indexed at the selected depth.
+                      {knowledge?.status.partialSourceCount} large document
+                      {knowledge?.status.partialSourceCount === 1 ? '' : 's'} partially indexed at
+                      the selected depth.
                     </p>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
-                    {knowledge?.status.state === 'indexing' || knowledge?.status.state === 'scanning' ? (
+                    {knowledge?.status.state === 'indexing' ||
+                    knowledge?.status.state === 'scanning' ? (
                       <Button
                         variant="ghost"
                         disabled={knowledgeBusy}
                         onClick={() => {
                           setKnowledgeBusy(true)
                           setKnowledgeMessage(null)
-                          setKnowledge((current) => current ? {
-                            ...current,
-                            status: { ...current.status, state: 'paused', detail: 'Pausing indexing…' },
-                          } : current)
-                          void window.tezbar.pauseKnowledgeIndexing()
+                          setKnowledge((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  status: {
+                                    ...current.status,
+                                    state: 'paused',
+                                    detail: 'Pausing indexing…',
+                                  },
+                                }
+                              : current
+                          )
+                          void window.tezbar
+                            .pauseKnowledgeIndexing()
                             .then(setKnowledge)
-                            .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                            .catch((error: unknown) =>
+                              setKnowledgeMessage(
+                                error instanceof Error ? error.message : String(error)
+                              )
+                            )
                             .finally(() => setKnowledgeBusy(false))
                         }}
                       >
@@ -2284,9 +2446,14 @@ export default function SettingsView({
                         onClick={() => {
                           setKnowledgeBusy(true)
                           setKnowledgeMessage(null)
-                          void window.tezbar.resumeKnowledgeIndexing()
+                          void window.tezbar
+                            .resumeKnowledgeIndexing()
                             .then(setKnowledge)
-                            .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                            .catch((error: unknown) =>
+                              setKnowledgeMessage(
+                                error instanceof Error ? error.message : String(error)
+                              )
+                            )
                             .finally(() => setKnowledgeBusy(false))
                         }}
                       >
@@ -2299,9 +2466,14 @@ export default function SettingsView({
                         onClick={() => {
                           setKnowledgeBusy(true)
                           setKnowledgeMessage(null)
-                          void window.tezbar.startKnowledgeIndexing()
+                          void window.tezbar
+                            .startKnowledgeIndexing()
                             .then(setKnowledge)
-                            .catch((error: unknown) => setKnowledgeMessage(error instanceof Error ? error.message : String(error)))
+                            .catch((error: unknown) =>
+                              setKnowledgeMessage(
+                                error instanceof Error ? error.message : String(error)
+                              )
+                            )
                             .finally(() => setKnowledgeBusy(false))
                         }}
                       >
@@ -2314,7 +2486,11 @@ export default function SettingsView({
                               : 'Start indexing'}
                       </Button>
                     )}
-                    <Button variant="quiet" disabled={knowledgeBusy} onClick={() => void loadKnowledge()}>
+                    <Button
+                      variant="quiet"
+                      disabled={knowledgeBusy}
+                      onClick={() => void loadKnowledge()}
+                    >
                       Refresh
                     </Button>
                   </div>
@@ -2334,14 +2510,20 @@ export default function SettingsView({
                 <div className="grid grid-cols-2 gap-2.5">
                   <div className="rounded-tezbar-row border border-sky-300/20 bg-sky-300/[0.07] p-3">
                     <p className="text-[12px] font-semibold text-ink-1">On this computer</p>
-                    <p className="mt-1 text-[10.5px] leading-snug text-ink-3">Private, offline, and enabled.</p>
+                    <p className="mt-1 text-[10.5px] leading-snug text-ink-3">
+                      Private, offline, and enabled.
+                    </p>
                   </div>
                   <div className="rounded-tezbar-row border border-white/[0.07] bg-white/[0.02] p-3 opacity-60">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[12px] font-semibold text-ink-2">Tezbar Cloud</p>
-                      <span className="text-[9.5px] uppercase tracking-wide text-ink-4">Coming later</span>
+                      <span className="text-[9.5px] uppercase tracking-wide text-ink-4">
+                        Coming later
+                      </span>
                     </div>
-                    <p className="mt-1 text-[10.5px] leading-snug text-ink-4">Disabled. Files are never uploaded.</p>
+                    <p className="mt-1 text-[10.5px] leading-snug text-ink-4">
+                      Disabled. Files are never uploaded.
+                    </p>
                   </div>
                 </div>
               </SettingsRow>
@@ -2352,7 +2534,11 @@ export default function SettingsView({
           {activeTab === 'storage' ? (
             <div className="mx-auto max-w-[610px]">
               <div className="mb-3 flex justify-end">
-                <Button variant="quiet" disabled={storageLoading} onClick={() => void loadStorage()}>
+                <Button
+                  variant="quiet"
+                  disabled={storageLoading}
+                  onClick={() => void loadStorage()}
+                >
                   {storageLoading ? 'Calculating…' : 'Refresh usage'}
                 </Button>
               </div>
@@ -2402,7 +2588,9 @@ export default function SettingsView({
                           if (Number.isFinite(value) && value > 0) {
                             void window.tezbar
                               .setClipboardStorageConfig({ maxImageMegapixels: value })
-                              .then((cfg) => setClipboardMaxImageMegapixels(String(cfg.maxImageMegapixels)))
+                              .then((cfg) =>
+                                setClipboardMaxImageMegapixels(String(cfg.maxImageMegapixels))
+                              )
                           }
                         }
                       }}
@@ -2416,7 +2604,9 @@ export default function SettingsView({
                         if (Number.isFinite(value) && value > 0) {
                           void window.tezbar
                             .setClipboardStorageConfig({ maxImageMegapixels: value })
-                            .then((cfg) => setClipboardMaxImageMegapixels(String(cfg.maxImageMegapixels)))
+                            .then((cfg) =>
+                              setClipboardMaxImageMegapixels(String(cfg.maxImageMegapixels))
+                            )
                         }
                       }}
                     >
@@ -2439,7 +2629,9 @@ export default function SettingsView({
                           className="flex items-center justify-between gap-3 rounded-tezbar-row border border-white/10 bg-white/[0.025] px-3 py-2"
                         >
                           <span className="text-[12.5px] text-ink-2">{item.label}</span>
-                          <span className="font-mono text-[12px] text-ink-3">{formatBytes(item.bytes)}</span>
+                          <span className="font-mono text-[12px] text-ink-3">
+                            {formatBytes(item.bytes)}
+                          </span>
                         </li>
                       ))}
                     </ul>

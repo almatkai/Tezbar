@@ -72,9 +72,13 @@ function normalizeSettingsTab(tab: unknown): SettingsTab {
 
 async function openNativeSettings(tab: SettingsTab): Promise<void> {
   window.localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, tab)
-  await window.tezbar.setLlmConfig({ settingsInitialTab: tab })
+  // Opening the native window must not depend on the backend being healthy.
+  // The config write is only used to select the initial tab; if the backend
+  // is still starting (or has crashed), Settings should still be reachable.
   await window.tezbar.openSettingsWindow()
-  await window.tezbar.hide()
+  void window.tezbar.setLlmConfig({ settingsInitialTab: tab }).catch((error: unknown) => {
+    console.warn('[Settings] Failed to persist initial tab:', error)
+  })
 }
 
 const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
@@ -195,18 +199,23 @@ function SnapOverlayApp(): JSX.Element {
 
 function SettingsWindowApp(): JSX.Element {
   const [surface, setSurface] = useState<'settings' | 'permissions'>('settings')
-  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(() => {
+    const storedTab = window.localStorage.getItem(SETTINGS_TAB_STORAGE_KEY)
+    return normalizeSettingsTab(storedTab ?? 'general')
+  })
 
   useEffect(() => {
     let cancelled = false
+    const storedTab = window.localStorage.getItem(SETTINGS_TAB_STORAGE_KEY)
     void window.tezbar
       .getLlmConfig()
       .then((config) => {
-        if (!cancelled) setSettingsTab(normalizeSettingsTab(config.settingsInitialTab))
+        if (!cancelled && storedTab === null) {
+          setSettingsTab(normalizeSettingsTab(config.settingsInitialTab))
+        }
       })
       .catch((error: unknown) => {
         console.warn('[SettingsWindow] Failed to load initial settings tab:', error)
-        if (!cancelled) setSettingsTab('general')
       })
 
     const onStorage = (event: StorageEvent): void => {
@@ -221,9 +230,16 @@ function SettingsWindowApp(): JSX.Element {
     }
   }, [])
 
-  if (settingsTab === null) {
-    return <div className="h-screen w-full bg-[#1e1f2e]" />
-  }
+  useEffect(() => {
+    // Native code hides the launcher on every Settings activation. Repeat the
+    // invariant after first paint as a safeguard for startup and WebView reloads.
+    const frame = window.requestAnimationFrame(() => {
+      void window.tezbar.hideLauncherForSettings().catch((error: unknown) => {
+        console.warn('[SettingsWindow] Failed to hide launcher:', error)
+      })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [])
 
   return (
     <div className="flex h-screen w-full bg-[#1e1f2e]">

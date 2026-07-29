@@ -1,21 +1,10 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { ExtensionManifest } from '../shared/extensions'
-import {
-  Button,
-  Hint,
-  HintBar,
-  Kbd,
-  Message,
-  TextField,
-  ViewHeader,
-  cx,
-} from './ui/primitives'
+import { parseGitHubRepositoryUrl } from '../shared/extensionRepository'
+import { Button, Hint, HintBar, Kbd, Message, TextField, ViewHeader, cx } from './ui/primitives'
 import { GlideList } from './ui/GlideList'
 import { ExtensionPreferencesEditor } from './ExtensionPreferencesEditor'
-import {
-  extensionCatalogReducer,
-  INITIAL_EXTENSION_CATALOG_STATE,
-} from './extensionCatalogState'
+import { extensionCatalogReducer, INITIAL_EXTENSION_CATALOG_STATE } from './extensionCatalogState'
 
 type StoreExtension = ExtensionManifest
 type ImageVariant = 'icon' | 'avatar' | 'screenshot'
@@ -155,40 +144,31 @@ function CachedImage({
     }
   }, [normalized, variant])
 
-  return (
-    <img
-      src={resolvedSrc}
-      alt={alt}
-      loading="lazy"
-      decoding="async"
-      className={className}
-      onError={onError}
-    />
-  )
+  return <img src={resolvedSrc} alt={alt} loading="lazy" decoding="async" className={className} onError={onError} />
 }
 
 function ExtensionIconPlaceholder(): ReactNode {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      className="h-[52%] w-[52%]"
-    >
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="h-[52%] w-[52%]">
       <path
         d="M9 4.75H6.75a2 2 0 0 0-2 2V9m10.25-4.25h2.25a2 2 0 0 1 2 2V9M4.75 15v2.25a2 2 0 0 0 2 2H9M19.25 15v2.25a2 2 0 0 1-2 2H15"
         stroke="currentColor"
         strokeWidth="1.75"
         strokeLinecap="round"
       />
-      <path
-        d="M9.25 9.25h5.5v5.5h-5.5z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinejoin="round"
-      />
+      <path d="M9.25 9.25h5.5v5.5h-5.5z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
     </svg>
   )
+}
+
+function installProgressLabel(progress: number): string {
+  const percent = Math.round(progress)
+  if (percent < 10) return `Preparing ${percent}%`
+  if (percent < 45) return `Downloading bundle ${percent}%`
+  if (percent < 60) return `Downloading source ${percent}%`
+  if (percent < 75) return `Installing dependencies ${percent}%`
+  if (percent < 95) return `Building commands ${percent}%`
+  return `Finishing ${percent}%`
 }
 
 function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 'small' | 'large' }): JSX.Element {
@@ -250,15 +230,15 @@ export default function ExtensionsView({
   onBack: () => void
   embedded?: boolean
 }): JSX.Element {
-  const [catalog, dispatchCatalog] = useReducer(
-    extensionCatalogReducer,
-    INITIAL_EXTENSION_CATALOG_STATE,
-  )
+  const [catalog, dispatchCatalog] = useReducer(extensionCatalogReducer, INITIAL_EXTENSION_CATALOG_STATE)
   const { query, loading, installing, store, installed, selectedId, followSelection } = catalog
   const msg = catalog.message
   const rootRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const loadRequestIdRef = useRef(0)
+  const [repositoryInstalling, setRepositoryInstalling] = useState(false)
+  const repository = useMemo(() => parseGitHubRepositoryUrl(query), [query])
+  const isUrlQuery = useMemo(() => /^[a-z][a-z0-9+.-]*:\/\//i.test(query.trim()), [query])
   const showMessage = useCallback((message: { tone: 'success' | 'error'; text: string }) => {
     dispatchCatalog({ type: 'message', message })
   }, [])
@@ -277,20 +257,20 @@ export default function ExtensionsView({
     try {
       const [installedList, storeList] = await Promise.all([
         window.tezbar.extensionList(),
-        window.tezbar.extensionSearchStore(query),
+        isUrlQuery ? Promise.resolve([]) : window.tezbar.extensionSearchStore(query),
       ])
       const normalizedInstalled = installedList.map((entry) => ({
-          id: entry.id,
-          name: entry.name,
-          description: entry.description,
-          author: entry.author || 'Raycast Community',
-          owner: entry.owner,
-          downloadCount: entry.downloadCount,
-          version: entry.version,
-          installedAt: entry.installedAt,
-          iconUrl: entry.iconPath,
-          authorIconUrl: entry.authorIconUrl,
-        }))
+        id: entry.id,
+        name: entry.name,
+        description: entry.description,
+        author: entry.author || 'Raycast Community',
+        owner: entry.owner,
+        downloadCount: entry.downloadCount,
+        version: entry.version,
+        installedAt: entry.installedAt,
+        iconUrl: entry.iconPath,
+        authorIconUrl: entry.authorIconUrl,
+      }))
       dispatchCatalog({
         type: 'load-succeeded',
         requestId,
@@ -304,10 +284,13 @@ export default function ExtensionsView({
         message: error instanceof Error ? error.message : 'Could not load extensions',
       })
     }
-  }, [query])
+  }, [isUrlQuery, query])
 
   useEffect(() => {
-    void reload()
+    const timeout = window.setTimeout(() => {
+      void reload()
+    }, 250)
+    return () => window.clearTimeout(timeout)
   }, [reload])
 
   useEffect(() => {
@@ -325,12 +308,15 @@ export default function ExtensionsView({
   }, [selectedId, store])
 
   const installedIds = useMemo(() => new Set(installed.map((i) => i.id)), [installed])
-  const selected = useMemo(
-    () => store.find((ext) => ext.id === selectedId) ?? store[0] ?? null,
-    [selectedId, store],
-  )
+  const selected = useMemo(() => store.find((ext) => ext.id === selectedId) ?? store[0] ?? null, [selectedId, store])
   const selectedIndex = useMemo(
-    () => (selected ? Math.max(0, store.findIndex((ext) => ext.id === selected.id)) : -1),
+    () =>
+      selected
+        ? Math.max(
+            0,
+            store.findIndex((ext) => ext.id === selected.id),
+          )
+        : -1,
     [selected, store],
   )
 
@@ -340,9 +326,7 @@ export default function ExtensionsView({
       if (!isInstalled) {
         dispatchCatalog({ type: 'install-started', id: ext.id })
       }
-      const action = isInstalled
-        ? window.tezbar.extensionUninstall(ext.id)
-        : window.tezbar.extensionInstall(ext.id)
+      const action = isInstalled ? window.tezbar.extensionUninstall(ext.id) : window.tezbar.extensionInstall(ext.id)
       void action
         .then(() => {
           dispatchCatalog({
@@ -369,6 +353,31 @@ export default function ExtensionsView({
     [installedIds, reload],
   )
 
+  const installRepository = useCallback((): void => {
+    if (!repository || repositoryInstalling) return
+
+    setRepositoryInstalling(true)
+    dispatchCatalog({ type: 'message', message: null })
+    void window.tezbar
+      .extensionInstall(repository.url)
+      .then((installedExtension) => {
+        showMessage({
+          tone: 'success',
+          text: `Installed ${installedExtension.name} from ${repository.owner}/${repository.repository}`,
+        })
+        return reload()
+      })
+      .catch((error: unknown) => {
+        showMessage({
+          tone: 'error',
+          text: error instanceof Error ? error.message : 'Could not install this repository',
+        })
+      })
+      .finally(() => {
+        setRepositoryInstalling(false)
+      })
+  }, [reload, repository, repositoryInstalling, showMessage])
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
@@ -380,6 +389,11 @@ export default function ExtensionsView({
       if (event.key === '/' && document.activeElement !== searchRef.current) {
         event.preventDefault()
         searchRef.current?.focus()
+        return
+      }
+      if (event.key === 'Enter' && repository) {
+        event.preventDefault()
+        installRepository()
         return
       }
       if (store.length === 0) return
@@ -402,10 +416,13 @@ export default function ExtensionsView({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [onBack, runInstallAction, selected, selectedIndex, store])
+  }, [installRepository, onBack, repository, runInstallAction, selected, selectedIndex, store])
 
   const screenshots = selected?.screenshotUrls?.filter(Boolean).slice(0, 4) ?? []
-  const commands = selected?.commands?.filter((command) => command.title || command.name).slice(0, 6) ?? []
+  // Show the complete command list. Some extensions (including Color Picker)
+  // expose more than six commands, and hiding the rest makes installed
+  // functionality look unavailable in the store detail view.
+  const commands = selected?.commands?.filter((command) => command.title || command.name) ?? []
   const categories = selected?.categories?.filter(Boolean).slice(0, 4) ?? []
   const selectedInstalled = selected ? installedIds.has(selected.id) : false
 
@@ -420,38 +437,46 @@ export default function ExtensionsView({
         embedded ? 'gap-0' : 'gap-2',
       )}
     >
-      {!embedded ? <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
-        <ViewHeader
-          title="Extensions"
-          onBack={onBack}
-          trailing={
-            <Button variant="ghost" onClick={() => void reload()} disabled={loading}>
-              {loading ? 'Refreshing' : 'Refresh'}
-            </Button>
-          }
-        />
-        <div className="mt-2">
-          <TextField
-            ref={searchRef}
-            value={query}
-            onChange={(event) => dispatchCatalog({ type: 'query', query: event.target.value })}
-            placeholder="Search extension store"
-            autoFocus
+      {!embedded ? (
+        <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
+          <ViewHeader
+            title="Extensions"
+            onBack={onBack}
+            trailing={
+              <Button variant="ghost" onClick={() => void reload()} disabled={loading}>
+                {loading ? 'Refreshing' : 'Refresh'}
+              </Button>
+            }
           />
+          <div className="mt-2">
+            <TextField
+              ref={searchRef}
+              value={query}
+              onChange={(event) => dispatchCatalog({ type: 'query', query: event.target.value })}
+              placeholder="Search store or paste a GitHub repository URL"
+              autoFocus
+            />
+          </div>
         </div>
-      </div> : null}
+      ) : null}
 
       <section className="grid min-h-0 flex-1 grid-cols-[224px_minmax(0,1fr)] gap-2 animate-tezbar-scale-in">
         <aside className="glass-card flex min-h-0 flex-col overflow-hidden px-1.5 py-2">
           <div className="flex items-center justify-between px-1.5 pb-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">
-              Store
-            </span>
-            <span className="text-[10px] text-ink-4">{loading ? 'Loading…' : store.length}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">Store</span>
+            <span className="text-[10px] text-ink-4">{loading ? 'Loading…' : isUrlQuery ? 'URL' : store.length}</span>
           </div>
           {store.length === 0 ? (
             <div className="flex min-h-0 flex-1 items-center justify-center text-center">
-              <p className="text-[12px] text-ink-3">{loading ? 'Loading extensions…' : 'No extensions match.'}</p>
+              <p className="px-3 text-[12px] text-ink-3">
+                {repository
+                  ? 'GitHub repository ready to install.'
+                  : isUrlQuery
+                    ? 'Paste a public GitHub repository root URL.'
+                    : loading
+                      ? 'Loading extensions…'
+                      : 'No extensions match.'}
+              </p>
             </div>
           ) : (
             <GlideList
@@ -497,7 +522,42 @@ export default function ExtensionsView({
         </aside>
 
         <main className="glass-card relative min-h-0 overflow-hidden">
-          {selected ? (
+          {repository ? (
+            <div className="flex h-full items-center justify-center px-8">
+              <div className="w-full max-w-[540px] rounded-[14px] border border-white/10 bg-white/[0.035] p-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">Install from GitHub</p>
+                <h2 className="mt-3 break-words text-[24px] font-semibold text-ink-1">{repository.repository}</h2>
+                <p className="mt-1 text-[13px] text-ink-3">
+                  {repository.owner}/{repository.repository}
+                </p>
+                <p className="mt-5 text-[13px] leading-relaxed text-ink-2">
+                  Tezbar will download this public repository, validate its package manifest and platform support, then
+                  install its checked-in command bundles or build them locally.
+                </p>
+                <div className="mt-6 flex items-center gap-3">
+                  <Button variant="primary" disabled={repositoryInstalling} onClick={installRepository}>
+                    {repositoryInstalling ? 'Installing repository…' : 'Install Repository'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={repositoryInstalling}
+                    onClick={() => void window.tezbar.openExternalUrl(repository.url)}
+                  >
+                    Open on GitHub
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : isUrlQuery ? (
+            <div className="flex h-full items-center justify-center px-8 text-center">
+              <div>
+                <p className="text-[15px] font-medium text-ink-1">That is not an installable URL.</p>
+                <p className="mt-2 text-[12px] text-ink-3">
+                  Use a public repository root such as https://github.com/owner/repository.
+                </p>
+              </div>
+            </div>
+          ) : selected ? (
             <div className="flex h-full min-h-0 flex-col">
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <section className="border-b border-white/10 bg-[radial-gradient(circle_at_10%_0%,rgba(114,95,255,0.20),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0))] px-8 py-7">
@@ -505,9 +565,7 @@ export default function ExtensionsView({
                     <ExtensionIcon ext={selected} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="truncate text-[28px] font-semibold leading-tight text-ink-1">
-                          {selected.name}
-                        </h2>
+                        <h2 className="truncate text-[28px] font-semibold leading-tight text-ink-1">{selected.name}</h2>
                         {selectedInstalled ? (
                           <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-300">
                             Installed
@@ -545,22 +603,16 @@ export default function ExtensionsView({
                           key={`${url}-${index}`}
                           className="aspect-[16/10] overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.03]"
                         >
-                          <CachedImage
-                            src={url}
-                            alt=""
-                            variant="screenshot"
-                            className="h-full w-full object-cover"
-                          />
+                          <CachedImage src={url} alt="" variant="screenshot" className="h-full w-full object-cover" />
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div className="rounded-[8px] border border-white/10 bg-white/[0.03] px-5 py-5">
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-ink-4">
-                        Preview
-                      </p>
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-ink-4">Preview</p>
                       <p className="mt-2 text-[13px] leading-relaxed text-ink-3">
-                        No screenshots are available for this extension yet. The command list and metadata below can still help you decide whether it belongs in your workflow.
+                        No screenshots are available for this extension yet. The command list and metadata below can
+                        still help you decide whether it belongs in your workflow.
                       </p>
                     </div>
                   )}
@@ -587,13 +639,9 @@ export default function ExtensionsView({
                       <div className="flex items-center gap-3 px-4 py-3">
                         <AuthorAvatar ext={selected} />
                         <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-4">
-                            Author
-                          </p>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-4">Author</p>
                           <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                            <span className="text-[13px] font-medium text-ink-1">
-                              {extensionAuthor(selected)}
-                            </span>
+                            <span className="text-[13px] font-medium text-ink-1">{extensionAuthor(selected)}</span>
                             {authorHandle(selected) ? (
                               <span className="font-mono text-[11px] text-ink-4">@{authorHandle(selected)}</span>
                             ) : null}
@@ -627,9 +675,7 @@ export default function ExtensionsView({
                     </a>
 
                     <div className="mt-5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4">
-                        Commands
-                      </p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4">Commands</p>
                       {commands.length > 0 ? (
                         <ul className="mt-2 space-y-1.5">
                           {commands.map((command) => (
@@ -641,9 +687,7 @@ export default function ExtensionsView({
                                 {command.title || command.name}
                               </p>
                               {command.description ? (
-                                <p className="mt-0.5 line-clamp-2 text-[10.5px] text-ink-4">
-                                  {command.description}
-                                </p>
+                                <p className="mt-0.5 line-clamp-2 text-[10.5px] text-ink-4">{command.description}</p>
                               ) : null}
                             </li>
                           ))}
@@ -664,11 +708,23 @@ export default function ExtensionsView({
                   disabled={loading || !!installing[selected.id]}
                   onClick={() => runInstallAction(selected)}
                 >
-                  {installing[selected.id] !== undefined ? `Installing ${Math.round(installing[selected.id]!)}%` : selectedInstalled ? 'Remove Extension' : 'Install Extension'}
+                  {installing[selected.id] !== undefined
+                    ? installProgressLabel(installing[selected.id]!)
+                    : selectedInstalled
+                      ? 'Remove Extension'
+                      : 'Install Extension'}
                 </Button>
                 <span className="hidden h-5 w-px bg-white/10 sm:block" />
                 <HintBar>
-                  <Hint label="Actions" keys={<><Kbd>⌘</Kbd><Kbd>K</Kbd></>} />
+                  <Hint
+                    label="Actions"
+                    keys={
+                      <>
+                        <Kbd>⌘</Kbd>
+                        <Kbd>K</Kbd>
+                      </>
+                    }
+                  />
                 </HintBar>
               </footer>
             </div>
@@ -686,14 +742,24 @@ export default function ExtensionsView({
         </div>
       ) : null}
 
-      {!embedded ? <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
-        <HintBar>
-          <Hint label="Search" keys={<Kbd>/</Kbd>} />
-          <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
-          <Hint label="Install / Remove" keys={<Kbd>↵</Kbd>} />
-          <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-        </HintBar>
-      </div> : null}
+      {!embedded ? (
+        <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
+          <HintBar>
+            <Hint label="Search" keys={<Kbd>/</Kbd>} />
+            <Hint
+              label="Navigate"
+              keys={
+                <>
+                  <Kbd>↑</Kbd>
+                  <Kbd>↓</Kbd>
+                </>
+              }
+            />
+            <Hint label="Install / Remove" keys={<Kbd>↵</Kbd>} />
+            <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+          </HintBar>
+        </div>
+      ) : null}
     </div>
   )
 }

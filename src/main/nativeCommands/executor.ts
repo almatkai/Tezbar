@@ -29,7 +29,7 @@ async function runPowerShell(script: string): Promise<string> {
     'Bypass',
     '-Command',
     script,
-  ])
+  ], { windowsHide: true })
   return stdout.trim()
 }
 

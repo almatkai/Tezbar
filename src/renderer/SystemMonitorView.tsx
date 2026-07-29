@@ -177,6 +177,12 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
     ? (snapshot.storage.usedBytes / Math.max(1, snapshot.storage.totalBytes)) * 100
     : 0
   const batteryPercent = snapshot?.battery?.chargePercent ?? 0
+  const isWindows = snapshot?.device.platform === 'Windows'
+  const deviceSummary = snapshot
+    ? [snapshot.device.chip, snapshot.device.model, snapshot.device.osVersion]
+        .filter(Boolean)
+        .join(' · ')
+    : 'Hardware and live activity'
   const updatedAt = snapshot
     ? new Date(snapshot.collectedAt).toLocaleTimeString([], {
         hour: '2-digit',
@@ -229,12 +235,10 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
         <div className="mt-2 flex items-end justify-between gap-4 border-t border-white/[0.055] pt-2.5">
           <div className="min-w-0">
             <p className="truncate font-display text-[15px] font-semibold tracking-[-0.015em] text-ink-1">
-              {snapshot?.device.name ?? 'Reading this Mac…'}
+              {snapshot?.device.name ?? 'Reading this computer…'}
             </p>
             <p className="mt-0.5 truncate text-[10.5px] text-ink-4">
-              {snapshot
-                ? `${snapshot.device.chip} · ${snapshot.device.model} · macOS ${snapshot.device.osVersion}`
-                : 'Hardware and live activity'}
+              {deviceSummary}
             </p>
           </div>
           <p className="shrink-0 text-[9.5px] tabular-nums text-ink-4">
@@ -382,7 +386,11 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
                   />
                   <DetailRow
                     label="Load average"
-                    value={snapshot.cpu.loadAverage.map((value) => value.toFixed(2)).join(' · ')}
+                    value={
+                      isWindows
+                        ? 'Not reported by Windows'
+                        : snapshot.cpu.loadAverage.map((value) => value.toFixed(2)).join(' · ')
+                    }
                   />
                   <DetailRow
                     label="GPU"
@@ -420,7 +428,10 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
                   <DetailRow label="Local IP" value={snapshot.network.localIp ?? '—'} />
                   <DetailRow
                     label="Wi-Fi"
-                    value={snapshot.network.ssid ?? 'Name hidden by macOS'}
+                    value={
+                      snapshot.network.ssid ??
+                      (isWindows ? 'Not connected or unavailable' : 'Name hidden by macOS')
+                    }
                   />
                 </div>
               </section>
@@ -445,11 +456,19 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
                   <DetailRow label="Uptime" value={formatUptime(snapshot.device.uptimeSeconds)} />
                   <DetailRow
                     label="Compressed"
-                    value={formatDecimalBytes(snapshot.memory.compressedBytes ?? 0)}
+                    value={
+                      snapshot.memory.compressedBytes === undefined
+                        ? '—'
+                        : formatDecimalBytes(snapshot.memory.compressedBytes)
+                    }
                   />
                   <DetailRow
                     label="Swap used"
-                    value={formatDecimalBytes(snapshot.memory.swapUsedBytes ?? 0)}
+                    value={
+                      snapshot.memory.swapUsedBytes === undefined
+                        ? '—'
+                        : formatDecimalBytes(snapshot.memory.swapUsedBytes)
+                    }
                   />
                 </div>
                 {snapshot.fans.note ? (

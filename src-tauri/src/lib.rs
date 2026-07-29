@@ -25,6 +25,8 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -55,6 +57,9 @@ const TAURI_WINDOW_POSITION_KEY: &str = "tauriWindowPosition";
 const TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "tauriWindowPositionsByDisplay";
 const LEGACY_WINDOW_POSITION_KEY: &str = "windowPosition";
 const LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "windowPositionsByDisplay";
+const DEFAULT_BACKEND_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const EXTENSION_INSTALL_REQUEST_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+const EXTENSION_RUNTIME_REQUEST_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 
 struct BackendState {
     writer: Arc<Mutex<Option<TcpStream>>>,
@@ -67,6 +72,27 @@ struct BackendLaunchConfig {
     executable: PathBuf,
     script_path: PathBuf,
     env: Vec<(String, String)>,
+}
+
+fn backend_request_timeout(channel: &str) -> Duration {
+    match channel {
+        // Installing can include a runtime download, source download,
+        // dependency installation, and an esbuild pass. Each stage has its own
+        // bounded timeout, so the bridge must not abandon the request first.
+        "extension:install" | "extensions:install" | "extensions:reinstall" => {
+            EXTENSION_INSTALL_REQUEST_TIMEOUT
+        }
+        // Extension commands can legitimately wait on their own network
+        // request. Keep the general RPC timeout short while allowing these
+        // explicitly long-running operations to finish.
+        "extension:run-command"
+        | "extension:invoke-action"
+        | "extension:refresh-session"
+        | "extension:search-text-changed"
+        | "extension:load-more"
+        | "search:benchmark:run" => EXTENSION_RUNTIME_REQUEST_TIMEOUT,
+        _ => DEFAULT_BACKEND_REQUEST_TIMEOUT,
+    }
 }
 
 #[derive(Default)]
@@ -346,6 +372,13 @@ fn run_backend_generation(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    #[cfg(target_os = "windows")]
+    {
+        // Bun is a console executable. Without this flag Windows may surface
+        // it through the user's default terminal every time the supervised
+        // backend starts or restarts.
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
 
     log::info!(
         "launching backend sidecar: {}",
@@ -357,6 +390,16 @@ fn run_backend_generation(
     let stdout = child.stdout.take().ok_or("Failed to open backend stdout")?;
     let stderr = child.stderr.take().ok_or("Failed to open backend stderr")?;
 
+    // Start draining stderr before waiting for the IPC handshake. A startup
+    // failure used to be hidden until after the five-second timeout, leaving
+    // only the misleading "still recovering" message in the UI.
+    let stderr_thread = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            log::info!("backend sidecar: {}", line);
+        }
+        log::info!("backend stderr reader stopped");
+    });
+
     let connect_deadline = Instant::now() + Duration::from_secs(5);
     let backend_stream = loop {
         match listener.accept() {
@@ -365,6 +408,7 @@ fn run_backend_generation(
                 if Instant::now() >= connect_deadline {
                     let _ = child.kill();
                     let _ = child.wait();
+                    let _ = stderr_thread.join();
                     return Err("Backend runner did not connect to its IPC socket".to_string());
                 }
                 std::thread::sleep(Duration::from_millis(10));
@@ -372,6 +416,7 @@ fn run_backend_generation(
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait();
+                let _ = stderr_thread.join();
                 return Err(format!("Failed to accept backend IPC connection: {error}"));
             }
         }
@@ -379,13 +424,6 @@ fn run_backend_generation(
     *writer.lock().unwrap() = Some(backend_stream);
     let connected_at = Instant::now();
     log::info!("backend sidecar IPC connected on localhost");
-
-    let stderr_thread = std::thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-            log::info!("backend sidecar: {}", line);
-        }
-        log::info!("backend stderr reader stopped");
-    });
 
     for line_result in BufReader::new(stdout).lines() {
         match line_result {
@@ -524,6 +562,65 @@ fn locate_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
     }
     #[cfg(not(target_os = "windows"))]
     Err("Bun is required to run the Tauri backend. Install Bun or place it in the app data bun directory.".to_string())
+}
+
+fn copy_backend_directory(source: &std::path::Path, destination: &std::path::Path) -> Result<(), String> {
+    fs::create_dir_all(destination)
+        .map_err(|error| format!("failed to create backend directory {}: {error}", destination.display()))?;
+    for entry in fs::read_dir(source)
+        .map_err(|error| format!("failed to read backend resources {}: {error}", source.display()))?
+    {
+        let entry = entry.map_err(|error| format!("failed to enumerate backend resources: {error}"))?;
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        let file_type = entry
+            .file_type()
+            .map_err(|error| format!("failed to inspect backend resource {}: {error}", source_path.display()))?;
+        if file_type.is_dir() {
+            copy_backend_directory(&source_path, &destination_path)?;
+        } else if file_type.is_file() {
+            fs::copy(&source_path, &destination_path).map_err(|error| {
+                format!(
+                    "failed to stage backend resource {} -> {}: {error}",
+                    source_path.display(),
+                    destination_path.display()
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
+fn stage_backend_bundle(
+    source_dir: &std::path::Path,
+    app_local_data: &std::path::Path,
+) -> Result<PathBuf, String> {
+    let destination_dir = app_local_data.join("backend");
+    copy_backend_directory(source_dir, &destination_dir)?;
+
+    // The bundle keeps esbuild external because it includes a native binary.
+    // Stage the two packaged module trees beside the relocated JS so Bun's
+    // normal CommonJS resolution still works from the writable directory.
+    let source_node_modules = source_dir
+        .parent()
+        .map(|parent| parent.join("node_modules"))
+        .ok_or("could not resolve packaged node_modules directory")?;
+    for module in ["esbuild", "@esbuild"] {
+        let source_module = source_node_modules.join(module);
+        if source_module.is_dir() {
+            copy_backend_directory(&source_module, &destination_dir.join("node_modules").join(module))?;
+        }
+    }
+
+    for required in ["main.js", "knowledge-worker.js"] {
+        if !destination_dir.join(required).is_file() {
+            return Err(format!(
+                "packaged backend resource is missing after staging: {}",
+                destination_dir.join(required).display()
+            ));
+        }
+    }
+    Ok(destination_dir.join("main.js"))
 }
 
 fn read_openray_config() -> serde_json::Value {
@@ -1607,18 +1704,64 @@ fn schedule_drag_position_persistence(window: WebviewWindow) {
     });
 }
 
+fn hide_main_window_for_settings(app: &AppHandle) -> Result<(), String> {
+    let Some(main_window) = app.get_webview_window("main") else {
+        return Ok(());
+    };
+    persist_current_window_position(&main_window);
+    hide_terminal_sessions(app);
+    main_window.hide().map_err(|error| error.to_string())
+}
+
+fn focus_settings_window_if_visible(app: &AppHandle) -> Result<bool, String> {
+    let Some(settings_window) = app.get_webview_window("settings") else {
+        return Ok(false);
+    };
+    if !settings_window
+        .is_visible()
+        .map_err(|error| error.to_string())?
+    {
+        return Ok(false);
+    }
+
+    // Settings is a mutually exclusive surface. Any attempt to activate the
+    // launcher while Settings is open must keep the launcher hidden and bring
+    // the existing Settings window forward instead.
+    hide_main_window_for_settings(app)?;
+    settings_window
+        .unminimize()
+        .map_err(|error| error.to_string())?;
+    settings_window
+        .show()
+        .map_err(|error| error.to_string())?;
+    settings_window
+        .set_focus()
+        .map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
 fn open_settings_window(app: AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("settings") {
-        let _ = win.show();
-        let _ = win.set_focus();
+        // The Settings WebView is predeclared so WebView2 has already started
+        // its renderer. Do only the minimum native work here: blocking while a
+        // secondary renderer initializes can make Windows mark the launcher as
+        // unresponsive.
+        win.unminimize().map_err(|error| error.to_string())?;
+        win.show().map_err(|error| error.to_string())?;
+        win.set_focus().map_err(|error| error.to_string())?;
+        hide_main_window_for_settings(&app)?;
         return Ok(());
     }
 
-    let _settings = tauri::WebviewWindowBuilder::new(
+    let settings = tauri::WebviewWindowBuilder::new(
         &app,
         "settings",
-        tauri::WebviewUrl::App("index.html".into()),
+        // Keep the resource URL identical to the configured main window. The
+        // explicit initialization script selects the surface without relying
+        // on a query-string URL being resolved by the dev/custom protocol.
+        tauri::WebviewUrl::App("index.html?window=settings".into()),
     )
+    .initialization_script("window.__TEZBAR_WINDOW_LABEL__ = 'settings';")
     .title("Tezbar Settings")
     .inner_size(920.0, 680.0)
     .resizable(true)
@@ -1626,6 +1769,22 @@ fn open_settings_window(app: AppHandle) -> Result<(), String> {
     .build()
     .map_err(|e| e.to_string())?;
 
+    settings.set_focus().map_err(|error| error.to_string())?;
+    hide_main_window_for_settings(&app)?;
+    Ok(())
+}
+
+fn restore_main_window(app: &AppHandle) -> Result<(), String> {
+    if focus_settings_window_if_visible(app)? {
+        return Ok(());
+    }
+    let Some(main_window) = app.get_webview_window("main") else {
+        return Ok(());
+    };
+    place_window(&main_window)?;
+    main_window.show().map_err(|e| e.to_string())?;
+    main_window.set_focus().map_err(|e| e.to_string())?;
+    let _ = main_window.emit("window-shown", json!({ "resetUi": false }));
     Ok(())
 }
 
@@ -1704,6 +1863,16 @@ fn open_settings_window_cmd(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn hide_launcher_for_settings(window: WebviewWindow) -> Result<(), String> {
+    // The native open path is authoritative. This renderer callback is an
+    // additional first-paint safeguard for startup and WebView reloads.
+    if window.label() != "settings" {
+        return Ok(());
+    }
+    hide_main_window_for_settings(window.app_handle())
+}
+
+#[tauri::command]
 fn terminal_sessions_show(app: AppHandle) -> Result<(), String> {
     let main_window = app
         .get_webview_window("main")
@@ -1744,6 +1913,9 @@ fn open_extensions_window(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn toggle_window(window: WebviewWindow) -> Result<(), String> {
+    if window.label() == "main" && focus_settings_window_if_visible(window.app_handle())? {
+        return Ok(());
+    }
     if window.is_visible().map_err(|e| e.to_string())? {
         persist_current_window_position(&window);
         window.hide().map_err(|e| e.to_string())?;
@@ -1765,6 +1937,9 @@ fn hide_window(window: WebviewWindow) -> Result<(), String> {
 
 #[tauri::command]
 fn show_window(window: WebviewWindow) -> Result<(), String> {
+    if window.label() == "main" && focus_settings_window_if_visible(window.app_handle())? {
+        return Ok(());
+    }
     place_window(&window)?;
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
@@ -1777,6 +1952,12 @@ fn close_current_window(window: WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
         persist_current_window_position(&window);
         window.hide().map_err(|e| e.to_string())
+    } else if window.label() == "settings" {
+        // Settings is declared in tauri.conf.json, so hide it instead of
+        // destroying its WebView. Reusing the initialized WebView avoids the
+        // blank-page race that occurs when WebView2 is created on demand.
+        window.hide().map_err(|e| e.to_string())?;
+        restore_main_window(window.app_handle())
     } else {
         window.close().map_err(|e| e.to_string())
     }
@@ -1891,7 +2072,18 @@ fn update_raymes_shortcut(app: AppHandle, shortcut_str: String) -> Result<(), St
         .replace("Option", "Alt")
         .replace("CommandOrControl", "Super")
         .replace("CmdOrCtrl", "Super")
-        .replace("Cmd", "Super");
+        .replace("Cmd", "Super")
+        .replace("Ctrl", "Control");
+    // Alt+Space is reserved by Windows for the native window menu. It was
+    // previously the cross-platform default, so make old installations
+    // usable instead of silently leaving them without a launcher shortcut.
+    let clean_shortcut = if cfg!(target_os = "windows")
+        && clean_shortcut.eq_ignore_ascii_case("Alt+Space")
+    {
+        "Control+Space".to_string()
+    } else {
+        clean_shortcut
+    };
     let shortcut = Shortcut::from_str(&clean_shortcut)
         .map_err(|e| format!("Invalid shortcut format: {:?}", e))?;
     let _ = app.global_shortcut().unregister_all();
@@ -1908,6 +2100,7 @@ async fn call_backend(
     payload: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     let started_at = Instant::now();
+    let request_timeout = backend_request_timeout(&channel);
     let id = {
         let mut counter = state.request_counter.lock().unwrap();
         *counter += 1;
@@ -1967,7 +2160,7 @@ async fn call_backend(
         }
     }
 
-    match tokio::time::timeout(Duration::from_secs(30), rx).await {
+    match tokio::time::timeout(request_timeout, rx).await {
         Ok(Ok(res)) => {
             if let Some(err) = res.get("error") {
                 let message = err.as_str().unwrap_or("Unknown backend error").to_string();
@@ -1999,7 +2192,10 @@ async fn call_backend(
         }
         Err(_) => {
             state.pending_requests.lock().unwrap().remove(&id);
-            let message = "Backend request timed out after 30 seconds".to_string();
+            let message = format!(
+                "Backend request for {channel} timed out after {} seconds",
+                request_timeout.as_secs()
+            );
             log::error!("{}: id={} channel={}", message, id, channel);
             Err(message)
         }
@@ -2017,6 +2213,22 @@ pub fn run() {
     let pending_requests_app = pending_requests.clone();
     let backend_writer_app = backend_writer.clone();
     tauri::Builder::default()
+        // This must stay before every other plugin. A second launch should
+        // wake the existing UI and exit before it creates another tray icon,
+        // backend supervisor, or global shortcut registration.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            match focus_settings_window_if_visible(app) {
+                Ok(true) => return,
+                Ok(false) => {}
+                Err(error) => {
+                    log::debug!("failed to focus existing Settings window: {error}");
+                    return;
+                }
+            }
+            if let Err(error) = restore_main_window(app) {
+                log::debug!("failed to focus existing Tezbar instance: {error}");
+            }
+        }))
         .plugin(tauri_plugin_log::Builder::default().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -2038,6 +2250,32 @@ pub fn run() {
         .manage(WindowBehaviorState::default())
         .manage(native_terminal::NativeTerminalState::default())
         .on_window_event(|window, event| {
+            if window.label() == "settings" {
+                match event {
+                    tauri::WindowEvent::Focused(true) => {
+                        if let Err(error) =
+                            hide_main_window_for_settings(&window.app_handle())
+                        {
+                            log::debug!("failed to hide launcher behind Settings: {error}");
+                        }
+                    }
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        // Treat the title-bar X like the in-app Back action. Keep
+                        // the predeclared WebView alive and return focus to the
+                        // launcher instead of leaving the whole app hidden.
+                        api.prevent_close();
+                        let _ = window.hide();
+                        if let Err(error) = restore_main_window(&window.app_handle()) {
+                            log::debug!(
+                                "failed to restore launcher after closing settings: {error}"
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
+
             if window.label() == TERMINAL_SESSIONS_LABEL {
                 if let tauri::WindowEvent::Focused(false) = event {
                     // Delay the check so the main window has time to receive focus
@@ -2099,6 +2337,15 @@ pub fn run() {
                     }
                 }
                 tauri::WindowEvent::Focused(false) => {
+                    if window
+                        .app_handle()
+                        .get_webview_window("settings")
+                        .map(|settings| settings.is_visible().unwrap_or(false))
+                        .unwrap_or(false)
+                    {
+                        let _ = hide_main_window_for_settings(&window.app_handle());
+                        return;
+                    }
                     if let Some(sidebar) = window
                         .app_handle()
                         .get_webview_window(TERMINAL_SESSIONS_LABEL)
@@ -2107,14 +2354,35 @@ pub fn run() {
                             return;
                         }
                     }
-                    let state = window.state::<WindowBehaviorState>();
-                    if !*state.suppress_blur_hide.lock().unwrap() {
-                        if let Some(main_window) = window.app_handle().get_webview_window("main") {
-                            persist_current_window_position(&main_window);
+                    // Windows can emit Focused(false) between show() and the
+                    // matching activation/focus event, especially when the
+                    // launcher is opened from the tray. Hiding synchronously
+                    // turns a successful tray activation into a flash-and-close
+                    // window. Re-check after the activation settles.
+                    let app = window.app_handle().clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(120));
+                        let Some(main_window) = app.get_webview_window("main") else {
+                            return;
+                        };
+                        let state = main_window.state::<WindowBehaviorState>();
+                        if *state.suppress_blur_hide.lock().unwrap() {
+                            return;
                         }
-                        hide_terminal_sessions(window.app_handle());
-                        let _ = window.hide();
-                    }
+                        if main_window.is_focused().unwrap_or(false) {
+                            return;
+                        }
+                        if app
+                            .get_webview_window(TERMINAL_SESSIONS_LABEL)
+                            .map(|sidebar| sidebar.is_focused().unwrap_or(false))
+                            .unwrap_or(false)
+                        {
+                            return;
+                        }
+                        persist_current_window_position(&main_window);
+                        hide_terminal_sessions(&app);
+                        let _ = main_window.hide();
+                    });
                 }
                 _ => {}
             }
@@ -2122,6 +2390,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             call_backend,
             open_settings_window_cmd,
+            hide_launcher_for_settings,
             terminal_sessions_show,
             terminal_sessions_hide,
             terminal_sessions_sync,
@@ -2159,9 +2428,7 @@ pub fn run() {
             let handle = app.handle().clone();
             #[cfg(target_os = "macos")]
             timer_notifications::setup(&handle);
-            // Spawn Background Bun process
             let app_local_data = handle.path().app_local_data_dir().unwrap_or_default();
-            let bun_command = locate_bun(&app_local_data)?;
             let mut backend_env = vec![
                 (
                     "APPDATA_DIR".to_string(),
@@ -2183,8 +2450,8 @@ pub fn run() {
                 ("IS_TAURI".to_string(), "true".to_string()),
             ];
 
+            #[cfg(target_os = "macos")]
             if let Ok(resource_dir) = handle.path().resource_dir() {
-                #[cfg(target_os = "macos")]
                 backend_env.extend([
                     (
                         "AXHELPER_PATH".to_string(),
@@ -2211,9 +2478,85 @@ pub fn run() {
                             .join("color-picker")
                             .join("color-picker-helper")
                             .to_string_lossy()
-                            .into_owned(),
+                        .into_owned(),
                     ),
                 ]);
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                let helper_path = if cfg!(debug_assertions) {
+                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("../native/color-picker/windows.ps1")
+                } else {
+                    handle
+                        .path()
+                        .resource_dir()
+                        .unwrap_or_default()
+                        .join("native")
+                        .join("color-picker")
+                        .join("windows.ps1")
+                };
+                backend_env.push((
+                    "COLOR_PICKER_HELPER_PATH".to_string(),
+                    helper_path.to_string_lossy().into_owned(),
+                ));
+                let image_colors_helper_path = if cfg!(debug_assertions) {
+                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("../native/image-colors/windows.ps1")
+                } else {
+                    handle
+                        .path()
+                        .resource_dir()
+                        .unwrap_or_default()
+                        .join("native")
+                        .join("image-colors")
+                        .join("windows.ps1")
+                };
+                backend_env.push((
+                    "IMAGE_COLORS_HELPER_PATH".to_string(),
+                    image_colors_helper_path.to_string_lossy().into_owned(),
+                ));
+            }
+
+            let script_path = if cfg!(debug_assertions) {
+                // Tauri copies resources into target/debug only during a Rust build.
+                // The backend bundler runs independently, so that copy quickly becomes
+                // stale during development. Always execute the live workspace bundle.
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist-backend/main.js")
+            } else {
+                handle
+                    .path()
+                    .resource_dir()
+                    .map(|dir| dir.join("dist-backend").join("main.js"))
+                    .unwrap_or_else(|_| std::path::PathBuf::from("dist-backend/main.js"))
+            };
+            let supervisor_handle = handle.clone();
+            let supervisor_pending = pending_requests_app.clone();
+            let supervisor_writer = backend_writer_app.clone();
+            std::thread::spawn(move || {
+                let script_path = if cfg!(debug_assertions) {
+                    script_path
+                } else {
+                    let source_dir = script_path
+                        .parent()
+                        .map(std::path::Path::to_path_buf)
+                        .unwrap_or_else(|| std::path::PathBuf::from("dist-backend"));
+                    loop {
+                        match stage_backend_bundle(&source_dir, &app_local_data) {
+                            Ok(path) => break path,
+                            Err(error) => {
+                                log::error!("backend bundle staging failed: {}", error);
+                                std::thread::sleep(Duration::from_secs(10));
+                            }
+                        }
+                    }
+                };
+                let mut backend_env = backend_env;
+                let backend_root = script_path
+                    .parent()
+                    .map(std::path::Path::to_path_buf)
+                    .unwrap_or_else(|| app_local_data.join("backend"));
                 let esbuild_platform = if cfg!(target_os = "windows") {
                     if cfg!(target_arch = "aarch64") {
                         "win32-arm64"
@@ -2232,7 +2575,7 @@ pub fn run() {
                 };
                 backend_env.push((
                     "ESBUILD_BINARY_PATH".to_string(),
-                    resource_dir
+                    backend_root
                         .join("node_modules")
                         .join("@esbuild")
                         .join(esbuild_platform)
@@ -2240,35 +2583,54 @@ pub fn run() {
                         .to_string_lossy()
                         .into_owned(),
                 ));
-            }
+                if !cfg!(debug_assertions) {
+                    backend_env.push((
+                        "NODE_PATH".to_string(),
+                        backend_root.join("node_modules").to_string_lossy().into_owned(),
+                    ));
+                    backend_env.push((
+                        "BUN_RUNTIME_TRANSPILER_CACHE_PATH".to_string(),
+                        backend_root.join("bun-cache").to_string_lossy().into_owned(),
+                    ));
+                }
 
-            let script_path = if cfg!(debug_assertions) {
-                // Tauri copies resources into target/debug only during a Rust build.
-                // The backend bundler runs independently, so that copy quickly becomes
-                // stale during development. Always execute the live workspace bundle.
-                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist-backend/main.js")
-            } else {
-                handle
-                    .path()
-                    .resource_dir()
-                    .map(|dir| dir.join("dist-backend").join("main.js"))
-                    .unwrap_or_else(|_| std::path::PathBuf::from("dist-backend/main.js"))
-            };
-            let backend_config = BackendLaunchConfig {
-                executable: bun_command,
-                script_path,
-                env: backend_env,
-            };
-            let supervisor_handle = handle.clone();
-            let supervisor_pending = pending_requests_app.clone();
-            let supervisor_writer = backend_writer_app.clone();
-            std::thread::spawn(move || {
-                supervise_backend(
-                    supervisor_handle,
-                    backend_config,
-                    supervisor_writer,
-                    supervisor_pending,
-                );
+                // Bun bootstrap/download can involve the network and may take
+                // seconds. Never perform it on Tauri's setup thread: doing so
+                // blocks the Windows message loop and produces a frozen,
+                // apparently non-responsive launcher window.
+                let mut failures = 0_u32;
+                loop {
+                    let bun_command = match locate_bun(&app_local_data) {
+                        Ok(path) => {
+                            failures = 0;
+                            path
+                        }
+                        Err(error) => {
+                            failures = failures.saturating_add(1);
+                            log::error!("backend runtime unavailable: {}", error);
+                            let exponent = failures.min(5);
+                            let delay_ms = (500_u64 * (1_u64 << exponent)).min(15_000);
+                            log::info!(
+                                "retrying backend runtime discovery in {}ms",
+                                delay_ms
+                            );
+                            std::thread::sleep(Duration::from_millis(delay_ms));
+                            continue;
+                        }
+                    };
+
+                    let backend_config = BackendLaunchConfig {
+                        executable: bun_command,
+                        script_path: script_path.clone(),
+                        env: backend_env.clone(),
+                    };
+                    supervise_backend(
+                        supervisor_handle.clone(),
+                        backend_config,
+                        supervisor_writer.clone(),
+                        supervisor_pending.clone(),
+                    );
+                }
             });
 
             // System Tray Menu Setup
@@ -2335,13 +2697,44 @@ pub fn run() {
                 .build(&handle_tray)?;
 
             let default_shortcut = Shortcut::new(
-                Some(tauri_plugin_global_shortcut::Modifiers::ALT),
+                if cfg!(target_os = "windows") {
+                    Some(tauri_plugin_global_shortcut::Modifiers::CONTROL)
+                } else {
+                    Some(tauri_plugin_global_shortcut::Modifiers::ALT)
+                },
                 tauri_plugin_global_shortcut::Code::Space,
             );
-            let _ = handle.global_shortcut().register(default_shortcut);
+            if let Err(error) = handle.global_shortcut().register(default_shortcut) {
+                log::error!("failed to register default launcher shortcut: {:?}", error);
+            }
 
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod backend_timeout_tests {
+    use super::*;
+
+    #[test]
+    fn ordinary_backend_requests_keep_the_short_failure_bound() {
+        assert_eq!(
+            backend_request_timeout("extension:list"),
+            DEFAULT_BACKEND_REQUEST_TIMEOUT
+        );
+    }
+
+    #[test]
+    fn extension_installs_outlive_their_bounded_install_stages() {
+        assert_eq!(
+            backend_request_timeout("extension:install"),
+            EXTENSION_INSTALL_REQUEST_TIMEOUT
+        );
+        assert_eq!(
+            backend_request_timeout("extensions:reinstall"),
+            EXTENSION_INSTALL_REQUEST_TIMEOUT
+        );
+    }
 }

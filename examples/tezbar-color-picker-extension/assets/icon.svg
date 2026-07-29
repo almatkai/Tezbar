@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">Color Picker</title>
+  <desc id="desc">An eyedropper over a vivid color swatch</desc>
+  <defs>
+    <linearGradient id="bg" x1="12" y1="8" x2="86" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#20283F"/>
+      <stop offset="1" stop-color="#111524"/>
+    </linearGradient>
+    <linearGradient id="drop" x1="24" y1="18" x2="68" y2="76" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FBFF"/>
+      <stop offset=".48" stop-color="#B8C7E9"/>
+      <stop offset="1" stop-color="#6979B6"/>
+    </linearGradient>
+    <linearGradient id="swatch" x1="57" y1="50" x2="83" y2="82" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF4C79"/>
+      <stop offset=".48" stop-color="#B946F2"/>
+      <stop offset="1" stop-color="#42C6FF"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="24" fill="url(#bg)"/>
+  <rect x="55" y="52" width="27" height="27" rx="8" fill="url(#swatch)" stroke="#fff" stroke-opacity=".72" stroke-width="2"/>
+  <g transform="rotate(-45 43 43)">
+    <path d="M37 14h13v36H37z" fill="url(#drop)" stroke="#0B1020" stroke-width="4"/>
+    <path d="M37 50h13l-6.5 20L37 50Z" fill="#DCE7FF" stroke="#0B1020" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M34 13h19v10H34z" fill="#7F90D1" stroke="#0B1020" stroke-width="4"/>
+    <circle cx="43.5" cy="31" r="4" fill="#5264AA"/>
+  </g>
+  <circle cx="73.5" cy="73.5" r="3.5" fill="#fff"/>
+</svg>

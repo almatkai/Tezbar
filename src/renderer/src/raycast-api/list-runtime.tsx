@@ -115,7 +115,7 @@ function parseListRows(node: ExtensionRuntimeNode): ListRow[] {
   const rows: ListRow[] = []
 
   const walk = (entry: ExtensionRuntimeNode, section?: string): void => {
-    if (entry.type === 'List.Item') {
+    if (entry.type === 'List.Item' || entry.type === 'MenuBarExtra.Item') {
       const title = typeof entry.props?.title === 'string' ? entry.props.title : 'Untitled'
       const subtitle = cleanSubtitle(entry.props?.subtitle)
       const icon = parseRowIcon(entry.props?.icon)
@@ -129,7 +129,7 @@ function parseListRows(node: ExtensionRuntimeNode): ListRow[] {
       return
     }
 
-    if (entry.type === 'List.Section') {
+    if (entry.type === 'List.Section' || entry.type === 'MenuBarExtra.Section') {
       const nextSection = typeof entry.props?.title === 'string' ? entry.props.title : section
       for (const child of entry.children ?? []) {
         walk(child, nextSection)

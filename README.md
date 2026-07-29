@@ -70,7 +70,7 @@ on Windows.
 
 ### Remaining work for a full Windows port
 
-- Replace the Swift OCR and color-picker helpers with Windows-native helpers.
+- Replace the Swift OCR helper with a Windows-native implementation.
 - Add Windows UI-automation/accessibility tree support for semantic agent actions.
 - Port extensions that directly depend on arbitrary AppleScript when a meaningful
   Windows equivalent exists.
@@ -104,8 +104,8 @@ The Electron build uses the branded icon files in [`build/`](/Users/almatkairato
 
 - The app’s current package manager is `pnpm`.
 - Windows supports the launcher UI, search, Start Menu applications, terminal,
-  clipboard text/images, Open Ports, and the cross-platform system helpers.
-  AppleScript, Finder automation, macOS accessibility snapshots, and the Swift
-  OCR/color-picker helpers remain macOS-only.
+  clipboard text/images, Open Ports, the interactive color picker, and the
+  cross-platform system helpers. AppleScript, Finder automation, macOS
+  accessibility snapshots, and the Swift OCR helper remain macOS-only.
 - The primary app flow is Tauri/Vite with a bundled TypeScript backend.
 - If macOS Finder shows an old app icon after rebuilding, that is usually icon cache lag rather than a bad build.

@@ -1112,13 +1112,22 @@ export async function listSearchCandidates(): Promise<SearchResult[]> {
   }))
 }
 
+function stripPathEllipsis(input: string): string {
+  // Treat a trailing `/...` as “show the contents of this directory”. It is
+  // a natural shorthand in the launcher and avoids looking for a literal
+  // folder named `...`.
+  return input.replace(/[\\/]\.\.\.$/, '/')
+}
+
 function expandUserPath(input: string): string {
-  if (input === '~') return homedir()
-  if (input.startsWith('~/')) return join(homedir(), input.slice(2))
-  return input
+  const normalized = stripPathEllipsis(input)
+  if (normalized === '~') return homedir()
+  if (normalized.startsWith('~/')) return join(homedir(), normalized.slice(2))
+  return normalized
 }
 
 function resolveSlashPathInput(input: string): string {
+  input = stripPathEllipsis(input)
   if (!input.startsWith('/')) return expandUserPath(input)
 
   const absolutePrefixes = [
@@ -1143,8 +1152,12 @@ function resolveSlashPathInput(input: string): string {
 
 function displayUserPath(path: string): string {
   const home = homedir()
-  if (path === home) return '~'
-  if (path.startsWith(`${home}/`)) return `~/${path.slice(home.length + 1)}`
+  const normalizedPath = path.replace(/\\/g, '/')
+  const normalizedHome = home.replace(/\\/g, '/')
+  if (normalizedPath === normalizedHome) return '~'
+  if (normalizedPath.startsWith(`${normalizedHome}/`)) {
+    return `~/${normalizedPath.slice(normalizedHome.length + 1)}`
+  }
   return path
 }
 
@@ -1778,7 +1791,7 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
     }
 
     case 'open-file': {
-      const opened = await shell.openPath(action.path)
+      const opened = await shell.openPath(resolveSlashPathInput(action.path))
       if (opened) {
         return { ok: false, message: opened }
       }
@@ -1786,13 +1799,14 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
     }
 
     case 'open-with-app': {
+      const targetPath = resolveSlashPathInput(action.path)
       if (action.appName) {
         if (process.platform === 'win32') {
           const application = listApplications().find(
             (item) => item.name.toLowerCase() === action.appName?.toLowerCase()
           )
           if (!application || application.path.startsWith('shell:AppsFolder\\')) {
-            const opened = await shell.openPath(action.path)
+            const opened = await shell.openPath(targetPath)
             return opened
               ? { ok: false, message: opened }
               : { ok: true, message: 'Opened with the default application' }
@@ -1811,18 +1825,18 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
               env: {
                 ...process.env,
                 TEZBAR_APP_PATH: application.path,
-                TEZBAR_TARGET_PATH: action.path,
+                TEZBAR_TARGET_PATH: targetPath,
               },
             }
           )
-          recordOpenWithUsage(action.path, action.appName)
+          recordOpenWithUsage(targetPath, action.appName)
           return { ok: true, message: `Opened with ${action.appName}` }
         }
-        await execFileAsync('open', ['-a', action.appName, action.path])
-        recordOpenWithUsage(action.path, action.appName)
+        await execFileAsync('open', ['-a', action.appName, targetPath])
+        recordOpenWithUsage(targetPath, action.appName)
         return { ok: true, message: `Opened with ${action.appName}` }
       }
-      const opened = await shell.openPath(action.path)
+      const opened = await shell.openPath(targetPath)
       if (opened) {
         return { ok: false, message: opened }
       }

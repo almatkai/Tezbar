@@ -11,8 +11,15 @@ vi.mock('@tezbar/desktop-runtime', () => ({
   app: {
     isPackaged: false,
     getPath: () => userData,
+    getAppPath: () => process.cwd(),
+    hide: () => undefined,
+    show: () => undefined,
   },
-  BrowserWindow: class {},
+  BrowserWindow: class {
+    static getAllWindows(): never[] {
+      return []
+    }
+  },
   clipboard: {
     readText: () => '',
     writeText: () => undefined,
@@ -466,17 +473,75 @@ describe('extension runtime list pagination', () => {
     }
   })
 
+  it.runIf(process.platform === 'win32')(
+    'bridges the Windows color picker helper into the pick-color command',
+    async () => {
+      const extensionRoot = mkdtempSync(join(tmpdir(), 'tezbar-color-picker-extension-'))
+      const helperPath = join(extensionRoot, 'color-picker.ps1')
+      mkdirSync(join(extensionRoot, '.sc-build'))
+      writeFileSync(
+        helperPath,
+        `[Console]::Out.Write('{"red":18,"green":171,"blue":52,"alpha":255,"colorSpace":"srgb"}')`
+      )
+      writeFileSync(
+        join(extensionRoot, 'package.json'),
+        JSON.stringify({
+          name: 'color-picker-fixture',
+          title: 'Color Picker Fixture',
+          commands: [{ name: 'pick-color', title: 'Pick Color', mode: 'view' }],
+        })
+      )
+      writeFileSync(
+        join(extensionRoot, '.sc-build', 'pick-color.js'),
+        `const { pickColor } = require('swift:../swift')
+         module.exports.default = async function Command() {
+           await pickColor()
+           return null
+         }`
+      )
+
+      const previousHelperPath = process.env.COLOR_PICKER_HELPER_PATH
+      process.env.COLOR_PICKER_HELPER_PATH = helperPath
+      try {
+        const result = await runExtensionCommandFromPackageJson(
+          join(extensionRoot, 'package.json'),
+          'pick-color'
+        )
+        expect(result.ok, JSON.stringify(result)).toBe(true)
+        if (!result.ok || result.mode !== 'view') return
+        expect(result.title).toBe('Color Wheel')
+        expect(result.root.type).toBe('Detail')
+        expect(result.root.props.initialColor).toEqual({
+          red: 18 / 255,
+          green: 171 / 255,
+          blue: 52 / 255,
+          alpha: 1,
+          colorSpace: 'srgb',
+        })
+      } finally {
+        if (previousHelperPath === undefined) delete process.env.COLOR_PICKER_HELPER_PATH
+        else process.env.COLOR_PICKER_HELPER_PATH = previousHelperPath
+        rmSync(extensionRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('bridges native image color extraction for extension commands', async () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-image-colors-extension-'))
-    const helperPath = join(extensionRoot, 'image-colors-helper')
+    const helperPath = join(
+      extensionRoot,
+      process.platform === 'win32' ? 'image-colors-helper.ps1' : 'image-colors-helper'
+    )
     const imagePath = join(extensionRoot, 'selected.png')
     mkdirSync(join(extensionRoot, '.sc-build'))
     writeFileSync(imagePath, 'fixture')
     writeFileSync(
       helperPath,
-      '#!/bin/sh\nprintf \'%s\\n\' \'[{"hex":"#12AB34","red":18,"green":171,"blue":52,"area":1,"hue":134,"saturation":81,"lightness":37,"intensity":80}]\'\n'
+      process.platform === 'win32'
+        ? `param([string]$ImagePath, [int]$Count, [string]$DominantOnly)\nWrite-Output '[{"hex":"#12AB34","red":18,"green":171,"blue":52,"area":1,"hue":134,"saturation":81,"lightness":37,"intensity":80}]'`
+        : '#!/bin/sh\nprintf \'%s\\n\' \'[{"hex":"#12AB34","red":18,"green":171,"blue":52,"area":1,"hue":134,"saturation":81,"lightness":37,"intensity":80}]\'\n'
     )
-    chmodSync(helperPath, 0o755)
+    if (process.platform !== 'win32') chmodSync(helperPath, 0o755)
     writeFileSync(
       join(extensionRoot, 'package.json'),
       JSON.stringify({
@@ -1253,6 +1318,42 @@ describe('extension runtime list pagination', () => {
       expect(refreshed.ok, JSON.stringify(refreshed)).toBe(true)
       if (!refreshed.ok || refreshed.mode !== 'view') return
       expect(refreshed.root.props.markdown).toBe('ready')
+    } finally {
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('renders menu bar items as actionable extension rows', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-menu-bar-extension-'))
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({
+        name: 'menu-bar-fixture',
+        title: 'Menu Bar Fixture',
+        commands: [{ name: 'menu-bar', title: 'Menu Bar', mode: 'menu-bar' }],
+      })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'menu-bar.js'),
+      `const React = require('react')
+       const { MenuBarExtra } = require('@raycast/api')
+       module.exports.default = function Command() {
+         return React.createElement(MenuBarExtra, null,
+           React.createElement(MenuBarExtra.Item, { title: 'Pick Color', onAction: () => {} }))
+       }`
+    )
+
+    try {
+      const result = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'menu-bar'
+      )
+      expect(result.ok, JSON.stringify(result)).toBe(true)
+      if (!result.ok || result.mode !== 'view') return
+      expect(result.root.type).toBe('MenuBarExtra')
+      expect(result.root.children?.[0]?.type).toBe('MenuBarExtra.Item')
+      expect(result.actions[0]?.title).toBe('Pick Color')
     } finally {
       rmSync(extensionRoot, { recursive: true, force: true })
     }

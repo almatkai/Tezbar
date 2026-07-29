@@ -187,7 +187,7 @@ export const clipboard = {
         return execFileSync(
           'powershell.exe',
           ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw'],
-          { encoding: 'utf8' }
+          { encoding: 'utf8', windowsHide: true }
         )
       }
       return execFileSync('pbpaste', [], { encoding: 'utf8' })
@@ -203,7 +203,7 @@ export const clipboard = {
           '-NonInteractive',
           '-Command',
           'Set-Clipboard -Value ([Console]::In.ReadToEnd())',
-        ])
+        ], { windowsHide: true })
         child.stdin.write(text)
         child.stdin.end()
         return

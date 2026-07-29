@@ -41,7 +41,7 @@ Some capabilities cannot translate literally because they expose a macOS product
 
 These areas still need Windows-native implementations before Windows can be called feature-complete:
 
-1. Replace the Swift Vision ScreenOCR helper with Windows OCR and port the interactive `NSColorSampler` color picker.
+1. Replace the Swift Vision ScreenOCR helper with Windows OCR.
 2. Add a Windows UI Automation tree reader to match the macOS accessibility snapshot helper. Input injection and screenshot-based agent actions already work on Windows, but semantic control discovery does not.
 3. Read and restore Windows clipboard file lists using `CF_HDROP`; text and image history already work.
 4. Extract icons for packaged Microsoft Store applications. Classic shortcut/executable icons are supported.

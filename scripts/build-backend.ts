@@ -1,6 +1,14 @@
 // scripts/build-backend.ts
 import { build } from 'esbuild'
-import { chmodSync, copyFileSync, existsSync, readFileSync, renameSync } from 'node:fs'
+import {
+  chmodSync,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { getLoadablePath } from 'sqlite-vec'
 
@@ -9,6 +17,29 @@ function replaceGeneratedFile(source: string, destination: string): void {
   copyFileSync(source, temporaryDestination)
   chmodSync(temporaryDestination, 0o644)
   renameSync(temporaryDestination, destination)
+}
+
+function copyFileIfChanged(source: string, destination: string): void {
+  if (existsSync(destination)) {
+    try {
+      if (readFileSync(source).equals(readFileSync(destination))) return
+    } catch {
+      // Fall through to the normal copy so a missing/inaccessible destination
+      // still produces the useful underlying filesystem error.
+    }
+  }
+  copyFileSync(source, destination)
+}
+
+function copyRuntimePackage(source: string, destination: string, label: string): void {
+  if (!existsSync(source)) {
+    throw new Error(`Missing ${label} package at ${source}`)
+  }
+  cpSync(realpathSync(source), destination, {
+    recursive: true,
+    dereference: true,
+    force: true,
+  })
 }
 
 async function runBuild(): Promise<void> {
@@ -41,7 +72,33 @@ async function runBuild(): Promise<void> {
     minify: false,
     format: 'cjs',
   })
-  copyFileSync(getLoadablePath(), join(outputDirectory, 'vec0'))
+  const loadablePath = getLoadablePath()
+  const extensionSuffix =
+    process.platform === 'win32' ? 'dll' : process.platform === 'darwin' ? 'dylib' : 'so'
+  // Keep the historical extensionless copy for compatibility with existing
+  // development bundles, but also ship the native suffix required by Windows
+  // LoadLibrary and by packaged resource layouts.
+  copyFileIfChanged(loadablePath, join(outputDirectory, 'vec0'))
+  copyFileIfChanged(loadablePath, join(outputDirectory, `vec0.${extensionSuffix}`))
+
+  // pnpm exposes esbuild through junctions under node_modules. Tauri's
+  // resource copier does not follow those junctions, so copy real package
+  // contents into the backend bundle before packaging the Windows app.
+  const esbuildPlatform =
+    process.platform === 'win32'
+      ? `win32-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
+      : `${process.platform === 'darwin' ? 'darwin' : process.platform}-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
+  const bundledNodeModules = join(outputDirectory, 'node_modules')
+  copyRuntimePackage(
+    join(root, 'node_modules', 'esbuild'),
+    join(bundledNodeModules, 'esbuild'),
+    'esbuild'
+  )
+  copyRuntimePackage(
+    join(root, 'node_modules', '@esbuild', esbuildPlatform),
+    join(bundledNodeModules, '@esbuild', esbuildPlatform),
+    `@esbuild/${esbuildPlatform}`
+  )
 
   // Bun's built-in SQLite disables loadable extensions on macOS. Ship a
   // loadable SQLite build beside the backend so sqlite-vec works on machines

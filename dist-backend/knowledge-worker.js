@@ -6,7 +6,7 @@ var import_node_os3 = require("node:os");
 // src/main/knowledge/service.ts
 var import_node_child_process4 = require("node:child_process");
 var import_node_crypto4 = require("node:crypto");
-var import_node_fs6 = require("node:fs");
+var import_node_fs7 = require("node:fs");
 var import_node_os2 = require("node:os");
 var import_node_path7 = require("node:path");
 var import_node_util3 = require("node:util");
@@ -734,14 +734,17 @@ var DatabaseShim = class {
 var better_sqlite3_shim_default = DatabaseShim;
 
 // src/main/knowledge/database/store.ts
-var import_node_fs5 = require("node:fs");
+var import_node_fs6 = require("node:fs");
 var import_node_path5 = require("node:path");
 var import_node_crypto3 = require("node:crypto");
 
 // src/main/sqlite-vec-bundled.ts
+var import_node_fs5 = require("node:fs");
 var import_node_path4 = require("node:path");
 function load(database) {
-  database.loadExtension((0, import_node_path4.join)(__dirname, "vec0"));
+  const suffix = process.platform === "win32" ? "dll" : process.platform === "darwin" ? "dylib" : "so";
+  const platformPath = (0, import_node_path4.join)(__dirname, `vec0.${suffix}`);
+  database.loadExtension((0, import_node_fs5.existsSync)(platformPath) ? platformPath : (0, import_node_path4.join)(__dirname, "vec0"));
 }
 
 // src/main/search/textMatch.ts
@@ -817,7 +820,7 @@ var DEFAULT_STATUS = {
 };
 function databasePath() {
   const directory = (0, import_node_path5.join)(app.getPath("userData"), "knowledge");
-  (0, import_node_fs5.mkdirSync)(directory, { recursive: true });
+  (0, import_node_fs6.mkdirSync)(directory, { recursive: true });
   return (0, import_node_path5.join)(directory, "knowledge.sqlite3");
 }
 function parseJson(value, fallback) {
@@ -1600,7 +1603,7 @@ ${page.ocr?.text ?? ""}`.trim();
     const path = databasePath();
     return [path, `${path}-wal`, `${path}-shm`].reduce((total, candidate) => {
       try {
-        return total + (0, import_node_fs5.statSync)(candidate).size;
+        return total + (0, import_node_fs6.statSync)(candidate).size;
       } catch {
         return total;
       }
@@ -2081,7 +2084,7 @@ function shouldSkipKnowledgeEntry(name, isDirectory) {
 function discoverMajorKnowledgeFolders(home = (0, import_node_os2.homedir)()) {
   return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path7.join)(home, name)).filter((path) => {
     try {
-      return (0, import_node_fs6.statSync)(path).isDirectory();
+      return (0, import_node_fs7.statSync)(path).isDirectory();
     } catch {
       return false;
     }
@@ -2213,7 +2216,7 @@ var KnowledgeService = class {
   addRoot(path) {
     this.initialize();
     const normalized = (0, import_node_path7.resolve)(path.trim());
-    if (!normalized || !(0, import_node_fs6.existsSync)(normalized) || !(0, import_node_fs6.statSync)(normalized).isDirectory()) {
+    if (!normalized || !(0, import_node_fs7.existsSync)(normalized) || !(0, import_node_fs7.statSync)(normalized).isDirectory()) {
       throw new Error("Choose an existing folder");
     }
     const current = this.store.listRoots();
@@ -2548,7 +2551,7 @@ var KnowledgeService = class {
       if (!directory) break;
       let entries;
       try {
-        entries = (0, import_node_fs6.readdirSync)(directory, { withFileTypes: true });
+        entries = (0, import_node_fs7.readdirSync)(directory, { withFileTypes: true });
       } catch {
         complete = false;
         continue;
@@ -2563,7 +2566,7 @@ var KnowledgeService = class {
           queue.push(path);
         } else if (entry.isFile() && isIndexablePath(path)) {
           try {
-            const fileStat = (0, import_node_fs6.statSync)(path);
+            const fileStat = (0, import_node_fs7.statSync)(path);
             const isExtensionlessExecutable = !(0, import_node_path7.extname)(path) && (fileStat.mode & 73) !== 0;
             if (!isExtensionlessExecutable && fileStat.size <= maximumIndexableSourceBytes(path)) {
               paths.push(path);
@@ -2585,7 +2588,7 @@ var KnowledgeService = class {
     const sourceId = sourceIdForPath(candidate.path);
     try {
       const existing = this.store.getSourceByPath(candidate.path);
-      const stat = (0, import_node_fs6.statSync)(candidate.path);
+      const stat = (0, import_node_fs7.statSync)(candidate.path);
       if (existing?.status === "indexed" && existing.byteSize === stat.size && Math.round(existing.modifiedAt) === Math.round(stat.mtimeMs) && existing.indexingProfile === profileKey) {
         return true;
       }
@@ -2647,7 +2650,7 @@ var KnowledgeService = class {
     if (!profile) return false;
     try {
       const existing = this.store.getSourceByPath(path);
-      const fileStat = (0, import_node_fs6.statSync)(path);
+      const fileStat = (0, import_node_fs7.statSync)(path);
       return !(existing?.status === "indexed" && existing.byteSize === fileStat.size && Math.round(existing.modifiedAt) === Math.round(fileStat.mtimeMs) && existing.indexingProfile === indexingProfileKey(profile));
     } catch {
       return false;
@@ -2780,7 +2783,7 @@ var KnowledgeService = class {
     for (const root of enabledRoots.values()) {
       if (this.watchers.has(root.id)) continue;
       try {
-        const watcher = (0, import_node_fs6.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
+        const watcher = (0, import_node_fs7.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
         watcher.on("error", () => {
           watcher.close();
           this.watchers.delete(root.id);

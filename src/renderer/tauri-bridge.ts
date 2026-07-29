@@ -17,13 +17,26 @@ type TauriRaymesApi = RaymesApi & {
   isPhysicalKeyDown: (key: string) => Promise<unknown>
 }
 
-export async function initTauriBridge(): Promise<void> {
+export function initTauriBridge(): void {
   // Check if we are running inside Tauri
   if (!(window as any).__TAURI_INTERNALS__) {
     return
   }
 
-  window.__TEZBAR_WINDOW_LABEL__ = getCurrentWindow().label
+  // `metadata.currentWindow` is normally available before application
+  // JavaScript runs, but WebView2 can expose the internals object a fraction
+  // earlier while creating a secondary window. The URL/native bootstrap
+  // supplies a fallback label so a transient metadata gap cannot abort the
+  // entire bridge and leave a white window.
+  try {
+    window.__TEZBAR_WINDOW_LABEL__ = getCurrentWindow().label
+  } catch (error: unknown) {
+    const fallbackLabel = new URLSearchParams(window.location.search).get('window')
+    if (fallbackLabel) {
+      window.__TEZBAR_WINDOW_LABEL__ = fallbackLabel
+    }
+    console.warn('[Tauri bridge] Current window metadata is not ready:', error)
+  }
 
   const errorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message
@@ -112,15 +125,22 @@ export async function initTauriBridge(): Promise<void> {
     }
   }
 
-  // Agent runs can begin during the first React effect. Listen before rendering
-  // and replay any early events when the chat surface subscribes.
-  await ensureEventListener('agent:event')
-  await ensureEventListener('terminal:exit')
+  // Do not block the renderer's first paint on native event registration.
+  // A secondary WebView can otherwise remain an empty white page forever if
+  // either Tauri listen() promise stalls during window creation. The backlog
+  // below still preserves events that arrive before React subscribes.
+  void ensureEventListener('agent:event').catch((error: unknown) => {
+    console.error('[Tauri bridge] Failed to listen for agent events:', error)
+  })
+  void ensureEventListener('terminal:exit').catch((error: unknown) => {
+    console.error('[Tauri bridge] Failed to listen for terminal exit events:', error)
+  })
 
   const tezbar: TauriRaymesApi = {
     hide: () => invoke('hide_window'),
     show: () => invoke('show_window'),
     openSettingsWindow: () => invoke('open_settings_window_cmd'),
+    hideLauncherForSettings: () => invoke('hide_launcher_for_settings'),
     closeCurrentWindow: () => invoke('close_current_window'),
     query: (text: string) => callBackend('query', text),
     cancel: () => callBackend('cancel'),
@@ -511,14 +531,19 @@ export async function initTauriBridge(): Promise<void> {
 
   window.tezbar = tezbar
 
-  void tezbar
-    .getLlmConfig()
-    .then((config) => {
-      if (typeof config.raymesHotkey === 'string' && config.raymesHotkey.trim()) {
-        return invoke('update_raymes_shortcut', { shortcutStr: config.raymesHotkey })
-      }
-    })
-    .catch((error: unknown) => {
-      console.warn('Could not restore the configured global shortcut:', error)
-    })
+  // Only the launcher owns the global shortcut. Re-registering it from a
+  // hidden secondary WebView creates needless backend traffic during WebView2
+  // startup and can contend with the Settings window being shown.
+  if (window.__TEZBAR_WINDOW_LABEL__ !== 'settings') {
+    void tezbar
+      .getLlmConfig()
+      .then((config) => {
+        if (typeof config.raymesHotkey === 'string' && config.raymesHotkey.trim()) {
+          return invoke('update_raymes_shortcut', { shortcutStr: config.raymesHotkey })
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn('Could not restore the configured global shortcut:', error)
+      })
+  }
 }

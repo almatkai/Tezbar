@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 type ExtensionDatabase = {
@@ -6,5 +7,8 @@ type ExtensionDatabase = {
 
 /** The backend build copies the platform-specific extension beside both bundles. */
 export function load(database: ExtensionDatabase): void {
-  database.loadExtension(join(__dirname, 'vec0'))
+  const suffix =
+    process.platform === 'win32' ? 'dll' : process.platform === 'darwin' ? 'dylib' : 'so'
+  const platformPath = join(__dirname, `vec0.${suffix}`)
+  database.loadExtension(existsSync(platformPath) ? platformPath : join(__dirname, 'vec0'))
 }

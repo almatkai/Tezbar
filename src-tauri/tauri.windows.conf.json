@@ -3,8 +3,9 @@
   "bundle": {
     "targets": ["nsis", "msi"],
     "resources": {
-      "../node_modules/@esbuild": "node_modules/@esbuild",
-      "../node_modules/esbuild": "node_modules/esbuild"
+      "../dist-backend/vec0.dll": "dist-backend/vec0.dll",
+      "../native/color-picker/windows.ps1": "native/color-picker/windows.ps1",
+      "../native/image-colors/windows.ps1": "native/image-colors/windows.ps1"
     },
     "windows": {
       "nsis": {

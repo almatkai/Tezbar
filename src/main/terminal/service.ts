@@ -215,13 +215,26 @@ function clampDimension(value: number, min: number, max: number): number {
   return Math.min(Math.max(Math.floor(value), min), max)
 }
 
+function normalizeTerminalPath(raw: string): string {
+  const requested = raw.trim().replace(/[\\/]\.\.\.$/, '')
+  if (!requested) return ''
+
+  if (requested === '~') return homedir()
+  if (requested.startsWith('~/')) return join(homedir(), requested.slice(2))
+
+  // The launcher uses `/Desktop`, `/Documents`, etc. as a compact cross-
+  // platform spelling. On Windows those are not drive-root folders; map them
+  // to the current user's profile before resolving the terminal cwd.
+  if (process.platform === 'win32' && /^\/(Desktop|Documents|Downloads|Pictures|Videos|Music)(?:\/|$)/i.test(requested)) {
+    return join(homedir(), requested.slice(1))
+  }
+
+  return requested
+}
+
 function resolveWorkingDirectory(raw?: string): string {
   const requested = raw?.trim()
-  const expanded = requested === '~'
-    ? homedir()
-    : requested?.startsWith('~/')
-      ? join(homedir(), requested.slice(2))
-      : requested
+  const expanded = requested ? normalizeTerminalPath(requested) : undefined
   const candidate = expanded ? resolve(expanded) : homedir()
   try {
     return existsSync(candidate) && statSync(candidate).isDirectory() ? candidate : homedir()
@@ -231,14 +244,9 @@ function resolveWorkingDirectory(raw?: string): string {
 }
 
 function resolveExistingWorkingDirectory(raw: string): string | null {
-  const requested = raw.trim()
+  const requested = normalizeTerminalPath(raw)
   if (!requested) return null
-  const expanded = requested === '~'
-    ? homedir()
-    : requested.startsWith('~/')
-      ? join(homedir(), requested.slice(2))
-      : requested
-  const candidate = resolve(expanded)
+  const candidate = resolve(requested)
   try {
     return existsSync(candidate) && statSync(candidate).isDirectory() ? candidate : null
   } catch {

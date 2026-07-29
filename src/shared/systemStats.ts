@@ -1,6 +1,7 @@
 export type SystemStatsSnapshot = {
   collectedAt: string
   device: {
+    platform?: 'macOS' | 'Windows'
     name: string
     model: string
     chip: string

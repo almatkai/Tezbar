@@ -19,11 +19,7 @@ import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as zlib from 'zlib';
-import {
-  getCurrentRaycastPlatform,
-  getManifestPlatforms,
-  isManifestPlatformCompatible,
-} from './extension-platform';
+import { getCurrentRaycastPlatform, getManifestPlatforms, isManifestPlatformCompatible } from './extension-platform';
 import { discoverInstalledExtensionCommands, type ExtensionCommandInfo } from './extension-builder';
 import {
   fetchCatalogFromAPI,
@@ -34,12 +30,35 @@ import {
 } from './extension-api';
 import { installDepsWithBun, installSpecificPackagesWithBun } from './bun-manager';
 import type { ExtensionManifest } from '../shared/extensions';
-import type {
-  ExtensionRegistryCommand,
-  InstalledRegistryExtension,
-} from '../shared/extensionRuntime';
+import type { ExtensionRegistryCommand, InstalledRegistryExtension } from '../shared/extensionRuntime';
+import { parseGitHubRepositoryUrl, type GitHubRepositoryReference } from '../shared/extensionRepository';
 
 export const extensionRegistryEvents = new EventEmitter();
+
+const extensionInstallJobs = new Map<string, Promise<InstalledRegistryExtension>>();
+
+function emitInstallProgress(name: string, progress: number): void {
+  extensionRegistryEvents.emit('progress', {
+    id: normalizeRaymesExtensionId(name),
+    progress: Math.max(0, Math.min(100, progress)),
+  });
+}
+
+async function installDependenciesWithProgress(name: string, installPath: string): Promise<boolean> {
+  let progress = 60;
+  emitInstallProgress(name, progress);
+  const heartbeat = setInterval(() => {
+    progress = Math.min(72, progress + 1);
+    emitInstallProgress(name, progress);
+  }, 1_500);
+  heartbeat.unref?.();
+
+  try {
+    return await installDepsWithBun(installPath);
+  } finally {
+    clearInterval(heartbeat);
+  }
+}
 
 function hasNodeModules(extPath: string): boolean {
   try {
@@ -49,12 +68,9 @@ function hasNodeModules(extPath: string): boolean {
   }
 }
 
-const GITHUB_RAW =
-  'https://raw.githubusercontent.com/raycast/extensions/main';
-const GITHUB_API =
-  'https://api.github.com/repos/raycast/extensions/contents';
-const GITHUB_TREE_API =
-  'https://api.github.com/repos/raycast/extensions/git/trees/main?recursive=1';
+const GITHUB_RAW = 'https://raw.githubusercontent.com/raycast/extensions/main';
+const GITHUB_API = 'https://api.github.com/repos/raycast/extensions/contents';
+const GITHUB_TREE_API = 'https://api.github.com/repos/raycast/extensions/git/trees/main?recursive=1';
 const RAYMES_EXTENSIONS_GIT = 'https://github.com/almatkai/raymes-extensions.git';
 
 type RepoTreeEntry = {
@@ -68,6 +84,7 @@ type RepoTreeCache = {
 };
 const REPO_TREE_TTL_MS = 10 * 60 * 1000;
 let repoTreeCache: RepoTreeCache | null = null;
+const MAX_EXTENSION_ARCHIVE_BYTES = 150 * 1024 * 1024;
 
 function shouldUseNetworkFallback(error: any): boolean {
   const text = `${String(error?.message || '')}\n${String(error?.stderr || '')}`.toLowerCase();
@@ -102,19 +119,11 @@ async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 45_0
 }
 
 async function fetchRepoTreeEntries(forceRefresh = false): Promise<RepoTreeEntry[]> {
-  if (
-    !forceRefresh &&
-    repoTreeCache &&
-    Date.now() - repoTreeCache.fetchedAt < REPO_TREE_TTL_MS
-  ) {
+  if (!forceRefresh && repoTreeCache && Date.now() - repoTreeCache.fetchedAt < REPO_TREE_TTL_MS) {
     return repoTreeCache.entries;
   }
 
-  const response = await fetchWithTimeout(
-    GITHUB_TREE_API,
-    { headers: githubApiHeaders() },
-    90_000
-  );
+  const response = await fetchWithTimeout(GITHUB_TREE_API, { headers: githubApiHeaders() }, 90_000);
   if (!response.ok) {
     throw new Error(`GitHub tree fetch failed with ${response.status} ${response.statusText}`);
   }
@@ -158,9 +167,7 @@ function readCatalogEntriesFromExtensionsDir(extensionsDir: string): CatalogEntr
       };
 
       const iconFile = pkg.icon || 'assets/icon.png';
-      const iconUrl = toAssetUrl(
-        iconFile.includes('/') ? iconFile : `assets/${iconFile}`
-      );
+      const iconUrl = toAssetUrl(iconFile.includes('/') ? iconFile : `assets/${iconFile}`);
 
       const commands = (pkg.commands || []).map((c: any) => ({
         name: c.name || '',
@@ -201,16 +208,16 @@ function readCatalogEntriesFromExtensionsDir(extensionsDir: string): CatalogEntr
       const authorName = normalizePerson(pkg.author) || '';
       const screenshotUrlsFromPackage: string[] = Array.isArray(pkg.screenshots)
         ? pkg.screenshots
-          .map((entry: any) => {
-            if (typeof entry === 'string') return toAssetUrl(entry);
-            if (entry && typeof entry === 'object') {
-              if (typeof entry.path === 'string') return toAssetUrl(entry.path);
-              if (typeof entry.src === 'string') return toAssetUrl(entry.src);
-              if (typeof entry.url === 'string') return toAssetUrl(entry.url);
-            }
-            return '';
-          })
-          .filter(Boolean)
+            .map((entry: any) => {
+              if (typeof entry === 'string') return toAssetUrl(entry);
+              if (entry && typeof entry === 'object') {
+                if (typeof entry.path === 'string') return toAssetUrl(entry.path);
+                if (typeof entry.src === 'string') return toAssetUrl(entry.src);
+                if (typeof entry.url === 'string') return toAssetUrl(entry.url);
+              }
+              return '';
+            })
+            .filter(Boolean)
         : [];
 
       const screenshotUrls = screenshotUrlsFromPackage;
@@ -277,9 +284,7 @@ function buildLightweightCatalogFromTree(
 async function downloadExtensionFromTree(name: string, tmpDir: string): Promise<string | null> {
   const treeEntries = await fetchRepoTreeEntries();
   const prefix = `extensions/${name}/`;
-  const fileEntries = treeEntries.filter(
-    (entry) => entry.type === 'blob' && entry.path.startsWith(prefix)
-  );
+  const fileEntries = treeEntries.filter((entry) => entry.type === 'blob' && entry.path.startsWith(prefix));
   if (fileEntries.length === 0) return null;
 
   const srcDir = path.join(tmpDir, 'extensions', name);
@@ -324,10 +329,7 @@ async function downloadExtensionFromTree(name: string, tmpDir: string): Promise<
     }
   };
 
-  const workers = Array.from(
-    { length: Math.min(CONCURRENCY, fileEntries.length) },
-    () => downloadOne()
-  );
+  const workers = Array.from({ length: Math.min(CONCURRENCY, fileEntries.length) }, () => downloadOne());
   await Promise.all(workers);
 
   console.log(`Downloaded ${fileEntries.length} files for "${name}"`);
@@ -337,19 +339,15 @@ async function downloadExtensionFromTree(name: string, tmpDir: string): Promise<
 function downloadExtensionViaSparseGit(name: string, tmpDir: string): string | null {
   const checkoutDir = path.join(tmpDir, 'raymes-extensions-source');
   try {
-    execFileSync('git', [
-      'clone',
-      '--depth', '1',
-      '--filter=blob:none',
-      '--sparse',
-      RAYMES_EXTENSIONS_GIT,
-      checkoutDir,
-    ], { stdio: 'ignore', timeout: 180_000 });
-    execFileSync('git', [
-      '-C', checkoutDir,
-      'sparse-checkout', 'set',
-      `extensions/${name}`,
-    ], { stdio: 'ignore', timeout: 120_000 });
+    execFileSync(
+      'git',
+      ['clone', '--depth', '1', '--filter=blob:none', '--sparse', RAYMES_EXTENSIONS_GIT, checkoutDir],
+      { stdio: 'ignore', timeout: 180_000 }
+    );
+    execFileSync('git', ['-C', checkoutDir, 'sparse-checkout', 'set', `extensions/${name}`], {
+      stdio: 'ignore',
+      timeout: 120_000,
+    });
     const extensionDir = path.join(checkoutDir, 'extensions', name);
     return fs.existsSync(path.join(extensionDir, 'package.json')) ? extensionDir : null;
   } catch (error) {
@@ -385,6 +383,7 @@ const CATALOG_VERSION = 6;
 const CATALOG_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 let catalogCache: CatalogCache | null = null;
+let catalogFetchPromise: Promise<CatalogEntry[]> | null = null;
 
 function coerceCatalogEntry(raw: any): CatalogEntry | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -393,12 +392,12 @@ function coerceCatalogEntry(raw: any): CatalogEntry | null {
 
   const commands = Array.isArray(raw.commands)
     ? raw.commands
-      .filter((cmd: any) => cmd && typeof cmd === 'object' && cmd.name)
-      .map((cmd: any) => ({
-        name: String(cmd.name || ''),
-        title: String(cmd.title || cmd.name || ''),
-        description: String(cmd.description || ''),
-      }))
+        .filter((cmd: any) => cmd && typeof cmd === 'object' && cmd.name)
+        .map((cmd: any) => ({
+          name: String(cmd.name || ''),
+          title: String(cmd.title || cmd.name || ''),
+          description: String(cmd.description || ''),
+        }))
     : [];
 
   return {
@@ -406,20 +405,14 @@ function coerceCatalogEntry(raw: any): CatalogEntry | null {
     title: typeof raw.title === 'string' ? raw.title : name,
     description: typeof raw.description === 'string' ? raw.description : '',
     author: typeof raw.author === 'string' ? raw.author : '',
-    contributors: Array.isArray(raw.contributors)
-      ? raw.contributors.filter((v: any) => typeof v === 'string')
-      : [],
+    contributors: Array.isArray(raw.contributors) ? raw.contributors.filter((v: any) => typeof v === 'string') : [],
     icon: typeof raw.icon === 'string' ? raw.icon : '',
     iconUrl: typeof raw.iconUrl === 'string' ? raw.iconUrl : '',
     screenshotUrls: Array.isArray(raw.screenshotUrls)
       ? raw.screenshotUrls.filter((v: any) => typeof v === 'string')
       : [],
-    categories: Array.isArray(raw.categories)
-      ? raw.categories.filter((v: any) => typeof v === 'string')
-      : [],
-    platforms: Array.isArray(raw.platforms)
-      ? raw.platforms.filter((v: any) => typeof v === 'string')
-      : [],
+    categories: Array.isArray(raw.categories) ? raw.categories.filter((v: any) => typeof v === 'string') : [],
+    platforms: Array.isArray(raw.platforms) ? raw.platforms.filter((v: any) => typeof v === 'string') : [],
     commands,
   };
 }
@@ -474,19 +467,15 @@ function loadCatalogFromDisk(): CatalogCache | null {
     const data = fs.readFileSync(getCatalogPath(), 'utf-8');
     const parsed = JSON.parse(data) as Partial<CatalogCache>;
     const entries = Array.isArray(parsed.entries)
-      ? parsed.entries
-        .map((entry: any) => coerceCatalogEntry(entry))
-        .filter(Boolean) as CatalogEntry[]
+      ? (parsed.entries.map((entry: any) => coerceCatalogEntry(entry)).filter(Boolean) as CatalogEntry[])
       : [];
     if (entries.length === 0) return null;
     return {
       entries,
-      fetchedAt:
-        typeof parsed.fetchedAt === 'number' ? parsed.fetchedAt : Date.now(),
-      version:
-        typeof parsed.version === 'number' ? parsed.version : CATALOG_VERSION,
+      fetchedAt: typeof parsed.fetchedAt === 'number' ? parsed.fetchedAt : Date.now(),
+      version: typeof parsed.version === 'number' ? parsed.version : CATALOG_VERSION,
     };
-  } catch { }
+  } catch {}
   return null;
 }
 
@@ -500,15 +489,9 @@ function saveCatalogToDisk(catalog: CatalogCache): void {
 
 // ─── Catalog: Public API ────────────────────────────────────────────
 
-export async function getCatalog(
-  forceRefresh = false
-): Promise<CatalogEntry[]> {
+async function getCatalogWithoutSharedRequest(forceRefresh = false): Promise<CatalogEntry[]> {
   // In-memory cache
-  if (
-    !forceRefresh &&
-    catalogCache &&
-    Date.now() - catalogCache.fetchedAt < CATALOG_TTL
-  ) {
+  if (!forceRefresh && catalogCache && Date.now() - catalogCache.fetchedAt < CATALOG_TTL) {
     return catalogCache.entries;
   }
 
@@ -549,6 +532,20 @@ export async function getCatalog(
   }
 
   return [];
+}
+
+export async function getCatalog(forceRefresh = false): Promise<CatalogEntry[]> {
+  // The store searches as the user types. Share the pending catalog load so a
+  // cold cache never produces one long-running backend request per character.
+  if (catalogFetchPromise) return catalogFetchPromise;
+
+  const request = getCatalogWithoutSharedRequest(forceRefresh);
+  catalogFetchPromise = request;
+  try {
+    return await request;
+  } finally {
+    if (catalogFetchPromise === request) catalogFetchPromise = null;
+  }
 }
 
 /**
@@ -610,22 +607,11 @@ export async function getExtensionScreenshotUrls(name: string): Promise<string[]
  * declared in their dependencies (a pattern Raycast tolerates via `ray build`
  * but esbuild does not).
  */
-export async function installSpecificPackages(
-  extPath: string,
-  packageNames: string[]
-): Promise<void> {
-  const unique = Array.from(
-    new Set(
-      packageNames
-        .map((name) => String(name || '').trim())
-        .filter(Boolean)
-    )
-  );
+export async function installSpecificPackages(extPath: string, packageNames: string[]): Promise<void> {
+  const unique = Array.from(new Set(packageNames.map((name) => String(name || '').trim()).filter(Boolean)));
   if (unique.length === 0) return;
 
-  console.log(
-    `Installing missing packages for ${path.basename(extPath)}: ${unique.join(', ')}`
-  );
+  console.log(`Installing missing packages for ${path.basename(extPath)}: ${unique.join(', ')}`);
 
   const ok = await installSpecificPackagesWithBun(extPath, unique);
   if (!ok) {
@@ -633,9 +619,7 @@ export async function installSpecificPackages(
   }
 }
 
-export async function installExtensionDeps(
-  extPath: string
-): Promise<void> {
+export async function installExtensionDeps(extPath: string): Promise<void> {
   const pkgPath = path.join(extPath, 'package.json');
   if (!fs.existsSync(pkgPath)) return;
 
@@ -687,14 +671,11 @@ export function getInstalledExtensionNames(): string[] {
     try {
       for (const d of fs.readdirSync(root)) {
         const p = path.join(root, d);
-        if (
-          fs.statSync(p).isDirectory() &&
-          fs.existsSync(path.join(p, 'package.json'))
-        ) {
+        if (fs.statSync(p).isDirectory() && fs.existsSync(path.join(p, 'package.json'))) {
           names.add(stripRaycastPrefix ? slugFromRaymesExtensionId(d) : d);
         }
       }
-    } catch { }
+    } catch {}
   };
 
   scanRoot(getExtensionsDir(), false);
@@ -707,10 +688,7 @@ function getDirectInstalledExtensionNames(): string[] {
   try {
     return fs.readdirSync(getExtensionsDir()).filter((d) => {
       const p = getInstalledPath(d);
-      return (
-        fs.statSync(p).isDirectory() &&
-        fs.existsSync(path.join(p, 'package.json'))
-      );
+      return fs.statSync(p).isDirectory() && fs.existsSync(path.join(p, 'package.json'));
     });
   } catch {
     return [];
@@ -731,6 +709,8 @@ export async function installExtension(name: string): Promise<boolean> {
     return false;
   }
 
+  emitInstallProgress(name, 5);
+
   // 1. FASTEST: Pre-built bundle from S3 (~2-3s, no npm/bun/esbuild needed)
   try {
     const success = await installExtensionFromBundle(name);
@@ -740,6 +720,7 @@ export async function installExtension(name: string): Promise<boolean> {
   }
 
   // 2. FALLBACK: Download source + Bun + esbuild
+  emitInstallProgress(name, 45);
   try {
     const success = await installExtensionViaAPI(name);
     if (success) return true;
@@ -760,9 +741,7 @@ export async function installExtension(name: string): Promise<boolean> {
 async function installExtensionFromBundle(name: string): Promise<boolean> {
   const installPath = getInstalledPath(name);
   const hadExistingInstall = fs.existsSync(installPath);
-  const backupPath = hadExistingInstall
-    ? path.join(getExtensionsDir(), `${name}.backup-${Date.now()}`)
-    : '';
+  const backupPath = hadExistingInstall ? path.join(getExtensionsDir(), `${name}.backup-${Date.now()}`) : '';
   const tmpDir = path.join(app.getPath('temp'), `supercmd-bundle-${Date.now()}`);
 
   try {
@@ -770,10 +749,12 @@ async function installExtensionFromBundle(name: string): Promise<boolean> {
 
     // Get pre-signed S3 URL from backend
     const { url } = await getExtensionBundleUrl(name);
+    emitInstallProgress(name, 10);
     console.log(`Downloading pre-built bundle for "${name}"…`);
 
     fs.mkdirSync(tmpDir, { recursive: true });
     await downloadAndExtractTarball(url, tmpDir);
+    emitInstallProgress(name, 35);
 
     // Find the extension in the extracted directory
     const nestedPath = path.join(tmpDir, name);
@@ -782,7 +763,7 @@ async function installExtensionFromBundle(name: string): Promise<boolean> {
       srcDir = nestedPath;
     } else if (!fs.existsSync(path.join(srcDir, 'package.json'))) {
       // Search subdirs
-      const subdirs = fs.readdirSync(tmpDir, { withFileTypes: true }).filter(d => d.isDirectory());
+      const subdirs = fs.readdirSync(tmpDir, { withFileTypes: true }).filter((d) => d.isDirectory());
       for (const sub of subdirs) {
         if (fs.existsSync(path.join(tmpDir, sub.name, 'package.json'))) {
           srcDir = path.join(tmpDir, sub.name);
@@ -816,6 +797,7 @@ async function installExtensionFromBundle(name: string): Promise<boolean> {
 
     // Copy to extensions directory
     fs.cpSync(srcDir, installPath, { recursive: true });
+    emitInstallProgress(name, 95);
 
     // Cleanup backup
     if (backupPath && fs.existsSync(backupPath)) {
@@ -823,21 +805,29 @@ async function installExtensionFromBundle(name: string): Promise<boolean> {
     }
 
     // Report install (fire-and-forget)
-    reportInstall(name, getMachineId()).catch(() => { });
+    reportInstall(name, getMachineId()).catch(() => {});
 
     console.log(`Extension "${name}" installed from pre-built bundle in ${Date.now() - t0}ms`);
     return true;
   } catch (error) {
     // Rollback
-    try { fs.rmSync(installPath, { recursive: true, force: true }); } catch { }
+    try {
+      fs.rmSync(installPath, { recursive: true, force: true });
+    } catch {}
     if (backupPath && fs.existsSync(backupPath)) {
-      try { fs.renameSync(backupPath, installPath); } catch { }
+      try {
+        fs.renameSync(backupPath, installPath);
+      } catch {}
     }
     throw error;
   } finally {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
     if (backupPath && fs.existsSync(backupPath)) {
-      try { fs.rmSync(backupPath, { recursive: true, force: true }); } catch { }
+      try {
+        fs.rmSync(backupPath, { recursive: true, force: true });
+      } catch {}
     }
   }
 }
@@ -851,9 +841,7 @@ async function installExtensionFromBundle(name: string): Promise<boolean> {
 async function installExtensionViaAPI(name: string): Promise<boolean> {
   const installPath = getInstalledPath(name);
   const hadExistingInstall = fs.existsSync(installPath);
-  const backupPath = hadExistingInstall
-    ? path.join(getExtensionsDir(), `${name}.backup-${Date.now()}`)
-    : '';
+  const backupPath = hadExistingInstall ? path.join(getExtensionsDir(), `${name}.backup-${Date.now()}`) : '';
   const tmpDir = path.join(app.getPath('temp'), `supercmd-api-install-${Date.now()}`);
 
   try {
@@ -870,6 +858,7 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
     }
     if (!srcDir) srcDir = downloadExtensionViaSparseGit(name, tmpDir);
     console.log(`  Download: ${Date.now() - t0}ms`);
+    emitInstallProgress(name, 55);
 
     if (!srcDir || !fs.existsSync(path.join(srcDir, 'package.json'))) {
       throw new Error(`Extension "${name}" not found or has no package.json`);
@@ -879,7 +868,9 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
     const srcPkg = JSON.parse(fs.readFileSync(path.join(srcDir, 'package.json'), 'utf-8'));
     if (!isManifestPlatformCompatible(srcPkg)) {
       const supported = getManifestPlatforms(srcPkg);
-      console.error(`Extension "${name}" is not compatible with ${getCurrentRaycastPlatform()} (supports: ${supported.join(', ')})`);
+      console.error(
+        `Extension "${name}" is not compatible with ${getCurrentRaycastPlatform()} (supports: ${supported.join(', ')})`
+      );
       return false;
     }
 
@@ -901,23 +892,27 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
         console.log(`No third-party dependencies for "${name}" — skipping install`);
       } else {
         // Bun only — npm fallback removed.
-        const depsInstalled = await installDepsWithBun(installPath);
+        const depsInstalled = await installDependenciesWithProgress(name, installPath);
         if (!depsInstalled) {
-          console.warn(`Could not install deps for "${name}" — extension may not work fully.`);
+          throw new Error(`Could not install dependencies for "${name}"`);
         }
       }
 
+      emitInstallProgress(name, 75);
       const t1 = Date.now();
       console.log(`  Deps: ${t1 - t0}ms. Pre-building commands for "${name}"…`);
       const { buildAllCommands } = require('./extension-builder');
       const builtCount = await buildAllCommands(name);
-      const expectedCount = (Array.isArray(extPkg.commands) ? extPkg.commands : [])
-        .filter((command: any) => command?.name)
-        .length;
+      const expectedCount = (Array.isArray(extPkg.commands) ? extPkg.commands : []).filter(
+        (command: any) => command?.name
+      ).length;
       if (builtCount < expectedCount) {
         throw new Error(`Built ${builtCount}/${expectedCount} commands for "${name}"`);
       }
-      console.log(`  Build: ${Date.now() - t1}ms. Extension "${name}" installed (${builtCount} commands) in ${Date.now() - t0}ms total`);
+      emitInstallProgress(name, 95);
+      console.log(
+        `  Build: ${Date.now() - t1}ms. Extension "${name}" installed (${builtCount} commands) in ${Date.now() - t0}ms total`
+      );
     }
 
     // Cleanup backup
@@ -926,7 +921,7 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
     }
 
     // Report install to backend (fire-and-forget)
-    reportInstall(name, getMachineId()).catch(() => { });
+    reportInstall(name, getMachineId()).catch(() => {});
 
     return true;
   } catch (error) {
@@ -934,15 +929,21 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
     // Rollback
     try {
       fs.rmSync(installPath, { recursive: true, force: true });
-    } catch { }
+    } catch {}
     if (backupPath && fs.existsSync(backupPath)) {
-      try { fs.renameSync(backupPath, installPath); } catch { }
+      try {
+        fs.renameSync(backupPath, installPath);
+      } catch {}
     }
     throw error; // Re-throw so the caller knows to try git fallback
   } finally {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
     if (backupPath && fs.existsSync(backupPath)) {
-      try { fs.rmSync(backupPath, { recursive: true, force: true }); } catch { }
+      try {
+        fs.rmSync(backupPath, { recursive: true, force: true });
+      } catch {}
     }
   }
 }
@@ -953,6 +954,156 @@ async function installExtensionViaAPI(name: string): Promise<boolean> {
  * Download a .tar.gz from a URL and extract to destDir.
  * Uses Node.js built-in https + zlib + tar-stream parsing — no npm deps.
  */
+function findRepositoryExtensionRoot(extractedDir: string): string | null {
+  if (fs.existsSync(path.join(extractedDir, 'package.json'))) return extractedDir;
+
+  const directories = fs.readdirSync(extractedDir, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+  for (const directory of directories) {
+    const candidate = path.join(extractedDir, directory.name);
+    if (fs.existsSync(path.join(candidate, 'package.json'))) return candidate;
+  }
+  return null;
+}
+
+function extensionSlugFromRepositoryManifest(pkg: any, fallback: string): string {
+  const packageName = String(pkg?.name || '').trim();
+  if (/^[A-Za-z0-9._-]+$/.test(packageName)) return packageName;
+
+  const sanitized = String(fallback || '')
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (!sanitized) throw new Error('The repository does not provide a valid extension name');
+  return sanitized;
+}
+
+function missingPrebuiltCommands(extensionPath: string, pkg: any): string[] {
+  const commands = Array.isArray(pkg?.commands) ? pkg.commands : [];
+  return commands
+    .map((command: any) => String(command?.name || '').trim())
+    .filter(Boolean)
+    .filter((name: string) => !fs.existsSync(path.join(extensionPath, '.sc-build', `${name}.js`)));
+}
+
+async function installRegistryExtensionFromGitHubRepository(
+  reference: GitHubRepositoryReference
+): Promise<InstalledRegistryExtension> {
+  const metadataUrl = `https://api.github.com/repos/${encodeURIComponent(reference.owner)}/${encodeURIComponent(reference.repository)}`;
+  const metadataResponse = await fetchWithTimeout(metadataUrl, { headers: githubApiHeaders() }, 30_000);
+  if (!metadataResponse.ok) {
+    if (metadataResponse.status === 404) {
+      throw new Error(`Repository not found or private: ${reference.url}`);
+    }
+    throw new Error(`GitHub repository lookup failed (${metadataResponse.status} ${metadataResponse.statusText})`);
+  }
+
+  const metadata = await metadataResponse.json();
+  const defaultBranch = String(metadata?.default_branch || '').trim();
+  if (!defaultBranch) throw new Error('GitHub did not return a default branch for this repository');
+
+  const tmpDir = path.join(app.getPath('temp'), `tezbar-repository-install-${Date.now()}-${randomHex(8)}`);
+  let installPath = '';
+  let backupPath = '';
+  let installedSlug = '';
+
+  try {
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const archiveUrl =
+      `https://codeload.github.com/${encodeURIComponent(reference.owner)}/` +
+      `${encodeURIComponent(reference.repository)}/tar.gz/${encodeURIComponent(defaultBranch)}`;
+    await downloadAndExtractTarball(archiveUrl, tmpDir);
+
+    const sourcePath = findRepositoryExtensionRoot(tmpDir);
+    if (!sourcePath) {
+      throw new Error('This repository has no package.json at its root');
+    }
+
+    const pkgPath = path.join(sourcePath, 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    const commands = Array.isArray(pkg?.commands)
+      ? pkg.commands.filter((command: any) => String(command?.name || '').trim())
+      : [];
+    if (commands.length === 0) {
+      throw new Error('This repository is not a Tezbar extension: package.json has no commands');
+    }
+    if (!isManifestPlatformCompatible(pkg)) {
+      const supported = getManifestPlatforms(pkg);
+      throw new Error(
+        `This extension does not support ${getCurrentRaycastPlatform()}` +
+          (supported.length > 0 ? ` (supports: ${supported.join(', ')})` : '')
+      );
+    }
+
+    installedSlug = extensionSlugFromRepositoryManifest(pkg, reference.repository);
+    installPath = getInstalledPath(installedSlug);
+    const hadExistingInstall = fs.existsSync(installPath);
+    backupPath = hadExistingInstall ? path.join(getExtensionsDir(), `${installedSlug}.backup-${Date.now()}`) : '';
+
+    emitInstallProgress(installedSlug, 20);
+    if (hadExistingInstall) fs.renameSync(installPath, backupPath);
+    fs.cpSync(sourcePath, installPath, { recursive: true });
+    emitInstallProgress(installedSlug, 45);
+
+    const installedPkgPath = path.join(installPath, 'package.json');
+    const installedPkg = JSON.parse(fs.readFileSync(installedPkgPath, 'utf-8'));
+    const missingBundles = missingPrebuiltCommands(installPath, installedPkg);
+    if (missingBundles.length > 0) {
+      const dependenciesInstalled = await installDepsWithBun(installPath);
+      if (!dependenciesInstalled) {
+        throw new Error(`Could not install dependencies for ${installedSlug}`);
+      }
+
+      emitInstallProgress(installedSlug, 70);
+      const { buildAllCommands } = require('./extension-builder');
+      const builtCount = await buildAllCommands(installedSlug);
+      const expectedCount = (Array.isArray(installedPkg.commands) ? installedPkg.commands : []).filter((command: any) =>
+        String(command?.name || '').trim()
+      ).length;
+      if (builtCount < expectedCount) {
+        throw new Error(`Built ${builtCount}/${expectedCount} commands for ${installedSlug}`);
+      }
+    }
+
+    const stillMissing = missingPrebuiltCommands(installPath, installedPkg);
+    if (stillMissing.length > 0) {
+      throw new Error(`Extension bundle is missing commands: ${stillMissing.join(', ')}`);
+    }
+
+    if (backupPath && fs.existsSync(backupPath)) {
+      fs.rmSync(backupPath, { recursive: true, force: true });
+    }
+    emitInstallProgress(installedSlug, 100);
+
+    const installed = listInstalledRegistryExtensions().find((entry) => entry.slug === installedSlug);
+    if (!installed) {
+      throw new Error(`Extension installed but could not be loaded: ${installedSlug}`);
+    }
+    return installed;
+  } catch (error) {
+    if (installPath) {
+      try {
+        fs.rmSync(installPath, { recursive: true, force: true });
+      } catch {}
+    }
+    if (backupPath && fs.existsSync(backupPath)) {
+      try {
+        fs.renameSync(backupPath, installPath);
+      } catch {}
+    }
+    if (installedSlug) emitInstallProgress(installedSlug, 0);
+    throw error;
+  } finally {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
+    if (backupPath && fs.existsSync(backupPath)) {
+      try {
+        fs.rmSync(backupPath, { recursive: true, force: true });
+      } catch {}
+    }
+  }
+}
+
 async function downloadAndExtractTarball(url: string, destDir: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const makeRequest = (requestUrl: string, redirectCount = 0) => {
@@ -965,31 +1116,60 @@ async function downloadAndExtractTarball(url: string, destDir: string): Promise<
       const isHttps = parsedUrl.protocol === 'https:';
       const transport = isHttps ? require('https') : require('http');
 
-      transport.get(requestUrl, { timeout: 120_000 }, (res: any) => {
-        // Follow redirects (S3 pre-signed URLs may redirect)
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          makeRequest(res.headers.location, redirectCount + 1);
-          return;
-        }
+      transport
+        .get(
+          requestUrl,
+          {
+            timeout: 120_000,
+            headers: {
+              'User-Agent': 'Tezbar',
+              Accept: 'application/octet-stream',
+            },
+          },
+          (res: any) => {
+            // Follow redirects (S3 pre-signed URLs may redirect)
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              res.resume();
+              makeRequest(new URL(res.headers.location, requestUrl).toString(), redirectCount + 1);
+              return;
+            }
 
-        if (res.statusCode !== 200) {
-          reject(new Error(`Download failed: ${res.statusCode} ${res.statusMessage}`));
-          return;
-        }
+            if (res.statusCode !== 200) {
+              res.resume();
+              reject(new Error(`Download failed: ${res.statusCode} ${res.statusMessage}`));
+              return;
+            }
 
-        const chunks: Buffer[] = [];
-        res.on('data', (chunk: Buffer) => chunks.push(chunk));
-        res.on('error', reject);
-        res.on('end', () => {
-          try {
-            const buffer = Buffer.concat(chunks);
-            extractTarGz(buffer, destDir);
-            resolve();
-          } catch (err) {
-            reject(err);
+            const declaredSize = Number(res.headers['content-length'] || 0);
+            if (declaredSize > MAX_EXTENSION_ARCHIVE_BYTES) {
+              res.resume();
+              reject(new Error('Extension archive is larger than 150 MB'));
+              return;
+            }
+
+            const chunks: Buffer[] = [];
+            let receivedSize = 0;
+            res.on('data', (chunk: Buffer) => {
+              receivedSize += chunk.length;
+              if (receivedSize > MAX_EXTENSION_ARCHIVE_BYTES) {
+                res.destroy(new Error('Extension archive is larger than 150 MB'));
+                return;
+              }
+              chunks.push(chunk);
+            });
+            res.on('error', reject);
+            res.on('end', () => {
+              try {
+                const buffer = Buffer.concat(chunks);
+                extractTarGz(buffer, destDir);
+                resolve();
+              } catch (err) {
+                reject(err);
+              }
+            });
           }
-        });
-      }).on('error', reject);
+        )
+        .on('error', reject);
     };
 
     makeRequest(url);
@@ -1003,6 +1183,20 @@ async function downloadAndExtractTarball(url: string, destDir: string): Promise<
 function extractTarGz(buffer: Buffer, destDir: string): void {
   // Decompress gzip
   const decompressed = zlib.gunzipSync(buffer);
+  const destinationRoot = path.resolve(destDir);
+
+  const safeArchivePath = (archivePath: string): string => {
+    const normalized = String(archivePath || '').replace(/\\/g, '/');
+    if (!normalized || normalized.includes('\0') || normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)) {
+      throw new Error(`Unsafe extension archive path: ${archivePath}`);
+    }
+
+    const resolved = path.resolve(destinationRoot, ...normalized.split('/'));
+    if (resolved !== destinationRoot && !resolved.startsWith(`${destinationRoot}${path.sep}`)) {
+      throw new Error(`Unsafe extension archive path: ${archivePath}`);
+    }
+    return resolved;
+  };
 
   // Parse tar entries (512-byte blocks)
   let offset = 0;
@@ -1026,11 +1220,11 @@ function extractTarGz(buffer: Buffer, destDir: string): void {
 
     if (typeFlag === 53 || fullName.endsWith('/')) {
       // Directory entry (type '5' = 53 in ASCII)
-      const dirPath = path.join(destDir, fullName);
+      const dirPath = safeArchivePath(fullName);
       fs.mkdirSync(dirPath, { recursive: true });
     } else if (typeFlag === 0 || typeFlag === 48) {
       // Regular file (type '0' = 48 in ASCII, or 0 = null for old tar)
-      const filePath = path.join(destDir, fullName);
+      const filePath = safeArchivePath(fullName);
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       const fileData = decompressed.subarray(offset, offset + size);
       fs.writeFileSync(filePath, fileData);
@@ -1061,13 +1255,13 @@ function getMachineId(): string {
       _machineId = existing;
       return existing;
     }
-  } catch { }
+  } catch {}
 
   // Generate a random UUID
   const id = `${randomHex(8)}-${randomHex(4)}-${randomHex(4)}-${randomHex(4)}-${randomHex(12)}`;
   try {
     fs.writeFileSync(idPath, id);
-  } catch { }
+  } catch {}
   _machineId = id;
   return id;
 }
@@ -1092,7 +1286,7 @@ export async function uninstallExtension(name: string): Promise<boolean> {
     console.log(`Extension "${name}" uninstalled.`);
 
     // Report uninstall to backend (fire-and-forget)
-    reportUninstall(name, getMachineId()).catch(() => { });
+    reportUninstall(name, getMachineId()).catch(() => {});
 
     return true;
   } catch (error) {
@@ -1104,12 +1298,16 @@ export async function uninstallExtension(name: string): Promise<boolean> {
 // ─── Tezbar IPC Compatibility ───────────────────────────────────────
 
 function normalizeRaymesExtensionId(input: string): string {
-  const slug = String(input || '').trim().replace(/^raycast\./, '');
+  const slug = String(input || '')
+    .trim()
+    .replace(/^raycast\./, '');
   return slug ? `raycast.${slug}` : '';
 }
 
 function slugFromRaymesExtensionId(input: string): string {
-  return String(input || '').trim().replace(/^raycast\./, '');
+  return String(input || '')
+    .trim()
+    .replace(/^raycast\./, '');
 }
 
 function extensionNameFromSlug(slug: string): string {
@@ -1137,8 +1335,7 @@ function resolvePlatformDefault(value: any): any {
     value &&
     typeof value === 'object' &&
     !Array.isArray(value) &&
-    (Object.prototype.hasOwnProperty.call(value, 'macOS') ||
-      Object.prototype.hasOwnProperty.call(value, 'Windows'))
+    (Object.prototype.hasOwnProperty.call(value, 'macOS') || Object.prototype.hasOwnProperty.call(value, 'Windows'))
   ) {
     if (Object.prototype.hasOwnProperty.call(value, platformKey)) {
       return value[platformKey];
@@ -1164,11 +1361,7 @@ function githubAvatarUrlForHandle(value: unknown): string | undefined {
     typeof value === 'object' && value
       ? String((value as { handle?: unknown; name?: unknown }).handle || (value as { name?: unknown }).name || '')
       : String(value || '');
-  const handle = raw
-    .split('<')[0]
-    .split('(')[0]
-    .trim()
-    .replace(/^@/, '');
+  const handle = raw.split('<')[0].split('(')[0].trim().replace(/^@/, '');
   if (!/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/i.test(handle)) return undefined;
   if (handle.toLowerCase() === 'raycast community') return undefined;
   return `https://github.com/${handle}.png?size=96`;
@@ -1179,10 +1372,7 @@ function resolveInstalledIconPath(extensionPath: string, icon: unknown): string 
   if (/^https?:\/\//i.test(icon)) return icon;
 
   const normalized = icon.replace(/^\.?\//, '');
-  const candidates = [
-    path.join(extensionPath, normalized),
-    path.join(extensionPath, 'assets', normalized),
-  ];
+  const candidates = [path.join(extensionPath, normalized), path.join(extensionPath, 'assets', normalized)];
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
@@ -1190,10 +1380,12 @@ function readAppBundleIdentifier(appPath: string): string | undefined {
   const infoPlistPath = path.join(appPath, 'Contents', 'Info.plist');
   if (!fs.existsSync(infoPlistPath)) return undefined;
   try {
-    return execFileSync('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', infoPlistPath], {
-      encoding: 'utf8',
-      timeout: 1000,
-    }).trim() || undefined;
+    return (
+      execFileSync('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', infoPlistPath], {
+        encoding: 'utf8',
+        timeout: 1000,
+      }).trim() || undefined
+    );
   } catch {
     return undefined;
   }
@@ -1212,11 +1404,11 @@ function resolveAppPickerDefault(pref: any): Record<string, string> | string {
   const candidates =
     pref?.name === 'uninstaller_app' || pref?.key === 'uninstaller_app'
       ? [
-        appPickerValue('AppCleaner', '/Applications/AppCleaner.app'),
-        appPickerValue('Pearcleaner', '/Applications/PearCleaner.app'),
-        appPickerValue('TrashMe 3', '/Applications/TrashMe 3.app'),
-        appPickerValue('App Cleaner 8', '/Applications/App Cleaner 8.app'),
-      ]
+          appPickerValue('AppCleaner', '/Applications/AppCleaner.app'),
+          appPickerValue('Pearcleaner', '/Applications/PearCleaner.app'),
+          appPickerValue('TrashMe 3', '/Applications/TrashMe 3.app'),
+          appPickerValue('App Cleaner 8', '/Applications/App Cleaner 8.app'),
+        ]
       : [];
   return candidates.find((candidate): candidate is Record<string, string> => Boolean(candidate)) || '';
 }
@@ -1237,14 +1429,10 @@ export function listInstalledRegistryExtensions(): InstalledRegistryExtension[] 
       const id = normalizeRaymesExtensionId(slug);
       const authorRaw = pkg.author || pkg.owner || '';
       const author =
-        typeof authorRaw === 'object'
-          ? String(authorRaw?.name || authorRaw?.handle || '')
-          : String(authorRaw || '');
+        typeof authorRaw === 'object' ? String(authorRaw?.name || authorRaw?.handle || '') : String(authorRaw || '');
       const ownerRaw = pkg.owner || pkg.author || '';
       const owner =
-        typeof ownerRaw === 'object'
-          ? String(ownerRaw?.handle || ownerRaw?.name || '')
-          : String(ownerRaw || '');
+        typeof ownerRaw === 'object' ? String(ownerRaw?.handle || ownerRaw?.name || '') : String(ownerRaw || '');
       const authorIconUrl = githubAvatarUrlForHandle(authorRaw);
       const iconPath = resolveInstalledIconPath(extensionPath, pkg.icon || 'icon.png');
 
@@ -1295,7 +1483,9 @@ function tokenScore(tokens: string[], query: string, exactScore: number, prefixS
 }
 
 export function scoreCatalogEntrySearch(entry: CatalogEntry, query: string): number {
-  const q = String(query || '').trim().toLowerCase();
+  const q = String(query || '')
+    .trim()
+    .toLowerCase();
   if (!q) return 1;
 
   const name = String(entry.name || '').toLowerCase();
@@ -1308,9 +1498,7 @@ export function scoreCatalogEntrySearch(entry: CatalogEntry, query: string): num
   const nameTokens = searchTokens(entry.name);
   const authorTokens = searchTokens(author);
   const categoryTokens = searchTokens(categories.join(' '));
-  const commandTokens = searchTokens(
-    commands.map((command) => `${command.name} ${command.title}`).join(' '),
-  );
+  const commandTokens = searchTokens(commands.map((command) => `${command.name} ${command.title}`).join(' '));
   const descriptionTokens = searchTokens(entry.description);
 
   let score = 0;
@@ -1339,7 +1527,9 @@ export function scoreCatalogEntrySearch(entry: CatalogEntry, query: string): num
 }
 
 export async function searchExtensionCatalog(query: string): Promise<ExtensionManifest[]> {
-  const q = String(query || '').trim().toLowerCase();
+  const q = String(query || '')
+    .trim()
+    .toLowerCase();
   const catalog = await getCatalog(false);
   return catalog
     .map((entry) => {
@@ -1372,20 +1562,48 @@ export async function searchExtensionCatalog(query: string): Promise<ExtensionMa
     }));
 }
 
-export async function installRegistryExtension(
-  extensionIdOrSlug: string
-): Promise<InstalledRegistryExtension> {
+export async function installRegistryExtension(extensionIdOrSlug: string): Promise<InstalledRegistryExtension> {
+  const repository = parseGitHubRepositoryUrl(extensionIdOrSlug);
+  if (repository) {
+    const repositoryJobKey = `repository:${repository.url.toLowerCase()}`;
+    const existingRepositoryJob = extensionInstallJobs.get(repositoryJobKey);
+    if (existingRepositoryJob) return existingRepositoryJob;
+
+    const repositoryJob = installRegistryExtensionFromGitHubRepository(repository);
+    extensionInstallJobs.set(repositoryJobKey, repositoryJob);
+    try {
+      return await repositoryJob;
+    } finally {
+      if (extensionInstallJobs.get(repositoryJobKey) === repositoryJob) {
+        extensionInstallJobs.delete(repositoryJobKey);
+      }
+    }
+  }
+
   const slug = slugFromRaymesExtensionId(extensionIdOrSlug);
   if (!slug) throw new Error('A valid extension id is required');
 
-  extensionRegistryEvents.emit('progress', { id: normalizeRaymesExtensionId(slug), progress: 5 });
-  const ok = await installExtension(slug);
-  extensionRegistryEvents.emit('progress', { id: normalizeRaymesExtensionId(slug), progress: ok ? 100 : 0 });
-  if (!ok) throw new Error(`Failed to install extension: ${slug}`);
+  const existingJob = extensionInstallJobs.get(slug);
+  if (existingJob) return existingJob;
 
-  const installed = listInstalledRegistryExtensions().find((entry) => entry.slug === slug);
-  if (!installed) throw new Error(`Extension installed but could not be loaded: ${slug}`);
-  return installed;
+  const job = (async (): Promise<InstalledRegistryExtension> => {
+    const ok = await installExtension(slug);
+    emitInstallProgress(slug, ok ? 100 : 0);
+    if (!ok) throw new Error(`Failed to install extension: ${slug}`);
+
+    const installed = listInstalledRegistryExtensions().find((entry) => entry.slug === slug);
+    if (!installed) throw new Error(`Extension installed but could not be loaded: ${slug}`);
+    return installed;
+  })();
+  extensionInstallJobs.set(slug, job);
+
+  try {
+    return await job;
+  } finally {
+    if (extensionInstallJobs.get(slug) === job) {
+      extensionInstallJobs.delete(slug);
+    }
+  }
 }
 
 export function uninstallRegistryExtension(extensionIdOrSlug: string): boolean {
@@ -1433,9 +1651,7 @@ export function getExtensionPreferences(extensionId: string, commandName?: strin
   };
 
   applyDefaults(Array.isArray(pkg.preferences) ? pkg.preferences : []);
-  const command = Array.isArray(pkg.commands)
-    ? pkg.commands.find((cmd: any) => cmd?.name === commandName)
-    : null;
+  const command = Array.isArray(pkg.commands) ? pkg.commands.find((cmd: any) => cmd?.name === commandName) : null;
   applyDefaults(Array.isArray(command?.preferences) ? command.preferences : []);
 
   const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
@@ -1449,13 +1665,16 @@ export function getExtensionPreferences(extensionId: string, commandName?: strin
           Object.assign(values, saved.commands[commandName]);
         }
       }
-    } catch { }
+    } catch {}
   }
 
   return values;
 }
 
-export function getExtensionPreferenceSetup(extensionId: string, commandName?: string): {
+export function getExtensionPreferenceSetup(
+  extensionId: string,
+  commandName?: string
+): {
   extensionId: string;
   commandName?: string;
   title: string;
@@ -1467,9 +1686,7 @@ export function getExtensionPreferenceSetup(extensionId: string, commandName?: s
   const slug = slugFromRaymesExtensionId(extensionId);
   const pkg = readInstalledPackage(slug);
   const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
-  const command = Array.isArray(pkg.commands)
-    ? pkg.commands.find((cmd: any) => cmd?.name === commandName)
-    : null;
+  const command = Array.isArray(pkg.commands) ? pkg.commands.find((cmd: any) => cmd?.name === commandName) : null;
   const extensionPreferences = Array.isArray(pkg.preferences)
     ? pkg.preferences.map((preference: any) => ({ ...preference }))
     : [];
@@ -1527,7 +1744,7 @@ export function shouldShowExtensionPreferenceSetup(extensionId: string, commandN
 export function saveExtensionPreferences(
   extensionId: string,
   values: Record<string, unknown>,
-  commandName?: string,
+  commandName?: string
 ): Record<string, unknown> {
   const slug = slugFromRaymesExtensionId(extensionId);
   const extensionPath = resolveInstalledExtensionPathForRaymes(slug) || getInstalledPath(slug);
@@ -1538,13 +1755,11 @@ export function saveExtensionPreferences(
     try {
       const parsed = JSON.parse(fs.readFileSync(preferencesPath, 'utf-8'));
       if (parsed && typeof parsed === 'object') existing = parsed;
-    } catch { }
+    } catch {}
   }
 
   if (commandName) {
-    existing.commands = existing.commands && typeof existing.commands === 'object'
-      ? existing.commands
-      : {};
+    existing.commands = existing.commands && typeof existing.commands === 'object' ? existing.commands : {};
     existing.commands[commandName] = {
       ...(existing.commands[commandName] || {}),
       ...values,

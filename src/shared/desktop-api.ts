@@ -88,6 +88,7 @@ export type RaymesApi = {
   hide: () => Promise<void>
   show: () => Promise<void>
   openSettingsWindow: () => Promise<void>
+  hideLauncherForSettings: () => Promise<void>
   closeCurrentWindow: () => Promise<void>
   query: (text: string) => Promise<Intent>
   cancel: () => Promise<unknown>

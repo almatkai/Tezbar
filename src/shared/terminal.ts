@@ -15,13 +15,29 @@ export const TERMINAL_IPC = {
 } as const
 
 export function compactTerminalPath(value: string): string {
-  return value.replace(/^\/Users\/[^/]+(?=\/|$)/, '...')
+  const normalized = value.replace(/\\/g, '/')
+  return normalized
+    .replace(/^\/Users\/[^/]+(?=\/|$)/, '...')
+    .replace(/^[A-Za-z]:\/Users\/[^/]+(?=\/|$)/, '...')
+}
+
+/**
+ * Returns whether a path can be used as an explicit terminal working directory.
+ * The launcher accepts `/path >`, `C:\\path >`, and UNC path prefixes.
+ */
+export function isAbsoluteTerminalPath(value: string): boolean {
+  const path = value.trim()
+  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path) || /^\\\\/.test(path)
 }
 
 export function terminalDirectoryLabel(cwd: string): string {
-  const parts = cwd.split('/').filter(Boolean)
+  const parts = cwd.replace(/\\/g, '/').split('/').filter(Boolean)
+  const first = parts[0] ?? ''
   if (parts.length === 2 && parts[0] === 'Users') return '~'
   if (parts.length === 3 && parts[0] === 'Users') return `~/${parts[2]}`
+  if (parts.length >= 4 && /^[A-Za-z]:$/.test(first) && parts[1] === 'Users') {
+    return `~/${parts.slice(3).join('/')}`
+  }
   if (parts.length === 0) return '/'
   return parts.slice(-2).join('/')
 }

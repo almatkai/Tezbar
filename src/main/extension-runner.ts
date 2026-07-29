@@ -542,21 +542,22 @@ async function runAppleScriptForSession(session: RuntimeSession, source: string)
   return runAppleScript(source)
 }
 
-function nativeColorPickerBundledBinaryPath(): string | null {
+function nativeColorPickerBundledHelperPath(): string | null {
   const envPath = process.env.COLOR_PICKER_HELPER_PATH
   if (envPath && existsSync(envPath)) return envPath
 
+  const helperName = process.platform === 'win32' ? 'windows.ps1' : 'color-picker-helper'
   const candidates = [
-    join(process.cwd(), 'native', 'color-picker', 'color-picker-helper'),
-    join(app.getAppPath(), 'native', 'color-picker', 'color-picker-helper'),
+    join(process.cwd(), 'native', 'color-picker', helperName),
+    join(app.getAppPath(), 'native', 'color-picker', helperName),
   ]
 
   if (app?.isPackaged) {
     const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
     if (resourcesPath) {
       candidates.unshift(
-        join(resourcesPath, 'app.asar.unpacked', 'native', 'color-picker', 'color-picker-helper'),
-        join(resourcesPath, 'native', 'color-picker', 'color-picker-helper')
+        join(resourcesPath, 'app.asar.unpacked', 'native', 'color-picker', helperName),
+        join(resourcesPath, 'native', 'color-picker', helperName)
       )
     }
   }
@@ -578,9 +579,10 @@ function nativeColorPickerSourcePath(): string | null {
   return candidates.find((candidate) => existsSync(candidate)) ?? null
 }
 
-async function ensureNativeColorPickerBinary(): Promise<string | null> {
-  const bundledPath = nativeColorPickerBundledBinaryPath()
+async function ensureNativeColorPickerHelper(): Promise<string | null> {
+  const bundledPath = nativeColorPickerBundledHelperPath()
   if (bundledPath) return bundledPath
+  if (process.platform !== 'darwin') return null
 
   const sourcePath = nativeColorPickerSourcePath()
   if (!sourcePath) return null
@@ -615,6 +617,36 @@ async function ensureNativeColorPickerBinary(): Promise<string | null> {
   }
 }
 
+async function runNativeColorPickerHelper(helperPath: string): Promise<string> {
+  if (process.platform === 'win32') {
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Sta',
+        '-File',
+        helperPath,
+      ],
+      {
+        encoding: 'utf8',
+        windowsHide: true,
+        maxBuffer: 1024 * 1024,
+      }
+    )
+    return stdout
+  }
+
+  const { stdout } = await execFileAsync(helperPath, [], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+  })
+  return stdout
+}
+
 async function pickColorWithNativeSampler(): Promise<{
   red: number
   green: number
@@ -624,8 +656,9 @@ async function pickColorWithNativeSampler(): Promise<{
 } | null> {
   const visibleWindows = BrowserWindow.getAllWindows().filter((window) => window.isVisible())
   try {
-    const binaryPath = await ensureNativeColorPickerBinary()
-    if (!binaryPath) {
+    const helperPath = await ensureNativeColorPickerHelper()
+    if (!helperPath) {
+      console.error(`[ColorPicker] No native picker is available on ${process.platform}.`)
       return null
     }
 
@@ -634,8 +667,8 @@ async function pickColorWithNativeSampler(): Promise<{
       window.hide()
     }
     app.hide()
-    await delay(80)
-    const { stdout } = await execFileAsync(binaryPath)
+    await delay(process.platform === 'win32' ? 160 : 80)
+    const stdout = await runNativeColorPickerHelper(helperPath)
     const trimmed = stdout.trim()
     if (!trimmed || trimmed === 'null') return null
 
@@ -663,7 +696,8 @@ async function pickColorWithNativeSampler(): Promise<{
           ? parsed.colorSpace
           : 'srgb',
     }
-  } catch {
+  } catch (error) {
+    console.error('[ColorPicker] Native sampler failed:', error)
     return null
   } finally {
     setSuppressBlurHide(false)
@@ -693,16 +727,17 @@ function imageColorsHelperPath(): string | null {
   const envPath = process.env.IMAGE_COLORS_HELPER_PATH
   if (envPath && existsSync(envPath)) return envPath
 
+  const helperName = process.platform === 'win32' ? 'windows.ps1' : 'image-colors-helper'
   const candidates = [
-    join(process.cwd(), 'native', 'image-colors', 'image-colors-helper'),
-    join(app.getAppPath(), 'native', 'image-colors', 'image-colors-helper'),
+    join(process.cwd(), 'native', 'image-colors', helperName),
+    join(app.getAppPath(), 'native', 'image-colors', helperName),
   ]
   if (app?.isPackaged) {
     const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
     if (resourcesPath) {
       candidates.unshift(
-        join(resourcesPath, 'app.asar.unpacked', 'native', 'image-colors', 'image-colors-helper'),
-        join(resourcesPath, 'native', 'image-colors', 'image-colors-helper')
+        join(resourcesPath, 'app.asar.unpacked', 'native', 'image-colors', helperName),
+        join(resourcesPath, 'native', 'image-colors', helperName)
       )
     }
   }
@@ -714,7 +749,8 @@ async function extractColorsFromImage(
   colorCount = 40,
   dominantOnly = false
 ): Promise<ExtractedImageColor[]> {
-  if (process.platform !== 'darwin') {
+  const isWindows = process.platform === 'win32'
+  if (process.platform !== 'darwin' && !isWindows) {
     throw new Error('Native image color extraction is not available on this platform')
   }
   if (!path || !existsSync(path)) throw new Error('The selected image no longer exists')
@@ -722,10 +758,32 @@ async function extractColorsFromImage(
   const helperPath = imageColorsHelperPath()
   if (!helperPath) throw new Error('The native image color helper is missing')
   const count = Math.max(1, Math.min(80, Math.round(Number(colorCount) || 40)))
+  // Packaged Windows builds use the PowerShell helper, while an explicit
+  // IMAGE_COLORS_HELPER_PATH may point to a native executable instead.
+  const usePowerShell = isWindows && extname(helperPath).toLowerCase() === '.ps1'
+  const command = usePowerShell ? 'powershell.exe' : helperPath
+  const args = usePowerShell
+    ? [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        helperPath,
+        path,
+        String(count),
+        dominantOnly ? 'true' : 'false',
+      ]
+    : [path, String(count), dominantOnly ? 'true' : 'false']
   const { stdout } = await execFileAsync(
-    helperPath,
-    [path, String(count), dominantOnly ? 'true' : 'false'],
-    { timeout: 60_000, maxBuffer: 10 * 1024 * 1024 }
+    command,
+    args,
+    {
+      timeout: 60_000,
+      maxBuffer: 10 * 1024 * 1024,
+      ...(isWindows ? { windowsHide: true } : {}),
+    }
   )
   const parsed = JSON.parse(stdout.trim()) as unknown
   if (!Array.isArray(parsed)) throw new Error('The native image color helper returned invalid data')
@@ -1780,8 +1838,33 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
         return []
       }
     },
-    launchCommand: async (): Promise<void> => {
-      // Background/menu-bar command relaunches are best-effort in Tezbar.
+    launchCommand: async (options?: unknown): Promise<void> => {
+      if (!options || typeof options !== 'object') {
+        throw new Error('launchCommand requires a command name')
+      }
+      const request = options as {
+        name?: unknown
+        arguments?: unknown
+      }
+      const targetName = typeof request.name === 'string' ? request.name.trim() : ''
+      if (!targetName) throw new Error('launchCommand requires a command name')
+      const argumentValues =
+        request.arguments && typeof request.arguments === 'object'
+          ? Object.fromEntries(
+              Object.entries(request.arguments as Record<string, unknown>).map(([key, value]) => [
+                key,
+                typeof value === 'string' ? value : String(value ?? ''),
+              ])
+            )
+          : {}
+      const result = await runCommandFromPackagePath(
+        join(session.packageRoot, 'package.json'),
+        session.extensionId,
+        targetName,
+        argumentValues,
+        getExtensionPreferences(session.extensionId, targetName)
+      )
+      if (!result.ok) throw new Error(result.message)
     },
     useNavigation: () => ({
       push: (next: unknown): void => {
@@ -3023,7 +3106,8 @@ function registerAction(
     }
 
     if (typeof props.onAction === 'function') {
-      await Promise.resolve((props.onAction as () => unknown)())
+      const event = typeName === 'MenuBarExtra.Item' ? { type: 'left-click' } : undefined
+      await Promise.resolve((props.onAction as (event?: unknown) => unknown)(event))
     }
   }
 
@@ -3144,6 +3228,9 @@ function walkRuntimeNodes(
   }
 
   const actionStart = session.currentActions.length
+  if (typeName === 'MenuBarExtra.Item' && typeof props.onAction === 'function') {
+    registerAction(typeName, props, session)
+  }
   const nestedOptions: WalkRuntimeOptions = {
     ...options,
     listItemsSeen: undefined,

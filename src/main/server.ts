@@ -13,6 +13,14 @@ import { warmSearchIndex } from './search/service'
 
 declare const __RAYMES_PI_POLICY_SOURCE__: string
 
+// stdout is the framed JSON transport consumed by the Tauri host. Route all
+// ordinary application logs to stderr so a dependency's console.log cannot
+// corrupt or interleave with an IPC reply.
+const writeBackendLog = console.error.bind(console)
+console.log = writeBackendLog
+console.info = writeBackendLog
+console.debug = writeBackendLog
+
 function materializePiPolicy(): void {
   const root = process.env.APPDATA_DIR
   if (!root || typeof __RAYMES_PI_POLICY_SOURCE__ !== 'string') return

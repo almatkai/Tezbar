@@ -67,6 +67,7 @@ import {
   setDisabledCommands,
   getCommandSurfaceTimeoutMs,
   getExtensionRuntimeTimeoutMs,
+  getRaymesHotkey,
 } from './llm/configStore'
 import { getInstalledExtensionsSettingsSchema } from './extension-builder'
 import {
@@ -629,6 +630,7 @@ export function registerIpcHandlers(
     ...LLM_DEFAULTS,
     ...readLLMConfig(),
     ...readRawConfig(),
+    raymesHotkey: getRaymesHotkey(),
     uiStateRetentionMs: getUiStateRetentionMs(),
     extensionRuntimeTimeoutMs: getExtensionRuntimeTimeoutMs(),
     aiModeTimeoutMs: getCommandSurfaceTimeoutMs('aiModeTimeoutMs'),

@@ -32,6 +32,7 @@ import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import {
   compactTerminalPath,
+  isAbsoluteTerminalPath,
   type TerminalKeepAliveFor,
   type TerminalPromptInfo,
   type TerminalSaveFor,
@@ -3862,7 +3863,7 @@ export default function CommandBar({
                   if (!terminalMode) {
                     const separator = newValue.indexOf('>')
                     const pathPrefix = separator > 0 ? newValue.slice(0, separator).trim() : ''
-                    if (separator === 0 || (separator > 0 && pathPrefix.startsWith('/'))) {
+                    if (separator === 0 || (separator > 0 && isAbsoluteTerminalPath(pathPrefix))) {
                       terminalWorkingDirectoryRef.current = pathPrefix || undefined
                       setTerminalMode(true)
                       nextTerminalMode = true

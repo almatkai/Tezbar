@@ -88,7 +88,7 @@ export function extensionCatalogReducer(
             : { ...state.installing, [action.id]: action.progress },
       }
     case 'install-started':
-      return { ...state, installing: { ...state.installing, [action.id]: 1 } }
+      return { ...state, installing: { ...state.installing, [action.id]: 5 } }
     case 'install-finished':
       return {
         ...state,

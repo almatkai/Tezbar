@@ -5,7 +5,10 @@ import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../../shared/llmConfig'
 
 export const OPENRAY_CONFIG_DIR = join(homedir(), '.openray')
 export const OPENRAY_CONFIG_PATH = join(OPENRAY_CONFIG_DIR, 'config.json')
-export const DEFAULT_RAYMES_HOTKEY = 'Alt+Space'
+// Alt+Space opens the native window menu on Windows, so it cannot be used as
+// a reliable global launcher shortcut there. Keep the macOS default intact
+// while giving Windows a shortcut that the OS does not reserve.
+export const DEFAULT_RAYMES_HOTKEY = process.platform === 'win32' ? 'Control+Space' : 'Alt+Space'
 
 let configCache: Record<string, unknown> | null = null
 
@@ -198,7 +201,14 @@ export function setPersistedWindowPositionForDisplay(
 
 export function getRaymesHotkey(): string {
   const value = readRawConfig().raymesHotkey
-  return typeof value === 'string' && value.trim() ? value : DEFAULT_RAYMES_HOTKEY
+  if (typeof value !== 'string' || !value.trim()) return DEFAULT_RAYMES_HOTKEY
+  // Migrate the old cross-platform default without overwriting a user's
+  // explicitly chosen shortcut. Alt+Space is the one value known to be the
+  // former default and is reserved by Windows for the system menu.
+  if (process.platform === 'win32' && value.trim().toLowerCase() === 'alt+space') {
+    return DEFAULT_RAYMES_HOTKEY
+  }
+  return value
 }
 
 export function setRaymesHotkey(accelerator: string): void {
