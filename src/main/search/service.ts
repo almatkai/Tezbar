@@ -1161,6 +1161,27 @@ function displayUserPath(path: string): string {
   return path
 }
 
+/**
+ * Convert an absolute path back into the slash-path syntax accepted by the
+ * launcher. Paths below the user's home are intentionally rendered as
+ * `/Desktop/...` (rather than `C:\\Users\\...` or `~/Desktop/...`) so that
+ * selecting a completion keeps the command bar readable and portable.
+ */
+function slashPathValue(path: string, trailingSlash = false): string {
+  const normalizedPath = path.replace(/\\/g, '/')
+  const normalizedHome = homedir().replace(/\\/g, '/').replace(/\/$/, '')
+  let value = normalizedPath
+
+  if (normalizedPath === normalizedHome) {
+    value = '/'
+  } else if (normalizedPath.startsWith(`${normalizedHome}/`)) {
+    value = `/${normalizedPath.slice(normalizedHome.length + 1)}`
+  }
+
+  if (trailingSlash && value !== '/' && !value.endsWith('/')) value += '/'
+  return value
+}
+
 function splitPathCompletionQuery(raw: string): {
   targetPath: string
   appTerm: string
@@ -1279,7 +1300,7 @@ function recommendedDirectories(): PathCompletionItem[] {
       section: 'recommended' as const,
       badge: 'Recommended',
       iconDataUrl: folderIconDataUrl,
-      value: `${item.path}/`,
+      value: slashPathValue(item.path, true),
       path: item.path,
       score: 5_000 - index,
     }))
@@ -1496,7 +1517,7 @@ function applicationCompletionItem(
     kind: 'application',
     section,
     badge: section === 'recommended' ? 'Recommended' : 'Open With',
-    value: `${targetPath} ${appInfo.name}`,
+    value: `${slashPathValue(targetPath)} ${appInfo.name}`,
     path: targetPath,
     appPath: appInfo.path,
     appName: appInfo.name,
@@ -1583,7 +1604,7 @@ export async function completePath(query: string, limit = 50): Promise<PathCompl
       kind: 'application' as const,
       section: 'default' as const,
       badge: 'Default',
-      value: `${targetPath} `,
+      value: `${slashPathValue(targetPath)} `,
       path: targetPath,
       applicationAction: 'open-with' as const,
       score: 2_000,
@@ -1618,7 +1639,7 @@ export async function completePath(query: string, limit = 50): Promise<PathCompl
           title: entry.name,
           subtitle: displayUserPath(absolute),
           kind,
-          value: isDirectory ? `${absolute}/` : absolute,
+          value: slashPathValue(absolute, isDirectory),
           path: absolute,
           iconDataUrl: isDirectory ? folderIconDataUrl : fileIconDataUrl(absolute),
           score:
