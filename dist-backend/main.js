@@ -24834,6 +24834,18 @@ function displayUserPath(path7) {
   }
   return path7;
 }
+function slashPathValue(path7, trailingSlash = false) {
+  const normalizedPath = path7.replace(/\\/g, "/");
+  const normalizedHome = (0, import_node_os10.homedir)().replace(/\\/g, "/").replace(/\/$/, "");
+  let value = normalizedPath;
+  if (normalizedPath === normalizedHome) {
+    value = "/";
+  } else if (normalizedPath.startsWith(`${normalizedHome}/`)) {
+    value = `/${normalizedPath.slice(normalizedHome.length + 1)}`;
+  }
+  if (trailingSlash && value !== "/" && !value.endsWith("/")) value += "/";
+  return value;
+}
 function splitPathCompletionQuery(raw) {
   const query = raw.trimStart();
   const body = query === "/" ? "" : query;
@@ -24932,7 +24944,7 @@ function recommendedDirectories() {
     section: "recommended",
     badge: "Recommended",
     iconDataUrl: folderIconDataUrl,
-    value: `${item.path}/`,
+    value: slashPathValue(item.path, true),
     path: item.path,
     score: 5e3 - index
   }));
@@ -25093,7 +25105,7 @@ function applicationCompletionItem(targetPath, appInfo, index, section, score) {
     kind: "application",
     section,
     badge: section === "recommended" ? "Recommended" : "Open With",
-    value: `${targetPath} ${appInfo.name}`,
+    value: `${slashPathValue(targetPath)} ${appInfo.name}`,
     path: targetPath,
     appPath: appInfo.path,
     appName: appInfo.name,
@@ -25152,7 +25164,7 @@ async function completePath(query, limit = 50) {
       kind: "application",
       section: "default",
       badge: "Default",
-      value: `${targetPath} `,
+      value: `${slashPathValue(targetPath)} `,
       path: targetPath,
       applicationAction: "open-with",
       score: 2e3
@@ -25180,7 +25192,7 @@ async function completePath(query, limit = 50) {
         title: entry.name,
         subtitle: displayUserPath(absolute),
         kind,
-        value: isDirectory ? `${absolute}/` : absolute,
+        value: slashPathValue(absolute, isDirectory),
         path: absolute,
         iconDataUrl: isDirectory ? folderIconDataUrl : fileIconDataUrl(absolute),
         score: (isDirectory ? 1e3 : 500) + (lowerName === normalizedPrefix ? 1e3 : lowerName.startsWith(normalizedPrefix) ? 100 : 0)

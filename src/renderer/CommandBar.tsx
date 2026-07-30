@@ -1527,6 +1527,10 @@ export default function CommandBar({
   const killPortModeRef = useRef(killPortMode)
   const killPortValueRef = useRef(killPortValue)
   const terminalModeRef = useRef(terminalMode)
+  // A terminal row is only eligible for Enter after keyboard navigation has
+  // explicitly selected the session. Hovering a row (or a stale search index)
+  // must not turn a fresh `>` launch into an implicit restore of row 0.
+  const terminalSessionSelectionActiveRef = useRef(false)
   const terminalSettingsOpenRef = useRef(terminalSettingsOpen)
   const launcherQueryHistoryRef = useRef<string[]>([])
   const lastSearchRequestId = useRef(0)
@@ -1592,6 +1596,7 @@ export default function CommandBar({
   if (initialValue !== prevInitialValue) {
     setPrevInitialValue(initialValue)
     setTerminalMode(initialValue.startsWith('>'))
+    terminalSessionSelectionActiveRef.current = false
     setValue(normalizedInitialValue)
     setSelectedSearch(
       initialValue.startsWith('>') ||
@@ -3131,6 +3136,7 @@ export default function CommandBar({
         return true
       }
       if (terminalModeRef.current) {
+        terminalSessionSelectionActiveRef.current = false
         setValue('')
         setTerminalMode(false)
         setTerminalPrompt('')
@@ -3288,7 +3294,9 @@ export default function CommandBar({
     }
 
     if (terminalMode) {
-      const selectedSession = terminalSessionAtIndex(orderedTerminalSessions, selectedSearch)
+      const selectedSession = terminalSessionSelectionActiveRef.current
+        ? terminalSessionAtIndex(orderedTerminalSessions, selectedSearch)
+        : undefined
       if (selectedSession) {
         openTerminalSession(selectedSession)
         return
@@ -3385,7 +3393,11 @@ export default function CommandBar({
       selectedQuickLookPath
     )
   const terminalSelectedIndex =
-    selectedSearch >= 0 && selectedSearch < terminalSessionCount ? selectedSearch : -1
+    terminalSessionSelectionActiveRef.current &&
+    selectedSearch >= 0 &&
+    selectedSearch < terminalSessionCount
+      ? selectedSearch
+      : -1
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLElement>): void => {
     if (isDeepSearchMode && searchResultNavigationActive && e.key === 'Escape') {
@@ -3456,6 +3468,7 @@ export default function CommandBar({
 
     if (terminalMode && e.key === 'Backspace' && !value) {
       e.preventDefault()
+      terminalSessionSelectionActiveRef.current = false
       setTerminalMode(false)
       setTerminalPrompt('')
       terminalWorkingDirectoryRef.current = undefined
@@ -3506,6 +3519,7 @@ export default function CommandBar({
     ) {
       e.preventDefault()
       terminalWorkingDirectoryRef.current = isSlashInput ? value.trim() : undefined
+      terminalSessionSelectionActiveRef.current = false
       setValue('')
       setTerminalMode(true)
       setSelectedSearch(-1)
@@ -3610,12 +3624,14 @@ export default function CommandBar({
     } else if (terminalMode && terminalSessionCount > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
+        terminalSessionSelectionActiveRef.current = true
         setFollowSearchSelection(true)
         setSelectedSearch((i) => moveTerminalSelectionDown(i, terminalSessionCount))
       }
       if (e.key === 'ArrowUp') {
         if (selectedSearch < 0) return
         e.preventDefault()
+        terminalSessionSelectionActiveRef.current = true
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.max(i - 1, 0))
       }
@@ -3865,6 +3881,7 @@ export default function CommandBar({
                     const pathPrefix = separator > 0 ? newValue.slice(0, separator).trim() : ''
                     if (separator === 0 || (separator > 0 && isAbsoluteTerminalPath(pathPrefix))) {
                       terminalWorkingDirectoryRef.current = pathPrefix || undefined
+                      terminalSessionSelectionActiveRef.current = false
                       setTerminalMode(true)
                       nextTerminalMode = true
                       newValue = newValue.slice(separator + 1)

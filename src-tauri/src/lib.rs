@@ -57,6 +57,8 @@ const TAURI_WINDOW_POSITION_KEY: &str = "tauriWindowPosition";
 const TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "tauriWindowPositionsByDisplay";
 const LEGACY_WINDOW_POSITION_KEY: &str = "windowPosition";
 const LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "windowPositionsByDisplay";
+const WINDOW_PLACEMENT_INITIALIZED_KEY: &str = "tezbarWindowPlacementInitialized";
+const WINDOW_PLACEMENT_VERSION: u64 = 3;
 const DEFAULT_BACKEND_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const EXTENSION_INSTALL_REQUEST_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const EXTENSION_RUNTIME_REQUEST_TIMEOUT: Duration = Duration::from_secs(2 * 60);
@@ -99,6 +101,10 @@ fn backend_request_timeout(channel: &str) -> Duration {
 struct WindowBehaviorState {
     suppress_blur_hide: Mutex<bool>,
     backend_hidden_windows: Mutex<Vec<String>>,
+    // Windows creates the hidden launcher at an OS-chosen position and emits
+    // Moved before Tezbar has selected its real placement. Ignore that event
+    // so it cannot overwrite the user's saved location with (typically) 130,130.
+    main_window_placed: Mutex<bool>,
     snap_drag_active: Mutex<bool>,
     snap_locked: Mutex<SnapLockState>,
     snap_motion: Mutex<SnapMotionState>,
@@ -289,6 +295,28 @@ fn hide_snap_overlay(app: &AppHandle, main_window: Option<&WebviewWindow>) {
     }
 }
 
+/// Close the sidecar connection before leaving the Tauri event loop. The
+/// backend treats EOF on this socket as its shutdown signal, which gives it a
+/// chance to stop its own workers instead of leaving a Bun process behind.
+fn close_backend_connection(app: &AppHandle) {
+    let Some(state) = app.try_state::<BackendState>() else {
+        return;
+    };
+    state.writer.lock().unwrap().take();
+    let mut pending = state.pending_requests.lock().unwrap();
+    for (_, sender) in pending.drain() {
+        let _ = sender.send(json!({ "error": "Tezbar is shutting down" }));
+    }
+}
+
+fn quit_app_now(app: &AppHandle) {
+    // Release the global shortcut and sidecar IPC before asking Tauri to exit.
+    // This makes tray/menu quits behave the same as the Settings quit action.
+    let _ = app.global_shortcut().unregister_all();
+    close_backend_connection(app);
+    app.exit(0);
+}
+
 fn handle_backend_message(
     app: &AppHandle,
     pending_requests: &Arc<Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>>,
@@ -325,7 +353,7 @@ fn handle_backend_message(
             }
         }
         "dialog" => println!("[Tauri Dialog] Dialog options: {:?}", val.get("options")),
-        "app_quit" => app.exit(0),
+        "app_quit" => quit_app_now(app),
         "window_suppress_blur" => {
             if let Some(value) = val.get("value").and_then(|value| value.as_bool()) {
                 let state = app.state::<WindowBehaviorState>();
@@ -642,6 +670,29 @@ fn position_from_config_value(
     serde_json::from_value(value?.clone()).ok()
 }
 
+#[cfg(target_os = "windows")]
+fn windows_window_placement_initialized() -> bool {
+    read_openray_config()
+        .get(WINDOW_PLACEMENT_INITIALIZED_KEY)
+        .and_then(serde_json::Value::as_u64)
+        .is_some_and(|version| version == WINDOW_PLACEMENT_VERSION)
+}
+
+#[cfg(target_os = "windows")]
+fn windows_persisted_window_position_for_monitor(
+    monitor_keys: &[String],
+) -> Option<PersistedWindowPosition> {
+    let config = read_openray_config();
+    monitor_keys.iter().find_map(|monitor_key| {
+        position_from_config_value(
+            config
+                .get(TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY)?
+                .get(monitor_key),
+        )
+    })
+}
+
+#[cfg(not(target_os = "windows"))]
 fn legacy_logical_to_physical_position(
     position: PersistedWindowPosition,
     monitor: &Monitor,
@@ -670,6 +721,7 @@ fn physical_to_legacy_logical_position(
     }
 }
 
+#[cfg(not(target_os = "windows"))]
 fn persisted_window_position(monitor: &Monitor) -> Option<PersistedWindowPosition> {
     let config = read_openray_config();
     position_from_config_value(config.get(TAURI_WINDOW_POSITION_KEY)).or_else(|| {
@@ -678,6 +730,7 @@ fn persisted_window_position(monitor: &Monitor) -> Option<PersistedWindowPositio
     })
 }
 
+#[cfg(not(target_os = "windows"))]
 fn position_from_config_object_key(
     config: &serde_json::Value,
     object_key: &str,
@@ -686,6 +739,7 @@ fn position_from_config_object_key(
     position_from_config_value(config.get(object_key)?.get(monitor_key))
 }
 
+#[cfg(not(target_os = "windows"))]
 fn persisted_window_position_for_monitor(
     monitor_keys: &[String],
     monitor: &Monitor,
@@ -741,6 +795,11 @@ fn set_persisted_window_position_for_monitor(monitor: &Monitor, position: Persis
     config_object.insert(
         LEGACY_WINDOW_POSITION_KEY.to_string(),
         json!(legacy_position),
+    );
+    #[cfg(target_os = "windows")]
+    config_object.insert(
+        WINDOW_PLACEMENT_INITIALIZED_KEY.to_string(),
+        json!(WINDOW_PLACEMENT_VERSION),
     );
     for monitor_key in monitor_storage_keys(monitor) {
         set_position_in_object(
@@ -1351,8 +1410,54 @@ fn frontmost_window_monitor(_window: &WebviewWindow) -> Option<Monitor> {
     None
 }
 
+#[cfg(target_os = "windows")]
+fn foreground_window_monitor(window: &WebviewWindow) -> Option<Monitor> {
+    use std::mem::size_of;
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+
+    let foreground_window = unsafe { GetForegroundWindow() };
+    if foreground_window.is_null() {
+        return None;
+    }
+
+    let monitor_handle =
+        unsafe { MonitorFromWindow(foreground_window, MONITOR_DEFAULTTONEAREST) };
+    if monitor_handle.is_null() {
+        return None;
+    }
+
+    let mut monitor_info = MONITORINFO {
+        cbSize: size_of::<MONITORINFO>() as u32,
+        rcMonitor: unsafe { std::mem::zeroed() },
+        rcWork: unsafe { std::mem::zeroed() },
+        dwFlags: 0,
+    };
+    if unsafe { GetMonitorInfoW(monitor_handle, &mut monitor_info) } == 0 {
+        return None;
+    }
+
+    // Tauri's monitor_from_point uses the same physical desktop coordinate
+    // space as the Win32 monitor rectangles. Use the foreground monitor's
+    // center to map the native handle back to Tauri's Monitor value.
+    let center_x =
+        (i64::from(monitor_info.rcMonitor.left) + i64::from(monitor_info.rcMonitor.right)) as f64
+            / 2.0;
+    let center_y =
+        (i64::from(monitor_info.rcMonitor.top) + i64::from(monitor_info.rcMonitor.bottom)) as f64
+            / 2.0;
+    window.monitor_from_point(center_x, center_y).ok().flatten()
+}
+
 fn active_monitor(window: &WebviewWindow) -> Result<Monitor, String> {
     if let Some(monitor) = frontmost_window_monitor(window) {
+        return Ok(monitor);
+    }
+
+    #[cfg(target_os = "windows")]
+    if let Some(monitor) = foreground_window_monitor(window) {
         return Ok(monitor);
     }
 
@@ -1411,6 +1516,19 @@ fn persist_window_position_at(window: &WebviewWindow, position: PersistedWindowP
 }
 
 fn persist_current_window_position(window: &WebviewWindow) {
+    {
+        #[cfg(target_os = "windows")]
+        if window.label() == "main"
+            && !*window
+                .state::<WindowBehaviorState>()
+                .main_window_placed
+                .lock()
+                .unwrap()
+        {
+            return;
+        }
+    }
+
     let Ok(position) = window.outer_position() else {
         return;
     };
@@ -1438,16 +1556,50 @@ fn set_window_position(
 fn place_window(window: &WebviewWindow) -> Result<(), String> {
     let monitor = active_monitor(window)?;
     let (window_width, window_height) = window_size_for_monitor(window, &monitor);
-    let monitor_keys = monitor_storage_keys(&monitor);
-    let position = plan_window_position(
-        monitor_geometry(&monitor),
-        window_width,
-        window_height,
-        persisted_window_position_for_monitor(&monitor_keys, &monitor),
-        persisted_window_position(&monitor),
-    );
+    #[cfg(target_os = "windows")]
+    let (position, should_persist_position) = {
+        let monitor_keys = monitor_storage_keys(&monitor);
+        let initialized = windows_window_placement_initialized();
+        let saved = initialized
+            .then(|| windows_persisted_window_position_for_monitor(&monitor_keys))
+            .flatten();
+        let position = plan_window_position(
+            monitor_geometry(&monitor),
+            window_width,
+            window_height,
+            saved,
+            None,
+        );
+        (position, saved != Some(position))
+    };
+    #[cfg(not(target_os = "windows"))]
+    let position = {
+        let monitor_keys = monitor_storage_keys(&monitor);
+        plan_window_position(
+            monitor_geometry(&monitor),
+            window_width,
+            window_height,
+            persisted_window_position_for_monitor(&monitor_keys, &monitor),
+            persisted_window_position(&monitor),
+        )
+    };
+
+    #[cfg(target_os = "windows")]
+    {
+        *window
+            .state::<WindowBehaviorState>()
+            .main_window_placed
+            .lock()
+            .unwrap() = true;
+    }
 
     set_window_position(window, position)?;
+    #[cfg(target_os = "windows")]
+    if should_persist_position {
+        // The first placement (or a new monitor) becomes the baseline for
+        // future launches. Subsequent drag events overwrite this position.
+        set_persisted_window_position_for_monitor(&monitor, position);
+    }
     Ok(())
 }
 
@@ -1965,7 +2117,7 @@ fn close_current_window(window: WebviewWindow) -> Result<(), String> {
 
 #[tauri::command]
 fn quit_app(app: AppHandle) {
-    app.exit(0);
+    quit_app_now(&app);
 }
 
 #[tauri::command]
@@ -2059,9 +2211,41 @@ fn window_set_content_height(
     let zoom = if zoom_factor > 0.0 { zoom_factor } else { 1.0 };
     let logical_height = height / zoom;
     let clamped_height = logical_height.clamp(WINDOW_MIN_HEIGHT, WINDOW_MAX_HEIGHT);
+
+    #[cfg(target_os = "windows")]
+    let previous_center = if window.is_visible().unwrap_or(false) {
+        window
+            .outer_position()
+            .ok()
+            .zip(window.outer_size().ok())
+            .map(|(position, size)| {
+                (
+                    position.x as f64 + size.width as f64 / 2.0,
+                    position.y as f64 + size.height as f64 / 2.0,
+                )
+            })
+    } else {
+        None
+    };
+
     window
         .set_size(LogicalSize::new(WINDOW_WIDTH, clamped_height))
         .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "windows")]
+    if let (Some((center_x, center_y)), Ok(size)) = (previous_center, window.outer_size()) {
+        // Resizing a borderless WebView keeps its top-left corner fixed. Move
+        // it back by half the size delta so a content-height update cannot
+        // pull the launcher away from the monitor center.
+        set_window_position(
+            &window,
+            PersistedWindowPosition {
+                x: center_x - size.width as f64 / 2.0,
+                y: center_y - size.height as f64 / 2.0,
+            },
+        )?;
+    }
+
     let _ = sync_terminal_sessions_window(window.app_handle());
     Ok(())
 }
@@ -2310,6 +2494,13 @@ pub fn run() {
                 tauri::WindowEvent::Moved(position) => {
                     if let Some(main_window) = window.app_handle().get_webview_window("main") {
                         let state = main_window.state::<WindowBehaviorState>();
+                        #[cfg(target_os = "windows")]
+                        if !*state.main_window_placed.lock().unwrap() {
+                            // The hidden predeclared window receives a move event at
+                            // Windows' default location before `place_window` runs.
+                            // It is not a user move and must not be persisted.
+                            return;
+                        }
                         if *state.snap_drag_active.lock().unwrap() {
                             let raw_position = PersistedWindowPosition {
                                 x: position.x as f64,
@@ -2366,6 +2557,10 @@ pub fn run() {
                             return;
                         };
                         let state = main_window.state::<WindowBehaviorState>();
+                        #[cfg(target_os = "windows")]
+                        if !*state.main_window_placed.lock().unwrap() {
+                            return;
+                        }
                         if *state.suppress_blur_hide.lock().unwrap() {
                             return;
                         }
@@ -2635,7 +2830,7 @@ pub fn run() {
 
             // System Tray Menu Setup
             use tauri::menu::{Menu, MenuItem};
-            use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+            use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
             let show_item = MenuItem::with_id(&handle, "show", "Show Tezbar", true, None::<&str>)?;
             let settings_item =
@@ -2672,6 +2867,10 @@ pub fn run() {
                 .icon(tray_icon)
                 .icon_as_template(true)
                 .menu(&menu)
+                // A left click is the launcher toggle. Keep the context menu
+                // on the right click so Windows does not run both actions for
+                // the same tray interaction.
+                .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| match event.id.as_ref() {
                     "show" => {
                         if let Some(win) = app.get_webview_window("main") {
@@ -2682,12 +2881,22 @@ pub fn run() {
                         let _ = open_settings_window(app.clone());
                     }
                     "quit" => {
-                        app.exit(0);
+                        quit_app_now(app);
                     }
                     _ => {}
                 })
                 .on_tray_icon_event(move |tray, event| {
-                    if let TrayIconEvent::Click { .. } = event {
+                    // Windows emits both button-down and button-up events for
+                    // every mouse button. Only toggle on a completed left
+                    // click; handling right/middle clicks here steals the
+                    // tray context-menu interaction and can flash the launcher
+                    // before hiding it again.
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
                         let app = tray.app_handle();
                         if let Some(win) = app.get_webview_window("main") {
                             let _ = toggle_window(win);
