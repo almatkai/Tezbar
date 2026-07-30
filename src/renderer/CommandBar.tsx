@@ -1468,7 +1468,9 @@ export default function CommandBar({
   // dedicated AI Chat surface (see App.tsx + AgentChatView).
   // Trigger AI mode if input starts with a space, or if it ends with exactly two spaces.
   const parsedSearchQuery = parseSearchQuery(value)
-  const isDeepSearchMode = parsedSearchQuery.mode === 'deep'
+  // Terminal mode owns the input completely. A slash, backtick, or deep-search
+  // prefix typed after `>` is shell text, not a launcher mode switch.
+  const isDeepSearchMode = !terminalMode && parsedSearchQuery.mode === 'deep'
   const isAiMode =
     !terminalMode && !isDeepSearchMode && (value.startsWith(' ') || value.endsWith('  '))
   const deepSearchQuery = isDeepSearchMode ? parsedSearchQuery.query : ''
@@ -1756,9 +1758,9 @@ export default function CommandBar({
   })
 
   const slashQuery = value.trimStart()
-  const isSlashInput = slashQuery.startsWith('/')
-  const isApplicationInput = slashQuery.startsWith('`')
-  const isCompletionInput = isSlashInput || isApplicationInput
+  const isSlashInput = !terminalMode && slashQuery.startsWith('/')
+  const isApplicationInput = !terminalMode && slashQuery.startsWith('`')
+  const isCompletionInput = !terminalMode && (isSlashInput || isApplicationInput)
 
   const chatHistoryQuery = agentTask.trim().toLowerCase()
   const filteredChatHistory = useMemo(() => {

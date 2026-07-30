@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { ExtensionManifest } from '../shared/extensions'
 import { parseGitHubRepositoryUrl } from '../shared/extensionRepository'
+import { searchLovedExtensions } from '../shared/lovedExtensions'
 import { Button, Hint, HintBar, Kbd, Message, TextField, ViewHeader, cx } from './ui/primitives'
 import { GlideList } from './ui/GlideList'
 import { ExtensionPreferencesEditor } from './ExtensionPreferencesEditor'
@@ -237,6 +238,9 @@ export default function ExtensionsView({
   const searchRef = useRef<HTMLInputElement>(null)
   const loadRequestIdRef = useRef(0)
   const [repositoryInstalling, setRepositoryInstalling] = useState(false)
+  const isWindows =
+    typeof navigator !== 'undefined' &&
+    (/windows/i.test(navigator.userAgent) || /win/i.test(navigator.platform))
   const repository = useMemo(() => parseGitHubRepositoryUrl(query), [query])
   const isUrlQuery = useMemo(() => /^[a-z][a-z0-9+.-]*:\/\//i.test(query.trim()), [query])
   const showMessage = useCallback((message: { tone: 'success' | 'error'; text: string }) => {
@@ -257,7 +261,11 @@ export default function ExtensionsView({
     try {
       const [installedList, storeList] = await Promise.all([
         window.tezbar.extensionList(),
-        isUrlQuery ? Promise.resolve([]) : window.tezbar.extensionSearchStore(query),
+        isUrlQuery
+          ? Promise.resolve([])
+          : isWindows
+            ? Promise.resolve(searchLovedExtensions(query))
+            : window.tezbar.extensionSearchStore(query),
       ])
       const normalizedInstalled = installedList.map((entry) => ({
         id: entry.id,
@@ -284,7 +292,7 @@ export default function ExtensionsView({
         message: error instanceof Error ? error.message : 'Could not load extensions',
       })
     }
-  }, [isUrlQuery, query])
+  }, [isUrlQuery, isWindows, query])
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -323,10 +331,14 @@ export default function ExtensionsView({
   const runInstallAction = useCallback(
     (ext: StoreExtension): void => {
       const isInstalled = installedIds.has(ext.id)
+      const repositoryReference = parseGitHubRepositoryUrl(repositoryUrl(ext) ?? '')
+      const installTarget = repositoryReference?.url ?? ext.id
       if (!isInstalled) {
         dispatchCatalog({ type: 'install-started', id: ext.id })
       }
-      const action = isInstalled ? window.tezbar.extensionUninstall(ext.id) : window.tezbar.extensionInstall(ext.id)
+      const action = isInstalled
+        ? window.tezbar.extensionUninstall(ext.id)
+        : window.tezbar.extensionInstall(installTarget)
       void action
         .then(() => {
           dispatchCatalog({
@@ -453,7 +465,7 @@ export default function ExtensionsView({
               ref={searchRef}
               value={query}
               onChange={(event) => dispatchCatalog({ type: 'query', query: event.target.value })}
-              placeholder="Search store or paste a GitHub repository URL"
+              placeholder={`${isWindows ? 'Search loved extensions' : 'Search store'} or paste a GitHub repository URL`}
               autoFocus
             />
           </div>
@@ -463,7 +475,9 @@ export default function ExtensionsView({
       <section className="grid min-h-0 flex-1 grid-cols-[224px_minmax(0,1fr)] gap-2 animate-tezbar-scale-in">
         <aside className="glass-card flex min-h-0 flex-col overflow-hidden px-1.5 py-2">
           <div className="flex items-center justify-between px-1.5 pb-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">Store</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">
+              {isWindows ? 'Loved by Tezbar' : 'Store'}
+            </span>
             <span className="text-[10px] text-ink-4">{loading ? 'Loading…' : isUrlQuery ? 'URL' : store.length}</span>
           </div>
           {store.length === 0 ? (
@@ -475,7 +489,9 @@ export default function ExtensionsView({
                     ? 'Paste a public GitHub repository root URL.'
                     : loading
                       ? 'Loading extensions…'
-                      : 'No extensions match.'}
+                      : isWindows
+                        ? 'No loved extensions match.'
+                        : 'No extensions match.'}
               </p>
             </div>
           ) : (
@@ -510,7 +526,7 @@ export default function ExtensionsView({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[11.5px] font-medium">{ext.name}</span>
                         <span className="mt-0.5 block truncate text-[9.5px] text-ink-4">
-                          {isInstalled ? 'Installed' : formatCount(ext.downloadCount)}
+                          {isInstalled ? 'Installed' : isWindows ? 'GitHub repository' : formatCount(ext.downloadCount)}
                         </span>
                       </span>
                     </button>
@@ -525,7 +541,9 @@ export default function ExtensionsView({
           {repository ? (
             <div className="flex h-full items-center justify-center px-8">
               <div className="w-full max-w-[540px] rounded-[14px] border border-white/10 bg-white/[0.035] p-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">Install from GitHub</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">
+                  {isWindows ? 'Loved extension from GitHub' : 'Install from GitHub'}
+                </p>
                 <h2 className="mt-3 break-words text-[24px] font-semibold text-ink-1">{repository.repository}</h2>
                 <p className="mt-1 text-[13px] text-ink-3">
                   {repository.owner}/{repository.repository}
@@ -575,7 +593,7 @@ export default function ExtensionsView({
                       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-2">
                         <span>{extensionAuthor(selected)}</span>
                         <span className="text-ink-4">|</span>
-                        <span>{formatCount(selected.downloadCount)}</span>
+                        <span>{isWindows ? 'GitHub repository' : formatCount(selected.downloadCount)}</span>
                         <span className="text-ink-4">|</span>
                         <span className="font-mono text-[12px] text-ink-3">v{selected.version}</span>
                       </div>

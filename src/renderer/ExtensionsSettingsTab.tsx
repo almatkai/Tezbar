@@ -237,6 +237,9 @@ export interface ExtensionsSettingsTabProps {
 }
 
 export default function ExtensionsSettingsTab({ onBrowseStore }: ExtensionsSettingsTabProps = {}): JSX.Element {
+  const isWindows =
+    typeof navigator !== 'undefined' &&
+    (/windows/i.test(navigator.userAgent) || /win/i.test(navigator.platform))
   const [schemas, setSchemas] = useState<ExtensionSchema[]>([])
   const [settings, setSettings] = useState<Settings>({
     commandHotkeys: {},
@@ -503,7 +506,7 @@ export default function ExtensionsSettingsTab({ onBrowseStore }: ExtensionsSetti
           <PuzzleIcon className="mx-auto mb-2 text-ink-4" />
           <div className="text-[13px] text-ink-3">No extensions installed.</div>
           <div className="mt-1 text-[12px] text-ink-4 mb-4">
-            Install extensions from the Store to manage them here.
+            Install extensions from {isWindows ? 'Loved Extensions' : 'the Store'} to manage them here.
           </div>
           <Button
             variant="primary"
@@ -512,7 +515,7 @@ export default function ExtensionsSettingsTab({ onBrowseStore }: ExtensionsSetti
               else void window.tezbar.openExtensionStore()
             }}
           >
-            Browse Extension Store
+            {isWindows ? 'Browse Loved Extensions' : 'Browse Extension Store'}
           </Button>
         </div>
       </div>
@@ -554,7 +557,7 @@ export default function ExtensionsSettingsTab({ onBrowseStore }: ExtensionsSetti
               if (onBrowseStore) onBrowseStore()
               else void window.tezbar.openExtensionStore()
             }}
-            title="Browse Extension Store"
+            title={isWindows ? 'Browse Loved Extensions' : 'Browse Extension Store'}
             className="flex-shrink-0 px-2 h-[30px]"
           >
             <svg

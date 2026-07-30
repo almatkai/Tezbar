@@ -26,6 +26,7 @@ Folder search uses Finder on macOS and Explorer on Windows. "Open with" resolves
 | Open ports                    | `lsof`                            | `netstat.exe` and `tasklist.exe`             |
 | System commands               | AppleScript and system tools      | PowerShell and Win32 tools                   |
 | Extension app discovery       | Raycast/macOS application catalog | Tezbar Windows application catalog           |
+| Extension store                | Raycast community catalog           | Tezbar-loved GitHub repositories             |
 | Runtime installation          | existing Bun installation         | existing Bun or first-launch Bun bootstrap   |
 
 Windows equivalents are implemented for appearance, audio, display sleep, computer sleep, keep-awake, lock, Wi-Fi, DNS flush, VPN settings, public/network information, Downloads, All Apps, AppData, Explorer path copying, Recycle Bin, OS/CPU/memory/disk/battery information, ports, and Git root copying.
@@ -35,6 +36,7 @@ Windows equivalents are implemented for appearance, audio, display sleep, comput
 Some capabilities cannot translate literally because they expose a macOS product rather than a user goal:
 
 - Dock, menu bar, Finder restart, Homebrew, and AppleScript commands remain labeled macOS-only. A Windows feature should be added under its own accurate name rather than presenting taskbar, Explorer, or WinGet behavior as if it were the macOS feature.
+- The Raycast extension catalog is not shown on Windows because many entries assume macOS APIs. Windows instead shows Tezbar-loved GitHub repositories, including direct repository installs for extensions that declare Windows support.
 - Raycast extensions that directly execute arbitrary AppleScript remain macOS-only. Extensions using Tezbar's cross-platform APIs continue to work.
 
 ## Remaining native parity work

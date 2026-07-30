@@ -26,6 +26,9 @@ function buildNativeCommandDocuments(): IndexedDocument[] {
 
 function buildRaymesSurfaceDocuments(): IndexedDocument[] {
   const now = Date.now()
+  const extensionsSurfaceTitle = process.platform === 'win32' ? 'Loved Extensions' : 'Extensions Store'
+  const extensionsSurfaceSubtitle =
+    process.platform === 'win32' ? 'Browse Tezbar-recommended GitHub extensions' : 'Browse and install extensions'
   return [
     {
       id: 'command:open-settings',
@@ -50,8 +53,8 @@ function buildRaymesSurfaceDocuments(): IndexedDocument[] {
     },
     {
       id: 'command:open-extensions',
-      title: 'Extensions Store',
-      subtitle: 'Browse and install extensions',
+      title: extensionsSurfaceTitle,
+      subtitle: extensionsSurfaceSubtitle,
       keywords: ['store', 'extension store', 'extensions store', 'raycast store', '/store'],
       commandId: 'open-extensions',
     },

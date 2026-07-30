@@ -30,6 +30,7 @@ import {
 } from './extension-api';
 import { installDepsWithBun, installSpecificPackagesWithBun } from './bun-manager';
 import type { ExtensionManifest } from '../shared/extensions';
+import { searchLovedExtensions } from '../shared/lovedExtensions';
 import type { ExtensionRegistryCommand, InstalledRegistryExtension } from '../shared/extensionRuntime';
 import { parseGitHubRepositoryUrl, type GitHubRepositoryReference } from '../shared/extensionRepository';
 
@@ -1527,6 +1528,11 @@ export function scoreCatalogEntrySearch(entry: CatalogEntry, query: string): num
 }
 
 export async function searchExtensionCatalog(query: string): Promise<ExtensionManifest[]> {
+  // The Raycast catalog contains macOS-first extensions and is not the right
+  // discovery surface on Windows. Keep Windows discovery deterministic and
+  // limited to repositories Tezbar has chosen to recommend.
+  if (process.platform === 'win32') return searchLovedExtensions(query);
+
   const q = String(query || '')
     .trim()
     .toLowerCase();
