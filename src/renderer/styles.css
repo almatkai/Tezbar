@@ -128,6 +128,14 @@
     -webkit-app-region: drag;
   }
 
+  /* WebView2's native app-region drag bypasses the renderer mousedown event
+     that starts center snapping. The Windows host tracks the held cursor and
+     moves the window itself, so keep the main surface as ordinary web content. */
+  html.platform-windows .drag-region,
+  html.platform-windows .drag-region * {
+    -webkit-app-region: no-drag;
+  }
+
   .no-drag,
   input,
   textarea,

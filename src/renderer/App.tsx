@@ -157,7 +157,23 @@ function SnapOverlayApp(): JSX.Element {
     targetRect: null,
   })
 
-  useEffect(() => window.tezbar.onWindowSnapGuides(setSnapGuides), [])
+  useEffect(() => {
+    let mounted = true
+    const unlisten = window.tezbar.onWindowSnapGuides(setSnapGuides)
+    // On Windows, the native overlay can be ready a little after its first
+    // event is emitted. Fetch the current state so its helper lines render
+    // even if that initial event was missed.
+    void window.tezbar
+      .getWindowSnapGuides()
+      .then((guides) => {
+        if (mounted) setSnapGuides(guides)
+      })
+      .catch(() => undefined)
+    return () => {
+      mounted = false
+      unlisten()
+    }
+  }, [])
 
   return (
     <div
@@ -413,12 +429,13 @@ function LauncherApp(): JSX.Element {
   }, [])
 
   useEffect(() => {
+    const isWindows = navigator.platform.includes('Win')
     let dragActive = false
 
     const isNoDragTarget = (target: HTMLElement): boolean => {
       return Boolean(
         target.closest(
-          '.no-drag, input, textarea, select, button, a[href], [role="button"], [role="menuitem"], [role="option"], [contenteditable="true"]'
+          '.no-drag, input, textarea, select, button, a[href], [role="button"], [role="menuitem"], [role="option"], [contenteditable="true"], .glass-card > *, .glass-panel > *, .tezbar-popover, .agent-chat-shell > *, .tezbar-settings-window > *, .cleanmymac-sidebar'
         )
       )
     }
@@ -429,7 +446,7 @@ function LauncherApp(): JSX.Element {
       if (!(target instanceof HTMLElement)) return
       if (!target.closest('.drag-region')) return
       if (isNoDragTarget(target)) return
-      dragActive = true
+      if (!isWindows) dragActive = true
       void window.tezbar.startWindowSnapDrag()
     }
 
@@ -444,14 +461,21 @@ function LauncherApp(): JSX.Element {
     }
 
     window.addEventListener('mousedown', onMouseDown, true)
-    window.addEventListener('mouseup', endDrag, true)
-    window.addEventListener('blur', endDrag)
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    // Showing the click-through guide WebView can make WebView2 synthesize
+    // blur/mouseup/visibility events. On Windows the host tracks the physical
+    // button and ends the drag itself, so renderer end signals are unnecessary.
+    if (!isWindows) {
+      window.addEventListener('mouseup', endDrag, true)
+      window.addEventListener('blur', endDrag)
+      document.addEventListener('visibilitychange', onVisibilityChange)
+    }
     return () => {
       window.removeEventListener('mousedown', onMouseDown, true)
-      window.removeEventListener('mouseup', endDrag, true)
-      window.removeEventListener('blur', endDrag)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
+      if (!isWindows) {
+        window.removeEventListener('mouseup', endDrag, true)
+        window.removeEventListener('blur', endDrag)
+        document.removeEventListener('visibilitychange', onVisibilityChange)
+      }
     }
   }, [])
 

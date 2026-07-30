@@ -481,6 +481,7 @@ export function initTauriBridge(): void {
       }) => void
     ) =>
       setupEventListener('window:snap-guides', listener),
+    getWindowSnapGuides: () => invoke('get_window_snap_guides'),
     onTerminalData: (listener: (event: any) => void) =>
       setupEventListener('terminal:data', listener),
     onTerminalExit: (listener: (event: any) => void) =>

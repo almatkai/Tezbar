@@ -107,6 +107,7 @@ struct WindowBehaviorState {
     main_window_placed: Mutex<bool>,
     snap_drag_active: Mutex<bool>,
     snap_locked: Mutex<SnapLockState>,
+    snap_guides: Mutex<SnapGuidesState>,
     snap_motion: Mutex<SnapMotionState>,
     snap_drag_generation: Mutex<u64>,
 }
@@ -127,6 +128,16 @@ struct MonitorGeometry {
 struct SnapLockState {
     x: bool,
     y: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SnapGuidesState {
+    visible: bool,
+    snap_x: bool,
+    snap_y: bool,
+    centered: bool,
+    target_rect: Option<SnapTargetRect>,
 }
 
 #[derive(Debug)]
@@ -209,13 +220,19 @@ fn emit_snap_guides(
     locked: SnapLockState,
     target_rect: Option<SnapTargetRect>,
 ) {
-    let payload = json!({
-        "visible": visible,
-        "snapX": locked.x,
-        "snapY": locked.y,
-        "centered": locked.x && locked.y,
-        "targetRect": target_rect,
-    });
+    let guides = SnapGuidesState {
+        visible,
+        snap_x: locked.x,
+        snap_y: locked.y,
+        centered: locked.x && locked.y,
+        target_rect,
+    };
+    *window
+        .state::<WindowBehaviorState>()
+        .snap_guides
+        .lock()
+        .unwrap() = guides;
+    let payload = serde_json::to_value(guides).unwrap_or_default();
     let _ = window.emit("window:snap-guides", &payload);
     if let Some(overlay) = app.get_webview_window(SNAP_OVERLAY_LABEL) {
         let _ = overlay.emit("window:snap-guides", payload);
@@ -255,8 +272,13 @@ fn sync_snap_overlay(
     window_width: f64,
     window_height: f64,
     locked: SnapLockState,
+    create_if_missing: bool,
 ) -> Result<(), String> {
-    let overlay = ensure_snap_overlay_window(app)?;
+    let overlay = match app.get_webview_window(SNAP_OVERLAY_LABEL) {
+        Some(overlay) => overlay,
+        None if create_if_missing => ensure_snap_overlay_window(app)?,
+        None => return Ok(()),
+    };
     let work_area = monitor.work_area();
     let position = work_area.position;
     let size = work_area.size;
@@ -952,6 +974,17 @@ fn snap_axis(
     (target - window_extent / 2.0, true, true)
 }
 
+fn window_position_for_cursor_drag(
+    initial_window_position: PersistedWindowPosition,
+    initial_cursor_position: PersistedWindowPosition,
+    cursor_position: PersistedWindowPosition,
+) -> PersistedWindowPosition {
+    PersistedWindowPosition {
+        x: initial_window_position.x + cursor_position.x - initial_cursor_position.x,
+        y: initial_window_position.y + cursor_position.y - initial_cursor_position.y,
+    }
+}
+
 fn snap_window_position(
     position: PersistedWindowPosition,
     window_width: f64,
@@ -1145,13 +1178,14 @@ fn update_window_snap_state(
     state: &WindowBehaviorState,
     raw_position: PersistedWindowPosition,
     from_timer: bool,
+    move_window: bool,
 ) -> Result<bool, String> {
     if !*state.snap_drag_active.lock().unwrap() {
         return Ok(false);
     }
 
     let now = Instant::now();
-    if !from_timer {
+    if !from_timer && !move_window {
         let mut motion = state.snap_motion.lock().unwrap();
         if let Some((programmatic, set_at)) = motion.programmatic_position {
             if now.duration_since(set_at) <= Duration::from_millis(100)
@@ -1252,7 +1286,7 @@ fn update_window_snap_state(
     }
     *state.snap_locked.lock().unwrap() = next_locked;
 
-    if next_position != raw_position {
+    if move_window || next_position != raw_position {
         state.snap_motion.lock().unwrap().programmatic_position = Some((
             PersistedWindowPosition {
                 x: next_position.x.round(),
@@ -1269,6 +1303,7 @@ fn update_window_snap_state(
         window_width,
         window_height,
         next_locked,
+        !cfg!(target_os = "windows"),
     )?;
     Ok(started_candidate || should_schedule_timer)
 }
@@ -1286,7 +1321,8 @@ fn schedule_snap_dwell(window: WebviewWindow, generation: u64) {
         }
         let raw_position = state.snap_motion.lock().unwrap().last_raw_position;
         if let Some(raw_position) = raw_position {
-            if let Err(error) = update_window_snap_state(&window, &app, &state, raw_position, true)
+            if let Err(error) =
+                update_window_snap_state(&window, &app, &state, raw_position, true, false)
             {
                 log::debug!("delayed window snap update failed: {error}");
             }
@@ -1405,13 +1441,13 @@ fn frontmost_window_monitor(window: &WebviewWindow) -> Option<Monitor> {
     None
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn frontmost_window_monitor(_window: &WebviewWindow) -> Option<Monitor> {
     None
 }
 
 #[cfg(target_os = "windows")]
-fn foreground_window_monitor(window: &WebviewWindow) -> Option<Monitor> {
+fn frontmost_window_monitor(window: &WebviewWindow) -> Option<Monitor> {
     use std::mem::size_of;
     use windows_sys::Win32::Graphics::Gdi::{
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
@@ -1453,11 +1489,6 @@ fn foreground_window_monitor(window: &WebviewWindow) -> Option<Monitor> {
 
 fn active_monitor(window: &WebviewWindow) -> Result<Monitor, String> {
     if let Some(monitor) = frontmost_window_monitor(window) {
-        return Ok(monitor);
-    }
-
-    #[cfg(target_os = "windows")]
-    if let Some(monitor) = foreground_window_monitor(window) {
         return Ok(monitor);
     }
 
@@ -1690,6 +1721,17 @@ mod window_placement_tests {
     }
 
     #[test]
+    fn cursor_drag_preserves_the_initial_grab_offset() {
+        let position = window_position_for_cursor_drag(
+            PersistedWindowPosition { x: 180.0, y: 120.0 },
+            PersistedWindowPosition { x: 184.0, y: 124.0 },
+            PersistedWindowPosition { x: 598.0, y: 214.0 },
+        );
+
+        assert_eq!(position, PersistedWindowPosition { x: 594.0, y: 210.0 });
+    }
+
+    #[test]
     fn window_snaps_to_monitor_center_when_both_axes_are_near() {
         let monitor = MonitorGeometry {
             bounds: (0.0, 0.0, 1920.0, 1080.0),
@@ -1852,6 +1894,127 @@ fn schedule_drag_position_persistence(window: WebviewWindow) {
                 break;
             }
             persist_current_window_position(&window);
+        }
+    });
+}
+
+#[cfg(target_os = "windows")]
+fn windows_cursor_position() -> Result<PersistedWindowPosition, String> {
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+
+    let mut point = POINT { x: 0, y: 0 };
+    if unsafe { GetCursorPos(&mut point) } == 0 {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    Ok(PersistedWindowPosition {
+        x: point.x as f64,
+        y: point.y as f64,
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn windows_left_mouse_button_is_down() -> bool {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+
+    unsafe { GetAsyncKeyState(VK_LBUTTON as i32) < 0 }
+}
+
+fn finish_window_snap_drag(
+    window: &WebviewWindow,
+    app: &AppHandle,
+    state: &WindowBehaviorState,
+) {
+    persist_current_window_position(window);
+    *state.snap_drag_active.lock().unwrap() = false;
+    *state.snap_locked.lock().unwrap() = SnapLockState::default();
+    *state.snap_motion.lock().unwrap() = SnapMotionState::default();
+    hide_snap_overlay(app, Some(window));
+    *state.suppress_blur_hide.lock().unwrap() = false;
+}
+
+#[cfg(target_os = "windows")]
+fn schedule_windows_snap_overlay(window: WebviewWindow, app: AppHandle, generation: u64) {
+    tauri::async_runtime::spawn(async move {
+        let state = app.state::<WindowBehaviorState>();
+        if !*state.snap_drag_active.lock().unwrap()
+            || state.snap_motion.lock().unwrap().generation != generation
+        {
+            return;
+        }
+        let result = monitor_for_window(&window).and_then(|monitor| {
+            let size = window.outer_size().map_err(|error| error.to_string())?;
+            let locked = *state.snap_locked.lock().unwrap();
+            sync_snap_overlay(
+                &app,
+                &window,
+                &monitor,
+                size.width as f64,
+                size.height as f64,
+                locked,
+                true,
+            )
+        });
+        if let Err(error) = result {
+            log::warn!("failed to show snap overlay: {error}");
+        }
+        if !*state.snap_drag_active.lock().unwrap()
+            || state.snap_motion.lock().unwrap().generation != generation
+        {
+            hide_snap_overlay(&app, Some(&window));
+        }
+    });
+}
+
+#[cfg(target_os = "windows")]
+fn schedule_windows_snap_drag(
+    window: WebviewWindow,
+    initial_window_position: PersistedWindowPosition,
+    initial_cursor_position: PersistedWindowPosition,
+    generation: u64,
+) {
+    tauri::async_runtime::spawn(async move {
+        let app = window.app_handle().clone();
+        let mut last_cursor_position = initial_cursor_position;
+        loop {
+            tokio::time::sleep(Duration::from_millis(8)).await;
+            let state = app.state::<WindowBehaviorState>();
+            if !*state.snap_drag_active.lock().unwrap()
+                || state.snap_motion.lock().unwrap().generation != generation
+            {
+                return;
+            }
+            if !windows_left_mouse_button_is_down() {
+                finish_window_snap_drag(&window, &app, &state);
+                return;
+            }
+            let Ok(cursor_position) = windows_cursor_position() else {
+                continue;
+            };
+            if cursor_position == last_cursor_position {
+                continue;
+            }
+            last_cursor_position = cursor_position;
+            let raw_position = window_position_for_cursor_drag(
+                initial_window_position,
+                initial_cursor_position,
+                cursor_position,
+            );
+            match update_window_snap_state(
+                &window,
+                &app,
+                &state,
+                raw_position,
+                false,
+                true,
+            ) {
+                Ok(true) => schedule_snap_dwell(window.clone(), generation),
+                Ok(false) => {}
+                Err(error) => {
+                    log::debug!("manual Windows window snap update failed: {error}");
+                    let _ = set_window_position(&window, raw_position);
+                }
+            }
         }
     });
 }
@@ -2126,6 +2289,13 @@ fn start_window_snap_drag(
     app: AppHandle,
     state: State<'_, WindowBehaviorState>,
 ) -> Result<(), String> {
+    let initial_position = window.outer_position().map_err(|error| error.to_string())?;
+    let initial_window_position = PersistedWindowPosition {
+        x: initial_position.x as f64,
+        y: initial_position.y as f64,
+    };
+    #[cfg(target_os = "windows")]
+    let initial_cursor_position = windows_cursor_position()?;
     *state.suppress_blur_hide.lock().unwrap() = true;
     *state.snap_drag_active.lock().unwrap() = true;
     *state.snap_locked.lock().unwrap() = SnapLockState::default();
@@ -2134,37 +2304,43 @@ fn start_window_snap_drag(
         *generation = generation.wrapping_add(1);
         *generation
     };
-    let initial_position = window.outer_position().map_err(|error| error.to_string())?;
     *state.snap_motion.lock().unwrap() = SnapMotionState {
         generation,
-        last_raw_position: Some(PersistedWindowPosition {
-            x: initial_position.x as f64,
-            y: initial_position.y as f64,
-        }),
+        last_raw_position: Some(initial_window_position),
         last_raw_at: Some(Instant::now()),
         ..SnapMotionState::default()
     };
-    if let Ok(monitor) = monitor_for_window(&window) {
-        if let Ok(size) = window.outer_size() {
-            if let Err(error) = sync_snap_overlay(
-                &app,
-                &window,
-                &monitor,
-                size.width as f64,
-                size.height as f64,
-                SnapLockState::default(),
-            ) {
-                log::warn!("failed to show snap overlay: {error}");
+    #[cfg(target_os = "windows")]
+    {
+        schedule_windows_snap_drag(
+            window.clone(),
+            initial_window_position,
+            initial_cursor_position,
+            generation,
+        );
+        schedule_windows_snap_overlay(window.clone(), app.clone(), generation);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(monitor) = monitor_for_window(&window) {
+            if let Ok(size) = window.outer_size() {
+                if let Err(error) = sync_snap_overlay(
+                    &app,
+                    &window,
+                    &monitor,
+                    size.width as f64,
+                    size.height as f64,
+                    SnapLockState::default(),
+                    true,
+                ) {
+                    log::warn!("failed to show snap overlay: {error}");
+                }
             }
         }
-    }
-    if let Err(error) = window.start_dragging() {
-        *state.suppress_blur_hide.lock().unwrap() = false;
-        *state.snap_drag_active.lock().unwrap() = false;
-        *state.snap_locked.lock().unwrap() = SnapLockState::default();
-        *state.snap_motion.lock().unwrap() = SnapMotionState::default();
-        hide_snap_overlay(&app, Some(&window));
-        return Err(error.to_string());
+        if let Err(error) = window.start_dragging() {
+            finish_window_snap_drag(&window, &app, &state);
+            return Err(error.to_string());
+        }
     }
     schedule_drag_position_persistence(window);
     Ok(())
@@ -2176,12 +2352,12 @@ fn end_window_snap_drag(
     app: AppHandle,
     state: State<'_, WindowBehaviorState>,
 ) {
-    persist_current_window_position(&window);
-    *state.snap_drag_active.lock().unwrap() = false;
-    *state.snap_locked.lock().unwrap() = SnapLockState::default();
-    *state.snap_motion.lock().unwrap() = SnapMotionState::default();
-    hide_snap_overlay(&app, Some(&window));
-    *state.suppress_blur_hide.lock().unwrap() = false;
+    finish_window_snap_drag(&window, &app, &state);
+}
+
+#[tauri::command]
+fn get_window_snap_guides(state: State<'_, WindowBehaviorState>) -> SnapGuidesState {
+    *state.snap_guides.lock().unwrap()
 }
 
 #[tauri::command]
@@ -2492,6 +2668,8 @@ pub fn run() {
             }
             match event {
                 tauri::WindowEvent::Moved(position) => {
+                    #[cfg(target_os = "windows")]
+                    let _ = position;
                     if let Some(main_window) = window.app_handle().get_webview_window("main") {
                         let state = main_window.state::<WindowBehaviorState>();
                         #[cfg(target_os = "windows")]
@@ -2502,24 +2680,33 @@ pub fn run() {
                             return;
                         }
                         if *state.snap_drag_active.lock().unwrap() {
-                            let raw_position = PersistedWindowPosition {
-                                x: position.x as f64,
-                                y: position.y as f64,
-                            };
-                            match update_window_snap_state(
-                                &main_window,
-                                window.app_handle(),
-                                &state,
-                                raw_position,
-                                false,
-                            ) {
-                                Ok(true) => {
-                                    let generation = state.snap_motion.lock().unwrap().generation;
-                                    schedule_snap_dwell(main_window.clone(), generation);
-                                }
-                                Ok(false) => {}
-                                Err(error) => {
-                                    log::debug!("window snap update failed: {error}");
+                            // Windows uses the cursor-driven drag task. Its SetPosition
+                            // calls also emit Moved events, but feeding those delayed
+                            // programmatic events back into the snap motion model would
+                            // reset the slow-dwell candidate before it can acquire.
+                            #[cfg(not(target_os = "windows"))]
+                            {
+                                let raw_position = PersistedWindowPosition {
+                                    x: position.x as f64,
+                                    y: position.y as f64,
+                                };
+                                match update_window_snap_state(
+                                    &main_window,
+                                    window.app_handle(),
+                                    &state,
+                                    raw_position,
+                                    false,
+                                    false,
+                                ) {
+                                    Ok(true) => {
+                                        let generation =
+                                            state.snap_motion.lock().unwrap().generation;
+                                        schedule_snap_dwell(main_window.clone(), generation);
+                                    }
+                                    Ok(false) => {}
+                                    Err(error) => {
+                                        log::debug!("window snap update failed: {error}");
+                                    }
                                 }
                             }
                         }
@@ -2597,6 +2784,7 @@ pub fn run() {
             quit_app,
             start_window_snap_drag,
             end_window_snap_drag,
+            get_window_snap_guides,
             set_suppress_blur_hide,
             set_quick_look_window_state,
             window_set_content_height,
