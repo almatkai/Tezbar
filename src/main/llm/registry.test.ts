@@ -103,4 +103,57 @@ describe('configForProvider', () => {
     expect(getSelectedPiModelPattern('chat')).toBe('deepseek/deepseek-v4-flash')
     expect(getSelectedPiProviderBridge('chat')?.providerJson).toContain('https://api.deepseek.com')
   })
+
+  it('uses DeepSeek Anthropic messages so DSML tool calls stay structured', () => {
+    vi.mocked(readRawConfig).mockReturnValue({
+      provider: 'deepseek',
+      providerConfigs: {
+        deepseek: { baseURL: 'https://api.deepseek.com', apiKey: 'deepseek-key' },
+      },
+      providerSelectedModels: {
+        deepseek: 'deepseek-v4-flash',
+      },
+    })
+
+    const bridge = getSelectedPiProviderBridge('chat')
+    const provider = JSON.parse(bridge?.providerJson ?? '{}') as {
+      api?: string
+      baseUrl?: string
+    }
+
+    expect(provider).toMatchObject({
+      api: 'anthropic-messages',
+      baseUrl: 'https://api.deepseek.com/anthropic',
+    })
+  })
+
+  it('keeps custom DeepSeek endpoints on OpenAI format with V4 compatibility', () => {
+    vi.mocked(readRawConfig).mockReturnValue({
+      provider: 'deepseek',
+      providerConfigs: {
+        deepseek: { baseURL: 'https://deepseek-proxy.example/v1', apiKey: 'proxy-key' },
+      },
+      providerSelectedModels: {
+        deepseek: 'deepseek-v4-flash',
+      },
+    })
+
+    const bridge = getSelectedPiProviderBridge('chat')
+    const provider = JSON.parse(bridge?.providerJson ?? '{}') as {
+      api?: string
+      baseUrl?: string
+      models?: Array<{ compat?: Record<string, unknown> }>
+    }
+
+    expect(provider).toMatchObject({
+      api: 'openai-completions',
+      baseUrl: 'https://deepseek-proxy.example/v1',
+    })
+    expect(provider.models?.[0]?.compat).toMatchObject({
+      supportsStore: false,
+      supportsDeveloperRole: false,
+      requiresReasoningContentOnAssistantMessages: true,
+      thinkingFormat: 'deepseek',
+    })
+  })
 })

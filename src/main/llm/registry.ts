@@ -399,6 +399,18 @@ function piApiKey(cfg: OpenRayLLMConfig): string | undefined {
   return cfg.apiKey
 }
 
+function officialDeepSeekAnthropicBaseUrl(baseUrl: string | undefined): string | undefined {
+  if (!baseUrl) return undefined
+  try {
+    const url = new URL(baseUrl)
+    const path = url.pathname.replace(/\/+$/, '')
+    if (url.hostname !== 'api.deepseek.com' || (path && path !== '/v1')) return undefined
+    return `${url.origin}/anthropic`
+  } catch {
+    return undefined
+  }
+}
+
 export function getSelectedPiProviderBridge(task?: LlmTask): PiProviderBridge | undefined {
   const baseConfig = readLLMConfig()
   const cfg = task ? configForTask(baseConfig, task) : baseConfig
@@ -415,14 +427,41 @@ export function getSelectedPiProviderBridge(task?: LlmTask): PiProviderBridge | 
     : ['text']
 
   const isAnthropic = cfg.provider === 'anthropic'
-  const baseUrl = isAnthropic ? cfg.baseURL ?? 'https://api.anthropic.com' : openAiCompatBaseUrl(cfg)
+  const openAiBaseUrl = openAiCompatBaseUrl(cfg)
+  // DeepSeek V4's OpenAI-compatible streaming endpoint can occasionally leak
+  // its internal DSML tool syntax into `content` instead of returning a
+  // structured `tool_calls` object. DeepSeek's first-party Anthropic endpoint
+  // exposes the same models and fully supports tool_use/tool_result, which lets
+  // Pi keep tool calls structured and executable.
+  const deepSeekAnthropicBaseUrl =
+    cfg.provider === 'deepseek' ? officialDeepSeekAnthropicBaseUrl(openAiBaseUrl) : undefined
+  const usesAnthropicMessages = isAnthropic || Boolean(deepSeekAnthropicBaseUrl)
+  const baseUrl = isAnthropic
+    ? cfg.baseURL ?? 'https://api.anthropic.com'
+    : deepSeekAnthropicBaseUrl ?? openAiBaseUrl
   const apiKey = isAnthropic ? cfg.apiKey : piApiKey(cfg)
   if (!baseUrl || !apiKey) return undefined
+
+  const compat = deepSeekAnthropicBaseUrl
+    ? {
+        supportsEagerToolInputStreaming: false,
+        supportsLongCacheRetention: false,
+        supportsCacheControlOnTools: false,
+        allowEmptySignature: true,
+      }
+    : cfg.provider === 'deepseek'
+      ? {
+          supportsStore: false,
+          supportsDeveloperRole: false,
+          requiresReasoningContentOnAssistantMessages: true,
+          thinkingFormat: 'deepseek',
+        }
+      : undefined
 
   const providerJson = JSON.stringify({
     baseUrl,
     apiKey,
-    api: isAnthropic ? 'anthropic-messages' : 'openai-completions',
+    api: usesAnthropicMessages ? 'anthropic-messages' : 'openai-completions',
     authHeader: true,
     models: [
       {
@@ -433,6 +472,7 @@ export function getSelectedPiProviderBridge(task?: LlmTask): PiProviderBridge | 
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 128000,
         maxTokens: 8192,
+        ...(compat ? { compat } : {}),
       },
     ],
   })

@@ -2,23 +2,33 @@ import type { ChatOptions, Delta, LLMProvider, Message, Tool } from './provider'
 import { spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 
+function formatConversation(messages: Message[]): string {
+  return [
+    'Continue the conversation below. Follow the system instructions and respond to the final user message.',
+    ...messages.map((message) => `${message.role.toUpperCase()}:\n${message.content}`),
+  ].join('\n\n')
+}
+
 export class OpenCodeProvider implements LLMProvider {
   readonly name = 'opencode'
 
   constructor(private readonly model: string) {}
 
-  async chat(messages: Message[], _tools?: Tool[], options?: ChatOptions): Promise<AsyncIterable<Delta>> {
-    const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')
-    if (!lastUserMessage) {
+  async chat(
+    messages: Message[],
+    _tools?: Tool[],
+    options?: ChatOptions
+  ): Promise<AsyncIterable<Delta>> {
+    if (!messages.some((message) => message.role === 'user')) {
       throw new Error('OpenCode: no user message found')
     }
 
-    return this.runOpenCode(lastUserMessage.content, options?.signal)
+    return this.runOpenCode(formatConversation(messages), options?.signal)
   }
 
   private async *runOpenCode(message: string, signal?: AbortSignal): AsyncGenerator<Delta> {
     const args = ['run', '--model', this.model, '--', message]
-    
+
     const child = spawn('opencode', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, TERM: 'dumb', CI: 'true' },
