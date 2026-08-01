@@ -302,8 +302,12 @@ export default function ExtensionsView({
   }, [reload])
 
   useEffect(() => {
-    rootRef.current?.focus()
-  }, [])
+    if (embedded) {
+      rootRef.current?.focus()
+      return
+    }
+    requestAnimationFrame(() => searchRef.current?.focus())
+  }, [embedded])
 
   useEffect(() => {
     if (store.length === 0) {

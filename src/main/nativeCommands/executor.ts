@@ -1,10 +1,11 @@
 import { execFile, spawn } from 'node:child_process'
+import { randomInt } from 'node:crypto'
 import { clipboard } from '@tezbar/desktop-runtime'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import type { NativeCommandId, NativeCommandResult } from '../../shared/nativeCommands'
-import { getNativeCommand } from './registry'
+import { getNativeCommand, getNativeCommandResultKind } from './registry'
 
 const execFileAsync = promisify(execFile)
 
@@ -154,7 +155,7 @@ async function executeWindowsCommand(id: NativeCommandId): Promise<NativeCommand
       const out = await runPowerShell(
         "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path } | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $path=$window.Document.Folder.Self.Path; Set-Clipboard -Value $path; $path"
       )
-      return { ok: true, message: `Copied: ${out}` }
+      return { ok: true, message: out }
     }
     case 'empty-trash':
       await runPowerShell('Clear-RecycleBin -Force -ErrorAction Stop')
@@ -207,7 +208,7 @@ async function executeWindowsCommand(id: NativeCommandId): Promise<NativeCommand
       })
       const root = stdout.trim()
       clipboard.writeText(root)
-      return { ok: true, message: `Copied repo root: ${root}` }
+      return { ok: true, message: root }
     }
     default:
       return null
@@ -249,7 +250,33 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-export async function executeNativeCommand(id: NativeCommandId): Promise<NativeCommandResult> {
+/** Build a 20-char password from four char classes using a CSPRNG
+ *  (`crypto.randomInt`), guaranteeing at least one char per class and
+ *  avoiding lookalikes (l, 1, I, O, 0) that cause transcription errors
+ *  when reading from a toast. Works identically on macOS and Windows. */
+function generatePassword(): string {
+  const classes = [
+    'ABCDEFGHJKLMNPQRSTUVWXYZ',
+    'abcdefghijkmnopqrstuvwxyz',
+    '23456789',
+    '!@#$%^&*()-_=+[]{}',
+  ]
+  const all = classes.join('')
+  const chars = [
+    ...classes.map((cls) => cls[randomInt(cls.length)]),
+    ...Array.from({ length: 16 }, () => all[randomInt(all.length)]),
+  ]
+  // Fisher–Yates so the guaranteed class chars aren't stuck at the front.
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = randomInt(i + 1)
+    ;[chars[i], chars[j]] = [chars[j], chars[i]]
+  }
+  return chars.join('')
+}
+
+export async function executeNativeCommandRaw(
+  id: NativeCommandId
+): Promise<NativeCommandResult> {
   const descriptor = getNativeCommand(id)
   if (!descriptor) {
     return { ok: false, message: `Unknown command: ${id}` }
@@ -450,7 +477,7 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
         if (!path) {
           return { ok: false, message: 'No Finder window is open.' }
         }
-        return { ok: true, message: `Copied: ${path}` }
+        return { ok: true, message: path }
       }
 
       case 'show-macos-version': {
@@ -513,7 +540,7 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
         try {
           const root = await runShell(`cd ${JSON.stringify(path)} && git rev-parse --show-toplevel`)
           await runShell(`printf %s ${JSON.stringify(root)} | pbcopy`)
-          return { ok: true, message: `Copied repo root: ${root}` }
+          return { ok: true, message: root }
         } catch {
           return { ok: false, message: `${path} is not inside a git repo.` }
         }
@@ -563,6 +590,14 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
         }
       }
 
+      case 'generate-password': {
+        // Pure Node implementation (crypto + clipboard), so this works
+        // identically on macOS and Windows with no shell or AppleScript.
+        const password = generatePassword()
+        clipboard.writeText(password)
+        return { ok: true, message: password }
+      }
+
       case 'quit-tezbar': {
         return {
           ok: false,
@@ -590,4 +625,13 @@ export async function executeNativeCommand(id: NativeCommandId): Promise<NativeC
     const message = error instanceof Error ? error.message : String(error)
     return { ok: false, message: `${descriptor.title} failed: ${message}` }
   }
+}
+
+/** Public entry point. Runs the raw executor, then stamps the result kind
+ *  from the registry so the launcher can render a styled card for info /
+ *  copied / password / toggle results — failures render as an error line. */
+export async function executeNativeCommand(id: NativeCommandId): Promise<NativeCommandResult> {
+  const result = await executeNativeCommandRaw(id)
+  const kind = result.ok ? getNativeCommandResultKind(id) : 'error'
+  return kind ? { ...result, kind } : result
 }

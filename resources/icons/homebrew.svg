@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Homebrew mug logo -->
+  <defs>
+    <linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBB040"/>
+      <stop offset="1" stop-color="#F89722"/>
+    </linearGradient>
+    <linearGradient id="foam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F2F2F2"/>
+    </linearGradient>
+  </defs>
+
+  <!-- handle -->
+  <path d="M86 40h14a10 10 0 0 1 10 10v28a10 10 0 0 1-10 10H86z" fill="none" stroke="#FBB040" stroke-width="10" stroke-linejoin="round"/>
+
+  <!-- mug body -->
+  <rect x="18" y="36" width="68" height="74" rx="10" ry="10" fill="url(#amber)" stroke="#7b4a12" stroke-width="4"/>
+
+  <!-- foam head -->
+  <path d="M18 42c0-8 4-14 10-14 3-7 9-12 17-12 7 0 12 3 16 8 6-1 11 2 13 7 5 0 8 4 8 8H18z" fill="url(#foam)" stroke="#7b4a12" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- mug lines -->
+  <line x1="34" y1="40" x2="34" y2="104" stroke="#7b4a12" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+  <line x1="52" y1="40" x2="52" y2="104" stroke="#7b4a12" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+  <line x1="70" y1="40" x2="70" y2="104" stroke="#7b4a12" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+</svg>

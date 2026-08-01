@@ -155,8 +155,30 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
 
   useEffect(() => {
     if (!autoRefresh) return
-    const interval = window.setInterval(() => void refresh(), REFRESH_INTERVAL_MS)
-    return () => window.clearInterval(interval)
+    let interval: number | null = null
+    const startPolling = (): void => {
+      if (interval !== null) return
+      interval = window.setInterval(() => void refresh(), REFRESH_INTERVAL_MS)
+    }
+    const stopPolling = (): void => {
+      if (interval !== null) window.clearInterval(interval)
+      interval = null
+    }
+    // Each refresh shells out to top/vm_stat/ioreg/netstat etc. — ~11 native
+    // processes. Stop the loop while the window isn't actually visible.
+    const onVisibility = (): void => {
+      if (document.hidden) stopPolling()
+      else {
+        void refresh()
+        startPolling()
+      }
+    }
+    startPolling()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      stopPolling()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [autoRefresh, refresh])
 
   useEffect(() => {

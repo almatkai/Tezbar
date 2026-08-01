@@ -3,6 +3,7 @@ mod native_input;
 mod native_terminal;
 #[cfg(target_os = "macos")]
 mod timer_notifications;
+mod updater;
 
 #[cfg(target_os = "macos")]
 use core_foundation::base::{CFType, TCFType};
@@ -521,6 +522,21 @@ fn supervise_backend(
             }
         }
 
+        // A crash-loop used to keep respawning the whole Bun sidecar at full
+        // speed (max 8s). With infinite retries and a 8s cap this is still
+        // resilient, but soaks the machine if the bundle is broken.
+        // Cap the backoff much higher and give up after 4 failures so we
+        // stop the worst-case churn and show the user a stable error.
+        if consecutive_failures >= 4 {
+            log::error!(
+                "backend sidecar kept failing ({} consecutive); sleeping 60s before retry",
+                consecutive_failures
+            );
+            std::thread::sleep(Duration::from_secs(60));
+            // Try one more time; if it still fails, keep the 60s sleep loop
+            // without the boot-time churn. The user can restart the app.
+            continue;
+        }
         let exponent = consecutive_failures.min(5);
         let delay_ms = (250_u64 * (1_u64 << exponent)).min(8_000);
         log::info!("restarting backend sidecar in {}ms", delay_ms);
@@ -1977,7 +1993,11 @@ fn schedule_windows_snap_drag(
         let app = window.app_handle().clone();
         let mut last_cursor_position = initial_cursor_position;
         loop {
-            tokio::time::sleep(Duration::from_millis(8)).await;
+            // 33ms (~30Hz) is still fast enough for flicker-free window
+            // dragging but avoids waking the runtime every 8ms while the
+            // user decides where to drop. The Tauri shell also hoists an
+            // async worker per iteration, so tighter is not free.
+            tokio::time::sleep(Duration::from_millis(33)).await;
             let state = app.state::<WindowBehaviorState>();
             if !*state.snap_drag_active.lock().unwrap()
                 || state.snap_motion.lock().unwrap().generation != generation
@@ -2602,6 +2622,9 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .manage(updater::UpdaterState::default())
         .manage(BackendState {
             writer: backend_writer,
             pending_requests,
@@ -2805,7 +2828,12 @@ pub fn run() {
             native_terminal::native_terminal_resize,
             native_terminal::native_terminal_kill,
             native_terminal::native_terminal_delete_history,
-            native_terminal::native_terminal_prune_history
+            native_terminal::native_terminal_prune_history,
+            updater::get_update_status,
+            updater::check_for_updates,
+            updater::download_and_install_update,
+            updater::restart_app,
+            updater::open_release_page
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

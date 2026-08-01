@@ -35,9 +35,20 @@ const execFileAsync = promisify(execFile)
 const MAX_SCANNED_FILES = 75_000
 const STATUS_EVENT_INTERVAL_MS = 100
 const STATUS_PERSIST_INTERVAL_MS = 1_000
-const BACKGROUND_FILE_DELAY_MS = 12
-const VECTOR_BACKFILL_BATCH_SIZE = 512
-const VECTOR_BACKFILL_DELAY_MS = 25
+// Pause between files in the background indexing worker. 12ms kept the queue
+// moving but pegged a core while large trees imported; 40ms is still fast
+// enough for a background pass and much kinder to battery.
+const BACKGROUND_FILE_DELAY_MS = 40
+// Vector backfill used to chew through 512-row batches with only a 25ms rest,
+// which on a first-run prioritizes index buildup over battery/CPU. Halve the
+// batch and stretch the rest so it's a true background task; the user can
+// always force a full reindex from Settings.
+const VECTOR_BACKFILL_BATCH_SIZE = 256
+const VECTOR_BACKFILL_DELAY_MS = 250
+// A file-change event used to re-trigger a reindex within 1.5s, which made a
+// burst of saves or builds keep the hot loop busy. 5s still feels responsive
+// for a document index while greatly reducing churn in active directories.
+const RESCAN_DEBOUNCE_MS = 5_000
 const STARTUP_INDEXING_DELAY_MS = 8_000
 const STARTUP_VECTOR_BACKFILL_DELAY_MS = 5_000
 const SKIP_NAMES = new Set([
@@ -907,7 +918,7 @@ export class KnowledgeService {
     this.rescanTimer = setTimeout(() => {
       this.rescanTimer = null
       void this.startIndexing()
-    }, 1_500)
+    }, RESCAN_DEBOUNCE_MS)
     this.rescanTimer.unref()
   }
 

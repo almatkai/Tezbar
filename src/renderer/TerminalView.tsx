@@ -296,11 +296,20 @@ export default function TerminalView({
   )
 
   useEffect(() => {
-    // Poll sessions list periodically to keep the status dots updated.
+    // Poll sessions list periodically to keep the status dots updated — but
+    // only while the window is actually visible.
+    if (document.hidden) return
     const interval = window.setInterval(() => {
       void refreshSessions()
     }, 3000)
-    return () => window.clearInterval(interval)
+    const onVisibility = (): void => {
+      if (!document.hidden) void refreshSessions()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [refreshSessions])
 
   useEffect(() => {

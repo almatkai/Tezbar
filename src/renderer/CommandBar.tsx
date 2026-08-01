@@ -664,6 +664,72 @@ function TerminalIcon(): JSX.Element {
     </svg>
   )
 }
+/* Key glyph — used by the Generate Password result card when a command has
+ * no explicit NATIVE_COMMAND_ICON_BY_ID entry. Identical geometry to the
+ * 'key' case in CommandIconGlyph so the card and rail never diverge. */
+function KeyGlyph(): ReactNode {
+  // Password-generation art: full-bleed field, thinner strokes, dots on
+  // pixel centers, check swung wider for breathing room. No card tile.
+  return (
+    <>
+      <rect x="0.4" y="3" width="13.2" height="8" rx="1.8" strokeWidth="0.8" />
+      <path d="M2 7H2.02M4.7 7H4.72M7.4 7H7.42" strokeWidth="1.2" />
+      <path d="M9.1 6.55 10 7.45 11.7 5.75" strokeWidth="0.95" />
+    </>
+  )
+}
+
+/* Tone for a native-command result card, keyed by result kind. Falls back to
+ * the neutral emerald "productivity" tone so cards always read as content. */
+function nativeResultCardTone(kind: string): {
+  card: string
+  chip: string
+  text: string
+  label: string
+} {
+  switch (kind) {
+    case 'password':
+      return {
+        card: 'border-emerald-300/25 bg-emerald-300/[0.07] shadow-[inset_0_0_20px_rgba(52,211,153,0.05)]',
+        chip: 'border-emerald-300/30 bg-emerald-300/10 text-emerald-300',
+        text: 'text-emerald-50',
+        label: 'text-emerald-300/80',
+      }
+    case 'copied':
+      return {
+        card: 'border-emerald-300/25 bg-emerald-300/[0.06] shadow-[inset_0_0_20px_rgba(52,211,153,0.04)]',
+        chip: 'border-emerald-300/30 bg-emerald-300/10 text-emerald-300',
+        text: 'text-emerald-50',
+        label: 'text-emerald-300/80',
+      }
+    case 'toggle':
+      return {
+        card: 'border-lime-300/25 bg-lime-300/[0.06] shadow-[inset_0_0_20px_rgba(163,230,53,0.04)]',
+        chip: 'border-lime-300/30 bg-lime-300/10 text-lime-300',
+        text: 'text-lime-50',
+        label: 'text-lime-300/80',
+      }
+    case 'info':
+    default:
+      return {
+        card: 'border-sky-300/25 bg-sky-300/[0.06] shadow-[inset_0_0_20px_rgba(125,211,252,0.04)]',
+        chip: 'border-sky-300/30 bg-sky-300/10 text-sky-300',
+        text: 'text-sky-50',
+        label: 'text-sky-300/80',
+      }
+  }
+}
+
+/* Small caption tag shown on the right of a result card. */
+function nativeResultCardLabel(kind: string): string | null {
+  switch (kind) {
+    case 'password':
+    case 'copied':
+      return 'copied'
+    default:
+      return null
+  }
+}
 
 type ListItemIconKind = PathCompletionItem['kind'] | SearchResult['category']
 
@@ -677,6 +743,7 @@ type CommandIconKind =
   | 'emoji'
   | 'clipboard'
   | 'terminal'
+  | 'key'
   | 'moon'
   | 'display'
   | 'display-sleep'
@@ -774,6 +841,7 @@ const NATIVE_COMMAND_ICON_BY_ID: Record<NativeCommandId, CommandIconKind> = {
   'open-snippets': 'snippets',
   'open-quick-notes': 'notes',
   'open-emoji-picker': 'emoji',
+  'generate-password': 'key',
 }
 
 function commandIconForResult(item: SearchResult): CommandIconKind | undefined {
@@ -807,6 +875,7 @@ function commandIconTone(kind: CommandIconKind): string {
     case 'notes':
     case 'clipboard':
     case 'emoji':
+    case 'key':
       return 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200'
     case 'moon':
     case 'display':
@@ -895,6 +964,16 @@ function CommandIconGlyph({ kind }: { kind: CommandIconKind }): ReactNode {
         <>
           <rect x="3" y="3.5" width="8" height="8.5" rx="1.25" />
           <path d="M5.25 4V2.75h3.5V4M5 7h4M5 9.5h3" />
+        </>
+      )
+    case 'key':
+      // Password-generation art: full-bleed field, thinner strokes, dots on
+      // pixel centers, check swung wider for breathing room. No card tile.
+      return (
+        <>
+          <rect x="0.4" y="3" width="13.2" height="8" rx="1.8" strokeWidth="0.8" />
+          <path d="M2 7H2.02M4.7 7H4.72M7.4 7H7.42" strokeWidth="1.2" />
+          <path d="M9.1 6.55 10 7.45 11.7 5.75" strokeWidth="0.95" />
         </>
       )
     case 'moon':
@@ -1448,19 +1527,30 @@ export default function CommandBar({
   const [followSearchSelection, setFollowSearchSelection] = useState(false)
   const [searchResultNavigationActive, setSearchResultNavigationActive] = useState(false)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
+  const [actionMsgCard, setActionMsgCard] = useState<{
+    kind: string
+    iconKind?: CommandIconKind
+  } | null>(null)
   const actionMsgTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  const showActionMsg = (msg: string | null): void => {
+  const showActionMsg = (
+    msg: string | null,
+    card: { kind: string; iconKind?: CommandIconKind } | null = null
+  ): void => {
     if (actionMsgTimeoutRef.current) {
       clearTimeout(actionMsgTimeoutRef.current)
       actionMsgTimeoutRef.current = null
     }
     setActionMsg(msg)
+    setActionMsgCard(card)
     if (msg) {
+      // Generated passwords stay up longest (read + transcribe the secret);
+      // info cards outlive plain status blurbs so output can be scanned.
+      const ttl = card?.kind === 'password' ? 9000 : card ? 7000 : 4000
       actionMsgTimeoutRef.current = setTimeout(() => {
         setActionMsg(null)
         actionMsgTimeoutRef.current = null
-      }, 4000)
+      }, ttl)
     }
   }
   const [terminalMode, setTerminalMode] = useState(() => initialValue.startsWith('>'))
@@ -1630,6 +1720,7 @@ export default function CommandBar({
       return
     }
     let cancelled = false
+    let interval: number | null = null
     const load = async (): Promise<void> => {
       try {
         const sessions = await window.tezbar.terminalList()
@@ -1638,13 +1729,32 @@ export default function CommandBar({
         if (!cancelled) setTerminalSessions([])
       }
     }
+    const startPolling = (): void => {
+      if (interval !== null) return
+      interval = window.setInterval(() => {
+        void load()
+      }, 2500)
+    }
+    const stopPolling = (): void => {
+      if (interval !== null) window.clearInterval(interval)
+      interval = null
+    }
     void load()
-    const interval = window.setInterval(() => {
-      void load()
-    }, 2500)
+    startPolling()
+    // Pause when the launcher is hidden — there's no status dot to update if
+    // nobody can see it.
+    const onVisibility = (): void => {
+      if (document.hidden) stopPolling()
+      else {
+        void load()
+        startPolling()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       cancelled = true
-      window.clearInterval(interval)
+      stopPolling()
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [terminalMode])
 
@@ -2954,7 +3064,22 @@ export default function CommandBar({
         rank,
         resultId: result.id,
       })
-      showActionMsg(r.message)
+      // A native command that returns content (info / copied / password /
+      // toggle) renders as a styled card carrying the command's own icon;
+      // plain status blurbs fall through to the default text line.
+      const card =
+        r.ok && typeof r.kind === 'string' && r.kind
+          ? {
+              kind: r.kind,
+              iconKind:
+                result.action.type === 'run-native-command'
+                  ? NATIVE_COMMAND_ICON_BY_ID[
+                      (result.action as { commandId?: NativeCommandId }).commandId as NativeCommandId
+                    ]
+                  : undefined,
+            }
+          : null
+      showActionMsg(r.message, card)
       if (r.ok) setValue('')
       if (r.ok) clearPendingAction()
       if (r.ok && result.category === 'snippets' && result.action.type === 'copy-text') {
@@ -4966,7 +5091,61 @@ export default function CommandBar({
           {error || actionMsg ? (
             <div className="px-1">
               {error ? <Message tone="error">{error}</Message> : null}
-              {actionMsg ? <Message>{actionMsg}</Message> : null}
+              {actionMsg ? (
+                actionMsgCard ? (
+                  (() => {
+                    const tone = nativeResultCardTone(actionMsgCard.kind)
+                    const label = nativeResultCardLabel(actionMsgCard.kind)
+                    // Multi-line output (info commands print several rows)
+                    // gets a slightly taller, top-aligned card; single-line
+                    // secrets/paths stay compact and centered.
+                    const multiline = actionMsg.includes('\n')
+                    const mono = actionMsgCard.kind === 'password' || actionMsgCard.kind === 'copied' || actionMsgCard.kind === 'info'
+                    return (
+                      <div
+                        className={`flex ${multiline ? 'items-start' : 'items-center'} gap-2.5 rounded-lg border px-3 py-2.5 ${tone.card}`}
+                        role="status"
+                      >
+                        <span
+                          className={`flex h-7 w-7 ${multiline ? 'mt-0.5' : ''} shrink-0 items-center justify-center rounded-md border ${tone.chip}`}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.15"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden
+                          >
+                            {actionMsgCard.iconKind ? (
+                              <CommandIconGlyph kind={actionMsgCard.iconKind} />
+                            ) : (
+                              <KeyGlyph />
+                            )}
+                          </svg>
+                        </span>
+                        <span
+                          className={`min-w-0 flex-1 select-all break-words ${mono ? 'font-mono' : ''} text-[12.5px] font-medium leading-relaxed tracking-wide ${tone.text}`}
+                        >
+                          {actionMsg}
+                        </span>
+                        {label ? (
+                          <span
+                            className={`shrink-0 ${multiline ? 'mt-1.5' : ''} text-[10px] font-medium uppercase tracking-wider ${tone.label}`}
+                          >
+                            {label}
+                          </span>
+                        ) : null}
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <Message>{actionMsg}</Message>
+                )
+              ) : null}
             </div>
           ) : null}
         </div>

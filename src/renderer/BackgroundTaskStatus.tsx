@@ -80,6 +80,8 @@ export default function BackgroundTaskStatus({
   const rootRef = useRef<HTMLDivElement>(null)
   const refreshInFlightRef = useRef(false)
   const mountedRef = useRef(true)
+  const pollTimerRef = useRef<number | null>(null)
+  const tasksRef = useRef<BackgroundTask[]>([])
   const [tasks, setTasks] = useState<BackgroundTask[]>([])
   const [open, setOpen] = useState(false)
 
@@ -90,7 +92,9 @@ export default function BackgroundTaskStatus({
     refreshInFlightRef.current = true
     try {
       const nextTasks = await window.tezbar.listBackgroundTasks()
-      if (mountedRef.current) setTasks(nextTasks)
+      if (!mountedRef.current) return
+      tasksRef.current = nextTasks
+      setTasks(nextTasks)
     } catch (error) {
       console.warn('[BackgroundTaskStatus] Failed to refresh background tasks:', error)
     } finally {
@@ -100,12 +104,33 @@ export default function BackgroundTaskStatus({
 
   useEffect(() => {
     mountedRef.current = true
-    void refresh()
-    const interval = window.setInterval(() => void refresh(), 1_000)
-    const offKnowledge = window.tezbar.onKnowledgeStatus(() => void refresh())
+    const POLL_ACTIVE_MS = 1_000
+    const POLL_IDLE_MS = 10_000
+
+    const scheduleNext = (ms: number): void => {
+      if (pollTimerRef.current !== null) window.clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = window.setTimeout(() => {
+        pollTimerRef.current = null
+        void refresh().then(() => {
+          const idle = tasksRef.current.length === 0
+          scheduleNext(idle ? POLL_IDLE_MS : POLL_ACTIVE_MS)
+        })
+      }, ms)
+    }
+
+    void refresh().then(() => {
+      scheduleNext(tasksRef.current.length === 0 ? POLL_IDLE_MS : POLL_ACTIVE_MS)
+    })
+    // The backend pushes knowledge/indexing status changes; re-poll right away
+    // when one arrives and switch to the fast cadence while tasks are active.
+    const offKnowledge = window.tezbar.onKnowledgeStatus(() => {
+      void refresh().then(() => {
+        scheduleNext(tasksRef.current.length === 0 ? POLL_IDLE_MS : POLL_ACTIVE_MS)
+      })
+    })
     return () => {
       mountedRef.current = false
-      window.clearInterval(interval)
+      if (pollTimerRef.current !== null) window.clearTimeout(pollTimerRef.current)
       offKnowledge()
     }
   }, [refresh])

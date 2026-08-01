@@ -2004,9 +2004,10 @@ var execFileAsync3 = (0, import_node_util3.promisify)(import_node_child_process4
 var MAX_SCANNED_FILES = 75e3;
 var STATUS_EVENT_INTERVAL_MS = 100;
 var STATUS_PERSIST_INTERVAL_MS = 1e3;
-var BACKGROUND_FILE_DELAY_MS = 12;
-var VECTOR_BACKFILL_BATCH_SIZE = 512;
-var VECTOR_BACKFILL_DELAY_MS = 25;
+var BACKGROUND_FILE_DELAY_MS = 40;
+var VECTOR_BACKFILL_BATCH_SIZE = 256;
+var VECTOR_BACKFILL_DELAY_MS = 250;
+var RESCAN_DEBOUNCE_MS = 5e3;
 var STARTUP_INDEXING_DELAY_MS = 8e3;
 var STARTUP_VECTOR_BACKFILL_DELAY_MS = 5e3;
 var SKIP_NAMES = /* @__PURE__ */ new Set([
@@ -2769,7 +2770,7 @@ var KnowledgeService = class {
     this.rescanTimer = setTimeout(() => {
       this.rescanTimer = null;
       void this.startIndexing();
-    }, 1500);
+    }, RESCAN_DEBOUNCE_MS);
     this.rescanTimer.unref();
   }
   syncWatchers() {

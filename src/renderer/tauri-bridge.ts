@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { emitTo, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { RaymesApi } from '../shared/desktop-api'
+import type { AppUpdateStatus } from '../shared/updater'
 import { formatTerminalSessionName, type TerminalSessionsAction } from '../shared/terminal'
 
 type TauriRaymesApi = RaymesApi & {
@@ -463,6 +464,15 @@ export function initTauriBridge(): void {
       const confirmed = await callBackend('app:confirm-quit')
       if (confirmed) await invoke('quit_app')
     },
+
+    getUpdateStatus: () => invoke('get_update_status') as Promise<AppUpdateStatus>,
+    checkForUpdates: () => invoke('check_for_updates') as Promise<AppUpdateStatus>,
+    downloadAndInstallUpdate: () =>
+      invoke('download_and_install_update') as Promise<AppUpdateStatus>,
+    restartApp: () => invoke('restart_app'),
+    openReleasePage: (url: string) => invoke('open_release_page', { url }),
+    onUpdateStatus: (listener: (status: AppUpdateStatus) => void) =>
+      setupEventListener('update-status', listener),
 
     onStreamToken: (listener: (token: string) => void) =>
       setupEventListener('stream-token', listener),

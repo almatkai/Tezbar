@@ -68,6 +68,7 @@ export type NativeCommandId =
   | 'open-snippets'
   | 'open-quick-notes'
   | 'open-emoji-picker'
+  | 'generate-password'
 
 export type NativeCommandDescriptor = {
   id: NativeCommandId
@@ -86,7 +87,16 @@ export type NativeCommandDescriptor = {
   macOnly?: boolean
 }
 
+export type NativeCommandResultKind =
+  | 'info'
+  | 'copied'
+  | 'password'
+  | 'toggle'
+  | 'error'
+
 export type NativeCommandResult = {
   ok: boolean
   message: string
+  /** Hint for the launcher: how to render this result. Omit → plain text line. */
+  kind?: NativeCommandResultKind
 }

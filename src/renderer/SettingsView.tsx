@@ -44,6 +44,7 @@ import {
 } from './ui/primitives'
 import { CurrencySettings } from './CurrencySettings'
 import ExtensionsSettingsTab from './ExtensionsSettingsTab'
+import { AppUpdateSettings } from './AppUpdateSettings'
 
 type SettingsTab =
   | 'general'
@@ -1599,6 +1600,10 @@ export default function SettingsView({
                     </button>
                   ))}
                 </div>
+              </SettingsRow>
+              <Divider />
+              <SettingsRow label="Updates">
+                <AppUpdateSettings />
               </SettingsRow>
               <Divider />
               <div className="py-3">

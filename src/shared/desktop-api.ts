@@ -28,6 +28,7 @@ import type {
   KnowledgeStatus,
 } from './knowledge'
 import type { NativeCommandDescriptor } from './nativeCommands'
+import type { AppUpdateStatus } from './updater'
 import type { SystemStatsSnapshot } from './systemStats'
 import type { PermissionId, PermissionStatus, PermissionsSnapshot } from './permissions'
 import type { SafetyDescriptor, SafetyLogEntry } from './safety'
@@ -424,5 +425,21 @@ export type RaymesApi = {
   onRunExtensionCommandFromHotkey: (
     listener: (payload: { extensionId: string; commandName: string }) => void
   ) => () => void
+  /** Quit the app (shows the native quit confirmation). */
   appQuit: () => Promise<void>
+
+  // ---------------------------------------------------------------- updates
+
+  /** Current app-update tracker state. */
+  getUpdateStatus: () => Promise<AppUpdateStatus>
+  /** Check GitHub for a newer stable release (beta/prerelease versions are skipped). */
+  checkForUpdates: () => Promise<AppUpdateStatus>
+  /** Download and install the update found by checkForUpdates. */
+  downloadAndInstallUpdate: () => Promise<AppUpdateStatus>
+  /** Restart into the freshly installed update. */
+  restartApp: () => Promise<void>
+  /** Open a releases page URL in the system browser. */
+  openReleasePage: (url: string) => Promise<void>
+  /** Subscribe to native update-tracker status changes. */
+  onUpdateStatus: (listener: (status: AppUpdateStatus) => void) => () => void
 }

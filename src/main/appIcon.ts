@@ -8,6 +8,31 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const appIconCache = new Map<string, string | null>()
 
+/** Bundled fallback icons for well-known CLI tools that have no .app bundle. */
+function bundledIconForPath(appPath: string): string | undefined {
+  if (!appPath.toLowerCase().includes('brew')) return undefined
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
+  const candidates = [
+    // dev: src/main/ → resources/
+    join(__dirname, '..', '..', 'resources', 'icons', 'homebrew.png'),
+    // packaged: backend staged under app.localDataDir, icon beside it
+    join(__dirname, 'resources', 'icons', 'homebrew.png'),
+    join(process.cwd(), 'resources', 'icons', 'homebrew.png'),
+    join(app.getAppPath(), 'resources', 'icons', 'homebrew.png'),
+  ]
+  if (resourcesPath) {
+    candidates.push(join(resourcesPath, 'icons', 'homebrew.png'))
+  }
+  for (const p of candidates) {
+    try {
+      if (existsSync(p)) return `data:image/png;base64,${readFileSync(p).toString('base64')}`
+    } catch {
+      /* try next */
+    }
+  }
+  return undefined
+}
+
 export async function appIconDataUrl(appPath: string): Promise<string | undefined> {
   if (appIconCache.has(appPath)) return appIconCache.get(appPath) ?? undefined
   try {
@@ -69,8 +94,9 @@ export async function appIconDataUrl(appPath: string): Promise<string | undefine
         resourceEntries.find((entry) => entry.toLowerCase().endsWith('.icns'))
     }
     if (!iconName) {
-      appIconCache.set(appPath, null)
-      return undefined
+      const fallback = bundledIconForPath(appPath)
+      appIconCache.set(appPath, fallback ?? null)
+      return fallback
     }
 
     const iconPath = join(resourceDir, iconName)
@@ -96,7 +122,8 @@ export async function appIconDataUrl(appPath: string): Promise<string | undefine
     appIconCache.set(appPath, dataUrl)
     return dataUrl
   } catch {
-    appIconCache.set(appPath, null)
-    return undefined
+    const fallback = bundledIconForPath(appPath)
+    appIconCache.set(appPath, fallback ?? null)
+    return fallback
   }
 }

@@ -2867,6 +2867,15 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
         isLoading: false,
       }
     },
+    getFavicon: (baseUrl: string, options?: { fallback?: string; size?: number }): { source: string } => {
+      const size = Math.max(16, Math.min(256, Number(options?.size) || 64))
+      const hostMatch = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i.exec(String(baseUrl ?? '').trim())
+      const host = hostMatch?.[1]
+      if (host) {
+        return { source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}` }
+      }
+      return { source: String(options?.fallback ?? 'Icon.Globe') }
+    },
     getAvatarIcon: avatarIcon,
     withCache: (
       fn: (...args: unknown[]) => unknown,

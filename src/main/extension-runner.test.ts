@@ -1323,6 +1323,50 @@ describe('extension runtime list pagination', () => {
     }
   })
 
+  it('renders getFavicon output as a list icon source', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-favicon-extension-'))
+    mkdirSync(join(extensionRoot, 'src'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({
+        name: 'favicon-fixture',
+        title: 'Favicon Fixture',
+        commands: [{ name: 'index', title: 'Index', mode: 'view' }],
+      })
+    )
+    writeFileSync(
+      join(extensionRoot, 'src', 'index.tsx'),
+      `import React from 'react'
+       import { Icon, List } from '@raycast/api'
+       import { getFavicon } from '@raycast/utils'
+       export default function Command() {
+         const baseUrl = 'https://www.npmjs.com/package/react'
+         return <List>
+           <List.Item title="With host" icon={getFavicon(baseUrl, { fallback: Icon.Globe })} />
+           <List.Item title="No host" icon={getFavicon('not a url', { fallback: Icon.Globe })} />
+           <List.Item title="No options" icon={getFavicon(baseUrl)} />
+         </List>
+       }`
+    )
+
+    try {
+      const result = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index'
+      )
+      expect(result.ok, JSON.stringify(result)).toBe(true)
+      if (!result.ok || result.mode !== 'view') return
+      const rows = result.root.children ?? []
+      const sources = rows.map((row: { props?: { icon?: { source?: string } } }) => row.props?.icon?.source)
+      expect(sources[0]).toMatch(/^https:\/\/www\.google\.com\/s2\/favicons\?domain=/)
+      expect(sources[0]).toContain(encodeURIComponent('www.npmjs.com'))
+      expect(sources[1]).toBe('Globe')
+      expect(sources[2]).toMatch(/^https:\/\//)
+    } finally {
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
   it('renders menu bar items as actionable extension rows', async () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-menu-bar-extension-'))
     mkdirSync(join(extensionRoot, '.sc-build'))
@@ -1354,6 +1398,50 @@ describe('extension runtime list pagination', () => {
       expect(result.root.type).toBe('MenuBarExtra')
       expect(result.root.children?.[0]?.type).toBe('MenuBarExtra.Item')
       expect(result.actions[0]?.title).toBe('Pick Color')
+    } finally {
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('renders getFavicon output as a list icon source', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-favicon-extension-'))
+    mkdirSync(join(extensionRoot, 'src'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({
+        name: 'favicon-fixture',
+        title: 'Favicon Fixture',
+        commands: [{ name: 'index', title: 'Index', mode: 'view' }],
+      })
+    )
+    writeFileSync(
+      join(extensionRoot, 'src', 'index.tsx'),
+      `import React from 'react'
+       import { Icon, List } from '@raycast/api'
+       import { getFavicon } from '@raycast/utils'
+       export default function Command() {
+         const baseUrl = 'https://www.npmjs.com/package/react'
+         return <List>
+           <List.Item title="With host" icon={getFavicon(baseUrl, { fallback: Icon.Globe })} />
+           <List.Item title="No host" icon={getFavicon('not a url', { fallback: Icon.Globe })} />
+           <List.Item title="No options" icon={getFavicon(baseUrl)} />
+         </List>
+       }`
+    )
+
+    try {
+      const result = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index'
+      )
+      expect(result.ok, JSON.stringify(result)).toBe(true)
+      if (!result.ok || result.mode !== 'view') return
+      const rows = result.root.children ?? []
+      const sources = rows.map((row: { props?: { icon?: { source?: string } } }) => row.props?.icon?.source)
+      expect(sources[0]).toMatch(/^https:\/\/www\.google\.com\/s2\/favicons\?domain=/)
+      expect(sources[0]).toContain(encodeURIComponent('www.npmjs.com'))
+      expect(sources[1]).toBe('Globe')
+      expect(sources[2]).toMatch(/^https:\/\//)
     } finally {
       rmSync(extensionRoot, { recursive: true, force: true })
     }

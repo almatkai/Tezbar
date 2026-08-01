@@ -8,6 +8,11 @@ import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
 import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../shared/llmConfig'
 import type { TerminalSessionsAction } from '../shared/terminal'
 import type { TerminalDefaults } from './terminalPreferences'
+import {
+  readLastUpdateCheck,
+  recordUpdateCheck,
+  shouldAutoCheckForUpdates,
+} from '../shared/updater'
 
 const AgentChatView = React.lazy(() => import('./AgentChatView'))
 const SettingsView = React.lazy(() => import('./SettingsView'))
@@ -298,6 +303,7 @@ function LauncherApp(): JSX.Element {
   const [terminalDefaults, setTerminalDefaults] = useState<TerminalDefaults | undefined>()
   const [aiChatBoot, setAiChatBoot] = useState<AiChatBoot>({ kind: 'panel' })
   const [aiChatKey, setAiChatKey] = useState(0)
+  const [extensionsKey, setExtensionsKey] = useState(0)
   const [extensionRuntimeInitial, setExtensionRuntimeInitial] = useState<Extract<
     ExtensionRunCommandResult,
     { ok: true; mode: 'view' }
@@ -318,6 +324,14 @@ function LauncherApp(): JSX.Element {
       document.getElementById('command-input')?.focus()
     })
   }
+
+  // Background auto-check for app updates once per 24h. Errors are swallowed —
+  // losing connectivity or GitHub being down shouldn't disrupt the launcher.
+  useEffect(() => {
+    if (!shouldAutoCheckForUpdates(readLastUpdateCheck(window.localStorage))) return
+    recordUpdateCheck(window.localStorage)
+    void window.tezbar.checkForUpdates().catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     const off = window.tezbar.onWindowShown(({ resetUi }) => {
@@ -397,6 +411,11 @@ function LauncherApp(): JSX.Element {
       if (nextSurface === 'settings') {
         void openNativeSettings('general')
         return
+      }
+      if (nextSurface === 'extensions') {
+        // Reopening the already-active store must behave like a fresh visit:
+        // remounting clears its search state and lets its input autofocus.
+        setExtensionsKey((key) => key + 1)
       }
       setSurface(nextSurface)
       focusSurface(nextSurface)
@@ -610,7 +629,7 @@ function LauncherApp(): JSX.Element {
               onBrowseStore={() => setSurface('extensions')}
             />
           ) : surface === 'extensions' ? (
-            <ExtensionsView onBack={() => setSurface('command')} />
+            <ExtensionsView key={extensionsKey} onBack={() => setSurface('command')} />
           ) : surface === 'extension-runtime' && extensionRuntimeInitial ? (
             <ExtensionRuntimeView
               initial={extensionRuntimeInitial}

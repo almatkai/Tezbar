@@ -82,6 +82,8 @@ export type PathCompletionItem = {
 export type SearchExecuteResult = {
   ok: boolean
   message: string
+  /** Optional card-render hint carried through from a native command. */
+  kind?: string
 }
 
 export type SearchExecuteContext = {

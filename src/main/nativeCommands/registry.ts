@@ -1,4 +1,8 @@
-import type { NativeCommandDescriptor, NativeCommandId } from '../../shared/nativeCommands'
+import type {
+  NativeCommandDescriptor,
+  NativeCommandId,
+  NativeCommandResultKind,
+} from '../../shared/nativeCommands'
 
 const WINDOWS = process.platform === 'win32'
 
@@ -432,10 +436,54 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     keywords: ['emoji', 'smiley', 'symbol', 'icon', 'face', 'emoticon'],
     macOnly: false,
   },
+  'generate-password': {
+    id: 'generate-password',
+    title: 'Generate Password',
+    subtitle: 'Generate a random 20-character password and copy it to the clipboard.',
+    category: 'productivity',
+    strategy: 'native-helper',
+    keywords: [
+      'password',
+      'passphrase',
+      'generate',
+      'random',
+      'secret',
+      'credentials',
+      'secure',
+    ],
+    macOnly: false,
+  },
 }
 
 export function getNativeCommand(id: NativeCommandId): NativeCommandDescriptor | null {
   return Object.prototype.hasOwnProperty.call(DESCRIPTORS, id) ? DESCRIPTORS[id] : null
+}
+
+/** Canonical card kind for a native command's result, if it should render
+ *  as a styled card instead of a plain text line. Derived from the
+ *  registry (not the executor) so both macOS and Windows paths of the
+ *  same command surface in the same visual style. */
+const RESULT_KIND_BY_ID: Partial<Record<NativeCommandId, NativeCommandResultKind>> = {
+  'show-network-info': 'info',
+  'show-public-ip': 'info',
+  'show-macos-version': 'info',
+  'show-cpu-info': 'info',
+  'show-memory-info': 'info',
+  'show-disk-usage': 'info',
+  'show-battery-status': 'info',
+  'list-listening-ports': 'info',
+  'show-system-monitor': 'info',
+  'copy-current-path': 'copied',
+  'git-root': 'copied',
+  'generate-password': 'password',
+  'start-keep-awake': 'toggle',
+  'stop-keep-awake': 'toggle',
+}
+
+export function getNativeCommandResultKind(
+  id: NativeCommandId
+): NativeCommandResultKind | undefined {
+  return RESULT_KIND_BY_ID[id]
 }
 
 export function listNativeCommands(): NativeCommandDescriptor[] {

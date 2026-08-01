@@ -2120,6 +2120,59 @@ var init_bun_manager = __esm({
   }
 });
 
+// src/shared/lovedExtensions.ts
+function searchableText(extension) {
+  return [
+    extension.name,
+    extension.id,
+    extension.description,
+    extension.author,
+    extension.owner,
+    extension.repository,
+    ...extension.categories ?? [],
+    ...(extension.commands ?? []).flatMap((command3) => [
+      command3.name,
+      command3.title,
+      command3.description
+    ])
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+function searchLovedExtensions(query) {
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  if (!normalizedQuery) return [...LOVED_EXTENSIONS];
+  return LOVED_EXTENSIONS.filter((extension) => searchableText(extension).includes(normalizedQuery));
+}
+var LOVED_EXTENSIONS;
+var init_lovedExtensions = __esm({
+  "src/shared/lovedExtensions.ts"() {
+    "use strict";
+    LOVED_EXTENSIONS = [
+      {
+        id: "raycast.tezbar-color-picker",
+        name: "Color Picker",
+        description: "Pick an exact pixel from any screen and inspect it in RGB, HEX, HSL, HSV, and CSS formats.",
+        author: "Tezbar",
+        owner: "almatkai",
+        version: "0.1.0",
+        repository: "https://github.com/almatkai/tezbar-color-picker-extension",
+        iconUrl: "https://raw.githubusercontent.com/almatkai/tezbar-color-picker-extension/master/assets/icon.svg",
+        screenshotUrls: [
+          "https://raw.githubusercontent.com/almatkai/tezbar-color-picker-extension/master/assets/picker-preview.png",
+          "https://raw.githubusercontent.com/almatkai/tezbar-color-picker-extension/master/assets/color-wheel-preview.png"
+        ],
+        categories: ["Design", "Developer Tools"],
+        commands: [
+          {
+            name: "pick-color",
+            title: "Pick Color",
+            description: "Open the native screen sampler and inspect the selected color."
+          }
+        ]
+      }
+    ];
+  }
+});
+
 // src/shared/extensionRepository.ts
 function parseGitHubRepositoryUrl(value) {
   const raw = String(value || "").trim();
@@ -3143,6 +3196,7 @@ function scoreCatalogEntrySearch(entry, query) {
   return score;
 }
 async function searchExtensionCatalog(query) {
+  if (process.platform === "win32") return searchLovedExtensions(query);
   const q = String(query || "").trim().toLowerCase();
   const catalog = await getCatalog(false);
   return catalog.map((entry) => {
@@ -3347,6 +3401,7 @@ var init_extension_registry = __esm({
     init_extension_builder();
     init_extension_api();
     init_bun_manager();
+    init_lovedExtensions();
     init_extensionRepository();
     extensionRegistryEvents = new import_events.EventEmitter();
     extensionInstallJobs = /* @__PURE__ */ new Map();
@@ -11149,7 +11204,7 @@ function promiseHookLabel(hookIdx, fn, args) {
   return `hook=${hookIdx} fn="${source}" args=${serializedArgs.slice(0, 160)}`;
 }
 function promiseResultCachePath(session2, key) {
-  const digest = (0, import_node_crypto12.createHash)("sha256").update(session2.bundledCode).update("\0").update(session2.extensionId).update("\0").update(session2.commandName).update("\0").update(key).digest("hex");
+  const digest = (0, import_node_crypto13.createHash)("sha256").update(session2.bundledCode).update("\0").update(session2.extensionId).update("\0").update(session2.commandName).update("\0").update(key).digest("hex");
   return (0, import_node_path29.join)(session2.packageRoot, ".tezbar-runtime-cache", `${digest}.bin.gz`);
 }
 function readPromiseResultCache(session2, key) {
@@ -11889,7 +11944,7 @@ function normalizeActionTitle(typeName, props) {
   }
 }
 function stableActionId(index, typeName, title) {
-  const hash2 = (0, import_node_crypto12.createHash)("sha1").update(`${index}:${typeName}:${title}`).digest("hex").slice(0, 12);
+  const hash2 = (0, import_node_crypto13.createHash)("sha1").update(`${index}:${typeName}:${title}`).digest("hex").slice(0, 12);
   return `ext-action-${index}-${hash2}`;
 }
 function parseShortcut(shortcut) {
@@ -13038,9 +13093,9 @@ function createRaycastUtilsShim(session2) {
       if (!clientId || !scope) throw new Error("Google OAuth requires clientId and scope");
       const stored = this.readStoredTokens();
       if (stored?.refreshToken && await this.refreshGoogleToken(stored)) return;
-      const state = (0, import_node_crypto12.randomBytes)(24).toString("base64url");
-      const codeVerifier = (0, import_node_crypto12.randomBytes)(48).toString("base64url");
-      const codeChallenge = (0, import_node_crypto12.createHash)("sha256").update(codeVerifier).digest("base64url");
+      const state = (0, import_node_crypto13.randomBytes)(24).toString("base64url");
+      const codeVerifier = (0, import_node_crypto13.randomBytes)(48).toString("base64url");
+      const codeChallenge = (0, import_node_crypto13.createHash)("sha256").update(codeVerifier).digest("base64url");
       let settleCallback = null;
       let rejectCallback = null;
       const callbackPromise = new Promise(
@@ -13160,6 +13215,15 @@ function createRaycastUtilsShim(session2) {
         },
         isLoading: false
       };
+    },
+    getFavicon: (baseUrl, options) => {
+      const size = Math.max(16, Math.min(256, Number(options?.size) || 64));
+      const hostMatch = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i.exec(String(baseUrl ?? "").trim());
+      const host = hostMatch?.[1];
+      if (host) {
+        return { source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}` };
+      }
+      return { source: String(options?.fallback ?? "Icon.Globe") };
     },
     getAvatarIcon: avatarIcon,
     withCache: (fn, options) => {
@@ -13868,7 +13932,7 @@ function runBundle(code, packageRoot, session2) {
     if (specifier === "sha256-file") {
       return (filename, callback) => {
         try {
-          const sum = (0, import_node_crypto12.createHash)("sha256").update((0, import_node_fs27.readFileSync)(filename)).digest("hex");
+          const sum = (0, import_node_crypto13.createHash)("sha256").update((0, import_node_fs27.readFileSync)(filename)).digest("hex");
           callback(null, sum);
         } catch (error) {
           callback(error instanceof Error ? error : new Error(String(error)));
@@ -14390,7 +14454,7 @@ function clearAllExtensionSessions() {
   }
   sessions.clear();
 }
-var import_node_fs27, import_promises4, import_node_child_process17, import_node_crypto12, import_node_http2, import_node_os13, import_node_module2, import_node_path29, import_node_stream, import_web, import_node_util14, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync14, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
+var import_node_fs27, import_promises4, import_node_child_process17, import_node_crypto13, import_node_http2, import_node_os13, import_node_module2, import_node_path29, import_node_stream, import_web, import_node_util14, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync14, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
 var init_extension_runner = __esm({
   "src/main/extension-runner.ts"() {
     "use strict";
@@ -14398,7 +14462,7 @@ var init_extension_runner = __esm({
     import_node_fs27 = require("node:fs");
     import_promises4 = require("node:fs/promises");
     import_node_child_process17 = require("node:child_process");
-    import_node_crypto12 = require("node:crypto");
+    import_node_crypto13 = require("node:crypto");
     import_node_http2 = require("node:http");
     import_node_os13 = require("node:os");
     import_node_module2 = require("node:module");
@@ -14473,7 +14537,7 @@ var CHAT_IPC = {
 
 // src/main/agent/bridge.ts
 var import_node_child_process13 = require("node:child_process");
-var import_node_crypto11 = require("node:crypto");
+var import_node_crypto12 = require("node:crypto");
 var import_node_events = require("node:events");
 var import_node_fs23 = require("node:fs");
 var import_node_os11 = require("node:os");
@@ -14757,7 +14821,7 @@ function buildPromptCommand(message, images) {
 }
 
 // src/main/knowledge/agent/gateway.ts
-var import_node_crypto10 = require("node:crypto");
+var import_node_crypto11 = require("node:crypto");
 var import_node_http = require("node:http");
 
 // src/shared/searchMode.ts
@@ -17111,7 +17175,15 @@ function createRaycastUtils(ctx) {
         title: error instanceof Error ? error.message : String(error)
       });
     },
-    getFavicon: () => createRenderProxy("Icon")
+    getFavicon: (baseUrl, options) => {
+      const size = Math.max(16, Math.min(256, Number(options?.size) || 64));
+      const hostMatch = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i.exec(String(baseUrl ?? "").trim());
+      const host = hostMatch?.[1];
+      if (host) {
+        return { source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}` };
+      }
+      return { source: String(options?.fallback ?? "Icon.Globe") };
+    }
   };
 }
 function formatRuntimeFeedback(feedback) {
@@ -17628,6 +17700,7 @@ function uninstallExtension(extensionId) {
 
 // src/main/nativeCommands/executor.ts
 var import_node_child_process4 = require("node:child_process");
+var import_node_crypto2 = require("node:crypto");
 init_desktop_runtime();
 var import_node_os5 = require("node:os");
 var import_node_path5 = require("node:path");
@@ -18048,10 +18121,46 @@ var DESCRIPTORS = {
     strategy: "native-helper",
     keywords: ["emoji", "smiley", "symbol", "icon", "face", "emoticon"],
     macOnly: false
+  },
+  "generate-password": {
+    id: "generate-password",
+    title: "Generate Password",
+    subtitle: "Generate a random 20-character password and copy it to the clipboard.",
+    category: "productivity",
+    strategy: "native-helper",
+    keywords: [
+      "password",
+      "passphrase",
+      "generate",
+      "random",
+      "secret",
+      "credentials",
+      "secure"
+    ],
+    macOnly: false
   }
 };
 function getNativeCommand(id) {
   return Object.prototype.hasOwnProperty.call(DESCRIPTORS, id) ? DESCRIPTORS[id] : null;
+}
+var RESULT_KIND_BY_ID = {
+  "show-network-info": "info",
+  "show-public-ip": "info",
+  "show-macos-version": "info",
+  "show-cpu-info": "info",
+  "show-memory-info": "info",
+  "show-disk-usage": "info",
+  "show-battery-status": "info",
+  "list-listening-ports": "info",
+  "show-system-monitor": "info",
+  "copy-current-path": "copied",
+  "git-root": "copied",
+  "generate-password": "password",
+  "start-keep-awake": "toggle",
+  "stop-keep-awake": "toggle"
+};
+function getNativeCommandResultKind(id) {
+  return RESULT_KIND_BY_ID[id];
 }
 function listNativeCommands() {
   return Object.values(DESCRIPTORS);
@@ -18188,7 +18297,7 @@ async function executeWindowsCommand(id) {
       const out = await runPowerShell(
         "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path } | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $path=$window.Document.Folder.Self.Path; Set-Clipboard -Value $path; $path"
       );
-      return { ok: true, message: `Copied: ${out}` };
+      return { ok: true, message: out };
     }
     case "empty-trash":
       await runPowerShell("Clear-RecycleBin -Force -ErrorAction Stop");
@@ -18241,7 +18350,7 @@ async function executeWindowsCommand(id) {
       });
       const root = stdout.trim();
       clipboard.writeText(root);
-      return { ok: true, message: `Copied repo root: ${root}` };
+      return { ok: true, message: root };
     }
     default:
       return null;
@@ -18275,7 +18384,25 @@ function isProcessAlive(pid) {
     return false;
   }
 }
-async function executeNativeCommand(id) {
+function generatePassword() {
+  const classes = [
+    "ABCDEFGHJKLMNPQRSTUVWXYZ",
+    "abcdefghijkmnopqrstuvwxyz",
+    "23456789",
+    "!@#$%^&*()-_=+[]{}"
+  ];
+  const all = classes.join("");
+  const chars = [
+    ...classes.map((cls) => cls[(0, import_node_crypto2.randomInt)(cls.length)]),
+    ...Array.from({ length: 16 }, () => all[(0, import_node_crypto2.randomInt)(all.length)])
+  ];
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = (0, import_node_crypto2.randomInt)(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join("");
+}
+async function executeNativeCommandRaw(id) {
   const descriptor = getNativeCommand(id);
   if (!descriptor) {
     return { ok: false, message: `Unknown command: ${id}` };
@@ -18437,7 +18564,7 @@ async function executeNativeCommand(id) {
         if (!path7) {
           return { ok: false, message: "No Finder window is open." };
         }
-        return { ok: true, message: `Copied: ${path7}` };
+        return { ok: true, message: path7 };
       }
       case "show-macos-version": {
         const out = await runShell("sw_vers && uname -v");
@@ -18483,7 +18610,7 @@ async function executeNativeCommand(id) {
         try {
           const root = await runShell(`cd ${JSON.stringify(path7)} && git rev-parse --show-toplevel`);
           await runShell(`printf %s ${JSON.stringify(root)} | pbcopy`);
-          return { ok: true, message: `Copied repo root: ${root}` };
+          return { ok: true, message: root };
         } catch {
           return { ok: false, message: `${path7} is not inside a git repo.` };
         }
@@ -18523,6 +18650,11 @@ async function executeNativeCommand(id) {
           message: "Emoji Picker is a UI navigation \u2014 open the launcher to browse it."
         };
       }
+      case "generate-password": {
+        const password = generatePassword();
+        clipboard.writeText(password);
+        return { ok: true, message: password };
+      }
       case "quit-tezbar": {
         return {
           ok: false,
@@ -18548,6 +18680,11 @@ async function executeNativeCommand(id) {
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, message: `${descriptor.title} failed: ${message}` };
   }
+}
+async function executeNativeCommand(id) {
+  const result = await executeNativeCommandRaw(id);
+  const kind = result.ok ? getNativeCommandResultKind(id) : "error";
+  return kind ? { ...result, kind } : result;
 }
 
 // src/main/search/service.ts
@@ -18762,7 +18899,7 @@ function clearSafetyLog() {
 // src/main/pathIcons.ts
 init_desktop_runtime();
 var import_node_child_process5 = require("node:child_process");
-var import_node_crypto2 = require("node:crypto");
+var import_node_crypto3 = require("node:crypto");
 var import_node_fs7 = require("node:fs");
 var import_node_path8 = require("node:path");
 var import_node_util4 = require("node:util");
@@ -18859,7 +18996,7 @@ async function generateNativeFileIconDataUrl(path7) {
   if (!(0, import_node_fs7.existsSync)(path7)) return void 0;
   try {
     const stats = (0, import_node_fs7.statSync)(path7);
-    const cacheKey2 = (0, import_node_crypto2.createHash)("sha1").update(`${path7}:${stats.mtimeMs}:${stats.size}`).digest("hex");
+    const cacheKey2 = (0, import_node_crypto3.createHash)("sha1").update(`${path7}:${stats.mtimeMs}:${stats.size}`).digest("hex");
     const outputDir = (0, import_node_path8.join)(app.getPath("userData"), "icon-cache", "files", cacheKey2);
     const outputPath = (0, import_node_path8.join)(outputDir, `${(0, import_node_path8.basename)(path7)}.png`);
     (0, import_node_fs7.mkdirSync)(outputDir, { recursive: true });
@@ -18922,12 +19059,34 @@ async function nativeFileIconDataUrl(path7) {
 // src/main/appIcon.ts
 init_desktop_runtime();
 var import_node_child_process6 = require("node:child_process");
-var import_node_crypto3 = require("node:crypto");
+var import_node_crypto4 = require("node:crypto");
 var import_node_fs8 = require("node:fs");
 var import_node_path9 = require("node:path");
 var import_node_util5 = require("node:util");
 var execFileAsync5 = (0, import_node_util5.promisify)(import_node_child_process6.execFile);
 var appIconCache = /* @__PURE__ */ new Map();
+function bundledIconForPath(appPath) {
+  if (!appPath.toLowerCase().includes("brew")) return void 0;
+  const resourcesPath = process.resourcesPath;
+  const candidates = [
+    // dev: src/main/ → resources/
+    (0, import_node_path9.join)(__dirname, "..", "..", "resources", "icons", "homebrew.png"),
+    // packaged: backend staged under app.localDataDir, icon beside it
+    (0, import_node_path9.join)(__dirname, "resources", "icons", "homebrew.png"),
+    (0, import_node_path9.join)(process.cwd(), "resources", "icons", "homebrew.png"),
+    (0, import_node_path9.join)(app.getAppPath(), "resources", "icons", "homebrew.png")
+  ];
+  if (resourcesPath) {
+    candidates.push((0, import_node_path9.join)(resourcesPath, "icons", "homebrew.png"));
+  }
+  for (const p of candidates) {
+    try {
+      if ((0, import_node_fs8.existsSync)(p)) return `data:image/png;base64,${(0, import_node_fs8.readFileSync)(p).toString("base64")}`;
+    } catch {
+    }
+  }
+  return void 0;
+}
 async function appIconDataUrl(appPath) {
   if (appIconCache.has(appPath)) return appIconCache.get(appPath) ?? void 0;
   try {
@@ -18938,7 +19097,7 @@ async function appIconDataUrl(appPath) {
       }
       const cacheDir2 = (0, import_node_path9.join)(app.getPath("userData"), "icon-cache", "applications");
       (0, import_node_fs8.mkdirSync)(cacheDir2, { recursive: true });
-      const pngPath2 = (0, import_node_path9.join)(cacheDir2, `${(0, import_node_crypto3.createHash)("sha1").update(appPath).digest("hex")}-64.png`);
+      const pngPath2 = (0, import_node_path9.join)(cacheDir2, `${(0, import_node_crypto4.createHash)("sha1").update(appPath).digest("hex")}-64.png`);
       if (!(0, import_node_fs8.existsSync)(pngPath2)) {
         await execFileAsync5(
           "powershell.exe",
@@ -18985,13 +19144,14 @@ async function appIconDataUrl(appPath) {
       iconName = resourceEntries.find((entry) => entry.toLowerCase() === `${appName}.icns`) ?? resourceEntries.find((entry) => entry.toLowerCase().endsWith(".icns"));
     }
     if (!iconName) {
-      appIconCache.set(appPath, null);
-      return void 0;
+      const fallback = bundledIconForPath(appPath);
+      appIconCache.set(appPath, fallback ?? null);
+      return fallback;
     }
     const iconPath = (0, import_node_path9.join)(resourceDir, iconName);
     const cacheDir = (0, import_node_path9.join)(app.getPath("userData"), "icon-cache");
     (0, import_node_fs8.mkdirSync)(cacheDir, { recursive: true });
-    const cacheName = `${(0, import_node_crypto3.createHash)("sha1").update(iconPath).digest("hex")}-64.png`;
+    const cacheName = `${(0, import_node_crypto4.createHash)("sha1").update(iconPath).digest("hex")}-64.png`;
     const pngPath = (0, import_node_path9.join)(cacheDir, cacheName);
     if (!(0, import_node_fs8.existsSync)(pngPath)) {
       await execFileAsync5("/usr/bin/sips", [
@@ -19009,14 +19169,15 @@ async function appIconDataUrl(appPath) {
     appIconCache.set(appPath, dataUrl);
     return dataUrl;
   } catch {
-    appIconCache.set(appPath, null);
-    return void 0;
+    const fallback = bundledIconForPath(appPath);
+    appIconCache.set(appPath, fallback ?? null);
+    return fallback;
   }
 }
 
 // src/main/knowledge/service.ts
 var import_node_child_process9 = require("node:child_process");
-var import_node_crypto7 = require("node:crypto");
+var import_node_crypto8 = require("node:crypto");
 var import_node_fs15 = require("node:fs");
 var import_node_os7 = require("node:os");
 var import_node_path15 = require("node:path");
@@ -19026,7 +19187,7 @@ var import_node_util7 = require("node:util");
 var import_node_fs10 = require("node:fs");
 
 // src/main/knowledge/core/chunker.ts
-var import_node_crypto4 = require("node:crypto");
+var import_node_crypto5 = require("node:crypto");
 var TARGET_CHARS = 1200;
 var OVERLAP_CHARS = 180;
 var MAX_KNOWLEDGE_CHUNKS_PER_SOURCE = 4e3;
@@ -19048,7 +19209,7 @@ async function chunkText(sourceId, text3, pageNumber, limit, yieldToInteractiveW
     }
     const value = normalized.slice(start, end).trim();
     if (value) {
-      const id = (0, import_node_crypto4.createHash)("sha256").update(`${sourceId}:${pageNumber ?? 0}:${start}:${value}`).digest("hex");
+      const id = (0, import_node_crypto5.createHash)("sha256").update(`${sourceId}:${pageNumber ?? 0}:${start}:${value}`).digest("hex");
       chunks.push({ id, pageNumber, text: value, startOffset: start, endOffset: end });
     }
     if (end >= normalized.length) break;
@@ -19564,11 +19725,11 @@ var TezbarCloudIndexingBackend = class {
 };
 
 // src/main/knowledge/core/fingerprint.ts
-var import_node_crypto5 = require("node:crypto");
+var import_node_crypto6 = require("node:crypto");
 var import_node_fs11 = require("node:fs");
 async function fingerprintSource(path7, signal) {
   const stat2 = (0, import_node_fs11.statSync)(path7);
-  const hash2 = (0, import_node_crypto5.createHash)("sha256");
+  const hash2 = (0, import_node_crypto6.createHash)("sha256");
   const stream = (0, import_node_fs11.createReadStream)(path7);
   await new Promise((resolve6, reject) => {
     const abort = () => {
@@ -19587,10 +19748,10 @@ async function fingerprintSource(path7, signal) {
   };
 }
 function sourceIdForPath(path7) {
-  return (0, import_node_crypto5.createHash)("sha256").update(path7).digest("hex");
+  return (0, import_node_crypto6.createHash)("sha256").update(path7).digest("hex");
 }
 function artifactSettingsHash(value) {
-  return (0, import_node_crypto5.createHash)("sha256").update(JSON.stringify(value)).digest("hex");
+  return (0, import_node_crypto6.createHash)("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 // src/main/knowledge/database/store.ts
@@ -19663,7 +19824,7 @@ var better_sqlite3_shim_default = DatabaseShim;
 // src/main/knowledge/database/store.ts
 var import_node_fs14 = require("node:fs");
 var import_node_path13 = require("node:path");
-var import_node_crypto6 = require("node:crypto");
+var import_node_crypto7 = require("node:crypto");
 
 // src/main/sqlite-vec-bundled.ts
 var import_node_fs13 = require("node:fs");
@@ -20410,7 +20571,7 @@ ${page.ocr?.text ?? ""}`.trim();
           page.ocr ? "ocr-indexed" : "not-indexed",
           embeddedPages.has(page.pageNumber) ? "embedded" : "not-indexed",
           imageEmbeddedPages.has(page.pageNumber) ? "embedded" : "not-indexed",
-          pageText ? (0, import_node_crypto6.createHash)("sha256").update(pageText).digest("hex") : null
+          pageText ? (0, import_node_crypto7.createHash)("sha256").update(pageText).digest("hex") : null
         );
       }
       const insertChunk = this.db.prepare(`
@@ -20469,7 +20630,7 @@ ${page.ocr?.text ?? ""}`.trim();
       for (const capability of result.completedCapabilities) {
         const processor = capability === "text-embeddings" && result.textEmbeddingModel ? result.textEmbeddingModel : result.extractor;
         const settingsHash = artifactSettingsHash({ capability, processor });
-        const artifactId = (0, import_node_crypto6.createHash)("sha256").update(
+        const artifactId = (0, import_node_crypto7.createHash)("sha256").update(
           `${result.sourceHash}:${capability}:${processor.id}:${processor.version}:${settingsHash}`
         ).digest("hex");
         insertArtifact.run(
@@ -20534,7 +20695,7 @@ ${page.ocr?.text ?? ""}`.trim();
         } : void 0
       })),
       chunks: chunks.map((chunk) => ({
-        id: (0, import_node_crypto6.createHash)("sha256").update(`${targetSourceId}:${chunk.id}`).digest("hex"),
+        id: (0, import_node_crypto7.createHash)("sha256").update(`${targetSourceId}:${chunk.id}`).digest("hex"),
         pageNumber: chunk.pageNumber ?? void 0,
         text: chunk.text,
         embedding: decodeEmbedding(chunk.embeddingJson),
@@ -20542,7 +20703,7 @@ ${page.ocr?.text ?? ""}`.trim();
         endOffset: chunk.endOffset ?? void 0
       })),
       images: images.map((image) => ({
-        id: (0, import_node_crypto6.createHash)("sha256").update(`${targetSourceId}:${image.id}`).digest("hex"),
+        id: (0, import_node_crypto7.createHash)("sha256").update(`${targetSourceId}:${image.id}`).digest("hex"),
         pageNumber: image.pageNumber ?? void 0,
         ocrText: image.ocrText ?? void 0,
         description: image.description ?? void 0,
@@ -21007,9 +21168,10 @@ var execFileAsync7 = (0, import_node_util7.promisify)(import_node_child_process9
 var MAX_SCANNED_FILES = 75e3;
 var STATUS_EVENT_INTERVAL_MS = 100;
 var STATUS_PERSIST_INTERVAL_MS = 1e3;
-var BACKGROUND_FILE_DELAY_MS = 12;
-var VECTOR_BACKFILL_BATCH_SIZE = 512;
-var VECTOR_BACKFILL_DELAY_MS = 25;
+var BACKGROUND_FILE_DELAY_MS = 40;
+var VECTOR_BACKFILL_BATCH_SIZE = 256;
+var VECTOR_BACKFILL_DELAY_MS = 250;
+var RESCAN_DEBOUNCE_MS = 5e3;
 var STARTUP_INDEXING_DELAY_MS = 8e3;
 var STARTUP_VECTOR_BACKFILL_DELAY_MS = 5e3;
 var SKIP_NAMES = /* @__PURE__ */ new Set([
@@ -21227,7 +21389,7 @@ var KnowledgeService = class {
     if (duplicate) return this.snapshot();
     const now = Date.now();
     this.store.upsertRoot({
-      id: (0, import_node_crypto7.randomUUID)(),
+      id: (0, import_node_crypto8.randomUUID)(),
       path: normalized,
       depth: "inherit",
       processingBackend: "local",
@@ -21251,7 +21413,7 @@ var KnowledgeService = class {
         continue;
       }
       this.store.upsertRoot({
-        id: (0, import_node_crypto7.randomUUID)(),
+        id: (0, import_node_crypto8.randomUUID)(),
         path: path7,
         depth: "inherit",
         processingBackend: "local",
@@ -21349,7 +21511,7 @@ var KnowledgeService = class {
     const roots = this.activeRoots();
     if (roots.length === 0) return this.snapshot();
     const checkpoint = this.store.getIndexingCheckpoint();
-    const jobId = checkpoint?.jobId ?? (0, import_node_crypto7.randomUUID)();
+    const jobId = checkpoint?.jobId ?? (0, import_node_crypto8.randomUUID)();
     if (checkpoint) {
       const processed = Math.min(checkpoint.processedSources, checkpoint.totalSources);
       this.updateStatus({
@@ -21772,7 +21934,7 @@ var KnowledgeService = class {
     this.rescanTimer = setTimeout(() => {
       this.rescanTimer = null;
       void this.startIndexing();
-    }, 1500);
+    }, RESCAN_DEBOUNCE_MS);
     this.rescanTimer.unref();
   }
   syncWatchers() {
@@ -22273,11 +22435,11 @@ var SearchIndexDatabase = class {
         const negBm25 = Math.max(-row.bm25Score, 0);
         return negBm25 / (1 + negBm25);
       })() : 0.5;
-      const searchableText = `${row.title} ${row.subtitle}`;
+      const searchableText2 = `${row.title} ${row.subtitle}`;
       const lexical = Math.max(
         inverseBm25,
-        lexicalScore(searchableText, trimmed),
-        fuzzySimilarityScore(searchableText, trimmed)
+        lexicalScore(searchableText2, trimmed),
+        fuzzySimilarityScore(searchableText2, trimmed)
       );
       return {
         id: row.id,
@@ -22327,10 +22489,10 @@ var SearchIndexDatabase = class {
     ).all(Math.max(1e3, limit * 10));
     const scored = [];
     for (const row of rows) {
-      const searchableText = `${row.title} ${row.subtitle} ${row.tokens}`;
+      const searchableText2 = `${row.title} ${row.subtitle} ${row.tokens}`;
       const lexical = Math.max(
-        lexicalScore(searchableText, query),
-        fuzzySimilarityScore(searchableText, query)
+        lexicalScore(searchableText2, query),
+        fuzzySimilarityScore(searchableText2, query)
       );
       if (lexical <= 0) continue;
       const distance = levenshteinDistance(row.title.toLowerCase(), query.toLowerCase());
@@ -22562,7 +22724,7 @@ init_appsProvider();
 
 // src/main/search/providers/clipboardProvider.ts
 init_desktop_runtime();
-var import_node_crypto8 = require("node:crypto");
+var import_node_crypto9 = require("node:crypto");
 var import_node_fs17 = require("node:fs");
 var import_node_path17 = require("node:path");
 init_configStore();
@@ -22702,7 +22864,7 @@ function insertEntry(db, entry) {
   return { items: [...pinned, entry, ...rest].slice(0, CLIPBOARD_LIMIT) };
 }
 function hashKey(kind, payload) {
-  return (0, import_node_crypto8.createHash)("sha1").update(`${kind}|${payload}`).digest("hex").slice(0, 16);
+  return (0, import_node_crypto9.createHash)("sha1").update(`${kind}|${payload}`).digest("hex").slice(0, 16);
 }
 function readFileUrls() {
   if (process.platform !== "darwin") return [];
@@ -22769,7 +22931,7 @@ function captureImageEntry(now) {
   const resized = resizeToMegapixels(image, config.maxImageMegapixels);
   const buffer = resized.toPNG();
   if (buffer.length === 0) return null;
-  const hash2 = (0, import_node_crypto8.createHash)("sha1").update(buffer).digest("hex");
+  const hash2 = (0, import_node_crypto9.createHash)("sha1").update(buffer).digest("hex");
   const id = idForImage(hash2);
   const file = (0, import_node_path17.join)(imagesDir(), `${hash2}.png`);
   if (!(0, import_node_fs17.existsSync)(file)) {
@@ -22963,47 +23125,59 @@ function readClipboardImagePayload(id) {
     byteSize: entry.byteSize
   };
 }
-var watcherHandle = null;
-var watcherInactiveTicks = 0;
-var WATCHER_DEFAULT_INTERVAL_MS = 1500;
-var WATCHER_IDLE_INTERVAL_MS = 5e3;
-var WATCHER_IDLE_THRESHOLD_TICKS = 12;
-function startClipboardWatcher(intervalMs = WATCHER_DEFAULT_INTERVAL_MS) {
-  if (watcherHandle) return;
+var WATCHER_DEFAULT_INTERVAL_MS = 2500;
+var WATCHER_IDLE_INTERVAL_MS = 1e4;
+var WATCHER_IDLE_THRESHOLD_TICKS = 8;
+var watcherTimer = null;
+var watcherCurrentMs = 0;
+function clipboardTextFingerprint() {
+  try {
+    const text3 = clipboard.readText();
+    if (!text3) return "";
+    return (0, import_node_crypto9.createHash)("sha1").update(text3).digest("hex");
+  } catch {
+    return "";
+  }
+}
+function startClipboardWatcher() {
+  if (watcherTimer) return;
   const config = getClipboardConfig();
   if (!config.watchEnabled) return;
   void cleanupOrphanClipboardImages().catch(() => {
   });
-  let lastTopId = "";
-  watcherHandle = setInterval(() => {
+  let lastFingerprint = "";
+  let idleTicks = 0;
+  const tick = () => {
     try {
-      captureClipboardSnapshot();
-      const db = _readClipboardDb;
-      const topId = db?.items[0]?.id ?? "";
-      if (topId === lastTopId) {
-        watcherInactiveTicks += 1;
+      const fp = clipboardTextFingerprint();
+      const changed = fp !== lastFingerprint;
+      if (changed) {
+        lastFingerprint = fp;
+        idleTicks = 0;
+        captureClipboardSnapshot();
       } else {
-        watcherInactiveTicks = 0;
-        lastTopId = topId;
-      }
-      if (watcherInactiveTicks > WATCHER_IDLE_THRESHOLD_TICKS && watcherHandle && intervalMs < WATCHER_IDLE_INTERVAL_MS) {
-        clearInterval(watcherHandle);
-        watcherHandle = null;
-        startClipboardWatcher(WATCHER_IDLE_INTERVAL_MS);
+        idleTicks += 1;
+        if (idleTicks >= WATCHER_IDLE_THRESHOLD_TICKS && watcherCurrentMs < WATCHER_IDLE_INTERVAL_MS) {
+          watcherCurrentMs = WATCHER_IDLE_INTERVAL_MS;
+        }
       }
     } catch {
     }
-  }, intervalMs);
-  if (typeof watcherHandle.unref === "function") {
-    ;
-    watcherHandle.unref();
-  }
+    if (watcherTimer) return;
+    watcherTimer = setTimeout(tick, watcherCurrentMs);
+    const t2 = watcherTimer;
+    if (typeof t2.unref === "function") t2.unref();
+  };
+  watcherCurrentMs = WATCHER_DEFAULT_INTERVAL_MS;
+  watcherTimer = setTimeout(tick, watcherCurrentMs);
+  const t = watcherTimer;
+  if (typeof t.unref === "function") t.unref();
 }
 function stopClipboardWatcher() {
-  if (!watcherHandle) return;
-  clearInterval(watcherHandle);
-  watcherHandle = null;
-  watcherInactiveTicks = 0;
+  if (!watcherTimer) return;
+  clearTimeout(watcherTimer);
+  watcherTimer = null;
+  watcherCurrentMs = 0;
 }
 function restartClipboardWatcher() {
   stopClipboardWatcher();
@@ -23033,6 +23207,8 @@ function buildNativeCommandDocuments() {
 }
 function buildRaymesSurfaceDocuments() {
   const now = Date.now();
+  const extensionsSurfaceTitle = process.platform === "win32" ? "Loved Extensions" : "Extensions Store";
+  const extensionsSurfaceSubtitle = process.platform === "win32" ? "Browse Tezbar-recommended GitHub extensions" : "Browse and install extensions";
   return [
     {
       id: "command:open-settings",
@@ -23057,8 +23233,8 @@ function buildRaymesSurfaceDocuments() {
     },
     {
       id: "command:open-extensions",
-      title: "Extensions Store",
-      subtitle: "Browse and install extensions",
+      title: extensionsSurfaceTitle,
+      subtitle: extensionsSurfaceSubtitle,
       keywords: ["store", "extension store", "extensions store", "raycast store", "/store"],
       commandId: "open-extensions"
     },
@@ -23453,7 +23629,7 @@ var quickLinksProvider = {
 
 // src/main/search/providers/snippetsProvider.ts
 init_desktop_runtime();
-var import_node_crypto9 = require("node:crypto");
+var import_node_crypto10 = require("node:crypto");
 var import_node_fs21 = require("node:fs");
 var import_node_os9 = require("node:os");
 var import_node_path21 = require("node:path");
@@ -23748,7 +23924,7 @@ function addUserSnippet(payload) {
   if (triggerTaken(db.snippets, trigger, null)) {
     return { ok: false, message: "Another snippet already uses this trigger" };
   }
-  const id = `snippet:user:${(0, import_node_crypto9.randomUUID)()}`;
+  const id = `snippet:user:${(0, import_node_crypto10.randomUUID)()}`;
   const createdAt = Date.now();
   const next = [...db.snippets, { id, label, trigger, body, createdAt }];
   persistSnippetsDb(next);
@@ -23792,7 +23968,7 @@ function formatTime(date) {
   return date.toTimeString().slice(0, 8);
 }
 function interpolateSnippet(input, now = /* @__PURE__ */ new Date()) {
-  return input.split("${date}").join(formatDate(now)).split("${time}").join(formatTime(now)).split("${datetime}").join(`${formatDate(now)} ${formatTime(now)}`).split("${iso}").join(now.toISOString()).split("${year}").join(String(now.getFullYear())).split("${timestamp}").join(String(Math.floor(now.getTime() / 1e3))).split("${hostname}").join((0, import_node_os9.hostname)()).replace(/\$\{uuid\}/g, () => (0, import_node_crypto9.randomUUID)());
+  return input.split("${date}").join(formatDate(now)).split("${time}").join(formatTime(now)).split("${datetime}").join(`${formatDate(now)} ${formatTime(now)}`).split("${iso}").join(now.toISOString()).split("${year}").join(String(now.getFullYear())).split("${timestamp}").join(String(Math.floor(now.getTime() / 1e3))).split("${hostname}").join((0, import_node_os9.hostname)()).replace(/\$\{uuid\}/g, () => (0, import_node_crypto10.randomUUID)());
 }
 function friendlyTriggerDisplay(trigger) {
   const stripped = trigger.replace(/^;/, "").trim();
@@ -25553,7 +25729,7 @@ function readBody(request) {
 function ensureKnowledgeAgentGateway() {
   if (!gatewayPromise) {
     gatewayPromise = new Promise((resolve6, reject) => {
-      const token = (0, import_node_crypto10.randomBytes)(32).toString("hex");
+      const token = (0, import_node_crypto11.randomBytes)(32).toString("hex");
       const server = (0, import_node_http.createServer)(async (request, response) => {
         response.setHeader("Content-Type", "application/json; charset=utf-8");
         if (request.method !== "POST" || request.headers.authorization !== `Bearer ${token}`) {
@@ -25668,7 +25844,7 @@ function resolvePiBinary(override) {
   return "pi";
 }
 function makeId() {
-  return (0, import_node_crypto11.randomUUID)();
+  return (0, import_node_crypto12.randomUUID)();
 }
 function writeCommand(child, command3) {
   const line = `${JSON.stringify(command3)}
@@ -27065,7 +27241,7 @@ async function fetchFrankfurterLatest(from) {
 }
 
 // src/main/portManager/namedPortsStore.ts
-var import_node_crypto13 = require("node:crypto");
+var import_node_crypto14 = require("node:crypto");
 var import_node_fs28 = require("node:fs");
 var import_node_path30 = require("node:path");
 init_desktop_runtime();
@@ -27105,7 +27281,7 @@ function addNamedPort(name, port) {
   const trimmed = name.trim();
   if (!trimmed || port < 1 || port > 65535) return null;
   const entries = readAll();
-  const next = { id: (0, import_node_crypto13.randomUUID)(), name: trimmed, port };
+  const next = { id: (0, import_node_crypto14.randomUUID)(), name: trimmed, port };
   entries.push(next);
   writeAll(entries);
   return next;
@@ -29088,7 +29264,7 @@ async function getSystemStats() {
 var import_node_fs32 = require("node:fs");
 var import_node_os17 = require("node:os");
 var import_node_path33 = require("node:path");
-var import_node_crypto14 = require("node:crypto");
+var import_node_crypto15 = require("node:crypto");
 var import_node_child_process21 = require("node:child_process");
 
 // src/shared/terminal.ts
@@ -29503,7 +29679,7 @@ function createTerminalSession(sender, request) {
     throw new Error("Invalid terminal session id");
   }
   const restoredSummary = request.restoreSessionId ? persistedSummaries.get(request.restoreSessionId) : void 0;
-  const sessionId = restoredSummary ? restoredSummary.sessionId : (0, import_node_crypto14.randomUUID)();
+  const sessionId = restoredSummary ? restoredSummary.sessionId : (0, import_node_crypto15.randomUUID)();
   if (sessions2.has(sessionId)) throw new Error("Terminal session is already running");
   const historyPath = terminalHistoryPath(sessionId);
   if (!restoredSummary) (0, import_node_fs32.writeFileSync)(historyPath, "", { encoding: "utf8", mode: 384 });
@@ -31299,7 +31475,7 @@ function materializePiPolicy() {
     const runtimeDir = (0, import_node_path35.join)(root, "runtime");
     const extensionPath = (0, import_node_path35.join)(runtimeDir, "raymes-pi-policy.ts");
     (0, import_node_fs33.mkdirSync)(runtimeDir, { recursive: true });
-    (0, import_node_fs33.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\r\n\r\ntype ToolCallEvent = {\r\n  toolName: string\r\n  input?: Record<string, unknown> & { command?: unknown }\r\n}\r\n\r\ntype ToolCallResult = {\r\n  block?: boolean\r\n  reason?: string\r\n}\r\n\r\ntype ExtensionContext = {\r\n  ui: {\r\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\r\n  }\r\n}\r\n\r\ntype ExtensionAPI = {\r\n  on(\r\n    event: 'tool_call',\r\n    handler: (\r\n      event: ToolCallEvent,\r\n      ctx: ExtensionContext\r\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\r\n  ): void\r\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\r\n  registerTool(definition: {\r\n    name: string\r\n    label: string\r\n    description: string\r\n    promptSnippet?: string\r\n    promptGuidelines?: string[]\r\n    parameters: unknown\r\n    execute: (\r\n      toolCallId: string,\r\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\r\n      signal?: AbortSignal\r\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\r\n  }): void\r\n}\r\n\r\ntype RaymesPiProviderConfig = {\r\n  baseUrl: string\r\n  apiKey: string\r\n  api: 'openai-completions' | 'anthropic-messages'\r\n  authHeader?: boolean\r\n  models: Array<{\r\n    id: string\r\n    name: string\r\n    reasoning: boolean\r\n    input: Array<'text' | 'image'>\r\n    cost: {\r\n      input: number\r\n      output: number\r\n      cacheRead: number\r\n      cacheWrite: number\r\n    }\r\n    contextWindow: number\r\n    maxTokens: number\r\n    compat?: Record<string, unknown>\r\n  }>\r\n}\r\n\r\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\r\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\r\n  if (!raw) return\r\n  try {\r\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\r\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\r\n    pi.registerProvider('tezbar', parsed)\r\n  } catch {\r\n    /* Ignore malformed bridge env so pi can still start with its own config. */\r\n  }\r\n}\r\n\r\nfunction hasUnsafeShellSyntax(command: string): boolean {\r\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\r\n}\r\n\r\nfunction persistedAllowedCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter(\r\n          (entry): entry is string =>\r\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\r\n        )\r\n        .map((entry) => entry.toLowerCase())\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction persistedAllowedExactCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter((entry): entry is string => typeof entry === 'string')\r\n        .map((entry) => entry.trim())\r\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction executableName(command: string): string {\r\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\r\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\r\n}\r\n\r\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\r\n\r\nexport function isPersistentlyAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string>\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\r\n    return false\r\n  }\r\n\r\n  const commands = trimmed\r\n    .split(/\\s*(?:&&|\\|)\\s*/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (commands.length === 0) return false\r\n\r\n  return commands.every((part) => {\r\n    if (isSimpleCd(part)) return true\r\n    const executable = executableName(part)\r\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\r\n  })\r\n}\r\n\r\nfunction isSimpleCd(command: string): boolean {\r\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitStatus(command: string): boolean {\r\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitClone(command: string): boolean {\r\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeDirectoryRead(command: string): boolean {\r\n  const trimmed = command.trim()\r\n  return (\r\n    trimmed === 'pwd' ||\r\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\r\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\r\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\r\n  )\r\n}\r\n\r\nexport type IndexedSearchKind = 'launcher' | 'deep'\r\n\r\nconst MAJOR_HOME_FOLDER_PATTERN =\r\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\r\n\r\nfunction hasBroadHomeScope(command: string): boolean {\r\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\r\n    return true\r\n  }\r\n\r\n  const roots = new Set<string>()\r\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\r\n    const root = match[1]?.toLowerCase()\r\n    if (root) roots.add(root)\r\n  }\r\n  return roots.size >= 2\r\n}\r\n\r\n/**\r\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\r\n * inside the active project remain valid shell work.\r\n */\r\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return null\r\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\r\n  if (!hasBroadHomeScope(trimmed)) return null\r\n\r\n  if (\r\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\r\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\r\n  ) {\r\n    return 'deep'\r\n  }\r\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\r\n  return null\r\n}\r\n\r\nexport function isAutoAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\r\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return false\r\n  if (allowedExactCommands.has(trimmed)) return true\r\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\r\n  if (hasUnsafeShellSyntax(trimmed)) return false\r\n\r\n  const parts = trimmed\r\n    .split(/\\s+&&\\s+/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (parts.length === 0) return false\r\n\r\n  const commandToRun = parts[parts.length - 1]\r\n  if (\r\n    !commandToRun ||\r\n    !(\r\n      isSafeGitStatus(commandToRun) ||\r\n      isSafeGitClone(commandToRun) ||\r\n      isSafeDirectoryRead(commandToRun)\r\n    )\r\n  ) {\r\n    return false\r\n  }\r\n\r\n  return parts.slice(0, -1).every(isSimpleCd)\r\n}\r\n\r\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\r\n  registerRaymesProvider(pi)\r\n\r\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\r\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\r\n  const hasIndexedSearchTools = Boolean(\r\n    knowledgeEndpoint &&\r\n    knowledgeToken &&\r\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\r\n  )\r\n  let launcherSearchAttempted = false\r\n  let deepSearchAttempted = false\r\n\r\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\r\n    pi.registerTool({\r\n      name: 'launcher_search',\r\n      label: 'Search Tezbar',\r\n      description:\r\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\r\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\r\n      promptGuidelines: [\r\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\r\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\r\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({\r\n          description: 'The file, app, command, note, or other local item to find',\r\n        }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          results?: Array<{\r\n            id: string\r\n            title: string\r\n            subtitle: string\r\n            category: string\r\n            score: number\r\n            target?: string\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\r\n        const results = payload.results ?? []\r\n        const text =\r\n          results.length === 0\r\n            ? 'No Tezbar launcher results matched this query.'\r\n            : results\r\n                .map((result, index) => {\r\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\r\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { results } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_search',\r\n      label: 'Deep Search PC Knowledge',\r\n      description:\r\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\r\n      promptSnippet:\r\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\r\n      promptGuidelines: [\r\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\r\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\r\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\r\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint, {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\r\n          signal,\r\n        })\r\n        const result = (await response.json()) as {\r\n          hits?: Array<{\r\n            chunkId: string\r\n            path: string\r\n            pageNumber?: number\r\n            text: string\r\n            score: number\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\r\n        const hits = result.hits ?? []\r\n        const text =\r\n          hits.length === 0\r\n            ? 'No indexed knowledge matched this query.'\r\n            : hits\r\n                .map((hit, index) => {\r\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\r\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { hits } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_read',\r\n      label: 'Read PC Knowledge Result',\r\n      description:\r\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\r\n      parameters: Type.Object({\r\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\r\n        maxChars: Type.Optional(\r\n          Type.Number({\r\n            minimum: 500,\r\n            maximum: 50_000,\r\n            description: 'Maximum text characters to return',\r\n          })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({\r\n            resultId: params.resultId ?? '',\r\n            maxChars: params.maxChars ?? 12_000,\r\n          }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          result?: { path: string; pageNumber?: number; text: string }\r\n          error?: string\r\n        }\r\n        if (!response.ok || !payload.result) {\r\n          throw new Error(payload.error || 'Knowledge result could not be read')\r\n        }\r\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\r\n        return {\r\n          content: [\r\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\r\n          ],\r\n          details: payload.result,\r\n        }\r\n      },\r\n    })\r\n  }\r\n\r\n  pi.on('tool_call', async (event, ctx) => {\r\n    if (event.toolName === 'launcher_search') {\r\n      launcherSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName === 'pc_search') {\r\n      deepSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName !== 'bash') return undefined\r\n\r\n    const command = event.input?.command\r\n    if (typeof command !== 'string') {\r\n      return { block: true, reason: 'Missing bash command.' }\r\n    }\r\n\r\n    if (hasIndexedSearchTools) {\r\n      const preferredSearch = preferredIndexedSearchForBash(command)\r\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\r\n        }\r\n      }\r\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\r\n        }\r\n      }\r\n    }\r\n\r\n    if (isAutoAllowedBash(command)) return undefined\r\n\r\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\r\n    if (confirmed) return undefined\r\n\r\n    return { block: true, reason: 'Bash command was not approved.' }\r\n  })\r\n}\r\n", "utf8");
+    (0, import_node_fs33.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\n\ntype ToolCallEvent = {\n  toolName: string\n  input?: Record<string, unknown> & { command?: unknown }\n}\n\ntype ToolCallResult = {\n  block?: boolean\n  reason?: string\n}\n\ntype ExtensionContext = {\n  ui: {\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\n  }\n}\n\ntype ExtensionAPI = {\n  on(\n    event: 'tool_call',\n    handler: (\n      event: ToolCallEvent,\n      ctx: ExtensionContext\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\n  ): void\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\n  registerTool(definition: {\n    name: string\n    label: string\n    description: string\n    promptSnippet?: string\n    promptGuidelines?: string[]\n    parameters: unknown\n    execute: (\n      toolCallId: string,\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\n      signal?: AbortSignal\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\n  }): void\n}\n\ntype RaymesPiProviderConfig = {\n  baseUrl: string\n  apiKey: string\n  api: 'openai-completions' | 'anthropic-messages'\n  authHeader?: boolean\n  models: Array<{\n    id: string\n    name: string\n    reasoning: boolean\n    input: Array<'text' | 'image'>\n    cost: {\n      input: number\n      output: number\n      cacheRead: number\n      cacheWrite: number\n    }\n    contextWindow: number\n    maxTokens: number\n    compat?: Record<string, unknown>\n  }>\n}\n\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\n  if (!raw) return\n  try {\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\n    pi.registerProvider('tezbar', parsed)\n  } catch {\n    /* Ignore malformed bridge env so pi can still start with its own config. */\n  }\n}\n\nfunction hasUnsafeShellSyntax(command: string): boolean {\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\n}\n\nfunction persistedAllowedCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter(\n          (entry): entry is string =>\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\n        )\n        .map((entry) => entry.toLowerCase())\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction persistedAllowedExactCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter((entry): entry is string => typeof entry === 'string')\n        .map((entry) => entry.trim())\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction executableName(command: string): string {\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\n}\n\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\n\nexport function isPersistentlyAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string>\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\n    return false\n  }\n\n  const commands = trimmed\n    .split(/\\s*(?:&&|\\|)\\s*/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (commands.length === 0) return false\n\n  return commands.every((part) => {\n    if (isSimpleCd(part)) return true\n    const executable = executableName(part)\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\n  })\n}\n\nfunction isSimpleCd(command: string): boolean {\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\n}\n\nfunction isSafeGitStatus(command: string): boolean {\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\n}\n\nfunction isSafeGitClone(command: string): boolean {\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\n}\n\nfunction isSafeDirectoryRead(command: string): boolean {\n  const trimmed = command.trim()\n  return (\n    trimmed === 'pwd' ||\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\n  )\n}\n\nexport type IndexedSearchKind = 'launcher' | 'deep'\n\nconst MAJOR_HOME_FOLDER_PATTERN =\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\n\nfunction hasBroadHomeScope(command: string): boolean {\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\n    return true\n  }\n\n  const roots = new Set<string>()\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\n    const root = match[1]?.toLowerCase()\n    if (root) roots.add(root)\n  }\n  return roots.size >= 2\n}\n\n/**\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\n * inside the active project remain valid shell work.\n */\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\n  const trimmed = command.trim()\n  if (!trimmed) return null\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\n  if (!hasBroadHomeScope(trimmed)) return null\n\n  if (\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\n  ) {\n    return 'deep'\n  }\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\n  return null\n}\n\nexport function isAutoAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed) return false\n  if (allowedExactCommands.has(trimmed)) return true\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\n  if (hasUnsafeShellSyntax(trimmed)) return false\n\n  const parts = trimmed\n    .split(/\\s+&&\\s+/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (parts.length === 0) return false\n\n  const commandToRun = parts[parts.length - 1]\n  if (\n    !commandToRun ||\n    !(\n      isSafeGitStatus(commandToRun) ||\n      isSafeGitClone(commandToRun) ||\n      isSafeDirectoryRead(commandToRun)\n    )\n  ) {\n    return false\n  }\n\n  return parts.slice(0, -1).every(isSimpleCd)\n}\n\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\n  registerRaymesProvider(pi)\n\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\n  const hasIndexedSearchTools = Boolean(\n    knowledgeEndpoint &&\n    knowledgeToken &&\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\n  )\n  let launcherSearchAttempted = false\n  let deepSearchAttempted = false\n\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\n    pi.registerTool({\n      name: 'launcher_search',\n      label: 'Search Tezbar',\n      description:\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\n      promptGuidelines: [\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({\n          description: 'The file, app, command, note, or other local item to find',\n        }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          results?: Array<{\n            id: string\n            title: string\n            subtitle: string\n            category: string\n            score: number\n            target?: string\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\n        const results = payload.results ?? []\n        const text =\n          results.length === 0\n            ? 'No Tezbar launcher results matched this query.'\n            : results\n                .map((result, index) => {\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { results } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_search',\n      label: 'Deep Search PC Knowledge',\n      description:\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\n      promptSnippet:\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\n      promptGuidelines: [\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint, {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\n          signal,\n        })\n        const result = (await response.json()) as {\n          hits?: Array<{\n            chunkId: string\n            path: string\n            pageNumber?: number\n            text: string\n            score: number\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\n        const hits = result.hits ?? []\n        const text =\n          hits.length === 0\n            ? 'No indexed knowledge matched this query.'\n            : hits\n                .map((hit, index) => {\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { hits } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_read',\n      label: 'Read PC Knowledge Result',\n      description:\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\n      parameters: Type.Object({\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\n        maxChars: Type.Optional(\n          Type.Number({\n            minimum: 500,\n            maximum: 50_000,\n            description: 'Maximum text characters to return',\n          })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({\n            resultId: params.resultId ?? '',\n            maxChars: params.maxChars ?? 12_000,\n          }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          result?: { path: string; pageNumber?: number; text: string }\n          error?: string\n        }\n        if (!response.ok || !payload.result) {\n          throw new Error(payload.error || 'Knowledge result could not be read')\n        }\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\n        return {\n          content: [\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\n          ],\n          details: payload.result,\n        }\n      },\n    })\n  }\n\n  pi.on('tool_call', async (event, ctx) => {\n    if (event.toolName === 'launcher_search') {\n      launcherSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName === 'pc_search') {\n      deepSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName !== 'bash') return undefined\n\n    const command = event.input?.command\n    if (typeof command !== 'string') {\n      return { block: true, reason: 'Missing bash command.' }\n    }\n\n    if (hasIndexedSearchTools) {\n      const preferredSearch = preferredIndexedSearchForBash(command)\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\n        }\n      }\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\n        }\n      }\n    }\n\n    if (isAutoAllowedBash(command)) return undefined\n\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\n    if (confirmed) return undefined\n\n    return { block: true, reason: 'Bash command was not approved.' }\n  })\n}\n", "utf8");
     process.env.RAYMES_PI_EXTENSION = extensionPath;
   } catch (error) {
     console.error("[server] failed to materialize Pi policy:", error);

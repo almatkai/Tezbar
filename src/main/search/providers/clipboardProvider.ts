@@ -517,23 +517,39 @@ export function readClipboardImagePayload(id: string): ClipboardImagePayload | n
 
 // --- Background watcher ---------------------------------------------------
 
-let watcherHandle: ReturnType<typeof setInterval> | null = null
-let watcherInactiveTicks = 0
-// Clipboard polling invokes a native process on every tick (pbpaste on macOS
-// and PowerShell on Windows). A 750ms cadence kept the history feeling
-// responsive, but it also created needless background CPU/process churn while
-// the app was idle. Two checks per three seconds are still fast enough for a
-// clipboard history tool and materially reduce that idle overhead.
-const WATCHER_DEFAULT_INTERVAL_MS = 1_500
-const WATCHER_IDLE_INTERVAL_MS = 5_000
-const WATCHER_IDLE_THRESHOLD_TICKS = 12
+// Clipboard polling invokes a native process on every tick (pbpaste on macOS,
+// PowerShell on Windows). A fast cadence kept the history feeling responsive,
+// but it also created needless background CPU/process churn while the app was
+// idle. We now hash the text content on each tick — which lets us skip the
+// heavier file-URL/image reads and JSON write entirely when nothing changed —
+// and we back off aggressively once the clipboard goes quiet.
+const WATCHER_DEFAULT_INTERVAL_MS = 2_500
+const WATCHER_IDLE_INTERVAL_MS = 10_000
+const WATCHER_IDLE_THRESHOLD_TICKS = 8
+
+let watcherTimer: ReturnType<typeof setTimeout> | null = null
+let watcherCurrentMs = 0
+
+/** Return a quick text fingerprint. Empty string = no text, or read failed.
+ *  This is a single cheap native process call; gating the full snapshot on it
+ *  eliminates file-URL parsing, image decode, and JSON I/O on quiet ticks. */
+function clipboardTextFingerprint(): string {
+  try {
+    const text = clipboard.readText()
+    if (!text) return ''
+    return createHash('sha1').update(text).digest('hex')
+  } catch {
+    return ''
+  }
+}
 
 /** Start polling the pasteboard when the user has enabled clipboard history.
  *  macOS doesn't expose a clipboard-change event, so polling is pragmatic.
- *  The interval backs off when the clipboard hasn't changed for a while to
- *  reduce idle churn. Image capture is opt-in and size-capped. */
-export function startClipboardWatcher(intervalMs = WATCHER_DEFAULT_INTERVAL_MS): void {
-  if (watcherHandle) return
+ *  A cheap text-hash gate decides whether we do the full snapshot; the
+ *  interval also backs off once the clipboard stays quiet to cut idle churn.
+ *  Image capture is opt-in and size-capped. */
+export function startClipboardWatcher(): void {
+  if (watcherTimer) return
   const config = getClipboardConfig()
   if (!config.watchEnabled) return
 
@@ -542,39 +558,50 @@ export function startClipboardWatcher(intervalMs = WATCHER_DEFAULT_INTERVAL_MS):
     // non-fatal
   })
 
-  let lastTopId = ''
-  watcherHandle = setInterval(() => {
+  let lastFingerprint = ''
+  let idleTicks = 0
+
+  const tick = (): void => {
     try {
-      captureClipboardSnapshot()
-      const db = _readClipboardDb
-      const topId = db?.items[0]?.id ?? ''
-      if (topId === lastTopId) {
-        watcherInactiveTicks += 1
+      const fp = clipboardTextFingerprint()
+      const changed = fp !== lastFingerprint
+      if (changed) {
+        lastFingerprint = fp
+        idleTicks = 0
+        captureClipboardSnapshot()
       } else {
-        watcherInactiveTicks = 0
-        lastTopId = topId
-      }
-      if (watcherInactiveTicks > WATCHER_IDLE_THRESHOLD_TICKS && watcherHandle && intervalMs < WATCHER_IDLE_INTERVAL_MS) {
-        clearInterval(watcherHandle)
-        watcherHandle = null
-        startClipboardWatcher(WATCHER_IDLE_INTERVAL_MS)
+        idleTicks += 1
+        // Back off after a sustained quiet period. The slower cadence is
+        // sticky for this session — we won't swing back up to fast mode, so
+        // average idle energy stays low.
+        if (
+          idleTicks >= WATCHER_IDLE_THRESHOLD_TICKS &&
+          watcherCurrentMs < WATCHER_IDLE_INTERVAL_MS
+        ) {
+          watcherCurrentMs = WATCHER_IDLE_INTERVAL_MS
+        }
       }
     } catch {
-      // Swallow — a one-off clipboard read error should not take down the
-      // interval timer.
+      // Swallow — a one-off clipboard read error should not kill the loop.
     }
-  }, intervalMs)
-  // Don't keep the event loop alive solely for clipboard polling.
-  if (typeof (watcherHandle as unknown as { unref?: () => void }).unref === 'function') {
-    ;(watcherHandle as unknown as { unref: () => void }).unref()
+    // Re-schedule with the (possibly newly-backed-off) interval.
+    if (watcherTimer) return // stopped concurrently
+    watcherTimer = setTimeout(tick, watcherCurrentMs)
+    const t = watcherTimer as unknown as { unref?: () => void }
+    if (typeof t.unref === 'function') t.unref()
   }
+
+  watcherCurrentMs = WATCHER_DEFAULT_INTERVAL_MS
+  watcherTimer = setTimeout(tick, watcherCurrentMs)
+  const t = watcherTimer as unknown as { unref?: () => void }
+  if (typeof t.unref === 'function') t.unref()
 }
 
 export function stopClipboardWatcher(): void {
-  if (!watcherHandle) return
-  clearInterval(watcherHandle)
-  watcherHandle = null
-  watcherInactiveTicks = 0
+  if (!watcherTimer) return
+  clearTimeout(watcherTimer)
+  watcherTimer = null
+  watcherCurrentMs = 0
 }
 
 /** Re-read config and restart the watcher when settings change. */
