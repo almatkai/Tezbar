@@ -136,8 +136,7 @@ export function defaultBaseUrl(provider: ProviderId): string {
 
 export function isAiProviderConfigured(config: LlmConfigRecord, provider: ProviderId): boolean {
   const models = config.providerModels?.[provider] ?? defaultModels(provider)
-  if (models.length === 0) return false
-  if (provider === 'ollama' || provider === 'opencode') return true
+  if (provider === 'ollama' || provider === 'opencode') return models.length > 0
 
   const providerConfig = config.providerConfigs?.[provider]
   const isActiveLegacyProvider = config.provider === provider
@@ -197,6 +196,12 @@ export function normalizeModelList(models: AiProviderModel[], fallbackId: string
       if (typeof model.contextWindow === 'number' && Number.isFinite(model.contextWindow)) {
         next.contextWindow = Math.max(0, Math.round(model.contextWindow))
       }
+      if (model.hiddenFromPicker === true) {
+        next.hiddenFromPicker = true
+      }
+      if (model.discovered === false) {
+        next.discovered = false
+      }
       return next
     })
     .filter((model) => {
@@ -216,27 +221,17 @@ export function normalizeProviderModelList(
   provider: ProviderId,
   models: AiProviderModel[]
 ): AiProviderModel[] {
+  // Custom providers have no shipped defaults — the user's list is authoritative.
   if (isCustomProvider(provider)) {
     return normalizeModelList(models, models[0]?.id ?? '')
   }
 
-  if (provider === 'openai-compatible') {
-    return normalizeModelList(models, RECOMMENDED_AI_MODEL[provider])
-  }
-
-  const ownDefaults = new Set(DEFAULT_PROVIDER_MODELS[provider].map((model) => model.id))
-  const otherDefaults = new Set<string>()
-  for (const [otherProvider, otherModels] of Object.entries(DEFAULT_PROVIDER_MODELS) as Array<
-    [BuiltInProviderId, AiProviderModel[]]
-  >) {
-    if (otherProvider === provider) continue
-    for (const model of otherModels) {
-      otherDefaults.add(model.id)
-    }
-  }
-
-  return normalizeModelList(
-    models.filter((model) => ownDefaults.has(model.id) || !otherDefaults.has(model.id)),
-    RECOMMENDED_AI_MODEL[provider]
-  )
+  // Built-in providers: trust the user's list. We deliberately do NOT filter ids
+  // against sibling providers' shipped defaults — that filter silently deleted
+  // any hand-added model that happened to share an id with another provider's
+  // default (e.g. a user's `auto` entry under Copilot matched a default
+  // elsewhere and was stripped before the picker ever saw it). We also do NOT
+  // re-inject the recommended model when the user has deliberately removed it;
+  // an empty list is how the user says "I want to choose from zero models here".
+  return normalizeModelList(models, '')
 }

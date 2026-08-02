@@ -643,16 +643,30 @@ export function registerIpcHandlers(
     const requestedHotkey = configPatch.raymesHotkey
     delete configPatch.raymesHotkey
 
+    // Notify every renderer that the LLM config changed, so views that cache
+    // `getLlmConfig()` on mount (CommandBar, AgentChatView, ProvidersView) can
+    // re-fetch and keep the model picker in sync with Settings edits.
+    const broadcast = (): void => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win.isDestroyed()) continue
+        try {
+          win.webContents.send('llm-config-changed', {})
+        } catch {}
+      }
+    }
+
     if (typeof requestedHotkey === 'string' && controls?.updateRaymesHotkey) {
       const result = controls.updateRaymesHotkey(requestedHotkey)
       if (!result.ok) return result
       if (Object.keys(configPatch).length > 0) writeConfigPatch(configPatch)
       invalidateProviderCache()
+      broadcast()
       return result
     }
 
     writeConfigPatch(configPatch)
     invalidateProviderCache()
+    broadcast()
   })
 
   ipcMain.handle('llm-provider-statuses', async () => {

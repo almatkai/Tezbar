@@ -18,6 +18,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     strategy: 'applescript',
     keywords: ['dark', 'light', 'appearance', 'theme', 'mode'],
     macOnly: false,
+    toggle: { onLabel: 'Dark', offLabel: 'Light' },
   },
   'start-screen-saver': {
     id: 'start-screen-saver',
@@ -74,6 +75,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     strategy: 'shell',
     keywords: ['hide', 'desktop', 'icons', 'clean', 'finder'],
     macOnly: true,
+    toggle: { onLabel: 'Hidden', offLabel: 'Visible' },
   },
   'toggle-autohide-dock': {
     id: 'toggle-autohide-dock',
@@ -83,6 +85,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     strategy: 'shell',
     keywords: ['dock', 'autohide', 'hide', 'bar'],
     macOnly: true,
+    toggle: { onLabel: 'Auto-hide', offLabel: 'Always visible' },
   },
   'toggle-autohide-menu-bar': {
     id: 'toggle-autohide-menu-bar',
@@ -92,6 +95,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     strategy: 'shell',
     keywords: ['menu', 'bar', 'autohide', 'notch'],
     macOnly: true,
+    toggle: { onLabel: 'Auto-hide', offLabel: 'Always visible' },
   },
   'restart-dock': {
     id: 'restart-dock',
@@ -130,6 +134,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     keywords: ['keep', 'awake', 'caffeinate', 'no', 'sleep'],
     restoreId: 'stop-keep-awake',
     macOnly: false,
+    toggle: { onLabel: 'Awake', offLabel: 'Sleep allowed' },
   },
   'stop-keep-awake': {
     id: 'stop-keep-awake',
@@ -158,6 +163,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     strategy: 'shell',
     keywords: ['bluetooth', 'bt', 'airpods', 'wireless'],
     macOnly: true,
+    toggle: { onLabel: 'On', offLabel: 'Off' },
   },
   'toggle-wifi': {
     id: 'toggle-wifi',
@@ -167,6 +173,7 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     strategy: 'shell',
     keywords: ['wifi', 'wireless', 'network', 'toggle'],
     macOnly: false,
+    toggle: { onLabel: 'On', offLabel: 'Off' },
   },
   'show-network-info': {
     id: 'show-network-info',

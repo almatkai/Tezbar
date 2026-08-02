@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ClipboardEntry, ClipboardImagePayload } from '../shared/clipboard'
 import { Hint, HintBar, Kbd, Message, ViewHeader } from './ui/primitives'
 import { GlideList } from './ui/GlideList'
+import { ConvertActionRow } from './clipboardActions'
 
 /** Extra kind bucket the UI tracks on top of the persisted kinds — a URL
  *  is really a text entry but users think of it as its own category, so
@@ -266,7 +267,8 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
     await reload()
     setImageCache((prev) => {
       if (!(entry.id in prev)) return prev
-      const { [entry.id]: _omit, ...rest } = prev
+      const rest = { ...prev }
+      delete rest[entry.id]
       return rest
     })
   }, [flash, reload])
@@ -474,7 +476,12 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
           {/* Right: preview */}
           <div className="min-h-0 flex-1 overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
             {currentEntry ? (
-              <PreviewPane entry={currentEntry} imageUrl={currentImageUrl} />
+              <PreviewPane
+                key={currentEntry.id}
+                entry={currentEntry}
+                imageUrl={currentImageUrl}
+                onFlash={flash}
+              />
             ) : (
               <div className="grid h-full place-items-center px-6 text-center">
                 <p className="text-[12px] text-ink-4">Your clipboard history preview will show up here.</p>
@@ -576,10 +583,13 @@ function ClipboardRow({
 function PreviewPane({
   entry,
   imageUrl,
+  onFlash,
 }: {
   entry: ClipboardEntry
   imageUrl: string | null
+  onFlash: (tone: 'success' | 'error', text: string) => void
 }): JSX.Element {
+  const showConvert = entry.kind === 'text' && !entry.isSecret
   return (
     <div className="flex h-full flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -591,6 +601,18 @@ function PreviewPane({
           <FilePreview entry={entry} />
         )}
       </div>
+      {showConvert ? (
+        <>
+          <div className="hairline" />
+          <div className="shrink-0 px-4 py-2">
+            <ConvertActionRow
+              sourceText={entry.kind === 'text' ? entry.text : ''}
+              onCopied={(msg) => onFlash('success', msg)}
+              onError={(msg) => onFlash('error', msg)}
+            />
+          </div>
+        </>
+      ) : null}
       <div className="hairline" />
       <div className="flex items-center justify-between gap-3 px-4 py-2 text-[11px] text-ink-4">
         <span>{entryKindLabel(entry)}</span>

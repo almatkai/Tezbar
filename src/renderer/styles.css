@@ -330,6 +330,25 @@
     margin-inline: auto;
   }
 
+  .agent-chat-thread {
+    contain: paint;
+    overflow-anchor: none;
+    overscroll-behavior-y: contain;
+    scroll-behavior: auto;
+    scrollbar-gutter: stable;
+    touch-action: pan-y;
+  }
+
+  .agent-chat-turn {
+    contain: layout paint style;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 140px;
+  }
+
+  .agent-chat-live {
+    contain: layout paint style;
+  }
+
   .agent-composer {
     backdrop-filter: blur(18px) saturate(130%);
     -webkit-backdrop-filter: blur(18px) saturate(130%);

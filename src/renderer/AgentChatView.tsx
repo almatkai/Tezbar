@@ -2,6 +2,8 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type UIEvent as ReactUIEvent,
+  type WheelEvent as ReactWheelEvent,
   useCallback,
   useEffect,
   useRef,
@@ -35,6 +37,8 @@ import { Hint, HintBar, Kbd, cx } from './ui/primitives'
 import { Markdown } from './ui/Markdown'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { AgentStageList, AgentStageRow } from './agentChat/shared'
+import { createFrameBatcher, type FrameBatcher, isNearScrollBottom } from './agentChat/streaming'
+import { appendTimelineText, upsertTimelineStage } from './agentChat/timeline'
 import { ModelPicker } from './ModelPicker'
 import { buildAgentPromptFromChat, makeChatId, summarizeChatTitle } from './agentChat/model'
 
@@ -67,6 +71,7 @@ const NEW_CHAT_KEYS = (
     <Kbd>N</Kbd>
   </>
 )
+const AGENT_STREAM_RENDER_INTERVAL_MS = 32
 
 function shouldRunAgent(message: string): boolean {
   const trimmed = message.trim()
@@ -110,29 +115,6 @@ function chatResponseMetaForConfig(config: LlmConfigRecord): ChatResponseMeta {
 function formatTokenCount(count: number): string {
   if (count >= 1000) return `~${(count / 1000).toFixed(count >= 10_000 ? 0 : 1)}k tokens`
   return `~${count} tokens`
-}
-
-function appendTimelineText(items: AgentTimelineItem[], delta: string): AgentTimelineItem[] {
-  if (!delta) return items
-  const next = items.slice()
-  const last = next[next.length - 1]
-  if (last?.type === 'text') {
-    next[next.length - 1] = { type: 'text', text: last.text + delta }
-  } else {
-    next.push({ type: 'text', text: delta })
-  }
-  return next
-}
-
-function upsertTimelineStage(items: AgentTimelineItem[], stage: Stage): AgentTimelineItem[] {
-  const next = items.slice()
-  const index = next.findIndex((item) => item.type === 'stage' && item.stage.index === stage.index)
-  if (index >= 0) {
-    next[index] = { type: 'stage', stage }
-  } else {
-    next.push({ type: 'stage', stage })
-  }
-  return next
 }
 
 function ResponseToolbar({
@@ -204,6 +186,9 @@ export default function AgentChatView({
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null)
 
   const chatThreadRef = useRef<HTMLDivElement>(null)
+  const followOutputRef = useRef(true)
+  const lastScrollTopRef = useRef(0)
+  const scrollFrameRef = useRef<number | null>(null)
   const historyOpenRef = useRef(false)
   useEffect(() => {
     historyOpenRef.current = historyOpen
@@ -214,6 +199,8 @@ export default function AgentChatView({
   const agentStreamTextRef = useRef('')
   const agentStagesRef = useRef<Stage[]>([])
   const agentTimelineRef = useRef<AgentTimelineItem[]>([])
+  const pendingTimelineTextRef = useRef('')
+  const runLogsRef = useRef<string[]>([])
   const agentStatusRef = useRef<'idle' | 'running' | 'done' | 'error'>('idle')
   const agentErrorRef = useRef<string | null>(null)
   const responseMetaRef = useRef<ChatResponseMeta | null>(null)
@@ -221,7 +208,9 @@ export default function AgentChatView({
   const pendingApprovalRef = useRef<PendingApproval | null>(null)
   const ignoredRunIdsRef = useRef<Set<string> | null>(null)
   const submittedBootRef = useRef<string | null>(null)
-  const completedRunIdsRef = useRef(new Set<string>())
+  const completedRunIdsRef = useRef<Set<string> | null>(null)
+  if (completedRunIdsRef.current === null) completedRunIdsRef.current = new Set<string>()
+  const completedRunIds = completedRunIdsRef.current
   const modelSelectionSaveRef = useRef<Promise<void> | null>(null)
 
   const [agentStages, setAgentStages] = useState<Stage[]>([])
@@ -229,6 +218,60 @@ export default function AgentChatView({
   const [agentStreamText, setAgentStreamText] = useState('')
   const [agentStatus, setAgentStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [agentError, setAgentError] = useState<string | null>(null)
+  const [isFollowingOutput, setIsFollowingOutput] = useState(true)
+  const appendPendingTimelineText = useCallback((): void => {
+    const pendingText = pendingTimelineTextRef.current
+    if (!pendingText) return
+    agentTimelineRef.current = appendTimelineText(agentTimelineRef.current, pendingText)
+    pendingTimelineTextRef.current = ''
+  }, [])
+  const agentRenderBatcherRef = useRef<FrameBatcher | null>(null)
+  if (agentRenderBatcherRef.current === null) {
+    agentRenderBatcherRef.current = createFrameBatcher({
+      minIntervalMs: AGENT_STREAM_RENDER_INTERVAL_MS,
+      requestFrame: (callback) => window.requestAnimationFrame(callback),
+      cancelFrame: (id) => window.cancelAnimationFrame(id),
+      onFlush: () => {
+        appendPendingTimelineText()
+        setAgentStreamText(agentStreamTextRef.current)
+        setAgentTimeline(agentTimelineRef.current)
+        setRunLogs(runLogsRef.current)
+      },
+    })
+  }
+
+  const setFollowingOutput = useCallback((following: boolean): void => {
+    if (followOutputRef.current === following) return
+    followOutputRef.current = following
+    setIsFollowingOutput(following)
+  }, [])
+
+  const cancelScheduledScroll = useCallback((): void => {
+    if (scrollFrameRef.current === null) return
+    window.cancelAnimationFrame(scrollFrameRef.current)
+    scrollFrameRef.current = null
+  }, [])
+
+  const scrollToLatest = useCallback((): void => {
+    setFollowingOutput(true)
+    cancelScheduledScroll()
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null
+      const el = chatThreadRef.current
+      if (!el || !followOutputRef.current) return
+      el.scrollTop = el.scrollHeight
+      lastScrollTopRef.current = el.scrollTop
+    })
+  }, [cancelScheduledScroll, setFollowingOutput])
+
+  useEffect(() => {
+    return () => {
+      agentRenderBatcherRef.current?.cancel()
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current)
+      }
+    }
+  }, [])
   useEffect(() => {
     chatSessionRef.current = chatSession
   }, [chatSession])
@@ -276,19 +319,22 @@ export default function AgentChatView({
         /* ignore */
       })
   }, [])
+  // Re-fetch the config whenever any other view writes it (e.g. a Settings
+  // model-list edit), so the picker never renders a stale snapshot.
   useEffect(() => {
-    agentStreamTextRef.current = agentStreamText
-  }, [agentStreamText])
-  useEffect(() => {
-    agentStagesRef.current = agentStages
-  }, [agentStages])
-  useEffect(() => {
-    agentStatusRef.current = agentStatus
-  }, [agentStatus])
-  useEffect(() => {
-    agentErrorRef.current = agentError
-  }, [agentError])
-
+    const unsubscribe = window.tezbar.onLlmConfigChanged(() => {
+      void window.tezbar
+        .getLlmConfig()
+        .then((config) => {
+          llmConfigRef.current = config
+          setLlmConfig(config)
+        })
+        .catch(() => {
+          /* ignore */
+        })
+    })
+    return unsubscribe
+  }, [])
   const refreshChatHistory = useCallback(async (): Promise<void> => {
     try {
       const rows = await window.tezbar.chatList(40)
@@ -300,6 +346,7 @@ export default function AgentChatView({
 
   const stopRun = useCallback((): void => {
     if (!currentAgentRunIdRef.current) return
+    agentRenderBatcherRef.current?.cancel()
     const ignoredRuns = ignoredRunIdsRef.current ?? new Set<string>()
     ignoredRuns.add(currentAgentRunIdRef.current)
     ignoredRunIdsRef.current = ignoredRuns
@@ -310,6 +357,8 @@ export default function AgentChatView({
     agentStreamTextRef.current = ''
     agentStagesRef.current = []
     agentTimelineRef.current = []
+    pendingTimelineTextRef.current = ''
+    runLogsRef.current = []
     responseMetaRef.current = null
     pendingApprovalRef.current = null
     setAgentStatus('idle')
@@ -317,9 +366,11 @@ export default function AgentChatView({
     setAgentStreamText('')
     setAgentStages([])
     setAgentTimeline([])
+    setRunLogs([])
     setPendingApproval(null)
+    setFollowingOutput(true)
     focusChatInput()
-  }, [])
+  }, [setFollowingOutput])
 
   const startNewChat = useCallback((): void => {
     if (currentAgentRunIdRef.current) {
@@ -327,7 +378,12 @@ export default function AgentChatView({
     }
     setChatSession(null)
     chatSessionRef.current = null
+    agentStreamTextRef.current = ''
+    agentStagesRef.current = []
     agentTimelineRef.current = []
+    pendingTimelineTextRef.current = ''
+    agentErrorRef.current = null
+    agentStatusRef.current = 'idle'
     setAgentStages([])
     setAgentTimeline([])
     setAgentStreamText('')
@@ -335,12 +391,14 @@ export default function AgentChatView({
     setAgentStatus('idle')
     responseMetaRef.current = null
     setHistoryOpen(false)
+    runLogsRef.current = []
     setRunLogs([])
     setLogsOpen(false)
     setPendingApproval(null)
     pendingApprovalRef.current = null
+    setFollowingOutput(true)
     focusChatInput()
-  }, [stopRun])
+  }, [setFollowingOutput, stopRun])
 
   const resolveApproval = useCallback(async (decision: AgentApprovalDecision): Promise<void> => {
     const approval = pendingApprovalRef.current
@@ -373,7 +431,12 @@ export default function AgentChatView({
         stopRun()
         setChatSession(full)
         chatSessionRef.current = full
+        agentStreamTextRef.current = ''
+        agentStagesRef.current = []
         agentTimelineRef.current = []
+        pendingTimelineTextRef.current = ''
+        agentErrorRef.current = null
+        agentStatusRef.current = 'idle'
         setAgentStages([])
         setAgentTimeline([])
         setAgentStreamText('')
@@ -381,14 +444,16 @@ export default function AgentChatView({
         setAgentStatus('idle')
         responseMetaRef.current = null
         setHistoryOpen(false)
+        runLogsRef.current = []
         setRunLogs([])
         setLogsOpen(false)
+        setFollowingOutput(true)
         focusChatInput()
       } catch {
         /* ignore */
       }
     },
-    [stopRun]
+    [setFollowingOutput, stopRun]
   )
 
   const deleteChatFromHistory = useCallback(
@@ -398,20 +463,28 @@ export default function AgentChatView({
         if (chatSessionRef.current?.id === id) {
           setChatSession(null)
           chatSessionRef.current = null
+          agentStreamTextRef.current = ''
+          agentStagesRef.current = []
           agentTimelineRef.current = []
+          pendingTimelineTextRef.current = ''
+          agentErrorRef.current = null
+          agentStatusRef.current = 'idle'
           setAgentStages([])
           setAgentTimeline([])
           setAgentStreamText('')
           setAgentError(null)
           setAgentStatus('idle')
           responseMetaRef.current = null
+          runLogsRef.current = []
+          setRunLogs([])
+          setFollowingOutput(true)
         }
         void refreshChatHistory()
       } catch {
         /* ignore */
       }
     },
-    [refreshChatHistory]
+    [refreshChatHistory, setFollowingOutput]
   )
 
   const copyAssistantResponse = useCallback(async (text: string): Promise<void> => {
@@ -513,14 +586,20 @@ export default function AgentChatView({
         })
         .then(() => refreshChatHistory())
 
-      setAgentError(null)
+      agentErrorRef.current = null
+      agentStreamTextRef.current = ''
+      agentStagesRef.current = []
       agentTimelineRef.current = []
+      pendingTimelineTextRef.current = ''
+      setAgentError(null)
       setAgentStages([])
       setAgentTimeline([])
       setAgentStreamText('')
       setAgentStatus('running')
+      runLogsRef.current = []
       setRunLogs([])
       setLogsOpen(false)
+      setFollowingOutput(true)
 
       try {
         const result =
@@ -553,7 +632,7 @@ export default function AgentChatView({
         setAgentStatus('error')
       }
     },
-    [refreshChatHistory]
+    [refreshChatHistory, setFollowingOutput]
   )
 
   const bootKey =
@@ -631,11 +710,53 @@ export default function AgentChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootKey])
 
+  const visibleRunLogCount = logsOpen ? runLogs.length : 0
+
   useEffect(() => {
-    const el = chatThreadRef.current
-    if (!el) return
-    el.scrollTop = el.scrollHeight
-  }, [chatSession, agentStreamText, agentStages.length, runLogs.length])
+    if (!followOutputRef.current || scrollFrameRef.current !== null) return
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null
+      const el = chatThreadRef.current
+      if (!el || !followOutputRef.current) return
+      el.scrollTop = el.scrollHeight
+      lastScrollTopRef.current = el.scrollTop
+    })
+  }, [
+    agentError,
+    agentStages.length,
+    agentStreamText,
+    agentTimeline,
+    chatSession,
+    logsOpen,
+    pendingApproval,
+    visibleRunLogCount,
+  ])
+
+  const onChatThreadScroll = useCallback(
+    (event: ReactUIEvent<HTMLDivElement>): void => {
+      const el = event.currentTarget
+      const previousTop = lastScrollTopRef.current
+      const movingTowardBottom = el.scrollTop > previousTop + 0.5
+      const exactlyAtBottom = el.scrollHeight - el.clientHeight - el.scrollTop <= 1
+      lastScrollTopRef.current = el.scrollTop
+
+      if (!isNearScrollBottom(el)) {
+        setFollowingOutput(false)
+      } else if (movingTowardBottom || exactlyAtBottom) {
+        setFollowingOutput(true)
+      }
+    },
+    [setFollowingOutput]
+  )
+
+  const onChatThreadWheel = useCallback(
+    (event: ReactWheelEvent<HTMLDivElement>): void => {
+      if (event.deltaY >= 0) return
+      cancelScheduledScroll()
+      setFollowingOutput(false)
+    },
+    [cancelScheduledScroll, setFollowingOutput]
+  )
 
   useEffect(() => {
     return window.tezbar.onAgentEvent((event: AgentRunEvent) => {
@@ -654,11 +775,14 @@ export default function AgentChatView({
 
       switch (event.type) {
         case 'start':
+          agentRenderBatcherRef.current?.cancel()
           currentAgentRunIdRef.current = event.runId
           pendingApprovalRef.current = null
           agentStagesRef.current = []
           agentTimelineRef.current = []
+          pendingTimelineTextRef.current = ''
           agentStreamTextRef.current = ''
+          runLogsRef.current = []
           agentErrorRef.current = null
           agentStatusRef.current = 'running'
           if (!responseMetaRef.current) {
@@ -680,10 +804,12 @@ export default function AgentChatView({
           return
         case 'log':
           if (event.source === 'stderr') {
-            setRunLogs((prev) => [...prev.slice(-400), event.line])
+            runLogsRef.current = [...runLogsRef.current.slice(-400), event.line]
+            agentRenderBatcherRef.current?.schedule()
           }
           return
         case 'stage': {
+          appendPendingTimelineText()
           const prev = agentStagesRef.current
           const idx = prev.findIndex((s) => s.index === event.stage.index)
           const next = idx < 0 ? [...prev, event.stage] : prev.slice()
@@ -698,22 +824,24 @@ export default function AgentChatView({
         case 'message': {
           const next = agentStreamTextRef.current + event.delta
           agentStreamTextRef.current = next
-          setAgentStreamText(next)
-          const nextTimeline = appendTimelineText(agentTimelineRef.current, event.delta)
-          agentTimelineRef.current = nextTimeline
-          setAgentTimeline(nextTimeline)
+          pendingTimelineTextRef.current += event.delta
+          agentRenderBatcherRef.current?.schedule()
           return
         }
-        case 'answer':
+        case 'answer': {
           agentStreamTextRef.current = event.text
-          setAgentStreamText(event.text)
+          appendPendingTimelineText()
           if (!agentTimelineRef.current.some((item) => item.type === 'text')) {
             const nextTimeline = appendTimelineText(agentTimelineRef.current, event.text)
             agentTimelineRef.current = nextTimeline
-            setAgentTimeline(nextTimeline)
           }
+          agentRenderBatcherRef.current?.schedule()
+          agentRenderBatcherRef.current?.flush()
           return
+        }
         case 'error':
+          agentRenderBatcherRef.current?.schedule()
+          agentRenderBatcherRef.current?.flush()
           pendingApprovalRef.current = null
           setPendingApproval(null)
           agentErrorRef.current = formatLlmErrorMessage(event.message)
@@ -722,8 +850,10 @@ export default function AgentChatView({
           setAgentStatus('error')
           return
         case 'done': {
-          if (completedRunIdsRef.current.has(event.runId)) return
-          completedRunIdsRef.current.add(event.runId)
+          if (completedRunIds.has(event.runId)) return
+          completedRunIds.add(event.runId)
+          agentRenderBatcherRef.current?.schedule()
+          agentRenderBatcherRef.current?.flush()
           const finalText = agentStreamTextRef.current
           const finalStages = agentStagesRef.current.slice()
           const finalTimeline = agentTimelineRef.current.slice()
@@ -779,6 +909,7 @@ export default function AgentChatView({
             agentStreamTextRef.current = ''
             agentStagesRef.current = []
             agentTimelineRef.current = []
+            pendingTimelineTextRef.current = ''
             agentErrorRef.current = null
             responseMetaRef.current = null
             setAgentStreamText('')
@@ -1113,171 +1244,209 @@ export default function AgentChatView({
           ) : null}
         </div>
 
-        <div
-          ref={chatThreadRef}
-          className="agent-chat-thread flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-5"
-        >
-          {chatSession && chatSession.turns.length > 0
-            ? chatSession.turns.map((turn) =>
-                turn.role === 'user' ? (
-                  <div key={turn.id} className="flex justify-end">
-                    <div className="max-w-[88%] overflow-hidden rounded-tezbar-row border border-white/10 bg-white/[0.055] text-[13.5px] leading-[1.5] text-ink-1">
-                      {turn.attachments?.map((attachment, index) =>
-                        attachment.data ? (
-                          <img
-                            key={`${attachment.name}-${index}`}
-                            src={`data:${attachment.mimeType};base64,${attachment.data}`}
-                            alt={attachment.name}
-                            className="max-h-44 w-full object-cover"
-                          />
-                        ) : (
-                          <div
-                            key={`${attachment.name}-${index}`}
-                            className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-2 text-[11px] text-ink-3"
-                          >
-                            <span className="h-2 w-2 rounded-sm bg-sky-300/80" />
-                            {attachment.name}
-                          </div>
-                        )
-                      )}
-                      <p className="px-3 py-2">{turn.text}</p>
+        <div className="relative flex min-h-0 flex-1">
+          <div
+            ref={chatThreadRef}
+            className="agent-chat-thread flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-5"
+            onScroll={onChatThreadScroll}
+            onWheel={onChatThreadWheel}
+          >
+            {chatSession && chatSession.turns.length > 0
+              ? chatSession.turns.map((turn) => {
+   const turnIsLastAssistant =
+     turn.role === 'assistant' && turn.id === chatSession.turns.at(-1)?.id
+   return turn.role === 'user' ? (
+                    <div key={turn.id} className="agent-chat-turn flex justify-end">
+                      <div className="max-w-[88%] overflow-hidden rounded-tezbar-row border border-white/10 bg-white/[0.055] text-[13.5px] leading-[1.5] text-ink-1">
+                        {turn.attachments?.map((attachment, index) =>
+                          attachment.data ? (
+                            <img
+                              key={`${attachment.name}-${index}`}
+                              src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                              alt={attachment.name}
+                              className="max-h-44 w-full object-cover"
+                            />
+                          ) : (
+                            <div
+                              key={`${attachment.name}-${index}`}
+                              className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-2 text-[11px] text-ink-3"
+                            >
+                              <span className="h-2 w-2 rounded-sm bg-sky-300/80" />
+                              {attachment.name}
+                            </div>
+                          )
+                        )}
+                        <p className="px-3 py-2">{turn.text}</p>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div key={turn.id} className="flex flex-col gap-1.5">
-                    {turn.timeline && turn.timeline.length > 0 ? (
-                      turn.timeline.map((item, index) =>
+                  ) : (
+                    <div key={turn.id} className="agent-chat-turn flex flex-col gap-1.5">
+                      {turn.timeline && turn.timeline.length > 0
+                        ? (() => {
+                            // Identity keys are stable across array shifts, unlike index keys.
+                            let textOrdinal = 0
+                            return turn.timeline.map((item) =>
+                              item.type === 'stage' ? (
+                                <AgentStageRow
+                                  key={`timeline-stage:${item.stage.index}`}
+                                  stage={item.stage}
+                                />
+                              ) : (
+                                <Markdown
+                                  key={`timeline-text:${(textOrdinal += 1)}`}
+                                  text={item.text}
+                                  streaming={
+                                    agentStatus === 'running' &&
+                                    turnIsLastAssistant &&
+                                    item === turn.timeline!.at(-1)
+                                  }
+                                />
+                              )
+                            )
+                          })() : (
+                        <>
+                          {turn.stages && turn.stages.length > 0 ? (
+                            <AgentStageList stages={turn.stages} compact />
+                          ) : null}
+                          {turn.text ? (
+                            <Markdown text={turn.text} />
+                          ) : turn.error ? null : (
+                            <p className="text-[12.5px] italic text-ink-4">(no text response)</p>
+                          )}
+                        </>
+                      )}
+                      {turn.error ? (
+                        <p className="text-[11.5px] text-rose-300" role="alert">
+                          {formatLlmErrorMessage(turn.error)}
+                        </p>
+                      ) : null}
+                      <ResponseToolbar
+                        meta={turn.responseMeta}
+                        text={turn.text}
+                        onCopy={() => {
+                          void copyAssistantResponse(turn.text)
+                        }}
+                        onDelete={() => {
+                          void deleteAssistantResponse(turn.id)
+                        }}
+                      />
+                    </div>
+                  )
+                  }
+                )
+              : null}
+
+            {agentStatus === 'running' || agentTimeline.length > 0 || agentStreamText ? (
+              <div className="agent-chat-live flex flex-col gap-1.5">
+                {agentTimeline.length > 0
+                  ? (() => {
+                      // Assign identity keys so text bubbles keep their DOM node (and
+                      // animation state) when a new stage pushes them up the thread.
+                      let textOrdinal = 0
+                      return agentTimeline.map((item, index) =>
                         item.type === 'stage' ? (
-                          <AgentStageRow
-                            key={`timeline-stage:${item.stage.index}`}
-                            stage={item.stage}
-                          />
+                          <AgentStageRow key={`live-stage:${item.stage.index}`} stage={item.stage} />
                         ) : (
-                          <Markdown key={`timeline-text:${index}`} text={item.text} />
+                          <Markdown
+                            key={`live-text:${(textOrdinal += 1)}`}
+                            text={item.text}
+                            streaming={agentStatus === 'running' && index === agentTimeline.length - 1}
+                          />
                         )
                       )
-                    ) : (
-                      <>
-                        {turn.stages && turn.stages.length > 0 ? (
-                          <AgentStageList stages={turn.stages} compact />
-                        ) : null}
-                        {turn.text ? (
-                          <Markdown text={turn.text} />
-                        ) : turn.error ? null : (
-                          <p className="text-[12.5px] italic text-ink-4">(no text response)</p>
-                        )}
-                      </>
-                    )}
-                    {turn.error ? (
-                      <p className="text-[11.5px] text-rose-300" role="alert">
-                        {formatLlmErrorMessage(turn.error)}
-                      </p>
-                    ) : null}
-                    <ResponseToolbar
-                      meta={turn.responseMeta}
-                      text={turn.text}
-                      onCopy={() => {
-                        void copyAssistantResponse(turn.text)
-                      }}
-                      onDelete={() => {
-                        void deleteAssistantResponse(turn.id)
-                      }}
-                    />
-                  </div>
-                )
-              )
-            : null}
-
-          {agentStatus === 'running' || agentTimeline.length > 0 || agentStreamText ? (
-            <div className="flex flex-col gap-1.5">
-              {agentTimeline.length > 0 ? (
-                agentTimeline.map((item, index) =>
-                  item.type === 'stage' ? (
-                    <AgentStageRow key={`live-stage:${item.stage.index}`} stage={item.stage} />
-                  ) : (
-                    <Markdown
-                      key={`live-text:${index}`}
-                      text={item.text}
-                      streaming={agentStatus === 'running' && index === agentTimeline.length - 1}
-                    />
-                  )
-                )
-              ) : agentStreamText ? (
-                <Markdown text={agentStreamText} streaming={agentStatus === 'running'} />
-              ) : agentStatus === 'running' ? (
-                <p className="tezbar-thinking flex items-center gap-2 text-[12px] text-ink-3">
-                  <span className="inline-flex gap-1">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:120ms]" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:240ms]" />
-                  </span>
-                  Working
-                </p>
-              ) : null}
-              {responseMetaRef.current ? (
-                <ResponseToolbar
-                  meta={{
-                    ...responseMetaRef.current,
-                    tokenCount: estimateTokenCount(agentStreamText),
-                  }}
-                  text={agentStreamText}
-                  onCopy={() => {
-                    void copyAssistantResponse(agentStreamText)
-                  }}
-                />
-              ) : null}
-            </div>
-          ) : null}
-
-          {agentError ? (
-            <div
-              className="flex items-start gap-2 rounded-xl border border-rose-400/15 bg-rose-500/[0.055] px-3 py-2 text-[11.5px] text-rose-200"
-              role="alert"
-            >
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-300" />
-              <span className="min-w-0 flex-1 whitespace-pre-wrap">{agentError}</span>
-            </div>
-          ) : null}
-
-          {runLogs.length > 0 ? (
-            <div className="rounded-tezbar-row border border-amber-400/20 bg-amber-500/5">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200/90"
-                onClick={() => setLogsOpen((v) => !v)}
-                aria-expanded={logsOpen}
-              >
-                Agent log (stderr)
-                <span className="text-ink-4">{logsOpen ? '▼' : '▶'}</span>
-              </button>
-              {logsOpen ? (
-                <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words px-2 pb-2 font-mono text-[10px] leading-relaxed text-amber-100/85">
-                  {runLogs.join('\n')}
-                </pre>
-              ) : null}
-            </div>
-          ) : null}
-
-          {!chatSession || chatSession.turns.length === 0 ? (
-            agentStatus === 'idle' && !agentStreamText ? (
-              <div className="flex flex-1 items-center justify-center px-4 py-10 text-center">
-                <div className="max-w-[440px] space-y-2 text-ink-3">
-                  <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-ink-3">
-                    <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
-                      <path
-                        d="M4 5.5h10M4 9h6M4 12.5h8"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeWidth="1.35"
-                      />
-                    </svg>
-                  </span>
-                  <p className="pt-1 text-[13px] font-medium text-ink-2">What are we working on?</p>
-                  <p className="text-[11px] text-ink-4">Ask a question or hand the agent a task.</p>
-                </div>
+                    })() : agentStreamText ? (
+                  <Markdown text={agentStreamText} streaming={agentStatus === 'running'} />
+                ) : agentStatus === 'running' ? (
+                  <p className="tezbar-thinking flex items-center gap-2 text-[12px] text-ink-3">
+                    <span className="inline-flex gap-1">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3" />
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:120ms]" />
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-3 [animation-delay:240ms]" />
+                    </span>
+                    Working
+                  </p>
+                ) : null}
+                {responseMetaRef.current ? (
+                  <ResponseToolbar
+                    meta={{
+                      ...responseMetaRef.current,
+                      tokenCount: estimateTokenCount(agentStreamText),
+                    }}
+                    text={agentStreamText}
+                    onCopy={() => {
+                      void copyAssistantResponse(agentStreamText)
+                    }}
+                  />
+                ) : null}
               </div>
-            ) : null
+            ) : null}
+
+            {agentError ? (
+              <div
+                className="flex items-start gap-2 rounded-xl border border-rose-400/15 bg-rose-500/[0.055] px-3 py-2 text-[11.5px] text-rose-200"
+                role="alert"
+              >
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-300" />
+                <span className="min-w-0 flex-1 whitespace-pre-wrap">{agentError}</span>
+              </div>
+            ) : null}
+
+            {runLogs.length > 0 ? (
+              <div className="rounded-tezbar-row border border-amber-400/20 bg-amber-500/5">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200/90"
+                  onClick={() => setLogsOpen((v) => !v)}
+                  aria-expanded={logsOpen}
+                >
+                  Agent log (stderr)
+                  <span className="text-ink-4">{logsOpen ? '▼' : '▶'}</span>
+                </button>
+                {logsOpen ? (
+                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words px-2 pb-2 font-mono text-[10px] leading-relaxed text-amber-100/85">
+                    {runLogs.join('\n')}
+                  </pre>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!chatSession || chatSession.turns.length === 0 ? (
+              agentStatus === 'idle' && !agentStreamText ? (
+                <div className="flex flex-1 items-center justify-center px-4 py-10 text-center">
+                  <div className="max-w-[440px] space-y-2 text-ink-3">
+                    <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-ink-3">
+                      <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
+                        <path
+                          d="M4 5.5h10M4 9h6M4 12.5h8"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeWidth="1.35"
+                        />
+                      </svg>
+                    </span>
+                    <p className="pt-1 text-[13px] font-medium text-ink-2">
+                      What are we working on?
+                    </p>
+                    <p className="text-[11px] text-ink-4">
+                      Ask a question or hand the agent a task.
+                    </p>
+                  </div>
+                </div>
+              ) : null
+            ) : null}
+          </div>
+          {!isFollowingOutput && agentStatus === 'running' ? (
+            <button
+              type="button"
+              className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/[0.12] bg-glass-panel/95 px-2.5 py-1.5 text-[10.5px] font-medium text-ink-2 shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition hover:border-white/[0.2] hover:text-ink-1"
+              onClick={scrollToLatest}
+            >
+              Latest
+              <span aria-hidden className="text-[12px] leading-none text-ink-3">
+                ↓
+              </span>
+            </button>
           ) : null}
         </div>
 

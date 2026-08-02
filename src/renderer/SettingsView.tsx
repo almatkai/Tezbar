@@ -680,6 +680,38 @@ export default function SettingsView({
       if (models.length > 0) {
         setAiProviderModels((prev) => {
           const existing = prev[provider] ?? defaultModels(provider)
+          if (provider === 'copilot') {
+            // GitHub owns the Copilot catalog — the live `/models` response is
+            // authoritative. REPLACE the stored list instead of merging so stale
+            // or internal ids (e.g. leaked agent/search SKUs) saved by earlier
+            // merges drop out on the next refresh. Per-model flags like
+            // `hiddenFromPicker` and any stored `contextWindow` survive for ids
+            // still present in the live catalog. Entries the user added by hand
+            // (`discovered === false`) are never provider-owned, so they survive
+            // the replace untouched; discovered entries that vanish from the
+            // live catalog are dropped.
+            const keepFlags = new Map(existing.map((m) => [m.id, m]))
+            const seen = new Set<string>()
+            const merged: AiProviderModel[] = []
+            const push = (entry: AiProviderModel) => {
+              if (seen.has(entry.id)) return
+              seen.add(entry.id)
+              merged.push(entry)
+            }
+            for (const id of models) {
+              const prior = keepFlags.get(id)
+              push({
+                id,
+                capabilities: prior?.capabilities?.length ? prior.capabilities : inferCapabilities(id),
+                ...(prior?.contextWindow !== undefined ? { contextWindow: prior.contextWindow } : {}),
+                ...(prior?.hiddenFromPicker === true ? { hiddenFromPicker: true } : {}),
+              })
+            }
+            for (const m of existing) {
+              if (m.discovered === false) push(m)
+            }
+            return { ...prev, [provider]: normalizeProviderModelList(provider, merged) }
+          }
           const discovered = models.map((id) => ({ id, capabilities: inferCapabilities(id) }))
           return {
             ...prev,
@@ -1120,6 +1152,7 @@ export default function SettingsView({
     setAiProviderSelectedModels((prev) => ({ ...prev, [aiProvider]: nextSelected }))
     setAiModel(nextSelected)
     setAiNewModelId('')
+    persistAiSettings()
   }
 
   const removeAiModel = (id: string): void => {
@@ -1133,11 +1166,13 @@ export default function SettingsView({
         setAiModel(nextSelected)
         setAiProviderSelectedModels((selected) => ({ ...selected, [aiProvider]: nextSelected }))
       }
+      persistAiSettings()
       return { ...prev, [aiProvider]: normalized }
     })
   }
 
   const toggleAiModelCapability = (modelId: string, capability: AiModelCapability): void => {
+    persistAiSettings()
     setAiProviderModels((prev) => {
       const current = prev[aiProvider] ?? defaultModels(aiProvider)
       return {
@@ -1151,6 +1186,49 @@ export default function SettingsView({
               ? model.capabilities.filter((item) => item !== capability)
               : [...model.capabilities, capability],
           }
+        }),
+      }
+    })
+  }
+
+  const toggleAiModelPickerVisibility = (modelId: string): void => {
+    persistAiSettings()
+    setAiProviderModels((prev) => {
+      const current = prev[aiProvider] ?? defaultModels(aiProvider)
+      return {
+        ...prev,
+        [aiProvider]: current.map((model) => {
+          if (model.id !== modelId) return model
+          const next = { ...model }
+          if (next.hiddenFromPicker === true) {
+            delete next.hiddenFromPicker
+          } else {
+            next.hiddenFromPicker = true
+          }
+          return next
+        }),
+      }
+    })
+  }
+
+  const setAllAiPickerVisibility = (visible: boolean): void => {
+    persistAiSettings()
+    setAiProviderModels((prev) => {
+      const current = prev[aiProvider] ?? defaultModels(aiProvider)
+      return {
+        ...prev,
+        [aiProvider]: current.map((model) => {
+          if (visible) {
+            if (model.hiddenFromPicker !== true) return model
+            const next = { ...model }
+            delete next.hiddenFromPicker
+            return next
+          }
+          // Keep the currently-selected model visible — hiding it would strand
+          // the active provider+model pairing.
+          if (model.id === aiModel) return model
+          if (model.hiddenFromPicker === true) return model
+          return { ...model, hiddenFromPicker: true }
         }),
       }
     })
@@ -1200,29 +1278,89 @@ export default function SettingsView({
     })
   }
 
+  // Debounce timer for AI-pane autosave. `window.setTimeout` returns a number in
+  // the DOM lib; paired `window.clearTimeout` accepts it.
+  const aiSaveTimer = useRef<number | null>(null)
+
+  // Autosave: any AI-pane mutation calls `persistAiSettings()`, which debounce-
+  // writes the whole AI provider patch. Pass `immediate` to skip the debounce.
+  // Unlike the dirty-tracked fields, this never fires on its own — only a real
+  // user action (add/remove model, toggle visibility/capability, switch
+  // provider/model, edit key/URL) invokes it.
+  const persistAiSettings = (immediate = false): void => {
+    if (aiSaveTimer.current !== null) window.clearTimeout(aiSaveTimer.current)
+    const write = (): void => {
+      void window.tezbar
+        .setLlmConfig(buildAiProviderPatch())
+        .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
+    }
+    if (immediate) {
+      write()
+      return
+    }
+    aiSaveTimer.current = window.setTimeout(() => {
+      aiSaveTimer.current = null
+      write()
+    }, 400)
+  }
+
+  // Flush any pending debounced AI save when the Settings window unmounts
+  // (e.g. user closes it within the 400ms debounce window), so an edit isn't
+  // silently dropped.
+  const persistAiSettingsRef = useRef(persistAiSettings)
+  useEffect(() => {
+    persistAiSettingsRef.current = persistAiSettings
+  })
+  useEffect(() => {
+    return () => {
+      if (aiSaveTimer.current !== null) {
+        window.clearTimeout(aiSaveTimer.current)
+        aiSaveTimer.current = null
+        persistAiSettingsRef.current(true)
+      }
+    }
+  }, [])
+
   const save = (): void => {
     const n = Number(retentionSec)
-    const m = Number(memoryMaxItems)
     if (!Number.isFinite(n) || n < 0) {
       setMsg({ tone: 'error', text: 'Enter a number greater than or equal to 0' })
       return
     }
+    void window.tezbar
+      .setLlmConfig({ uiStateRetentionMs: Math.round(n * 1000) })
+      .then(() => {
+        setMsg({ tone: 'success', text: 'Saved' })
+        void reload()
+      })
+      .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
+  }
+
+  // Autosave memory "max items" on blur / Enter, validating the number.
+  const saveMemoryMaxItems = (): void => {
+    const m = Number(memoryMaxItems)
     if (!Number.isFinite(m) || m < 0) {
       setMsg({ tone: 'error', text: 'Memory items must be 0 or more' })
       return
     }
     void window.tezbar
+      .setLlmConfig({ memoryMaxItems: Math.round(m) })
+      .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
+  }
+
+  // Autosave the AI-tab toggles (memory + action-mode) immediately on change.
+  const saveAiToggles = (
+    overrides: Partial<{
+      memoryEnabled: boolean
+      aiActionRequirePermission: boolean
+      aiActionRedactionEnabled: boolean
+    }> = {}
+  ): void => {
+    void window.tezbar
       .setLlmConfig({
-        ...buildAiProviderPatch(),
-        uiStateRetentionMs: Math.round(n * 1000),
-        memoryEnabled,
-        memoryMaxItems: Math.round(m),
-        aiActionRequirePermission: actionPermissionRequired,
-        aiActionRedactionEnabled: actionRedactionEnabled,
-      })
-      .then(() => {
-        setMsg({ tone: 'success', text: 'Saved' })
-        void reload()
+        memoryEnabled: overrides.memoryEnabled ?? memoryEnabled,
+        aiActionRequirePermission: overrides.aiActionRequirePermission ?? actionPermissionRequired,
+        aiActionRedactionEnabled: overrides.aiActionRedactionEnabled ?? actionRedactionEnabled,
       })
       .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
   }
@@ -1834,7 +1972,10 @@ export default function SettingsView({
                               type="password"
                               autoComplete="off"
                               value={aiApiKey}
-                              onChange={(event) => setAiApiKey(event.target.value)}
+                              onChange={(event) => {
+                                setAiApiKey(event.target.value)
+                                persistAiSettings()
+                              }}
                               placeholder={
                                 aiProvider === 'anthropic'
                                   ? 'sk-ant-...'
@@ -1858,7 +1999,10 @@ export default function SettingsView({
                         >
                           <TextField
                             value={aiBaseURL}
-                            onChange={(event) => setAiBaseURL(event.target.value)}
+                            onChange={(event) => {
+                              setAiBaseURL(event.target.value)
+                              persistAiSettings()
+                            }}
                             placeholder={defaultBaseUrl(aiProvider)}
                           />
                         </SettingsRow>
@@ -1896,6 +2040,28 @@ export default function SettingsView({
                             </Button>
                           </div>
 
+                          <div className="flex items-center gap-2 text-[10.5px] text-ink-4">
+                            <span>
+                              {currentAiModels.filter((m) => m.hiddenFromPicker !== true).length} of{' '}
+                              {currentAiModels.length} shown in picker
+                            </span>
+                            <span className="h-3 w-px bg-white/10" aria-hidden />
+                            <button
+                              type="button"
+                              className="text-ink-3 transition hover:text-ink-1"
+                              onClick={() => setAllAiPickerVisibility(true)}
+                            >
+                              Show all
+                            </button>
+                            <button
+                              type="button"
+                              className="text-ink-3 transition hover:text-ink-1"
+                              onClick={() => setAllAiPickerVisibility(false)}
+                            >
+                              Hide all
+                            </button>
+                          </div>
+
                           <ul className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                             {currentAiModels.map((model) => (
                               <li
@@ -1917,6 +2083,7 @@ export default function SettingsView({
                                         ...prev,
                                         [aiProvider]: model.id,
                                       }))
+                                      persistAiSettings()
                                     }}
                                   >
                                     <span className="block truncate text-[12.5px] font-semibold text-ink-1">
@@ -1942,7 +2109,16 @@ export default function SettingsView({
                                     Remove
                                   </Button>
                                 </div>
-                                <div className="mt-2 flex flex-wrap gap-2">
+                                <div className="mt-2 flex flex-wrap gap-2 items-center">
+                                  <label className="flex items-center gap-1.5 text-[11px] font-medium text-ink-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={model.hiddenFromPicker !== true}
+                                      onChange={() => toggleAiModelPickerVisibility(model.id)}
+                                    />
+                                    Show in picker
+                                  </label>
+                                  <span className="mx-0.5 h-3 w-px bg-white/10" aria-hidden />
                                   {AI_CAPABILITIES.map((capability) => (
                                     <label
                                       key={capability.id}
@@ -1980,7 +2156,10 @@ export default function SettingsView({
                     <input
                       type="checkbox"
                       checked={memoryEnabled}
-                      onChange={(e) => setMemoryEnabled(e.target.checked)}
+                      onChange={(e) => {
+                        setMemoryEnabled(e.target.checked)
+                        saveAiToggles({ memoryEnabled: e.target.checked })
+                      }}
                     />
                     Enable memory retrieval
                   </label>
@@ -1992,6 +2171,13 @@ export default function SettingsView({
                       step={1}
                       value={memoryMaxItems}
                       onChange={(e) => setMemoryMaxItems(e.target.value)}
+                      onBlur={saveMemoryMaxItems}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          saveMemoryMaxItems()
+                        }
+                      }}
                       className="w-16 text-center font-mono tabular-nums"
                     />
                   </div>
@@ -2006,7 +2192,10 @@ export default function SettingsView({
                     <input
                       type="checkbox"
                       checked={actionPermissionRequired}
-                      onChange={(e) => setActionPermissionRequired(e.target.checked)}
+                      onChange={(e) => {
+                        setActionPermissionRequired(e.target.checked)
+                        saveAiToggles({ aiActionRequirePermission: e.target.checked })
+                      }}
                     />
                     Require explicit permission
                   </label>
@@ -2014,19 +2203,19 @@ export default function SettingsView({
                     <input
                       type="checkbox"
                       checked={actionRedactionEnabled}
-                      onChange={(e) => setActionRedactionEnabled(e.target.checked)}
+                      onChange={(e) => {
+                        setActionRedactionEnabled(e.target.checked)
+                        saveAiToggles({ aiActionRedactionEnabled: e.target.checked })
+                      }}
                     />
                     Redact sensitive context by default
                   </label>
                 </div>
               </SettingsRow>
 
-              {/* Global Save Button */}
-              <div className="mt-4 flex items-center justify-between">
+              {/* AI settings now autosave — no global button. */}
+              <div className="mt-4 flex items-center">
                 <div>{msg ? <Message tone={msg.tone}>{msg.text}</Message> : null}</div>
-                <Button variant="primary" onClick={save}>
-                  Save AI Settings
-                </Button>
               </div>
             </div>
           ) : null}

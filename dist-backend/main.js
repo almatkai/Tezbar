@@ -3456,6 +3456,12 @@ function normalizeModelList(models, fallbackId) {
     if (typeof model.contextWindow === "number" && Number.isFinite(model.contextWindow)) {
       next.contextWindow = Math.max(0, Math.round(model.contextWindow));
     }
+    if (model.hiddenFromPicker === true) {
+      next.hiddenFromPicker = true;
+    }
+    if (model.discovered === false) {
+      next.discovered = false;
+    }
     return next;
   }).filter((model) => {
     if (!model.id || seen.has(model.id)) return false;
@@ -3471,21 +3477,7 @@ function normalizeProviderModelList(provider, models) {
   if (isCustomProvider(provider)) {
     return normalizeModelList(models, models[0]?.id ?? "");
   }
-  if (provider === "openai-compatible") {
-    return normalizeModelList(models, RECOMMENDED_AI_MODEL[provider]);
-  }
-  const ownDefaults = new Set(DEFAULT_PROVIDER_MODELS[provider].map((model) => model.id));
-  const otherDefaults = /* @__PURE__ */ new Set();
-  for (const [otherProvider, otherModels] of Object.entries(DEFAULT_PROVIDER_MODELS)) {
-    if (otherProvider === provider) continue;
-    for (const model of otherModels) {
-      otherDefaults.add(model.id);
-    }
-  }
-  return normalizeModelList(
-    models.filter((model) => ownDefaults.has(model.id) || !otherDefaults.has(model.id)),
-    RECOMMENDED_AI_MODEL[provider]
-  );
+  return normalizeModelList(models, "");
 }
 var RECOMMENDED_AI_MODEL, DEFAULT_PROVIDER_MODELS;
 var init_aiProviders = __esm({
@@ -10657,6 +10649,13 @@ var init_openai = __esm({
 });
 
 // src/main/llm/opencode.ts
+function formatConversation(messages) {
+  return [
+    "Continue the conversation below. Follow the system instructions and respond to the final user message.",
+    ...messages.map((message) => `${message.role.toUpperCase()}:
+${message.content}`)
+  ].join("\n\n");
+}
 var import_node_child_process16, import_node_util13, OpenCodeProvider;
 var init_opencode = __esm({
   "src/main/llm/opencode.ts"() {
@@ -10670,11 +10669,10 @@ var init_opencode = __esm({
       model;
       name = "opencode";
       async chat(messages, _tools, options) {
-        const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
-        if (!lastUserMessage) {
+        if (!messages.some((message) => message.role === "user")) {
           throw new Error("OpenCode: no user message found");
         }
-        return this.runOpenCode(lastUserMessage.content, options?.signal);
+        return this.runOpenCode(formatConversation(messages), options?.signal);
       }
       async *runOpenCode(message, signal) {
         const args = ["run", "--model", this.model, "--", message];
@@ -11009,6 +11007,17 @@ function piApiKey(cfg) {
   if (cfg.provider === "ollama") return "ollama";
   return cfg.apiKey;
 }
+function officialDeepSeekAnthropicBaseUrl(baseUrl) {
+  if (!baseUrl) return void 0;
+  try {
+    const url = new URL(baseUrl);
+    const path7 = url.pathname.replace(/\/+$/, "");
+    if (url.hostname !== "api.deepseek.com" || path7 && path7 !== "/v1") return void 0;
+    return `${url.origin}/anthropic`;
+  } catch {
+    return void 0;
+  }
+}
 function getSelectedPiProviderBridge(task) {
   const baseConfig = readLLMConfig();
   const cfg = task ? configForTask(baseConfig, task) : baseConfig;
@@ -11021,13 +11030,27 @@ function getSelectedPiProviderBridge(task) {
   );
   const modelInput = selectedModel?.capabilities.includes("vision") ? ["text", "image"] : ["text"];
   const isAnthropic = cfg.provider === "anthropic";
-  const baseUrl = isAnthropic ? cfg.baseURL ?? "https://api.anthropic.com" : openAiCompatBaseUrl(cfg);
+  const openAiBaseUrl = openAiCompatBaseUrl(cfg);
+  const deepSeekAnthropicBaseUrl = cfg.provider === "deepseek" ? officialDeepSeekAnthropicBaseUrl(openAiBaseUrl) : void 0;
+  const usesAnthropicMessages = isAnthropic || Boolean(deepSeekAnthropicBaseUrl);
+  const baseUrl = isAnthropic ? cfg.baseURL ?? "https://api.anthropic.com" : deepSeekAnthropicBaseUrl ?? openAiBaseUrl;
   const apiKey = isAnthropic ? cfg.apiKey : piApiKey(cfg);
   if (!baseUrl || !apiKey) return void 0;
+  const compat = deepSeekAnthropicBaseUrl ? {
+    supportsEagerToolInputStreaming: false,
+    supportsLongCacheRetention: false,
+    supportsCacheControlOnTools: false,
+    allowEmptySignature: true
+  } : cfg.provider === "deepseek" ? {
+    supportsStore: false,
+    supportsDeveloperRole: false,
+    requiresReasoningContentOnAssistantMessages: true,
+    thinkingFormat: "deepseek"
+  } : void 0;
   const providerJson = JSON.stringify({
     baseUrl,
     apiKey,
-    api: isAnthropic ? "anthropic-messages" : "openai-completions",
+    api: usesAnthropicMessages ? "anthropic-messages" : "openai-completions",
     authHeader: true,
     models: [
       {
@@ -11037,7 +11060,8 @@ function getSelectedPiProviderBridge(task) {
         input: modelInput,
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 128e3,
-        maxTokens: 8192
+        maxTokens: 8192,
+        ...compat ? { compat } : {}
       }
     ]
   });
@@ -26902,6 +26926,27 @@ function extractModelIds(json) {
   return [];
 }
 var COPILOT_MODELS = "https://api.githubcopilot.com/models";
+var COPILOT_BLOCKED_FAMILIES = /* @__PURE__ */ new Set(["search-agent", "exec-agent", "trajectory-compaction"]);
+var COPILOT_DISCOVERY_BLOCKLIST = /(^|[-_/])(exec-)?agent[-_]?[a-z0-9]*$/i;
+function extractCopilotChatModelIds(json) {
+  if (!json || typeof json !== "object") return [];
+  const o = json;
+  if (!Array.isArray(o.data)) return [];
+  const ids = [];
+  for (const item of o.data) {
+    if (!item || typeof item !== "object") continue;
+    const row = item;
+    const id = typeof row.id === "string" ? row.id : "";
+    if (!id) continue;
+    const caps = row.capabilities && typeof row.capabilities === "object" ? row.capabilities : {};
+    if (typeof caps.type === "string" && caps.type !== "chat") continue;
+    const family = typeof caps.family === "string" ? caps.family : "";
+    if (COPILOT_BLOCKED_FAMILIES.has(family)) continue;
+    if (COPILOT_DISCOVERY_BLOCKLIST.test(id) || COPILOT_DISCOVERY_BLOCKLIST.test(family)) continue;
+    ids.push(id);
+  }
+  return uniqSorted(ids);
+}
 async function fetchCopilotModelIds(accessToken, signal) {
   if (!accessToken.trim()) return [];
   try {
@@ -26916,8 +26961,7 @@ async function fetchCopilotModelIds(accessToken, signal) {
       signal: signal ?? AbortSignal.timeout(12e3)
     });
     if (!res.ok) return [];
-    const json = await res.json();
-    return extractModelIds(json);
+    return extractCopilotChatModelIds(await res.json());
   } catch {
     return [];
   }
@@ -30479,15 +30523,26 @@ function registerIpcHandlers(getWindow, controls) {
     const configPatch = { ...patch };
     const requestedHotkey = configPatch.raymesHotkey;
     delete configPatch.raymesHotkey;
+    const broadcast = () => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win.isDestroyed()) continue;
+        try {
+          win.webContents.send("llm-config-changed", {});
+        } catch {
+        }
+      }
+    };
     if (typeof requestedHotkey === "string" && controls?.updateRaymesHotkey) {
       const result = controls.updateRaymesHotkey(requestedHotkey);
       if (!result.ok) return result;
       if (Object.keys(configPatch).length > 0) writeConfigPatch(configPatch);
       invalidateProviderCache();
+      broadcast();
       return result;
     }
     writeConfigPatch(configPatch);
     invalidateProviderCache();
+    broadcast();
   });
   ipcMain.handle("llm-provider-statuses", async () => {
     const cfg = readLLMConfig();

@@ -75,13 +75,26 @@ export function ModelPicker({
     [config.providerModels, previewProvider]
   )
   const previewConfigured = isAiProviderConfigured(config, previewProvider)
+  // Models the user has hidden stay in Settings' list but drop out of the picker,
+  // unless the model is the currently-selected one — the picker must always show
+  // what's actually in use.
+  const selectablePreviewModels = useMemo(
+    () =>
+      previewModels.filter(
+        (model) =>
+          !model.hiddenFromPicker ||
+          (previewProvider === activeProvider && model.id === activeModel)
+      ),
+    [previewModels, previewProvider, activeProvider, activeModel]
+  )
+  const hiddenCount = previewModels.length - selectablePreviewModels.length
   const filteredPreviewModels = useMemo(() => {
     const query = modelSearch.trim().toLowerCase()
-    if (!query) return previewModels
-    return previewModels.filter((model) =>
+    if (!query) return selectablePreviewModels
+    return selectablePreviewModels.filter((model) =>
       `${model.id} ${model.capabilities.join(' ')}`.toLowerCase().includes(query)
     )
-  }, [modelSearch, previewModels])
+  }, [modelSearch, selectablePreviewModels])
 
   const configure = (): void => {
     onOpenChange(false)
@@ -122,7 +135,7 @@ export function ModelPicker({
       {open ? (
         <section
           aria-label="Choose model"
-          className="tezbar-popover absolute right-0 top-9 z-50 flex max-h-[430px] w-[min(410px,calc(100vw-48px))] flex-col overflow-hidden p-1.5"
+          className="tezbar-popover absolute right-0 top-9 z-50 flex max-h-[430px] w-[min(520px,calc(100vw-48px))] flex-col overflow-hidden p-1.5"
         >
           <div className="flex items-center gap-2 border-b border-white/[0.07] p-1.5 pb-2">
             <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5 text-ink-4">
@@ -142,109 +155,121 @@ export function ModelPicker({
             </span>
           </div>
 
-          <div className="flex shrink-0 gap-1 overflow-x-auto px-1 py-2">
-            {availableProviders.map((provider) => {
-              const configured = isAiProviderConfigured(config, provider.id)
-              const selected = provider.id === previewProvider
-              return (
-                <button
-                  key={provider.id}
-                  type="button"
-                  className={cx(
-                    'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[10.5px] transition',
-                    selected
-                      ? 'bg-white/[0.09] text-ink-1'
-                      : configured
-                        ? 'text-ink-3 hover:bg-white/[0.05] hover:text-ink-1'
-                        : 'text-ink-4 hover:bg-white/[0.05] hover:text-ink-2'
-                  )}
-                  onClick={() => {
-                    setPreviewProvider(provider.id)
-                    setModelSearch('')
-                  }}
-                >
-                  <ProviderMark label={provider.title} />
-                  {provider.title}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="flex items-center justify-between px-2 pb-1.5">
-            <div>
-              <p className="text-[11.5px] font-medium text-ink-1">
-                {providerTitle(previewProvider, config)}
-              </p>
-              <p className="text-[9.5px] text-ink-4">
-                {previewConfigured ? `${previewModels.length} models available` : 'Setup required'}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="text-[10.5px] text-ink-3 transition hover:text-ink-1"
-              onClick={configure}
-            >
-              Configure
-            </button>
-          </div>
-
-          <ul className="min-h-0 flex-1 overflow-y-auto px-0.5 pb-1">
-            {filteredPreviewModels.map((model) => {
-              const selected = previewProvider === activeProvider && model.id === activeModel
-              return (
-                <li key={model.id}>
+          <div className="flex min-h-0 flex-1">
+            {/* Providers sidebar */}
+            <aside className="flex w-[132px] shrink-0 flex-col overflow-y-auto border-r border-white/[0.07] py-1 pr-1">
+              {availableProviders.map((provider) => {
+                const configured = isAiProviderConfigured(config, provider.id)
+                const selected = provider.id === previewProvider
+                return (
                   <button
+                    key={provider.id}
                     type="button"
-                    aria-current={selected ? 'true' : undefined}
-                    disabled={!previewConfigured}
                     className={cx(
-                      'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-40',
+                      'flex w-full items-center gap-1.5 rounded-lg px-2 py-[7px] text-left text-[10.5px] transition',
                       selected
-                        ? 'bg-white/[0.075] text-ink-1'
-                        : 'text-ink-2 hover:bg-white/[0.045] hover:text-ink-1'
+                        ? 'bg-white/[0.09] text-ink-1'
+                        : configured
+                          ? 'text-ink-3 hover:bg-white/[0.05] hover:text-ink-1'
+                          : 'text-ink-4 hover:bg-white/[0.05] hover:text-ink-2'
                     )}
                     onClick={() => {
-                      onOpenChange(false)
-                      void onSelect(previewProvider, model.id)
+                      setPreviewProvider(provider.id)
+                      setModelSearch('')
                     }}
                   >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] font-medium">{model.id}</span>
-                      <span className="mt-0.5 block truncate text-[9.5px] text-ink-4">
-                        {[
-                          ...model.capabilities,
-                          model.contextWindow
-                            ? `${Math.round(model.contextWindow / 1000)}k context`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                    </span>
-                    {selected ? (
-                      <svg
-                        viewBox="0 0 16 16"
-                        aria-hidden="true"
-                        className="h-4 w-4 text-emerald-300"
-                      >
-                        <path
-                          d="m3.5 8.2 2.7 2.7 6.3-6.3"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="1.7"
-                        />
-                      </svg>
-                    ) : null}
+                    <ProviderMark label={provider.title} />
+                    <span className="min-w-0 flex-1 truncate">{provider.title}</span>
                   </button>
-                </li>
-              )
-            })}
-            {filteredPreviewModels.length === 0 ? (
-              <li className="px-3 py-8 text-center text-[11px] text-ink-4">No matching models</li>
-            ) : null}
-          </ul>
+                )
+              })}
+            </aside>
+
+            {/* Models pane */}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex items-center justify-between px-2 pb-1.5 pt-2">
+                <div>
+                  <p className="text-[11.5px] font-medium text-ink-1">
+                    {providerTitle(previewProvider, config)}
+                  </p>
+                  <p className="text-[9.5px] text-ink-4">
+                    {previewConfigured
+                      ? hiddenCount > 0
+                        ? `${selectablePreviewModels.length} shown · ${hiddenCount} hidden in Settings`
+                        : `${selectablePreviewModels.length} models available`
+                      : 'Setup required'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="text-[10.5px] text-ink-3 transition hover:text-ink-1"
+                  onClick={configure}
+                >
+                  Configure
+                </button>
+              </div>
+
+              <ul className="min-h-0 flex-1 overflow-y-auto px-0.5 pb-1">
+                {filteredPreviewModels.map((model) => {
+                  const selected = previewProvider === activeProvider && model.id === activeModel
+                  return (
+                    <li key={model.id}>
+                      <button
+                        type="button"
+                        aria-current={selected ? 'true' : undefined}
+                        disabled={!previewConfigured}
+                        className={cx(
+                          'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-40',
+                          selected
+                            ? 'bg-white/[0.075] text-ink-1'
+                            : 'text-ink-2 hover:bg-white/[0.045] hover:text-ink-1'
+                        )}
+                        onClick={() => {
+                          onOpenChange(false)
+                          void onSelect(previewProvider, model.id)
+                        }}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12px] font-medium">{model.id}</span>
+                          <span className="mt-0.5 block truncate text-[9.5px] text-ink-4">
+                            {[
+                              ...model.capabilities,
+                              model.contextWindow
+                                ? `${Math.round(model.contextWindow / 1000)}k context`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </span>
+                        </span>
+                        {selected ? (
+                          <svg
+                            viewBox="0 0 16 16"
+                            aria-hidden="true"
+                            className="h-4 w-4 text-emerald-300"
+                          >
+                            <path
+                              d="m3.5 8.2 2.7 2.7 6.3-6.3"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="1.7"
+                            />
+                          </svg>
+                        ) : null}
+                      </button>
+                    </li>
+                  )
+                })}
+                {filteredPreviewModels.length === 0 ? (
+                  <li className="px-3 py-8 text-center text-[11px] text-ink-4">
+                    No matching models
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+          </div>
 
           <button
             type="button"

@@ -52,13 +52,32 @@ async function runElevatedPowerShell(script: string): Promise<void> {
   ])
 }
 
+/** Read the current Windows dark-mode state from the registry. */
+async function readWindowsDarkMode(): Promise<boolean> {
+  const out = await runPowerShell(
+    "(Get-ItemPropertyValue -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -Name AppsUseLightTheme -ErrorAction SilentlyContinue)"
+  )
+  return out.trim() === '0'
+}
+
+/** Read the current Windows Wi-Fi adapter state (true = enabled). */
+async function readWindowsWifiState(): Promise<boolean> {
+  const out = await runPowerShell(
+    "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; $adapter.AdminStatus"
+  )
+  return out.trim() === 'Up'
+}
+
 async function executeWindowsCommand(id: NativeCommandId): Promise<NativeCommandResult | null> {
   switch (id) {
-    case 'toggle-dark-mode':
+    case 'toggle-dark-mode': {
+      const wasOn = await readWindowsDarkMode()
       await runPowerShell(
         "$p='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'; $v=(Get-ItemPropertyValue -Path $p -Name AppsUseLightTheme -ErrorAction SilentlyContinue); $n=if($v -eq 0){1}else{0}; Set-ItemProperty -Path $p -Name AppsUseLightTheme -Value $n; Set-ItemProperty -Path $p -Name SystemUsesLightTheme -Value $n"
       )
-      return { ok: true, message: 'Toggled Windows dark mode' }
+      const isOn = await readWindowsDarkMode()
+      return { ok: true, message: 'Toggled Windows dark mode', state: { isOn, wasOn } }
+    }
     case 'start-screen-saver':
       await execFileAsync('rundll32.exe', ['user32.dll,LockWorkStation'])
       return { ok: true, message: 'Screen locked' }
@@ -86,21 +105,25 @@ async function executeWindowsCommand(id: NativeCommandId): Promise<NativeCommand
               : 'Volume down',
       }
     }
-    case 'start-keep-awake':
+    case 'start-keep-awake': {
+      const wasOn = isBackgroundAlive('keep-awake')
       startBackground('keep-awake', 'powershell.exe', [
         '-NoProfile',
         '-NonInteractive',
         '-Command',
         '$wshell=New-Object -ComObject WScript.Shell; while($true){$wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Milliseconds 50; $wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Seconds 240}',
       ])
-      return { ok: true, message: 'Keep Awake is on.' }
-    case 'stop-keep-awake':
+      return { ok: true, message: 'Keep Awake is on.', state: { isOn: true, wasOn } }
+    }
+    case 'stop-keep-awake': {
+      const wasOn = isBackgroundAlive('keep-awake')
+      const stopped = stopBackground('keep-awake')
       return {
         ok: true,
-        message: stopBackground('keep-awake')
-          ? 'Keep Awake turned off.'
-          : 'Keep Awake was not running.',
+        message: stopped ? 'Keep Awake turned off.' : 'Keep Awake was not running.',
+        state: { isOn: false, wasOn },
       }
+    }
     case 'sleep-system':
       await runPowerShell(
         'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)'
@@ -128,14 +151,12 @@ async function executeWindowsCommand(id: NativeCommandId): Promise<NativeCommand
       await execFileAsync('explorer.exe', ['ms-settings:network-vpn'])
       return { ok: true, message: 'Opened VPN settings' }
     case 'toggle-wifi': {
-      const adapterState = await runPowerShell(
-        "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; $adapter.AdminStatus"
-      )
-      const disabling = adapterState === 'Up'
+      const wasOn = await readWindowsWifiState()
       await runElevatedPowerShell(
         "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; if($adapter.AdminStatus -eq 'Up'){Disable-NetAdapter -Name $adapter.Name -Confirm:$false}else{Enable-NetAdapter -Name $adapter.Name -Confirm:$false}"
       )
-      return { ok: true, message: `Wi-Fi ${disabling ? 'disabled' : 'enabled'}` }
+      const isOn = await readWindowsWifiState()
+      return { ok: true, message: `Wi-Fi ${isOn ? 'enabled' : 'disabled'}`, state: { isOn, wasOn } }
     }
     case 'lock-screen':
       await execFileAsync('rundll32.exe', ['user32.dll,LockWorkStation'])
@@ -228,6 +249,11 @@ function startBackground(key: string, command: string, args: string[]): void {
   if (child.pid) backgroundProcesses.set(key, child.pid)
 }
 
+function isBackgroundAlive(key: string): boolean {
+  const pid = backgroundProcesses.get(key)
+  return pid !== undefined && isProcessAlive(pid)
+}
+
 function stopBackground(key: string): boolean {
   const pid = backgroundProcesses.get(key)
   if (!pid) return false
@@ -274,6 +300,57 @@ function generatePassword(): string {
   return chars.join('')
 }
 
+/** Read a macOS boolean preference via `defaults read`. Returns the fallback
+ *  when the key doesn't exist (e.g. fresh install). */
+async function readMacOSBoolPref(domain: string, key: string, fallback: boolean): Promise<boolean> {
+  try {
+    const out = await runShell(`defaults read ${domain} ${key} 2>/dev/null || echo ${fallback ? '1' : '0'}`)
+    return out.trim() === '1' || out.trim().toLowerCase() === 'true'
+  } catch {
+    return fallback
+  }
+}
+
+/** Read the current macOS dark-mode state. The key exists (== 'Dark') only
+ *  when dark appearance is active. */
+async function readMacOSDarkMode(): Promise<boolean> {
+  try {
+    const out = await runShell('defaults read NSGlobalDomain AppleInterfaceStyle 2>/dev/null || echo Light')
+    return out.trim() === 'Dark'
+  } catch {
+    return false
+  }
+}
+
+/** Read desktop-icons visibility (CreateDesktop). */
+async function readMacOSDesktopIcons(): Promise<boolean> {
+  return readMacOSBoolPref('com.apple.finder', 'CreateDesktop', true)
+}
+
+/** Read Dock auto-hide state. */
+async function readMacOSAutohideDock(): Promise<boolean> {
+  return readMacOSBoolPref('com.apple.dock', 'autohide', false)
+}
+
+/** Read menu-bar auto-hide state. */
+async function readMacOSAutohideMenuBar(): Promise<boolean> {
+  return readMacOSBoolPref('NSGlobalDomain', '_HIHideMenuBar', false)
+}
+
+/** Read Bluetooth power state via blueutil. */
+async function readMacOSBluetooth(): Promise<boolean> {
+  const out = await runShell('blueutil -p')
+  return out.trim() === '1'
+}
+
+/** Read Wi-Fi power state on the default interface. */
+async function readMacOSWifi(): Promise<boolean> {
+  const out = await runShell(
+    `iface=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2; exit}'); if [ -z "$iface" ]; then echo off; else networksetup -getairportpower "$iface" | awk '{print $NF}'; fi`
+  )
+  return out.trim().toLowerCase() === 'on'
+}
+
 export async function executeNativeCommandRaw(
   id: NativeCommandId
 ): Promise<NativeCommandResult> {
@@ -297,10 +374,12 @@ export async function executeNativeCommandRaw(
   try {
     switch (id) {
       case 'toggle-dark-mode': {
+        const wasOn = await readMacOSDarkMode()
         const script =
           'tell application "System Events" to tell appearance preferences to set dark mode to not dark mode'
         await runAppleScript(script)
-        return { ok: true, message: 'Toggled Dark Mode' }
+        const isOn = await readMacOSDarkMode()
+        return { ok: true, message: 'Toggled Dark Mode', state: { isOn, wasOn } }
       }
 
       case 'toggle-mute': {
@@ -311,33 +390,43 @@ export async function executeNativeCommandRaw(
       }
 
       case 'toggle-hide-desktop-icons': {
+        // CreateDesktop=true means icons visible; the toggle's "on" state means hidden.
+        const wasOn = !(await readMacOSDesktopIcons())
         const script = `current=$(defaults read com.apple.finder CreateDesktop 2>/dev/null || echo true); if [ "$current" = "false" ]; then defaults write com.apple.finder CreateDesktop true; else defaults write com.apple.finder CreateDesktop false; fi; killall Finder`
         await runShell(script)
-        return { ok: true, message: 'Toggled desktop icons' }
+        const isOn = !(await readMacOSDesktopIcons())
+        return { ok: true, message: 'Toggled desktop icons', state: { isOn, wasOn } }
       }
 
       case 'toggle-autohide-dock': {
+        const wasOn = await readMacOSAutohideDock()
         const script = `current=$(defaults read com.apple.dock autohide 2>/dev/null || echo 0); if [ "$current" = "1" ]; then defaults write com.apple.dock autohide -bool false; else defaults write com.apple.dock autohide -bool true; fi; killall Dock`
         await runShell(script)
-        return { ok: true, message: 'Toggled Dock auto-hide' }
+        const isOn = await readMacOSAutohideDock()
+        return { ok: true, message: 'Toggled Dock auto-hide', state: { isOn, wasOn } }
       }
 
       case 'toggle-autohide-menu-bar': {
+        const wasOn = await readMacOSAutohideMenuBar()
         const script = `current=$(defaults read NSGlobalDomain _HIHideMenuBar 2>/dev/null || echo 0); if [ "$current" = "1" ]; then defaults write NSGlobalDomain _HIHideMenuBar -bool false; else defaults write NSGlobalDomain _HIHideMenuBar -bool true; fi; killall SystemUIServer`
         await runShell(script)
-        return { ok: true, message: 'Toggled menu bar auto-hide' }
+        const isOn = await readMacOSAutohideMenuBar()
+        return { ok: true, message: 'Toggled menu bar auto-hide', state: { isOn, wasOn } }
       }
 
       case 'start-keep-awake': {
+        const wasOn = isBackgroundAlive('caffeinate')
         startBackground('caffeinate', 'caffeinate', ['-di'])
-        return { ok: true, message: 'Keep Awake is on — system will not sleep.' }
+        return { ok: true, message: 'Keep Awake is on — system will not sleep.', state: { isOn: true, wasOn } }
       }
 
       case 'stop-keep-awake': {
+        const wasOn = isBackgroundAlive('caffeinate')
         const stopped = stopBackground('caffeinate')
         return {
           ok: true,
           message: stopped ? 'Keep Awake turned off.' : 'Keep Awake was not running.',
+          state: { isOn: false, wasOn },
         }
       }
 
@@ -348,10 +437,10 @@ export async function executeNativeCommandRaw(
 
       case 'toggle-bluetooth': {
         try {
-          const current = await runShell('blueutil -p')
-          const next = current === '1' ? '0' : '1'
+          const wasOn = await readMacOSBluetooth()
+          const next = wasOn ? '0' : '1'
           await runShell(`blueutil -p ${next}`)
-          return { ok: true, message: `Bluetooth ${next === '1' ? 'enabled' : 'disabled'}` }
+          return { ok: true, message: `Bluetooth ${next === '1' ? 'enabled' : 'disabled'}`, state: { isOn: next === '1', wasOn } }
         } catch {
           return {
             ok: false,
@@ -433,9 +522,11 @@ export async function executeNativeCommandRaw(
       }
 
       case 'toggle-wifi': {
+        const wasOn = await readMacOSWifi()
         const script = `iface=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2; exit}'); if [ -z "$iface" ]; then exit 1; fi; state=$(networksetup -getairportpower "$iface" | awk '{print $NF}'); if [ "$state" = "On" ]; then networksetup -setairportpower "$iface" off; echo off; else networksetup -setairportpower "$iface" on; echo on; fi`
         const out = await runShell(script)
-        return { ok: true, message: `Wi-Fi ${out || 'toggled'}` }
+        const isOn = out.trim().toLowerCase() === 'on'
+        return { ok: true, message: `Wi-Fi ${out || 'toggled'}`, state: { isOn, wasOn } }
       }
 
       case 'show-public-ip': {

@@ -1799,6 +1799,20 @@ export default function CommandBar({
     void window.tezbar.getLlmConfig().then((c) => setCfg(c as LlmConfigRecord))
   }, [])
 
+  // Keep the model picker in sync: another view (Settings) writing the config
+  // should immediately refresh the snapshot this component caches on mount.
+  useEffect(() => {
+    const unsubscribe = window.tezbar.onLlmConfigChanged(() => {
+      void window.tezbar
+        .getLlmConfig()
+        .then((c) => setCfg(c as LlmConfigRecord))
+        .catch(() => {
+          /* ignore */
+        })
+    })
+    return unsubscribe
+  }, [])
+
   useEffect(() => {
     const onQuickNoteShortcut = (): void => {
       const currentValue = valueRef.current

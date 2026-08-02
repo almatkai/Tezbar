@@ -14,6 +14,13 @@ export type AiProviderModel = {
   id: string
   capabilities: AiModelCapability[]
   contextWindow?: number
+/** When false, the model was added by the user (not returned by live provider
+ *  discovery). Provider-catalog REPLACE (copilot) keeps these entries across a
+ *  refresh; entries without the flag or with `true` are treated as
+ *  provider-owned and are dropped when they disappear from the live catalog. */
+  discovered?: boolean
+  /** When true, the model is hidden from the AI-mode model picker but kept in the Settings list. */
+  hiddenFromPicker?: boolean
 }
 
 export type AiProviderConfig = {

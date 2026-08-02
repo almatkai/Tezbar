@@ -350,6 +350,8 @@ export type RaymesApi = {
   onExtensionInstallProgress: (
     listener: (payload: { id: string; progress: number }) => void
   ) => () => void
+  /** Fired on every successful `setLlmConfig` write — views caching config should re-fetch. */
+  onLlmConfigChanged: (listener: () => void) => () => void
   /** Chat session history (AI-mode multi-turn conversations). */
   chatRun: (turns: ChatTurn[]) => Promise<{ ok: boolean; runId?: string; error?: string }>
   chatList: (limit?: number) => Promise<ChatSessionSummary[]>

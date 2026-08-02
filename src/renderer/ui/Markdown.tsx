@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import { Marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js/lib/common'
@@ -16,28 +16,36 @@ import DOMPurify from 'dompurify'
  *   (wired in after render via a small effect).
  */
 
-// Shared Marked instance (configured once).
-const marked = new Marked(
+// Rich parsing is reserved for settled content. Re-running syntax highlighting
+// over a growing code block on every stream frame is especially expensive.
+const MAX_HIGHLIGHT_CHARS = 12_000
+const richMarked = new Marked(
   markedHighlight({
     langPrefix: 'hljs language-',
     highlight(code, lang) {
       const language = lang && hljs.getLanguage(lang) ? lang : undefined
       try {
-        if (language) {
+        if (language && code.length <= MAX_HIGHLIGHT_CHARS) {
           return hljs.highlight(code, { language, ignoreIllegals: true }).value
         }
-        return hljs.highlightAuto(code).value
+        // Auto-detection runs every registered grammar and large blocks can
+        // stall the UI at the exact moment a response finishes. Unlabelled or
+        // unusually large code remains readable without highlighting.
+        return escapeHtml(code)
       } catch {
         return escapeHtml(code)
       }
     },
-  }),
+  })
 )
+const streamingMarked = new Marked()
 
-marked.setOptions({
-  gfm: true,
-  breaks: true,
-})
+for (const parser of [richMarked, streamingMarked]) {
+  parser.setOptions({
+    gfm: true,
+    breaks: true,
+  })
+}
 
 function escapeHtml(s: string): string {
   return s
@@ -54,13 +62,21 @@ function escapeHtml(s: string): string {
  * message from being swallowed as if it were still inside a fence.
  */
 function balanceStreamingFences(input: string): string {
-  let fenceCount = 0
+  let openFence: { character: '`' | '~'; length: number } | null = null
   const lines = input.split('\n')
   for (const line of lines) {
-    if (/^\s{0,3}(```|~~~)/.test(line)) fenceCount += 1
+    const match = /^\s{0,3}(`{3,}|~{3,})/.exec(line)
+    if (!match) continue
+    const marker = match[1]!
+    const character = marker[0] as '`' | '~'
+    if (!openFence) {
+      openFence = { character, length: marker.length }
+    } else if (character === openFence.character && marker.length >= openFence.length) {
+      openFence = null
+    }
   }
-  if (fenceCount % 2 === 1) {
-    return input + '\n```'
+  if (openFence) {
+    return `${input}\n${openFence.character.repeat(openFence.length)}`
   }
   return input
 }
@@ -93,12 +109,18 @@ function rewriteImageSrcs(html: string, resolver: (src: string) => string | unde
   return doc.body.innerHTML
 }
 
-export function Markdown({ text, streaming = false, className, imageSrcResolver }: MarkdownProps): JSX.Element {
+function MarkdownView({
+  text,
+  streaming = false,
+  className,
+  imageSrcResolver,
+}: MarkdownProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const html = useMemo(() => {
     const source = streaming ? balanceStreamingFences(text) : text
-    let raw = marked.parse(source, { async: false }) as string
+    const parser = streaming ? streamingMarked : richMarked
+    let raw = parser.parse(source, { async: false }) as string
     if (imageSrcResolver) {
       raw = rewriteImageSrcs(raw, imageSrcResolver)
     }
@@ -113,63 +135,65 @@ export function Markdown({ text, streaming = false, className, imageSrcResolver 
     const root = containerRef.current
     if (!root) return
 
-    const pres = root.querySelectorAll('pre')
-    pres.forEach((pre) => {
-      if (pre.dataset.raymesDecorated === '1') return
-      const codeEl = pre.querySelector('code')
-      if (!codeEl) return
-      pre.dataset.raymesDecorated = '1'
+    if (!streaming) {
+      const pres = root.querySelectorAll('pre')
+      pres.forEach((pre) => {
+        if (pre.dataset.raymesDecorated === '1') return
+        const codeEl = pre.querySelector('code')
+        if (!codeEl) return
+        pre.dataset.raymesDecorated = '1'
 
-      // Derive language from "language-xxx" class.
-      const langClass = Array.from(codeEl.classList).find((c) => c.startsWith('language-'))
-      const lang = langClass ? langClass.replace('language-', '').replace('hljs', '').trim() : ''
+        // Derive language from "language-xxx" class.
+        const langClass = Array.from(codeEl.classList).find((c) => c.startsWith('language-'))
+        const lang = langClass ? langClass.replace('language-', '').replace('hljs', '').trim() : ''
 
-      const header = document.createElement('div')
-      header.className = 'tezbar-md-code-header'
+        const header = document.createElement('div')
+        header.className = 'tezbar-md-code-header'
 
-      const langLabel = document.createElement('span')
-      langLabel.className = 'tezbar-md-code-lang'
-      langLabel.textContent = lang || 'code'
-      header.appendChild(langLabel)
+        const langLabel = document.createElement('span')
+        langLabel.className = 'tezbar-md-code-lang'
+        langLabel.textContent = lang || 'code'
+        header.appendChild(langLabel)
 
-      const copyBtn = document.createElement('button')
-      copyBtn.type = 'button'
-      copyBtn.className = 'tezbar-md-code-copy'
-      copyBtn.textContent = 'Copy'
-      copyBtn.addEventListener('click', () => {
-        const raw = codeEl.textContent ?? ''
-        const handleSuccess = (): void => {
-          copyBtn.textContent = 'Copied'
-          window.setTimeout(() => {
-            copyBtn.textContent = 'Copy'
-          }, 1200)
-        }
-        const handleFailure = (): void => {
-          copyBtn.textContent = 'Failed'
-          window.setTimeout(() => {
-            copyBtn.textContent = 'Copy'
-          }, 1200)
-        }
+        const copyBtn = document.createElement('button')
+        copyBtn.type = 'button'
+        copyBtn.className = 'tezbar-md-code-copy'
+        copyBtn.textContent = 'Copy'
+        header.appendChild(copyBtn)
 
-        if (window.tezbar && typeof window.tezbar.clipboardWriteText === 'function') {
-          window.tezbar.clipboardWriteText(raw).then(
-            (res) => {
-              if (res && res.ok === false) {
-                handleFailure()
-              } else {
-                handleSuccess()
-              }
-            },
-            handleFailure,
-          )
-        } else {
-          void navigator.clipboard.writeText(raw).then(handleSuccess, handleFailure)
-        }
+        pre.prepend(header)
       })
-      header.appendChild(copyBtn)
+    }
 
-      pre.prepend(header)
-    })
+    const resetTimers = new Set<number>()
+    const onCodeCopy = (event: Event): void => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const copyBtn = target.closest<HTMLButtonElement>('.tezbar-md-code-copy')
+      if (!copyBtn || !root.contains(copyBtn)) return
+      const raw = copyBtn.closest('pre')?.querySelector('code')?.textContent ?? ''
+      const showResult = (label: 'Copied' | 'Failed'): void => {
+        copyBtn.textContent = label
+        const resetTimer = window.setTimeout(() => {
+          resetTimers.delete(resetTimer)
+          if (copyBtn.isConnected) copyBtn.textContent = 'Copy'
+        }, 1200)
+        resetTimers.add(resetTimer)
+      }
+
+      if (window.tezbar && typeof window.tezbar.clipboardWriteText === 'function') {
+        window.tezbar.clipboardWriteText(raw).then(
+          (result) => showResult(result && result.ok === false ? 'Failed' : 'Copied'),
+          () => showResult('Failed')
+        )
+      } else {
+        void navigator.clipboard.writeText(raw).then(
+          () => showResult('Copied'),
+          () => showResult('Failed')
+        )
+      }
+    }
+    root.addEventListener('click', onCodeCopy)
 
     // Make all links open externally with safe rel.
     const links = root.querySelectorAll('a[href]')
@@ -177,7 +201,12 @@ export function Markdown({ text, streaming = false, className, imageSrcResolver 
       a.setAttribute('target', '_blank')
       a.setAttribute('rel', 'noopener noreferrer')
     })
-  }, [html])
+
+    return () => {
+      root.removeEventListener('click', onCodeCopy)
+      resetTimers.forEach((timer) => window.clearTimeout(timer))
+    }
+  }, [html, streaming])
 
   return (
     <div
@@ -187,3 +216,5 @@ export function Markdown({ text, streaming = false, className, imageSrcResolver 
     />
   )
 }
+
+export const Markdown = memo(MarkdownView)

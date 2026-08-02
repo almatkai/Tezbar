@@ -85,6 +85,9 @@ export type NativeCommandDescriptor = {
   restoreId?: NativeCommandId
   /** If true the command only applies on macOS. */
   macOnly?: boolean
+  /** Optional toggle metadata: labels for the on/off states so the UI can
+   *  render a stateful toggle card instead of a plain message. */
+  toggle?: { onLabel: string; offLabel: string }
 }
 
 export type NativeCommandResultKind =
@@ -99,4 +102,7 @@ export type NativeCommandResult = {
   message: string
   /** Hint for the launcher: how to render this result. Omit → plain text line. */
   kind?: NativeCommandResultKind
+  /** Optional state snapshot for toggle commands: `isOn` is the state AFTER
+   *  the command ran, `wasOn` is the state BEFORE. */
+  state?: { isOn: boolean; wasOn: boolean }
 }

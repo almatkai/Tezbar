@@ -50,6 +50,38 @@ function extractModelIds(json: unknown): string[] {
 
 const COPILOT_MODELS = 'https://api.githubcopilot.com/models'
 
+/** `capabilities.family` values GitHub's `/models` catalog uses for internal,
+ *  non-user-selectable rows (agent/search SKUs, compaction infra). Anything
+ *  whose family is not listed here and whose type is `chat` is a real chat
+ *  model — including dated snapshot variants, which we keep. */
+const COPILOT_BLOCKED_FAMILIES = new Set(['search-agent', 'exec-agent', 'trajectory-compaction'])
+
+/** Fallback id-pattern blocklist for agent SKUs whose family metadata is absent. */
+const COPILOT_DISCOVERY_BLOCKLIST = /(^|[-_/])(exec-)?agent[-_]?[a-z0-9]*$/i
+
+function extractCopilotChatModelIds(json: unknown): string[] {
+  if (!json || typeof json !== 'object') return []
+  const o = json as Record<string, unknown>
+  if (!Array.isArray(o.data)) return []
+  const ids: string[] = []
+  for (const item of o.data) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Record<string, unknown>
+    const id = typeof row.id === 'string' ? row.id : ''
+    if (!id) continue
+    const caps = row.capabilities && typeof row.capabilities === 'object'
+      ? (row.capabilities as Record<string, unknown>)
+      : {}
+    // Drop non-chat rows (embeddings etc.) when the row declares its type.
+    if (typeof caps.type === 'string' && caps.type !== 'chat') continue
+    const family = typeof caps.family === 'string' ? caps.family : ''
+    if (COPILOT_BLOCKED_FAMILIES.has(family)) continue
+    if (COPILOT_DISCOVERY_BLOCKLIST.test(id) || COPILOT_DISCOVERY_BLOCKLIST.test(family)) continue
+    ids.push(id)
+  }
+  return uniqSorted(ids)
+}
+
 async function fetchCopilotModelIds(accessToken: string, signal?: AbortSignal): Promise<string[]> {
   if (!accessToken.trim()) return []
   try {
@@ -64,8 +96,7 @@ async function fetchCopilotModelIds(accessToken: string, signal?: AbortSignal): 
       signal: signal ?? AbortSignal.timeout(12_000),
     })
     if (!res.ok) return []
-    const json: unknown = await res.json()
-    return extractModelIds(json)
+    return extractCopilotChatModelIds(await res.json())
   } catch {
     return []
   }

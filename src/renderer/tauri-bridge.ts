@@ -504,6 +504,7 @@ export function initTauriBridge(): void {
     onAgentEvent: (listener: (event: any) => void) => setupEventListener('agent:event', listener),
     onExtensionInstallProgress: (listener: (payload: any) => void) =>
       setupEventListener('extension:install-progress', listener),
+    onLlmConfigChanged: (listener: () => void) => setupEventListener('llm-config-changed', listener),
 
     startWindowSnapDrag: () => invoke('start_window_snap_drag'),
     endWindowSnapDrag: () => invoke('end_window_snap_drag'),
