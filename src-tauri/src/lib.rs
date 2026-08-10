@@ -115,6 +115,15 @@ struct WindowBehaviorState {
     // so it cannot overwrite the user's saved location with (typically) 130,130.
     #[cfg(target_os = "windows")]
     main_window_placed: Mutex<bool>,
+    // SetPosition is asynchronous on Windows. A generation keeps an older
+    // mixed-DPI finalizer from racing a newer launcher invocation.
+    #[cfg(target_os = "windows")]
+    window_placement_generation: Mutex<u64>,
+    // The renderer can report a content height immediately after show. Hold
+    // the newest value until mixed-DPI placement has finished so neither
+    // operation can overwrite the other.
+    #[cfg(target_os = "windows")]
+    pending_content_height: Mutex<Option<f64>>,
     snap_drag_active: Mutex<bool>,
     snap_locked: Mutex<SnapLockState>,
     snap_guides: Mutex<SnapGuidesState>,
@@ -1515,7 +1524,18 @@ fn cursor_monitor(window: &WebviewWindow) -> Option<Monitor> {
         .flatten()
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+fn cursor_monitor(window: &WebviewWindow) -> Option<Monitor> {
+    // Keep cursor and monitor lookup in Win32's physical virtual-desktop
+    // coordinate space, including negative coordinates and mixed DPI.
+    let position = windows_cursor_position().ok()?;
+    window
+        .monitor_from_point(position.x, position.y)
+        .ok()
+        .flatten()
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn cursor_monitor(window: &WebviewWindow) -> Option<Monitor> {
     let position = window.cursor_position().ok()?;
     window
@@ -1676,6 +1696,35 @@ fn set_window_position(
     window: &WebviewWindow,
     position: PersistedWindowPosition,
 ) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            SetWindowPos, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
+        };
+
+        let hwnd = window.hwnd().map_err(|error| error.to_string())?;
+        let success = unsafe {
+            // Tauri/Tao normally queues a move with SWP_ASYNCWINDOWPOS, which
+            // lets Show overtake it when a hidden launcher is reopened. Apply
+            // this move synchronously so the window never becomes visible on
+            // its previous monitor.
+            SetWindowPos(
+                hwnd.0 as _,
+                std::ptr::null_mut(),
+                position.x.round() as i32,
+                position.y.round() as i32,
+                0,
+                0,
+                SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOZORDER,
+            )
+        };
+        if success == 0 {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
     window
         .set_position(PhysicalPosition::new(
             position.x.round() as i32,
@@ -1687,13 +1736,29 @@ fn set_window_position(
 fn set_window_position_on_monitor(
     window: &WebviewWindow,
     position: PersistedWindowPosition,
-    monitor: &Monitor,
+    _monitor: &Monitor,
 ) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        let logical = logical_position_for_monitor(position, monitor.scale_factor());
+        use objc2::runtime::AnyObject;
+        use objc2_foundation::NSPoint;
+
+        let logical = logical_position_for_monitor(position, _monitor.scale_factor());
+        let point = NSPoint::new(
+            logical.x,
+            CGDisplay::main().pixels_high() as f64 - logical.y,
+        );
+        let ns_window = window.ns_window().map_err(|error| error.to_string())? as usize;
+
+        // Tao's macOS set_position queues setFrameTopLeftPoint on GCD, while
+        // show() is synchronous. That lets the old monitor flash before the
+        // queued move runs. Put a synchronous AppKit move on Tauri's main-thread
+        // queue; the subsequent Show message cannot overtake it.
         window
-            .set_position(LogicalPosition::new(logical.x, logical.y))
+            .run_on_main_thread(move || unsafe {
+                let ns_window = &*(ns_window as *const AnyObject);
+                let _: () = objc2::msg_send![ns_window, setFrameTopLeftPoint: point];
+            })
             .map_err(|error| error.to_string())
     }
     #[cfg(not(target_os = "macos"))]
@@ -1702,11 +1767,131 @@ fn set_window_position_on_monitor(
     }
 }
 
+#[cfg(target_os = "windows")]
+fn schedule_windows_window_placement_finalization(
+    window: WebviewWindow,
+    target_monitor_id: String,
+    target_position: PersistedWindowPosition,
+    target_size: (f64, f64),
+    generation: u64,
+    persist_position: bool,
+) {
+    tauri::async_runtime::spawn(async move {
+        let placement_is_current = || {
+            *window
+                .state::<WindowBehaviorState>()
+                .window_placement_generation
+                .lock()
+                .unwrap()
+                == generation
+        };
+        let current_monitor_is_target = || {
+            window
+                .current_monitor()
+                .ok()
+                .flatten()
+                .and_then(|monitor| monitor_id(&window, &monitor))
+                .as_deref()
+                == Some(target_monitor_id.as_str())
+        };
+
+        // Wait until Win32 has moved the hidden window onto the target monitor
+        // and delivered its DPI transition. The initial move is synchronous;
+        // this loop handles the later DPI resize and any compositor lag.
+        let mut target_reached = false;
+        for _ in 0..30 {
+            tokio::time::sleep(Duration::from_millis(16)).await;
+            if !placement_is_current() {
+                return;
+            }
+            if current_monitor_is_target() {
+                target_reached = true;
+                break;
+            }
+            let _ = set_window_position(&window, target_position);
+        }
+
+        let mut placement_settled = false;
+        if target_reached {
+            let desired_size = PhysicalSize::new(
+                target_size.0.round().max(1.0) as u32,
+                target_size.1.round().max(1.0) as u32,
+            );
+            // Normally WM_DPICHANGED preserves logical dimensions. Windows can
+            // intentionally skip that resize when "Show window contents while
+            // dragging" is disabled, so finalize the physical size ourselves
+            // and then reapply the physical top-left to keep exact centering.
+            for _ in 0..4 {
+                if !placement_is_current() {
+                    return;
+                }
+                let _ = window.set_size(desired_size);
+                let _ = set_window_position(&window, target_position);
+                tokio::time::sleep(Duration::from_millis(16)).await;
+
+                let size_matches = window.outer_size().ok() == Some(desired_size);
+                let position_matches = window.outer_position().ok().is_some_and(|position| {
+                    position.x == target_position.x.round() as i32
+                        && position.y == target_position.y.round() as i32
+                });
+                if size_matches && position_matches && current_monitor_is_target() {
+                    placement_settled = true;
+                    break;
+                }
+            }
+            if !placement_settled {
+                log::warn!(
+                    "Windows launcher reached target monitor {target_monitor_id} but did not settle at the requested size and position"
+                );
+            }
+        } else {
+            log::warn!(
+                "Windows launcher did not reach target monitor {target_monitor_id} before placement finalization timed out"
+            );
+        }
+
+        if !placement_is_current() {
+            return;
+        }
+        // Coordinate with a content-height command that may have arrived
+        // while placement was in progress. Both paths lock `main_window_placed`
+        // before `pending_content_height`, so no update can fall between the
+        // final pending read and releasing the placement guard.
+        let pending_content_height = {
+            let state = window.state::<WindowBehaviorState>();
+            let mut placed = state.main_window_placed.lock().unwrap();
+            let pending = state.pending_content_height.lock().unwrap().take();
+            *placed = true;
+            pending
+        };
+        if let Some(height) = pending_content_height {
+            match apply_window_content_height(&window, height) {
+                Ok(()) if persist_position => {
+                    // Position updates are asynchronous on Windows. Persist the
+                    // post-resize coordinate after that final move can land.
+                    tokio::time::sleep(Duration::from_millis(16)).await;
+                    if placement_is_current() {
+                        persist_current_window_position(&window);
+                    }
+                }
+                Ok(()) => {}
+                Err(error) => {
+                    log::warn!("failed to apply deferred Windows content height: {error}");
+                }
+            }
+        } else if target_reached && placement_settled && persist_position {
+            persist_current_window_position(&window);
+        }
+    });
+}
+
 fn place_window(window: &WebviewWindow) -> Result<(), String> {
     let monitor = active_monitor(window)?;
     let (window_width, window_height) = window_size_for_monitor(window, &monitor);
-    let stored = monitor_id(window, &monitor)
-        .map(|monitor_id| stored_window_position_for_monitor(&monitor_id))
+    let target_monitor_id = monitor_id(window, &monitor);
+    let stored = target_monitor_id
+        .as_deref()
+        .map(stored_window_position_for_monitor)
         .unwrap_or_default();
     let position = plan_window_position(
         monitor_geometry(&monitor),
@@ -1714,23 +1899,57 @@ fn place_window(window: &WebviewWindow) -> Result<(), String> {
         window_height,
         stored.position,
     );
+    let persist_position = stored.needs_reset || stored.position != Some(position);
 
     #[cfg(target_os = "windows")]
     {
-        *window
-            .state::<WindowBehaviorState>()
-            .main_window_placed
-            .lock()
-            .unwrap() = true;
+        let state = window.state::<WindowBehaviorState>();
+        {
+            let mut placed = state.main_window_placed.lock().unwrap();
+            let mut pending = state.pending_content_height.lock().unwrap();
+            *placed = false;
+            *pending = None;
+        }
+        let generation = {
+            let mut generation = state.window_placement_generation.lock().unwrap();
+            *generation = generation.wrapping_add(1);
+            *generation
+        };
+        // Queue the target physical size before the synchronous Win32 move.
+        // The hidden window is then already sized for the destination DPI when
+        // the caller sends its subsequent Show message.
+        window
+            .set_size(PhysicalSize::new(
+                window_width.round().max(1.0) as u32,
+                window_height.round().max(1.0) as u32,
+            ))
+            .map_err(|error| error.to_string())?;
+        set_window_position_on_monitor(window, position, &monitor)?;
+        if let Some(target_monitor_id) = target_monitor_id {
+            schedule_windows_window_placement_finalization(
+                window.clone(),
+                target_monitor_id,
+                position,
+                (window_width, window_height),
+                generation,
+                persist_position,
+            );
+        } else {
+            *state.main_window_placed.lock().unwrap() = true;
+        }
+        return Ok(());
     }
 
-    set_window_position_on_monitor(window, position, &monitor)?;
-    if stored.needs_reset || stored.position != Some(position) {
-        // Old placement formats used the wrong coordinate space. Reset them
-        // once, center this monitor, and keep only monitor ID + coordinates.
-        set_persisted_window_position_for_monitor(window, &monitor, position);
+    #[cfg(not(target_os = "windows"))]
+    {
+        set_window_position_on_monitor(window, position, &monitor)?;
+        if persist_position {
+            // Old placement formats used the wrong coordinate space. Reset
+            // once and keep only monitor ID + coordinates.
+            set_persisted_window_position_for_monitor(window, &monitor, position);
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -1740,8 +1959,8 @@ mod window_placement_tests {
     #[test]
     fn monitor_storage_uses_only_the_monitor_id() {
         assert_eq!(
-            monitor_id_from_name(Some("Monitor #41054")).as_deref(),
-            Some("Monitor #41054")
+            monitor_id_from_name(Some(r"\\.\DISPLAY2")).as_deref(),
+            Some(r"\\.\DISPLAY2")
         );
     }
 
@@ -1881,6 +2100,38 @@ mod window_placement_tests {
             y: physical_position.y / 2.0,
         };
         assert!(!position_is_in_bounds(old_effective_position, external.bounds));
+    }
+
+    #[test]
+    fn windows_mixed_dpi_centers_from_200_percent_to_100_percent() {
+        let target = MonitorGeometry {
+            bounds: (0.0, 0.0, 1920.0, 1080.0),
+            work_area: (0.0, 0.0, 1920.0, 1040.0),
+        };
+        let (window_width, window_height) =
+            window_size_for_target_monitor((1520.0, 1280.0), 2.0, 1.0);
+
+        assert_eq!((window_width, window_height), (760.0, 640.0));
+        assert_eq!(
+            plan_window_position(target, window_width, window_height, None),
+            PersistedWindowPosition { x: 580.0, y: 200.0 }
+        );
+    }
+
+    #[test]
+    fn windows_mixed_dpi_centers_on_negative_200_percent_monitor() {
+        let target = MonitorGeometry {
+            bounds: (-3840.0, 0.0, 3840.0, 2160.0),
+            work_area: (-3840.0, 0.0, 3840.0, 2080.0),
+        };
+        let (window_width, window_height) =
+            window_size_for_target_monitor((760.0, 640.0), 1.0, 2.0);
+
+        assert_eq!((window_width, window_height), (1520.0, 1280.0));
+        assert_eq!(
+            plan_window_position(target, window_width, window_height, None),
+            PersistedWindowPosition { x: -2680.0, y: 400.0 }
+        );
     }
 
     #[test]
@@ -2508,6 +2759,25 @@ fn start_window_snap_drag(
     app: AppHandle,
     state: State<'_, WindowBehaviorState>,
 ) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        // A visible user drag owns the window immediately. Cancel any delayed
+        // placement writes and apply the latest deferred content height first.
+        {
+            let mut generation = state.window_placement_generation.lock().unwrap();
+            *generation = generation.wrapping_add(1);
+        }
+        let pending_content_height = {
+            let mut placed = state.main_window_placed.lock().unwrap();
+            let pending = state.pending_content_height.lock().unwrap().take();
+            *placed = true;
+            pending
+        };
+        if let Some(height) = pending_content_height {
+            apply_window_content_height(&window, height)?;
+        }
+    }
+
     let initial_position = window.outer_position().map_err(|error| error.to_string())?;
     let initial_window_position = PersistedWindowPosition {
         x: initial_position.x as f64,
@@ -2595,18 +2865,10 @@ fn set_quick_look_window_state(window: WebviewWindow, previewing: bool) -> Resul
     Ok(())
 }
 
-#[tauri::command]
-fn window_set_content_height(
-    window: WebviewWindow,
-    height: f64,
-    zoom_factor: f64,
+fn apply_window_content_height(
+    window: &WebviewWindow,
+    clamped_height: f64,
 ) -> Result<(), String> {
-    // `height` is already in physical pixels (css_height * zoom_factor computed
-    // on the JS side). Convert back to logical pixels by dividing once.
-    let zoom = if zoom_factor > 0.0 { zoom_factor } else { 1.0 };
-    let logical_height = height / zoom;
-    let clamped_height = logical_height.clamp(WINDOW_MIN_HEIGHT, WINDOW_MAX_HEIGHT);
-
     #[cfg(target_os = "windows")]
     let previous_center = if window.is_visible().unwrap_or(false) {
         window
@@ -2643,6 +2905,31 @@ fn window_set_content_height(
 
     let _ = sync_terminal_sessions_window(window.app_handle());
     Ok(())
+}
+
+#[tauri::command]
+fn window_set_content_height(
+    window: WebviewWindow,
+    height: f64,
+    zoom_factor: f64,
+) -> Result<(), String> {
+    // `height` is already in physical pixels (css_height * zoom_factor computed
+    // on the JS side). Convert back to logical pixels by dividing once.
+    let zoom = if zoom_factor > 0.0 { zoom_factor } else { 1.0 };
+    let logical_height = height / zoom;
+    let clamped_height = logical_height.clamp(WINDOW_MIN_HEIGHT, WINDOW_MAX_HEIGHT);
+
+    #[cfg(target_os = "windows")]
+    if window.label() == "main" {
+        let state = window.state::<WindowBehaviorState>();
+        let placed = state.main_window_placed.lock().unwrap();
+        if !*placed {
+            *state.pending_content_height.lock().unwrap() = Some(clamped_height);
+            return Ok(());
+        }
+    }
+
+    apply_window_content_height(&window, clamped_height)
 }
 
 #[tauri::command]

@@ -1484,6 +1484,10 @@ export default function CommandBar({
   ) => void
 }): JSX.Element {
   const normalizedInitialValue = initialValue.startsWith('>') ? initialValue.slice(1) : initialValue
+  const initialInputMode = commandBarInputMode(
+    normalizedInitialValue,
+    initialValue.startsWith('>')
+  )
   const [value, setValue] = useState(normalizedInitialValue)
   const [prevInitialValue, setPrevInitialValue] = useState(initialValue)
   const [error, setError] = useState<string | null>(null)
@@ -1519,8 +1523,7 @@ export default function CommandBar({
   )
   const [selectedSearch, setSelectedSearch] = useState(() =>
     initialValue.startsWith('>') ||
-    initialValue.startsWith(' ') ||
-    initialValue.endsWith('  ') ||
+    initialInputMode.isAiMode ||
     parseSearchQuery(initialValue).mode === 'deep'
       ? -1
       : 0
@@ -1697,8 +1700,7 @@ export default function CommandBar({
     setValue(normalizedInitialValue)
     setSelectedSearch(
       initialValue.startsWith('>') ||
-        initialValue.startsWith(' ') ||
-        initialValue.endsWith('  ') ||
+        commandBarInputMode(normalizedInitialValue, initialValue.startsWith('>')).isAiMode ||
         parseSearchQuery(initialValue).mode === 'deep'
         ? -1
         : 0
@@ -1821,7 +1823,7 @@ export default function CommandBar({
   useEffect(() => {
     const onQuickNoteShortcut = (): void => {
       const currentValue = valueRef.current
-      if (currentValue.startsWith(' ')) {
+      if (commandBarInputMode(currentValue, terminalModeRef.current).isAiMode) {
         onOpenAiChat({ kind: 'newChat' })
         showActionMsg('Opening new chat')
         return
@@ -1870,7 +1872,7 @@ export default function CommandBar({
         return
       }
       setValue((prev) => {
-        const isAiModeActive = prev.startsWith(' ') || prev.endsWith('  ')
+        const isAiModeActive = commandBarInputMode(prev, terminalModeRef.current).isAiMode
         if (!prev.trim()) {
           // If the buffer was literally just spaces (prompting AI mode),
           // preserve those spaces so the transcription result is treated as an AI prompt.
@@ -3249,7 +3251,10 @@ export default function CommandBar({
         focusCommandInput()
         return true
       }
-      const currentInputMode = commandBarInputMode(valueRef.current, false)
+      const currentInputMode = commandBarInputMode(
+        valueRef.current,
+        terminalModeRef.current
+      )
       if (currentInputMode.isAiMode) {
         // Escape first clears the AI prompt. For directory-rooted AI mode, a
         // second Escape removes the double-Space switch but preserves the path.
@@ -3452,7 +3457,7 @@ export default function CommandBar({
         setValue('  ')
         return
       }
-      if (showChatHistory) {
+      if (!aiWorkingDirectory && showChatHistory) {
         const selectedChat = filteredChatHistory[selectedSearch]
         if (selectedChat) {
           onOpenAiChat({ kind: 'resume', sessionId: selectedChat.id })
@@ -3726,7 +3731,9 @@ export default function CommandBar({
         setSelectedSuggestion(0)
         const nextDeepSearchMode = parseSearchQuery(lastQuery).mode === 'deep'
         setFollowSearchSelection(!nextDeepSearchMode)
-        setSelectedSearch(lastQuery.startsWith(' ') || nextDeepSearchMode ? -1 : 0)
+        setSelectedSearch(
+          commandBarInputMode(lastQuery, false).isAiMode || nextDeepSearchMode ? -1 : 0
+        )
         return
       }
     }
@@ -4091,10 +4098,9 @@ export default function CommandBar({
                       !nextTerminalMode &&
                       nextSearchValue &&
                       !newValue.trimStart().startsWith('!') &&
-                      !newValue.startsWith(' ') &&
+                      !commandBarInputMode(newValue, nextTerminalMode).isAiMode &&
                       !newValue.startsWith('/') &&
-                      !newValue.startsWith('`') &&
-                      !newValue.endsWith('  ')
+                      !newValue.startsWith('`')
                     ) {
                       const normalizedQuery = nextSearchValue.toLowerCase()
                       const cachedEntry = queryResultsCacheRef.current.get(normalizedQuery)
@@ -4113,10 +4119,10 @@ export default function CommandBar({
                     }
                   }
                   setValue(newValue)
-                  const nextIsAiMode =
-                    !nextTerminalMode &&
-                    nextSearchQuery.mode !== 'deep' &&
-                    (newValue.startsWith(' ') || newValue.endsWith('  '))
+                  const nextIsAiMode = commandBarInputMode(
+                    newValue,
+                    nextTerminalMode
+                  ).isAiMode
                   if (
                     searchMeaningChanged ||
                     nextTerminalMode !== terminalMode ||

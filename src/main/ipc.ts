@@ -1160,8 +1160,11 @@ export function registerIpcHandlers(
     if (!task.trim()) {
       return { ok: false, error: 'Task is empty' }
     }
+    if (request.cwd !== undefined && typeof request.cwd !== 'string') {
+      return { ok: false, error: 'Invalid agent working directory' }
+    }
     const images = Array.isArray(request.images) ? request.images : []
-    const requestedCwd = typeof request.cwd === 'string' ? request.cwd.trim() : ''
+    const requestedCwd = request.cwd?.trim() ?? ''
     const cwd = requestedCwd ? (resolveLauncherDirectory(requestedCwd) ?? undefined) : undefined
     if (requestedCwd && !cwd) {
       return { ok: false, error: `Directory does not exist: ${requestedCwd}` }

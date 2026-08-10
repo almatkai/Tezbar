@@ -29,6 +29,20 @@ describe('command bar input mode', () => {
     })
   })
 
+  it('preserves regular AI activation when two spaces are trailing', () => {
+    const mode = commandBarInputMode('search  ', false)
+
+    expect(mode.isAiMode).toBe(true)
+    expect(mode.aiTask).toBe('search')
+  })
+
+  it('does not treat an ordinary internal double-space query as AI mode', () => {
+    const mode = commandBarInputMode('search  two words', false)
+
+    expect(mode.isAiMode).toBe(false)
+    expect(mode.isCompletionInput).toBe(false)
+  })
+
   it('preserves leading-Space AI prompts without treating them as directories', () => {
     const mode = commandBarInputMode(' explain this project', false)
 

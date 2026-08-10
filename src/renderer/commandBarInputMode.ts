@@ -33,8 +33,12 @@ export function commandBarInputMode(value: string, terminalMode: boolean): Comma
   const parsedSearchQuery = parseSearchQuery(value)
   const isDeepSearchMode = !terminalMode && parsedSearchQuery.mode === 'deep'
   const aiSeparatorIndex = value.indexOf('  ')
+  const hasDirectoryAiSeparator =
+    aiSeparatorIndex >= 0 && value.slice(0, aiSeparatorIndex).trimStart().startsWith('/')
   const isAiMode =
-    !terminalMode && !isDeepSearchMode && (value.startsWith(' ') || aiSeparatorIndex >= 0)
+    !terminalMode &&
+    !isDeepSearchMode &&
+    (value.startsWith(' ') || value.endsWith('  ') || hasDirectoryAiSeparator)
   let aiTask = ''
   let aiWorkingDirectory: string | undefined
   if (isAiMode) {
@@ -43,7 +47,7 @@ export function commandBarInputMode(value: string, terminalMode: boolean): Comma
     } else {
       const prefix = value.slice(0, aiSeparatorIndex).trim()
       const suffix = value.slice(aiSeparatorIndex + 2).trim()
-      if (prefix.startsWith('/')) {
+      if (hasDirectoryAiSeparator && prefix.startsWith('/')) {
         aiWorkingDirectory = prefix
         aiTask = suffix
       } else {

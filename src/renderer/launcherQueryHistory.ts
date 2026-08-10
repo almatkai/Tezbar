@@ -1,3 +1,5 @@
+import { commandBarInputMode } from './commandBarInputMode'
+
 export const LAUNCHER_QUERY_HISTORY_LIMIT = 1
 
 type LastLauncherQueryRecallContext = {
@@ -35,8 +37,12 @@ export function launcherQueryHistoryEntry(value: string, terminalMode: boolean):
   const query = value.trim()
   if (!query) return null
 
-  const isAiMode = value.startsWith(' ') || value.endsWith('  ')
-  return isAiMode ? ` ${query}` : query
+  const inputMode = commandBarInputMode(value, terminalMode)
+  if (!inputMode.isAiMode) return query
+  if (inputMode.aiWorkingDirectory) {
+    return `${inputMode.aiWorkingDirectory}  ${inputMode.aiTask}`.trimEnd()
+  }
+  return ` ${query}`
 }
 
 export function addLauncherQueryHistoryEntry(entry: string): string[] {

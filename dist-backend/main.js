@@ -25102,6 +25102,14 @@ function resolveSlashPathInput(input) {
   }
   return (0, import_node_path23.join)((0, import_node_os10.homedir)(), input.slice(1));
 }
+function resolveLauncherDirectory(input) {
+  const candidate = (0, import_node_path23.resolve)(resolveSlashPathInput(input.trim()));
+  try {
+    return (0, import_node_fs22.existsSync)(candidate) && (0, import_node_fs22.statSync)(candidate).isDirectory() ? candidate : null;
+  } catch {
+    return null;
+  }
+}
 function displayUserPath(path7) {
   const home = (0, import_node_os10.homedir)();
   const normalizedPath = path7.replace(/\\/g, "/");
@@ -26453,7 +26461,8 @@ var ChatSessionDatabase = class {
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        working_directory TEXT
       );
       CREATE TABLE IF NOT EXISTS chat_turns (
         id TEXT PRIMARY KEY,
@@ -26472,6 +26481,10 @@ var ChatSessionDatabase = class {
       CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
     `);
     try {
+      this.db.exec(`ALTER TABLE chat_sessions ADD COLUMN working_directory TEXT;`);
+    } catch {
+    }
+    try {
       this.db.exec(`ALTER TABLE chat_turns ADD COLUMN attachments_json TEXT;`);
     } catch {
     }
@@ -26486,7 +26499,7 @@ var ChatSessionDatabase = class {
   }
   listSessions(limit = 100) {
     const rows = this.db.prepare(
-      `SELECT s.id, s.title, s.created_at, s.updated_at,
+      `SELECT s.id, s.title, s.created_at, s.updated_at, s.working_directory,
                 (SELECT COUNT(*) FROM chat_turns t WHERE t.session_id = s.id) AS turn_count,
                 (SELECT t.text FROM chat_turns t
                    WHERE t.session_id = s.id AND t.role = 'user'
@@ -26501,11 +26514,14 @@ var ChatSessionDatabase = class {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       turnCount: Number(r.turn_count),
+      workingDirectory: r.working_directory ?? void 0,
       preview: r.preview ?? ""
     }));
   }
   getSession(id) {
-    const sessionRow = this.db.prepare(`SELECT id, title, created_at, updated_at FROM chat_sessions WHERE id = ?`).get(id);
+    const sessionRow = this.db.prepare(
+      `SELECT id, title, created_at, updated_at, working_directory FROM chat_sessions WHERE id = ?`
+    ).get(id);
     if (!sessionRow) return null;
     const turnRows = this.db.prepare(
       `SELECT id, session_id, role, text, response_meta_json, stages_json, timeline_json, attachments_json, error, created_at
@@ -26516,6 +26532,7 @@ var ChatSessionDatabase = class {
       title: sessionRow.title,
       createdAt: sessionRow.created_at,
       updatedAt: sessionRow.updated_at,
+      workingDirectory: sessionRow.working_directory ?? void 0,
       turns: turnRows.map((t) => ({
         id: t.id,
         role: t.role === "assistant" ? "assistant" : "user",
@@ -26531,12 +26548,19 @@ var ChatSessionDatabase = class {
   }
   upsertSession(session2) {
     this.db.prepare(
-      `INSERT INTO chat_sessions(id, title, created_at, updated_at)
-         VALUES(?, ?, ?, ?)
+      `INSERT INTO chat_sessions(id, title, created_at, updated_at, working_directory)
+         VALUES(?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            title = excluded.title,
-           updated_at = excluded.updated_at`
-    ).run(session2.id, session2.title, session2.createdAt, session2.updatedAt);
+           updated_at = excluded.updated_at,
+           working_directory = excluded.working_directory`
+    ).run(
+      session2.id,
+      session2.title,
+      session2.createdAt,
+      session2.updatedAt,
+      session2.workingDirectory ?? null
+    );
   }
   appendTurn(sessionId, turn) {
     this.db.prepare(
@@ -26631,6 +26655,7 @@ var IPC_CHANNELS = {
   SEARCH_ALL: "search:all",
   SEARCH_CANDIDATES: "search:candidates",
   PATH_COMPLETE: "path:complete",
+  PATH_RESOLVE_DIRECTORY: "path:resolve-directory",
   DIRECTORY_VISIT_RECORD: "directory-visit:record",
   QUICK_LOOK_FILE: "file:quick-look",
   SEARCH_EXECUTE: "search:execute",
@@ -30400,7 +30425,7 @@ function canRetryRun(error, signal) {
   const message = error instanceof Error ? error.message : String(error);
   return !/aborted|cancelled|task is empty|invalid base64|unsupported agent image/i.test(message);
 }
-function startAgentRun(sender, task, images = []) {
+function startAgentRun(sender, task, images = [], cwd) {
   cancelPendingAgentApprovals();
   agentAbort?.abort();
   agentAbort = new AbortController();
@@ -30456,7 +30481,8 @@ ${extractedText}`;
       onMessageDelta,
       onAnswer,
       onStderrLine,
-      images: runImages
+      images: runImages,
+      cwd
     };
     try {
       await bridge.run(runTask, options);
@@ -30983,8 +31009,16 @@ function registerIpcHandlers(getWindow, controls) {
     if (!task.trim()) {
       return { ok: false, error: "Task is empty" };
     }
+    if (request.cwd !== void 0 && typeof request.cwd !== "string") {
+      return { ok: false, error: "Invalid agent working directory" };
+    }
     const images = Array.isArray(request.images) ? request.images : [];
-    const runId = startAgentRun(event.sender, task, images);
+    const requestedCwd = request.cwd?.trim() ?? "";
+    const cwd = requestedCwd ? resolveLauncherDirectory(requestedCwd) ?? void 0 : void 0;
+    if (requestedCwd && !cwd) {
+      return { ok: false, error: `Directory does not exist: ${requestedCwd}` };
+    }
+    const runId = startAgentRun(event.sender, task, images, cwd);
     return { ok: true, runId };
   });
   ipcMain.handle(AGENT_IPC.CAPTURE_ACTIVE_SCREEN, async (event) => {
@@ -31068,7 +31102,7 @@ function registerIpcHandlers(getWindow, controls) {
     const body = payload;
     const s = body.session;
     const t = body.turn;
-    if (!s || typeof s.id !== "string" || typeof s.title !== "string" || typeof s.createdAt !== "number" || typeof s.updatedAt !== "number") {
+    if (!s || typeof s.id !== "string" || typeof s.title !== "string" || typeof s.createdAt !== "number" || typeof s.updatedAt !== "number" || s.workingDirectory !== void 0 && typeof s.workingDirectory !== "string") {
       return { ok: false, error: "Invalid session" };
     }
     if (!t || typeof t.id !== "string" || t.role !== "user" && t.role !== "assistant" || typeof t.text !== "string" || typeof t.createdAt !== "number") {
@@ -31079,7 +31113,8 @@ function registerIpcHandlers(getWindow, controls) {
         id: s.id,
         title: s.title,
         createdAt: s.createdAt,
-        updatedAt: s.updatedAt
+        updatedAt: s.updatedAt,
+        workingDirectory: s.workingDirectory
       });
       await appendChatTurn(s.id, {
         id: t.id,
@@ -31429,6 +31464,9 @@ function registerIpcHandlers(getWindow, controls) {
   ipcMain.handle(IPC_CHANNELS.PATH_COMPLETE, async (_event, query) => {
     const q = typeof query === "string" ? query : "";
     return completePath(q);
+  });
+  ipcMain.handle(IPC_CHANNELS.PATH_RESOLVE_DIRECTORY, async (_event, input) => {
+    return typeof input === "string" ? resolveLauncherDirectory(input) : null;
   });
   ipcMain.handle(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path7) => {
     if (typeof path7 === "string") recordDirectoryVisit(path7);

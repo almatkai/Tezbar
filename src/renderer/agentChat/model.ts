@@ -32,7 +32,7 @@ export function buildAgentPromptFromChat(session: ChatSession, nextUserText: str
   ]
   if (session.workingDirectory) {
     lines.push(
-      `Your working directory is ${session.workingDirectory}.`,
+      `Your working directory is ${JSON.stringify(session.workingDirectory)}.`,
       'Stay inside this directory unless the user explicitly asks you to inspect or change something outside it.'
     )
   }
