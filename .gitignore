@@ -27,3 +27,9 @@ native/**/Cargo.lock
 *.swo
 .idea/
 .vscode/
+
+
+# Tauri signing private keys
+/keys/
+*.key
+*.key.pub
