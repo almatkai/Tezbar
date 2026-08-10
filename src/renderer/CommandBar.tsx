@@ -70,6 +70,7 @@ import {
   parseSearchQuery,
   searchRequestInput,
 } from '../shared/searchMode'
+import { aiChatBootForInput, commandBarInputMode } from './commandBarInputMode'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
@@ -1556,16 +1557,20 @@ export default function CommandBar({
   const [terminalMode, setTerminalMode] = useState(() => initialValue.startsWith('>'))
   // Space prefix = AI mode in the launcher; the full chat UI lives on the
   // dedicated AI Chat surface (see App.tsx + AgentChatView).
-  // Trigger AI mode if input starts with a space, or if it ends with exactly two spaces.
-  const parsedSearchQuery = parseSearchQuery(value)
-  // Terminal mode owns the input completely. A slash, backtick, or deep-search
-  // prefix typed after `>` is shell text, not a launcher mode switch.
-  const isDeepSearchMode = !terminalMode && parsedSearchQuery.mode === 'deep'
-  const isAiMode =
-    !terminalMode && !isDeepSearchMode && (value.startsWith(' ') || value.endsWith('  '))
+  const {
+    parsedSearchQuery,
+    isDeepSearchMode,
+    isAiMode,
+    aiTask: parsedAgentTask,
+    aiWorkingDirectory,
+    slashQuery,
+    isSlashInput,
+    isApplicationInput,
+    isCompletionInput,
+  } = commandBarInputMode(value, terminalMode)
   const deepSearchQuery = isDeepSearchMode ? parsedSearchQuery.query : ''
   const normalizedSearchValue = searchRequestInput(value)
-  const agentTask = isAiMode ? value.trim() : ''
+  const agentTask = isAiMode ? parsedAgentTask : ''
 
   const [pendingAction, setPendingAction] = useState<{
     extensionId: string
@@ -1880,11 +1885,6 @@ export default function CommandBar({
       })
     },
   })
-
-  const slashQuery = value.trimStart()
-  const isSlashInput = !terminalMode && slashQuery.startsWith('/')
-  const isApplicationInput = !terminalMode && slashQuery.startsWith('`')
-  const isCompletionInput = !terminalMode && (isSlashInput || isApplicationInput)
 
   const chatHistoryQuery = agentTask.trim().toLowerCase()
   const filteredChatHistory = useMemo(() => {
@@ -3249,10 +3249,19 @@ export default function CommandBar({
         focusCommandInput()
         return true
       }
-      if (valueRef.current.startsWith(' ')) {
-        // Space prefix = AI mode. Escape first clears a typed prompt, then
-        // a second Escape removes the prefix and returns to normal command search.
-        setValue(valueRef.current.trim() ? ' ' : '')
+      const currentInputMode = commandBarInputMode(valueRef.current, false)
+      if (currentInputMode.isAiMode) {
+        // Escape first clears the AI prompt. For directory-rooted AI mode, a
+        // second Escape removes the double-Space switch but preserves the path.
+        if (currentInputMode.aiWorkingDirectory) {
+          setValue(
+            currentInputMode.aiTask
+              ? `${currentInputMode.aiWorkingDirectory}  `
+              : currentInputMode.aiWorkingDirectory
+          )
+        } else {
+          setValue(valueRef.current.trim() ? ' ' : '')
+        }
         focusCommandInput()
         return true
       }
@@ -3418,6 +3427,31 @@ export default function CommandBar({
     // AI mode: open the dedicated AI Chat surface and submit the prompt
     // there (multi-turn chat, logs, history — see AgentChatView).
     if (isAiMode) {
+      let resolvedWorkingDirectory: string | undefined
+      if (aiWorkingDirectory) {
+        try {
+          resolvedWorkingDirectory =
+            (await window.tezbar.resolveDirectory(aiWorkingDirectory)) ?? undefined
+        } catch {
+          setError(`Could not resolve directory: ${aiWorkingDirectory}`)
+          return
+        }
+        if (!resolvedWorkingDirectory) {
+          setError(`Directory does not exist: ${aiWorkingDirectory}`)
+          return
+        }
+        void window.tezbar.recordDirectoryVisit(resolvedWorkingDirectory)
+      }
+
+      const boot = aiChatBootForInput(
+        { aiTask: agentTask.trim(), aiWorkingDirectory },
+        resolvedWorkingDirectory
+      )
+      if (boot?.kind === 'newChat') {
+        onOpenAiChat(boot)
+        setValue('  ')
+        return
+      }
       if (showChatHistory) {
         const selectedChat = filteredChatHistory[selectedSearch]
         if (selectedChat) {
@@ -3426,10 +3460,9 @@ export default function CommandBar({
           return
         }
       }
-      const task = agentTask.trim()
-      if (!task) return
+      if (!boot) return
       await modelSelectionSaveRef.current
-      onOpenAiChat({ kind: 'submit', prompt: task })
+      onOpenAiChat(boot)
       setValue('  ')
       return
     }

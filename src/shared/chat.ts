@@ -53,6 +53,8 @@ export interface ChatSession {
   title: string
   createdAt: number
   updatedAt: number
+  /** Directory where Pi starts for every agent turn in this conversation. */
+  workingDirectory?: string
   turns: ChatTurn[]
 }
 
@@ -63,6 +65,7 @@ export interface ChatSessionSummary {
   createdAt: number
   updatedAt: number
   turnCount: number
+  workingDirectory?: string
   /** Preview of the most recent user prompt, for the history dropdown. */
   preview: string
 }

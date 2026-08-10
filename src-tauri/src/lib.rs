@@ -6,7 +6,7 @@ mod timer_notifications;
 mod updater;
 
 #[cfg(target_os = "macos")]
-use core_foundation::base::{CFType, TCFType};
+use core_foundation::base::{kCFAllocatorDefault, CFType, TCFType};
 #[cfg(target_os = "macos")]
 use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
 #[cfg(target_os = "macos")]
@@ -14,13 +14,17 @@ use core_foundation::number::CFNumber;
 #[cfg(target_os = "macos")]
 use core_foundation::string::{CFString, CFStringRef};
 #[cfg(target_os = "macos")]
+use core_foundation::uuid::{CFUUIDCreateString, CFUUIDRef, CFUUID};
+#[cfg(target_os = "macos")]
+use core_graphics::display::{CGDirectDisplayID, CGDisplay};
+#[cfg(target_os = "macos")]
 use core_graphics::window::{
     copy_window_info, kCGWindowAlpha, kCGWindowBounds, kCGWindowLayer,
     kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly, kCGWindowOwnerName,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -31,9 +35,12 @@ use std::os::windows::process::CommandExt;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+#[cfg(target_os = "macos")]
+use tauri::LogicalPosition;
+#[cfg(not(target_os = "macos"))]
+use tauri::PhysicalSize;
 use tauri::{
-    AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, PhysicalSize, State,
-    WebviewWindow,
+    AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, State, WebviewWindow,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tokio::sync::oneshot;
@@ -54,15 +61,16 @@ const SNAP_THRESHOLD: f64 = 32.0;
 const SNAP_RELEASE_THRESHOLD: f64 = 32.0;
 const SNAP_SLOW_SPEED_THRESHOLD: f64 = 420.0;
 const SNAP_DWELL_DURATION: Duration = Duration::from_millis(130);
-const TAURI_WINDOW_POSITION_KEY: &str = "tauriWindowPosition";
-const TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "tauriWindowPositionsByDisplay";
-const LEGACY_WINDOW_POSITION_KEY: &str = "windowPosition";
-const LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY: &str = "windowPositionsByDisplay";
-const WINDOW_PLACEMENT_INITIALIZED_KEY: &str = "tezbarWindowPlacementInitialized";
-const WINDOW_PLACEMENT_VERSION: u64 = 3;
+const WINDOW_POSITIONS_BY_MONITOR_KEY: &str = "windowPositionsByMonitorV2";
 const DEFAULT_BACKEND_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const EXTENSION_INSTALL_REQUEST_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const EXTENSION_RUNTIME_REQUEST_TIMEOUT: Duration = Duration::from_secs(2 * 60);
+
+#[cfg(target_os = "macos")]
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    fn CGDisplayCreateUUIDFromDisplayID(display: CGDirectDisplayID) -> CFUUIDRef;
+}
 
 struct BackendState {
     writer: Arc<Mutex<Option<TcpStream>>>,
@@ -105,6 +113,7 @@ struct WindowBehaviorState {
     // Windows creates the hidden launcher at an OS-chosen position and emits
     // Moved before Tezbar has selected its real placement. Ignore that event
     // so it cannot overwrite the user's saved location with (typically) 130,130.
+    #[cfg(target_os = "windows")]
     main_window_placed: Mutex<bool>,
     snap_drag_active: Mutex<bool>,
     snap_locked: Mutex<SnapLockState>,
@@ -292,11 +301,33 @@ fn sync_snap_overlay(
         .map(|current| current.width != size.width || current.height != size.height)
         .unwrap_or(true);
     if needs_position_update {
+        #[cfg(target_os = "macos")]
+        {
+            let logical = logical_position_for_monitor(
+                PersistedWindowPosition {
+                    x: position.x as f64,
+                    y: position.y as f64,
+                },
+                monitor.scale_factor(),
+            );
+            overlay
+                .set_position(LogicalPosition::new(logical.x, logical.y))
+                .map_err(|error| error.to_string())?;
+        }
+        #[cfg(not(target_os = "macos"))]
         overlay
             .set_position(PhysicalPosition::new(position.x, position.y))
             .map_err(|error| error.to_string())?;
     }
     if needs_size_update {
+        #[cfg(target_os = "macos")]
+        overlay
+            .set_size(LogicalSize::new(
+                size.width as f64 / valid_scale_factor(monitor.scale_factor()),
+                size.height as f64 / valid_scale_factor(monitor.scale_factor()),
+            ))
+            .map_err(|error| error.to_string())?;
+        #[cfg(not(target_os = "macos"))]
         overlay
             .set_size(PhysicalSize::new(size.width, size.height))
             .map_err(|error| error.to_string())?;
@@ -708,151 +739,93 @@ fn position_from_config_value(
     serde_json::from_value(value?.clone()).ok()
 }
 
-#[cfg(target_os = "windows")]
-fn windows_window_placement_initialized() -> bool {
-    read_openray_config()
-        .get(WINDOW_PLACEMENT_INITIALIZED_KEY)
-        .and_then(serde_json::Value::as_u64)
-        .is_some_and(|version| version == WINDOW_PLACEMENT_VERSION)
-}
-
-#[cfg(target_os = "windows")]
-fn windows_persisted_window_position_for_monitor(
-    monitor_keys: &[String],
-) -> Option<PersistedWindowPosition> {
-    let config = read_openray_config();
-    monitor_keys.iter().find_map(|monitor_key| {
-        position_from_config_value(
-            config
-                .get(TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY)?
-                .get(monitor_key),
-        )
-    })
-}
-
-#[cfg(not(target_os = "windows"))]
-fn legacy_logical_to_physical_position(
-    position: PersistedWindowPosition,
-    monitor: &Monitor,
-) -> PersistedWindowPosition {
-    let scale_factor = monitor.scale_factor();
-    let monitor_position = monitor.position();
-    let logical_monitor_x = monitor_position.x as f64 / scale_factor;
-    let logical_monitor_y = monitor_position.y as f64 / scale_factor;
-    PersistedWindowPosition {
-        x: monitor_position.x as f64 + (position.x - logical_monitor_x) * scale_factor,
-        y: monitor_position.y as f64 + (position.y - logical_monitor_y) * scale_factor,
-    }
-}
-
-fn physical_to_legacy_logical_position(
-    position: PersistedWindowPosition,
-    monitor: &Monitor,
-) -> PersistedWindowPosition {
-    let scale_factor = monitor.scale_factor();
-    let monitor_position = monitor.position();
-    let logical_monitor_x = monitor_position.x as f64 / scale_factor;
-    let logical_monitor_y = monitor_position.y as f64 / scale_factor;
-    PersistedWindowPosition {
-        x: logical_monitor_x + (position.x - monitor_position.x as f64) / scale_factor,
-        y: logical_monitor_y + (position.y - monitor_position.y as f64) / scale_factor,
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn persisted_window_position(monitor: &Monitor) -> Option<PersistedWindowPosition> {
-    let config = read_openray_config();
-    position_from_config_value(config.get(TAURI_WINDOW_POSITION_KEY)).or_else(|| {
-        position_from_config_value(config.get(LEGACY_WINDOW_POSITION_KEY))
-            .map(|position| legacy_logical_to_physical_position(position, monitor))
-    })
-}
-
-#[cfg(not(target_os = "windows"))]
-fn position_from_config_object_key(
+fn monitor_positions_from_config(
     config: &serde_json::Value,
-    object_key: &str,
-    monitor_key: &str,
-) -> Option<PersistedWindowPosition> {
-    position_from_config_value(config.get(object_key)?.get(monitor_key))
+) -> BTreeMap<String, PersistedWindowPosition> {
+    config
+        .get(WINDOW_POSITIONS_BY_MONITOR_KEY)
+        .and_then(serde_json::Value::as_object)
+        .map(|positions| {
+            positions
+                .iter()
+                .filter_map(|(monitor_id, value)| {
+                    position_from_config_value(Some(value))
+                        .map(|position| (monitor_id.clone(), position))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
-#[cfg(not(target_os = "windows"))]
-fn persisted_window_position_for_monitor(
-    monitor_keys: &[String],
-    monitor: &Monitor,
-) -> Option<PersistedWindowPosition> {
+fn window_position_config_needs_reset(config: &serde_json::Value) -> bool {
+    [
+        "tauriWindowPosition",
+        "tauriWindowPositionsByDisplay",
+        "windowPositionsByMonitor",
+        "windowPosition",
+        "windowPositionsByDisplay",
+        "tezbarWindowPlacementInitialized",
+    ]
+    .iter()
+    .any(|key| config.get(key).is_some())
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct StoredWindowPosition {
+    position: Option<PersistedWindowPosition>,
+    needs_reset: bool,
+}
+
+fn stored_window_position_for_monitor(monitor_id: &str) -> StoredWindowPosition {
     let config = read_openray_config();
-    for monitor_key in monitor_keys {
-        if let Some(position) = position_from_config_object_key(
-            &config,
-            TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY,
-            monitor_key,
-        ) {
-            return Some(position);
-        }
+    StoredWindowPosition {
+        position: monitor_positions_from_config(&config)
+            .get(monitor_id)
+            .copied(),
+        needs_reset: window_position_config_needs_reset(&config),
     }
-    for monitor_key in monitor_keys {
-        if let Some(position) = position_from_config_object_key(
-            &config,
-            LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY,
-            monitor_key,
-        ) {
-            return Some(legacy_logical_to_physical_position(position, monitor));
-        }
-    }
-    None
 }
 
-fn set_position_in_object(
-    config_object: &mut serde_json::Map<String, serde_json::Value>,
-    object_key: &str,
-    monitor_key: &str,
+fn update_window_position_config(
+    config: &mut serde_json::Value,
+    monitor_id: &str,
     position: PersistedWindowPosition,
 ) {
-    let positions = config_object.entry(object_key).or_insert_with(|| json!({}));
-    if !positions.is_object() {
-        *positions = json!({});
-    }
-    if let Some(positions_object) = positions.as_object_mut() {
-        positions_object.insert(monitor_key.to_string(), json!(position));
-    }
-}
+    let mut positions = monitor_positions_from_config(config);
+    positions.insert(monitor_id.to_string(), position);
 
-fn set_persisted_window_position_for_monitor(monitor: &Monitor, position: PersistedWindowPosition) {
-    let Some(path) = openray_config_path() else {
-        return;
-    };
-    let mut config = read_openray_config();
     let Some(config_object) = config.as_object_mut() else {
         return;
     };
-
-    let legacy_position = physical_to_legacy_logical_position(position, monitor);
-    config_object.insert(TAURI_WINDOW_POSITION_KEY.to_string(), json!(position));
-    config_object.insert(
-        LEGACY_WINDOW_POSITION_KEY.to_string(),
-        json!(legacy_position),
-    );
-    #[cfg(target_os = "windows")]
-    config_object.insert(
-        WINDOW_PLACEMENT_INITIALIZED_KEY.to_string(),
-        json!(WINDOW_PLACEMENT_VERSION),
-    );
-    for monitor_key in monitor_storage_keys(monitor) {
-        set_position_in_object(
-            config_object,
-            TAURI_WINDOW_POSITIONS_BY_DISPLAY_KEY,
-            &monitor_key,
-            position,
-        );
-        set_position_in_object(
-            config_object,
-            LEGACY_WINDOW_POSITIONS_BY_DISPLAY_KEY,
-            &monitor_key,
-            legacy_position,
-        );
+    for obsolete_key in [
+        "tauriWindowPosition",
+        "tauriWindowPositionsByDisplay",
+        "windowPositionsByMonitor",
+        "windowPosition",
+        "windowPositionsByDisplay",
+        "tezbarWindowPlacementInitialized",
+    ] {
+        config_object.remove(obsolete_key);
     }
+    config_object.insert(
+        WINDOW_POSITIONS_BY_MONITOR_KEY.to_string(),
+        json!(positions),
+    );
+}
+
+fn set_persisted_window_position_for_monitor(
+    window: &WebviewWindow,
+    monitor: &Monitor,
+    position: PersistedWindowPosition,
+) {
+    let Some(path) = openray_config_path() else {
+        return;
+    };
+    let Some(monitor_id) = monitor_id(window, monitor) else {
+        return;
+    };
+    let mut config = read_openray_config();
+    update_window_position_config(&mut config, &monitor_id, position);
 
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
@@ -862,38 +835,60 @@ fn set_persisted_window_position_for_monitor(monitor: &Monitor, position: Persis
     }
 }
 
-fn monitor_storage_key(monitor: &Monitor) -> String {
-    let position = monitor.position();
-    let size = monitor.size();
-    let name = monitor.name().map(String::as_str).unwrap_or("unknown");
-    format!(
-        "{name}:{}:{}:{}:{}:{}",
-        position.x,
-        position.y,
-        size.width,
-        size.height,
-        monitor.scale_factor()
-    )
+#[cfg(any(not(target_os = "macos"), test))]
+fn monitor_id_from_name(name: Option<&str>) -> Option<String> {
+    name.map(str::to_string)
 }
 
-fn legacy_monitor_storage_key(monitor: &Monitor) -> String {
-    let size = monitor.size();
-    let name = monitor.name().map(String::as_str).unwrap_or("unknown");
-    format!(
-        "{name}:{}:{}:{}",
-        size.width,
-        size.height,
-        monitor.scale_factor()
-    )
+#[cfg(target_os = "macos")]
+fn monitors_match(left: &Monitor, right: &Monitor) -> bool {
+    left.name() == right.name()
+        && left.position() == right.position()
+        && left.size() == right.size()
+        && left.scale_factor() == right.scale_factor()
 }
 
-fn monitor_storage_keys(monitor: &Monitor) -> Vec<String> {
-    let mut keys = vec![
-        monitor_storage_key(monitor),
-        legacy_monitor_storage_key(monitor),
-    ];
-    keys.dedup();
-    keys
+#[cfg(target_os = "macos")]
+fn macos_display_uuid(display_id: CGDirectDisplayID) -> Option<String> {
+    let uuid_ref = unsafe { CGDisplayCreateUUIDFromDisplayID(display_id) };
+    if uuid_ref.is_null() {
+        return None;
+    }
+    let uuid = unsafe { CFUUID::wrap_under_create_rule(uuid_ref) };
+    let string_ref = unsafe {
+        CFUUIDCreateString(kCFAllocatorDefault, uuid.as_concrete_TypeRef())
+    };
+    if string_ref.is_null() {
+        return None;
+    }
+    let uuid_string = unsafe { CFString::wrap_under_create_rule(string_ref) };
+    Some(format!("macos:{}", uuid_string))
+}
+
+#[cfg(target_os = "macos")]
+fn monitor_id(window: &WebviewWindow, monitor: &Monitor) -> Option<String> {
+    for display_id in CGDisplay::active_displays().ok()? {
+        let bounds = CGDisplay::new(display_id).bounds();
+        let candidate = window
+            .monitor_from_point(
+                bounds.origin.x + bounds.size.width / 2.0,
+                bounds.origin.y + bounds.size.height / 2.0,
+            )
+            .ok()
+            .flatten();
+        if candidate
+            .as_ref()
+            .is_some_and(|candidate| monitors_match(candidate, monitor))
+        {
+            return macos_display_uuid(display_id);
+        }
+    }
+    None
+}
+
+#[cfg(not(target_os = "macos"))]
+fn monitor_id(_window: &WebviewWindow, monitor: &Monitor) -> Option<String> {
+    monitor_id_from_name(monitor.name().map(String::as_str))
 }
 
 fn physical_monitor_work_area(monitor: &Monitor) -> (f64, f64, f64, f64) {
@@ -945,7 +940,6 @@ fn plan_window_position(
     window_width: f64,
     window_height: f64,
     saved_for_active_monitor: Option<PersistedWindowPosition>,
-    legacy_saved_position: Option<PersistedWindowPosition>,
 ) -> PersistedWindowPosition {
     if let Some(position) = saved_for_active_monitor {
         return clamp_position_to_work_area(
@@ -956,22 +950,13 @@ fn plan_window_position(
         );
     }
 
-    if let Some(position) = legacy_saved_position {
-        if position_is_in_bounds(position, active_monitor.bounds) {
-            return clamp_position_to_work_area(
-                position,
-                active_monitor.work_area,
-                window_width,
-                window_height,
-            );
-        }
-    }
-
     let (work_x, work_y, work_width, work_height) = active_monitor.work_area;
-    PersistedWindowPosition {
+    let position = PersistedWindowPosition {
         x: work_x + ((work_width - window_width) / 2.0).max(0.0),
         y: work_y + ((work_height - window_height) / 2.0).max(0.0),
-    }
+    };
+    debug_assert!(position_is_in_bounds(position, active_monitor.bounds));
+    position
 }
 
 fn snap_axis(
@@ -990,6 +975,7 @@ fn snap_axis(
     (target - window_extent / 2.0, true, true)
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn window_position_for_cursor_drag(
     initial_window_position: PersistedWindowPosition,
     initial_cursor_position: PersistedWindowPosition,
@@ -1065,10 +1051,19 @@ fn monitor_for_position(
     window_width: f64,
     window_height: f64,
 ) -> Result<Monitor, String> {
-    let center_x = position.x + window_width / 2.0;
-    let center_y = position.y + window_height / 2.0;
+    #[cfg(target_os = "macos")]
+    let center = logical_window_center(
+        position,
+        (window_width, window_height),
+        window.scale_factor().unwrap_or(1.0),
+    );
+    #[cfg(not(target_os = "macos"))]
+    let center = PersistedWindowPosition {
+        x: position.x + window_width / 2.0,
+        y: position.y + window_height / 2.0,
+    };
     window
-        .monitor_from_point(center_x, center_y)
+        .monitor_from_point(center.x, center.y)
         .map_err(|error| error.to_string())?
         .or_else(|| window.current_monitor().ok().flatten())
         .or_else(|| window.primary_monitor().ok().flatten())
@@ -1310,7 +1305,7 @@ fn update_window_snap_state(
             },
             now,
         ));
-        set_window_position(window, next_position)?;
+        set_window_position_on_monitor(window, next_position, &monitor)?;
     }
     sync_snap_overlay(
         app,
@@ -1503,63 +1498,152 @@ fn frontmost_window_monitor(window: &WebviewWindow) -> Option<Monitor> {
     window.monitor_from_point(center_x, center_y).ok().flatten()
 }
 
-fn active_monitor(window: &WebviewWindow) -> Result<Monitor, String> {
-    if let Some(monitor) = frontmost_window_monitor(window) {
-        return Ok(monitor);
-    }
+#[cfg(target_os = "macos")]
+fn cursor_monitor(window: &WebviewWindow) -> Option<Monitor> {
+    use core_graphics::event::CGEvent;
+    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 
-    if let Ok(cursor) = window.cursor_position() {
-        if let Some(monitor) = window
-            .monitor_from_point(cursor.x, cursor.y)
-            .map_err(|e| e.to_string())?
-        {
-            return Ok(monitor);
-        }
-    }
-
-    if let Some(monitor) = window.current_monitor().map_err(|e| e.to_string())? {
-        return Ok(monitor);
-    }
-
+    // Tauri scales the macOS cursor position by the primary monitor's scale
+    // factor before passing it to CoreGraphics' logical-coordinate monitor
+    // lookup. That misses mixed-DPI secondary monitors. Read the cursor in
+    // CoreGraphics' native global coordinate space instead.
+    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).ok()?;
+    let position = CGEvent::new(source).ok()?.location();
     window
-        .primary_monitor()
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "No monitor found".to_string())
+        .monitor_from_point(position.x, position.y)
+        .ok()
+        .flatten()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn cursor_monitor(window: &WebviewWindow) -> Option<Monitor> {
+    let position = window.cursor_position().ok()?;
+    window
+        .monitor_from_point(position.x, position.y)
+        .ok()
+        .flatten()
+}
+
+fn select_active_monitor<T>(
+    cursor: Option<T>,
+    frontmost: Option<T>,
+    current: impl FnOnce() -> Option<T>,
+    primary: impl FnOnce() -> Option<T>,
+) -> Option<T> {
+    cursor.or(frontmost).or_else(current).or_else(primary)
+}
+
+fn active_monitor(window: &WebviewWindow) -> Result<Monitor, String> {
+    select_active_monitor(
+        cursor_monitor(window),
+        frontmost_window_monitor(window),
+        || window.current_monitor().ok().flatten(),
+        || window.primary_monitor().ok().flatten(),
+    )
+    .ok_or_else(|| "No monitor found".to_string())
+}
+
+fn window_size_for_target_monitor(
+    current_size: (f64, f64),
+    current_scale_factor: f64,
+    target_scale_factor: f64,
+) -> (f64, f64) {
+    let current_scale_factor = valid_scale_factor(current_scale_factor);
+    let target_scale_factor = valid_scale_factor(target_scale_factor);
+    let logical_height = (current_size.1 / current_scale_factor)
+        .clamp(WINDOW_MIN_HEIGHT, WINDOW_MAX_HEIGHT);
+    (
+        WINDOW_WIDTH * target_scale_factor,
+        logical_height * target_scale_factor,
+    )
+}
+
+fn valid_scale_factor(scale_factor: f64) -> f64 {
+    if scale_factor.is_finite() && scale_factor > 0.0 {
+        scale_factor
+    } else {
+        1.0
+    }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn logical_position_for_monitor(
+    position: PersistedWindowPosition,
+    target_scale_factor: f64,
+) -> PersistedWindowPosition {
+    let target_scale_factor = valid_scale_factor(target_scale_factor);
+    PersistedWindowPosition {
+        x: position.x / target_scale_factor,
+        y: position.y / target_scale_factor,
+    }
 }
 
 fn window_size_for_monitor(window: &WebviewWindow, monitor: &Monitor) -> (f64, f64) {
-    let scale_factor = monitor.scale_factor();
+    let target_scale_factor = monitor.scale_factor();
     match window.outer_size() {
-        Ok(current_size) => (
-            current_size.width as f64,
-            (current_size.height as f64).clamp(
-                WINDOW_MIN_HEIGHT * scale_factor,
-                WINDOW_MAX_HEIGHT * scale_factor,
-            ),
+        Ok(current_size) => window_size_for_target_monitor(
+            (current_size.width as f64, current_size.height as f64),
+            window.scale_factor().unwrap_or(target_scale_factor),
+            target_scale_factor,
         ),
         Err(_) => (
-            WINDOW_WIDTH * scale_factor,
-            WINDOW_MAX_HEIGHT * scale_factor,
+            WINDOW_WIDTH * target_scale_factor,
+            WINDOW_MAX_HEIGHT * target_scale_factor,
         ),
     }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn logical_window_center(
+    position: PersistedWindowPosition,
+    size: (f64, f64),
+    scale_factor: f64,
+) -> PersistedWindowPosition {
+    let scale_factor = valid_scale_factor(scale_factor);
+    PersistedWindowPosition {
+        x: (position.x + size.0 / 2.0) / scale_factor,
+        y: (position.y + size.1 / 2.0) / scale_factor,
+    }
+}
+
+fn monitor_for_window_position(
+    window: &WebviewWindow,
+    position: PersistedWindowPosition,
+    size: (f64, f64),
+) -> Option<Monitor> {
+    if let Some(monitor) = window.current_monitor().ok().flatten() {
+        return Some(monitor);
+    }
+
+    #[cfg(target_os = "macos")]
+    let center = logical_window_center(
+        position,
+        size,
+        window.scale_factor().unwrap_or(1.0),
+    );
+    #[cfg(not(target_os = "macos"))]
+    let center = PersistedWindowPosition {
+        x: position.x + size.0 / 2.0,
+        y: position.y + size.1 / 2.0,
+    };
+    window
+        .monitor_from_point(center.x, center.y)
+        .ok()
+        .flatten()
 }
 
 fn persist_window_position_at(window: &WebviewWindow, position: PersistedWindowPosition) {
     let Ok(size) = window.outer_size() else {
         return;
     };
-    let monitor = window
-        .monitor_from_point(
-            position.x + size.width as f64 / 2.0,
-            position.y + size.height as f64 / 2.0,
-        )
-        .ok()
-        .flatten()
-        .or_else(|| window.current_monitor().ok().flatten());
-    let Some(monitor) = monitor else {
+    let Some(monitor) = monitor_for_window_position(
+        window,
+        position,
+        (size.width as f64, size.height as f64),
+    ) else {
         return;
     };
-    set_persisted_window_position_for_monitor(&monitor, position);
+    set_persisted_window_position_for_monitor(window, &monitor, position);
 }
 
 fn persist_current_window_position(window: &WebviewWindow) {
@@ -1600,36 +1684,36 @@ fn set_window_position(
         .map_err(|e| e.to_string())
 }
 
+fn set_window_position_on_monitor(
+    window: &WebviewWindow,
+    position: PersistedWindowPosition,
+    monitor: &Monitor,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let logical = logical_position_for_monitor(position, monitor.scale_factor());
+        window
+            .set_position(LogicalPosition::new(logical.x, logical.y))
+            .map_err(|error| error.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        set_window_position(window, position)
+    }
+}
+
 fn place_window(window: &WebviewWindow) -> Result<(), String> {
     let monitor = active_monitor(window)?;
     let (window_width, window_height) = window_size_for_monitor(window, &monitor);
-    #[cfg(target_os = "windows")]
-    let (position, should_persist_position) = {
-        let monitor_keys = monitor_storage_keys(&monitor);
-        let initialized = windows_window_placement_initialized();
-        let saved = initialized
-            .then(|| windows_persisted_window_position_for_monitor(&monitor_keys))
-            .flatten();
-        let position = plan_window_position(
-            monitor_geometry(&monitor),
-            window_width,
-            window_height,
-            saved,
-            None,
-        );
-        (position, saved != Some(position))
-    };
-    #[cfg(not(target_os = "windows"))]
-    let position = {
-        let monitor_keys = monitor_storage_keys(&monitor);
-        plan_window_position(
-            monitor_geometry(&monitor),
-            window_width,
-            window_height,
-            persisted_window_position_for_monitor(&monitor_keys, &monitor),
-            persisted_window_position(&monitor),
-        )
-    };
+    let stored = monitor_id(window, &monitor)
+        .map(|monitor_id| stored_window_position_for_monitor(&monitor_id))
+        .unwrap_or_default();
+    let position = plan_window_position(
+        monitor_geometry(&monitor),
+        window_width,
+        window_height,
+        stored.position,
+    );
 
     #[cfg(target_os = "windows")]
     {
@@ -1640,12 +1724,11 @@ fn place_window(window: &WebviewWindow) -> Result<(), String> {
             .unwrap() = true;
     }
 
-    set_window_position(window, position)?;
-    #[cfg(target_os = "windows")]
-    if should_persist_position {
-        // The first placement (or a new monitor) becomes the baseline for
-        // future launches. Subsequent drag events overwrite this position.
-        set_persisted_window_position_for_monitor(&monitor, position);
+    set_window_position_on_monitor(window, position, &monitor)?;
+    if stored.needs_reset || stored.position != Some(position) {
+        // Old placement formats used the wrong coordinate space. Reset them
+        // once, center this monitor, and keep only monitor ID + coordinates.
+        set_persisted_window_position_for_monitor(window, &monitor, position);
     }
     Ok(())
 }
@@ -1655,19 +1738,105 @@ mod window_placement_tests {
     use super::*;
 
     #[test]
-    fn missing_active_monitor_position_never_reuses_another_monitors_position() {
+    fn monitor_storage_uses_only_the_monitor_id() {
+        assert_eq!(
+            monitor_id_from_name(Some("Monitor #41054")).as_deref(),
+            Some("Monitor #41054")
+        );
+    }
+
+    #[test]
+    fn cursor_monitor_is_the_active_monitor() {
+        let selected = select_active_monitor(
+            Some("cursor"),
+            Some("frontmost"),
+            || panic!("current monitor lookup must be short-circuited"),
+            || panic!("primary monitor lookup must be short-circuited"),
+        );
+
+        assert_eq!(selected, Some("cursor"));
+    }
+
+    #[test]
+    fn frontmost_monitor_is_used_when_cursor_detection_is_unavailable() {
+        let selected = select_active_monitor(
+            None,
+            Some("frontmost"),
+            || panic!("current monitor lookup must be short-circuited"),
+            || panic!("primary monitor lookup must be short-circuited"),
+        );
+
+        assert_eq!(selected, Some("frontmost"));
+    }
+
+    #[test]
+    fn persistence_keeps_one_coordinate_pair_per_monitor_id() {
+        let mut config = json!({
+            "unrelatedSetting": true,
+            "windowPositionsByMonitorV2": {
+                "Monitor B": { "x": 2100.0, "y": 150.0 }
+            }
+        });
+
+        update_window_position_config(
+            &mut config,
+            "Monitor A",
+            PersistedWindowPosition { x: 30.0, y: 40.0 },
+        );
+
+        assert_eq!(
+            config,
+            json!({
+                "unrelatedSetting": true,
+                "windowPositionsByMonitorV2": {
+                    "Monitor A": { "x": 30.0, "y": 40.0 },
+                    "Monitor B": { "x": 2100.0, "y": 150.0 }
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn broken_legacy_coordinates_are_reset_instead_of_restored() {
+        let mut config = json!({
+            "tauriWindowPosition": { "x": 1.0, "y": 2.0 },
+            "windowPositionsByMonitor": {
+                "macos:broken": { "x": 52.0, "y": 568.0 }
+            },
+            "windowPosition": { "x": 0.5, "y": 1.0 },
+            "windowPositionsByDisplay": {
+                "Monitor A:1920:1080:2": { "x": 15.0, "y": 25.0 }
+            },
+            "tauriWindowPositionsByDisplay": {
+                "Monitor A:0:0:1920:1080:2": { "x": 30.0, "y": 50.0 }
+            }
+        });
+
+        assert!(window_position_config_needs_reset(&config));
+        update_window_position_config(
+            &mut config,
+            "Monitor B",
+            PersistedWindowPosition { x: 200.0, y: 300.0 },
+        );
+
+        assert_eq!(
+            config,
+            json!({
+                "windowPositionsByMonitorV2": {
+                    "Monitor B": { "x": 200.0, "y": 300.0 }
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn missing_position_centers_on_the_active_monitor() {
         let external = MonitorGeometry {
             bounds: (1920.0, -180.0, 2560.0, 1440.0),
             work_area: (1920.0, -156.0, 2560.0, 1416.0),
         };
 
-        let position = plan_window_position(
-            external,
-            760.0,
-            640.0,
-            None,
-            Some(PersistedWindowPosition { x: 420.0, y: 180.0 }),
-        );
+        let position = plan_window_position(external, 760.0, 640.0, None);
 
         assert!(
             position_is_in_bounds(position, external.bounds),
@@ -1679,6 +1848,64 @@ mod window_placement_tests {
                 x: 2820.0,
                 y: 232.0
             }
+        );
+    }
+
+    #[test]
+    fn mixed_dpi_monitor_uses_its_own_scale_and_center() {
+        let external = MonitorGeometry {
+            bounds: (1800.0, 0.0, 1920.0, 1080.0),
+            work_area: (1800.0, 0.0, 1920.0, 1080.0),
+        };
+        let (window_width, window_height) =
+            window_size_for_target_monitor((1520.0, 1280.0), 2.0, 1.0);
+
+        assert_eq!((window_width, window_height), (760.0, 640.0));
+        let physical_position = plan_window_position(
+            external,
+            window_width,
+            window_height,
+            None,
+        );
+        assert_eq!(
+            logical_position_for_monitor(physical_position, 1.0),
+            PersistedWindowPosition { x: 2380.0, y: 220.0 }
+        );
+        assert!(position_is_in_bounds(physical_position, external.bounds));
+
+        // This is the old Tauri PhysicalPosition behavior: Tao divides by the
+        // hidden window's current scale (2), putting x=1190 back on the Retina
+        // monitor instead of the active external monitor.
+        let old_effective_position = PersistedWindowPosition {
+            x: physical_position.x / 2.0,
+            y: physical_position.y / 2.0,
+        };
+        assert!(!position_is_in_bounds(old_effective_position, external.bounds));
+    }
+
+    #[test]
+    fn mixed_dpi_monitor_scales_up_from_external_to_retina() {
+        let retina = MonitorGeometry {
+            bounds: (0.0, 0.0, 3600.0, 2338.0),
+            work_area: (0.0, 0.0, 3600.0, 2338.0),
+        };
+        let (window_width, window_height) =
+            window_size_for_target_monitor((760.0, 640.0), 1.0, 2.0);
+
+        assert_eq!((window_width, window_height), (1520.0, 1280.0));
+        let physical_position = plan_window_position(
+            retina,
+            window_width,
+            window_height,
+            None,
+        );
+        assert_eq!(
+            physical_position,
+            PersistedWindowPosition { x: 1040.0, y: 529.0 }
+        );
+        assert_eq!(
+            logical_position_for_monitor(physical_position, 2.0),
+            PersistedWindowPosition { x: 520.0, y: 264.5 }
         );
     }
 
@@ -1697,7 +1924,6 @@ mod window_placement_tests {
                 x: -3000.0,
                 y: -500.0,
             }),
-            Some(PersistedWindowPosition { x: 420.0, y: 180.0 }),
         );
 
         assert_eq!(
@@ -1705,33 +1931,6 @@ mod window_placement_tests {
             PersistedWindowPosition {
                 x: -2560.0,
                 y: -156.0,
-            }
-        );
-    }
-
-    #[test]
-    fn legacy_position_is_only_reused_when_it_belongs_to_active_monitor() {
-        let active = MonitorGeometry {
-            bounds: (1920.0, 0.0, 2560.0, 1440.0),
-            work_area: (1920.0, 24.0, 2560.0, 1416.0),
-        };
-
-        let position = plan_window_position(
-            active,
-            760.0,
-            640.0,
-            None,
-            Some(PersistedWindowPosition {
-                x: 2400.0,
-                y: 160.0,
-            }),
-        );
-
-        assert_eq!(
-            position,
-            PersistedWindowPosition {
-                x: 2400.0,
-                y: 160.0,
             }
         );
     }

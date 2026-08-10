@@ -17740,7 +17740,8 @@ var DESCRIPTORS = {
     category: "display",
     strategy: "applescript",
     keywords: ["dark", "light", "appearance", "theme", "mode"],
-    macOnly: false
+    macOnly: false,
+    toggle: { onLabel: "Dark", offLabel: "Light" }
   },
   "start-screen-saver": {
     id: "start-screen-saver",
@@ -17794,7 +17795,8 @@ var DESCRIPTORS = {
     category: "desktop",
     strategy: "shell",
     keywords: ["hide", "desktop", "icons", "clean", "finder"],
-    macOnly: true
+    macOnly: true,
+    toggle: { onLabel: "Hidden", offLabel: "Visible" }
   },
   "toggle-autohide-dock": {
     id: "toggle-autohide-dock",
@@ -17803,7 +17805,8 @@ var DESCRIPTORS = {
     category: "desktop",
     strategy: "shell",
     keywords: ["dock", "autohide", "hide", "bar"],
-    macOnly: true
+    macOnly: true,
+    toggle: { onLabel: "Auto-hide", offLabel: "Always visible" }
   },
   "toggle-autohide-menu-bar": {
     id: "toggle-autohide-menu-bar",
@@ -17812,7 +17815,8 @@ var DESCRIPTORS = {
     category: "desktop",
     strategy: "shell",
     keywords: ["menu", "bar", "autohide", "notch"],
-    macOnly: true
+    macOnly: true,
+    toggle: { onLabel: "Auto-hide", offLabel: "Always visible" }
   },
   "restart-dock": {
     id: "restart-dock",
@@ -17849,7 +17853,8 @@ var DESCRIPTORS = {
     strategy: "shell",
     keywords: ["keep", "awake", "caffeinate", "no", "sleep"],
     restoreId: "stop-keep-awake",
-    macOnly: false
+    macOnly: false,
+    toggle: { onLabel: "Awake", offLabel: "Sleep allowed" }
   },
   "stop-keep-awake": {
     id: "stop-keep-awake",
@@ -17876,7 +17881,8 @@ var DESCRIPTORS = {
     category: "network",
     strategy: "shell",
     keywords: ["bluetooth", "bt", "airpods", "wireless"],
-    macOnly: true
+    macOnly: true,
+    toggle: { onLabel: "On", offLabel: "Off" }
   },
   "toggle-wifi": {
     id: "toggle-wifi",
@@ -17885,7 +17891,8 @@ var DESCRIPTORS = {
     category: "network",
     strategy: "shell",
     keywords: ["wifi", "wireless", "network", "toggle"],
-    macOnly: false
+    macOnly: false,
+    toggle: { onLabel: "On", offLabel: "Off" }
   },
   "show-network-info": {
     id: "show-network-info",
@@ -18227,13 +18234,28 @@ async function runElevatedPowerShell(script) {
     launcher
   ]);
 }
+async function readWindowsDarkMode() {
+  const out = await runPowerShell(
+    "(Get-ItemPropertyValue -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -Name AppsUseLightTheme -ErrorAction SilentlyContinue)"
+  );
+  return out.trim() === "0";
+}
+async function readWindowsWifiState() {
+  const out = await runPowerShell(
+    "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; $adapter.AdminStatus"
+  );
+  return out.trim() === "Up";
+}
 async function executeWindowsCommand(id) {
   switch (id) {
-    case "toggle-dark-mode":
+    case "toggle-dark-mode": {
+      const wasOn = await readWindowsDarkMode();
       await runPowerShell(
         "$p='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'; $v=(Get-ItemPropertyValue -Path $p -Name AppsUseLightTheme -ErrorAction SilentlyContinue); $n=if($v -eq 0){1}else{0}; Set-ItemProperty -Path $p -Name AppsUseLightTheme -Value $n; Set-ItemProperty -Path $p -Name SystemUsesLightTheme -Value $n"
       );
-      return { ok: true, message: "Toggled Windows dark mode" };
+      const isOn = await readWindowsDarkMode();
+      return { ok: true, message: "Toggled Windows dark mode", state: { isOn, wasOn } };
+    }
     case "start-screen-saver":
       await execFileAsync3("rundll32.exe", ["user32.dll,LockWorkStation"]);
       return { ok: true, message: "Screen locked" };
@@ -18254,19 +18276,25 @@ async function executeWindowsCommand(id) {
         message: id === "toggle-mute" ? "Toggled system mute" : id === "volume-up" ? "Volume up" : "Volume down"
       };
     }
-    case "start-keep-awake":
+    case "start-keep-awake": {
+      const wasOn = isBackgroundAlive("keep-awake");
       startBackground("keep-awake", "powershell.exe", [
         "-NoProfile",
         "-NonInteractive",
         "-Command",
         '$wshell=New-Object -ComObject WScript.Shell; while($true){$wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Milliseconds 50; $wshell.SendKeys("{SCROLLLOCK}"); Start-Sleep -Seconds 240}'
       ]);
-      return { ok: true, message: "Keep Awake is on." };
-    case "stop-keep-awake":
+      return { ok: true, message: "Keep Awake is on.", state: { isOn: true, wasOn } };
+    }
+    case "stop-keep-awake": {
+      const wasOn = isBackgroundAlive("keep-awake");
+      const stopped = stopBackground("keep-awake");
       return {
         ok: true,
-        message: stopBackground("keep-awake") ? "Keep Awake turned off." : "Keep Awake was not running."
+        message: stopped ? "Keep Awake turned off." : "Keep Awake was not running.",
+        state: { isOn: false, wasOn }
       };
+    }
     case "sleep-system":
       await runPowerShell(
         "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)"
@@ -18294,14 +18322,12 @@ async function executeWindowsCommand(id) {
       await execFileAsync3("explorer.exe", ["ms-settings:network-vpn"]);
       return { ok: true, message: "Opened VPN settings" };
     case "toggle-wifi": {
-      const adapterState = await runPowerShell(
-        "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; $adapter.AdminStatus"
-      );
-      const disabling = adapterState === "Up";
+      const wasOn = await readWindowsWifiState();
       await runElevatedPowerShell(
         "$adapter=Get-NetAdapter -IncludeHidden | Where-Object { $_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\\.11') } | Select-Object -First 1; if($null -eq $adapter){throw 'No Wi-Fi adapter found.'}; if($adapter.AdminStatus -eq 'Up'){Disable-NetAdapter -Name $adapter.Name -Confirm:$false}else{Enable-NetAdapter -Name $adapter.Name -Confirm:$false}"
       );
-      return { ok: true, message: `Wi-Fi ${disabling ? "disabled" : "enabled"}` };
+      const isOn = await readWindowsWifiState();
+      return { ok: true, message: `Wi-Fi ${isOn ? "enabled" : "disabled"}`, state: { isOn, wasOn } };
     }
     case "lock-screen":
       await execFileAsync3("rundll32.exe", ["user32.dll,LockWorkStation"]);
@@ -18388,6 +18414,10 @@ function startBackground(key, command3, args) {
   child.unref();
   if (child.pid) backgroundProcesses.set(key, child.pid);
 }
+function isBackgroundAlive(key) {
+  const pid = backgroundProcesses.get(key);
+  return pid !== void 0 && isProcessAlive(pid);
+}
 function stopBackground(key) {
   const pid = backgroundProcesses.get(key);
   if (!pid) return false;
@@ -18426,6 +18456,41 @@ function generatePassword() {
   }
   return chars.join("");
 }
+async function readMacOSBoolPref(domain, key, fallback) {
+  try {
+    const out = await runShell(`defaults read ${domain} ${key} 2>/dev/null || echo ${fallback ? "1" : "0"}`);
+    return out.trim() === "1" || out.trim().toLowerCase() === "true";
+  } catch {
+    return fallback;
+  }
+}
+async function readMacOSDarkMode() {
+  try {
+    const out = await runShell("defaults read NSGlobalDomain AppleInterfaceStyle 2>/dev/null || echo Light");
+    return out.trim() === "Dark";
+  } catch {
+    return false;
+  }
+}
+async function readMacOSDesktopIcons() {
+  return readMacOSBoolPref("com.apple.finder", "CreateDesktop", true);
+}
+async function readMacOSAutohideDock() {
+  return readMacOSBoolPref("com.apple.dock", "autohide", false);
+}
+async function readMacOSAutohideMenuBar() {
+  return readMacOSBoolPref("NSGlobalDomain", "_HIHideMenuBar", false);
+}
+async function readMacOSBluetooth() {
+  const out = await runShell("blueutil -p");
+  return out.trim() === "1";
+}
+async function readMacOSWifi() {
+  const out = await runShell(
+    `iface=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2; exit}'); if [ -z "$iface" ]; then echo off; else networksetup -getairportpower "$iface" | awk '{print $NF}'; fi`
+  );
+  return out.trim().toLowerCase() === "on";
+}
 async function executeNativeCommandRaw(id) {
   const descriptor = getNativeCommand(id);
   if (!descriptor) {
@@ -18445,9 +18510,11 @@ async function executeNativeCommandRaw(id) {
   try {
     switch (id) {
       case "toggle-dark-mode": {
+        const wasOn = await readMacOSDarkMode();
         const script = 'tell application "System Events" to tell appearance preferences to set dark mode to not dark mode';
         await runAppleScript2(script);
-        return { ok: true, message: "Toggled Dark Mode" };
+        const isOn = await readMacOSDarkMode();
+        return { ok: true, message: "Toggled Dark Mode", state: { isOn, wasOn } };
       }
       case "toggle-mute": {
         await runAppleScript2(
@@ -18456,29 +18523,38 @@ async function executeNativeCommandRaw(id) {
         return { ok: true, message: "Toggled system mute" };
       }
       case "toggle-hide-desktop-icons": {
+        const wasOn = !await readMacOSDesktopIcons();
         const script = `current=$(defaults read com.apple.finder CreateDesktop 2>/dev/null || echo true); if [ "$current" = "false" ]; then defaults write com.apple.finder CreateDesktop true; else defaults write com.apple.finder CreateDesktop false; fi; killall Finder`;
         await runShell(script);
-        return { ok: true, message: "Toggled desktop icons" };
+        const isOn = !await readMacOSDesktopIcons();
+        return { ok: true, message: "Toggled desktop icons", state: { isOn, wasOn } };
       }
       case "toggle-autohide-dock": {
+        const wasOn = await readMacOSAutohideDock();
         const script = `current=$(defaults read com.apple.dock autohide 2>/dev/null || echo 0); if [ "$current" = "1" ]; then defaults write com.apple.dock autohide -bool false; else defaults write com.apple.dock autohide -bool true; fi; killall Dock`;
         await runShell(script);
-        return { ok: true, message: "Toggled Dock auto-hide" };
+        const isOn = await readMacOSAutohideDock();
+        return { ok: true, message: "Toggled Dock auto-hide", state: { isOn, wasOn } };
       }
       case "toggle-autohide-menu-bar": {
+        const wasOn = await readMacOSAutohideMenuBar();
         const script = `current=$(defaults read NSGlobalDomain _HIHideMenuBar 2>/dev/null || echo 0); if [ "$current" = "1" ]; then defaults write NSGlobalDomain _HIHideMenuBar -bool false; else defaults write NSGlobalDomain _HIHideMenuBar -bool true; fi; killall SystemUIServer`;
         await runShell(script);
-        return { ok: true, message: "Toggled menu bar auto-hide" };
+        const isOn = await readMacOSAutohideMenuBar();
+        return { ok: true, message: "Toggled menu bar auto-hide", state: { isOn, wasOn } };
       }
       case "start-keep-awake": {
+        const wasOn = isBackgroundAlive("caffeinate");
         startBackground("caffeinate", "caffeinate", ["-di"]);
-        return { ok: true, message: "Keep Awake is on \u2014 system will not sleep." };
+        return { ok: true, message: "Keep Awake is on \u2014 system will not sleep.", state: { isOn: true, wasOn } };
       }
       case "stop-keep-awake": {
+        const wasOn = isBackgroundAlive("caffeinate");
         const stopped = stopBackground("caffeinate");
         return {
           ok: true,
-          message: stopped ? "Keep Awake turned off." : "Keep Awake was not running."
+          message: stopped ? "Keep Awake turned off." : "Keep Awake was not running.",
+          state: { isOn: false, wasOn }
         };
       }
       case "start-screen-saver": {
@@ -18487,10 +18563,10 @@ async function executeNativeCommandRaw(id) {
       }
       case "toggle-bluetooth": {
         try {
-          const current = await runShell("blueutil -p");
-          const next = current === "1" ? "0" : "1";
+          const wasOn = await readMacOSBluetooth();
+          const next = wasOn ? "0" : "1";
           await runShell(`blueutil -p ${next}`);
-          return { ok: true, message: `Bluetooth ${next === "1" ? "enabled" : "disabled"}` };
+          return { ok: true, message: `Bluetooth ${next === "1" ? "enabled" : "disabled"}`, state: { isOn: next === "1", wasOn } };
         } catch {
           return {
             ok: false,
@@ -18557,9 +18633,11 @@ async function executeNativeCommandRaw(id) {
         return { ok: true, message: "System sleeping" };
       }
       case "toggle-wifi": {
+        const wasOn = await readMacOSWifi();
         const script = `iface=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2; exit}'); if [ -z "$iface" ]; then exit 1; fi; state=$(networksetup -getairportpower "$iface" | awk '{print $NF}'); if [ "$state" = "On" ]; then networksetup -setairportpower "$iface" off; echo off; else networksetup -setairportpower "$iface" on; echo on; fi`;
         const out = await runShell(script);
-        return { ok: true, message: `Wi-Fi ${out || "toggled"}` };
+        const isOn = out.trim().toLowerCase() === "on";
+        return { ok: true, message: `Wi-Fi ${out || "toggled"}`, state: { isOn, wasOn } };
       }
       case "show-public-ip": {
         const out = await runShell('curl -m 4 -fsS https://api.ipify.org || echo "(unreachable)"');

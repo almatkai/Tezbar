@@ -125,6 +125,7 @@ import {
   reindexExtensions,
   reindexQuickNotes,
   reindexSnippets,
+  resolveLauncherDirectory,
   runSearchBenchmarks,
   searchEverything,
 } from './search/service'
@@ -405,7 +406,8 @@ function canRetryRun(error: unknown, signal: AbortSignal): boolean {
 function startAgentRun(
   sender: WebContents,
   task: string,
-  images: readonly AgentInputImage[] = []
+  images: readonly AgentInputImage[] = [],
+  cwd?: string
 ): string {
   cancelPendingAgentApprovals()
   agentAbort?.abort()
@@ -467,6 +469,7 @@ function startAgentRun(
       onAnswer,
       onStderrLine,
       images: runImages,
+      cwd,
     }
 
     try {
@@ -1158,7 +1161,12 @@ export function registerIpcHandlers(
       return { ok: false, error: 'Task is empty' }
     }
     const images = Array.isArray(request.images) ? request.images : []
-    const runId = startAgentRun(event.sender, task, images)
+    const requestedCwd = typeof request.cwd === 'string' ? request.cwd.trim() : ''
+    const cwd = requestedCwd ? (resolveLauncherDirectory(requestedCwd) ?? undefined) : undefined
+    if (requestedCwd && !cwd) {
+      return { ok: false, error: `Directory does not exist: ${requestedCwd}` }
+    }
+    const runId = startAgentRun(event.sender, task, images, cwd)
     return { ok: true, runId }
   })
 
@@ -1271,7 +1279,8 @@ export function registerIpcHandlers(
       typeof s.id !== 'string' ||
       typeof s.title !== 'string' ||
       typeof s.createdAt !== 'number' ||
-      typeof s.updatedAt !== 'number'
+      typeof s.updatedAt !== 'number' ||
+      (s.workingDirectory !== undefined && typeof s.workingDirectory !== 'string')
     ) {
       return { ok: false, error: 'Invalid session' }
     }
@@ -1290,6 +1299,7 @@ export function registerIpcHandlers(
         title: s.title,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
+        workingDirectory: s.workingDirectory,
       })
       await appendChatTurn(s.id, {
         id: t.id,
@@ -1751,6 +1761,10 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.PATH_COMPLETE, async (_event, query: unknown) => {
     const q = typeof query === 'string' ? query : ''
     return completePath(q)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PATH_RESOLVE_DIRECTORY, async (_event, input: unknown) => {
+    return typeof input === 'string' ? resolveLauncherDirectory(input) : null
   })
 
   ipcMain.handle(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path: unknown) => {

@@ -37,6 +37,8 @@ export interface AgentInputImage {
 export interface AgentRunRequest {
   task: string
   images?: AgentInputImage[]
+  /** Existing directory used as the Pi subprocess cwd. */
+  cwd?: string
 }
 
 export type AgentApprovalDecision = 'deny' | 'once' | 'always'

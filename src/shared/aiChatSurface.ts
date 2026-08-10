@@ -4,9 +4,9 @@
  * a fresh session.
  */
 export type AiChatBoot =
-  | { kind: 'submit'; prompt: string }
+  | { kind: 'submit'; prompt: string; workingDirectory?: string }
   | { kind: 'panel' }
-  | { kind: 'newChat' }
+  | { kind: 'newChat'; workingDirectory?: string }
   | { kind: 'screen' }
   | { kind: 'resume'; sessionId: string }
 

@@ -164,6 +164,7 @@ export type RaymesApi = {
   searchAll: (query: string) => Promise<SearchResult[]>
   listSearchCandidates: () => Promise<SearchResult[]>
   completePath: (query: string) => Promise<PathCompletionItem[]>
+  resolveDirectory: (path: string) => Promise<string | null>
   recordDirectoryVisit: (path: string) => Promise<void>
   runSearchBenchmark: () => Promise<SearchBenchmarkReport>
   getSearchBenchmarkHistory: () => Promise<SearchBenchmarkReport[]>
@@ -357,7 +358,10 @@ export type RaymesApi = {
   chatList: (limit?: number) => Promise<ChatSessionSummary[]>
   chatGet: (id: string) => Promise<ChatSession | null>
   chatAppend: (payload: {
-    session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt'>
+    session: Pick<
+      ChatSession,
+      'id' | 'title' | 'createdAt' | 'updatedAt' | 'workingDirectory'
+    >
     turn: ChatTurn
   }) => Promise<{ ok: boolean; error?: string }>
   chatUpdateTitle: (id: string, title: string) => Promise<{ ok: boolean }>

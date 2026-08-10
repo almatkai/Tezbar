@@ -30,6 +30,12 @@ export function buildAgentPromptFromChat(session: ChatSession, nextUserText: str
     'When the user asks what is installed or what they have, inspect /Applications, ~/Applications, PATH, or relevant local locations.',
     'Resolve common macOS shorthand like "desktop/code" to ~/Desktop/code when appropriate.',
   ]
+  if (session.workingDirectory) {
+    lines.push(
+      `Your working directory is ${session.workingDirectory}.`,
+      'Stay inside this directory unless the user explicitly asks you to inspect or change something outside it.'
+    )
+  }
   if (priorTurns.length === 0) {
     lines.push('', 'User message:', nextUserText)
     return lines.join('\n')

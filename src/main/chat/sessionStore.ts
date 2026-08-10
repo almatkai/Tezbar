@@ -18,6 +18,7 @@ type SessionRow = {
   title: string
   created_at: number
   updated_at: number
+  working_directory: string | null
 }
 
 type TurnRow = {
@@ -166,7 +167,8 @@ class ChatSessionDatabase {
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        working_directory TEXT
       );
       CREATE TABLE IF NOT EXISTS chat_turns (
         id TEXT PRIMARY KEY,
@@ -184,6 +186,11 @@ class ChatSessionDatabase {
       CREATE INDEX IF NOT EXISTS idx_chat_turns_session ON chat_turns(session_id);
       CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
     `)
+    try {
+      this.db.exec(`ALTER TABLE chat_sessions ADD COLUMN working_directory TEXT;`)
+    } catch {
+      // Existing and newly-created databases already have the column.
+    }
     try {
       this.db.exec(`ALTER TABLE chat_turns ADD COLUMN attachments_json TEXT;`)
     } catch {
@@ -204,7 +211,7 @@ class ChatSessionDatabase {
   listSessions(limit = 100): ChatSessionSummary[] {
     const rows = this.db
       .prepare(
-        `SELECT s.id, s.title, s.created_at, s.updated_at,
+        `SELECT s.id, s.title, s.created_at, s.updated_at, s.working_directory,
                 (SELECT COUNT(*) FROM chat_turns t WHERE t.session_id = s.id) AS turn_count,
                 (SELECT t.text FROM chat_turns t
                    WHERE t.session_id = s.id AND t.role = 'user'
@@ -220,13 +227,16 @@ class ChatSessionDatabase {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       turnCount: Number(r.turn_count),
+      workingDirectory: r.working_directory ?? undefined,
       preview: r.preview ?? '',
     }))
   }
 
   getSession(id: string): ChatSession | null {
     const sessionRow = this.db
-      .prepare(`SELECT id, title, created_at, updated_at FROM chat_sessions WHERE id = ?`)
+      .prepare(
+        `SELECT id, title, created_at, updated_at, working_directory FROM chat_sessions WHERE id = ?`
+      )
       .get(id) as SessionRow | undefined
     if (!sessionRow) return null
     const turnRows = this.db
@@ -240,6 +250,7 @@ class ChatSessionDatabase {
       title: sessionRow.title,
       createdAt: sessionRow.created_at,
       updatedAt: sessionRow.updated_at,
+      workingDirectory: sessionRow.working_directory ?? undefined,
       turns: turnRows.map((t) => ({
         id: t.id,
         role: (t.role === 'assistant' ? 'assistant' : 'user') as ChatRole,
@@ -254,16 +265,25 @@ class ChatSessionDatabase {
     }
   }
 
-  upsertSession(session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt'>): void {
+  upsertSession(
+    session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt' | 'workingDirectory'>
+  ): void {
     this.db
       .prepare(
-        `INSERT INTO chat_sessions(id, title, created_at, updated_at)
-         VALUES(?, ?, ?, ?)
+        `INSERT INTO chat_sessions(id, title, created_at, updated_at, working_directory)
+         VALUES(?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            title = excluded.title,
-           updated_at = excluded.updated_at`
+           updated_at = excluded.updated_at,
+           working_directory = excluded.working_directory`
       )
-      .run(session.id, session.title, session.createdAt, session.updatedAt)
+      .run(
+        session.id,
+        session.title,
+        session.createdAt,
+        session.updatedAt,
+        session.workingDirectory ?? null
+      )
   }
 
   appendTurn(sessionId: string, turn: ChatTurn): void {
@@ -350,7 +370,7 @@ export async function getChatSession(id: string): Promise<ChatSession | null> {
 }
 
 export async function upsertChatSession(
-  session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt'>
+  session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt' | 'workingDirectory'>
 ): Promise<void> {
   await store().ensureInitialized()
   store().upsertSession(session)

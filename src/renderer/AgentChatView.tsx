@@ -173,6 +173,9 @@ export default function AgentChatView({
   onOpenSettings: () => void
 }): JSX.Element {
   const [chatSession, setChatSession] = useState<ChatSession | null>(null)
+  const [workingDirectory, setWorkingDirectory] = useState<string | undefined>(() =>
+    boot.kind === 'submit' || boot.kind === 'newChat' ? boot.workingDirectory : undefined
+  )
   const [chatHistory, setChatHistory] = useState<ChatSessionSummary[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
   const [draft, setDraft] = useState('')
@@ -195,6 +198,7 @@ export default function AgentChatView({
   }, [historyOpen])
 
   const chatSessionRef = useRef<ChatSession | null>(null)
+  const workingDirectoryRef = useRef<string | undefined>(workingDirectory)
   const llmConfigRef = useRef<LlmConfigRecord>({})
   const agentStreamTextRef = useRef('')
   const agentStagesRef = useRef<Stage[]>([])
@@ -275,6 +279,9 @@ export default function AgentChatView({
   useEffect(() => {
     chatSessionRef.current = chatSession
   }, [chatSession])
+  useEffect(() => {
+    workingDirectoryRef.current = workingDirectory
+  }, [workingDirectory])
   useEffect(() => {
     llmConfigRef.current = llmConfig
   }, [llmConfig])
@@ -372,12 +379,14 @@ export default function AgentChatView({
     focusChatInput()
   }, [setFollowingOutput])
 
-  const startNewChat = useCallback((): void => {
+  const startNewChat = useCallback((nextWorkingDirectory?: string): void => {
     if (currentAgentRunIdRef.current) {
       stopRun()
     }
     setChatSession(null)
     chatSessionRef.current = null
+    setWorkingDirectory(nextWorkingDirectory)
+    workingDirectoryRef.current = nextWorkingDirectory
     agentStreamTextRef.current = ''
     agentStagesRef.current = []
     agentTimelineRef.current = []
@@ -431,6 +440,8 @@ export default function AgentChatView({
         stopRun()
         setChatSession(full)
         chatSessionRef.current = full
+        setWorkingDirectory(full.workingDirectory)
+        workingDirectoryRef.current = full.workingDirectory
         agentStreamTextRef.current = ''
         agentStagesRef.current = []
         agentTimelineRef.current = []
@@ -463,6 +474,8 @@ export default function AgentChatView({
         if (chatSessionRef.current?.id === id) {
           setChatSession(null)
           chatSessionRef.current = null
+          setWorkingDirectory(undefined)
+          workingDirectoryRef.current = undefined
           agentStreamTextRef.current = ''
           agentStagesRef.current = []
           agentTimelineRef.current = []
@@ -545,6 +558,7 @@ export default function AgentChatView({
             title: summarizeChatTitle(trimmed),
             createdAt: now,
             updatedAt: now,
+            workingDirectory: workingDirectoryRef.current,
             turns: [],
           }
 
@@ -581,6 +595,7 @@ export default function AgentChatView({
             title: nextSession.title,
             createdAt: nextSession.createdAt,
             updatedAt: nextSession.updatedAt,
+            workingDirectory: nextSession.workingDirectory,
           },
           turn: userTurn,
         })
@@ -603,10 +618,11 @@ export default function AgentChatView({
 
       try {
         const result =
-          shouldRunAgent(trimmed) || image
+          nextSession.workingDirectory || shouldRunAgent(trimmed) || image
             ? await window.tezbar.agentRun({
                 task: buildAgentPromptFromChat(nextSession, trimmed),
                 images: image ? [image] : undefined,
+                cwd: nextSession.workingDirectory,
               })
             : await window.tezbar.chatRun(nextSession.turns)
         if (!result.ok) {
@@ -637,12 +653,14 @@ export default function AgentChatView({
 
   const bootKey =
     boot.kind === 'submit'
-      ? `submit:${boot.prompt}`
+      ? `submit:${boot.workingDirectory ?? ''}:${boot.prompt}`
       : boot.kind === 'resume'
         ? `resume:${boot.sessionId}`
-        : boot.kind === 'panel'
-          ? 'panel'
-          : boot.kind
+        : boot.kind === 'newChat'
+          ? `newChat:${boot.workingDirectory ?? ''}`
+          : boot.kind === 'panel'
+            ? 'panel'
+            : boot.kind
 
   // First paint: honour boot + hydrate history.
   useEffect(() => {
@@ -653,7 +671,7 @@ export default function AgentChatView({
         if (cancelled) return
 
         if (boot.kind === 'newChat') {
-          startNewChat()
+          startNewChat(boot.workingDirectory)
           return
         }
 
@@ -679,15 +697,23 @@ export default function AgentChatView({
             if (!cancelled && full) {
               setChatSession(full)
               chatSessionRef.current = full
+              setWorkingDirectory(full.workingDirectory)
+              workingDirectoryRef.current = full.workingDirectory
             }
           }
           return
         }
 
         if (boot.kind === 'submit') {
+          setWorkingDirectory(boot.workingDirectory)
+          workingDirectoryRef.current = boot.workingDirectory
           let session: ChatSession | null = null
           const mostRecent = rows[0]
-          if (mostRecent && Date.now() - mostRecent.updatedAt < CHAT_CONTINUATION_WINDOW_MS) {
+          if (
+            !boot.workingDirectory &&
+            mostRecent &&
+            Date.now() - mostRecent.updatedAt < CHAT_CONTINUATION_WINDOW_MS
+          ) {
             session = await window.tezbar.chatGet(mostRecent.id)
           }
           if (cancelled) return
@@ -902,6 +928,7 @@ export default function AgentChatView({
                   title: nextSession.title,
                   createdAt: nextSession.createdAt,
                   updatedAt: nextSession.updatedAt,
+                  workingDirectory: nextSession.workingDirectory,
                 },
                 turn,
               })
@@ -1076,9 +1103,14 @@ export default function AgentChatView({
             <div className="min-w-0">
               <p className="text-[11.5px] font-semibold text-ink-1">Agent</p>
               {chatSession ? (
-                <p className="truncate text-[10px] text-ink-4">{chatSession.title}</p>
+                <p className="truncate text-[10px] text-ink-4">
+                  {chatSession.title}
+                  {workingDirectory ? ` · ${workingDirectory}` : ''}
+                </p>
               ) : (
-                <p className="text-[10px] text-ink-4">New conversation</p>
+                <p className="truncate text-[10px] text-ink-4">
+                  {workingDirectory ? `New conversation · ${workingDirectory}` : 'New conversation'}
+                </p>
               )}
             </div>
           </div>

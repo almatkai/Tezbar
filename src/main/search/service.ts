@@ -1126,7 +1126,7 @@ function expandUserPath(input: string): string {
   return normalized
 }
 
-function resolveSlashPathInput(input: string): string {
+export function resolveSlashPathInput(input: string): string {
   input = stripPathEllipsis(input)
   if (!input.startsWith('/')) return expandUserPath(input)
 
@@ -1148,6 +1148,16 @@ function resolveSlashPathInput(input: string): string {
   }
 
   return join(homedir(), input.slice(1))
+}
+
+/** Resolve launcher slash syntax to an existing directory for terminal/agent cwd use. */
+export function resolveLauncherDirectory(input: string): string | null {
+  const candidate = resolve(resolveSlashPathInput(input.trim()))
+  try {
+    return existsSync(candidate) && statSync(candidate).isDirectory() ? candidate : null
+  } catch {
+    return null
+  }
 }
 
 function displayUserPath(path: string): string {

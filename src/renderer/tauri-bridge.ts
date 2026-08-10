@@ -178,6 +178,7 @@ export function initTauriBridge(): void {
     searchAll: (query: string) => callBackend('search:all', query),
     listSearchCandidates: () => callBackend('search:candidates'),
     completePath: (query: string) => callBackend('path:complete', query),
+    resolveDirectory: (path: string) => callBackend('path:resolve-directory', path),
     recordDirectoryVisit: (path: string) => callBackend('directory-visit:record', path),
     runSearchBenchmark: () => callBackend('search:benchmark:run'),
     getSearchBenchmarkHistory: () => callBackend('search:benchmark:history'),
