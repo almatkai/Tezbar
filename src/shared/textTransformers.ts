@@ -483,19 +483,18 @@ const G15 = 0b10100110111
 const G18 = 0b1111100100101
 const G15_MASK = 0b101010000010010
 
+function bchDigitRaw(d: number): number {
+  let i = 0
+  while (d >>> i > 0) i++
+  return i - 1
+}
+
 function bchDigit(data: number): number {
   let d = data << 10
-  while (bchDigit.raw(d) - bchDigit.raw(G15) >= 0) {
-    d ^= G15 << (bchDigit.raw(d) - bchDigit.raw(G15))
+  while (bchDigitRaw(d) - bchDigitRaw(G15) >= 0) {
+    d ^= G15 << (bchDigitRaw(d) - bchDigitRaw(G15))
   }
   return ((data << 10) | d) ^ G15_MASK
-}
-namespace bchDigit {
-  export function raw(d: number): number {
-    let i = 0
-    while (d >>> i > 0) i++
-    return i - 1
-  }
 }
 
 function bchDigit18(data: number): number {

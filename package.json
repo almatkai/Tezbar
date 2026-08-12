@@ -22,7 +22,8 @@
     "tauri": "tauri",
     "build:backend": "pnpm exec tsx scripts/build-backend.ts",
     "tauri:dev": "tauri dev",
-    "tauri:build": "pnpm build"
+    "tauri:build": "pnpm build",
+    "icons:generate": "tauri icon appIcon_simple.svg --ios-color transparent && node scripts/sync-icons.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

@@ -82,7 +82,7 @@ platform mapping and remaining native parity work.
 
 ## Tauri Builds
 
-Tauri is configured separately in [`src-tauri/tauri.conf.json`](/Users/almatkairatov/Desktop/code/Raymes/src-tauri/tauri.conf.json). It uses the app’s branded icon set and can produce macOS DMG output.
+Tauri is configured separately in [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json). It uses the app’s branded icon set and can produce macOS DMG output.
 
 To build the Tauri app:
 
@@ -98,7 +98,7 @@ src-tauri/target/release/bundle/dmg/
 
 ## Icon Assets
 
-The Electron build uses the branded icon files in [`build/`](/Users/almatkairatov/Desktop/code/Raymes/build). Tauri now uses the same source artwork, so both builds should present Tezbar branding instead of the default placeholder icon.
+All application icons are generated from the vector source `appIcon_simple.svg`. You can regenerate all platform icons with transparent backgrounds at any time by running `pnpm icons:generate`.
 
 ## Notes
 
