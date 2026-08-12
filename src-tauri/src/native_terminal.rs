@@ -5,7 +5,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -91,27 +91,51 @@ struct TerminalExitEvent {
     signal: Option<u32>,
 }
 
-fn working_directory(requested: Option<&str>) -> PathBuf {
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .or_else(|| std::env::current_dir().ok())
-        .unwrap_or_else(|| PathBuf::from("."));
+fn working_directory_for_home(requested: Option<&str>, home: &Path) -> PathBuf {
     let Some(requested) = requested.map(str::trim).filter(|value| !value.is_empty()) else {
-        return home;
+        return home.to_path_buf();
     };
+    let absolute_prefixes = [
+        "/Users/",
+        "/Volumes/",
+        "/private/",
+        "/tmp/",
+        "/var/",
+        "/System/",
+        "/Library/",
+    ];
+    let is_filesystem_absolute = absolute_prefixes
+        .iter()
+        .any(|prefix| requested.starts_with(prefix))
+        || requested == "/Users"
+        || requested == "/Volumes";
     let candidate = if requested == "~" {
-        home.clone()
+        home.to_path_buf()
     } else if let Some(tail) = requested.strip_prefix("~/") {
         home.join(tail)
+    } else if requested.starts_with('/') && !is_filesystem_absolute {
+        // The launcher displays paths below the home directory as `/Desktop/…`
+        // to keep its input compact. Resolve that syntax before spawning the
+        // shell; treating it as a filesystem-root path would silently fall
+        // back to the home directory.
+        home.join(requested.trim_start_matches('/'))
     } else {
         PathBuf::from(requested)
     };
     if candidate.is_dir() {
         candidate
     } else {
-        home
+        home.to_path_buf()
     }
+}
+
+fn working_directory(requested: Option<&str>) -> PathBuf {
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."));
+    working_directory_for_home(requested, &home)
 }
 
 fn parse_lsof_working_directory(output: &str) -> Option<String> {
@@ -595,6 +619,24 @@ mod tests {
             parse_lsof_working_directory("p123\nfcwd\nn/tmp\n"),
             Some("/tmp".to_string())
         );
+    }
+
+    #[test]
+    fn compact_launcher_paths_use_home_as_their_root() {
+        let home = std::env::temp_dir().join(format!(
+            "tezbar-native-terminal-home-{}",
+            std::process::id()
+        ));
+        let directory = home.join("Desktop/code");
+        let _ = fs::remove_dir_all(&home);
+        fs::create_dir_all(&directory).unwrap();
+
+        assert_eq!(
+            working_directory_for_home(Some("/Desktop/code/"), &home),
+            directory
+        );
+
+        fs::remove_dir_all(home).unwrap();
     }
 
     #[cfg(target_os = "macos")]

@@ -222,10 +222,24 @@ function normalizeTerminalPath(raw: string): string {
   if (requested === '~') return homedir()
   if (requested.startsWith('~/')) return join(homedir(), requested.slice(2))
 
-  // The launcher uses `/Desktop`, `/Documents`, etc. as a compact cross-
-  // platform spelling. On Windows those are not drive-root folders; map them
-  // to the current user's profile before resolving the terminal cwd.
-  if (process.platform === 'win32' && /^\/(Desktop|Documents|Downloads|Pictures|Videos|Music)(?:\/|$)/i.test(requested)) {
+  const absolutePrefixes = [
+    '/Users/',
+    '/Volumes/',
+    '/private/',
+    '/tmp/',
+    '/var/',
+    '/System/',
+    '/Library/',
+  ]
+  const isFilesystemAbsolute =
+    absolutePrefixes.some((prefix) => requested.startsWith(prefix)) ||
+    requested === '/Users' ||
+    requested === '/Volumes'
+
+  // The launcher displays paths below the home directory as `/Desktop/...`
+  // on every platform. Resolve that compact spelling before spawning the
+  // terminal; on Windows it is not a drive-root path.
+  if (requested.startsWith('/') && !isFilesystemAbsolute) {
     return join(homedir(), requested.slice(1))
   }
 

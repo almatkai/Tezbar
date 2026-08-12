@@ -29747,7 +29747,17 @@ function normalizeTerminalPath(raw) {
   if (!requested) return "";
   if (requested === "~") return (0, import_node_os17.homedir)();
   if (requested.startsWith("~/")) return (0, import_node_path33.join)((0, import_node_os17.homedir)(), requested.slice(2));
-  if (process.platform === "win32" && /^\/(Desktop|Documents|Downloads|Pictures|Videos|Music)(?:\/|$)/i.test(requested)) {
+  const absolutePrefixes = [
+    "/Users/",
+    "/Volumes/",
+    "/private/",
+    "/tmp/",
+    "/var/",
+    "/System/",
+    "/Library/"
+  ];
+  const isFilesystemAbsolute = absolutePrefixes.some((prefix) => requested.startsWith(prefix)) || requested === "/Users" || requested === "/Volumes";
+  if (requested.startsWith("/") && !isFilesystemAbsolute) {
     return (0, import_node_path33.join)((0, import_node_os17.homedir)(), requested.slice(1));
   }
   return requested;
