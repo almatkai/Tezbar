@@ -4,6 +4,7 @@ export const AI_PROVIDER_ROWS: Array<{ id: BuiltInProviderId; title: string; sub
   { id: 'openai', title: 'OpenAI', subtitle: 'Official OpenAI API' },
   { id: 'deepseek', title: 'DeepSeek', subtitle: 'DeepSeek V4 Flash and Pro' },
   { id: 'openai-compatible', title: 'OpenAI Compatible', subtitle: 'Custom OpenAI-style endpoint' },
+  { id: 'tokenrouter', title: 'TokenRouter', subtitle: 'TokenRouter OpenAI-compatible gateway' },
   { id: 'gemini', title: 'Gemini', subtitle: 'Google Gemini via OpenAI-compatible API' },
   { id: 'anthropic', title: 'Anthropic', subtitle: 'Claude via the official API' },
   { id: 'ollama', title: 'Ollama', subtitle: 'Local models on this machine' },
@@ -21,6 +22,7 @@ export const RECOMMENDED_AI_MODEL: Record<BuiltInProviderId, string> = {
   openai: 'gpt-5.4-mini',
   deepseek: 'deepseek-v4-flash',
   'openai-compatible': 'gpt-5.4-mini',
+  tokenrouter: 'moonshotai/kimi-k3-free',
   gemini: 'gemini-3.5-flash',
   anthropic: 'claude-haiku-4-5-20251001',
   ollama: 'llama3.2',
@@ -32,6 +34,7 @@ export const DEFAULT_BASE_URL: Partial<Record<BuiltInProviderId, string>> = {
   openai: 'https://api.openai.com/v1',
   deepseek: 'https://api.deepseek.com',
   'openai-compatible': 'https://api.openai.com/v1',
+  tokenrouter: 'https://api.tokenrouter.com/v1',
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
   anthropic: 'https://api.anthropic.com',
   ollama: 'http://localhost:11434',
@@ -53,6 +56,10 @@ export const DEFAULT_PROVIDER_MODELS: Record<BuiltInProviderId, AiProviderModel[
 
   'openai-compatible': [
     { id: 'gpt-5.4-mini', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
+  ],
+
+  tokenrouter: [
+    { id: 'moonshotai/kimi-k3-free', capabilities: ['tools'], contextWindow: 128000 },
   ],
 
   gemini: [

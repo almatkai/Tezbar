@@ -21,6 +21,7 @@ const ROWS: { id: ProviderId; title: string; subtitle: string }[] = [
   { id: 'openai', title: 'OpenAI', subtitle: 'Chat Completions API or compatible' },
   { id: 'deepseek', title: 'DeepSeek', subtitle: 'DeepSeek-V4, V3, and R1 via the official API' },
   { id: 'openai-compatible', title: 'OpenAI Compatible', subtitle: 'Any endpoint that speaks OpenAI Chat API' },
+  { id: 'tokenrouter', title: 'TokenRouter', subtitle: 'TokenRouter OpenAI-compatible gateway' },
   { id: 'gemini', title: 'Gemini', subtitle: 'Google Gemini via OpenAI-compatible endpoint' },
   { id: 'anthropic', title: 'Anthropic', subtitle: 'Claude via the official API' },
   { id: 'ollama', title: 'Ollama', subtitle: 'Local models running on this machine' },
@@ -32,6 +33,7 @@ const DEFAULT_MODEL: Partial<Record<ProviderId, string>> = {
   openai: 'gpt-4o-mini',
   deepseek: 'deepseek-v4-flash',
   'openai-compatible': 'gpt-4o-mini',
+  tokenrouter: 'moonshotai/kimi-k3-free',
   gemini: 'gemini-2.0-flash',
   anthropic: 'claude-3-5-haiku-20241022',
   ollama: 'llama3.2',
@@ -106,6 +108,11 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
     if (id === 'openai-compatible') {
       patch.apiKey = apiKey
       patch.openaiCompatibleBaseURL = baseURL.trim() || 'https://api.openai.com/v1'
+      patch.model = model.trim() || defaultModelForProvider(id)
+    }
+    if (id === 'tokenrouter') {
+      patch.apiKey = apiKey
+      patch.baseURL = baseURL.trim() || 'https://api.tokenrouter.com/v1'
       patch.model = model.trim() || defaultModelForProvider(id)
     }
     if (id === 'gemini') {
@@ -214,7 +221,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
         />
       </div>
       <div className="glass-card min-h-0 flex-1 overflow-y-auto px-4 py-3 pr-[calc(0.5rem+2px)] animate-tezbar-scale-in">
-        {id === 'openai' || id === 'anthropic' || id === 'openai-compatible' || id === 'gemini' || id === 'deepseek' ? (
+        {id === 'openai' || id === 'anthropic' || id === 'openai-compatible' || id === 'tokenrouter' || id === 'gemini' || id === 'deepseek' ? (
           <div className="space-y-3">
             <div>
               <FieldLabel>API key</FieldLabel>
@@ -230,7 +237,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
                       ? 'sk-ant-…'
                       : id === 'gemini'
                         ? 'AIza…'
-                        : id === 'deepseek'
+                        : id === 'deepseek' || id === 'tokenrouter'
                           ? 'sk-…'
                           : 'provider key'
                 }
@@ -250,7 +257,9 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
                         ? 'https://generativelanguage.googleapis.com/v1beta/openai'
                         : id === 'deepseek'
                           ? 'https://api.deepseek.com'
-                          : 'https://api.openai.com/v1'
+                          : id === 'tokenrouter'
+                            ? 'https://api.tokenrouter.com/v1'
+                            : 'https://api.openai.com/v1'
                 }
               />
             </div>
@@ -476,6 +485,7 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
     openai: false,
     deepseek: false,
     'openai-compatible': false,
+    tokenrouter: false,
     gemini: false,
     anthropic: false,
     ollama: false,

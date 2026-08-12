@@ -104,6 +104,48 @@ describe('configForProvider', () => {
     expect(getSelectedPiProviderBridge('chat')?.providerJson).toContain('https://api.deepseek.com')
   })
 
+  it('routes TokenRouter models through the OpenAI-compatible Pi provider', () => {
+    vi.mocked(readRawConfig).mockReturnValue({
+      provider: 'tokenrouter',
+      providerConfigs: {
+        tokenrouter: {
+          baseURL: 'https://api.tokenrouter.com/v1',
+          apiKey: 'tokenrouter-key',
+        },
+      },
+      providerSelectedModels: {
+        tokenrouter: 'moonshotai/kimi-k3-free',
+      },
+      providerModels: {
+        tokenrouter: [{ id: 'moonshotai/kimi-k3-free', capabilities: ['tools'] }],
+      },
+    })
+
+    expect(getSelectedPiModelPattern('chat')).toBe('tokenrouter/moonshotai/kimi-k3-free')
+
+    const bridge = getSelectedPiProviderBridge('chat')
+    const provider = JSON.parse(bridge?.providerJson ?? '{}') as {
+      api?: string
+      authHeader?: boolean
+      baseUrl?: string
+      models?: Array<{ id?: string; compat?: Record<string, unknown> }>
+    }
+
+    expect(bridge?.modelPattern).toBe('tezbar/moonshotai/kimi-k3-free')
+    expect(provider).toMatchObject({
+      api: 'openai-completions',
+      authHeader: true,
+      baseUrl: 'https://api.tokenrouter.com/v1',
+    })
+    expect(provider.models?.[0]).toMatchObject({
+      id: 'moonshotai/kimi-k3-free',
+      compat: {
+        supportsStore: false,
+        maxTokensField: 'max_tokens',
+      },
+    })
+  })
+
   it('uses DeepSeek Anthropic messages so DSML tool calls stay structured', () => {
     vi.mocked(readRawConfig).mockReturnValue({
       provider: 'deepseek',

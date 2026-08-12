@@ -2,7 +2,16 @@ import type { VoiceModelId } from './voice'
 
 export const DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS = 5 * 60 * 1000
 
-export type BuiltInProviderId = 'openai' | 'openai-compatible' | 'anthropic' | 'ollama' | 'copilot' | 'gemini' | 'opencode' | 'deepseek'
+export type BuiltInProviderId =
+  | 'openai'
+  | 'openai-compatible'
+  | 'tokenrouter'
+  | 'anthropic'
+  | 'ollama'
+  | 'copilot'
+  | 'gemini'
+  | 'opencode'
+  | 'deepseek'
 
 export type ProviderId = BuiltInProviderId | `custom:${string}`
 

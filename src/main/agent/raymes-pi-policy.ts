@@ -62,6 +62,35 @@ type RaymesPiProviderConfig = {
   }>
 }
 
+const TOKENROUTER_BASE_URL = 'https://api.tokenrouter.com/v1'
+const TOKENROUTER_MODEL_ID = 'moonshotai/kimi-k3-free'
+
+function registerTokenRouterProvider(pi: ExtensionAPI): void {
+  pi.registerProvider('tokenrouter', {
+    baseUrl: TOKENROUTER_BASE_URL,
+    apiKey: '$TOKENROUTER_API_KEY',
+    authHeader: true,
+    api: 'openai-completions',
+    models: [
+      {
+        id: TOKENROUTER_MODEL_ID,
+        name: 'Kimi K3 Free (TokenRouter)',
+        reasoning: false,
+        input: ['text'],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128000,
+        maxTokens: 8192,
+        compat: {
+          supportsStore: false,
+          supportsDeveloperRole: false,
+          supportsReasoningEffort: false,
+          maxTokensField: 'max_tokens',
+        },
+      },
+    ],
+  })
+}
+
 function registerRaymesProvider(pi: ExtensionAPI): void {
   const raw = process.env['RAYMES_PI_PROVIDER_JSON']
   if (!raw) return
@@ -238,6 +267,7 @@ export function isAutoAllowedBash(
 }
 
 export default function raymesPiPolicy(pi: ExtensionAPI): void {
+  registerTokenRouterProvider(pi)
   registerRaymesProvider(pi)
 
   const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']

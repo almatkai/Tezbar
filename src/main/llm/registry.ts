@@ -51,6 +51,8 @@ const DEFAULT_GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/op
 const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash'
 const DEFAULT_DEEPSEEK_BASE = 'https://api.deepseek.com'
 const DEFAULT_DEEPSEEK_MODEL = 'deepseek-v4-flash'
+const DEFAULT_TOKENROUTER_BASE = 'https://api.tokenrouter.com/v1'
+const DEFAULT_TOKENROUTER_MODEL = 'moonshotai/kimi-k3-free'
 
 function normalizeCustomProviders(raw: unknown): CustomAiProvider[] {
   if (!Array.isArray(raw)) return []
@@ -129,7 +131,8 @@ function normalizeFromRaw(raw: Record<string, unknown>): OpenRayLLMConfig {
       p === 'copilot' ||
       p === 'gemini' ||
       p === 'opencode' ||
-      p === 'deepseek'
+      p === 'deepseek' ||
+      p === 'tokenrouter'
       ? (p as ProviderId)
       : hasCopilotToken
         ? 'copilot'
@@ -220,6 +223,13 @@ export function readLLMConfig(): OpenRayLLMConfig {
       model: n.model ?? DEFAULT_DEEPSEEK_MODEL,
     }
   }
+  if (n.provider === 'tokenrouter') {
+    return {
+      ...n,
+      baseURL: n.baseURL ?? DEFAULT_TOKENROUTER_BASE,
+      model: n.model ?? DEFAULT_TOKENROUTER_MODEL,
+    }
+  }
   return n
 }
 
@@ -255,6 +265,9 @@ export function configForProvider(cfg: OpenRayLLMConfig, provider: ProviderId): 
   }
   if (provider === 'deepseek') {
     return { ...next, baseURL: next.baseURL ?? DEFAULT_DEEPSEEK_BASE, model: next.model ?? DEFAULT_DEEPSEEK_MODEL }
+  }
+  if (provider === 'tokenrouter') {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_TOKENROUTER_BASE, model: next.model ?? DEFAULT_TOKENROUTER_MODEL }
   }
   return {
     ...next,
@@ -327,6 +340,13 @@ function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
         cfg.model ?? DEFAULT_DEEPSEEK_MODEL,
         'DeepSeek',
       )
+    case 'tokenrouter':
+      return new OpenAIProvider(
+        cfg.baseURL ?? DEFAULT_TOKENROUTER_BASE,
+        cfg.apiKey?.trim() ? cfg.apiKey : (process.env['TOKENROUTER_API_KEY'] ?? ''),
+        cfg.model ?? DEFAULT_TOKENROUTER_MODEL,
+        'TokenRouter',
+      )
     default:
       return new OllamaProvider(DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL)
   }
@@ -367,7 +387,7 @@ export function getSelectedPiModelPattern(task?: LlmTask): string | undefined {
     return `opencode/opencode/${model}`
   }
   if (model.startsWith(`${provider}/`)) return model
-  if (model.includes('/')) return model
+  if (model.includes('/') && provider !== 'tokenrouter') return model
   return `${provider}/${model}`
 }
 
@@ -385,6 +405,7 @@ function openAiCompatBaseUrl(cfg: OpenRayLLMConfig): string | undefined {
   if (cfg.provider === 'openai-compatible') return cfg.openaiCompatibleBaseURL ?? cfg.baseURL
   if (cfg.provider === 'gemini') return cfg.baseURL ?? DEFAULT_GEMINI_BASE
   if (cfg.provider === 'deepseek') return cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE
+  if (cfg.provider === 'tokenrouter') return cfg.baseURL ?? DEFAULT_TOKENROUTER_BASE
   if (isCustomProvider(cfg.provider)) return cfg.openaiCompatibleBaseURL ?? cfg.baseURL
   if (cfg.provider === 'ollama') {
     const base = cfg.baseURL ?? DEFAULT_OLLAMA_BASE
@@ -396,6 +417,9 @@ function openAiCompatBaseUrl(cfg: OpenRayLLMConfig): string | undefined {
 function piApiKey(cfg: OpenRayLLMConfig): string | undefined {
   if (cfg.provider === 'gemini') return cfg.geminiApiKey ?? cfg.apiKey
   if (cfg.provider === 'ollama') return 'ollama'
+  if (cfg.provider === 'tokenrouter') {
+    return cfg.apiKey?.trim() ? cfg.apiKey : process.env['TOKENROUTER_API_KEY']
+  }
   return cfg.apiKey
 }
 
@@ -456,7 +480,14 @@ export function getSelectedPiProviderBridge(task?: LlmTask): PiProviderBridge | 
           requiresReasoningContentOnAssistantMessages: true,
           thinkingFormat: 'deepseek',
         }
-      : undefined
+      : cfg.provider === 'tokenrouter'
+        ? {
+            supportsStore: false,
+            supportsDeveloperRole: false,
+            supportsReasoningEffort: false,
+            maxTokensField: 'max_tokens',
+          }
+        : undefined
 
   const providerJson = JSON.stringify({
     baseUrl,

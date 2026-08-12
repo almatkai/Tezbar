@@ -1,5 +1,5 @@
 import { app, clipboard, nativeImage, shell } from '@tezbar/desktop-runtime'
-import type { NativeImage } from '@tezbar/desktop-runtime'
+import type { ClipboardSnapshot, NativeImage } from '@tezbar/desktop-runtime'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
@@ -184,36 +184,11 @@ function hashKey(kind: string, payload: string): string {
   return createHash('sha1').update(`${kind}|${payload}`).digest('hex').slice(0, 16)
 }
 
-function readFileUrls(): string[] {
-  if (process.platform !== 'darwin') return []
-  const formats = clipboard.availableFormats()
-  const hasFileUrl = formats.some(
-    (f) => f === 'public.file-url' || f === 'NSFilenamesPboardType' || f === 'Files',
-  )
-  if (!hasFileUrl) return []
-
+function readClipboardSnapshot(): ClipboardSnapshot {
   try {
-    const raw = clipboard.read('public.file-url')
-    if (!raw) return []
-    const parts = raw
-      .split(/\0|\r?\n/g)
-      .map((part) => part.trim())
-      .filter(Boolean)
-    const paths = parts
-      .map((url) => {
-        try {
-          if (url.startsWith('file://')) {
-            return decodeURIComponent(new URL(url).pathname)
-          }
-          return url
-        } catch {
-          return ''
-        }
-      })
-      .filter(Boolean)
-    return Array.from(new Set(paths))
+    return clipboard.readSnapshot()
   } catch {
-    return []
+    return { text: '', filePaths: [], hasImage: false, changeCount: 0 }
   }
 }
 
@@ -228,16 +203,19 @@ function idForImage(hash: string): string {
 }
 
 function captureFileEntry(paths: string[], now: number): ClipboardEntry | null {
-  if (paths.length === 0) return null
+  const uniquePaths = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)))
+  if (uniquePaths.length === 0) return null
   return {
-    id: idForFiles(paths),
+    id: idForFiles(uniquePaths),
     kind: 'file',
     createdAt: now,
     pinned: false,
     isSecret: false,
-    paths,
+    paths: uniquePaths,
     preview:
-      paths.length === 1 ? basename(paths[0]) : `${basename(paths[0])} + ${paths.length - 1} more`,
+      uniquePaths.length === 1
+        ? basename(uniquePaths[0])
+        : `${basename(uniquePaths[0])} + ${uniquePaths.length - 1} more`,
   }
 }
 
@@ -284,8 +262,7 @@ function captureImageEntry(now: number): ClipboardEntry | null {
   }
 }
 
-function captureTextEntry(now: number): ClipboardEntry | null {
-  const text = clipboard.readText()
+function captureTextEntry(now: number, text: string): ClipboardEntry | null {
   if (!text || !text.trim()) return null
 
   return {
@@ -305,14 +282,14 @@ function captureTextEntry(now: number): ClipboardEntry | null {
  *  pasteboard. Precedence: file URLs beat images beat text, because
  *  Finder and many apps set all three formats when you copy a file
  *  (and we want the richest kind to win). */
-export function captureClipboardSnapshot(): void {
+export function captureClipboardSnapshot(snapshot?: ClipboardSnapshot): void {
   const now = Date.now()
   ensureDbLoaded()
   if (!_readClipboardDb) return
 
-  const fileUrls = readFileUrls()
+  const current = snapshot ?? readClipboardSnapshot()
   const candidate =
-    captureFileEntry(fileUrls, now) ?? captureImageEntry(now) ?? captureTextEntry(now)
+    captureFileEntry(current.filePaths, now) ?? captureImageEntry(now) ?? captureTextEntry(now, current.text)
   if (!candidate) return
 
   const existing = _readClipboardDb.items.find((item) => item.id === candidate.id)
@@ -335,6 +312,10 @@ export function captureClipboardSnapshot(): void {
 }
 
 export function listClipboardEntries(): ClipboardEntry[] {
+  // Load persisted history synchronously on the first UI request. The async
+  // signature of ensureDbLoaded is retained for cleanup callers, but its
+  // synchronous body completes before the returned promise settles.
+  ensureDbLoaded()
   return normalizeDb(_readClipboardDb || { items: [] }).items
 }
 
@@ -474,7 +455,7 @@ export function restoreClipboardEntry(id: string): boolean {
       // useful fallback.
       if (process.platform === 'darwin') {
         const url = `file://${encodeURI(entry.paths[0])}`
-        clipboard.write({ text: entry.paths.join('\n'), bookmark: url })
+        clipboard.write({ text: entry.paths.join('\n'), bookmark: url, filePaths: entry.paths })
       } else {
         clipboard.writeText(entry.paths.join('\n'))
       }
@@ -518,38 +499,33 @@ export function readClipboardImagePayload(id: string): ClipboardImagePayload | n
 // --- Background watcher ---------------------------------------------------
 
 // Clipboard polling invokes a native process on every tick (pbpaste on macOS,
-// PowerShell on Windows). A fast cadence kept the history feeling responsive,
-// but it also created needless background CPU/process churn while the app was
-// idle. We now hash the text content on each tick — which lets us skip the
-// heavier file-URL/image reads and JSON write entirely when nothing changed —
-// and we back off aggressively once the clipboard goes quiet.
-const WATCHER_DEFAULT_INTERVAL_MS = 2_500
-const WATCHER_IDLE_INTERVAL_MS = 10_000
-const WATCHER_IDLE_THRESHOLD_TICKS = 8
+// PowerShell on Windows). Clipboard history must favor capture reliability:
+// backing off after idle creates a multi-second blind spot, and polling every
+// few seconds loses rapid copy sequences permanently. The lightweight
+// clipboard snapshot fingerprint still avoids JSON writes when unchanged.
+const WATCHER_INTERVAL_MS = 100
+const RICH_CLIPBOARD_PROBE_INTERVAL_MS = 1_000
 
 let watcherTimer: ReturnType<typeof setTimeout> | null = null
-let watcherCurrentMs = 0
+let watcherRunning = false
 
-/** Return a quick text fingerprint. Empty string = no text, or read failed.
- *  This is a single cheap native process call; gating the full snapshot on it
- *  eliminates file-URL parsing, image decode, and JSON I/O on quiet ticks. */
-function clipboardTextFingerprint(): string {
-  try {
-    const text = clipboard.readText()
-    if (!text) return ''
-    return createHash('sha1').update(text).digest('hex')
-  } catch {
-    return ''
-  }
+/** Return a cheap fingerprint for every clipboard kind we can restore.
+ *  File-only copies have no plain-text representation, so the file paths must
+ *  participate in change detection too. */
+function clipboardSnapshotFingerprint(snapshot: ClipboardSnapshot): string {
+  if (!snapshot.text && snapshot.filePaths.length === 0 && !snapshot.hasImage) return ''
+  return createHash('sha1')
+    .update(JSON.stringify([snapshot.text, snapshot.filePaths, snapshot.hasImage, snapshot.changeCount]))
+    .digest('hex')
 }
 
 /** Start polling the pasteboard when the user has enabled clipboard history.
  *  macOS doesn't expose a clipboard-change event, so polling is pragmatic.
- *  A cheap text-hash gate decides whether we do the full snapshot; the
- *  interval also backs off once the clipboard stays quiet to cut idle churn.
+ *  A cheap snapshot-fingerprint gate decides whether we write history. The
+ *  watcher remains armed continuously so rapid copies are not lost.
  *  Image capture is opt-in and size-capped. */
 export function startClipboardWatcher(): void {
-  if (watcherTimer) return
+  if (watcherRunning) return
   const config = getClipboardConfig()
   if (!config.watchEnabled) return
 
@@ -559,49 +535,50 @@ export function startClipboardWatcher(): void {
   })
 
   let lastFingerprint = ''
-  let idleTicks = 0
+  let lastText = ''
+  let lastRichProbeAt = 0
+  watcherRunning = true
 
   const tick = (): void => {
+    watcherTimer = null
+    if (!watcherRunning) return
     try {
-      const fp = clipboardTextFingerprint()
+      const now = Date.now()
+      const text = clipboard.readText()
+      const needsRichProbe =
+        !text && (lastText !== '' || now - lastRichProbeAt >= RICH_CLIPBOARD_PROBE_INTERVAL_MS)
+      const snapshot = needsRichProbe
+        ? readClipboardSnapshot()
+        : { text, filePaths: [], hasImage: false, changeCount: 0 }
+      if (needsRichProbe) lastRichProbeAt = now
+      lastText = text
+      const fp = clipboardSnapshotFingerprint(snapshot)
       const changed = fp !== lastFingerprint
       if (changed) {
         lastFingerprint = fp
-        idleTicks = 0
-        captureClipboardSnapshot()
-      } else {
-        idleTicks += 1
-        // Back off after a sustained quiet period. The slower cadence is
-        // sticky for this session — we won't swing back up to fast mode, so
-        // average idle energy stays low.
-        if (
-          idleTicks >= WATCHER_IDLE_THRESHOLD_TICKS &&
-          watcherCurrentMs < WATCHER_IDLE_INTERVAL_MS
-        ) {
-          watcherCurrentMs = WATCHER_IDLE_INTERVAL_MS
-        }
+        captureClipboardSnapshot(snapshot)
       }
     } catch {
       // Swallow — a one-off clipboard read error should not kill the loop.
     }
-    // Re-schedule with the (possibly newly-backed-off) interval.
-    if (watcherTimer) return // stopped concurrently
-    watcherTimer = setTimeout(tick, watcherCurrentMs)
+    // Never back off: a copy can happen at any time and there is no native
+    // clipboard-change event available through this runtime adapter.
+    if (!watcherRunning) return
+    watcherTimer = setTimeout(tick, WATCHER_INTERVAL_MS)
     const t = watcherTimer as unknown as { unref?: () => void }
     if (typeof t.unref === 'function') t.unref()
   }
 
-  watcherCurrentMs = WATCHER_DEFAULT_INTERVAL_MS
-  watcherTimer = setTimeout(tick, watcherCurrentMs)
+  watcherTimer = setTimeout(tick, WATCHER_INTERVAL_MS)
   const t = watcherTimer as unknown as { unref?: () => void }
   if (typeof t.unref === 'function') t.unref()
 }
 
 export function stopClipboardWatcher(): void {
+  watcherRunning = false
   if (!watcherTimer) return
   clearTimeout(watcherTimer)
   watcherTimer = null
-  watcherCurrentMs = 0
 }
 
 /** Re-read config and restart the watcher when settings change. */

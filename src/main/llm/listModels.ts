@@ -244,6 +244,24 @@ export async function listModelsForProvider(id: ProviderId, signal?: AbortSignal
         return ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-reasoner']
       }
     }
+    case 'tokenrouter': {
+      const defaultModel = 'moonshotai/kimi-k3-free'
+      const base = cfg.baseURL ?? 'https://api.tokenrouter.com/v1'
+      const key = cfg.apiKey?.trim() ? cfg.apiKey : (process.env['TOKENROUTER_API_KEY'] ?? '')
+      if (!key.trim()) return [defaultModel]
+      try {
+        const res = await fetch(modelsUrl(base), {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${key}` },
+          signal: signal ?? AbortSignal.timeout(12_000),
+        })
+        if (!res.ok) return [defaultModel]
+        const ids = extractModelIds(await res.json())
+        return ids.length > 0 ? ids : [defaultModel]
+      } catch {
+        return [defaultModel]
+      }
+    }
     default:
       return []
   }

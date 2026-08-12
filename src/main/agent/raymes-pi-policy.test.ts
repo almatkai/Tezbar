@@ -9,6 +9,8 @@ import raymesPiPolicy, {
 afterEach(() => {
   delete process.env.TEZBAR_KNOWLEDGE_ENDPOINT
   delete process.env.TEZBAR_KNOWLEDGE_TOKEN
+  delete process.env.TOKENROUTER_API_KEY
+  delete process.env.RAYMES_PI_PROVIDER_JSON
 })
 
 describe('Raymes Pi command policy', () => {
@@ -53,6 +55,33 @@ describe('Raymes Pi command policy', () => {
       )
     ).toBe('launcher')
     expect(preferredIndexedSearchForBash('rg "pc_search" src/main/agent')).toBeNull()
+  })
+
+  it('registers TokenRouter as an OpenAI-compatible Pi provider', () => {
+    const providers: Array<{ name: string; config: Record<string, unknown> }> = []
+    const pi = {
+      registerProvider: (name: string, config: Record<string, unknown>) => {
+        providers.push({ name, config })
+      },
+      registerTool: () => {},
+      on: () => {},
+    } as unknown as Parameters<typeof raymesPiPolicy>[0]
+
+    raymesPiPolicy(pi)
+
+    const tokenrouter = providers.find((provider) => provider.name === 'tokenrouter')
+    expect(tokenrouter?.config).toMatchObject({
+      baseUrl: 'https://api.tokenrouter.com/v1',
+      apiKey: '$TOKENROUTER_API_KEY',
+      authHeader: true,
+      api: 'openai-completions',
+    })
+    expect(tokenrouter?.config.models).toEqual([
+      expect.objectContaining({
+        id: 'moonshotai/kimi-k3-free',
+        reasoning: false,
+      }),
+    ])
   })
 
   it('registers the read-only knowledge tool only for an authenticated loopback bridge', () => {

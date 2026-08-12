@@ -3,7 +3,7 @@
 import { extname, join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { execFile, execFileSync, spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
@@ -12,6 +12,32 @@ function runDetached(command: string, args: string[], description: string): void
   void execFileAsync(command, args).catch((error: unknown) => {
     console.error(`[desktop-runtime] ${description} failed:`, error)
   })
+}
+
+export function fileClipboardJavaScript(paths: string[]): string | null {
+  const uniquePaths = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)))
+  if (uniquePaths.length === 0) return null
+  return [
+    'ObjC.import("AppKit")',
+    'ObjC.import("Foundation")',
+    `const paths = ${JSON.stringify(uniquePaths)}`,
+    'const pasteboard = $.NSPasteboard.generalPasteboard',
+    'pasteboard.clearContents',
+    'const urls = $.NSMutableArray.alloc.init',
+    'for (const path of paths) urls.addObject($.NSURL.fileURLWithPath($(path)))',
+    'pasteboard.writeObjects(urls)',
+  ].join('; ')
+}
+
+export function clipboardImageAppleScript(destinationPath: string): string {
+  const escaped = destinationPath.replace(/\\/g, '\\\\').replace(/"/g, '\\\"')
+  return [
+    `set outputFile to POSIX file "${escaped}"`,
+    'set fileRef to open for access outputFile with write permission',
+    'set eof fileRef to 0',
+    'write (the clipboard as «class PNGf») to fileRef',
+    'close access fileRef',
+  ].join('\n')
 }
 
 export function imageClipboardAppleScript(sourcePath: string): string | null {
@@ -167,12 +193,23 @@ export const shell = {
   },
 }
 
+function pngSize(sourcePath?: string): { width: number; height: number } {
+  if (!sourcePath || !existsSync(sourcePath)) return { width: 0, height: 0 }
+  try {
+    const bytes = readFileSync(sourcePath)
+    if (bytes.length < 24 || bytes.readUInt32BE(0) !== 0x89504e47) return { width: 0, height: 0 }
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+  } catch {
+    return { width: 0, height: 0 }
+  }
+}
+
 function makeNativeImage(sourcePath?: string): NativeImage {
   const image: NativeImage = {
     sourcePath,
     isEmpty: () => !sourcePath || !existsSync(sourcePath),
     setTemplateImage: () => undefined,
-    getSize: () => ({ width: 0, height: 0 }),
+    getSize: () => pngSize(sourcePath),
     resize: () => image,
     toPNG: () =>
       sourcePath && existsSync(sourcePath) ? readFileSync(sourcePath) : Buffer.alloc(0),
@@ -180,7 +217,103 @@ function makeNativeImage(sourcePath?: string): NativeImage {
   return image
 }
 
+export type ClipboardSnapshot = {
+  text: string
+  filePaths: string[]
+  hasImage: boolean
+  changeCount: number
+}
+
+function parseClipboardSnapshot(raw: string): ClipboardSnapshot {
+  try {
+    const parsed = JSON.parse(raw.trim()) as Partial<ClipboardSnapshot>
+    const rawPaths = Array.isArray(parsed.filePaths)
+      ? parsed.filePaths
+      : typeof parsed.filePaths === 'string'
+        ? [parsed.filePaths]
+        : []
+    return {
+      text: typeof parsed.text === 'string' ? parsed.text : '',
+      filePaths: Array.from(new Set(rawPaths.map(String).map((path) => path.trim()).filter(Boolean))),
+      hasImage: parsed.hasImage === true,
+      changeCount: Number.isFinite(Number(parsed.changeCount)) ? Number(parsed.changeCount) : 0,
+    }
+  } catch {
+    return { text: '', filePaths: [], hasImage: false, changeCount: 0 }
+  }
+}
+
+function readMacClipboardSnapshot(): ClipboardSnapshot {
+  const script = [
+    'ObjC.import("AppKit")',
+    'ObjC.import("Foundation")',
+    'const pasteboard = $.NSPasteboard.generalPasteboard',
+    'const classes = $.NSArray.arrayWithObject($.NSURL)',
+    'const urls = pasteboard.readObjectsForClassesOptions(classes, $.NSDictionary.dictionary)',
+    'const filePaths = []',
+    'if (urls && urls.count) { for (let i = 0; i < urls.count; i++) filePaths.push(ObjC.unwrap(urls.objectAtIndex(i).path)) }',
+    'const text = pasteboard.stringForType($.NSPasteboardTypeString)',
+    'const types = pasteboard.types',
+    'const hasImage = !!(types && (types.containsObject($.NSPasteboardTypePNG) || types.containsObject($.NSPasteboardTypeTIFF)))',
+    'const output = JSON.stringify({ text: text ? ObjC.unwrap(text) : "", filePaths: filePaths, hasImage: hasImage, changeCount: pasteboard.changeCount })',
+    'const data = $(output).dataUsingEncoding($.NSUTF8StringEncoding)',
+    '$.NSFileHandle.fileHandleWithStandardOutput.writeData(data)',
+  ].join('; ')
+  try {
+    const raw = execFileSync('osascript', ['-l', 'JavaScript', '-e', script], { encoding: 'utf8' })
+    return parseClipboardSnapshot(raw)
+  } catch {
+    return { text: '', filePaths: [], hasImage: false, changeCount: 0 }
+  }
+}
+
+function readWindowsClipboardSnapshot(): ClipboardSnapshot {
+  const script =
+    '$ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; $text=if([System.Windows.Forms.Clipboard]::ContainsText()){[System.Windows.Forms.Clipboard]::GetText()}else{""}; $paths=@(); if([System.Windows.Forms.Clipboard]::ContainsFileDropList()){$paths=@([System.Windows.Forms.Clipboard]::GetFileDropList())}; $hasImage=[System.Windows.Forms.Clipboard]::ContainsImage(); [Console]::Write(([PSCustomObject]@{text=$text;filePaths=$paths;hasImage=$hasImage}|ConvertTo-Json -Compress))'
+  try {
+    const raw = execFileSync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Sta', '-Command', script],
+      { encoding: 'utf8', windowsHide: true },
+    )
+    return parseClipboardSnapshot(raw)
+  } catch {
+    return { text: '', filePaths: [], hasImage: false, changeCount: 0 }
+  }
+}
+
+function writeWindowsClipboardFilePaths(paths: string[]): void {
+  const script =
+    '$ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; $paths=$env:TEZBAR_CLIPBOARD_FILES|ConvertFrom-Json; $files=New-Object System.Collections.Specialized.StringCollection; foreach($path in @($paths)){[void]$files.Add([string]$path)}; [System.Windows.Forms.Clipboard]::SetFileDropList($files)'
+  void execFileAsync(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-Sta', '-Command', script],
+    {
+      windowsHide: true,
+      env: { ...process.env, TEZBAR_CLIPBOARD_FILES: JSON.stringify(paths) },
+    },
+  ).catch((error: unknown) => {
+    console.error('[desktop-runtime] clipboard file copy failed:', error)
+  })
+}
+
+function readClipboardSnapshot(): ClipboardSnapshot {
+  if (process.platform === 'darwin') return readMacClipboardSnapshot()
+  if (process.platform === 'win32') return readWindowsClipboardSnapshot()
+  try {
+    return { text: execFileSync('pbpaste', [], { encoding: 'utf8' }), filePaths: [], hasImage: false, changeCount: 0 }
+  } catch {
+    return { text: '', filePaths: [], hasImage: false, changeCount: 0 }
+  }
+}
+
 export const clipboard = {
+  readSnapshot(): ClipboardSnapshot {
+    return readClipboardSnapshot()
+  },
+  readFilePaths(): string[] {
+    return readClipboardSnapshot().filePaths
+  },
   readText(): string {
     try {
       if (process.platform === 'win32') {
@@ -228,7 +361,30 @@ export const clipboard = {
     return ''
   },
   readImage(): NativeImage {
-    return makeNativeImage()
+    const path = join(app.getPath('temp'), 'tezbar-clipboard-current.png')
+    try {
+      rmSync(path, { force: true })
+      if (process.platform === 'darwin') {
+        execFileSync('osascript', ['-e', clipboardImageAppleScript(path)], { stdio: 'ignore' })
+      } else if (process.platform === 'win32') {
+        const script =
+          '$ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; if(![System.Windows.Forms.Clipboard]::ContainsImage()){throw "Clipboard does not contain an image"}; $image=[System.Windows.Forms.Clipboard]::GetImage(); try{$image.Save($env:TEZBAR_CLIPBOARD_IMAGE,[System.Drawing.Imaging.ImageFormat]::Png)}finally{$image.Dispose()}'
+        execFileSync(
+          'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-Sta', '-Command', script],
+          {
+            encoding: 'utf8',
+            windowsHide: true,
+            env: { ...process.env, TEZBAR_CLIPBOARD_IMAGE: path },
+          },
+        )
+      } else {
+        return makeNativeImage()
+      }
+      return makeNativeImage(path)
+    } catch {
+      return makeNativeImage()
+    }
   },
   writeImage(image: NativeImage): void {
     if (!image.sourcePath || process.platform !== 'darwin') return
@@ -241,7 +397,19 @@ export const clipboard = {
     }
     runDetached('osascript', ['-e', script], 'clipboard image copy')
   },
-  write(payload: { text?: string; html?: string; bookmark?: string }): void {
+  write(payload: { text?: string; html?: string; bookmark?: string; filePaths?: string[] }): void {
+    const filePaths = payload.filePaths?.filter(Boolean) ?? []
+    if (filePaths.length > 0) {
+      if (process.platform === 'darwin') {
+        const script = fileClipboardJavaScript(filePaths)
+        if (script) runDetached('osascript', ['-l', 'JavaScript', '-e', script], 'clipboard file copy')
+        return
+      }
+      if (process.platform === 'win32') {
+        writeWindowsClipboardFilePaths(filePaths)
+        return
+      }
+    }
     if (payload.text) this.writeText(payload.text)
   },
   clear(): void {

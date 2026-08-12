@@ -167,6 +167,21 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
 
   useEffect(() => {
     void reload()
+
+    // The launcher window is hidden rather than destroyed. Refresh immediately
+    // when it is shown again, then keep the history lively while this view is
+    // open so copies made outside Tezbar appear without remounting the view.
+    const offWindowShown = window.tezbar.onWindowShown(() => {
+      void reload()
+    })
+    const refreshTimer = window.setInterval(() => {
+      void reload()
+    }, 500)
+
+    return () => {
+      offWindowShown()
+      window.clearInterval(refreshTimer)
+    }
   }, [reload])
 
   useEffect(() => {

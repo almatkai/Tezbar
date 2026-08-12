@@ -36,6 +36,30 @@ function runDetached(command3, args, description) {
     console.error(`[desktop-runtime] ${description} failed:`, error);
   });
 }
+function fileClipboardJavaScript(paths) {
+  const uniquePaths = Array.from(new Set(paths.map((path7) => path7.trim()).filter(Boolean)));
+  if (uniquePaths.length === 0) return null;
+  return [
+    'ObjC.import("AppKit")',
+    'ObjC.import("Foundation")',
+    `const paths = ${JSON.stringify(uniquePaths)}`,
+    "const pasteboard = $.NSPasteboard.generalPasteboard",
+    "pasteboard.clearContents",
+    "const urls = $.NSMutableArray.alloc.init",
+    "for (const path of paths) urls.addObject($.NSURL.fileURLWithPath($(path)))",
+    "pasteboard.writeObjects(urls)"
+  ].join("; ");
+}
+function clipboardImageAppleScript(destinationPath) {
+  const escaped = destinationPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return [
+    `set outputFile to POSIX file "${escaped}"`,
+    "set fileRef to open for access outputFile with write permission",
+    "set eof fileRef to 0",
+    "write (the clipboard as \xABclass PNGf\xBB) to fileRef",
+    "close access fileRef"
+  ].join("\n");
+}
 function imageClipboardAppleScript(sourcePath) {
   const clipboardClass = {
     ".gif": "GIFf",
@@ -49,16 +73,98 @@ function imageClipboardAppleScript(sourcePath) {
   const escaped = sourcePath.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
   return `set the clipboard to (read (POSIX file "${escaped}") as \xABclass ${clipboardClass}\xBB)`;
 }
+function pngSize(sourcePath) {
+  if (!sourcePath || !(0, import_node_fs.existsSync)(sourcePath)) return { width: 0, height: 0 };
+  try {
+    const bytes = (0, import_node_fs.readFileSync)(sourcePath);
+    if (bytes.length < 24 || bytes.readUInt32BE(0) !== 2303741511) return { width: 0, height: 0 };
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  } catch {
+    return { width: 0, height: 0 };
+  }
+}
 function makeNativeImage(sourcePath) {
   const image = {
     sourcePath,
     isEmpty: () => !sourcePath || !(0, import_node_fs.existsSync)(sourcePath),
     setTemplateImage: () => void 0,
-    getSize: () => ({ width: 0, height: 0 }),
+    getSize: () => pngSize(sourcePath),
     resize: () => image,
     toPNG: () => sourcePath && (0, import_node_fs.existsSync)(sourcePath) ? (0, import_node_fs.readFileSync)(sourcePath) : Buffer.alloc(0)
   };
   return image;
+}
+function parseClipboardSnapshot(raw) {
+  try {
+    const parsed = JSON.parse(raw.trim());
+    const rawPaths = Array.isArray(parsed.filePaths) ? parsed.filePaths : typeof parsed.filePaths === "string" ? [parsed.filePaths] : [];
+    return {
+      text: typeof parsed.text === "string" ? parsed.text : "",
+      filePaths: Array.from(new Set(rawPaths.map(String).map((path7) => path7.trim()).filter(Boolean))),
+      hasImage: parsed.hasImage === true,
+      changeCount: Number.isFinite(Number(parsed.changeCount)) ? Number(parsed.changeCount) : 0
+    };
+  } catch {
+    return { text: "", filePaths: [], hasImage: false, changeCount: 0 };
+  }
+}
+function readMacClipboardSnapshot() {
+  const script = [
+    'ObjC.import("AppKit")',
+    'ObjC.import("Foundation")',
+    "const pasteboard = $.NSPasteboard.generalPasteboard",
+    "const classes = $.NSArray.arrayWithObject($.NSURL)",
+    "const urls = pasteboard.readObjectsForClassesOptions(classes, $.NSDictionary.dictionary)",
+    "const filePaths = []",
+    "if (urls && urls.count) { for (let i = 0; i < urls.count; i++) filePaths.push(ObjC.unwrap(urls.objectAtIndex(i).path)) }",
+    "const text = pasteboard.stringForType($.NSPasteboardTypeString)",
+    "const types = pasteboard.types",
+    "const hasImage = !!(types && (types.containsObject($.NSPasteboardTypePNG) || types.containsObject($.NSPasteboardTypeTIFF)))",
+    'const output = JSON.stringify({ text: text ? ObjC.unwrap(text) : "", filePaths: filePaths, hasImage: hasImage, changeCount: pasteboard.changeCount })',
+    "const data = $(output).dataUsingEncoding($.NSUTF8StringEncoding)",
+    "$.NSFileHandle.fileHandleWithStandardOutput.writeData(data)"
+  ].join("; ");
+  try {
+    const raw = (0, import_node_child_process.execFileSync)("osascript", ["-l", "JavaScript", "-e", script], { encoding: "utf8" });
+    return parseClipboardSnapshot(raw);
+  } catch {
+    return { text: "", filePaths: [], hasImage: false, changeCount: 0 };
+  }
+}
+function readWindowsClipboardSnapshot() {
+  const script = '$ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; $text=if([System.Windows.Forms.Clipboard]::ContainsText()){[System.Windows.Forms.Clipboard]::GetText()}else{""}; $paths=@(); if([System.Windows.Forms.Clipboard]::ContainsFileDropList()){$paths=@([System.Windows.Forms.Clipboard]::GetFileDropList())}; $hasImage=[System.Windows.Forms.Clipboard]::ContainsImage(); [Console]::Write(([PSCustomObject]@{text=$text;filePaths=$paths;hasImage=$hasImage}|ConvertTo-Json -Compress))';
+  try {
+    const raw = (0, import_node_child_process.execFileSync)(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Sta", "-Command", script],
+      { encoding: "utf8", windowsHide: true }
+    );
+    return parseClipboardSnapshot(raw);
+  } catch {
+    return { text: "", filePaths: [], hasImage: false, changeCount: 0 };
+  }
+}
+function writeWindowsClipboardFilePaths(paths) {
+  const script = '$ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; $paths=$env:TEZBAR_CLIPBOARD_FILES|ConvertFrom-Json; $files=New-Object System.Collections.Specialized.StringCollection; foreach($path in @($paths)){[void]$files.Add([string]$path)}; [System.Windows.Forms.Clipboard]::SetFileDropList($files)';
+  void execFileAsync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Sta", "-Command", script],
+    {
+      windowsHide: true,
+      env: { ...process.env, TEZBAR_CLIPBOARD_FILES: JSON.stringify(paths) }
+    }
+  ).catch((error) => {
+    console.error("[desktop-runtime] clipboard file copy failed:", error);
+  });
+}
+function readClipboardSnapshot() {
+  if (process.platform === "darwin") return readMacClipboardSnapshot();
+  if (process.platform === "win32") return readWindowsClipboardSnapshot();
+  try {
+    return { text: (0, import_node_child_process.execFileSync)("pbpaste", [], { encoding: "utf8" }), filePaths: [], hasImage: false, changeCount: 0 };
+  } catch {
+    return { text: "", filePaths: [], hasImage: false, changeCount: 0 };
+  }
 }
 var import_node_path, import_node_os, import_node_child_process, import_node_fs, import_node_util, execFileAsync, backendWebContents, IpcMain, ipcMain, app, shell, clipboard, dialog, session, screen, desktopCapturer, nativeImage, globalShortcut, BrowserWindow, systemPreferences;
 var init_desktop_runtime = __esm({
@@ -171,6 +277,12 @@ var init_desktop_runtime = __esm({
       }
     };
     clipboard = {
+      readSnapshot() {
+        return readClipboardSnapshot();
+      },
+      readFilePaths() {
+        return readClipboardSnapshot().filePaths;
+      },
       readText() {
         try {
           if (process.platform === "win32") {
@@ -220,7 +332,29 @@ var init_desktop_runtime = __esm({
         return "";
       },
       readImage() {
-        return makeNativeImage();
+        const path7 = (0, import_node_path.join)(app.getPath("temp"), "tezbar-clipboard-current.png");
+        try {
+          (0, import_node_fs.rmSync)(path7, { force: true });
+          if (process.platform === "darwin") {
+            (0, import_node_child_process.execFileSync)("osascript", ["-e", clipboardImageAppleScript(path7)], { stdio: "ignore" });
+          } else if (process.platform === "win32") {
+            const script = '$ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; if(![System.Windows.Forms.Clipboard]::ContainsImage()){throw "Clipboard does not contain an image"}; $image=[System.Windows.Forms.Clipboard]::GetImage(); try{$image.Save($env:TEZBAR_CLIPBOARD_IMAGE,[System.Drawing.Imaging.ImageFormat]::Png)}finally{$image.Dispose()}';
+            (0, import_node_child_process.execFileSync)(
+              "powershell.exe",
+              ["-NoProfile", "-NonInteractive", "-Sta", "-Command", script],
+              {
+                encoding: "utf8",
+                windowsHide: true,
+                env: { ...process.env, TEZBAR_CLIPBOARD_IMAGE: path7 }
+              }
+            );
+          } else {
+            return makeNativeImage();
+          }
+          return makeNativeImage(path7);
+        } catch {
+          return makeNativeImage();
+        }
       },
       writeImage(image) {
         if (!image.sourcePath || process.platform !== "darwin") return;
@@ -234,6 +368,18 @@ var init_desktop_runtime = __esm({
         runDetached("osascript", ["-e", script], "clipboard image copy");
       },
       write(payload) {
+        const filePaths = payload.filePaths?.filter(Boolean) ?? [];
+        if (filePaths.length > 0) {
+          if (process.platform === "darwin") {
+            const script = fileClipboardJavaScript(filePaths);
+            if (script) runDetached("osascript", ["-l", "JavaScript", "-e", script], "clipboard file copy");
+            return;
+          }
+          if (process.platform === "win32") {
+            writeWindowsClipboardFilePaths(filePaths);
+            return;
+          }
+        }
         if (payload.text) this.writeText(payload.text);
       },
       clear() {
@@ -3487,6 +3633,7 @@ var init_aiProviders = __esm({
       openai: "gpt-5.4-mini",
       deepseek: "deepseek-v4-flash",
       "openai-compatible": "gpt-5.4-mini",
+      tokenrouter: "moonshotai/kimi-k3-free",
       gemini: "gemini-3.5-flash",
       anthropic: "claude-haiku-4-5-20251001",
       ollama: "llama3.2",
@@ -3507,6 +3654,9 @@ var init_aiProviders = __esm({
       ],
       "openai-compatible": [
         { id: "gpt-5.4-mini", capabilities: ["vision", "thinking", "tools"], contextWindow: 4e5 }
+      ],
+      tokenrouter: [
+        { id: "moonshotai/kimi-k3-free", capabilities: ["tools"], contextWindow: 128e3 }
       ],
       gemini: [
         { id: "gemini-3.5-flash", capabilities: ["vision", "thinking", "tools"], contextWindow: 1048576 },
@@ -10794,7 +10944,7 @@ function normalizeFromRaw(raw) {
   const ids = providerIds(customProviders);
   const p = raw.provider;
   const hasCopilotToken = typeof raw.copilotGithubToken === "string" && raw.copilotGithubToken.length > 0;
-  const provider = typeof p === "string" && customProviders.some((provider2) => provider2.id === p) || p === "openai" || p === "openai-compatible" || p === "anthropic" || p === "ollama" || p === "copilot" || p === "gemini" || p === "opencode" || p === "deepseek" ? p : hasCopilotToken ? "copilot" : "ollama";
+  const provider = typeof p === "string" && customProviders.some((provider2) => provider2.id === p) || p === "openai" || p === "openai-compatible" || p === "anthropic" || p === "ollama" || p === "copilot" || p === "gemini" || p === "opencode" || p === "deepseek" || p === "tokenrouter" ? p : hasCopilotToken ? "copilot" : "ollama";
   const providerModels = normalizeProviderModels(raw.providerModels, ids);
   const providerSelectedModels = normalizeProviderSelectedModels(raw.providerSelectedModels, ids);
   const providerConfigs = normalizeProviderConfigs(raw.providerConfigs, ids);
@@ -10853,6 +11003,13 @@ function readLLMConfig() {
       model: n.model ?? DEFAULT_DEEPSEEK_MODEL
     };
   }
+  if (n.provider === "tokenrouter") {
+    return {
+      ...n,
+      baseURL: n.baseURL ?? DEFAULT_TOKENROUTER_BASE,
+      model: n.model ?? DEFAULT_TOKENROUTER_MODEL
+    };
+  }
   return n;
 }
 function configForProvider(cfg, provider) {
@@ -10878,6 +11035,9 @@ function configForProvider(cfg, provider) {
   }
   if (provider === "deepseek") {
     return { ...next, baseURL: next.baseURL ?? DEFAULT_DEEPSEEK_BASE, model: next.model ?? DEFAULT_DEEPSEEK_MODEL };
+  }
+  if (provider === "tokenrouter") {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_TOKENROUTER_BASE, model: next.model ?? DEFAULT_TOKENROUTER_MODEL };
   }
   return {
     ...next,
@@ -10947,6 +11107,13 @@ function buildProvider(cfg) {
         cfg.model ?? DEFAULT_DEEPSEEK_MODEL,
         "DeepSeek"
       );
+    case "tokenrouter":
+      return new OpenAIProvider(
+        cfg.baseURL ?? DEFAULT_TOKENROUTER_BASE,
+        cfg.apiKey?.trim() ? cfg.apiKey : process.env["TOKENROUTER_API_KEY"] ?? "",
+        cfg.model ?? DEFAULT_TOKENROUTER_MODEL,
+        "TokenRouter"
+      );
     default:
       return new OllamaProvider(DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL);
   }
@@ -10979,7 +11146,7 @@ function getSelectedPiModelPattern(task) {
     return `opencode/opencode/${model}`;
   }
   if (model.startsWith(`${provider}/`)) return model;
-  if (model.includes("/")) return model;
+  if (model.includes("/") && provider !== "tokenrouter") return model;
   return `${provider}/${model}`;
 }
 function stripProviderPrefix(model, provider) {
@@ -10995,6 +11162,7 @@ function openAiCompatBaseUrl(cfg) {
   if (cfg.provider === "openai-compatible") return cfg.openaiCompatibleBaseURL ?? cfg.baseURL;
   if (cfg.provider === "gemini") return cfg.baseURL ?? DEFAULT_GEMINI_BASE;
   if (cfg.provider === "deepseek") return cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE;
+  if (cfg.provider === "tokenrouter") return cfg.baseURL ?? DEFAULT_TOKENROUTER_BASE;
   if (isCustomProvider(cfg.provider)) return cfg.openaiCompatibleBaseURL ?? cfg.baseURL;
   if (cfg.provider === "ollama") {
     const base = cfg.baseURL ?? DEFAULT_OLLAMA_BASE;
@@ -11005,6 +11173,9 @@ function openAiCompatBaseUrl(cfg) {
 function piApiKey(cfg) {
   if (cfg.provider === "gemini") return cfg.geminiApiKey ?? cfg.apiKey;
   if (cfg.provider === "ollama") return "ollama";
+  if (cfg.provider === "tokenrouter") {
+    return cfg.apiKey?.trim() ? cfg.apiKey : process.env["TOKENROUTER_API_KEY"];
+  }
   return cfg.apiKey;
 }
 function officialDeepSeekAnthropicBaseUrl(baseUrl) {
@@ -11046,6 +11217,11 @@ function getSelectedPiProviderBridge(task) {
     supportsDeveloperRole: false,
     requiresReasoningContentOnAssistantMessages: true,
     thinkingFormat: "deepseek"
+  } : cfg.provider === "tokenrouter" ? {
+    supportsStore: false,
+    supportsDeveloperRole: false,
+    supportsReasoningEffort: false,
+    maxTokensField: "max_tokens"
   } : void 0;
   const providerJson = JSON.stringify({
     baseUrl,
@@ -11071,7 +11247,7 @@ function getSelectedPiProviderBridge(task) {
     acceptsImages: modelInput.includes("image")
   };
 }
-var DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL, DEFAULT_GEMINI_BASE, DEFAULT_GEMINI_MODEL, DEFAULT_DEEPSEEK_BASE, DEFAULT_DEEPSEEK_MODEL, cacheKey, active;
+var DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL, DEFAULT_GEMINI_BASE, DEFAULT_GEMINI_MODEL, DEFAULT_DEEPSEEK_BASE, DEFAULT_DEEPSEEK_MODEL, DEFAULT_TOKENROUTER_BASE, DEFAULT_TOKENROUTER_MODEL, cacheKey, active;
 var init_registry = __esm({
   "src/main/llm/registry.ts"() {
     "use strict";
@@ -11088,6 +11264,8 @@ var init_registry = __esm({
     DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
     DEFAULT_DEEPSEEK_BASE = "https://api.deepseek.com";
     DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
+    DEFAULT_TOKENROUTER_BASE = "https://api.tokenrouter.com/v1";
+    DEFAULT_TOKENROUTER_MODEL = "moonshotai/kimi-k3-free";
     cacheKey = "";
     active = null;
   }
@@ -22968,30 +23146,11 @@ function insertEntry(db, entry) {
 function hashKey(kind, payload) {
   return (0, import_node_crypto9.createHash)("sha1").update(`${kind}|${payload}`).digest("hex").slice(0, 16);
 }
-function readFileUrls() {
-  if (process.platform !== "darwin") return [];
-  const formats = clipboard.availableFormats();
-  const hasFileUrl = formats.some(
-    (f) => f === "public.file-url" || f === "NSFilenamesPboardType" || f === "Files"
-  );
-  if (!hasFileUrl) return [];
+function readClipboardSnapshot2() {
   try {
-    const raw = clipboard.read("public.file-url");
-    if (!raw) return [];
-    const parts = raw.split(/\0|\r?\n/g).map((part) => part.trim()).filter(Boolean);
-    const paths = parts.map((url) => {
-      try {
-        if (url.startsWith("file://")) {
-          return decodeURIComponent(new URL(url).pathname);
-        }
-        return url;
-      } catch {
-        return "";
-      }
-    }).filter(Boolean);
-    return Array.from(new Set(paths));
+    return clipboard.readSnapshot();
   } catch {
-    return [];
+    return { text: "", filePaths: [], hasImage: false, changeCount: 0 };
   }
 }
 function idForText(text3) {
@@ -23004,15 +23163,16 @@ function idForImage(hash2) {
   return `image:${hash2.slice(0, 12)}`;
 }
 function captureFileEntry(paths, now) {
-  if (paths.length === 0) return null;
+  const uniquePaths = Array.from(new Set(paths.map((path7) => path7.trim()).filter(Boolean)));
+  if (uniquePaths.length === 0) return null;
   return {
-    id: idForFiles(paths),
+    id: idForFiles(uniquePaths),
     kind: "file",
     createdAt: now,
     pinned: false,
     isSecret: false,
-    paths,
-    preview: paths.length === 1 ? (0, import_node_path17.basename)(paths[0]) : `${(0, import_node_path17.basename)(paths[0])} + ${paths.length - 1} more`
+    paths: uniquePaths,
+    preview: uniquePaths.length === 1 ? (0, import_node_path17.basename)(uniquePaths[0]) : `${(0, import_node_path17.basename)(uniquePaths[0])} + ${uniquePaths.length - 1} more`
   };
 }
 function resizeToMegapixels(image, maxMegapixels) {
@@ -23051,8 +23211,7 @@ function captureImageEntry(now) {
     byteSize: buffer.length
   };
 }
-function captureTextEntry(now) {
-  const text3 = clipboard.readText();
+function captureTextEntry(now, text3) {
   if (!text3 || !text3.trim()) return null;
   return {
     id: idForText(text3),
@@ -23066,12 +23225,12 @@ function captureTextEntry(now) {
     lineCount: text3.split("\n").length
   };
 }
-function captureClipboardSnapshot() {
+function captureClipboardSnapshot(snapshot) {
   const now = Date.now();
   ensureDbLoaded();
   if (!_readClipboardDb) return;
-  const fileUrls = readFileUrls();
-  const candidate = captureFileEntry(fileUrls, now) ?? captureImageEntry(now) ?? captureTextEntry(now);
+  const current = snapshot ?? readClipboardSnapshot2();
+  const candidate = captureFileEntry(current.filePaths, now) ?? captureImageEntry(now) ?? captureTextEntry(now, current.text);
   if (!candidate) return;
   const existing = _readClipboardDb.items.find((item) => item.id === candidate.id);
   const merged = existing ? {
@@ -23086,6 +23245,7 @@ function captureClipboardSnapshot() {
   writeDb2(db);
 }
 function listClipboardEntries() {
+  ensureDbLoaded();
   return normalizeDb(_readClipboardDb || { items: [] }).items;
 }
 function getClipboardEntry(id) {
@@ -23192,7 +23352,7 @@ function restoreClipboardEntry(id) {
     case "file": {
       if (process.platform === "darwin") {
         const url = `file://${encodeURI(entry.paths[0])}`;
-        clipboard.write({ text: entry.paths.join("\n"), bookmark: url });
+        clipboard.write({ text: entry.paths.join("\n"), bookmark: url, filePaths: entry.paths });
       } else {
         clipboard.writeText(entry.paths.join("\n"));
       }
@@ -23227,59 +23387,56 @@ function readClipboardImagePayload(id) {
     byteSize: entry.byteSize
   };
 }
-var WATCHER_DEFAULT_INTERVAL_MS = 2500;
-var WATCHER_IDLE_INTERVAL_MS = 1e4;
-var WATCHER_IDLE_THRESHOLD_TICKS = 8;
+var WATCHER_INTERVAL_MS = 100;
+var RICH_CLIPBOARD_PROBE_INTERVAL_MS = 1e3;
 var watcherTimer = null;
-var watcherCurrentMs = 0;
-function clipboardTextFingerprint() {
-  try {
-    const text3 = clipboard.readText();
-    if (!text3) return "";
-    return (0, import_node_crypto9.createHash)("sha1").update(text3).digest("hex");
-  } catch {
-    return "";
-  }
+var watcherRunning = false;
+function clipboardSnapshotFingerprint(snapshot) {
+  if (!snapshot.text && snapshot.filePaths.length === 0 && !snapshot.hasImage) return "";
+  return (0, import_node_crypto9.createHash)("sha1").update(JSON.stringify([snapshot.text, snapshot.filePaths, snapshot.hasImage, snapshot.changeCount])).digest("hex");
 }
 function startClipboardWatcher() {
-  if (watcherTimer) return;
+  if (watcherRunning) return;
   const config = getClipboardConfig();
   if (!config.watchEnabled) return;
   void cleanupOrphanClipboardImages().catch(() => {
   });
   let lastFingerprint = "";
-  let idleTicks = 0;
+  let lastText = "";
+  let lastRichProbeAt = 0;
+  watcherRunning = true;
   const tick = () => {
+    watcherTimer = null;
+    if (!watcherRunning) return;
     try {
-      const fp = clipboardTextFingerprint();
+      const now = Date.now();
+      const text3 = clipboard.readText();
+      const needsRichProbe = !text3 && (lastText !== "" || now - lastRichProbeAt >= RICH_CLIPBOARD_PROBE_INTERVAL_MS);
+      const snapshot = needsRichProbe ? readClipboardSnapshot2() : { text: text3, filePaths: [], hasImage: false, changeCount: 0 };
+      if (needsRichProbe) lastRichProbeAt = now;
+      lastText = text3;
+      const fp = clipboardSnapshotFingerprint(snapshot);
       const changed = fp !== lastFingerprint;
       if (changed) {
         lastFingerprint = fp;
-        idleTicks = 0;
-        captureClipboardSnapshot();
-      } else {
-        idleTicks += 1;
-        if (idleTicks >= WATCHER_IDLE_THRESHOLD_TICKS && watcherCurrentMs < WATCHER_IDLE_INTERVAL_MS) {
-          watcherCurrentMs = WATCHER_IDLE_INTERVAL_MS;
-        }
+        captureClipboardSnapshot(snapshot);
       }
     } catch {
     }
-    if (watcherTimer) return;
-    watcherTimer = setTimeout(tick, watcherCurrentMs);
+    if (!watcherRunning) return;
+    watcherTimer = setTimeout(tick, WATCHER_INTERVAL_MS);
     const t2 = watcherTimer;
     if (typeof t2.unref === "function") t2.unref();
   };
-  watcherCurrentMs = WATCHER_DEFAULT_INTERVAL_MS;
-  watcherTimer = setTimeout(tick, watcherCurrentMs);
+  watcherTimer = setTimeout(tick, WATCHER_INTERVAL_MS);
   const t = watcherTimer;
   if (typeof t.unref === "function") t.unref();
 }
 function stopClipboardWatcher() {
+  watcherRunning = false;
   if (!watcherTimer) return;
   clearTimeout(watcherTimer);
   watcherTimer = null;
-  watcherCurrentMs = 0;
 }
 function restartClipboardWatcher() {
   stopClipboardWatcher();
@@ -27205,6 +27362,24 @@ async function listModelsForProvider(id, signal) {
         return ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-reasoner"];
       }
     }
+    case "tokenrouter": {
+      const defaultModel = "moonshotai/kimi-k3-free";
+      const base = cfg.baseURL ?? "https://api.tokenrouter.com/v1";
+      const key = cfg.apiKey?.trim() ? cfg.apiKey : process.env["TOKENROUTER_API_KEY"] ?? "";
+      if (!key.trim()) return [defaultModel];
+      try {
+        const res = await fetch(modelsUrl2(base), {
+          method: "GET",
+          headers: { Authorization: `Bearer ${key}` },
+          signal: signal ?? AbortSignal.timeout(12e3)
+        });
+        if (!res.ok) return [defaultModel];
+        const ids = extractModelIds(await res.json());
+        return ids.length > 0 ? ids : [defaultModel];
+      } catch {
+        return [defaultModel];
+      }
+    }
     default:
       return [];
   }
@@ -30653,6 +30828,7 @@ function registerIpcHandlers(getWindow, controls) {
     const ids = [
       "openai",
       "openai-compatible",
+      "tokenrouter",
       "anthropic",
       "ollama",
       "copilot",
@@ -30675,7 +30851,7 @@ function registerIpcHandlers(getWindow, controls) {
   ipcMain.handle("llm-list-models", async (_event, providerId) => {
     const id = providerId;
     const customProvider = typeof id === "string" && readLLMConfig().customProviders?.some((provider) => provider.id === id);
-    if (id !== "openai" && id !== "openai-compatible" && id !== "anthropic" && id !== "ollama" && id !== "copilot" && id !== "gemini" && id !== "opencode" && id !== "deepseek" && !customProvider)
+    if (id !== "openai" && id !== "openai-compatible" && id !== "tokenrouter" && id !== "anthropic" && id !== "ollama" && id !== "copilot" && id !== "gemini" && id !== "opencode" && id !== "deepseek" && !customProvider)
       return [];
     try {
       return await listModelsForProvider(id);
@@ -31646,7 +31822,7 @@ function materializePiPolicy() {
     const runtimeDir = (0, import_node_path35.join)(root, "runtime");
     const extensionPath = (0, import_node_path35.join)(runtimeDir, "raymes-pi-policy.ts");
     (0, import_node_fs33.mkdirSync)(runtimeDir, { recursive: true });
-    (0, import_node_fs33.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\n\ntype ToolCallEvent = {\n  toolName: string\n  input?: Record<string, unknown> & { command?: unknown }\n}\n\ntype ToolCallResult = {\n  block?: boolean\n  reason?: string\n}\n\ntype ExtensionContext = {\n  ui: {\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\n  }\n}\n\ntype ExtensionAPI = {\n  on(\n    event: 'tool_call',\n    handler: (\n      event: ToolCallEvent,\n      ctx: ExtensionContext\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\n  ): void\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\n  registerTool(definition: {\n    name: string\n    label: string\n    description: string\n    promptSnippet?: string\n    promptGuidelines?: string[]\n    parameters: unknown\n    execute: (\n      toolCallId: string,\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\n      signal?: AbortSignal\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\n  }): void\n}\n\ntype RaymesPiProviderConfig = {\n  baseUrl: string\n  apiKey: string\n  api: 'openai-completions' | 'anthropic-messages'\n  authHeader?: boolean\n  models: Array<{\n    id: string\n    name: string\n    reasoning: boolean\n    input: Array<'text' | 'image'>\n    cost: {\n      input: number\n      output: number\n      cacheRead: number\n      cacheWrite: number\n    }\n    contextWindow: number\n    maxTokens: number\n    compat?: Record<string, unknown>\n  }>\n}\n\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\n  if (!raw) return\n  try {\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\n    pi.registerProvider('tezbar', parsed)\n  } catch {\n    /* Ignore malformed bridge env so pi can still start with its own config. */\n  }\n}\n\nfunction hasUnsafeShellSyntax(command: string): boolean {\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\n}\n\nfunction persistedAllowedCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter(\n          (entry): entry is string =>\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\n        )\n        .map((entry) => entry.toLowerCase())\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction persistedAllowedExactCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter((entry): entry is string => typeof entry === 'string')\n        .map((entry) => entry.trim())\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction executableName(command: string): string {\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\n}\n\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\n\nexport function isPersistentlyAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string>\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\n    return false\n  }\n\n  const commands = trimmed\n    .split(/\\s*(?:&&|\\|)\\s*/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (commands.length === 0) return false\n\n  return commands.every((part) => {\n    if (isSimpleCd(part)) return true\n    const executable = executableName(part)\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\n  })\n}\n\nfunction isSimpleCd(command: string): boolean {\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\n}\n\nfunction isSafeGitStatus(command: string): boolean {\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\n}\n\nfunction isSafeGitClone(command: string): boolean {\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\n}\n\nfunction isSafeDirectoryRead(command: string): boolean {\n  const trimmed = command.trim()\n  return (\n    trimmed === 'pwd' ||\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\n  )\n}\n\nexport type IndexedSearchKind = 'launcher' | 'deep'\n\nconst MAJOR_HOME_FOLDER_PATTERN =\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\n\nfunction hasBroadHomeScope(command: string): boolean {\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\n    return true\n  }\n\n  const roots = new Set<string>()\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\n    const root = match[1]?.toLowerCase()\n    if (root) roots.add(root)\n  }\n  return roots.size >= 2\n}\n\n/**\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\n * inside the active project remain valid shell work.\n */\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\n  const trimmed = command.trim()\n  if (!trimmed) return null\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\n  if (!hasBroadHomeScope(trimmed)) return null\n\n  if (\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\n  ) {\n    return 'deep'\n  }\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\n  return null\n}\n\nexport function isAutoAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed) return false\n  if (allowedExactCommands.has(trimmed)) return true\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\n  if (hasUnsafeShellSyntax(trimmed)) return false\n\n  const parts = trimmed\n    .split(/\\s+&&\\s+/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (parts.length === 0) return false\n\n  const commandToRun = parts[parts.length - 1]\n  if (\n    !commandToRun ||\n    !(\n      isSafeGitStatus(commandToRun) ||\n      isSafeGitClone(commandToRun) ||\n      isSafeDirectoryRead(commandToRun)\n    )\n  ) {\n    return false\n  }\n\n  return parts.slice(0, -1).every(isSimpleCd)\n}\n\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\n  registerRaymesProvider(pi)\n\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\n  const hasIndexedSearchTools = Boolean(\n    knowledgeEndpoint &&\n    knowledgeToken &&\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\n  )\n  let launcherSearchAttempted = false\n  let deepSearchAttempted = false\n\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\n    pi.registerTool({\n      name: 'launcher_search',\n      label: 'Search Tezbar',\n      description:\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\n      promptGuidelines: [\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({\n          description: 'The file, app, command, note, or other local item to find',\n        }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          results?: Array<{\n            id: string\n            title: string\n            subtitle: string\n            category: string\n            score: number\n            target?: string\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\n        const results = payload.results ?? []\n        const text =\n          results.length === 0\n            ? 'No Tezbar launcher results matched this query.'\n            : results\n                .map((result, index) => {\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { results } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_search',\n      label: 'Deep Search PC Knowledge',\n      description:\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\n      promptSnippet:\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\n      promptGuidelines: [\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint, {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\n          signal,\n        })\n        const result = (await response.json()) as {\n          hits?: Array<{\n            chunkId: string\n            path: string\n            pageNumber?: number\n            text: string\n            score: number\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\n        const hits = result.hits ?? []\n        const text =\n          hits.length === 0\n            ? 'No indexed knowledge matched this query.'\n            : hits\n                .map((hit, index) => {\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { hits } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_read',\n      label: 'Read PC Knowledge Result',\n      description:\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\n      parameters: Type.Object({\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\n        maxChars: Type.Optional(\n          Type.Number({\n            minimum: 500,\n            maximum: 50_000,\n            description: 'Maximum text characters to return',\n          })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({\n            resultId: params.resultId ?? '',\n            maxChars: params.maxChars ?? 12_000,\n          }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          result?: { path: string; pageNumber?: number; text: string }\n          error?: string\n        }\n        if (!response.ok || !payload.result) {\n          throw new Error(payload.error || 'Knowledge result could not be read')\n        }\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\n        return {\n          content: [\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\n          ],\n          details: payload.result,\n        }\n      },\n    })\n  }\n\n  pi.on('tool_call', async (event, ctx) => {\n    if (event.toolName === 'launcher_search') {\n      launcherSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName === 'pc_search') {\n      deepSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName !== 'bash') return undefined\n\n    const command = event.input?.command\n    if (typeof command !== 'string') {\n      return { block: true, reason: 'Missing bash command.' }\n    }\n\n    if (hasIndexedSearchTools) {\n      const preferredSearch = preferredIndexedSearchForBash(command)\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\n        }\n      }\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\n        }\n      }\n    }\n\n    if (isAutoAllowedBash(command)) return undefined\n\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\n    if (confirmed) return undefined\n\n    return { block: true, reason: 'Bash command was not approved.' }\n  })\n}\n", "utf8");
+    (0, import_node_fs33.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\n\ntype ToolCallEvent = {\n  toolName: string\n  input?: Record<string, unknown> & { command?: unknown }\n}\n\ntype ToolCallResult = {\n  block?: boolean\n  reason?: string\n}\n\ntype ExtensionContext = {\n  ui: {\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\n  }\n}\n\ntype ExtensionAPI = {\n  on(\n    event: 'tool_call',\n    handler: (\n      event: ToolCallEvent,\n      ctx: ExtensionContext\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\n  ): void\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\n  registerTool(definition: {\n    name: string\n    label: string\n    description: string\n    promptSnippet?: string\n    promptGuidelines?: string[]\n    parameters: unknown\n    execute: (\n      toolCallId: string,\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\n      signal?: AbortSignal\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\n  }): void\n}\n\ntype RaymesPiProviderConfig = {\n  baseUrl: string\n  apiKey: string\n  api: 'openai-completions' | 'anthropic-messages'\n  authHeader?: boolean\n  models: Array<{\n    id: string\n    name: string\n    reasoning: boolean\n    input: Array<'text' | 'image'>\n    cost: {\n      input: number\n      output: number\n      cacheRead: number\n      cacheWrite: number\n    }\n    contextWindow: number\n    maxTokens: number\n    compat?: Record<string, unknown>\n  }>\n}\n\nconst TOKENROUTER_BASE_URL = 'https://api.tokenrouter.com/v1'\nconst TOKENROUTER_MODEL_ID = 'moonshotai/kimi-k3-free'\n\nfunction registerTokenRouterProvider(pi: ExtensionAPI): void {\n  pi.registerProvider('tokenrouter', {\n    baseUrl: TOKENROUTER_BASE_URL,\n    apiKey: '$TOKENROUTER_API_KEY',\n    authHeader: true,\n    api: 'openai-completions',\n    models: [\n      {\n        id: TOKENROUTER_MODEL_ID,\n        name: 'Kimi K3 Free (TokenRouter)',\n        reasoning: false,\n        input: ['text'],\n        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },\n        contextWindow: 128000,\n        maxTokens: 8192,\n        compat: {\n          supportsStore: false,\n          supportsDeveloperRole: false,\n          supportsReasoningEffort: false,\n          maxTokensField: 'max_tokens',\n        },\n      },\n    ],\n  })\n}\n\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\n  if (!raw) return\n  try {\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\n    pi.registerProvider('tezbar', parsed)\n  } catch {\n    /* Ignore malformed bridge env so pi can still start with its own config. */\n  }\n}\n\nfunction hasUnsafeShellSyntax(command: string): boolean {\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\n}\n\nfunction persistedAllowedCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter(\n          (entry): entry is string =>\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\n        )\n        .map((entry) => entry.toLowerCase())\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction persistedAllowedExactCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter((entry): entry is string => typeof entry === 'string')\n        .map((entry) => entry.trim())\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction executableName(command: string): string {\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\n}\n\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\n\nexport function isPersistentlyAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string>\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\n    return false\n  }\n\n  const commands = trimmed\n    .split(/\\s*(?:&&|\\|)\\s*/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (commands.length === 0) return false\n\n  return commands.every((part) => {\n    if (isSimpleCd(part)) return true\n    const executable = executableName(part)\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\n  })\n}\n\nfunction isSimpleCd(command: string): boolean {\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\n}\n\nfunction isSafeGitStatus(command: string): boolean {\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\n}\n\nfunction isSafeGitClone(command: string): boolean {\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\n}\n\nfunction isSafeDirectoryRead(command: string): boolean {\n  const trimmed = command.trim()\n  return (\n    trimmed === 'pwd' ||\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\n  )\n}\n\nexport type IndexedSearchKind = 'launcher' | 'deep'\n\nconst MAJOR_HOME_FOLDER_PATTERN =\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\n\nfunction hasBroadHomeScope(command: string): boolean {\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\n    return true\n  }\n\n  const roots = new Set<string>()\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\n    const root = match[1]?.toLowerCase()\n    if (root) roots.add(root)\n  }\n  return roots.size >= 2\n}\n\n/**\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\n * inside the active project remain valid shell work.\n */\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\n  const trimmed = command.trim()\n  if (!trimmed) return null\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\n  if (!hasBroadHomeScope(trimmed)) return null\n\n  if (\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\n  ) {\n    return 'deep'\n  }\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\n  return null\n}\n\nexport function isAutoAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed) return false\n  if (allowedExactCommands.has(trimmed)) return true\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\n  if (hasUnsafeShellSyntax(trimmed)) return false\n\n  const parts = trimmed\n    .split(/\\s+&&\\s+/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (parts.length === 0) return false\n\n  const commandToRun = parts[parts.length - 1]\n  if (\n    !commandToRun ||\n    !(\n      isSafeGitStatus(commandToRun) ||\n      isSafeGitClone(commandToRun) ||\n      isSafeDirectoryRead(commandToRun)\n    )\n  ) {\n    return false\n  }\n\n  return parts.slice(0, -1).every(isSimpleCd)\n}\n\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\n  registerTokenRouterProvider(pi)\n  registerRaymesProvider(pi)\n\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\n  const hasIndexedSearchTools = Boolean(\n    knowledgeEndpoint &&\n    knowledgeToken &&\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\n  )\n  let launcherSearchAttempted = false\n  let deepSearchAttempted = false\n\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\n    pi.registerTool({\n      name: 'launcher_search',\n      label: 'Search Tezbar',\n      description:\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\n      promptGuidelines: [\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({\n          description: 'The file, app, command, note, or other local item to find',\n        }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          results?: Array<{\n            id: string\n            title: string\n            subtitle: string\n            category: string\n            score: number\n            target?: string\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\n        const results = payload.results ?? []\n        const text =\n          results.length === 0\n            ? 'No Tezbar launcher results matched this query.'\n            : results\n                .map((result, index) => {\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { results } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_search',\n      label: 'Deep Search PC Knowledge',\n      description:\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\n      promptSnippet:\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\n      promptGuidelines: [\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint, {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\n          signal,\n        })\n        const result = (await response.json()) as {\n          hits?: Array<{\n            chunkId: string\n            path: string\n            pageNumber?: number\n            text: string\n            score: number\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\n        const hits = result.hits ?? []\n        const text =\n          hits.length === 0\n            ? 'No indexed knowledge matched this query.'\n            : hits\n                .map((hit, index) => {\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { hits } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_read',\n      label: 'Read PC Knowledge Result',\n      description:\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\n      parameters: Type.Object({\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\n        maxChars: Type.Optional(\n          Type.Number({\n            minimum: 500,\n            maximum: 50_000,\n            description: 'Maximum text characters to return',\n          })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({\n            resultId: params.resultId ?? '',\n            maxChars: params.maxChars ?? 12_000,\n          }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          result?: { path: string; pageNumber?: number; text: string }\n          error?: string\n        }\n        if (!response.ok || !payload.result) {\n          throw new Error(payload.error || 'Knowledge result could not be read')\n        }\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\n        return {\n          content: [\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\n          ],\n          details: payload.result,\n        }\n      },\n    })\n  }\n\n  pi.on('tool_call', async (event, ctx) => {\n    if (event.toolName === 'launcher_search') {\n      launcherSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName === 'pc_search') {\n      deepSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName !== 'bash') return undefined\n\n    const command = event.input?.command\n    if (typeof command !== 'string') {\n      return { block: true, reason: 'Missing bash command.' }\n    }\n\n    if (hasIndexedSearchTools) {\n      const preferredSearch = preferredIndexedSearchForBash(command)\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\n        }\n      }\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\n        }\n      }\n    }\n\n    if (isAutoAllowedBash(command)) return undefined\n\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\n    if (confirmed) return undefined\n\n    return { block: true, reason: 'Bash command was not approved.' }\n  })\n}\n", "utf8");
     process.env.RAYMES_PI_EXTENSION = extensionPath;
   } catch (error) {
     console.error("[server] failed to materialize Pi policy:", error);

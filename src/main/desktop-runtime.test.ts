@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { app, imageClipboardAppleScript } from './desktop-runtime'
+import {
+  app,
+  clipboardImageAppleScript,
+  fileClipboardJavaScript,
+  imageClipboardAppleScript,
+} from './desktop-runtime'
 
 describe('Tauri desktop runtime', () => {
   const previousIsTauri = process.env.IS_TAURI
@@ -25,6 +30,19 @@ describe('Tauri desktop runtime', () => {
     expect(write).toHaveBeenNthCalledWith(
       2,
       `${JSON.stringify({ type: 'app_visibility', visible: true })}\n`
+    )
+  })
+
+  it('builds a file-reference pasteboard payload without copying file bytes', () => {
+    const script = fileClipboardJavaScript(['/tmp/report.pdf', '/tmp/report.pdf'])
+
+    expect(script).toContain('const paths = ["/tmp/report.pdf"]')
+    expect(script).toContain('pasteboard.writeObjects(urls)')
+  })
+
+  it('writes clipboard image data to one reusable temporary file', () => {
+    expect(clipboardImageAppleScript('/tmp/clipboard-image.png')).toContain(
+      'write (the clipboard as «class PNGf») to fileRef',
     )
   })
 

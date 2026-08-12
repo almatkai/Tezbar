@@ -677,6 +677,7 @@ export function registerIpcHandlers(
     const ids: ProviderId[] = [
       'openai',
       'openai-compatible',
+      'tokenrouter',
       'anthropic',
       'ollama',
       'copilot',
@@ -705,6 +706,7 @@ export function registerIpcHandlers(
     if (
       id !== 'openai' &&
       id !== 'openai-compatible' &&
+      id !== 'tokenrouter' &&
       id !== 'anthropic' &&
       id !== 'ollama' &&
       id !== 'copilot' &&
