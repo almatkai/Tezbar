@@ -1,4 +1,4 @@
-import { dirname } from 'node:path'
+import { posix as posixPath } from 'node:path'
 
 export type DirectoryVisit = {
   count: number
@@ -19,6 +19,15 @@ type RankDirectoryRecommendationOptions = {
   excludedPaths?: Iterable<string>
 }
 
+function normalizePath(path: string): string {
+  const normalized = path.replace(/\\/g, '/')
+  return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized
+}
+
+function isAbsolutePath(path: string): boolean {
+  return path.startsWith('/') || path.startsWith('//') || /^[A-Za-z]:\//.test(path)
+}
+
 function visitScore(visit: DirectoryVisit, now: number): number {
   const ageDays = Math.max(0, (now - visit.lastVisitedAt) / 86_400_000)
   const recencyBoost = Math.max(0, 14 - ageDays)
@@ -32,20 +41,22 @@ export function rankDirectoryRecommendations(
   const now = options.now ?? Date.now()
   const limit = options.limit ?? 5
   const siblingThreshold = options.siblingThreshold ?? 3
-  const excluded = new Set(options.excludedPaths ?? [])
-  const validVisits = Object.entries(visits).filter(
-    ([path, visit]) =>
-      path.startsWith('/') &&
-      visit !== null &&
-      typeof visit === 'object' &&
-      Number.isFinite(visit.count) &&
-      visit.count > 0 &&
-      Number.isFinite(visit.lastVisitedAt),
-  )
+  const excluded = new Set(Array.from(options.excludedPaths ?? [], normalizePath))
+  const validVisits = Object.entries(visits)
+    .map(([path, visit]) => [normalizePath(path), visit] as const)
+    .filter(
+      ([path, visit]) =>
+        isAbsolutePath(path) &&
+        visit !== null &&
+        typeof visit === 'object' &&
+        Number.isFinite(visit.count) &&
+        visit.count > 0 &&
+        Number.isFinite(visit.lastVisitedAt),
+    )
 
-  const childrenByParent = new Map<string, Array<[string, DirectoryVisit]>>()
+  const childrenByParent = new Map<string, Array<readonly [string, DirectoryVisit]>>()
   for (const entry of validVisits) {
-    const parent = dirname(entry[0])
+    const parent = posixPath.dirname(entry[0])
     const siblings = childrenByParent.get(parent) ?? []
     siblings.push(entry)
     childrenByParent.set(parent, siblings)
@@ -59,7 +70,7 @@ export function rankDirectoryRecommendations(
   const recommendations = new Map<string, DirectoryRecommendation>()
 
   for (const [path, visit] of validVisits) {
-    const parent = dirname(path)
+    const parent = posixPath.dirname(path)
     const recommendationPath = collapsedParents.has(parent) ? parent : path
 
     if (excluded.has(recommendationPath)) continue

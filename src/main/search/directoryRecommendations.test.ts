@@ -51,6 +51,21 @@ describe('rankDirectoryRecommendations', () => {
     ])
   })
 
+  it('accepts Windows drive paths for recommendations', () => {
+    const ranked = rankDirectoryRecommendations(
+      {
+        'C:\\Users\\dev\\Desktop\\code': { count: 4, lastVisitedAt: NOW },
+        'C:\\Users\\dev\\Documents': { count: 2, lastVisitedAt: NOW },
+      },
+      { now: NOW, excludedPaths: ['C:\\Users\\dev'] },
+    )
+
+    expect(ranked.map((item) => item.path)).toEqual([
+      'C:/Users/dev/Desktop/code',
+      'C:/Users/dev/Documents',
+    ])
+  })
+
   it('keeps the strongest concrete directory in a traversed branch', () => {
     const ranked = rankDirectoryRecommendations(
       {

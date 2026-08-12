@@ -24393,6 +24393,13 @@ function shouldPreferRecent(leftScore, leftAgeMs, rightScore, rightAgeMs) {
 
 // src/main/search/directoryRecommendations.ts
 var import_node_path22 = require("node:path");
+function normalizePath(path7) {
+  const normalized = path7.replace(/\\/g, "/");
+  return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized;
+}
+function isAbsolutePath(path7) {
+  return path7.startsWith("/") || path7.startsWith("//") || /^[A-Za-z]:\//.test(path7);
+}
 function visitScore(visit, now) {
   const ageDays = Math.max(0, (now - visit.lastVisitedAt) / 864e5);
   const recencyBoost = Math.max(0, 14 - ageDays);
@@ -24402,13 +24409,13 @@ function rankDirectoryRecommendations(visits, options = {}) {
   const now = options.now ?? Date.now();
   const limit = options.limit ?? 5;
   const siblingThreshold = options.siblingThreshold ?? 3;
-  const excluded = new Set(options.excludedPaths ?? []);
-  const validVisits = Object.entries(visits).filter(
-    ([path7, visit]) => path7.startsWith("/") && visit !== null && typeof visit === "object" && Number.isFinite(visit.count) && visit.count > 0 && Number.isFinite(visit.lastVisitedAt)
+  const excluded = new Set(Array.from(options.excludedPaths ?? [], normalizePath));
+  const validVisits = Object.entries(visits).map(([path7, visit]) => [normalizePath(path7), visit]).filter(
+    ([path7, visit]) => isAbsolutePath(path7) && visit !== null && typeof visit === "object" && Number.isFinite(visit.count) && visit.count > 0 && Number.isFinite(visit.lastVisitedAt)
   );
   const childrenByParent = /* @__PURE__ */ new Map();
   for (const entry of validVisits) {
-    const parent = (0, import_node_path22.dirname)(entry[0]);
+    const parent = import_node_path22.posix.dirname(entry[0]);
     const siblings = childrenByParent.get(parent) ?? [];
     siblings.push(entry);
     childrenByParent.set(parent, siblings);
@@ -24418,7 +24425,7 @@ function rankDirectoryRecommendations(visits, options = {}) {
   );
   const recommendations = /* @__PURE__ */ new Map();
   for (const [path7, visit] of validVisits) {
-    const parent = (0, import_node_path22.dirname)(path7);
+    const parent = import_node_path22.posix.dirname(path7);
     const recommendationPath = collapsedParents.has(parent) ? parent : path7;
     if (excluded.has(recommendationPath)) continue;
     const existing = recommendations.get(recommendationPath);
