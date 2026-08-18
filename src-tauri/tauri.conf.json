@@ -46,7 +46,7 @@
   "plugins": {
     "updater": {
       "active": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhDRUU3OUQ4RjU4MDk5Q0EKUldTbHk3YXRYUThqaXVFcFRUcy9TVmN0bGxCK0pnVGVUeHlBWmRLc1ZzYkxkTzJrZmNQYUFaMVQK",
+      "pubkey": "ZFc1MGNuVnpkR1ZrSUdOdmJXMWxiblE2SUcxcGJtbHphV2R1SUhCMVlteHBZeUJyWlhrNklEWTVSRE5FTWpORFEwSXhORFl3TnpZS1VsZFNNbGxDVkV4UVRreFVZVnBVY2xscGVDOUNXVXRPVUdweVpHNUlVVEpUV25jeGFsbHJOVVVyUWpoMFUxbERaRWhvWWxKUVMwb0s=",
       "endpoints": [
         "https://github.com/almatkai/Raymes/releases/latest/download/latest.json"
       ]
