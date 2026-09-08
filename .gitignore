@@ -13,6 +13,9 @@ dist
 
 SuperCmd-main
 
+# Standalone extension repositories are managed independently.
+/extensions/
+
 # Native build artifacts
 native/**/target/
 native/**/*.node

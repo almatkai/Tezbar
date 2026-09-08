@@ -4206,6 +4206,22 @@ function getCommandExport(
   return null
 }
 
+function manifestPreferenceDefaults(pkg: any, command: any): Record<string, unknown> {
+  const values: Record<string, unknown> = {}
+  const apply = (preferences: any[] | undefined) => {
+    for (const preference of preferences ?? []) {
+      if (!preference?.name) continue
+      if (preference.default !== undefined) values[preference.name] = preference.default
+      else if (preference.type === 'checkbox') values[preference.name] = false
+      else if (preference.type === 'dropdown') values[preference.name] = preference.data?.[0]?.value ?? ''
+      else values[preference.name] = ''
+    }
+  }
+  apply(Array.isArray(pkg.preferences) ? pkg.preferences : [])
+  apply(Array.isArray(command?.preferences) ? command.preferences : [])
+  return values
+}
+
 async function runCommandFromPackagePath(
   packageJsonPath: string,
   extensionId: string,
@@ -4242,7 +4258,12 @@ async function runCommandFromPackagePath(
     effects: [],
     effectMode: options?.effectMode ?? 'system',
     stack: [],
-    preferences: preferenceValues ?? getExtensionPreferences(extensionId, commandName),
+    preferences:
+      preferenceValues ??
+      {
+        ...manifestPreferenceDefaults(pkg, command),
+        ...getExtensionPreferences(extensionId, commandName),
+      },
     searchTextChangeHandler: null,
     commandFn: null,
     commandArgs: argumentValues,
@@ -4406,7 +4427,7 @@ export async function runExtensionCommandFromPackageJson(
     return { ok: false, message: 'packageJsonPath and commandName are required.' }
   }
 
-  const extensionId = `raycast.${dirname(normalizedPath).split('/').pop() || 'external'}`
+  const extensionId = `raycast.${basename(dirname(normalizedPath)) || 'external'}`
   try {
     return await runCommandFromPackagePath(
       normalizedPath,

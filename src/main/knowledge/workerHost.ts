@@ -32,7 +32,8 @@ export class KnowledgeWorkerHost {
     const workerPath = join(__dirname, 'knowledge-worker.js')
     const child = spawn(process.execPath, [workerPath], {
       env: { ...process.env, TEZBAR_KNOWLEDGE_WORKER: '1' },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      // EOF on this pipe tells the worker its backend owner has exited.
+      stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     })
     this.child = child

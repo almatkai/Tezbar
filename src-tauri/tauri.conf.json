@@ -25,18 +25,6 @@
         "skipTaskbar": true,
         "visible": false,
         "shadow": false
-      },
-      {
-        "label": "settings",
-        "title": "Tezbar Settings",
-        "url": "index.html?window=settings",
-        "width": 920,
-        "height": 680,
-        "resizable": true,
-        "decorations": true,
-        "visible": false,
-        "skipTaskbar": false,
-        "shadow": true
       }
     ],
     "security": {

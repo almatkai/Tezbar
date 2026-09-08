@@ -289,7 +289,9 @@ export function captureClipboardSnapshot(snapshot?: ClipboardSnapshot): void {
 
   const current = snapshot ?? readClipboardSnapshot()
   const candidate =
-    captureFileEntry(current.filePaths, now) ?? captureImageEntry(now) ?? captureTextEntry(now, current.text)
+    captureFileEntry(current.filePaths, now) ??
+    (current.hasImage ? captureImageEntry(now) : null) ??
+    captureTextEntry(now, current.text)
   if (!candidate) return
 
   const existing = _readClipboardDb.items.find((item) => item.id === candidate.id)
@@ -508,6 +510,34 @@ const RICH_CLIPBOARD_PROBE_INTERVAL_MS = 1_000
 
 let watcherTimer: ReturnType<typeof setTimeout> | null = null
 let watcherRunning = false
+let nativeReadPending: Promise<void> | null = null
+let nativeReadRequested = false
+let watcherGeneration = 0
+
+/** Coalesce native change events; never overlap clipboard helpers or block IPC. */
+export function notifyClipboardChanged(): Promise<void> {
+  if (!watcherRunning || !getClipboardConfig().watchEnabled) return Promise.resolve()
+  nativeReadRequested = true
+  if (nativeReadPending) return nativeReadPending
+  const generation = watcherGeneration
+  nativeReadPending = (async () => {
+    while (nativeReadRequested && watcherRunning && generation === watcherGeneration) {
+      nativeReadRequested = false
+      try {
+        const snapshot = await clipboard.readSnapshotAsync()
+        if (watcherRunning && generation === watcherGeneration && getClipboardConfig().watchEnabled) {
+          captureClipboardSnapshot(snapshot)
+        }
+      } catch (error) {
+        console.warn('[clipboard] failed to read changed clipboard:', error)
+      }
+    }
+  })().finally(() => {
+    nativeReadPending = null
+    if (nativeReadRequested && watcherRunning) void notifyClipboardChanged()
+  })
+  return nativeReadPending
+}
 
 /** Return a cheap fingerprint for every clipboard kind we can restore.
  *  File-only copies have no plain-text representation, so the file paths must
@@ -538,6 +568,10 @@ export function startClipboardWatcher(): void {
   let lastText = ''
   let lastRichProbeAt = 0
   watcherRunning = true
+  if (process.platform === 'win32' && process.env.IS_TAURI === 'true') {
+    void notifyClipboardChanged()
+    return
+  }
 
   const tick = (): void => {
     watcherTimer = null
@@ -576,6 +610,8 @@ export function startClipboardWatcher(): void {
 
 export function stopClipboardWatcher(): void {
   watcherRunning = false
+  watcherGeneration += 1
+  nativeReadRequested = false
   if (!watcherTimer) return
   clearTimeout(watcherTimer)
   watcherTimer = null

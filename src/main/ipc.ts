@@ -23,8 +23,6 @@ import {
 } from '../shared/agent'
 import { CHAT_CONTEXT_MAX_TURNS, CHAT_IPC, type ChatSession, type ChatTurn } from '../shared/chat'
 import type { ChatAttachment } from '../shared/chat'
-import { disposeSharedBridge, getSharedBridge } from './agent/bridge'
-import { extractTextFromAgentImages } from './agent/imageContext'
 import {
   appendChatTurn,
   clearAllChatSessions,
@@ -48,7 +46,6 @@ import type { Message } from './llm/provider'
 import { appIconDataUrl } from './appIcon'
 import { imageFileDataUrl, nativeFileIconDataUrl } from './pathIcons'
 import { quickLookFiles } from './quickLook'
-import { streamAnswerToRenderer } from './llm/answerStream'
 import { setLauncherContentHeight } from './windowBounds'
 import {
   addAgentAlwaysAllowedExactCommand,
@@ -69,7 +66,6 @@ import {
   getExtensionRuntimeTimeoutMs,
   getRaymesHotkey,
 } from './llm/configStore'
-import { getInstalledExtensionsSettingsSchema } from './extension-builder'
 import {
   clearDeviceSession,
   persistCopilotTokens,
@@ -87,33 +83,6 @@ import {
 } from './llm/registry'
 import type { ProviderId } from '../shared/llmConfig'
 import { classifyIntent } from './router'
-import {
-  getExtensionInstallError,
-  inspectExtensionIntegrity,
-  installExtension,
-  listInstalledExtensions,
-  reinstallExtension,
-  searchStoreExtensions,
-  uninstallExtension,
-} from './extensions/service'
-import {
-  extensionRegistryEvents,
-  getExtensionPreferenceSetup,
-  getExtensionPreferences as getRegistryExtensionPreferences,
-  installRegistryExtension,
-  listInstalledRegistryExtensions,
-  searchExtensionCatalog,
-  saveExtensionPreferences as saveRegistryExtensionPreferences,
-  uninstallRegistryExtension,
-} from './extension-registry'
-import {
-  clearAllExtensionSessions,
-  disposeExtensionSession,
-  invokeExtensionAction,
-  loadMoreExtensionSession,
-  refreshExtensionSession,
-  runExtensionCommand,
-} from './extension-runner'
 import {
   executeSearchAction,
   completePath,
@@ -138,17 +107,6 @@ import {
 import { fetchFrankfurterLatest } from './currency/frankfurter'
 import { addNamedPort, listNamedPorts, removeNamedPort } from './portManager/namedPortsStore'
 import { runAiActionMode } from './llm/actionMode'
-import {
-  downloadVoiceModel,
-  deleteVoiceModel,
-  getSelectedVoiceModelId,
-  listSttModes,
-  listVoiceModels,
-  setSelectedVoiceModelId,
-  speakText,
-  stopSpeaking,
-  transcribeAudio,
-} from './voice/service'
 import type { VoiceModelId } from '../shared/voice'
 import type { KnowledgeDepth, KnowledgeRootDepth } from '../shared/knowledge'
 import { listBackgroundTasks } from './backgroundTasks'
@@ -176,24 +134,6 @@ import {
   updateUserSnippet,
 } from './search/providers/snippetsProvider'
 import {
-  attachTerminalSession,
-  createTerminalSession,
-  deleteTerminalSession,
-  detachTerminalSession,
-  getTerminalPromptInfo,
-  getTerminalSessionCwd,
-  killTerminalSession,
-  listTerminalSessions,
-  markNativeTerminalSessionAttached,
-  markNativeTerminalSessionExited,
-  markNativeTerminalSessionRestored,
-  recordNativeTerminalSession,
-  resizeTerminalSession,
-  shutdownTerminalSessions,
-  updateTerminalSession,
-  writeTerminalSession,
-} from './terminal/service'
-import {
   TERMINAL_IPC,
   type TerminalAttachRequest,
   type TerminalCreateRequest,
@@ -216,6 +156,39 @@ const LLM_DEFAULTS = {
 let answerAbort: AbortController | null = null
 let agentAbort: AbortController | null = null
 let agentRunId: string | null = null
+let extensionRunnerModule: typeof import('./extension-runner') | null = null
+let terminalModule: typeof import('./terminal/service') | null = null
+let agentBridgeModule: typeof import('./agent/bridge') | null = null
+let extensionRegistryModule: typeof import('./extension-registry') | null = null
+let extensionRegistryProgressAttached = false
+let extensionProgressWindow: (() => BrowserWindow | null) | null = null
+
+async function loadExtensionRegistry(): Promise<typeof import('./extension-registry')> {
+  extensionRegistryModule ??= await import('./extension-registry')
+  if (!extensionRegistryProgressAttached && extensionProgressWindow) {
+    extensionRegistryProgressAttached = true
+    extensionRegistryModule.extensionRegistryEvents.on('progress', (payload) => {
+      const win = extensionProgressWindow?.()
+      if (win && !win.isDestroyed()) win.webContents.send('extension:install-progress', payload)
+    })
+  }
+  return extensionRegistryModule
+}
+
+async function loadExtensionRunner(): Promise<typeof import('./extension-runner')> {
+  extensionRunnerModule ??= await import('./extension-runner')
+  return extensionRunnerModule
+}
+
+async function loadTerminal(): Promise<typeof import('./terminal/service')> {
+  terminalModule ??= await import('./terminal/service')
+  return terminalModule
+}
+
+async function loadAgentBridge(): Promise<typeof import('./agent/bridge')> {
+  agentBridgeModule ??= await import('./agent/bridge')
+  return agentBridgeModule
+}
 const pendingAgentApprovals = new Map<
   string,
   {
@@ -415,8 +388,6 @@ function startAgentRun(
   const ac = agentAbort
   const runId =
     (agentRunId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
-  const bridge = getSharedBridge()
-  const piProvider = getSelectedPiProviderBridge('chat')
   let emittedOutput = false
 
   sendAgentEvent(sender, { type: 'start', runId, task })
@@ -441,6 +412,12 @@ function startAgentRun(
   console.log('[tezbar:agent] run', { runId, taskPreview: task.slice(0, 120) })
 
   void (async () => {
+    const [{ getSharedBridge }, { extractTextFromAgentImages }] = await Promise.all([
+      loadAgentBridge(),
+      import('./agent/imageContext'),
+    ])
+    const bridge = getSharedBridge()
+    const piProvider = getSelectedPiProviderBridge('chat')
     let runTask = task
     let runImages = images
     if (images.length > 0 && piProvider && !piProvider.acceptsImages) {
@@ -613,21 +590,16 @@ export function shutdownIpcHandlers(): void {
   answerAbort?.abort()
   cancelPendingAgentApprovals()
   agentAbort?.abort()
-  clearAllExtensionSessions()
-  disposeSharedBridge()
-  shutdownTerminalSessions()
+  extensionRunnerModule?.clearAllExtensionSessions()
+  agentBridgeModule?.disposeSharedBridge()
+  terminalModule?.shutdownTerminalSessions()
 }
 
 export function registerIpcHandlers(
   getWindow: () => BrowserWindow | null,
   controls?: IpcControls
 ): void {
-  extensionRegistryEvents.on('progress', (payload) => {
-    const win = getWindow()
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('extension:install-progress', payload)
-    }
-  })
+  extensionProgressWindow = getWindow
 
   ipcMain.handle('llm-config-get', async () => ({
     ...LLM_DEFAULTS,
@@ -925,6 +897,7 @@ export function registerIpcHandlers(
     if ((body.initialCommand?.length ?? 0) > 16 * 1024) {
       throw new Error('Initial terminal command is too long')
     }
+    const { createTerminalSession } = await loadTerminal()
     return createTerminalSession(event.sender, body as TerminalCreateRequest)
   })
 
@@ -938,6 +911,7 @@ export function registerIpcHandlers(
     ) {
       return null
     }
+    const { attachTerminalSession } = await loadTerminal()
     return attachTerminalSession(event.sender, body as TerminalAttachRequest)
   })
 
@@ -945,10 +919,12 @@ export function registerIpcHandlers(
     if (!raw || typeof raw !== 'object') return false
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return false
+    const { detachTerminalSession } = await loadTerminal()
     return detachTerminalSession(event.sender.id, body.sessionId)
   })
 
   ipcMain.handle(TERMINAL_IPC.LIST, async (event) => {
+    const { listTerminalSessions } = await loadTerminal()
     return listTerminalSessions(event.sender.id)
   })
 
@@ -960,6 +936,7 @@ export function registerIpcHandlers(
     if (body.cwd !== undefined && typeof body.cwd !== 'string') return null
     if (body.lastCommand !== undefined && typeof body.lastCommand !== 'string') return null
     if ((body.lastCommand?.length ?? 0) > 16 * 1024) return null
+    const { updateTerminalSession } = await loadTerminal()
     return updateTerminalSession(event.sender.id, body as TerminalUpdateRequest)
   })
 
@@ -1000,6 +977,7 @@ export function registerIpcHandlers(
         ? body.keepAliveFor
         : undefined
     if ((initialCommand?.length ?? 0) > 16 * 1024) return null
+    const { recordNativeTerminalSession } = await loadTerminal()
     return recordNativeTerminalSession({
       sessionId: body.sessionId,
       shell: body.shell,
@@ -1015,6 +993,7 @@ export function registerIpcHandlers(
     if (!raw || typeof raw !== 'object') return null
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return null
+    const { markNativeTerminalSessionAttached } = await loadTerminal()
     return markNativeTerminalSessionAttached(body.sessionId)
   })
 
@@ -1028,6 +1007,7 @@ export function registerIpcHandlers(
     ) {
       return null
     }
+    const { markNativeTerminalSessionRestored } = await loadTerminal()
     return markNativeTerminalSessionRestored({
       sessionId: body.sessionId,
       shell: body.shell,
@@ -1047,6 +1027,7 @@ export function registerIpcHandlers(
       typeof body.signal === 'number' && Number.isFinite(body.signal)
         ? Math.max(0, Math.round(body.signal))
         : undefined
+    const { markNativeTerminalSessionExited } = await loadTerminal()
     return markNativeTerminalSessionExited(body.sessionId, exitCode, signal)
   })
 
@@ -1054,6 +1035,7 @@ export function registerIpcHandlers(
     if (!raw || typeof raw !== 'object') return false
     const body = raw as { sessionId?: unknown; data?: unknown }
     if (typeof body.sessionId !== 'string' || typeof body.data !== 'string') return false
+    const { writeTerminalSession } = await loadTerminal()
     return writeTerminalSession(event.sender.id, body.sessionId, body.data)
   })
 
@@ -1067,6 +1049,7 @@ export function registerIpcHandlers(
     ) {
       return false
     }
+    const { resizeTerminalSession } = await loadTerminal()
     return resizeTerminalSession(event.sender.id, body.sessionId, body.cols, body.rows)
   })
 
@@ -1074,6 +1057,7 @@ export function registerIpcHandlers(
     if (!raw || typeof raw !== 'object') return null
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return null
+    const { getTerminalSessionCwd } = await loadTerminal()
     return getTerminalSessionCwd(event.sender.id, body.sessionId)
   })
 
@@ -1081,6 +1065,7 @@ export function registerIpcHandlers(
     if (!raw || typeof raw !== 'object') return false
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return false
+    const { killTerminalSession } = await loadTerminal()
     return killTerminalSession(event.sender.id, body.sessionId)
   })
 
@@ -1088,10 +1073,12 @@ export function registerIpcHandlers(
     if (!raw || typeof raw !== 'object') return false
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return false
+    const { deleteTerminalSession } = await loadTerminal()
     return deleteTerminalSession(event.sender.id, body.sessionId)
   })
 
   ipcMain.handle(TERMINAL_IPC.GET_PROMPT_INFO, async () => {
+    const { getTerminalPromptInfo } = await loadTerminal()
     return getTerminalPromptInfo()
   })
 
@@ -1135,7 +1122,9 @@ export function registerIpcHandlers(
       answerAbort?.abort()
       answerAbort = new AbortController()
       const ac = answerAbort
-      void streamAnswerToRenderer(event.sender, intent.input, ac.signal).finally(() => {
+      void import('./llm/answerStream').then(({ streamAnswerToRenderer }) =>
+        streamAnswerToRenderer(event.sender, intent.input, ac.signal)
+      ).finally(() => {
         if (answerAbort === ac) answerAbort = null
       })
     }
@@ -1398,15 +1387,18 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle('get-extensions', async () => {
+    const { listInstalledExtensions } = await import('./extensions/service')
     return listInstalledExtensions()
   })
 
   ipcMain.handle('extensions:listInstalled', async () => {
+    const { listInstalledExtensions } = await import('./extensions/service')
     return listInstalledExtensions()
   })
 
   ipcMain.handle('extensions:searchStore', async (_event, query: unknown) => {
     const q = typeof query === 'string' ? query : ''
+    const { searchStoreExtensions } = await import('./extensions/service')
     return searchStoreExtensions(q)
   })
 
@@ -1414,6 +1406,7 @@ export function registerIpcHandlers(
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
+    const { installExtension } = await import('./extensions/service')
     const result = await installExtension(extensionId)
     await reindexExtensions()
     return result
@@ -1423,6 +1416,7 @@ export function registerIpcHandlers(
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
+    const { uninstallExtension } = await import('./extensions/service')
     const result = await uninstallExtension(extensionId)
     await reindexExtensions()
     return result
@@ -1432,6 +1426,7 @@ export function registerIpcHandlers(
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
+    const { inspectExtensionIntegrity } = await import('./extensions/service')
     return inspectExtensionIntegrity(extensionId)
   })
 
@@ -1439,20 +1434,24 @@ export function registerIpcHandlers(
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
+    const { reinstallExtension } = await import('./extensions/service')
     return reinstallExtension(extensionId)
   })
 
   ipcMain.handle('extensions:install-error', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) return null
+    const { getExtensionInstallError } = await import('./extensions/service')
     return getExtensionInstallError(extensionId)
   })
 
   ipcMain.handle('extension:list', async () => {
+    const { listInstalledRegistryExtensions } = await loadExtensionRegistry()
     return listInstalledRegistryExtensions()
   })
 
   ipcMain.handle('extension:search-store', async (_event, query: unknown) => {
     const q = typeof query === 'string' ? query : ''
+    const { searchExtensionCatalog } = await loadExtensionRegistry()
     return searchExtensionCatalog(q)
   })
 
@@ -1460,6 +1459,7 @@ export function registerIpcHandlers(
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
+    const { installRegistryExtension } = await loadExtensionRegistry()
     const result = await installRegistryExtension(extensionId)
     await reindexExtensions()
     return result
@@ -1469,6 +1469,7 @@ export function registerIpcHandlers(
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
+    const { uninstallRegistryExtension } = await loadExtensionRegistry()
     const result = uninstallRegistryExtension(extensionId)
     await reindexExtensions()
     return result
@@ -1499,6 +1500,7 @@ export function registerIpcHandlers(
           )
         : undefined
 
+    const { runExtensionCommand } = await loadExtensionRunner()
     return runExtensionCommand({
       extensionId: body.extensionId,
       commandName: body.commandName,
@@ -1537,6 +1539,7 @@ export function registerIpcHandlers(
           )
         : undefined
 
+    const { invokeExtensionAction } = await loadExtensionRunner()
     return invokeExtensionAction({
       sessionId: body.sessionId,
       actionId: body.actionId,
@@ -1558,7 +1561,7 @@ export function registerIpcHandlers(
       throw new Error('sessionId and searchText are required')
     }
 
-    const { updateSearchText } = await import('./extension-runner')
+    const { updateSearchText } = await loadExtensionRunner()
     return updateSearchText({
       sessionId: body.sessionId,
       searchText: body.searchText,
@@ -1575,6 +1578,7 @@ export function registerIpcHandlers(
       throw new Error('sessionId is required')
     }
 
+    const { refreshExtensionSession } = await loadExtensionRunner()
     return refreshExtensionSession({ sessionId: body.sessionId })
   })
 
@@ -1582,6 +1586,7 @@ export function registerIpcHandlers(
     if (!payload || typeof payload !== 'object') return false
     const body = payload as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return false
+    const { disposeExtensionSession } = await loadExtensionRunner()
     return disposeExtensionSession(body.sessionId)
   })
 
@@ -1593,6 +1598,7 @@ export function registerIpcHandlers(
     if (typeof body.sessionId !== 'string') {
       throw new Error('sessionId is required')
     }
+    const { loadMoreExtensionSession } = await loadExtensionRunner()
     return loadMoreExtensionSession({ sessionId: body.sessionId })
   })
 
@@ -1620,7 +1626,8 @@ export function registerIpcHandlers(
     if (typeof body.extensionId !== 'string' || !body.extensionId.trim()) return {}
 
     const commandName = typeof body.commandName === 'string' ? body.commandName : undefined
-    return getRegistryExtensionPreferences(body.extensionId, commandName)
+    const { getExtensionPreferences } = await loadExtensionRegistry()
+    return getExtensionPreferences(body.extensionId, commandName)
   })
 
   ipcMain.handle('preferences:setup', async (_event, payload: unknown) => {
@@ -1628,6 +1635,7 @@ export function registerIpcHandlers(
     const body = payload as { extensionId?: unknown; commandName?: unknown }
     if (typeof body.extensionId !== 'string' || !body.extensionId.trim()) return null
     const commandName = typeof body.commandName === 'string' ? body.commandName : undefined
+    const { getExtensionPreferenceSetup } = await loadExtensionRegistry()
     return getExtensionPreferenceSetup(body.extensionId, commandName)
   })
 
@@ -1642,10 +1650,12 @@ export function registerIpcHandlers(
     const values =
       body.values && typeof body.values === 'object' ? (body.values as Record<string, unknown>) : {}
     const commandName = typeof body.commandName === 'string' ? body.commandName : undefined
-    return saveRegistryExtensionPreferences(body.extensionId, values, commandName)
+    const { saveExtensionPreferences } = await loadExtensionRegistry()
+    return saveExtensionPreferences(body.extensionId, values, commandName)
   })
 
   ipcMain.handle('get-installed-extensions-settings-schema', async () => {
+    const { getInstalledExtensionsSettingsSchema } = await import('./extension-builder')
     return getInstalledExtensionsSettingsSchema()
   })
 
@@ -1855,21 +1865,25 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.VOICE_TTS_SPEAK, async (_event, payload: unknown) => {
     const req = parseVoiceSpeakRequest(payload)
+    const { speakText } = await import('./voice/service')
     await speakText(req.text)
     return { ok: true }
   })
 
   ipcMain.handle(IPC_CHANNELS.VOICE_TTS_STOP, async () => {
+    const { stopSpeaking } = await import('./voice/service')
     stopSpeaking()
     return { ok: true }
   })
 
   ipcMain.handle(IPC_CHANNELS.VOICE_STT_MODES, async () => {
+    const { listSttModes } = await import('./voice/service')
     return listSttModes()
   })
 
   ipcMain.handle(IPC_CHANNELS.VOICE_STT_TRANSCRIBE, async (_event, payload: unknown) => {
     const req = parseVoiceTranscribeRequest(payload)
+    const { transcribeAudio } = await import('./voice/service')
     return transcribeAudio(req)
   })
 
@@ -1881,25 +1895,30 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle(IPC_CHANNELS.VOICE_MODELS_LIST, async () => {
+    const { listVoiceModels } = await import('./voice/service')
     return listVoiceModels()
   })
 
   ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_DOWNLOAD, async (_event, payload: unknown) => {
     const req = parseVoiceModelRequest(payload)
+    const { downloadVoiceModel } = await import('./voice/service')
     return downloadVoiceModel(req.modelId as VoiceModelId)
   })
 
   ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_DELETE, async (_event, payload: unknown) => {
     const req = parseVoiceModelRequest(payload)
+    const { deleteVoiceModel } = await import('./voice/service')
     return { modelId: await deleteVoiceModel(req.modelId as VoiceModelId) }
   })
 
   ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_GET_SELECTED, async () => {
+    const { getSelectedVoiceModelId } = await import('./voice/service')
     return { modelId: getSelectedVoiceModelId() }
   })
 
   ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_SET_SELECTED, async (_event, payload: unknown) => {
     const req = parseVoiceModelRequest(payload)
+    const { setSelectedVoiceModelId } = await import('./voice/service')
     return { modelId: setSelectedVoiceModelId(req.modelId as VoiceModelId) }
   })
 

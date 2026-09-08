@@ -1,13 +1,13 @@
 // src/main/server.ts
 import { registerIpcHandlers, shutdownIpcHandlers } from './ipc'
-import { startClipboardWatcher, stopClipboardWatcher } from './search/providers/clipboardProvider'
+import { startClipboardWatcher, stopClipboardWatcher, notifyClipboardChanged } from './search/providers/clipboardProvider'
 import { flushConfig, writeConfigPatch } from './llm/configStore'
 import { BrowserWindow, ipcMain } from '@tezbar/desktop-runtime'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { createConnection } from 'node:net'
-import { getKnowledgeService } from './knowledge/service'
+import { shutdownKnowledgeService } from './knowledge/service'
 import { stopKnowledgeAgentGateway } from './knowledge/agent/gateway'
 import { warmSearchIndex } from './search/service'
 
@@ -64,10 +64,6 @@ function fixPathSync(): void {
 
 fixPathSync()
 materializePiPolicy()
-void warmSearchIndex().catch((error: unknown) => {
-  console.warn('[server] failed to warm the cached search index:', error)
-})
-getKnowledgeService()
 
 // A rejected fire-and-forget integration must not take down every backend
 // feature. Individual operations should still catch their own errors; this is
@@ -104,6 +100,14 @@ async function handleLine(line: string): Promise<void> {
       id?: unknown
       channel?: unknown
       payload?: unknown
+    }
+    if (message.type === 'ping') {
+      writeReply({ type: 'pong' })
+      return
+    }
+    if (message.type === 'clipboard-changed') {
+      void notifyClipboardChanged()
+      return
     }
     if (message.type === 'invoke') {
       const { id, channel, payload } = message
@@ -191,7 +195,7 @@ function cleanup(): void {
     stopClipboardWatcher()
     shutdownIpcHandlers()
     flushConfig()
-    getKnowledgeService().shutdown()
+    shutdownKnowledgeService()
     void stopKnowledgeAgentGateway()
   } catch (err) {
     console.error('[server] error during cleanup:', err)
@@ -203,3 +207,10 @@ process.on('SIGINT', cleanup)
 process.on('SIGTERM', cleanup)
 
 console.error('[server] Raymes TS background runner started successfully via stdin/stdout IPC.')
+
+// Establish IPC before opening databases or enumerating indexed folders.
+setTimeout(() => {
+  void warmSearchIndex().catch((error: unknown) => {
+    console.warn('[server] failed to warm the cached search index:', error)
+  })
+}, 0)

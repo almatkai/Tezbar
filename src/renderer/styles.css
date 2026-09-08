@@ -1118,3 +1118,44 @@
   border-color: rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.05);
 }
+/* Native service status also renders before the main application chunk loads. */
+.backend-connection {
+  position: fixed;
+  inset: 8px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  background: rgb(var(--c-panel));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--r-panel);
+}
+
+.backend-connection--banner {
+  top: auto;
+  padding: 12px 16px;
+}
+
+.backend-connection__retry {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font-size: 12px;
+}
+
+.backend-connection__retry:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.backend-connection__retry:disabled { opacity: 0.5; }
+
+/* Tauri's hidden WebView2 window remains document-visible on Windows. Remove
+   the launcher from layout until the native host shows it again so animated
+   indicators and transparent compositing do not run while idle. */
+html.tezbar-window-hidden body {
+  display: none;
+}

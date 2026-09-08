@@ -22,13 +22,6 @@ import {
   DEEP_SEARCH_RESULT_PREFIX,
   parseSearchQuery,
 } from '../../shared/searchMode'
-import {
-  executeExtensionCommandRuntime,
-  getExtensionCommands,
-  isUnsupportedRuntimeModeError,
-  installExtension,
-  listInstalledExtensions,
-} from '../extensions/service'
 import { executeNativeCommand } from '../nativeCommands/executor'
 import { getSafetyDryRun } from '../llm/configStore'
 import { confirmSafetyAction } from '../safety/confirm'
@@ -36,7 +29,7 @@ import { recordSafetyEntry } from '../safety/log'
 import { getSafetyDescriptor } from '../safety/registry'
 import { fileIconDataUrl, folderIconDataUrl } from '../pathIcons'
 import { appIconDataUrl } from '../appIcon'
-import { getKnowledgeService } from '../knowledge/service'
+import { getKnowledgeService, notifyKnowledgeInteractiveActivity } from '../knowledge/service'
 import { commandBus } from './commandBus'
 // Fix imports from indexDb
 import {
@@ -46,10 +39,9 @@ import {
   type SearchIndexRow,
 } from './indexDb'
 import { appsProvider, listApplications } from './providers/appsProvider'
-import { captureClipboardSnapshot, clipboardProvider } from './providers/clipboardProvider'
+import { clipboardProvider } from './providers/clipboardProvider'
 import { commandsProvider } from './providers/commandsProvider'
-import { extensionsProvider } from './providers/extensionsProvider'
-import { collectInitialFileDocuments, startFileWatcher } from './providers/filesProvider'
+import { scanInitialFileDocumentBatches, startFileWatcher } from './providers/filesProvider'
 import { addQuickNote, notesProvider } from './providers/notesProvider'
 import { quickLinksProvider } from './providers/quickLinksProvider'
 import { snippetsProvider } from './providers/snippetsProvider'
@@ -300,30 +292,18 @@ async function refreshAllProviders(): Promise<void> {
   ])
   indexDb.clearSearchCache()
 
-  // Extension discovery can take tens of seconds on the Tauri/Bun backend.
-  // Do not hold the launcher's first results hostage while every installed
-  // extension is inspected; core commands and applications are useful now.
-  void upsertProvider(extensionsProvider)
-    .then(() => {
-      indexDb.clearSearchCache()
-    })
-    .catch((error: unknown) => {
-      console.warn('[Search] Failed to build extension index:', error)
-    })
 }
 
 async function refreshVolatileProviders(): Promise<void> {
   if (volatileRefreshPromise) return volatileRefreshPromise
 
   volatileRefreshPromise = (async () => {
-    captureClipboardSnapshot()
     const providers = selectVolatileSearchProviders([
       commandsProvider,
       clipboardProvider,
       notesProvider,
       snippetsProvider,
       quickLinksProvider,
-      extensionsProvider,
     ])
     await Promise.all(providers.map((provider) => upsertProvider(provider)))
     lastVolatileRefreshAt = Date.now()
@@ -360,30 +340,34 @@ function startBackgroundFileIndexing(): void {
   }
 
   fileBootstrapPromise = (async () => {
-    const fileDocs = await collectInitialFileDocuments(FILE_INDEX_LIMIT)
     const existing = new Map(
       indexDb.listDocumentSyncState('files').map((row) => [row.id, row.sourceMtime])
     )
-    const incomingIds = new Set(fileDocs.map((document) => document.id))
-    const removals = Array.from(existing.keys()).filter((id) => !incomingIds.has(id))
-    const upserts = fileDocs.filter((document) => {
-      const persistedMtime = existing.get(document.id)
-      return (
-        persistedMtime === undefined || persistedMtime !== Math.round(document.sourceMtime ?? 0)
-      )
-    })
-
-    // Only write the delta, and yield between bounded transactions. Search IPC
-    // can therefore run while a large first-time index is being populated.
+    let changed = false
+    for await (const batch of scanInitialFileDocumentBatches(
+      FILE_INDEX_LIMIT,
+      FILE_INDEX_WRITE_BATCH_SIZE
+    )) {
+      const upserts = batch.filter((document) => {
+        const persistedMtime = existing.get(document.id)
+        existing.delete(document.id)
+        return (
+          persistedMtime === undefined || persistedMtime !== Math.round(document.sourceMtime ?? 0)
+        )
+      })
+      if (upserts.length > 0) {
+        indexDb.upsertDocuments(upserts)
+        changed = true
+      }
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+    const removals = Array.from(existing.keys())
     for (let offset = 0; offset < removals.length; offset += FILE_INDEX_WRITE_BATCH_SIZE) {
       indexDb.removeDocumentsByIds(removals.slice(offset, offset + FILE_INDEX_WRITE_BATCH_SIZE))
+      changed = true
       await new Promise<void>((resolve) => setImmediate(resolve))
     }
-    for (let offset = 0; offset < upserts.length; offset += FILE_INDEX_WRITE_BATCH_SIZE) {
-      indexDb.upsertDocuments(upserts.slice(offset, offset + FILE_INDEX_WRITE_BATCH_SIZE))
-      await new Promise<void>((resolve) => setImmediate(resolve))
-    }
-    if (removals.length > 0 || upserts.length > 0) indexDb.clearSearchCache()
+    if (changed) indexDb.clearSearchCache()
 
     stopFileWatcher = startFileWatcher(({ upserts, removeIds }) => {
       if (upserts.length > 0) indexDb.upsertDocuments(upserts)
@@ -484,6 +468,7 @@ export async function reindexSnippets(): Promise<void> {
 /** Rebuild extension command rows after extension install/uninstall. */
 export async function reindexExtensions(): Promise<void> {
   await bootstrapSearchIndex()
+  const { extensionsProvider } = await import('./providers/extensionsProvider')
   await upsertProvider(extensionsProvider)
   indexDb?.clearSearchCache()
 }
@@ -937,13 +922,14 @@ async function attachOpenPortProcessIcons(
 }
 
 export async function searchEverything(query: string): Promise<SearchResult[]> {
-  getKnowledgeService().notifyInteractiveActivity()
+  notifyKnowledgeInteractiveActivity()
   await bootstrapSearchIndex()
   refreshVolatileProvidersIfStale()
 
   const parsedQuery = parseSearchQuery(query)
   const trimmed = parsedQuery.query
   const isDeepSearch = parsedQuery.mode === 'deep'
+  const knowledgeService = isDeepSearch ? getKnowledgeService() : null
   if (!trimmed && !isDeepSearch) {
     return attachSearchResultIcons(buildRecommendations())
   }
@@ -1014,8 +1000,7 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     return true
   })
   const fileResults = asResults.filter((result) => result.category === 'files')
-  const indexedSourceResults = getKnowledgeService()
-    .searchMetadata(trimmed, 24)
+  const indexedSourceResults = (knowledgeService?.searchMetadata(trimmed, 24) ?? [])
     .map(
       (hit, index): SearchResult => ({
         id: `file:${hit.path}`,
@@ -1029,7 +1014,7 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
   const allFileResults = uniqById([...fileResults, ...indexedSourceResults])
 
   const openPortResults = isDeepSearch ? [] : await searchPortManagerOpenPorts(trimmed)
-  const knowledgeHits = isDeepSearch ? getKnowledgeService().search(trimmed, 16) : []
+  const knowledgeHits = knowledgeService?.search(trimmed, 16) ?? []
   const seenKnowledgeSources = new Set<string>()
   const knowledgeResults = knowledgeHits.flatMap((hit): SearchResult[] => {
     if (seenKnowledgeSources.has(hit.sourceId)) return []
@@ -1918,11 +1903,14 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
     }
 
     case 'install-extension': {
+      const { installExtension } = await import('../extensions/service')
       await installExtension(action.extensionId)
       return { ok: true, message: `Installing ${action.extensionId}` }
     }
 
     case 'run-extension-command': {
+      const { executeExtensionCommandRuntime, isUnsupportedRuntimeModeError } =
+        await import('../extensions/service')
       const argumentValues: Record<string, string> = {
         ...(action.argumentValues ?? {}),
       }
@@ -2054,6 +2042,7 @@ export async function recordSearchActionUsage(
 }
 
 export async function listExtensionCommandIndexIds(): Promise<string[]> {
+  const { getExtensionCommands, listInstalledExtensions } = await import('../extensions/service')
   const installed = listInstalledExtensions()
   if (installed.length === 0) return []
 

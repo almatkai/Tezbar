@@ -10,6 +10,8 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { StringCache } from '../shared/stringCache'
+import { useBackendGeneration } from './backendGeneration'
 import {
   defaultModels,
   normalizeProviderModelList,
@@ -23,7 +25,6 @@ import { Hint, HintBar, Kbd, Message, SelectField, TextField, cx } from './ui/pr
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { GlideList } from './ui/GlideList'
 import { RollingText } from './ui/RollingText'
-import { useHoldToSpeak } from './hooks/useHoldToSpeak'
 import { evaluateExpression, type CalcResult } from './calculator'
 import { buildColorConversionResults } from './colorConverter'
 import { parseCurrencyQuery } from './currency/parseCurrencyQuery'
@@ -81,6 +82,7 @@ const SEARCH_CANDIDATES_CACHE_KEY = 'tezbar:search-candidates:v1'
 const MAX_CACHED_HOME_RESULTS = 40
 const MAX_OPTIMISTIC_SEARCH_CANDIDATES = 1_000
 const QUERY_RESULTS_CACHE_TTL_MS = 5_000
+const QUERY_RESULTS_CACHE_LIMIT = 32
 const PINNED_HOME_RESULT_SCORE_PENALTY = 850
 const MAX_PINNED_COMMANDS = 12
 const SEARCH_RESULT_PIN_DRAG_THRESHOLD = 6
@@ -1208,7 +1210,7 @@ function CommandIconGlyph({ kind }: { kind: CommandIconKind }): ReactNode {
   }
 }
 
-const resolvedAssetIconCache = new Map<string, string | null>()
+const resolvedAssetIconCache = new StringCache()
 const pendingAssetIconCache = new Map<string, Promise<string | null>>()
 
 function loadAssetIcon(kind: IconAssetKind, path: string): Promise<string | null> {
@@ -1512,6 +1514,7 @@ export default function CommandBar({
   const [followSuggestionSelection, setFollowSuggestionSelection] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[]>(readInitialSearchResults)
   const [deepSearchLoadingQuery, setDeepSearchLoadingQuery] = useState<string | null>(null)
+  const backendGeneration = useBackendGeneration()
   const [cachedSearchCandidates] = useState<SearchResult[]>(readCachedSearchCandidates)
   const [initialSearchCandidates] = useState<SearchResult[]>(() =>
     mergeSearchCandidates(searchResults, cachedSearchCandidates)
@@ -1771,8 +1774,8 @@ export default function CommandBar({
     writeLauncherQueryHistory(launcherQueryHistory)
     setRecentExtensionCommands(readRecentExtensionCommands())
     setPinnedTerminalSessionIds(readPinnedTerminalSessionIds())
-    void window.tezbar.chatList(40).then(setChatHistory)
-  }, [])
+    void window.tezbar.chatList(40).then(setChatHistory).catch(() => undefined)
+  }, [backendGeneration])
 
   useEffect(() => {
     if (!initialSelectedChatId || !isAiMode || chatHistory.length === 0) return
@@ -1803,8 +1806,8 @@ export default function CommandBar({
   }, [])
 
   useEffect(() => {
-    void window.tezbar.getLlmConfig().then((c) => setCfg(c as LlmConfigRecord))
-  }, [])
+    void window.tezbar.getLlmConfig().then((c) => setCfg(c as LlmConfigRecord)).catch(() => undefined)
+  }, [backendGeneration])
 
   // Keep the model picker in sync: another view (Settings) writing the config
   // should immediately refresh the snapshot this component caches on mount.
@@ -1857,36 +1860,6 @@ export default function CommandBar({
     window.addEventListener(RAYMES_QUICK_NOTE_SHORTCUT_EVENT, onQuickNoteShortcut)
     return () => window.removeEventListener(RAYMES_QUICK_NOTE_SHORTCUT_EVENT, onQuickNoteShortcut)
   }, [onOpenAiChat])
-
-  // Hold-to-Speak pipeline: captures mic audio via MediaRecorder, resamples
-  // to 16 kHz mono WAV in the renderer, and hands the bytes to the main
-  // process for local transcription (whisper-cli / moonshine). See
-  // `useHoldToSpeak` for the full rationale and the reason we no longer
-  // use `webkitSpeechRecognition`.
-  const holdToSpeak = useHoldToSpeak({
-    onMessage: (message) => showActionMsg(message),
-    onTranscript: (text) => {
-      const cleaned = text.trim()
-      if (!cleaned) {
-        showActionMsg('Nothing was transcribed. Try speaking louder or for longer.')
-        return
-      }
-      setValue((prev) => {
-        const isAiModeActive = commandBarInputMode(prev, terminalModeRef.current).isAiMode
-        if (!prev.trim()) {
-          // If the buffer was literally just spaces (prompting AI mode),
-          // preserve those spaces so the transcription result is treated as an AI prompt.
-          // Note: if it started with at least one space, we keep it as an AI prompt.
-          return isAiModeActive ? ` ${cleaned}` : cleaned
-        }
-        if (isAiModeActive) {
-          // If already in AI mode (e.g. ends in two spaces), append.
-          return `${prev}${cleaned}`
-        }
-        return `${prev} ${cleaned}`
-      })
-    },
-  })
 
   const chatHistoryQuery = agentTask.trim().toLowerCase()
   const filteredChatHistory = useMemo(() => {
@@ -2162,7 +2135,7 @@ export default function CommandBar({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [backendGeneration])
 
   useEffect(() => {
     if (!isCompletionInput) {
@@ -2181,7 +2154,7 @@ export default function CommandBar({
     return () => {
       cancelled = true
     }
-  }, [isCompletionInput, value])
+  }, [isCompletionInput, value, backendGeneration])
 
   useEffect(() => {
     let cancelled = false
@@ -2217,10 +2190,16 @@ export default function CommandBar({
                 writeCachedHomeSearchResults(items)
               } else {
                 if (!isHome) {
+                  const cache = queryResultsCacheRef.current
+                  for (const [key, entry] of cache) {
+                    if (Date.now() - entry.cachedAt > QUERY_RESULTS_CACHE_TTL_MS) cache.delete(key)
+                  }
+                  cache.delete(normalizedSearchValue.toLowerCase())
                   queryResultsCacheRef.current.set(normalizedSearchValue.toLowerCase(), {
                     items,
                     cachedAt: Date.now(),
                   })
+                  while (cache.size > QUERY_RESULTS_CACHE_LIMIT) cache.delete(cache.keys().next().value!)
                   if (!isDeepSearchMode) {
                     searchCandidatesRef.current = mergeSearchCandidates(
                       searchCandidatesRef.current,
@@ -2250,6 +2229,7 @@ export default function CommandBar({
       clearTimeout(t)
     }
   }, [
+    backendGeneration,
     deepSearchQuery,
     isAiMode,
     isCompletionInput,
@@ -2630,12 +2610,6 @@ export default function CommandBar({
     updatePinDropIndex(null)
     updatePinUnpinDropActive(false)
   }
-
-  const isDictating = holdToSpeak.state.kind === 'recording'
-  const isTranscribing = holdToSpeak.state.kind === 'transcribing'
-  const dictationSupported = holdToSpeak.supported
-  const startDictation = holdToSpeak.press
-  const stopDictation = holdToSpeak.release
 
   const speakAnswerText = async (): Promise<void> => {
     if (!streamText.trim()) return
@@ -4199,40 +4173,6 @@ export default function CommandBar({
                 onConfigure={onConfigureAi}
                 triggerClassName="font-mono leading-none tabular-nums tracking-normal"
               />
-            ) : null}
-            {dictationSupported && !terminalMode && !pendingInlineArgument ? (
-              <button
-                type="button"
-                className={cx(
-                  'inline-flex h-6 min-w-[116px] shrink-0 items-center justify-center rounded-tezbar-chip border px-2 text-[10px] font-medium uppercase leading-none tracking-[0.12em] transition',
-                  isDictating
-                    ? 'border-rose-400/40 bg-rose-500/20 text-rose-200'
-                    : isTranscribing
-                      ? 'border-amber-400/40 bg-amber-500/15 text-amber-200'
-                      : 'border-white/10 bg-white/[0.03] text-ink-3 hover:text-ink-2'
-                )}
-                disabled={isTranscribing}
-                onMouseDown={(event) => {
-                  event.preventDefault()
-                  startDictation()
-                }}
-                onMouseUp={stopDictation}
-                onMouseLeave={stopDictation}
-                onTouchStart={(event) => {
-                  event.preventDefault()
-                  startDictation()
-                }}
-                onTouchEnd={stopDictation}
-                title="Hold to speak"
-              >
-                {isDictating ? (
-                  'Listening'
-                ) : isTranscribing ? (
-                  'Transcribing…'
-                ) : (
-                  'Hold to speak'
-                )}
-              </button>
             ) : null}
           </div>
         </form>

@@ -6,12 +6,7 @@ import {
   recommendedModel,
 } from '../../shared/aiProviders'
 import type { AiProviderConfig, AiProviderModel, CustomAiProvider, LlmTask, ProviderId } from '../../shared/llmConfig'
-import { AnthropicProvider } from './anthropic'
 import { readRawConfig } from './configStore'
-import { CopilotProvider } from './copilot'
-import { OllamaProvider } from './ollama'
-import { OpenAIProvider } from './openai'
-import { OpenCodeProvider } from './opencode'
 import type { LLMProvider } from './provider'
 
 export type OpenRayLLMConfig = {
@@ -291,8 +286,17 @@ export function configForTask(cfg: OpenRayLLMConfig, task: LlmTask): OpenRayLLMC
 }
 
 function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
+  const openAiProvider = (
+    baseUrl: string,
+    apiKey: string,
+    model: string,
+    label: string
+  ): LLMProvider => {
+    const { OpenAIProvider } = require('./openai') as typeof import('./openai')
+    return new OpenAIProvider(baseUrl, apiKey, model, label)
+  }
   if (isCustomProvider(cfg.provider)) {
-    return new OpenAIProvider(
+    return openAiProvider(
       cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? '',
       cfg.apiKey ?? '',
       cfg.model ?? '',
@@ -301,54 +305,59 @@ function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
   }
   switch (cfg.provider) {
     case 'openai':
-      return new OpenAIProvider(
+      return openAiProvider(
         cfg.baseURL ?? 'https://api.openai.com/v1',
         cfg.apiKey ?? '',
         cfg.model ?? 'gpt-4o-mini',
         'OpenAI',
       )
     case 'openai-compatible':
-      return new OpenAIProvider(
+      return openAiProvider(
         cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? 'https://api.openai.com/v1',
         cfg.apiKey ?? '',
         cfg.model ?? 'gpt-4o-mini',
         'OpenAI-compatible provider',
       )
     case 'anthropic':
+      const { AnthropicProvider } = require('./anthropic') as typeof import('./anthropic')
       return new AnthropicProvider(
         cfg.apiKey ?? '',
         cfg.model ?? 'claude-3-5-haiku-20241022',
         cfg.baseURL,
       )
     case 'ollama':
+      const { OllamaProvider } = require('./ollama') as typeof import('./ollama')
       return new OllamaProvider(cfg.baseURL ?? DEFAULT_OLLAMA_BASE, cfg.model ?? DEFAULT_OLLAMA_MODEL)
     case 'copilot':
+      const { CopilotProvider } = require('./copilot') as typeof import('./copilot')
       return new CopilotProvider(cfg.model ?? 'gpt-4o')
     case 'gemini':
-      return new OpenAIProvider(
+      return openAiProvider(
         cfg.baseURL ?? DEFAULT_GEMINI_BASE,
         cfg.geminiApiKey ?? cfg.apiKey ?? '',
         cfg.model ?? DEFAULT_GEMINI_MODEL,
         'Gemini',
       )
     case 'opencode':
+      const { OpenCodeProvider } = require('./opencode') as typeof import('./opencode')
       return new OpenCodeProvider(cfg.model ?? 'opencode/big-pickle')
     case 'deepseek':
-      return new OpenAIProvider(
+      return openAiProvider(
         cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE,
         cfg.apiKey ?? '',
         cfg.model ?? DEFAULT_DEEPSEEK_MODEL,
         'DeepSeek',
       )
     case 'tokenrouter':
-      return new OpenAIProvider(
+      return openAiProvider(
         cfg.baseURL ?? DEFAULT_TOKENROUTER_BASE,
         cfg.apiKey?.trim() ? cfg.apiKey : (process.env['TOKENROUTER_API_KEY'] ?? ''),
         cfg.model ?? DEFAULT_TOKENROUTER_MODEL,
         'TokenRouter',
       )
     default:
-      return new OllamaProvider(DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL)
+      const { OllamaProvider: DefaultOllamaProvider } = require('./ollama') as typeof import('./ollama')
+      return new DefaultOllamaProvider(DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL)
   }
 }
 

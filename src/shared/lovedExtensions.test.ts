@@ -15,9 +15,9 @@ describe('loved extensions', () => {
   })
 
   it('searches the curated list locally', () => {
-    expect(searchLovedExtensions('pixel').map((extension) => extension.name)).toEqual([
-      'Color Picker',
-    ])
+    const names = searchLovedExtensions('pixel').map((extension) => extension.name)
+    expect(names).toContain('Color Picker')
+    expect(names).toContain('Pixels to Viewport Width or Height')
     expect(searchLovedExtensions('does-not-exist')).toEqual([])
   })
 })
