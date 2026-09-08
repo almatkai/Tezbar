@@ -267,14 +267,18 @@ function readMacClipboardSnapshot(): ClipboardSnapshot {
   }
 }
 
-function readWindowsClipboardSnapshot(): ClipboardSnapshot {
-  const script =
+function windowsClipboardSnapshotScript(): string {
+  return (
     '$ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; $text=if([System.Windows.Forms.Clipboard]::ContainsText()){[System.Windows.Forms.Clipboard]::GetText()}else{""}; $paths=@(); if([System.Windows.Forms.Clipboard]::ContainsFileDropList()){$paths=@([System.Windows.Forms.Clipboard]::GetFileDropList())}; $hasImage=[System.Windows.Forms.Clipboard]::ContainsImage(); [Console]::Write(([PSCustomObject]@{text=$text;filePaths=$paths;hasImage=$hasImage}|ConvertTo-Json -Compress))'
+  )
+}
+
+function readWindowsClipboardSnapshot(): ClipboardSnapshot {
   try {
     const raw = execFileSync(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Sta', '-Command', script],
-      { encoding: 'utf8', windowsHide: true },
+      ['-NoProfile', '-NonInteractive', '-Sta', '-Command', windowsClipboardSnapshotScript()],
+      { encoding: 'utf8', windowsHide: true, timeout: 3_000 },
     )
     return parseClipboardSnapshot(raw)
   } catch {
@@ -308,6 +312,15 @@ function readClipboardSnapshot(): ClipboardSnapshot {
 }
 
 export const clipboard = {
+  async readSnapshotAsync(): Promise<ClipboardSnapshot> {
+    if (process.platform !== 'win32') return readClipboardSnapshot()
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Sta', '-Command', windowsClipboardSnapshotScript()],
+      { encoding: 'utf8', windowsHide: true, timeout: 3_000, maxBuffer: 4 * 1024 * 1024 },
+    )
+    return parseClipboardSnapshot(stdout)
+  },
   readSnapshot(): ClipboardSnapshot {
     return readClipboardSnapshot()
   },
@@ -320,7 +333,7 @@ export const clipboard = {
         return execFileSync(
           'powershell.exe',
           ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw'],
-          { encoding: 'utf8', windowsHide: true }
+          { encoding: 'utf8', windowsHide: true, timeout: 3_000 }
         )
       }
       return execFileSync('pbpaste', [], { encoding: 'utf8' })

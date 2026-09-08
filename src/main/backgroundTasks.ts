@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
+import { app } from '@tezbar/desktop-runtime'
 import type { BackgroundTask } from '../shared/backgroundTasks'
 import type { KnowledgeStatus } from '../shared/knowledge'
-import { resolveInstalledPackageJsonPath } from './extension-registry'
-import { getKnowledgeService } from './knowledge/service'
+import { getKnowledgeSnapshotIfInitialized } from './knowledge/service'
 
 type TimerFileContents = {
   name?: unknown
@@ -75,7 +75,13 @@ export function timerBackgroundTask(
 }
 
 function listRunningTimers(now = Date.now()): BackgroundTask[] {
-  const packageJsonPath = resolveInstalledPackageJsonPath('timers')
+  const userData = app.getPath('userData')
+  const packageJsonPath = [
+    join(userData, 'extensions', 'timers', 'package.json'),
+    join(userData, 'extensions', 'raycast.timers', 'package.json'),
+    join(userData, 'extensions', 'packages', 'raycast.timers', 'package.json'),
+    join(userData, 'extension-registry', 'packages', 'raycast.timers', 'package.json'),
+  ].find((candidate) => existsSync(candidate))
   if (!packageJsonPath) return []
 
   const supportPath = join(dirname(packageJsonPath), '.tezbar-support')
@@ -102,7 +108,8 @@ function listRunningTimers(now = Date.now()): BackgroundTask[] {
 
 export function listBackgroundTasks(now = Date.now()): BackgroundTask[] {
   const tasks: BackgroundTask[] = []
-  const indexing = indexingBackgroundTask(getKnowledgeService().snapshot().status)
+  const knowledge = getKnowledgeSnapshotIfInitialized()
+  const indexing = knowledge ? indexingBackgroundTask(knowledge.status) : null
   if (indexing) tasks.push(indexing)
   tasks.push(...listRunningTimers(now))
   return tasks

@@ -61,7 +61,6 @@ type ModeTimeoutField = 'extensionRuntimeTimeoutMs' | 'aiModeTimeoutMs' | 'termi
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'general', label: 'General', icon: 'gear' },
   { id: 'ai', label: 'AI', icon: 'spark' },
-  { id: 'voice', label: 'Voice', icon: 'mic' },
   { id: 'knowledge', label: 'Knowledge', icon: 'knowledge' },
   { id: 'extensions', label: 'Extensions', icon: 'puzzle' },
   { id: 'permissions', label: 'Permissions', icon: 'lock' },
@@ -648,7 +647,7 @@ export default function SettingsView({
   const [aiNewModelId, setAiNewModelId] = useState('')
   const [aiModelsLoading, setAiModelsLoading] = useState(false)
   const [safetyDryRun, setSafetyDryRunState] = useState(false)
-  const [voiceModes, setVoiceModes] = useState<string[]>([])
+  const [voiceModes] = useState<string[]>([])
   const [voiceModels, setVoiceModels] = useState<VoiceModel[]>([])
   const [deletingVoiceModelId, setDeletingVoiceModelId] = useState<VoiceModelId | null>(null)
   const [selectedVoiceModelId, setSelectedVoiceModelId] =
@@ -851,14 +850,9 @@ export default function SettingsView({
     setAiTaskModelOverrides(c.taskModelOverrides ?? {})
     setAiModel(selectedModel)
 
-    const [dryRun, modes] = await Promise.all([
-      window.tezbar.getSafetyDryRun().catch(() => false),
-      window.tezbar.listVoiceSttModes().catch(() => []),
-      refreshVoiceModels(),
-    ])
+    const dryRun = await window.tezbar.getSafetyDryRun().catch(() => false)
 
     setSafetyDryRunState(Boolean(dryRun))
-    setVoiceModes(modes)
     const savedHotkey = c.raymesHotkey ?? DEFAULT_RAYMES_HOTKEY
     if (isValidStoredAccelerator(savedHotkey)) {
       setRaymesHotkeyState(savedHotkey)
@@ -867,7 +861,7 @@ export default function SettingsView({
       void window.tezbar.setLlmConfig({ raymesHotkey: DEFAULT_RAYMES_HOTKEY })
     }
     void loadAiModels(provider)
-  }, [loadAiModels, refreshVoiceModels])
+  }, [loadAiModels])
 
   useEffect(() => {
     void reload()

@@ -1919,7 +1919,8 @@ var KnowledgeWorkerHost = class {
     const workerPath = (0, import_node_path6.join)(__dirname, "knowledge-worker.js");
     const child = (0, import_node_child_process3.spawn)(process.execPath, [workerPath], {
       env: { ...process.env, TEZBAR_KNOWLEDGE_WORKER: "1" },
-      stdio: ["ignore", "pipe", "pipe"],
+      // EOF on this pipe tells the worker its backend owner has exited.
+      stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true
     });
     this.child = child;
@@ -2847,13 +2848,31 @@ function shutdown() {
 }
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+var bun = globalThis.Bun;
+if (bun) {
+  void (async () => {
+    const reader = bun.stdin.stream().getReader();
+    try {
+      while (!(await reader.read()).done) {
+      }
+    } finally {
+      reader.releaseLock();
+      shutdown();
+    }
+  })().catch(shutdown);
+} else {
+  process.stdin.on("end", shutdown);
+  process.stdin.on("error", shutdown);
+  process.stdin.resume();
+}
 void (async () => {
   service.initialize();
   await service.startIndexing();
   await service.waitForCurrentRun();
-  service.shutdown();
+  shutdown();
 })().catch((error) => {
   console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exitCode = 1;
+  service.shutdown();
+  process.exit(1);
 });
 //# sourceMappingURL=knowledge-worker.js.map

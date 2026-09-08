@@ -10,7 +10,14 @@
          works offline, and avoids leaking the user's IP to a third party. -->
   </head>
   <body class="m-0 h-screen overflow-hidden bg-transparent font-sans text-white antialiased">
-    <div id="root" class="h-full w-full"></div>
+    <div id="root" class="h-full w-full">
+      <div class="glass-shell flex h-full items-center p-6 text-[13px] text-ink-2" role="status">Starting Tezbar…</div>
+    </div>
+    <script>
+      if (new URLSearchParams(location.search).get('window') === 'snap-overlay') {
+        document.getElementById('root').replaceChildren()
+      }
+    </script>
     <script type="module" src="./main.tsx"></script>
   </body>
 </html>

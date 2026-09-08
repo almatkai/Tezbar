@@ -992,6 +992,18 @@ export function getKnowledgeService(): KnowledgeService {
   return service
 }
 
+export function notifyKnowledgeInteractiveActivity(durationMs = 1_000): void {
+  service?.notifyInteractiveActivity(durationMs)
+}
+
+export function getKnowledgeSnapshotIfInitialized(): KnowledgeSnapshot | null {
+  return service?.snapshot() ?? null
+}
+
+export function shutdownKnowledgeService(): void {
+  service?.shutdown()
+}
+
 export async function chooseKnowledgeFolder(): Promise<string | null> {
   if (process.platform !== 'darwin' && process.platform !== 'win32') return null
   process.stdout.write(`${JSON.stringify({ type: 'window_suppress_blur', value: true })}\n`)

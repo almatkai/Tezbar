@@ -91,20 +91,30 @@ function initialRoots(): string[] {
 }
 
 export async function collectInitialFileDocuments(limit = 75_000): Promise<IndexedDocument[]> {
-  const roots = initialRoots()
-  if (roots.length === 0) return []
+  const documents: IndexedDocument[] = []
+  for await (const batch of scanInitialFileDocumentBatches(limit)) documents.push(...batch)
+  return documents
+}
 
-  const out: IndexedDocument[] = []
+export async function* scanInitialFileDocumentBatches(
+  limit = 75_000,
+  batchSize = 400
+): AsyncGenerator<IndexedDocument[]> {
+  const roots = initialRoots()
+  if (roots.length === 0) return
+
+  let batch: IndexedDocument[] = []
   const queue = [...roots]
   let visitedEntries = 0
+  let emittedDocuments = 0
 
-  while (queue.length > 0 && out.length < limit) {
+  while (queue.length > 0 && emittedDocuments < limit) {
     const current = queue.shift()
     if (!current) continue
     try {
       const entries = readdirSync(current, { withFileTypes: true })
       for (const entry of entries) {
-        if (out.length >= limit) break
+        if (emittedDocuments >= limit) break
         visitedEntries += 1
         if (visitedEntries % 250 === 0) {
           await new Promise<void>((resolve) => setImmediate(resolve))
@@ -115,14 +125,19 @@ export async function collectInitialFileDocuments(limit = 75_000): Promise<Index
           continue
         }
         const doc = makeFileDocument(absolute)
-        if (doc) out.push(doc)
+        if (!doc) continue
+        batch.push(doc)
+        emittedDocuments += 1
+        if (batch.length >= batchSize) {
+          yield batch
+          batch = []
+        }
       }
     } catch {
       // Ignore unreadable directories.
     }
   }
-
-  return out
+  if (batch.length > 0) yield batch
 }
 
 export function startFileWatcher(listener: FileChangeListener): () => void {

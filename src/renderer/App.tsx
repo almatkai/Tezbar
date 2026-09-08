@@ -65,7 +65,6 @@ const SETTINGS_TAB_STORAGE_KEY = 'tezbar:settings-tab'
 
 function normalizeSettingsTab(tab: unknown): SettingsTab {
   return tab === 'ai' ||
-    tab === 'voice' ||
     tab === 'knowledge' ||
     tab === 'extensions' ||
     tab === 'permissions' ||

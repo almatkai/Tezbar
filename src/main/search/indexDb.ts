@@ -797,6 +797,7 @@ export class SearchIndexDatabase {
   private _searchCache: Map<string, SearchIndexRow[]> = new Map()
   private _cacheTimestamp: Map<string, number> = new Map()
   private readonly CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+  private readonly CACHE_LIMIT = 64
 
   getSearch(query: string, limit: number): SearchIndexRow[] {
     const now = Date.now()
@@ -804,14 +805,28 @@ export class SearchIndexDatabase {
 
     // Check cache validity
     const lastUpdate = this._cacheTimestamp.get(cacheKey)
-    if (lastUpdate && now - lastUpdate < this.CACHE_TTL) {
-      return this._searchCache.get(cacheKey) || []
+    if (lastUpdate !== undefined && now - lastUpdate < this.CACHE_TTL) {
+      const results = this._searchCache.get(cacheKey) || []
+      this._searchCache.delete(cacheKey)
+      this._searchCache.set(cacheKey, results)
+      return results
     }
 
-    // Perform search and cache result
+    // TTL checks alone leave every abandoned query resident indefinitely.
+    for (const [key, timestamp] of this._cacheTimestamp) {
+      if (now - timestamp >= this.CACHE_TTL) {
+        this._searchCache.delete(key)
+        this._cacheTimestamp.delete(key)
+      }
+    }
     const results = this.search(query, limit)
     this._searchCache.set(cacheKey, results)
     this._cacheTimestamp.set(cacheKey, now)
+    while (this._searchCache.size > this.CACHE_LIMIT) {
+      const oldest = this._searchCache.keys().next().value!
+      this._searchCache.delete(oldest)
+      this._cacheTimestamp.delete(oldest)
+    }
 
     return results
   }

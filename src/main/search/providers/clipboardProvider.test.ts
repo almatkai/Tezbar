@@ -25,6 +25,9 @@ const mocks = vi.hoisted(() => {
       changeCount: state.changeCount,
     })),
     readText: vi.fn(() => state.text),
+    readSnapshotAsync: vi.fn(async () => ({
+      text: state.text, filePaths: state.filePaths, hasImage: state.image, changeCount: state.changeCount,
+    })),
     readFilePaths: vi.fn(() => state.filePaths),
     availableFormats: vi.fn(() => [] as string[]),
     read: vi.fn(() => ''),
@@ -56,7 +59,14 @@ vi.mock('../../llm/configStore', () => ({
 }))
 
 describe('clipboard watcher', () => {
+  const previousTauri = process.env.IS_TAURI
+  const previousPlatform = process.platform
   afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: previousPlatform })
+    if (previousTauri === undefined) delete process.env.IS_TAURI
+    else process.env.IS_TAURI = previousTauri
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
     vi.useRealTimers()
     rmSync(mocks.userData, { recursive: true, force: true })
     mocks.state.text = ''
@@ -66,7 +76,45 @@ describe('clipboard watcher', () => {
     mocks.state.changeCount = 1
   })
 
+  it('does no clipboard reads while Windows is idle and captures a native change', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    process.env.IS_TAURI = 'true'
+    vi.useFakeTimers()
+    vi.resetModules()
+    const provider = await import('./clipboardProvider')
+    provider.startClipboardWatcher()
+    await provider.notifyClipboardChanged()
+    mocks.clipboard.readSnapshotAsync.mockClear()
+    mocks.clipboard.readText.mockClear()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(mocks.clipboard.readSnapshotAsync).not.toHaveBeenCalled()
+    expect(mocks.clipboard.readText).not.toHaveBeenCalled()
+    mocks.state.text = 'copy after idle'
+    await provider.notifyClipboardChanged()
+    expect(provider.listClipboardEntries()).toContainEqual(expect.objectContaining({ text: 'copy after idle' }))
+    provider.stopClipboardWatcher()
+  })
+
+  it('coalesces change events and ignores a read completed after the watcher stops', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    process.env.IS_TAURI = 'true'
+    vi.resetModules()
+    let finish!: (value: { text: string; filePaths: string[]; hasImage: boolean; changeCount: number }) => void
+    mocks.clipboard.readSnapshotAsync.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const provider = await import('./clipboardProvider')
+    provider.startClipboardWatcher()
+    const pending = provider.notifyClipboardChanged()
+    void provider.notifyClipboardChanged()
+    expect(mocks.clipboard.readSnapshotAsync).toHaveBeenCalledTimes(1)
+    provider.stopClipboardWatcher()
+    finish({ text: 'late copy', filePaths: [], hasImage: false, changeCount: 1 })
+    await pending
+    expect(provider.listClipboardEntries()).toEqual([])
+    expect(mocks.clipboard.readSnapshotAsync).toHaveBeenCalledTimes(1)
+  })
+
   it('stores copied files as paths and deduplicates repeated copies', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
     vi.resetModules()
     rmSync(mocks.userData, { recursive: true, force: true })
     mocks.state.text = ''

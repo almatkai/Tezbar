@@ -1,5 +1,7 @@
 // src-tauri/src/lib.rs
 mod native_input;
+mod backend_health;
+use backend_health::{BackendStatus, HealthCheck, CONNECT_TIMEOUT};
 mod native_terminal;
 #[cfg(target_os = "macos")]
 mod timer_notifications;
@@ -34,6 +36,8 @@ use std::process::{Command, Stdio};
 use std::os::windows::process::CommandExt;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 #[cfg(target_os = "macos")]
 use tauri::LogicalPosition;
@@ -76,6 +80,43 @@ struct BackendState {
     writer: Arc<Mutex<Option<TcpStream>>>,
     pending_requests: Arc<Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>>,
     request_counter: Arc<Mutex<u64>>,
+    status: Mutex<BackendStatus>,
+    restart_requested: AtomicBool,
+    shutting_down: AtomicBool,
+}
+
+fn set_backend_status(app: &AppHandle, phase: &str, detail: &str) {
+    let state = app.state::<BackendState>();
+    let mut status = state.status.lock().unwrap();
+    if status.phase == phase && status.detail == detail { return; }
+    if phase == "ready" && status.phase != "ready" { status.generation += 1; }
+    status.phase = phase.into();
+    status.detail = detail.into();
+    status.revision += 1;
+    let _ = app.emit("backend-status", status.clone());
+}
+
+#[tauri::command]
+fn get_backend_status(state: State<'_, BackendState>) -> BackendStatus {
+    state.status.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn restart_backend(state: State<'_, BackendState>) {
+    state.restart_requested.store(true, Ordering::Relaxed);
+}
+
+// Backoff is interruptible by Retry and app shutdown, without polling the renderer.
+fn wait_backend_retry(app: &AppHandle, delay: Duration) -> bool {
+    let state = app.state::<BackendState>();
+    let deadline = Instant::now() + delay;
+    loop {
+        if state.shutting_down.load(Ordering::Relaxed) { return false; }
+        if state.restart_requested.swap(false, Ordering::Relaxed) || Instant::now() >= deadline {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }
 
 #[derive(Clone)]
@@ -207,6 +248,24 @@ struct SnapTargetRect {
     bottom: f64,
 }
 
+fn emit_main_window_visibility(window: &WebviewWindow, visible: bool) {
+    if window.label() == "main" {
+        let _ = window.emit("window-visibility", visible);
+    }
+}
+
+fn show_main_window_native(window: &WebviewWindow) -> Result<(), String> {
+    window.show().map_err(|error| error.to_string())?;
+    emit_main_window_visibility(window, true);
+    Ok(())
+}
+
+fn hide_main_window_native(window: &WebviewWindow) -> Result<(), String> {
+    window.hide().map_err(|error| error.to_string())?;
+    emit_main_window_visibility(window, false);
+    Ok(())
+}
+
 fn set_backend_app_visibility(app: &AppHandle, visible: bool) {
     let state = app.state::<WindowBehaviorState>();
     if visible {
@@ -217,6 +276,7 @@ fn set_backend_app_visibility(app: &AppHandle, visible: bool) {
         for label in labels {
             if let Some(window) = app.get_webview_window(&label) {
                 let _ = window.show();
+                emit_main_window_visibility(&window, true);
             }
         }
         return;
@@ -228,6 +288,7 @@ fn set_backend_app_visibility(app: &AppHandle, visible: bool) {
         if window.is_visible().unwrap_or(false) {
             hidden.push(label);
             let _ = window.hide();
+            emit_main_window_visibility(&window, false);
         }
     }
 }
@@ -365,6 +426,7 @@ fn close_backend_connection(app: &AppHandle) {
     let Some(state) = app.try_state::<BackendState>() else {
         return;
     };
+    state.shutting_down.store(true, Ordering::Relaxed);
     state.writer.lock().unwrap().take();
     let mut pending = state.pending_requests.lock().unwrap();
     for (_, sender) in pending.drain() {
@@ -491,15 +553,34 @@ fn run_backend_generation(
         log::info!("backend stderr reader stopped");
     });
 
-    let connect_deadline = Instant::now() + Duration::from_secs(5);
+    // Drain stdout during startup too: logging/dependency output must not fill
+    // its pipe and prevent the process from ever connecting. Bound the queue.
+    let (lines_tx, lines_rx) = mpsc::sync_channel(64);
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            if lines_tx.send(line).is_err() { break; }
+        }
+    });
+    let connect_deadline = Instant::now() + CONNECT_TIMEOUT;
     let backend_stream = loop {
+        while let Ok(line) = lines_rx.try_recv() {
+            if let Ok(line) = line { handle_backend_message(app, pending_requests, &line); }
+        }
+        let state = app.state::<BackendState>();
+        if state.shutting_down.load(Ordering::Relaxed)
+            || state.restart_requested.swap(false, Ordering::Relaxed)
+            || child.try_wait().ok().flatten().is_some()
+        {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("Backend startup interrupted or process exited".into());
+        }
         match listener.accept() {
             Ok((stream, _)) => break stream,
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 if Instant::now() >= connect_deadline {
                     let _ = child.kill();
                     let _ = child.wait();
-                    let _ = stderr_thread.join();
                     return Err("Backend runner did not connect to its IPC socket".to_string());
                 }
                 std::thread::sleep(Duration::from_millis(10));
@@ -507,28 +588,62 @@ fn run_backend_generation(
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                let _ = stderr_thread.join();
                 return Err(format!("Failed to accept backend IPC connection: {error}"));
             }
         }
     };
+    if let Err(error) = backend_stream.set_write_timeout(Some(Duration::from_secs(2))) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(format!("Failed to configure backend connection: {error}"));
+    }
     *writer.lock().unwrap() = Some(backend_stream);
     let connected_at = Instant::now();
     log::info!("backend sidecar IPC connected on localhost");
+    set_backend_status(app, "ready", "Background service ready");
+    let mut health = HealthCheck::new(connected_at);
+    #[cfg(target_os = "windows")]
+    let mut clipboard_sequence = None;
 
-    for line_result in BufReader::new(stdout).lines() {
-        match line_result {
-            Ok(line) if !line.trim().is_empty() => {
-                handle_backend_message(app, pending_requests, &line)
+    loop {
+        let state = app.state::<BackendState>();
+        if state.shutting_down.load(Ordering::Relaxed)
+            || state.restart_requested.swap(false, Ordering::Relaxed) { break; }
+        match lines_rx.recv_timeout(Duration::from_millis(250)) {
+            Ok(Ok(line)) if !line.trim().is_empty() => {
+                if serde_json::from_str::<serde_json::Value>(&line)
+                    .ok().and_then(|value| value.get("type").cloned()) == Some(json!("pong")) {
+                    health.pong();
+                } else {
+                    handle_backend_message(app, pending_requests, &line);
+                }
             }
-            Ok(_) => {}
-            Err(error) => {
-                log::error!("failed reading backend stdout: {}", error);
-                break;
+            Ok(Err(_)) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            _ => {}
+        }
+        let now = Instant::now();
+        if health.expired(now) || child.try_wait().ok().flatten().is_some() {
+            log::error!("backend stopped responding; replacing the process");
+            break;
+        }
+        let mut messages = Vec::new();
+        if health.should_ping(now) { messages.push("{\"type\":\"ping\"}"); }
+        #[cfg(target_os = "windows")]
+        {
+            // Reading this native counter is cheap and does not open the
+            // clipboard. Only changed contents need a PowerShell read.
+            let sequence = unsafe { windows_clipboard_sequence() };
+            if clipboard_sequence != Some(sequence) {
+                clipboard_sequence = Some(sequence);
+                messages.push("{\"type\":\"clipboard-changed\"}");
             }
         }
+        let mut connection = writer.lock().unwrap();
+        let Some(stream) = connection.as_mut() else { break; };
+        if messages.iter().any(|message| writeln!(stream, "{message}").is_err()) { break; }
     }
 
+    set_backend_status(app, "reconnecting", "The background service stopped responding. Reconnecting…");
     *writer.lock().unwrap() = None;
     let mut pending = pending_requests.lock().unwrap();
     for (_, sender) in pending.drain() {
@@ -540,7 +655,8 @@ fn run_backend_generation(
         let _ = child.kill();
     }
     let status = child.wait().ok();
-    let _ = stderr_thread.join();
+    // A descendant can inherit a pipe; never block recovery joining a reader.
+    drop(stderr_thread);
     log::error!("backend sidecar stopped with status {:?}", status);
     Ok(connected_at.elapsed())
 }
@@ -553,26 +669,29 @@ fn supervise_backend(
 ) {
     let mut consecutive_failures = 0_u32;
     loop {
+        if app.state::<BackendState>().shutting_down.load(Ordering::Relaxed) { return; }
+        set_backend_status(&app, if consecutive_failures == 0 { "starting" } else { "reconnecting" }, "Starting the background service…");
         match run_backend_generation(&app, &config, &writer, &pending_requests) {
             Ok(uptime) if uptime >= Duration::from_secs(30) => consecutive_failures = 0,
             Ok(_) => consecutive_failures = consecutive_failures.saturating_add(1),
             Err(error) => {
                 consecutive_failures = consecutive_failures.saturating_add(1);
                 log::error!("backend sidecar launch failed: {}", error);
+                set_backend_status(&app, "reconnecting", &error);
             }
         }
 
         // A crash-loop used to keep respawning the whole Bun sidecar at full
         // speed (max 8s). With infinite retries and a 8s cap this is still
         // resilient, but soaks the machine if the bundle is broken.
-        // Cap the backoff much higher and give up after 4 failures so we
-        // stop the worst-case churn and show the user a stable error.
+        // After four failures, keep retrying slowly with a visible error.
         if consecutive_failures >= 4 {
             log::error!(
                 "backend sidecar kept failing ({} consecutive); sleeping 60s before retry",
                 consecutive_failures
             );
-            std::thread::sleep(Duration::from_secs(60));
+            set_backend_status(&app, "failed", "The background service could not start. Retrying in 60 seconds.");
+            if !wait_backend_retry(&app, Duration::from_secs(60)) { return; }
             // Try one more time; if it still fails, keep the 60s sleep loop
             // without the boot-time churn. The user can restart the app.
             continue;
@@ -580,8 +699,15 @@ fn supervise_backend(
         let exponent = consecutive_failures.min(5);
         let delay_ms = (250_u64 * (1_u64 << exponent)).min(8_000);
         log::info!("restarting backend sidecar in {}ms", delay_ms);
-        std::thread::sleep(Duration::from_millis(delay_ms));
+        if !wait_backend_retry(&app, Duration::from_millis(delay_ms)) { return; }
     }
+}
+
+#[cfg(target_os = "windows")]
+#[link(name = "user32")]
+extern "system" {
+    #[link_name = "GetClipboardSequenceNumber"]
+    fn windows_clipboard_sequence() -> u32;
 }
 
 fn openray_config_path() -> Option<PathBuf> {
@@ -2495,7 +2621,7 @@ fn hide_main_window_for_settings(app: &AppHandle) -> Result<(), String> {
     };
     persist_current_window_position(&main_window);
     hide_terminal_sessions(app);
-    main_window.hide().map_err(|error| error.to_string())
+    hide_main_window_native(&main_window)
 }
 
 fn focus_settings_window_if_visible(app: &AppHandle) -> Result<bool, String> {
@@ -2527,10 +2653,7 @@ fn focus_settings_window_if_visible(app: &AppHandle) -> Result<bool, String> {
 
 fn open_settings_window(app: AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("settings") {
-        // The Settings WebView is predeclared so WebView2 has already started
-        // its renderer. Do only the minimum native work here: blocking while a
-        // secondary renderer initializes can make Windows mark the launcher as
-        // unresponsive.
+        // Reuse Settings while it is open; closing releases the WebView.
         win.unminimize().map_err(|error| error.to_string())?;
         win.show().map_err(|error| error.to_string())?;
         win.set_focus().map_err(|error| error.to_string())?;
@@ -2567,7 +2690,7 @@ fn restore_main_window(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     };
     place_window(&main_window)?;
-    main_window.show().map_err(|e| e.to_string())?;
+    show_main_window_native(&main_window)?;
     main_window.set_focus().map_err(|e| e.to_string())?;
     let _ = main_window.emit("window-shown", json!({ "resetUi": false }));
     Ok(())
@@ -2643,7 +2766,7 @@ fn hide_terminal_sessions(app: &AppHandle) {
 }
 
 #[tauri::command]
-fn open_settings_window_cmd(app: AppHandle) -> Result<(), String> {
+async fn open_settings_window_cmd(app: AppHandle) -> Result<(), String> {
     open_settings_window(app)
 }
 
@@ -2689,7 +2812,7 @@ fn open_extensions_window(app: AppHandle) -> Result<(), String> {
         .get_webview_window("main")
         .ok_or_else(|| "Main window not found".to_string())?;
     place_window(&window)?;
-    window.show().map_err(|e| e.to_string())?;
+    show_main_window_native(&window)?;
     window.set_focus().map_err(|e| e.to_string())?;
     let _ = window.emit("window-shown", json!({ "resetUi": false }));
     let _ = window.emit("app:open-surface", "extensions");
@@ -2703,10 +2826,10 @@ fn toggle_window(window: WebviewWindow) -> Result<(), String> {
     }
     if window.is_visible().map_err(|e| e.to_string())? {
         persist_current_window_position(&window);
-        window.hide().map_err(|e| e.to_string())?;
+        hide_main_window_native(&window)?;
     } else {
         place_window(&window)?;
-        window.show().map_err(|e| e.to_string())?;
+        show_main_window_native(&window)?;
         window.set_focus().map_err(|e| e.to_string())?;
         let _ = window.emit("window-shown", json!({ "resetUi": false }));
     }
@@ -2717,7 +2840,11 @@ fn toggle_window(window: WebviewWindow) -> Result<(), String> {
 fn hide_window(window: WebviewWindow) -> Result<(), String> {
     persist_current_window_position(&window);
     hide_terminal_sessions(window.app_handle());
-    window.hide().map_err(|e| e.to_string())
+    if window.label() == "main" {
+        hide_main_window_native(&window)
+    } else {
+        window.hide().map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]
@@ -2726,7 +2853,7 @@ fn show_window(window: WebviewWindow) -> Result<(), String> {
         return Ok(());
     }
     place_window(&window)?;
-    window.show().map_err(|e| e.to_string())?;
+    show_main_window_native(&window)?;
     window.set_focus().map_err(|e| e.to_string())?;
     let _ = window.emit("window-shown", json!({ "resetUi": false }));
     Ok(())
@@ -2736,12 +2863,10 @@ fn show_window(window: WebviewWindow) -> Result<(), String> {
 fn close_current_window(window: WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
         persist_current_window_position(&window);
-        window.hide().map_err(|e| e.to_string())
+        hide_main_window_native(&window)
     } else if window.label() == "settings" {
-        // Settings is declared in tauri.conf.json, so hide it instead of
-        // destroying its WebView. Reusing the initialized WebView avoids the
-        // blank-page race that occurs when WebView2 is created on demand.
         window.hide().map_err(|e| e.to_string())?;
+        window.close().map_err(|e| e.to_string())?;
         restore_main_window(window.app_handle())
     } else {
         window.close().map_err(|e| e.to_string())
@@ -3115,6 +3240,9 @@ pub fn run() {
             writer: backend_writer,
             pending_requests,
             request_counter,
+            status: Mutex::new(BackendStatus::default()),
+            restart_requested: AtomicBool::new(false),
+            shutting_down: AtomicBool::new(false),
         })
         .manage(WindowBehaviorState::default())
         .manage(native_terminal::NativeTerminalState::default())
@@ -3128,11 +3256,8 @@ pub fn run() {
                             log::debug!("failed to hide launcher behind Settings: {error}");
                         }
                     }
-                    tauri::WindowEvent::CloseRequested { api, .. } => {
-                        // Treat the title-bar X like the in-app Back action. Keep
-                        // the predeclared WebView alive and return focus to the
-                        // launcher instead of leaving the whole app hidden.
-                        api.prevent_close();
+                    tauri::WindowEvent::CloseRequested { .. } => {
+                        // Release the Settings renderer when closed.
                         let _ = window.hide();
                         if let Err(error) = restore_main_window(&window.app_handle()) {
                             log::debug!(
@@ -3164,7 +3289,7 @@ pub fn run() {
                             if !main_focused && !sidebar_focused {
                                 persist_current_window_position(&main_window);
                                 hide_terminal_sessions(&app);
-                                let _ = main_window.hide();
+                                let _ = hide_main_window_native(&main_window);
                             }
                         }
                     });
@@ -3272,7 +3397,7 @@ pub fn run() {
                         }
                         persist_current_window_position(&main_window);
                         hide_terminal_sessions(&app);
-                        let _ = main_window.hide();
+                        let _ = hide_main_window_native(&main_window);
                     });
                 }
                 _ => {}
@@ -3280,6 +3405,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             call_backend,
+            get_backend_status,
+            restart_backend,
             open_settings_window_cmd,
             hide_launcher_for_settings,
             terminal_sessions_show,
@@ -3444,7 +3571,8 @@ pub fn run() {
                             Ok(path) => break path,
                             Err(error) => {
                                 log::error!("backend bundle staging failed: {}", error);
-                                std::thread::sleep(Duration::from_secs(10));
+                                set_backend_status(&supervisor_handle, "failed", &error);
+                                if !wait_backend_retry(&supervisor_handle, Duration::from_secs(10)) { return; }
                             }
                         }
                     }
@@ -3498,20 +3626,18 @@ pub fn run() {
                 let mut failures = 0_u32;
                 loop {
                     let bun_command = match locate_bun(&app_local_data) {
-                        Ok(path) => {
-                            failures = 0;
-                            path
-                        }
+                        Ok(path) => path,
                         Err(error) => {
                             failures = failures.saturating_add(1);
                             log::error!("backend runtime unavailable: {}", error);
+                            set_backend_status(&supervisor_handle, "failed", &error);
                             let exponent = failures.min(5);
                             let delay_ms = (500_u64 * (1_u64 << exponent)).min(15_000);
                             log::info!(
                                 "retrying backend runtime discovery in {}ms",
                                 delay_ms
                             );
-                            std::thread::sleep(Duration::from_millis(delay_ms));
+                            if !wait_backend_retry(&supervisor_handle, Duration::from_millis(delay_ms)) { return; }
                             continue;
                         }
                     };
@@ -3527,6 +3653,7 @@ pub fn run() {
                         supervisor_writer.clone(),
                         supervisor_pending.clone(),
                     );
+                    return;
                 }
             });
 
@@ -3580,7 +3707,13 @@ pub fn run() {
                         }
                     }
                     "settings" => {
-                        let _ = open_settings_window(app.clone());
+                        let handle = app.clone();
+                        // WebView2 creation must happen off the UI event loop.
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(error) = open_settings_window(handle) {
+                                log::error!("failed to open Settings: {error}");
+                            }
+                        });
                     }
                     "quit" => {
                         quit_app_now(app);

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
 import { promisify } from 'node:util'
+import { StringCache } from '../shared/stringCache'
 
 const execFileAsync = promisify(execFile)
 
@@ -51,7 +52,7 @@ const IMAGE_EXTENSIONS = new Set([
   '.webp',
 ])
 const ARCHIVE_EXTENSIONS = new Set(['.7z', '.bz2', '.gz', '.rar', '.tar', '.tgz'])
-const nativeFileIconCache = new Map<string, string | null>()
+const nativeFileIconCache = new StringCache()
 const nativeFileIconRequests = new Map<string, Promise<string | undefined>>()
 const nativeFileIconWaiters: Array<() => void> = []
 const NATIVE_FILE_ICON_CONCURRENCY = 2

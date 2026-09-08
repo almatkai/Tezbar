@@ -4,9 +4,10 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
 import { promisify } from 'node:util'
+import { StringCache } from '../shared/stringCache'
 
 const execFileAsync = promisify(execFile)
-const appIconCache = new Map<string, string | null>()
+const appIconCache = new StringCache()
 
 /** Bundled fallback icons for well-known CLI tools that have no .app bundle. */
 function bundledIconForPath(appPath: string): string | undefined {
