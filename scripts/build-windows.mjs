@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -18,6 +18,18 @@ if (!existsSync(tauriCli)) {
   process.exit(1)
 }
 
+const tauriConfig = JSON.parse(
+  readFileSync(join(root, 'src-tauri', 'tauri.conf.json'), 'utf8')
+)
+const isPrerelease = tauriConfig.version.includes('-')
+const bundles = isPrerelease ? 'nsis' : 'nsis,msi'
+
+if (isPrerelease) {
+  console.warn(
+    `Building NSIS only for prerelease ${tauriConfig.version}; MSI does not support textual SemVer prerelease identifiers.`
+  )
+}
+
 for (const command of ['rustc', 'cargo']) {
   const probe = spawnSync(command, ['--version'], { cwd: root, stdio: 'ignore', windowsHide: true })
   if (probe.error || probe.status !== 0) {
@@ -30,11 +42,11 @@ for (const command of ['rustc', 'cargo']) {
 
 const result = spawnSync(
   process.execPath,
-  [tauriCli, 'build', '--bundles', 'nsis,msi', '--ci', ...process.argv.slice(2)],
+  [tauriCli, 'build', '--bundles', bundles, '--ci', ...process.argv.slice(2)],
   { cwd: root, stdio: 'inherit', windowsHide: true }
 )
 
 if (result.error) throw result.error
 if (result.status !== 0) process.exit(result.status ?? 1)
 
-console.log('Windows installers are available under src-tauri\\target\\release\\bundle\\.')
+console.log('Windows installer bundles are available under src-tauri\\target\\release\\bundle\\.')
