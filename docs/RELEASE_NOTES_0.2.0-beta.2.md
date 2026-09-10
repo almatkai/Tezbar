@@ -8,6 +8,7 @@ This beta introduces the first Windows installers for Tezbar and significantly r
 - Reduced measured idle private RAM from 635.9 MiB to 502.8 MiB (20.9%), with additional lazy loading bringing the packaged app process tree to about 406.8 MiB in the final profile.
 - Removed idle voice-input services and deferred Knowledge, Settings, extensions, terminals, agents, and AI providers until they are needed.
 - Added clear startup and reconnection status, Retry controls, backend health checks, and recovery from crashes or hangs.
+- Fixed macOS launcher placement: the first open is centered on the active display, and later opens restore the last valid position.
 - Improved Windows launcher placement, snapping, mixed-DPI handling, terminal startup paths, drive-path completions, and application discovery.
 - Added TokenRouter integration and improved OpenCode, DeepSeek, model selection, and chat working-directory support.
 - Expanded the cross-platform extension catalog and synchronized application and tray icons.
