@@ -65,7 +65,18 @@ const SNAP_THRESHOLD: f64 = 32.0;
 const SNAP_RELEASE_THRESHOLD: f64 = 32.0;
 const SNAP_SLOW_SPEED_THRESHOLD: f64 = 420.0;
 const SNAP_DWELL_DURATION: Duration = Duration::from_millis(130);
+#[cfg(target_os = "macos")]
+const WINDOW_POSITIONS_BY_MONITOR_KEY: &str = "windowPositionsByMonitorV3";
+#[cfg(not(target_os = "macos"))]
 const WINDOW_POSITIONS_BY_MONITOR_KEY: &str = "windowPositionsByMonitorV2";
+const LEGACY_WINDOW_POSITION_KEYS: &[&str] = &[
+    "tauriWindowPosition",
+    "tauriWindowPositionsByDisplay",
+    "windowPositionsByMonitor",
+    "windowPosition",
+    "windowPositionsByDisplay",
+    "tezbarWindowPlacementInitialized",
+];
 const DEFAULT_BACKEND_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const EXTENSION_INSTALL_REQUEST_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const EXTENSION_RUNTIME_REQUEST_TIMEOUT: Duration = Duration::from_secs(2 * 60);
@@ -151,10 +162,9 @@ fn backend_request_timeout(channel: &str) -> Duration {
 struct WindowBehaviorState {
     suppress_blur_hide: Mutex<bool>,
     backend_hidden_windows: Mutex<Vec<String>>,
-    // Windows creates the hidden launcher at an OS-chosen position and emits
-    // Moved before Tezbar has selected its real placement. Ignore that event
-    // so it cannot overwrite the user's saved location with (typically) 130,130.
-    #[cfg(target_os = "windows")]
+    // Desktop window managers can position the hidden predeclared launcher and
+    // emit Moved before Tezbar has selected its real placement. Ignore those
+    // startup events so they cannot overwrite the user's saved location.
     main_window_placed: Mutex<bool>,
     // SetPosition is asynchronous on Windows. A generation keeps an older
     // mixed-DPI finalizer from racing a newer launcher invocation.
@@ -893,16 +903,15 @@ fn monitor_positions_from_config(
 }
 
 fn window_position_config_needs_reset(config: &serde_json::Value) -> bool {
-    [
-        "tauriWindowPosition",
-        "tauriWindowPositionsByDisplay",
-        "windowPositionsByMonitor",
-        "windowPosition",
-        "windowPositionsByDisplay",
-        "tezbarWindowPlacementInitialized",
-    ]
-    .iter()
-    .any(|key| config.get(key).is_some())
+    let has_legacy_position = LEGACY_WINDOW_POSITION_KEYS
+        .iter()
+        .any(|key| config.get(key).is_some());
+
+    #[cfg(target_os = "macos")]
+    return has_legacy_position || config.get("windowPositionsByMonitorV2").is_some();
+
+    #[cfg(not(target_os = "macos"))]
+    has_legacy_position
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -932,16 +941,11 @@ fn update_window_position_config(
     let Some(config_object) = config.as_object_mut() else {
         return;
     };
-    for obsolete_key in [
-        "tauriWindowPosition",
-        "tauriWindowPositionsByDisplay",
-        "windowPositionsByMonitor",
-        "windowPosition",
-        "windowPositionsByDisplay",
-        "tezbarWindowPlacementInitialized",
-    ] {
+    for &obsolete_key in LEGACY_WINDOW_POSITION_KEYS {
         config_object.remove(obsolete_key);
     }
+    #[cfg(target_os = "macos")]
+    config_object.remove("windowPositionsByMonitorV2");
     config_object.insert(
         WINDOW_POSITIONS_BY_MONITOR_KEY.to_string(),
         json!(positions),
@@ -1015,10 +1019,27 @@ fn monitor_id(window: &WebviewWindow, monitor: &Monitor) -> Option<String> {
             .as_ref()
             .is_some_and(|candidate| monitors_match(candidate, monitor))
         {
-            return macos_display_uuid(display_id);
+            if let Some(uuid) = macos_display_uuid(display_id) {
+                return Some(uuid);
+            }
+            break;
         }
     }
-    None
+
+    // UUID matching should normally succeed, but persistence must not silently
+    // stop if CoreGraphics and Tao briefly disagree while displays are changing.
+    // This geometry-based ID remains stable for the usual monitor arrangement.
+    let position = monitor.position();
+    let size = monitor.size();
+    Some(format!(
+        "macos-fallback:{}:{}:{}:{}:{}:{:.3}",
+        monitor.name().unwrap_or_else(|| "unknown".to_string()),
+        position.x,
+        position.y,
+        size.width,
+        size.height,
+        monitor.scale_factor(),
+    ))
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -1793,17 +1814,14 @@ fn persist_window_position_at(window: &WebviewWindow, position: PersistedWindowP
 }
 
 fn persist_current_window_position(window: &WebviewWindow) {
+    if window.label() == "main"
+        && !*window
+            .state::<WindowBehaviorState>()
+            .main_window_placed
+            .lock()
+            .unwrap()
     {
-        #[cfg(target_os = "windows")]
-        if window.label() == "main"
-            && !*window
-                .state::<WindowBehaviorState>()
-                .main_window_placed
-                .lock()
-                .unwrap()
-        {
-            return;
-        }
+        return;
     }
 
     let Ok(position) = window.outer_position() else {
@@ -2069,6 +2087,11 @@ fn place_window(window: &WebviewWindow) -> Result<(), String> {
     #[cfg(not(target_os = "windows"))]
     {
         set_window_position_on_monitor(window, position, &monitor)?;
+        *window
+            .state::<WindowBehaviorState>()
+            .main_window_placed
+            .lock()
+            .unwrap() = true;
         if persist_position {
             // Old placement formats used the wrong coordinate space. Reset
             // once and keep only monitor ID + coordinates.
@@ -2118,7 +2141,7 @@ mod window_placement_tests {
     fn persistence_keeps_one_coordinate_pair_per_monitor_id() {
         let mut config = json!({
             "unrelatedSetting": true,
-            "windowPositionsByMonitorV2": {
+            (WINDOW_POSITIONS_BY_MONITOR_KEY): {
                 "Monitor B": { "x": 2100.0, "y": 150.0 }
             }
         });
@@ -2133,7 +2156,7 @@ mod window_placement_tests {
             config,
             json!({
                 "unrelatedSetting": true,
-                "windowPositionsByMonitorV2": {
+                (WINDOW_POSITIONS_BY_MONITOR_KEY): {
                     "Monitor A": { "x": 30.0, "y": 40.0 },
                     "Monitor B": { "x": 2100.0, "y": 150.0 }
                 }
@@ -2167,8 +2190,34 @@ mod window_placement_tests {
         assert_eq!(
             config,
             json!({
-                "windowPositionsByMonitorV2": {
+                (WINDOW_POSITIONS_BY_MONITOR_KEY): {
                     "Monitor B": { "x": 200.0, "y": 300.0 }
+                }
+            })
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_startup_overwritten_v2_position_is_reset() {
+        let mut config = json!({
+            "windowPositionsByMonitorV2": {
+                "macos:startup-overwritten": { "x": 130.0, "y": 130.0 }
+            }
+        });
+
+        assert!(window_position_config_needs_reset(&config));
+        update_window_position_config(
+            &mut config,
+            "macos:current",
+            PersistedWindowPosition { x: 520.0, y: 264.0 },
+        );
+
+        assert_eq!(
+            config,
+            json!({
+                "windowPositionsByMonitorV3": {
+                    "macos:current": { "x": 520.0, "y": 264.0 }
                 }
             })
         );
@@ -3306,11 +3355,10 @@ pub fn run() {
                     let _ = position;
                     if let Some(main_window) = window.app_handle().get_webview_window("main") {
                         let state = main_window.state::<WindowBehaviorState>();
-                        #[cfg(target_os = "windows")]
                         if !*state.main_window_placed.lock().unwrap() {
-                            // The hidden predeclared window receives a move event at
-                            // Windows' default location before `place_window` runs.
-                            // It is not a user move and must not be persisted.
+                            // Hidden predeclared windows can receive a startup move
+                            // before `place_window` runs. It is not a user move and
+                            // must not be persisted on macOS or Windows.
                             return;
                         }
                         if *state.snap_drag_active.lock().unwrap() {
@@ -3378,7 +3426,6 @@ pub fn run() {
                             return;
                         };
                         let state = main_window.state::<WindowBehaviorState>();
-                        #[cfg(target_os = "windows")]
                         if !*state.main_window_placed.lock().unwrap() {
                             return;
                         }
