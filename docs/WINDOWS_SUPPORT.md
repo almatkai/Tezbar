@@ -27,7 +27,7 @@ Folder search uses Finder on macOS and Explorer on Windows. "Open with" resolves
 | System commands               | AppleScript and system tools      | PowerShell and Win32 tools                   |
 | Extension app discovery       | Raycast/macOS application catalog | Tezbar Windows application catalog           |
 | Extension store                | Raycast community catalog           | Tezbar-loved GitHub repositories             |
-| Runtime installation          | existing Bun installation         | existing Bun or first-launch Bun bootstrap   |
+| Runtime installation          | existing Bun or first-launch Bun bootstrap | existing Bun or first-launch Bun bootstrap |
 
 Windows equivalents are implemented for appearance, audio, display sleep, computer sleep, keep-awake, lock, Wi-Fi, DNS flush, VPN settings, public/network information, Downloads, All Apps, AppData, Explorer path copying, Recycle Bin, OS/CPU/memory/disk/battery information, ports, and Git root copying.
 
@@ -54,6 +54,6 @@ These areas still need Windows-native implementations before Windows can be call
 
 Run `pnpm build:windows` on Windows to produce both a per-user NSIS installer and an MSI package. The command checks for Rust and Cargo, uses the Windows-specific Tauri configuration, and writes installers under `src-tauri/target/release/bundle/`.
 
-The generic `pnpm build` command is also platform-aware. The native helper step builds Swift helpers only on macOS and is a no-op on Windows. Tauri merges `tauri.macos.conf.json` or `tauri.windows.conf.json` and packages only resources valid for that operating system. The Windows host downloads Bun on first launch if it is not already installed.
+The generic `pnpm build` command is also platform-aware. The native helper step builds Swift helpers only on macOS and is a no-op on Windows. Tauri merges `tauri.macos.conf.json` or `tauri.windows.conf.json` and packages only resources valid for that operating system. If Bun is not already available, the Tauri host downloads the pinned Bun runtime into Tezbar's app-data directory on first launch; it does not modify the user's PATH, shell files, Homebrew installation, or system directories.
 
 Cross-compilation from macOS can type-check Rust code, but a complete Windows Tauri build also requires a Windows resource compiler and cannot replace an installer test on Windows.

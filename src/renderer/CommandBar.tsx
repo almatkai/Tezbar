@@ -4649,6 +4649,7 @@ export default function CommandBar({
                   selectedIndex={selectedSearch}
                   itemCount={filteredChatHistory.length}
                   followSelected={followSearchSelection}
+                  className="min-h-0 flex-1 overflow-y-auto"
                 >
                   {filteredChatHistory.map((chat, i) => (
                     <li key={chat.id} className="relative z-[1]">
@@ -5147,7 +5148,7 @@ export default function CommandBar({
       {/* Footer hint bar — same glass-card shell as Clipboard / other views */}
       <div
         className={cx(
-          'glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in',
+          'glass-card mt-auto shrink-0 px-4 py-2 animate-tezbar-scale-in',
           showSearchResults || showSuggestions || showDeepSearchLoading || showAnswer
             ? 'opacity-60'
             : ''
