@@ -50,8 +50,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tokio::sync::oneshot;
 
 const WINDOW_WIDTH: f64 = 760.0;
-const WINDOW_MIN_HEIGHT: f64 = 120.0;
-const WINDOW_MAX_HEIGHT: f64 = 700.0;
+const WINDOW_HEIGHT: f64 = 640.0;
 const TERMINAL_SESSIONS_LABEL: &str = "terminal-sessions";
 const TERMINAL_SESSIONS_WIDTH: f64 = 300.0;
 // The sessions sidebar sits to the LEFT of the main window. A positive overhang
@@ -1711,17 +1710,14 @@ fn active_monitor(window: &WebviewWindow) -> Result<Monitor, String> {
 }
 
 fn window_size_for_target_monitor(
-    current_size: (f64, f64),
-    current_scale_factor: f64,
+    _current_size: (f64, f64),
+    _current_scale_factor: f64,
     target_scale_factor: f64,
 ) -> (f64, f64) {
-    let current_scale_factor = valid_scale_factor(current_scale_factor);
     let target_scale_factor = valid_scale_factor(target_scale_factor);
-    let logical_height = (current_size.1 / current_scale_factor)
-        .clamp(WINDOW_MIN_HEIGHT, WINDOW_MAX_HEIGHT);
     (
         WINDOW_WIDTH * target_scale_factor,
-        logical_height * target_scale_factor,
+        WINDOW_HEIGHT * target_scale_factor,
     )
 }
 
@@ -1755,7 +1751,7 @@ fn window_size_for_monitor(window: &WebviewWindow, monitor: &Monitor) -> (f64, f
         ),
         Err(_) => (
             WINDOW_WIDTH * target_scale_factor,
-            WINDOW_MAX_HEIGHT * target_scale_factor,
+            WINDOW_HEIGHT * target_scale_factor,
         ),
     }
 }
@@ -2086,6 +2082,9 @@ fn place_window(window: &WebviewWindow) -> Result<(), String> {
 
     #[cfg(not(target_os = "windows"))]
     {
+        window
+            .set_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
+            .map_err(|error| error.to_string())?;
         set_window_position_on_monitor(window, position, &monitor)?;
         *window
             .state::<WindowBehaviorState>()
@@ -2104,6 +2103,16 @@ fn place_window(window: &WebviewWindow) -> Result<(), String> {
 #[cfg(test)]
 mod window_placement_tests {
     use super::*;
+
+    #[test]
+    fn reopening_a_collapsed_launcher_restores_standard_height() {
+        for scale in [1.0, 1.5, 2.0] {
+            assert_eq!(
+                window_size_for_target_monitor((760.0, 120.0), 1.0, scale),
+                (760.0 * scale, 640.0 * scale),
+            );
+        }
+    }
 
     #[test]
     fn monitor_storage_uses_only_the_monitor_id() {
@@ -3087,11 +3096,13 @@ fn window_set_content_height(
     height: f64,
     zoom_factor: f64,
 ) -> Result<(), String> {
-    // `height` is already in physical pixels (css_height * zoom_factor computed
-    // on the JS side). Convert back to logical pixels by dividing once.
-    let zoom = if zoom_factor > 0.0 { zoom_factor } else { 1.0 };
-    let logical_height = height / zoom;
-    let clamped_height = logical_height.clamp(WINDOW_MIN_HEIGHT, WINDOW_MAX_HEIGHT);
+    // Retain compatibility with older renderers, but content and page zoom
+    // must never change the launcher's standard native dimensions.
+    let _ = (height, zoom_factor);
+    if window.label() != "main" {
+        return Ok(());
+    }
+    let clamped_height = WINDOW_HEIGHT;
 
     #[cfg(target_os = "windows")]
     if window.label() == "main" {

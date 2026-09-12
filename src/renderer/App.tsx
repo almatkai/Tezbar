@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { Suspense, useEffect, useRef, useState } from 'react'
 import { tryConsumeCommandSurfaceEscape } from './escapeGate'
 import CommandBar from './CommandBar'
 import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
@@ -104,7 +104,6 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
 /** How much vertical padding the outer app container adds. Kept in sync
  *  with the `p-2` below so we can report accurate content height to the
  *  main process (otherwise the window would be 16px too short). */
-const OUTER_PADDING_PX = 16
 
 const TIMED_SURFACE_CONFIG = {
   'extension-runtime': {
@@ -307,8 +306,6 @@ function LauncherApp(): JSX.Element {
     ExtensionRunCommandResult,
     { ok: true; mode: 'view' }
   > | null>(null)
-  const contentRef = useRef<HTMLDivElement | null>(null)
-  const lastReportedHeightRef = useRef<number>(-1)
   const surfaceRef = useRef<Surface>('command')
 
   const focusSurface = (nextSurface: Surface): void => {
@@ -576,35 +573,6 @@ function LauncherApp(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [surface])
 
-  // Report intrinsic content height rather than only the viewport height.
-  // At page zoom > 100%, CSS pixels require more native window pixels;
-  // scaling the report prevents footer chrome and wrapped hints from clipping.
-  useLayoutEffect(() => {
-    const el = contentRef.current
-    if (!el) return
-
-    const report = (): void => {
-      const cssHeight =
-        Math.max(el.getBoundingClientRect().height, el.scrollHeight) + OUTER_PADDING_PX
-      const zoomFactor = Math.max(1, window.tezbar.getWindowZoomFactor())
-      const measured = Math.ceil(cssHeight * zoomFactor)
-      if (measured === lastReportedHeightRef.current) return
-      lastReportedHeightRef.current = measured
-      void window.tezbar.setWindowContentHeight(measured, zoomFactor)
-    }
-
-    report()
-    const observer = new ResizeObserver(() => report())
-    observer.observe(el)
-    window.addEventListener('resize', report)
-    window.visualViewport?.addEventListener('resize', report)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', report)
-      window.visualViewport?.removeEventListener('resize', report)
-    }
-  }, [surface])
-
   return (
     <div
       className={[
@@ -615,7 +583,6 @@ function LauncherApp(): JSX.Element {
         .join(' ')}
     >
       <div
-        ref={contentRef}
         key={surface}
         className="relative z-0 flex h-full w-full animate-tezbar-fade-in flex-col"
       >
