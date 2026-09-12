@@ -101,10 +101,6 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
   terminal: '[aria-label="Terminal"]',
 }
 
-/** How much vertical padding the outer app container adds. Kept in sync
- *  with the `p-2` below so we can report accurate content height to the
- *  main process (otherwise the window would be 16px too short). */
-
 const TIMED_SURFACE_CONFIG = {
   'extension-runtime': {
     configKey: 'extensionRuntimeTimeoutMs',
@@ -584,7 +580,7 @@ function LauncherApp(): JSX.Element {
     >
       <div
         key={surface}
-        className="relative z-0 flex h-full w-full animate-tezbar-fade-in flex-col"
+        className="relative z-0 flex h-full min-h-0 w-full animate-tezbar-fade-in flex-col"
       >
         <Suspense fallback={<SurfaceFallback />}>
           {surface === 'settings' ? (
