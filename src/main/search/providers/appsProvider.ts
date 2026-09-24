@@ -1,14 +1,66 @@
-import { readdirSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { IndexedDocument, SearchProvider } from './types'
 
+export type InstalledApplication = {
+  name: string
+  path: string
+  bundleId?: string
+  windowsAppId?: string
+}
+
+const bundleIdCache = new Map<string, { mtimeMs: number; bundleId?: string }>()
+
+export function readAppBundleIdentifier(appPath: string): string | undefined {
+  if (process.platform !== 'darwin') return undefined
+  try {
+    const infoPlistPath = join(appPath, 'Contents', 'Info.plist')
+    const stat = statSync(infoPlistPath)
+    const cached = bundleIdCache.get(infoPlistPath)
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      return cached.bundleId
+    }
+
+    let bundleId: string | undefined
+    const buf = readFileSync(infoPlistPath)
+    if (!buf.subarray(0, 8).includes(Buffer.from('bplist'))) {
+      const text = buf.toString('utf8')
+      const match = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/.exec(text)
+      if (match) {
+        bundleId = match[1].trim()
+      }
+    }
+
+    if (!bundleId) {
+      try {
+        const res = execFileSync(
+          '/usr/bin/plutil',
+          ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', infoPlistPath],
+          {
+            encoding: 'utf8',
+            timeout: 1000,
+          }
+        ).trim()
+        if (res) bundleId = res
+      } catch {
+        // plutil failed or timed out
+      }
+    }
+
+    bundleIdCache.set(infoPlistPath, { mtimeMs: stat.mtimeMs, bundleId })
+    return bundleId
+  } catch {
+    return undefined
+  }
+}
+
 let windowsApplicationCache:
-  | { collectedAt: number; applications: Array<{ name: string; path: string }> }
+  | { collectedAt: number; applications: InstalledApplication[] }
   | undefined
 
-export function listApplications(): Array<{ name: string; path: string }> {
+export function listApplications(): InstalledApplication[] {
   if (process.platform === 'win32') {
     if (windowsApplicationCache && Date.now() - windowsApplicationCache.collectedAt < 30_000) {
       return windowsApplicationCache.applications
@@ -29,7 +81,7 @@ export function listApplications(): Array<{ name: string; path: string }> {
         'Programs'
       ),
     ]
-    const out: Array<{ name: string; path: string }> = []
+    const out: InstalledApplication[] = []
     const seen = new Set<string>()
     for (const root of roots) {
       try {
@@ -66,7 +118,7 @@ export function listApplications(): Array<{ name: string; path: string }> {
         const appId = item.AppID.trim()
         if (!name || !appId || seen.has(name.toLowerCase())) continue
         seen.add(name.toLowerCase())
-        out.push({ name, path: `shell:AppsFolder\\${appId}` })
+        out.push({ name, path: `shell:AppsFolder\\${appId}`, windowsAppId: appId })
       }
     } catch {
       // Shortcut discovery still provides classic desktop applications when
@@ -84,7 +136,7 @@ export function listApplications(): Array<{ name: string; path: string }> {
     '/System/Library/CoreServices',
     join(homedir(), 'Applications'),
   ]
-  const out: Array<{ name: string; path: string }> = []
+  const out: InstalledApplication[] = []
   const seen = new Set<string>()
 
   for (const root of roots) {
@@ -94,9 +146,11 @@ export function listApplications(): Array<{ name: string; path: string }> {
         const name = entry.replace(/\.app$/, '')
         if (seen.has(name)) continue
         seen.add(name)
+        const appPath = join(root, entry)
         out.push({
           name,
-          path: join(root, entry),
+          path: appPath,
+          bundleId: readAppBundleIdentifier(appPath),
         })
       }
     } catch {

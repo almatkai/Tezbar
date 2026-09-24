@@ -96,6 +96,19 @@ export type PiExtensionItem = {
   features?: string[]
 }
 
+export interface ExtensionStorePage {
+  items: ExtensionManifest[]
+  total: number
+  offset: number
+  limit: number
+  hasMore: boolean
+}
+
+export type ExtensionCatalogQueryOptions = {
+  offset?: number
+  limit?: number
+}
+
 export type RaymesApi = {
   hide: () => Promise<void>
   show: () => Promise<void>
@@ -113,7 +126,10 @@ export type RaymesApi = {
   reinstallExtension: (extensionId: string) => Promise<ExtensionIntegrityReport>
   getExtensionInstallError: (extensionId: string) => Promise<string | null>
   extensionList: () => Promise<InstalledRegistryExtension[]>
-  extensionSearchStore: (query: string) => Promise<ExtensionManifest[]>
+  extensionSearchStore: (
+    query: string,
+    options?: ExtensionCatalogQueryOptions,
+  ) => Promise<ExtensionStorePage>
   extensionInstall: (extensionId: string) => Promise<InstalledRegistryExtension>
   extensionUninstall: (extensionId: string) => Promise<boolean>
   extensionRunCommand: (payload: {

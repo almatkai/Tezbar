@@ -75,4 +75,43 @@ describe('extension catalog state', () => {
       progress: 100,
     }).installing).toEqual({})
   })
+
+  it('supports pagination: load-more appends items and manages hasMore/total', () => {
+    const loading = extensionCatalogReducer(INITIAL_EXTENSION_CATALOG_STATE, {
+      type: 'load-started',
+      requestId: 1,
+    })
+    const initial = extensionCatalogReducer(loading, {
+      type: 'load-succeeded',
+      requestId: 1,
+      installed: [],
+      store: [{ id: 'raycast.1', name: 'One', description: '', author: '', version: '1' }],
+      total: 50,
+      hasMore: true,
+    })
+    expect(initial.total).toBe(50)
+    expect(initial.hasMore).toBe(true)
+
+    const loadingMore = extensionCatalogReducer(initial, { type: 'load-more-started' })
+    expect(loadingMore.loadingMore).toBe(true)
+
+    const moreLoaded = extensionCatalogReducer(loadingMore, {
+      type: 'load-more-succeeded',
+      items: [{ id: 'raycast.2', name: 'Two', description: '', author: '', version: '1' }],
+      total: 50,
+      hasMore: true,
+      selectNext: true,
+    })
+    expect(moreLoaded.loadingMore).toBe(false)
+    expect(moreLoaded.store).toHaveLength(2)
+    expect(moreLoaded.selectedId).toBe('raycast.2')
+    expect(moreLoaded.followSelection).toBe(true)
+
+    const failed = extensionCatalogReducer(loadingMore, {
+      type: 'load-more-failed',
+      message: 'Network error',
+    })
+    expect(failed.loadingMore).toBe(false)
+    expect(failed.message?.text).toBe('Network error')
+  })
 })

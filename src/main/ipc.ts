@@ -1468,10 +1468,27 @@ export function registerIpcHandlers(
     return listInstalledRegistryExtensions()
   })
 
-  ipcMain.handle('extension:search-store', async (_event, query: unknown) => {
-    const q = typeof query === 'string' ? query : ''
+  ipcMain.handle('extension:search-store', async (_event, payload: unknown, maybeOptions?: unknown) => {
+    let query = ''
+    let offset: number | undefined
+    let limit: number | undefined
+
+    if (typeof payload === 'string') {
+      query = payload
+      if (maybeOptions && typeof maybeOptions === 'object') {
+        const opt = maybeOptions as { offset?: unknown; limit?: unknown }
+        if (typeof opt.offset === 'number') offset = opt.offset
+        if (typeof opt.limit === 'number') limit = opt.limit
+      }
+    } else if (payload && typeof payload === 'object') {
+      const body = payload as { query?: unknown; offset?: unknown; limit?: unknown }
+      if (typeof body.query === 'string') query = body.query
+      if (typeof body.offset === 'number') offset = body.offset
+      if (typeof body.limit === 'number') limit = body.limit
+    }
+
     const { searchExtensionCatalog } = await loadExtensionRegistry()
-    return searchExtensionCatalog(q)
+    return searchExtensionCatalog(query, { offset, limit })
   })
 
   ipcMain.handle('extension:install', async (_event, extensionId: unknown) => {

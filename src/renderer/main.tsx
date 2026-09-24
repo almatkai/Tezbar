@@ -6,6 +6,8 @@ import BackendConnection from './BackendConnection'
 import 'highlight.js/styles/atom-one-dark.css'
 import './styles.css'
 import { initTauriBridge } from './tauri-bridge'
+import { applyTezbarTheme, isTezbarThemePreference, TEZBAR_THEME_STORAGE_KEY, type TezbarThemePreference } from './theme'
+
 
 const App = lazy(() => import('./App'))
 
@@ -17,6 +19,16 @@ const rootElement = document.getElementById('root')
 if (navigator.platform.includes('Win')) {
   document.documentElement.classList.add('platform-windows')
 }
+
+const storedTheme = window.localStorage.getItem(TEZBAR_THEME_STORAGE_KEY)
+const themePreference: TezbarThemePreference = isTezbarThemePreference(storedTheme) ? storedTheme : 'system'
+applyTezbarTheme(themePreference)
+
+const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+const syncSystemTheme = (): void => {
+  if (themePreference === 'system') applyTezbarTheme('system')
+}
+colorSchemeQuery.addEventListener('change', syncSystemTheme)
 
 if (!rootElement) {
   throw new Error('Tezbar renderer root element is missing')

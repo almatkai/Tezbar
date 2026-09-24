@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { ExtensionManifest } from '../shared/extensions'
+import type { ExtensionStorePage } from '../shared/desktop-api'
 import { parseGitHubRepositoryUrl } from '../shared/extensionRepository'
 import { searchLovedExtensions } from '../shared/lovedExtensions'
 import { Button, Hint, HintBar, Kbd, Message, TextField, ViewHeader, cx } from './ui/primitives'
@@ -232,7 +233,18 @@ export default function ExtensionsView({
   embedded?: boolean
 }): JSX.Element {
   const [catalog, dispatchCatalog] = useReducer(extensionCatalogReducer, INITIAL_EXTENSION_CATALOG_STATE)
-  const { query, loading, installing, store, installed, selectedId, followSelection } = catalog
+  const {
+    query,
+    loading,
+    loadingMore,
+    installing,
+    store,
+    installed,
+    selectedId,
+    followSelection,
+    total,
+    hasMore,
+  } = catalog
   const msg = catalog.message
   const rootRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -254,19 +266,37 @@ export default function ExtensionsView({
     return cleanup
   }, [])
 
+  const loadStorePage = useCallback(
+    async (offset = 0, limit = 25): Promise<ExtensionStorePage> => {
+      if (isUrlQuery) {
+        return { items: [], total: 0, offset, limit, hasMore: false }
+      }
+      if (isWindows) {
+        const loved = searchLovedExtensions(query)
+        const items = loved.slice(offset, offset + limit)
+        return {
+          items,
+          total: loved.length,
+          offset,
+          limit,
+          hasMore: offset + items.length < loved.length,
+        }
+      }
+      return window.tezbar.extensionSearchStore(query, { offset, limit })
+    },
+    [isUrlQuery, isWindows, query],
+  )
+
   const reload = useCallback(async () => {
     const requestId = loadRequestIdRef.current + 1
     loadRequestIdRef.current = requestId
     dispatchCatalog({ type: 'load-started', requestId })
     try {
-      const [installedList, storeList] = await Promise.all([
+      const [installedList, storePage] = await Promise.all([
         window.tezbar.extensionList(),
-        isUrlQuery
-          ? Promise.resolve([])
-          : isWindows
-            ? Promise.resolve(searchLovedExtensions(query))
-            : window.tezbar.extensionSearchStore(query),
+        loadStorePage(0, 25),
       ])
+      if (loadRequestIdRef.current !== requestId) return
       const normalizedInstalled = installedList.map((entry) => ({
         id: entry.id,
         name: entry.name,
@@ -283,16 +313,55 @@ export default function ExtensionsView({
         type: 'load-succeeded',
         requestId,
         installed: normalizedInstalled,
-        store: storeList,
+        store: storePage.items,
+        total: storePage.total,
+        hasMore: storePage.hasMore,
       })
     } catch (error) {
+      if (loadRequestIdRef.current !== requestId) return
       dispatchCatalog({
         type: 'load-failed',
         requestId,
         message: error instanceof Error ? error.message : 'Could not load extensions',
       })
     }
-  }, [isUrlQuery, isWindows, query])
+  }, [loadStorePage])
+
+  const loadMore = useCallback(
+    async (options?: { selectNext?: boolean }) => {
+      if (loadingMore || !hasMore || loading) return
+      const requestId = loadRequestIdRef.current
+      dispatchCatalog({ type: 'load-more-started' })
+      try {
+        const nextPage = await loadStorePage(store.length, 25)
+        if (loadRequestIdRef.current !== requestId) return
+        dispatchCatalog({
+          type: 'load-more-succeeded',
+          items: nextPage.items,
+          total: nextPage.total,
+          hasMore: nextPage.hasMore,
+          selectNext: options?.selectNext,
+        })
+      } catch (error) {
+        if (loadRequestIdRef.current !== requestId) return
+        dispatchCatalog({
+          type: 'load-more-failed',
+          message: error instanceof Error ? error.message : 'Could not load more extensions',
+        })
+      }
+    },
+    [hasMore, loading, loadingMore, loadStorePage, store.length],
+  )
+
+  const handleListScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const { scrollTop, scrollHeight, clientHeight } = event.currentTarget
+      if (scrollHeight - (scrollTop + clientHeight) < 250 && hasMore && !loadingMore && !loading) {
+        void loadMore()
+      }
+    },
+    [hasMore, loadingMore, loading, loadMore],
+  )
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -415,13 +484,32 @@ export default function ExtensionsView({
       if (store.length === 0) return
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        const next = Math.min(selectedIndex + 1, store.length - 1)
+        if (selectedIndex + 1 >= store.length) {
+          if (hasMore) {
+            void loadMore({ selectNext: true })
+          } else {
+            // Infinite loop: loop back to top
+            dispatchCatalog({ type: 'selected', id: store[0]?.id ?? null, follow: true })
+          }
+          return
+        }
+
+        const next = selectedIndex + 1
         dispatchCatalog({ type: 'selected', id: store[next]?.id ?? null, follow: true })
+        if (hasMore && !loadingMore && next >= store.length - 5) {
+          void loadMore()
+        }
         return
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault()
-        const next = Math.max(selectedIndex - 1, 0)
+        if (selectedIndex <= 0) {
+          // Infinite loop: loop back to bottom
+          const next = store.length - 1
+          dispatchCatalog({ type: 'selected', id: store[next]?.id ?? null, follow: true })
+          return
+        }
+        const next = selectedIndex - 1
         dispatchCatalog({ type: 'selected', id: store[next]?.id ?? null, follow: true })
         return
       }
@@ -432,7 +520,18 @@ export default function ExtensionsView({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [installRepository, onBack, repository, runInstallAction, selected, selectedIndex, store])
+  }, [
+    hasMore,
+    installRepository,
+    loadingMore,
+    loadMore,
+    onBack,
+    repository,
+    runInstallAction,
+    selected,
+    selectedIndex,
+    store,
+  ])
 
   const screenshots = selected?.screenshotUrls?.filter(Boolean).slice(0, 4) ?? []
   // Show the complete command list. Some extensions (including Color Picker)
@@ -482,7 +581,9 @@ export default function ExtensionsView({
             <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">
               {isWindows ? 'Loved by Tezbar' : 'Store'}
             </span>
-            <span className="text-[10px] text-ink-4">{loading ? 'Loading…' : isUrlQuery ? 'URL' : store.length}</span>
+            <span className="text-[10px] text-ink-4">
+              {loading ? 'Loading…' : isUrlQuery ? 'URL' : total.toLocaleString()}
+            </span>
           </div>
           {store.length === 0 ? (
             <div className="flex min-h-0 flex-1 items-center justify-center text-center">
@@ -506,6 +607,7 @@ export default function ExtensionsView({
               className="min-h-0 flex-1 overflow-y-auto pr-0.5"
               listClassName="space-y-0.5"
               highlightClassName="bg-white/[0.075] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.20)]"
+              onScroll={handleListScroll}
             >
               {store.map((ext) => {
                 const isSelected = selected?.id === ext.id
@@ -537,6 +639,11 @@ export default function ExtensionsView({
                   </li>
                 )
               })}
+              {loadingMore ? (
+                <li className="flex items-center justify-center py-2 text-[10px] text-ink-4">
+                  Loading more…
+                </li>
+              ) : null}
             </GlideList>
           )}
         </aside>

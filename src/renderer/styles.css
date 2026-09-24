@@ -50,9 +50,31 @@
     --c-success: 52 211 153;
     --c-danger: 248 113 113;
     --c-warning: 251 191 36;
+    --c-theme-line: 255 255 255;
+    --c-theme-control: 255 255 255;
+    --c-theme-control-hover: 255 255 255;
 
     /* Shadows intentionally omitted — the design relies on 1px inset
        borders for edge definition, not drop shadows. */
+  }
+
+  :root[data-theme='white'] {
+    --c-shell: 244 246 250;
+    --c-panel: 255 255 255;
+    --c-row: 255 255 255;
+    --c-text-1: 28 30 38;
+    --c-text-2: 67 70 82;
+    --c-text-3: 104 108 122;
+    --c-text-4: 139 143 157;
+    --c-accent: 99 102 241;
+    --c-accent-strong: 79 70 229;
+    --c-success: 5 150 105;
+    --c-danger: 220 38 38;
+    --c-warning: 217 119 6;
+    --c-theme-line: 15 23 42;
+    --c-theme-control: 241 245 249;
+    --c-theme-control-hover: 226 232 240;
+    color-scheme: light;
   }
 
   html,

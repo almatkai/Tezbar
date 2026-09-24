@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tezbar</title>
+    <script>
+      // Apply the saved theme before the first paint to avoid a dark flash.
+      ;(() => {
+        try {
+          const stored = localStorage.getItem('tezbar:theme')
+          const preference = stored === 'white' || stored === 'dark' || stored === 'system' ? stored : 'system'
+          const resolved = preference === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'white')
+            : preference
+          document.documentElement.dataset.theme = resolved
+          document.documentElement.style.colorScheme = resolved
+        } catch {
+          document.documentElement.dataset.theme = 'dark'
+        }
+      })()
+    </script>
+
     <!-- Fonts: Tezbar intentionally does not load web fonts from a CDN. If the
          Geist/Geist Mono families are installed locally, they are used; otherwise
          the CSS falls back to the system font stack. This keeps startup fast,

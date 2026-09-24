@@ -13855,6 +13855,44 @@ var init_indexDb = __esm({
 });
 
 // src/main/search/providers/appsProvider.ts
+function readAppBundleIdentifier(appPath) {
+  if (process.platform !== "darwin") return void 0;
+  try {
+    const infoPlistPath = (0, import_node_path16.join)(appPath, "Contents", "Info.plist");
+    const stat2 = (0, import_node_fs15.statSync)(infoPlistPath);
+    const cached = bundleIdCache.get(infoPlistPath);
+    if (cached && cached.mtimeMs === stat2.mtimeMs) {
+      return cached.bundleId;
+    }
+    let bundleId;
+    const buf = (0, import_node_fs15.readFileSync)(infoPlistPath);
+    if (!buf.subarray(0, 8).includes(Buffer.from("bplist"))) {
+      const text3 = buf.toString("utf8");
+      const match = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/.exec(text3);
+      if (match) {
+        bundleId = match[1].trim();
+      }
+    }
+    if (!bundleId) {
+      try {
+        const res = (0, import_node_child_process11.execFileSync)(
+          "/usr/bin/plutil",
+          ["-extract", "CFBundleIdentifier", "raw", "-o", "-", infoPlistPath],
+          {
+            encoding: "utf8",
+            timeout: 1e3
+          }
+        ).trim();
+        if (res) bundleId = res;
+      } catch {
+      }
+    }
+    bundleIdCache.set(infoPlistPath, { mtimeMs: stat2.mtimeMs, bundleId });
+    return bundleId;
+  } catch {
+    return void 0;
+  }
+}
 function listApplications() {
   if (process.platform === "win32") {
     if (windowsApplicationCache && Date.now() - windowsApplicationCache.collectedAt < 3e4) {
@@ -13912,7 +13950,7 @@ function listApplications() {
         const appId = item.AppID.trim();
         if (!name || !appId || seen2.has(name.toLowerCase())) continue;
         seen2.add(name.toLowerCase());
-        out2.push({ name, path: `shell:AppsFolder\\${appId}` });
+        out2.push({ name, path: `shell:AppsFolder\\${appId}`, windowsAppId: appId });
       }
     } catch {
     }
@@ -13937,9 +13975,11 @@ function listApplications() {
         const name = entry.replace(/\.app$/, "");
         if (seen.has(name)) continue;
         seen.add(name);
+        const appPath = (0, import_node_path16.join)(root, entry);
         out.push({
           name,
-          path: (0, import_node_path16.join)(root, entry)
+          path: appPath,
+          bundleId: readAppBundleIdentifier(appPath)
         });
       }
     } catch {
@@ -13947,7 +13987,7 @@ function listApplications() {
   }
   return out;
 }
-var import_node_fs15, import_node_child_process11, import_node_os5, import_node_path16, windowsApplicationCache, appsProvider;
+var import_node_fs15, import_node_child_process11, import_node_os5, import_node_path16, bundleIdCache, windowsApplicationCache, appsProvider;
 var init_appsProvider = __esm({
   "src/main/search/providers/appsProvider.ts"() {
     "use strict";
@@ -13955,6 +13995,7 @@ var init_appsProvider = __esm({
     import_node_child_process11 = require("node:child_process");
     import_node_os5 = require("node:os");
     import_node_path16 = require("node:path");
+    bundleIdCache = /* @__PURE__ */ new Map();
     appsProvider = {
       providerId: "apps",
       async buildDocuments() {
@@ -19147,7 +19188,8 @@ function coerceCatalogEntry(raw) {
     screenshotUrls: Array.isArray(raw.screenshotUrls) ? raw.screenshotUrls.filter((v) => typeof v === "string") : [],
     categories: Array.isArray(raw.categories) ? raw.categories.filter((v) => typeof v === "string") : [],
     platforms: Array.isArray(raw.platforms) ? raw.platforms.filter((v) => typeof v === "string") : [],
-    commands
+    commands,
+    installCount: typeof raw.installCount === "number" ? raw.installCount : typeof raw.install_count === "number" ? raw.install_count : void 0
   };
 }
 function getCatalogPath() {
@@ -19185,10 +19227,13 @@ function resolveInstalledExtensionPathForRaymes(name) {
   }
   return null;
 }
-function loadCatalogFromDisk() {
+function loadCatalogFromDisk(allowAnyVersion = false) {
   try {
     const data = fs3.readFileSync(getCatalogPath(), "utf-8");
     const parsed = JSON.parse(data);
+    if (!allowAnyVersion && typeof parsed.version === "number" && parsed.version < CATALOG_VERSION) {
+      return null;
+    }
     const entries = Array.isArray(parsed.entries) ? parsed.entries.map((entry) => coerceCatalogEntry(entry)).filter(Boolean) : [];
     if (entries.length === 0) return null;
     return {
@@ -19212,7 +19257,7 @@ async function getCatalogWithoutSharedRequest(forceRefresh = false) {
     return catalogCache.entries;
   }
   if (!forceRefresh) {
-    const diskCache2 = loadCatalogFromDisk();
+    const diskCache2 = loadCatalogFromDisk(false);
     if (diskCache2 && Date.now() - diskCache2.fetchedAt < CATALOG_TTL) {
       catalogCache = diskCache2;
       return diskCache2.entries;
@@ -19233,7 +19278,7 @@ async function getCatalogWithoutSharedRequest(forceRefresh = false) {
   } catch (apiError) {
     console.warn("API catalog fetch failed:", apiError?.message || apiError);
   }
-  const diskCache = loadCatalogFromDisk();
+  const diskCache = loadCatalogFromDisk(true);
   if (diskCache) {
     catalogCache = diskCache;
     console.log(`Extension catalog (disk cache): ${diskCache.entries.length} extensions from cache.`);
@@ -19846,18 +19891,6 @@ function resolveInstalledIconPath(extensionPath, icon) {
   const candidates = [path4.join(extensionPath, normalized), path4.join(extensionPath, "assets", normalized)];
   return candidates.find((candidate) => fs3.existsSync(candidate));
 }
-function readAppBundleIdentifier(appPath) {
-  const infoPlistPath = path4.join(appPath, "Contents", "Info.plist");
-  if (!fs3.existsSync(infoPlistPath)) return void 0;
-  try {
-    return (0, import_child_process2.execFileSync)("/usr/bin/plutil", ["-extract", "CFBundleIdentifier", "raw", "-o", "-", infoPlistPath], {
-      encoding: "utf8",
-      timeout: 1e3
-    }).trim() || void 0;
-  } catch {
-    return void 0;
-  }
-}
 function appPickerValue(name, appPath) {
   if (!fs3.existsSync(appPath)) return null;
   return {
@@ -19963,15 +19996,30 @@ function scoreCatalogEntrySearch(entry, query) {
   }
   return score;
 }
-async function searchExtensionCatalog(query) {
-  if (process.platform === "win32") return searchLovedExtensions(query);
+async function searchExtensionCatalog(query, options) {
+  const offset = Math.max(0, options?.offset ?? 0);
+  const limit = Math.max(1, options?.limit ?? 25);
+  if (process.platform === "win32") {
+    const loved = searchLovedExtensions(query);
+    const items2 = loved.slice(offset, offset + limit);
+    return {
+      items: items2,
+      total: loved.length,
+      offset,
+      limit,
+      hasMore: offset + items2.length < loved.length
+    };
+  }
   const q = String(query || "").trim().toLowerCase();
   const catalog = await getCatalog(false);
-  return catalog.map((entry) => {
+  const matched = catalog.map((entry) => {
     return { entry, score: scoreCatalogEntrySearch(entry, q) };
   }).filter(({ score }) => score > 0).sort((a, b) => {
     return b.score - a.score || (b.entry.installCount ?? 0) - (a.entry.installCount ?? 0) || a.entry.title.localeCompare(b.entry.title);
-  }).slice(0, 200).map(({ entry }) => ({
+  });
+  const total = matched.length;
+  const pageEntries = matched.slice(offset, offset + limit);
+  const items = pageEntries.map(({ entry }) => ({
     id: normalizeRaymesExtensionId(entry.name),
     name: entry.title || extensionNameFromSlug(entry.name),
     description: entry.description || "",
@@ -19987,6 +20035,13 @@ async function searchExtensionCatalog(query) {
     commands: entry.commands,
     owner: entry.author || void 0
   }));
+  return {
+    items,
+    total,
+    offset,
+    limit,
+    hasMore: offset + items.length < total
+  };
 }
 async function installRegistryExtension(extensionIdOrSlug) {
   const repository = parseGitHubRepositoryUrl(extensionIdOrSlug);
@@ -20171,6 +20226,7 @@ var init_extension_registry = __esm({
     init_bun_manager();
     init_lovedExtensions();
     init_extensionRepository();
+    init_appsProvider();
     extensionRegistryEvents = new import_events2.EventEmitter();
     extensionInstallJobs = /* @__PURE__ */ new Map();
     GITHUB_RAW = "https://raw.githubusercontent.com/raycast/extensions/main";
@@ -22352,6 +22408,11 @@ function createRaycastApi(ctx) {
     getPreferenceValues: () => readPreferences(ctx.packageRoot),
     getSelectedText: async () => "",
     getApplications: async () => listApplications(),
+    getFrontmostApplication: async () => {
+      const apps = listApplications();
+      return apps[0] ?? { name: "Tezbar", path: process.execPath };
+    },
+    getDefaultApplication: async () => null,
     runAppleScript: runAppleScript2,
     open: async (target) => {
       if (typeof target !== "string") return;
@@ -22903,13 +22964,26 @@ async function executeNoViewScript(extensionId, commandName2, scriptPath, argume
     throw new Error(`Unsupported runtime dependency: ${specifier}`);
   };
   const mod = { exports: {} };
+  let scriptSource = (0, import_node_fs22.readFileSync)(scriptPath, "utf8");
+  if (scriptPath.toLowerCase().includes("amphetamine")) {
+    scriptSource = scriptSource.replace(
+      /if\s*\(\s*isSessionActive\s*===\s*["']true["']\s*\)\s*\{[\s\S]*?toast\.title\s*=\s*["']A session is already running["'][\s\S]*?return\s+false;?\s*\}/g,
+      `if (isSessionActive === "true") {
+    await runAppleScript(\`
+    tell application "Amphetamine"
+        end session
+    end tell
+  \`);
+  }`
+    );
+  }
   const wrapper = new Function(
     "exports",
     "require",
     "module",
     "__filename",
     "__dirname",
-    (0, import_node_fs22.readFileSync)(scriptPath, "utf8")
+    scriptSource
   );
   wrapper(mod.exports, customRequire, mod, scriptPath, (0, import_node_path24.dirname)(scriptPath));
   const exported = mod.exports;
@@ -26313,11 +26387,26 @@ function resolveCommandEntry(packageRoot, commandName2, command3) {
   }
   return candidate;
 }
+function patchExtensionScript(entryPath, code) {
+  if (entryPath.toLowerCase().includes("amphetamine")) {
+    return code.replace(
+      /if\s*\(\s*isSessionActive\s*===\s*["']true["']\s*\)\s*\{[\s\S]*?toast\.title\s*=\s*["']A session is already running["'][\s\S]*?return\s+false;?\s*\}/g,
+      `if (isSessionActive === "true") {
+    await runAppleScript(\`
+    tell application "Amphetamine"
+        end session
+    end tell
+  \`);
+  }`
+    );
+  }
+  return code;
+}
 async function bundleCommand(entryPath, packageRoot) {
   if (entryPath.includes(`${(0, import_node_path30.join)(".sc-build", "")}`) || entryPath.includes("/.sc-build/")) {
     const prebuilt = (0, import_node_fs27.readFileSync)(entryPath, "utf8");
     if (!prebuilt.trim()) throw new Error(`Prebuilt extension bundle is empty: ${entryPath}`);
-    return prebuilt;
+    return patchExtensionScript(entryPath, prebuilt);
   }
   configurePackagedEsbuildBinary();
   const esbuild = await import("esbuild");
@@ -26363,7 +26452,7 @@ async function bundleCommand(entryPath, packageRoot) {
   if (!output) {
     throw new Error("esbuild did not produce output");
   }
-  return output;
+  return patchExtensionScript(entryPath, output);
 }
 function createJsxRuntimeShim() {
   const jsx = (type, props, key) => ({
@@ -27135,7 +27224,11 @@ function createRaycastApiShim(session2) {
               timeout: 3e3
             }
           );
-          const apps = stdout.trim().split("\n").filter((p) => p.endsWith(".app")).map((appPath) => ({ name: (0, import_node_path30.basename)(appPath, ".app"), path: appPath })).sort((a, b) => a.name.localeCompare(b.name));
+          const apps = stdout.trim().split("\n").filter((p) => p.endsWith(".app")).map((appPath) => ({
+            name: (0, import_node_path30.basename)(appPath, ".app"),
+            path: appPath,
+            bundleId: readAppBundleIdentifier(appPath)
+          })).sort((a, b) => a.name.localeCompare(b.name));
           console.log(`[getApplications] mdfind returned ${apps.length} applications`);
           return apps;
         } catch (err) {
@@ -27146,7 +27239,12 @@ function createRaycastApiShim(session2) {
             try {
               for (const entry of (0, import_node_fs27.readdirSync)(dir)) {
                 if (entry.endsWith(".app")) {
-                  apps.push({ name: (0, import_node_path30.basename)(entry, ".app"), path: (0, import_node_path30.join)(dir, entry) });
+                  const appPath = (0, import_node_path30.join)(dir, entry);
+                  apps.push({
+                    name: (0, import_node_path30.basename)(entry, ".app"),
+                    path: appPath,
+                    bundleId: readAppBundleIdentifier(appPath)
+                  });
                 }
               }
             } catch (dirErr) {
@@ -27189,15 +27287,31 @@ function createRaycastApiShim(session2) {
         return { name: "Tezbar", path: process.execPath };
       }
       try {
-        const script = 'tell application "System Events" to get name of first application process whose frontmost is true';
+        const script = `tell application "System Events"
+          set p to first process whose frontmost is true
+          set appPath to ""
+          try
+            set appPath to POSIX path of (application file of p as alias)
+          end try
+          return (name of p) & linefeed & (bundle identifier of p) & linefeed & appPath
+        end tell`;
         const { stdout } = await execFileAsync15("/usr/bin/osascript", ["-e", script], {
           timeout: 3e3
         });
-        const name = stdout.trim();
-        if (name) return { name, path: `/Applications/${name}.app` };
-        return { name: "Raymes", path: process.execPath };
+        const lines = stdout.trim().split("\n");
+        const name = lines[0]?.trim() || "";
+        const bundleId = lines[1]?.trim() || void 0;
+        const appPath = lines[2]?.trim() || (name ? `/Applications/${name}.app` : "");
+        if (name) {
+          return {
+            name,
+            path: appPath,
+            bundleId: bundleId || (appPath ? readAppBundleIdentifier(appPath) : void 0)
+          };
+        }
+        return { name: "Tezbar", path: process.execPath };
       } catch {
-        return { name: "Raymes", path: process.execPath };
+        return { name: "Tezbar", path: process.execPath };
       }
     },
     getDefaultApplication: async () => {
@@ -31927,12 +32041,12 @@ async function listModelsForProvider(id, signal, baseURLOverride, apiKeyOverride
   switch (id) {
     case "antigravity": {
       try {
-        const { existsSync: existsSync24, readFileSync: readFileSync22 } = await import("node:fs");
+        const { existsSync: existsSync24, readFileSync: readFileSync23 } = await import("node:fs");
         const { homedir: homedir14 } = await import("node:os");
         const path8 = await import("node:path");
         const storePath2 = path8.join(homedir14(), ".pi", "agent", "models-store.json");
         if (existsSync24(storePath2)) {
-          const raw = JSON.parse(readFileSync22(storePath2, "utf8"));
+          const raw = JSON.parse(readFileSync23(storePath2, "utf8"));
           const models = raw?.antigravity?.models;
           if (Array.isArray(models)) {
             const ids = models.map((m) => typeof m?.id === "string" ? m.id : "").filter(Boolean);
@@ -34439,10 +34553,25 @@ function registerIpcHandlers(getWindow, controls) {
     const { listInstalledRegistryExtensions: listInstalledRegistryExtensions2 } = await loadExtensionRegistry();
     return listInstalledRegistryExtensions2();
   });
-  ipcMain.handle("extension:search-store", async (_event, query) => {
-    const q = typeof query === "string" ? query : "";
+  ipcMain.handle("extension:search-store", async (_event, payload, maybeOptions) => {
+    let query = "";
+    let offset;
+    let limit;
+    if (typeof payload === "string") {
+      query = payload;
+      if (maybeOptions && typeof maybeOptions === "object") {
+        const opt = maybeOptions;
+        if (typeof opt.offset === "number") offset = opt.offset;
+        if (typeof opt.limit === "number") limit = opt.limit;
+      }
+    } else if (payload && typeof payload === "object") {
+      const body = payload;
+      if (typeof body.query === "string") query = body.query;
+      if (typeof body.offset === "number") offset = body.offset;
+      if (typeof body.limit === "number") limit = body.limit;
+    }
     const { searchExtensionCatalog: searchExtensionCatalog2 } = await loadExtensionRegistry();
-    return searchExtensionCatalog2(q);
+    return searchExtensionCatalog2(query, { offset, limit });
   });
   ipcMain.handle("extension:install", async (_event, extensionId) => {
     if (typeof extensionId !== "string" || !extensionId.trim()) {

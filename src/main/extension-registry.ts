@@ -33,6 +33,7 @@ import type { ExtensionManifest } from '../shared/extensions';
 import { searchLovedExtensions } from '../shared/lovedExtensions';
 import type { ExtensionRegistryCommand, InstalledRegistryExtension } from '../shared/extensionRuntime';
 import { parseGitHubRepositoryUrl, type GitHubRepositoryReference } from '../shared/extensionRepository';
+import { readAppBundleIdentifier } from './search/providers/appsProvider';
 
 export const extensionRegistryEvents = new EventEmitter();
 
@@ -415,6 +416,12 @@ function coerceCatalogEntry(raw: any): CatalogEntry | null {
     categories: Array.isArray(raw.categories) ? raw.categories.filter((v: any) => typeof v === 'string') : [],
     platforms: Array.isArray(raw.platforms) ? raw.platforms.filter((v: any) => typeof v === 'string') : [],
     commands,
+    installCount:
+      typeof raw.installCount === 'number'
+        ? raw.installCount
+        : typeof raw.install_count === 'number'
+          ? raw.install_count
+          : undefined,
   };
 }
 
@@ -463,10 +470,13 @@ function resolveInstalledExtensionPathForRaymes(name: string): string | null {
 
 // ─── Catalog: Disk Cache ────────────────────────────────────────────
 
-function loadCatalogFromDisk(): CatalogCache | null {
+function loadCatalogFromDisk(allowAnyVersion = false): CatalogCache | null {
   try {
     const data = fs.readFileSync(getCatalogPath(), 'utf-8');
     const parsed = JSON.parse(data) as Partial<CatalogCache>;
+    if (!allowAnyVersion && typeof parsed.version === 'number' && parsed.version < CATALOG_VERSION) {
+      return null;
+    }
     const entries = Array.isArray(parsed.entries)
       ? (parsed.entries.map((entry: any) => coerceCatalogEntry(entry)).filter(Boolean) as CatalogEntry[])
       : [];
@@ -498,7 +508,7 @@ async function getCatalogWithoutSharedRequest(forceRefresh = false): Promise<Cat
 
   // Disk cache
   if (!forceRefresh) {
-    const diskCache = loadCatalogFromDisk();
+    const diskCache = loadCatalogFromDisk(false);
     if (diskCache && Date.now() - diskCache.fetchedAt < CATALOG_TTL) {
       catalogCache = diskCache;
       return diskCache.entries;
@@ -525,7 +535,7 @@ async function getCatalogWithoutSharedRequest(forceRefresh = false): Promise<Cat
   }
 
   // FALLBACK: disk cache (even if expired)
-  const diskCache = loadCatalogFromDisk();
+  const diskCache = loadCatalogFromDisk(true);
   if (diskCache) {
     catalogCache = diskCache;
     console.log(`Extension catalog (disk cache): ${diskCache.entries.length} extensions from cache.`);
@@ -1377,21 +1387,6 @@ function resolveInstalledIconPath(extensionPath: string, icon: unknown): string 
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
-function readAppBundleIdentifier(appPath: string): string | undefined {
-  const infoPlistPath = path.join(appPath, 'Contents', 'Info.plist');
-  if (!fs.existsSync(infoPlistPath)) return undefined;
-  try {
-    return (
-      execFileSync('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', infoPlistPath], {
-        encoding: 'utf8',
-        timeout: 1000,
-      }).trim() || undefined
-    );
-  } catch {
-    return undefined;
-  }
-}
-
 function appPickerValue(name: string, appPath: string): Record<string, string> | null {
   if (!fs.existsSync(appPath)) return null;
   return {
@@ -1527,17 +1522,46 @@ export function scoreCatalogEntrySearch(entry: CatalogEntry, query: string): num
   return score;
 }
 
-export async function searchExtensionCatalog(query: string): Promise<ExtensionManifest[]> {
+export interface ExtensionCatalogSearchOptions {
+  offset?: number;
+  limit?: number;
+}
+
+export interface ExtensionCatalogPage {
+  items: ExtensionManifest[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export async function searchExtensionCatalog(
+  query: string,
+  options?: ExtensionCatalogSearchOptions,
+): Promise<ExtensionCatalogPage> {
+  const offset = Math.max(0, options?.offset ?? 0);
+  const limit = Math.max(1, options?.limit ?? 25);
+
   // The Raycast catalog contains macOS-first extensions and is not the right
   // discovery surface on Windows. Keep Windows discovery deterministic and
   // limited to repositories Tezbar has chosen to recommend.
-  if (process.platform === 'win32') return searchLovedExtensions(query);
+  if (process.platform === 'win32') {
+    const loved = searchLovedExtensions(query);
+    const items = loved.slice(offset, offset + limit);
+    return {
+      items,
+      total: loved.length,
+      offset,
+      limit,
+      hasMore: offset + items.length < loved.length,
+    };
+  }
 
   const q = String(query || '')
     .trim()
     .toLowerCase();
   const catalog = await getCatalog(false);
-  return catalog
+  const matched = catalog
     .map((entry) => {
       return { entry, score: scoreCatalogEntrySearch(entry, q) };
     })
@@ -1548,24 +1572,35 @@ export async function searchExtensionCatalog(query: string): Promise<ExtensionMa
         (b.entry.installCount ?? 0) - (a.entry.installCount ?? 0) ||
         a.entry.title.localeCompare(b.entry.title)
       );
-    })
-    .slice(0, 200)
-    .map(({ entry }) => ({
-      id: normalizeRaymesExtensionId(entry.name),
-      name: entry.title || extensionNameFromSlug(entry.name),
-      description: entry.description || '',
-      author: entry.author || entry.contributors?.[0] || 'Raycast Community',
-      version: 'latest',
-      repository: `https://github.com/raycast/extensions/tree/main/extensions/${entry.name}`,
-      downloadCount: entry.installCount,
-      icon: entry.icon,
-      iconUrl: entry.iconUrl,
-      authorIconUrl: githubAvatarUrlForHandle(entry.author || entry.contributors?.[0]),
-      screenshotUrls: entry.screenshotUrls,
-      categories: entry.categories,
-      commands: entry.commands,
-      owner: entry.author || undefined,
-    }));
+    });
+
+  const total = matched.length;
+  const pageEntries = matched.slice(offset, offset + limit);
+
+  const items: ExtensionManifest[] = pageEntries.map(({ entry }) => ({
+    id: normalizeRaymesExtensionId(entry.name),
+    name: entry.title || extensionNameFromSlug(entry.name),
+    description: entry.description || '',
+    author: entry.author || entry.contributors?.[0] || 'Raycast Community',
+    version: 'latest',
+    repository: `https://github.com/raycast/extensions/tree/main/extensions/${entry.name}`,
+    downloadCount: entry.installCount,
+    icon: entry.icon,
+    iconUrl: entry.iconUrl,
+    authorIconUrl: githubAvatarUrlForHandle(entry.author || entry.contributors?.[0]),
+    screenshotUrls: entry.screenshotUrls,
+    categories: entry.categories,
+    commands: entry.commands,
+    owner: entry.author || undefined,
+  }));
+
+  return {
+    items,
+    total,
+    offset,
+    limit,
+    hasMore: offset + items.length < total,
+  };
 }
 
 export async function installRegistryExtension(extensionIdOrSlug: string): Promise<InstalledRegistryExtension> {

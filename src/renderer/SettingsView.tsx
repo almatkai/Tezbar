@@ -46,6 +46,7 @@ import {
 import { CurrencySettings } from './CurrencySettings'
 import ExtensionsSettingsTab from './ExtensionsSettingsTab'
 import { AppUpdateSettings } from './AppUpdateSettings'
+import { applyTezbarTheme, isTezbarThemePreference, TEZBAR_THEME_STORAGE_KEY, type TezbarThemePreference } from './theme'
 
 type SettingsTab =
   | 'general'
@@ -614,6 +615,10 @@ export default function SettingsView({
   nativeWindow?: boolean
 }): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
+  const [themePreference, setThemePreference] = useState<TezbarThemePreference>(() => {
+    const stored = window.localStorage.getItem(TEZBAR_THEME_STORAGE_KEY)
+    return isTezbarThemePreference(stored) ? stored : 'system'
+  })
   const [retentionSec, setRetentionSec] = useState('60')
   const [extensionRuntimeTimeoutMinutes, setExtensionRuntimeTimeoutMinutes] = useState('5')
   const [aiModeTimeoutMinutes, setAiModeTimeoutMinutes] = useState('5')
@@ -1910,21 +1915,45 @@ export default function SettingsView({
                 </div>
               ) : null}
               <Divider />
-              <SettingsRow label="Appearance">
-                <div className="flex gap-3">
-                  {['Light', 'Dark', 'System'].map((mode) => (
+              <SettingsRow
+                label="Appearance"
+                detail="Choose Tezbar's color theme. System follows your device setting."
+              >
+                <div className="flex gap-3" role="group" aria-label="Color theme">
+                  {(
+                    [
+                      { id: 'white', label: 'White' },
+                      { id: 'dark', label: 'Dark' },
+                      { id: 'system', label: 'System' },
+                    ] as const
+                  ).map((mode) => (
                     <button
-                      key={mode}
+                      key={mode.id}
                       type="button"
+                      aria-pressed={themePreference === mode.id}
+                      onClick={() => {
+                        setThemePreference(mode.id)
+                        applyTezbarTheme(mode.id)
+                        window.localStorage.setItem(TEZBAR_THEME_STORAGE_KEY, mode.id)
+                      }}
                       className={cx(
                         'flex h-[58px] w-[72px] flex-col items-center justify-center gap-1 rounded-tezbar-row border text-[12px] font-semibold transition',
-                        mode === 'System'
-                          ? 'border-accent/70 bg-white/[0.08] text-ink-1'
-                          : 'border-white/10 bg-white/[0.035] text-ink-3 hover:text-ink-1'
+                        themePreference === mode.id
+                          ? 'border-accent/70 bg-accent/10 text-ink-1'
+                          : 'border-theme-line bg-theme-control text-ink-3 hover:bg-theme-control-hover hover:text-ink-1'
                       )}
                     >
-                      <span className="h-6 w-6 rounded-full border border-current" />
-                      {mode}
+                      <span
+                        className={cx(
+                          'h-6 w-6 rounded-full border',
+                          mode.id === 'white'
+                            ? 'border-slate-300 bg-white'
+                            : mode.id === 'dark'
+                              ? 'border-slate-600 bg-slate-950'
+                              : 'border-slate-400 bg-gradient-to-br from-white via-slate-200 to-slate-900'
+                        )}
+                      />
+                      {mode.label}
                     </button>
                   ))}
                 </div>

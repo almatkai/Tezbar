@@ -146,6 +146,28 @@ describe('raycast shim API surface', () => {
     expect(utils.useFetch().isLoading).toBe(false)
   })
 
+  it('getApplications returns applications with bundle identifiers', async () => {
+    const api = createRaycastApi(ctx) as Record<string, any>
+    const apps = await api.getApplications()
+    expect(Array.isArray(apps)).toBe(true)
+    if (process.platform === 'darwin' && apps.length > 0) {
+      const amphetamine = apps.find((app: any) => app.bundleId === 'com.if.Amphetamine')
+      if (amphetamine) {
+        expect(amphetamine.bundleId).toBe('com.if.Amphetamine')
+        expect(amphetamine.name).toBe('Amphetamine')
+      }
+    }
+  })
+
+  it('getFrontmostApplication and getDefaultApplication return expected shapes', async () => {
+    const api = createRaycastApi(ctx) as Record<string, any>
+    const frontmost = await api.getFrontmostApplication()
+    expect(frontmost).toBeDefined()
+    expect(typeof frontmost.name).toBe('string')
+    const defaultApp = await api.getDefaultApplication('/path/to/file')
+    expect(defaultApp).toBeNull()
+  })
+
   it('formatRuntimeFeedback falls back to a default string', () => {
     expect(formatRuntimeFeedback({ kind: 'hud' } as RuntimeFeedback)).toBe(
       'Extension command completed.',

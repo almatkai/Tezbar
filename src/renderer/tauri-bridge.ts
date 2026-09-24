@@ -155,7 +155,8 @@ export function initTauriBridge(): void {
     getExtensionInstallError: (extensionId: string) =>
       callBackend('extensions:install-error', extensionId),
     extensionList: () => callBackend('extension:list'),
-    extensionSearchStore: (query: string) => callBackend('extension:search-store', query),
+    extensionSearchStore: (query: string, options?: { offset?: number; limit?: number }) =>
+      callBackend('extension:search-store', { query, ...options }),
     extensionInstall: (extensionId: string) => callBackend('extension:install', extensionId),
     extensionUninstall: (extensionId: string) => callBackend('extension:uninstall', extensionId),
     extensionRunCommand: (payload: any) => callBackend('extension:run-command', payload),

@@ -482,6 +482,7 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
   const [selected, setSelected] = useState(0)
   const [cfg, setCfg] = useState<LlmConfigRecord>({})
   const [statuses, setStatuses] = useState<ProviderConnectionStatuses>({
+    antigravity: false,
     openai: false,
     deepseek: false,
     'openai-compatible': false,

@@ -39,6 +39,11 @@ export default {
           DEFAULT: 'rgb(var(--c-accent) / <alpha-value>)',
           strong: 'rgb(var(--c-accent-strong) / <alpha-value>)',
         },
+        theme: {
+          line: 'rgb(var(--c-theme-line) / <alpha-value>)',
+          control: 'rgb(var(--c-theme-control) / <alpha-value>)',
+          'control-hover': 'rgb(var(--c-theme-control-hover) / <alpha-value>)',
+        },
       },
       transitionTimingFunction: {
         'out-expo': 'cubic-bezier(0.22, 1, 0.36, 1)',

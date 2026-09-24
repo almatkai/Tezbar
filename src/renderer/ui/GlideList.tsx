@@ -30,6 +30,7 @@ export function GlideList({
   className,
   listClassName,
   highlightClassName,
+  onScroll,
 }: {
   children: ReactNode
   selectedIndex: number
@@ -38,6 +39,7 @@ export function GlideList({
   className?: string
   listClassName?: string
   highlightClassName?: string
+  onScroll?: (event: React.UIEvent<HTMLDivElement>) => void
 }): JSX.Element {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
@@ -114,7 +116,7 @@ export function GlideList({
   }, [followSelected, selectedIndex])
 
   return (
-    <div ref={wrapperRef} className={`relative ${className ?? ''}`}>
+    <div ref={wrapperRef} onScroll={onScroll} className={`relative ${className ?? ''}`}>
       <div
         aria-hidden
         className={`glide-highlight ${highlightClassName ?? ''}`}
