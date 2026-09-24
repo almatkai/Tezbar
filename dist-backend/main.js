@@ -37,7 +37,7 @@ function runDetached(command3, args, description) {
   });
 }
 function fileClipboardJavaScript(paths) {
-  const uniquePaths = Array.from(new Set(paths.map((path7) => path7.trim()).filter(Boolean)));
+  const uniquePaths = Array.from(new Set(paths.map((path8) => path8.trim()).filter(Boolean)));
   if (uniquePaths.length === 0) return null;
   return [
     'ObjC.import("AppKit")',
@@ -100,7 +100,7 @@ function parseClipboardSnapshot(raw) {
     const rawPaths = Array.isArray(parsed.filePaths) ? parsed.filePaths : typeof parsed.filePaths === "string" ? [parsed.filePaths] : [];
     return {
       text: typeof parsed.text === "string" ? parsed.text : "",
-      filePaths: Array.from(new Set(rawPaths.map(String).map((path7) => path7.trim()).filter(Boolean))),
+      filePaths: Array.from(new Set(rawPaths.map(String).map((path8) => path8.trim()).filter(Boolean))),
       hasImage: parsed.hasImage === true,
       changeCount: Number.isFinite(Number(parsed.changeCount)) ? Number(parsed.changeCount) : 0
     };
@@ -343,11 +343,11 @@ var init_desktop_runtime = __esm({
         return "";
       },
       readImage() {
-        const path7 = (0, import_node_path.join)(app.getPath("temp"), "tezbar-clipboard-current.png");
+        const path8 = (0, import_node_path.join)(app.getPath("temp"), "tezbar-clipboard-current.png");
         try {
-          (0, import_node_fs.rmSync)(path7, { force: true });
+          (0, import_node_fs.rmSync)(path8, { force: true });
           if (process.platform === "darwin") {
-            (0, import_node_child_process.execFileSync)("osascript", ["-e", clipboardImageAppleScript(path7)], { stdio: "ignore" });
+            (0, import_node_child_process.execFileSync)("osascript", ["-e", clipboardImageAppleScript(path8)], { stdio: "ignore" });
           } else if (process.platform === "win32") {
             const script = '$ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; if(![System.Windows.Forms.Clipboard]::ContainsImage()){throw "Clipboard does not contain an image"}; $image=[System.Windows.Forms.Clipboard]::GetImage(); try{$image.Save($env:TEZBAR_CLIPBOARD_IMAGE,[System.Drawing.Imaging.ImageFormat]::Png)}finally{$image.Dispose()}';
             (0, import_node_child_process.execFileSync)(
@@ -356,13 +356,13 @@ var init_desktop_runtime = __esm({
               {
                 encoding: "utf8",
                 windowsHide: true,
-                env: { ...process.env, TEZBAR_CLIPBOARD_IMAGE: path7 }
+                env: { ...process.env, TEZBAR_CLIPBOARD_IMAGE: path8 }
               }
             );
           } else {
             return makeNativeImage();
           }
-          return makeNativeImage(path7);
+          return makeNativeImage(path8);
         } catch {
           return makeNativeImage();
         }
@@ -495,8 +495,8 @@ var init_desktop_runtime = __esm({
       }
     };
     nativeImage = {
-      createFromPath(path7) {
-        return makeNativeImage(path7);
+      createFromPath(path8) {
+        return makeNativeImage(path8);
       },
       createFromDataURL(_dataUrl) {
         return makeNativeImage();
@@ -614,7 +614,7 @@ var init_better_sqlite3_shim = __esm({
         "/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib",
         "/usr/local/opt/sqlite/lib/libsqlite3.dylib",
         "/usr/local/opt/sqlite3/lib/libsqlite3.dylib"
-      ].filter((path7) => Boolean(path7 && (0, import_node_fs2.existsSync)(path7)));
+      ].filter((path8) => Boolean(path8 && (0, import_node_fs2.existsSync)(path8)));
       const sqliteLibrary = sqliteCandidates[0];
       if (sqliteLibrary) {
         try {
@@ -658,8 +658,8 @@ var init_better_sqlite3_shim = __esm({
         const stmt = this._db.prepare(sql);
         return new StatementShim(stmt);
       }
-      loadExtension(path7) {
-        this._db.loadExtension(path7);
+      loadExtension(path8) {
+        this._db.loadExtension(path8);
       }
       transaction(fn) {
         return this._db.transaction(fn);
@@ -861,8 +861,8 @@ function documentSvg(label, color) {
   const safeLabel = label.replace(/[&<>"']/g, "");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path fill="#f5f6f8" d="M13 5h25l13 13v41H13z"/><path fill="#d9dde5" d="M38 5v14h13z"/><rect x="17" y="36" width="30" height="17" rx="4" fill="${color}"/><text x="32" y="48" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="10" font-weight="800" fill="white">${safeLabel}</text></svg>`;
 }
-function fileIconDataUrl(path7) {
-  const extension = (0, import_node_path5.extname)(path7).toLowerCase();
+function fileIconDataUrl(path8) {
+  const extension = (0, import_node_path5.extname)(path8).toLowerCase();
   const style = FILE_ICON_STYLES[extension];
   if (style) return svgDataUrl(documentSvg(style.label, style.color));
   if (IMAGE_EXTENSIONS.has(extension)) return svgDataUrl(documentSvg("IMG", "#8b6fc0"));
@@ -871,23 +871,23 @@ function fileIconDataUrl(path7) {
     documentSvg(extension ? extension.slice(1, 5).toUpperCase() : "FILE", "#7d8798")
   );
 }
-function imageFileDataUrl(path7) {
-  if (!(0, import_node_fs5.existsSync)(path7)) return void 0;
-  const mimeType = (0, import_node_path5.extname)(path7).toLowerCase() === ".svg" ? "image/svg+xml" : (0, import_node_path5.extname)(path7).toLowerCase() === ".jpg" || (0, import_node_path5.extname)(path7).toLowerCase() === ".jpeg" ? "image/jpeg" : (0, import_node_path5.extname)(path7).toLowerCase() === ".webp" ? "image/webp" : "image/png";
+function imageFileDataUrl(path8) {
+  if (!(0, import_node_fs5.existsSync)(path8)) return void 0;
+  const mimeType = (0, import_node_path5.extname)(path8).toLowerCase() === ".svg" ? "image/svg+xml" : (0, import_node_path5.extname)(path8).toLowerCase() === ".jpg" || (0, import_node_path5.extname)(path8).toLowerCase() === ".jpeg" ? "image/jpeg" : (0, import_node_path5.extname)(path8).toLowerCase() === ".webp" ? "image/webp" : "image/png";
   try {
-    return `data:${mimeType};base64,${(0, import_node_fs5.readFileSync)(path7).toString("base64")}`;
+    return `data:${mimeType};base64,${(0, import_node_fs5.readFileSync)(path8).toString("base64")}`;
   } catch {
     return void 0;
   }
 }
-async function generateNativeFileIconDataUrl(path7) {
-  if (nativeFileIconCache.has(path7)) return nativeFileIconCache.get(path7) ?? void 0;
-  if (!(0, import_node_fs5.existsSync)(path7)) return void 0;
+async function generateNativeFileIconDataUrl(path8) {
+  if (nativeFileIconCache.has(path8)) return nativeFileIconCache.get(path8) ?? void 0;
+  if (!(0, import_node_fs5.existsSync)(path8)) return void 0;
   try {
-    const stats = (0, import_node_fs5.statSync)(path7);
-    const cacheKey2 = (0, import_node_crypto2.createHash)("sha1").update(`${path7}:${stats.mtimeMs}:${stats.size}`).digest("hex");
+    const stats = (0, import_node_fs5.statSync)(path8);
+    const cacheKey2 = (0, import_node_crypto2.createHash)("sha1").update(`${path8}:${stats.mtimeMs}:${stats.size}`).digest("hex");
     const outputDir = (0, import_node_path5.join)(app.getPath("userData"), "icon-cache", "files", cacheKey2);
-    const outputPath = (0, import_node_path5.join)(outputDir, `${(0, import_node_path5.basename)(path7)}.png`);
+    const outputPath = (0, import_node_path5.join)(outputDir, `${(0, import_node_path5.basename)(path8)}.png`);
     (0, import_node_fs5.mkdirSync)(outputDir, { recursive: true });
     if (!(0, import_node_fs5.existsSync)(outputPath)) {
       if (process.platform === "win32") {
@@ -905,13 +905,13 @@ async function generateNativeFileIconDataUrl(path7) {
             windowsHide: true,
             env: {
               ...process.env,
-              TEZBAR_ICON_SOURCE: path7,
+              TEZBAR_ICON_SOURCE: path8,
               TEZBAR_ICON_DEST: outputPath
             }
           }
         );
       } else {
-        await execFileAsync3("/usr/bin/qlmanage", ["-t", "-i", "-s", "64", "-o", outputDir, path7], {
+        await execFileAsync3("/usr/bin/qlmanage", ["-t", "-i", "-s", "64", "-o", outputDir, path8], {
           timeout: 3e3,
           // Quick Look occasionally ignores the default SIGTERM timeout and
           // survives as an orphan. It is disposable thumbnail work, so enforce
@@ -921,27 +921,27 @@ async function generateNativeFileIconDataUrl(path7) {
       }
     }
     if (!(0, import_node_fs5.existsSync)(outputPath)) {
-      nativeFileIconCache.set(path7, null);
+      nativeFileIconCache.set(path8, null);
       return void 0;
     }
     const dataUrl = `data:image/png;base64,${(0, import_node_fs5.readFileSync)(outputPath).toString("base64")}`;
-    nativeFileIconCache.set(path7, dataUrl);
+    nativeFileIconCache.set(path8, dataUrl);
     return dataUrl;
   } catch {
-    nativeFileIconCache.set(path7, null);
+    nativeFileIconCache.set(path8, null);
     return void 0;
   }
 }
-async function nativeFileIconDataUrl(path7) {
-  if (nativeFileIconCache.has(path7)) return nativeFileIconCache.get(path7) ?? void 0;
-  const pending = nativeFileIconRequests.get(path7);
+async function nativeFileIconDataUrl(path8) {
+  if (nativeFileIconCache.has(path8)) return nativeFileIconCache.get(path8) ?? void 0;
+  const pending = nativeFileIconRequests.get(path8);
   if (pending) return pending;
-  const request = withNativeFileIconSlot(() => generateNativeFileIconDataUrl(path7));
-  nativeFileIconRequests.set(path7, request);
+  const request = withNativeFileIconSlot(() => generateNativeFileIconDataUrl(path8));
+  nativeFileIconRequests.set(path8, request);
   try {
     return await request;
   } finally {
-    nativeFileIconRequests.delete(path7);
+    nativeFileIconRequests.delete(path8);
   }
 }
 var import_node_child_process3, import_node_crypto2, import_node_fs5, import_node_path5, import_node_util3, execFileAsync3, FILE_ICON_STYLES, IMAGE_EXTENSIONS, ARCHIVE_EXTENSIONS, nativeFileIconCache, nativeFileIconRequests, nativeFileIconWaiters, NATIVE_FILE_ICON_CONCURRENCY, activeNativeFileIcons, folderIconDataUrl;
@@ -1034,11 +1034,12 @@ function readRawConfig() {
   }
 }
 function flushConfig() {
-  if (!configCache || !writeTimeout) return;
+  if (!configCache || !configDirty) return;
   try {
     (0, import_node_fs6.mkdirSync)((0, import_node_path7.dirname)(OPENRAY_CONFIG_PATH), { recursive: true });
     (0, import_node_fs6.writeFileSync)(OPENRAY_CONFIG_PATH, `${JSON.stringify(configCache, null, 2)}
 `, "utf-8");
+    configDirty = false;
     if (writeTimeout) {
       clearTimeout(writeTimeout);
       writeTimeout = null;
@@ -1050,11 +1051,12 @@ function flushConfig() {
 function writeConfigPatch(patch) {
   const current = readRawConfig();
   configCache = { ...current, ...patch };
-  if (writeTimeout) clearTimeout(writeTimeout);
-  writeTimeout = setTimeout(() => {
-    flushConfig();
+  configDirty = true;
+  if (writeTimeout) {
+    clearTimeout(writeTimeout);
     writeTimeout = null;
-  }, 1e3);
+  }
+  flushConfig();
 }
 function getUiStateRetentionMs() {
   const raw = readRawConfig();
@@ -1150,7 +1152,7 @@ function getDisabledCommands() {
 function setDisabledCommands(disabled) {
   writeConfigPatch({ disabledCommands: disabled });
 }
-var import_node_fs6, import_node_os2, import_node_path7, OPENRAY_CONFIG_DIR, OPENRAY_CONFIG_PATH, DEFAULT_RAYMES_HOTKEY, configCache, writeTimeout;
+var import_node_fs6, import_node_os2, import_node_path7, OPENRAY_CONFIG_DIR, OPENRAY_CONFIG_PATH, DEFAULT_RAYMES_HOTKEY, configCache, writeTimeout, configDirty;
 var init_configStore = __esm({
   "src/main/llm/configStore.ts"() {
     "use strict";
@@ -1163,6 +1165,7 @@ var init_configStore = __esm({
     DEFAULT_RAYMES_HOTKEY = process.platform === "win32" ? "Control+Space" : "Alt+Space";
     configCache = null;
     writeTimeout = null;
+    configDirty = false;
   }
 });
 
@@ -1401,6 +1404,7 @@ var init_aiProviders = __esm({
     RECOMMENDED_AI_MODEL = {
       openai: "gpt-5.4-mini",
       deepseek: "deepseek-v4-flash",
+      antigravity: "gemini-3.8-flash",
       "openai-compatible": "gpt-5.4-mini",
       tokenrouter: "moonshotai/kimi-k3-free",
       gemini: "gemini-3.5-flash",
@@ -1410,6 +1414,16 @@ var init_aiProviders = __esm({
       opencode: "opencode/big-pickle"
     };
     DEFAULT_PROVIDER_MODELS = {
+      antigravity: [
+        { id: "gemini-3.8-flash", capabilities: ["vision", "thinking", "tools"], contextWindow: 1048576 },
+        { id: "gemini-3.7-flash", capabilities: ["vision", "thinking", "tools"], contextWindow: 1048576 },
+        { id: "gemini-3.5-flash", capabilities: ["vision", "thinking", "tools"], contextWindow: 1048576 },
+        { id: "gemini-3.1-pro", capabilities: ["vision", "thinking", "tools"], contextWindow: 1048576 },
+        { id: "gemini-2.5-pro", capabilities: ["vision", "thinking", "tools"], contextWindow: 1048576 },
+        { id: "claude-sonnet-4-6", capabilities: ["vision", "thinking", "tools"], contextWindow: 2e5 },
+        { id: "claude-opus-4-6", capabilities: ["vision", "thinking", "tools"], contextWindow: 25e4 },
+        { id: "gpt-oss-120b", capabilities: ["thinking", "tools"], contextWindow: 131072 }
+      ],
       openai: [
         { id: "gpt-5.5", capabilities: ["vision", "thinking", "tools"], contextWindow: 105e4 },
         { id: "gpt-5.4", capabilities: ["vision", "thinking", "tools"], contextWindow: 105e4 },
@@ -1714,15 +1728,19 @@ var openai_exports = {};
 __export(openai_exports, {
   OpenAIProvider: () => OpenAIProvider
 });
-function trimSlash(url) {
-  return url.replace(/\/+$/, "");
+function normalizeBaseUrl(url) {
+  let cleaned = url.trim().replace(/\/+$/, "");
+  cleaned = cleaned.replace(/^(https?:\/\/)0\.0\.0\.0(?::(\d+))?/, (_match, proto, port) => {
+    return `${proto}127.0.0.1${port ? `:${port}` : ""}`;
+  });
+  return cleaned;
 }
 function chatCompletionsUrl(baseURL) {
-  const base = trimSlash(baseURL);
+  const base = normalizeBaseUrl(baseURL);
   return base.endsWith("/chat/completions") ? base : `${base}/chat/completions`;
 }
 function modelsUrl(baseURL) {
-  const base = trimSlash(baseURL);
+  const base = normalizeBaseUrl(baseURL);
   if (base.endsWith("/chat/completions")) {
     return `${base.slice(0, -"/chat/completions".length)}/models`;
   }
@@ -1760,21 +1778,34 @@ var init_openai = __esm({
       providerLabel;
       name = "openai";
       async chat(messages, tools, options) {
-        const url = chatCompletionsUrl(this.baseURL);
+        const cleanBase = normalizeBaseUrl(this.baseURL);
+        if (!cleanBase) {
+          throw new Error(
+            formatLlmErrorMessage(
+              `Base URL is not configured for ${this.providerLabel}. Open Settings > AI and enter the endpoint Base URL (e.g. http://127.0.0.1:8080/v1).`,
+              this.providerLabel
+            )
+          );
+        }
+        const url = chatCompletionsUrl(cleanBase);
         const body = {
           model: this.model,
           messages: toOpenAIMessages2(messages),
-          stream: true
+          stream: true,
+          max_tokens: 8192
         };
         if (tools?.length) {
           body.tools = toOpenAITools2(tools);
         }
+        const headers = {
+          "Content-Type": "application/json"
+        };
+        if (this.apiKey.trim()) {
+          headers.Authorization = `Bearer ${this.apiKey.trim()}`;
+        }
         const res = await fetch(url, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${this.apiKey}`
-          },
+          headers,
           body: JSON.stringify(body),
           signal: options?.signal
         });
@@ -1790,15 +1821,21 @@ var init_openai = __esm({
         return parseOpenAISSE(res, options?.signal);
       }
       async isAvailable() {
-        if (!this.apiKey.trim()) return false;
+        const normBase = normalizeBaseUrl(this.baseURL);
+        if (!normBase) return false;
         try {
-          const url = modelsUrl(this.baseURL);
+          const url = modelsUrl(normBase);
+          const headers = {};
+          if (this.apiKey.trim()) {
+            headers.Authorization = `Bearer ${this.apiKey.trim()}`;
+          }
           const res = await fetch(url, {
             method: "GET",
-            headers: { Authorization: `Bearer ${this.apiKey}` },
+            headers,
             signal: AbortSignal.timeout(4e3)
           });
-          return res.ok;
+          if (res.ok) return true;
+          return res.status < 500;
         } catch {
           return false;
         }
@@ -3253,12 +3290,12 @@ var init_path = __esm({
   "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs"() {
     init_error();
     EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
-    createPathTagFunction = (pathEncoder = encodeURIPath) => function path7(statics, ...params) {
+    createPathTagFunction = (pathEncoder = encodeURIPath) => function path8(statics, ...params) {
       if (statics.length === 1)
         return statics[0];
       let postPath = false;
       const invalidSegments = [];
-      const path8 = statics.reduce((previousValue, currentValue, index) => {
+      const path9 = statics.reduce((previousValue, currentValue, index) => {
         if (/[?#]/.test(currentValue)) {
           postPath = true;
         }
@@ -3275,7 +3312,7 @@ var init_path = __esm({
         }
         return previousValue + currentValue + (index === params.length ? "" : encoded);
       }, "");
-      const pathOnly = path8.split(/[?#]/, 1)[0];
+      const pathOnly = path9.split(/[?#]/, 1)[0];
       const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
       let match;
       while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
@@ -3296,10 +3333,10 @@ var init_path = __esm({
         }, "");
         throw new AnthropicError(`Path parameters result in path with invalid segments:
 ${invalidSegments.map((e) => e.error).join("\n")}
-${path8}
+${path9}
 ${underline}`);
       }
-      return path8;
+      return path9;
     };
     path = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
   }
@@ -7799,9 +7836,9 @@ var init_client = __esm({
       makeStatusError(status, error, message, headers) {
         return APIError.generate(status, error, message, headers);
       }
-      buildURL(path7, query, defaultBaseURL) {
+      buildURL(path8, query, defaultBaseURL) {
         const baseURL = !__classPrivateFieldGet(this, _BaseAnthropic_instances, "m", _BaseAnthropic_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-        const url = isAbsoluteURL(path7) ? new URL(path7) : new URL(baseURL + (baseURL.endsWith("/") && path7.startsWith("/") ? path7.slice(1) : path7));
+        const url = isAbsoluteURL(path8) ? new URL(path8) : new URL(baseURL + (baseURL.endsWith("/") && path8.startsWith("/") ? path8.slice(1) : path8));
         const defaultQuery = this.defaultQuery();
         const pathQuery = Object.fromEntries(url.searchParams);
         if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
@@ -7833,24 +7870,24 @@ var init_client = __esm({
        */
       async prepareRequest(request, { url, options }) {
       }
-      get(path7, opts) {
-        return this.methodRequest("get", path7, opts);
+      get(path8, opts) {
+        return this.methodRequest("get", path8, opts);
       }
-      post(path7, opts) {
-        return this.methodRequest("post", path7, opts);
+      post(path8, opts) {
+        return this.methodRequest("post", path8, opts);
       }
-      patch(path7, opts) {
-        return this.methodRequest("patch", path7, opts);
+      patch(path8, opts) {
+        return this.methodRequest("patch", path8, opts);
       }
-      put(path7, opts) {
-        return this.methodRequest("put", path7, opts);
+      put(path8, opts) {
+        return this.methodRequest("put", path8, opts);
       }
-      delete(path7, opts) {
-        return this.methodRequest("delete", path7, opts);
+      delete(path8, opts) {
+        return this.methodRequest("delete", path8, opts);
       }
-      methodRequest(method, path7, opts) {
+      methodRequest(method, path8, opts) {
         return this.request(Promise.resolve(opts).then((opts2) => {
-          return { method, path: path7, ...opts2 };
+          return { method, path: path8, ...opts2 };
         }));
       }
       request(options, remainingRetries = null) {
@@ -7954,8 +7991,8 @@ var init_client = __esm({
         }));
         return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
       }
-      getAPIList(path7, Page2, opts) {
-        return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path7, ...opts2 })) : { method: "get", path: path7, ...opts });
+      getAPIList(path8, Page2, opts) {
+        return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path8, ...opts2 })) : { method: "get", path: path8, ...opts });
       }
       requestAPIList(Page2, options) {
         const request = this.makeRequest(options, null, void 0);
@@ -8043,8 +8080,8 @@ var init_client = __esm({
       }
       async buildRequest(inputOptions, { retryCount = 0 } = {}) {
         const options = { ...inputOptions };
-        const { method, path: path7, query, defaultBaseURL } = options;
-        const url = this.buildURL(path7, query, defaultBaseURL);
+        const { method, path: path8, query, defaultBaseURL } = options;
+        const url = this.buildURL(path8, query, defaultBaseURL);
         if ("timeout" in options)
           validatePositiveInteger("timeout", options.timeout);
         options.timeout = options.timeout ?? this.timeout;
@@ -8171,7 +8208,7 @@ var anthropic_exports = {};
 __export(anthropic_exports, {
   AnthropicProvider: () => AnthropicProvider
 });
-function trimSlash2(url) {
+function trimSlash(url) {
   return url.replace(/\/+$/, "");
 }
 function splitAnthropicMessages(messages) {
@@ -8245,7 +8282,7 @@ var init_anthropic = __esm({
       constructor(apiKey, model, baseURL) {
         this.apiKey = apiKey;
         this.model = model;
-        this.apiBase = trimSlash2(baseURL ?? "https://api.anthropic.com");
+        this.apiBase = trimSlash(baseURL ?? "https://api.anthropic.com");
         this.client = new Anthropic({
           apiKey,
           baseURL: this.apiBase
@@ -8296,7 +8333,7 @@ var ollama_exports = {};
 __export(ollama_exports, {
   OllamaProvider: () => OllamaProvider
 });
-function trimSlash3(url) {
+function trimSlash2(url) {
   return url.replace(/\/+$/, "");
 }
 function toOllamaMessages(messages) {
@@ -8380,7 +8417,7 @@ var init_ollama = __esm({
       model;
       name = "ollama";
       async chat(messages, tools, options) {
-        const url = `${trimSlash3(this.baseURL)}/api/chat`;
+        const url = `${trimSlash2(this.baseURL)}/api/chat`;
         const body = {
           model: this.model,
           messages: toOllamaMessages(messages),
@@ -8403,7 +8440,7 @@ var init_ollama = __esm({
       }
       async isAvailable() {
         try {
-          const url = `${trimSlash3(this.baseURL)}/api/tags`;
+          const url = `${trimSlash2(this.baseURL)}/api/tags`;
           const res = await fetch(url, { method: "GET", signal: AbortSignal.timeout(4e3) });
           return res.ok;
         } catch {
@@ -8491,407 +8528,358 @@ var init_opencode = __esm({
   }
 });
 
-// src/main/llm/registry.ts
-var registry_exports = {};
-__export(registry_exports, {
-  buildProviderForId: () => buildProviderForId,
-  configForProvider: () => configForProvider,
-  configForTask: () => configForTask,
-  getProvider: () => getProvider,
-  getProviderForTask: () => getProviderForTask,
-  getSelectedPiModelPattern: () => getSelectedPiModelPattern,
-  getSelectedPiProviderBridge: () => getSelectedPiProviderBridge,
-  invalidateProviderCache: () => invalidateProviderCache,
-  readLLMConfig: () => readLLMConfig
+// src/main/agent/tools.ts
+function str(value, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+function truncate(value, max = 60) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, max - 1)}\u2026`;
+}
+function labelForToolCall(toolName, args) {
+  const safeArgs = args && typeof args === "object" ? args : {};
+  if (toolName === "launcher_search") {
+    return `search Tezbar: ${truncate(str(safeArgs.query, "<query>"))}`;
+  }
+  if (toolName === "pc_search" || toolName === "search_knowledge") {
+    return `deep search: ${truncate(str(safeArgs.query, "<query>"))}`;
+  }
+  if (toolName === "pc_read") {
+    return `read deep-search result: ${truncate(str(safeArgs.resultId, "<result>"))}`;
+  }
+  if (toolName === "workflow_create") {
+    const name = str(safeArgs.name) || str(safeArgs.label);
+    return name ? `workflow: ${truncate(name)}` : "multi-agent workflow";
+  }
+  if (toolName === "workflow_list") {
+    return "list workflows";
+  }
+  if (toolName === "workflow_inspect") {
+    const run = str(safeArgs.run);
+    return run ? `inspect workflow: ${truncate(run, 24)}` : "inspect workflow";
+  }
+  if (toolName === "workflow_result") {
+    const run = str(safeArgs.run);
+    return run ? `workflow result: ${truncate(run, 24)}` : "workflow result";
+  }
+  if (toolName === "workflow_stop") {
+    return "stop workflow";
+  }
+  if (toolName === "generate_image") {
+    return `generate image: ${truncate(str(safeArgs.prompt, "<prompt>"))}`;
+  }
+  const descriptor = PI_TOOLS[toolName];
+  if (!descriptor) return `${toolName}`;
+  return descriptor.label(safeArgs);
+}
+var PI_TOOLS;
+var init_tools = __esm({
+  "src/main/agent/tools.ts"() {
+    "use strict";
+    PI_TOOLS = {
+      read: {
+        name: "read",
+        description: "Read a file (optional offset/limit for large files)",
+        argKeys: ["path", "offset", "limit"],
+        mutates: false,
+        label: (args) => `read ${truncate(str(args.path, "<path>"))}`
+      },
+      bash: {
+        name: "bash",
+        description: "Run a shell command (optional timeout ms)",
+        argKeys: ["command", "timeout"],
+        mutates: true,
+        label: (args) => `bash: ${truncate(str(args.command, "<cmd>"))}`
+      },
+      edit: {
+        name: "edit",
+        description: "Apply one or more oldText/newText edits to a file",
+        argKeys: ["path", "edits"],
+        mutates: true,
+        label: (args) => {
+          const edits = Array.isArray(args.edits) ? args.edits.length : 0;
+          return `edit ${truncate(str(args.path, "<path>"))} (${edits} change${edits === 1 ? "" : "s"})`;
+        }
+      },
+      write: {
+        name: "write",
+        description: "Overwrite (or create) a file with full content",
+        argKeys: ["path", "content"],
+        mutates: true,
+        label: (args) => `write ${truncate(str(args.path, "<path>"))}`
+      },
+      grep: {
+        name: "grep",
+        description: "Ripgrep-backed content search (glob / literal / context)",
+        argKeys: ["pattern", "path", "glob", "ignoreCase", "literal", "context", "limit"],
+        mutates: false,
+        label: (args) => `grep ${truncate(str(args.pattern, "<pattern>"))}`
+      },
+      find: {
+        name: "find",
+        description: "Find files by filename pattern",
+        argKeys: ["pattern", "path", "limit"],
+        mutates: false,
+        label: (args) => `find ${truncate(str(args.pattern, "<pattern>"))}`
+      },
+      ls: {
+        name: "ls",
+        description: "List directory contents",
+        argKeys: ["path", "limit"],
+        mutates: false,
+        label: (args) => `ls ${truncate(str(args.path, "."))}`
+      }
+    };
+  }
 });
-function normalizeCustomProviders(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((value) => {
-    if (!value || typeof value !== "object") return [];
-    const entry = value;
-    const id = typeof entry.id === "string" ? entry.id.trim() : "";
-    const title = typeof entry.title === "string" ? entry.title.trim() : "";
-    if (!id.startsWith("custom:") || !title) return [];
-    return [{
-      id,
-      title,
-      subtitle: typeof entry.subtitle === "string" ? entry.subtitle.trim() : void 0
-    }];
-  });
-}
-function providerIds(customProviders) {
-  return [...Object.keys(DEFAULT_PROVIDER_MODELS), ...customProviders.map((provider) => provider.id)];
-}
-function normalizeProviderModels(raw, ids) {
-  if (!raw || typeof raw !== "object") return void 0;
-  const result = {};
-  for (const provider of ids) {
-    const models = raw[provider];
-    if (!Array.isArray(models)) continue;
-    result[provider] = normalizeProviderModelList(provider, models);
-  }
-  return result;
-}
-function normalizeProviderSelectedModels(raw, ids) {
-  if (!raw || typeof raw !== "object") return void 0;
-  const result = {};
-  for (const provider of ids) {
-    const value = raw[provider];
-    if (typeof value === "string" && value.trim()) result[provider] = value.trim();
-  }
-  return result;
-}
-function normalizeProviderConfigs(raw, ids) {
-  if (!raw || typeof raw !== "object") return void 0;
-  const result = {};
-  for (const provider of ids) {
-    const value = raw[provider];
-    if (!value || typeof value !== "object") continue;
-    const config = value;
-    result[provider] = {
-      apiKey: typeof config.apiKey === "string" ? config.apiKey : void 0,
-      baseURL: typeof config.baseURL === "string" ? config.baseURL : void 0,
-      openaiCompatibleBaseURL: typeof config.openaiCompatibleBaseURL === "string" ? config.openaiCompatibleBaseURL : void 0,
-      geminiApiKey: typeof config.geminiApiKey === "string" ? config.geminiApiKey : void 0,
-      copilotGithubToken: typeof config.copilotGithubToken === "string" ? config.copilotGithubToken : void 0,
-      githubOAuthClientId: typeof config.githubOAuthClientId === "string" ? config.githubOAuthClientId : void 0
-    };
-  }
-  return result;
-}
-function normalizeFromRaw(raw) {
-  const customProviders = normalizeCustomProviders(raw.customProviders);
-  const ids = providerIds(customProviders);
-  const p = raw.provider;
-  const hasCopilotToken = typeof raw.copilotGithubToken === "string" && raw.copilotGithubToken.length > 0;
-  const provider = typeof p === "string" && customProviders.some((provider2) => provider2.id === p) || p === "openai" || p === "openai-compatible" || p === "anthropic" || p === "ollama" || p === "copilot" || p === "gemini" || p === "opencode" || p === "deepseek" || p === "tokenrouter" ? p : hasCopilotToken ? "copilot" : "ollama";
-  const providerModels = normalizeProviderModels(raw.providerModels, ids);
-  const providerSelectedModels = normalizeProviderSelectedModels(raw.providerSelectedModels, ids);
-  const providerConfigs = normalizeProviderConfigs(raw.providerConfigs, ids);
-  const selectedModel = providerSelectedModels?.[provider];
-  const providerConfig = providerConfigs?.[provider] ?? {};
-  const allowLegacyProviderFields = !providerConfigs || Object.keys(providerConfigs).length === 0;
-  return {
-    provider,
-    customProviders,
-    providerConfigs,
-    apiKey: providerConfig.apiKey ?? (allowLegacyProviderFields && typeof raw.apiKey === "string" ? raw.apiKey : void 0),
-    baseURL: providerConfig.baseURL ?? (allowLegacyProviderFields && typeof raw.baseURL === "string" ? raw.baseURL : void 0),
-    openaiCompatibleBaseURL: providerConfig.openaiCompatibleBaseURL ?? (allowLegacyProviderFields && typeof raw.openaiCompatibleBaseURL === "string" ? raw.openaiCompatibleBaseURL : void 0),
-    geminiApiKey: providerConfig.geminiApiKey ?? (allowLegacyProviderFields && typeof raw.geminiApiKey === "string" ? raw.geminiApiKey : void 0),
-    model: selectedModel ?? (typeof raw.model === "string" ? raw.model : void 0),
-    providerModels,
-    providerSelectedModels,
-    copilotGithubToken: providerConfig.copilotGithubToken ?? (allowLegacyProviderFields && typeof raw.copilotGithubToken === "string" ? raw.copilotGithubToken : void 0),
-    copilotRefreshToken: typeof raw.copilotRefreshToken === "string" ? raw.copilotRefreshToken : void 0,
-    copilotExpiresAt: typeof raw.copilotExpiresAt === "number" ? raw.copilotExpiresAt : void 0,
-    githubOAuthClientId: providerConfig.githubOAuthClientId ?? (allowLegacyProviderFields && typeof raw.githubOAuthClientId === "string" ? raw.githubOAuthClientId : void 0),
-    taskProviderOverrides: typeof raw.taskProviderOverrides === "object" && raw.taskProviderOverrides ? raw.taskProviderOverrides : void 0,
-    taskModelOverrides: typeof raw.taskModelOverrides === "object" && raw.taskModelOverrides ? raw.taskModelOverrides : void 0,
-    memoryEnabled: typeof raw.memoryEnabled === "boolean" ? raw.memoryEnabled : void 0,
-    memoryMaxItems: typeof raw.memoryMaxItems === "number" ? raw.memoryMaxItems : void 0,
-    memoryIncludePrivate: typeof raw.memoryIncludePrivate === "boolean" ? raw.memoryIncludePrivate : void 0,
-    aiActionRequirePermission: typeof raw.aiActionRequirePermission === "boolean" ? raw.aiActionRequirePermission : void 0,
-    aiActionRedactionEnabled: typeof raw.aiActionRedactionEnabled === "boolean" ? raw.aiActionRedactionEnabled : void 0,
-    uiStateRetentionMs: typeof raw.uiStateRetentionMs === "number" ? raw.uiStateRetentionMs : void 0
-  };
-}
-function readLLMConfig() {
-  const raw = readRawConfig();
-  if (Object.keys(raw).length === 0) {
-    return { provider: "ollama", baseURL: DEFAULT_OLLAMA_BASE, model: DEFAULT_OLLAMA_MODEL };
-  }
-  const n = normalizeFromRaw(raw);
-  if (n.provider === "ollama") {
-    return {
-      ...n,
-      baseURL: n.baseURL ?? DEFAULT_OLLAMA_BASE,
-      model: n.model ?? DEFAULT_OLLAMA_MODEL
-    };
-  }
-  if (n.provider === "gemini") {
-    return {
-      ...n,
-      baseURL: n.baseURL ?? DEFAULT_GEMINI_BASE,
-      model: n.model ?? DEFAULT_GEMINI_MODEL
-    };
-  }
-  if (n.provider === "deepseek") {
-    return {
-      ...n,
-      baseURL: n.baseURL ?? DEFAULT_DEEPSEEK_BASE,
-      model: n.model ?? DEFAULT_DEEPSEEK_MODEL
-    };
-  }
-  if (n.provider === "tokenrouter") {
-    return {
-      ...n,
-      baseURL: n.baseURL ?? DEFAULT_TOKENROUTER_BASE,
-      model: n.model ?? DEFAULT_TOKENROUTER_MODEL
-    };
-  }
-  return n;
-}
-function configForProvider(cfg, provider) {
-  const providerConfig = cfg.providerConfigs?.[provider] ?? {};
-  const useCurrentProviderFields = cfg.provider === provider;
-  const model = cfg.providerSelectedModels?.[provider] ?? (useCurrentProviderFields ? cfg.model : void 0);
-  const next = {
-    ...cfg,
-    provider,
-    model,
-    apiKey: providerConfig.apiKey ?? (useCurrentProviderFields ? cfg.apiKey : void 0),
-    baseURL: providerConfig.baseURL ?? (useCurrentProviderFields ? cfg.baseURL : void 0),
-    openaiCompatibleBaseURL: providerConfig.openaiCompatibleBaseURL ?? (useCurrentProviderFields ? cfg.openaiCompatibleBaseURL : void 0),
-    geminiApiKey: providerConfig.geminiApiKey ?? (useCurrentProviderFields ? cfg.geminiApiKey : void 0),
-    copilotGithubToken: providerConfig.copilotGithubToken ?? (useCurrentProviderFields ? cfg.copilotGithubToken : void 0),
-    githubOAuthClientId: providerConfig.githubOAuthClientId ?? (useCurrentProviderFields ? cfg.githubOAuthClientId : void 0)
-  };
-  if (provider === "ollama") {
-    return { ...next, baseURL: next.baseURL ?? DEFAULT_OLLAMA_BASE, model: next.model ?? DEFAULT_OLLAMA_MODEL };
-  }
-  if (provider === "gemini") {
-    return { ...next, baseURL: next.baseURL ?? DEFAULT_GEMINI_BASE, model: next.model ?? DEFAULT_GEMINI_MODEL };
-  }
-  if (provider === "deepseek") {
-    return { ...next, baseURL: next.baseURL ?? DEFAULT_DEEPSEEK_BASE, model: next.model ?? DEFAULT_DEEPSEEK_MODEL };
-  }
-  if (provider === "tokenrouter") {
-    return { ...next, baseURL: next.baseURL ?? DEFAULT_TOKENROUTER_BASE, model: next.model ?? DEFAULT_TOKENROUTER_MODEL };
-  }
-  return {
-    ...next,
-    model: next.model ?? (recommendedModel(provider) || defaultModels(provider)[0]?.id)
-  };
-}
-function buildProviderForId(id, cfg) {
-  return buildProvider(configForProvider(cfg, id));
-}
-function configForTask(cfg, task) {
-  const providerOverride = cfg.taskProviderOverrides?.[task];
-  const modelOverride = cfg.taskModelOverrides?.[task];
-  const targetProvider = providerOverride ?? cfg.provider;
-  const targetConfig = configForProvider(cfg, targetProvider);
-  return {
-    ...targetConfig,
-    model: modelOverride ?? targetConfig.model
-  };
-}
-function buildProvider(cfg) {
-  const openAiProvider = (baseUrl, apiKey, model, label) => {
-    const { OpenAIProvider: OpenAIProvider2 } = (init_openai(), __toCommonJS(openai_exports));
-    return new OpenAIProvider2(baseUrl, apiKey, model, label);
-  };
-  if (isCustomProvider(cfg.provider)) {
-    return openAiProvider(
-      cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? "",
-      cfg.apiKey ?? "",
-      cfg.model ?? "",
-      cfg.customProviders?.find((provider) => provider.id === cfg.provider)?.title ?? "Custom provider"
-    );
-  }
-  switch (cfg.provider) {
-    case "openai":
-      return openAiProvider(
-        cfg.baseURL ?? "https://api.openai.com/v1",
-        cfg.apiKey ?? "",
-        cfg.model ?? "gpt-4o-mini",
-        "OpenAI"
-      );
-    case "openai-compatible":
-      return openAiProvider(
-        cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? "https://api.openai.com/v1",
-        cfg.apiKey ?? "",
-        cfg.model ?? "gpt-4o-mini",
-        "OpenAI-compatible provider"
-      );
-    case "anthropic":
-      const { AnthropicProvider: AnthropicProvider2 } = (init_anthropic(), __toCommonJS(anthropic_exports));
-      return new AnthropicProvider2(
-        cfg.apiKey ?? "",
-        cfg.model ?? "claude-3-5-haiku-20241022",
-        cfg.baseURL
-      );
-    case "ollama":
-      const { OllamaProvider: OllamaProvider2 } = (init_ollama(), __toCommonJS(ollama_exports));
-      return new OllamaProvider2(cfg.baseURL ?? DEFAULT_OLLAMA_BASE, cfg.model ?? DEFAULT_OLLAMA_MODEL);
-    case "copilot":
-      const { CopilotProvider: CopilotProvider2 } = (init_copilot(), __toCommonJS(copilot_exports));
-      return new CopilotProvider2(cfg.model ?? "gpt-4o");
-    case "gemini":
-      return openAiProvider(
-        cfg.baseURL ?? DEFAULT_GEMINI_BASE,
-        cfg.geminiApiKey ?? cfg.apiKey ?? "",
-        cfg.model ?? DEFAULT_GEMINI_MODEL,
-        "Gemini"
-      );
-    case "opencode":
-      const { OpenCodeProvider: OpenCodeProvider2 } = (init_opencode(), __toCommonJS(opencode_exports));
-      return new OpenCodeProvider2(cfg.model ?? "opencode/big-pickle");
-    case "deepseek":
-      return openAiProvider(
-        cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE,
-        cfg.apiKey ?? "",
-        cfg.model ?? DEFAULT_DEEPSEEK_MODEL,
-        "DeepSeek"
-      );
-    case "tokenrouter":
-      return openAiProvider(
-        cfg.baseURL ?? DEFAULT_TOKENROUTER_BASE,
-        cfg.apiKey?.trim() ? cfg.apiKey : process.env["TOKENROUTER_API_KEY"] ?? "",
-        cfg.model ?? DEFAULT_TOKENROUTER_MODEL,
-        "TokenRouter"
-      );
-    default:
-      const { OllamaProvider: DefaultOllamaProvider } = (init_ollama(), __toCommonJS(ollama_exports));
-      return new DefaultOllamaProvider(DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL);
-  }
-}
-function invalidateProviderCache() {
-  cacheKey = "";
-  active = null;
-}
-function getProvider() {
-  const cfg = readLLMConfig();
-  const key = JSON.stringify(cfg);
-  if (active && key === cacheKey) return active;
-  active = buildProvider(cfg);
-  cacheKey = key;
-  return active;
-}
-function getProviderForTask(task) {
-  const cfg = readLLMConfig();
-  return buildProvider(configForTask(cfg, task));
-}
-function getSelectedPiModelPattern(task) {
-  const baseConfig = readLLMConfig();
-  const cfg = task ? configForTask(baseConfig, task) : baseConfig;
-  const model = cfg.model?.trim();
-  if (!model) return void 0;
-  const provider = cfg.provider;
-  if (provider === "opencode") {
-    if (model.startsWith("opencode/opencode/")) return model;
-    if (model.startsWith("opencode/")) return `opencode/${model}`;
-    return `opencode/opencode/${model}`;
-  }
-  if (model.startsWith(`${provider}/`)) return model;
-  if (model.includes("/") && provider !== "tokenrouter") return model;
-  return `${provider}/${model}`;
-}
-function stripProviderPrefix(model, provider) {
-  const prefix = `${provider}/`;
-  let normalized = model.trim();
-  while (normalized.startsWith(prefix)) {
-    normalized = normalized.slice(prefix.length);
-  }
-  return normalized;
-}
-function openAiCompatBaseUrl(cfg) {
-  if (cfg.provider === "openai") return cfg.baseURL ?? "https://api.openai.com/v1";
-  if (cfg.provider === "openai-compatible") return cfg.openaiCompatibleBaseURL ?? cfg.baseURL;
-  if (cfg.provider === "gemini") return cfg.baseURL ?? DEFAULT_GEMINI_BASE;
-  if (cfg.provider === "deepseek") return cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE;
-  if (cfg.provider === "tokenrouter") return cfg.baseURL ?? DEFAULT_TOKENROUTER_BASE;
-  if (isCustomProvider(cfg.provider)) return cfg.openaiCompatibleBaseURL ?? cfg.baseURL;
-  if (cfg.provider === "ollama") {
-    const base = cfg.baseURL ?? DEFAULT_OLLAMA_BASE;
-    return base.endsWith("/v1") ? base : `${base.replace(/\/+$/, "")}/v1`;
+
+// src/main/agent/loop.ts
+function errorDetail(result) {
+  if (!result || typeof result !== "object") return void 0;
+  const content = result.content;
+  if (!Array.isArray(content)) return void 0;
+  for (const item of content) {
+    if (item && typeof item === "object" && item.type === "text") {
+      const text3 = item.text;
+      if (typeof text3 === "string" && text3.trim()) {
+        return text3.replace(/\s+/g, " ").trim().slice(0, 160);
+      }
+    }
   }
   return void 0;
 }
-function piApiKey(cfg) {
-  if (cfg.provider === "gemini") return cfg.geminiApiKey ?? cfg.apiKey;
-  if (cfg.provider === "ollama") return "ollama";
-  if (cfg.provider === "tokenrouter") {
-    return cfg.apiKey?.trim() ? cfg.apiKey : process.env["TOKENROUTER_API_KEY"];
-  }
-  return cfg.apiKey;
-}
-function officialDeepSeekAnthropicBaseUrl(baseUrl) {
-  if (!baseUrl) return void 0;
-  try {
-    const url = new URL(baseUrl);
-    const path7 = url.pathname.replace(/\/+$/, "");
-    if (url.hostname !== "api.deepseek.com" || path7 && path7 !== "/v1") return void 0;
-    return `${url.origin}/anthropic`;
-  } catch {
-    return void 0;
-  }
-}
-function getSelectedPiProviderBridge(task) {
-  const baseConfig = readLLMConfig();
-  const cfg = task ? configForTask(baseConfig, task) : baseConfig;
-  const model = cfg.model?.trim();
-  if (!model) return void 0;
-  const modelId = stripProviderPrefix(model, cfg.provider);
-  if (!modelId) return void 0;
-  const selectedModel = cfg.providerModels?.[cfg.provider]?.find(
-    (candidate) => stripProviderPrefix(candidate.id, cfg.provider) === modelId
-  );
-  const modelInput = selectedModel?.capabilities.includes("vision") ? ["text", "image"] : ["text"];
-  const isAnthropic = cfg.provider === "anthropic";
-  const openAiBaseUrl = openAiCompatBaseUrl(cfg);
-  const deepSeekAnthropicBaseUrl = cfg.provider === "deepseek" ? officialDeepSeekAnthropicBaseUrl(openAiBaseUrl) : void 0;
-  const usesAnthropicMessages = isAnthropic || Boolean(deepSeekAnthropicBaseUrl);
-  const baseUrl = isAnthropic ? cfg.baseURL ?? "https://api.anthropic.com" : deepSeekAnthropicBaseUrl ?? openAiBaseUrl;
-  const apiKey = isAnthropic ? cfg.apiKey : piApiKey(cfg);
-  if (!baseUrl || !apiKey) return void 0;
-  const compat = deepSeekAnthropicBaseUrl ? {
-    supportsEagerToolInputStreaming: false,
-    supportsLongCacheRetention: false,
-    supportsCacheControlOnTools: false,
-    allowEmptySignature: true
-  } : cfg.provider === "deepseek" ? {
-    supportsStore: false,
-    supportsDeveloperRole: false,
-    requiresReasoningContentOnAssistantMessages: true,
-    thinkingFormat: "deepseek"
-  } : cfg.provider === "tokenrouter" ? {
-    supportsStore: false,
-    supportsDeveloperRole: false,
-    supportsReasoningEffort: false,
-    maxTokensField: "max_tokens"
-  } : void 0;
-  const providerJson = JSON.stringify({
-    baseUrl,
-    apiKey,
-    api: usesAnthropicMessages ? "anthropic-messages" : "openai-completions",
-    authHeader: true,
-    models: [
-      {
-        id: modelId,
-        name: `Tezbar ${cfg.provider} ${modelId}`,
-        reasoning: /reason|think|r1|o\d|gpt-5|claude|deepseek/i.test(modelId),
-        input: modelInput,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 128e3,
-        maxTokens: 8192,
-        ...compat ? { compat } : {}
+function createLoopDriver(callbacks) {
+  const tracker = {
+    stages: /* @__PURE__ */ new Map(),
+    nextIndex: 0,
+    currentText: "",
+    ended: false
+  };
+  const emitStage = (stage) => {
+    tracker.stages.set(`stage:${stage.index}`, stage);
+    callbacks.onStage(stage);
+  };
+  const updateStageStatus = (toolCallId, status, detail) => {
+    const existing = tracker.stages.get(toolCallId);
+    if (!existing) return;
+    const next = detail ? { ...existing, status, detail } : { ...existing, status };
+    tracker.stages.set(toolCallId, next);
+    callbacks.onStage(next);
+  };
+  const asString = (v, fallback = "") => typeof v === "string" ? v : fallback;
+  const asBool = (v) => v === true;
+  const asNumber = (v, fallback = 0) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
+  const asRecord2 = (v) => v && typeof v === "object" && !Array.isArray(v) ? v : void 0;
+  return function handle(event) {
+    switch (event.type) {
+      case "agent_start": {
+        tracker.stages.clear();
+        tracker.nextIndex = 0;
+        tracker.currentText = "";
+        tracker.ended = false;
+        tracker.lastError = void 0;
+        return;
       }
-    ]
-  });
-  return {
-    modelPattern: `tezbar/${modelId}`,
-    providerJson,
-    acceptsImages: modelInput.includes("image")
+      case "message_start":
+      case "message_end":
+      case "turn_end": {
+        const msg = asRecord2(event["message"]);
+        if (msg) {
+          const stopReason = asString(msg["stopReason"]);
+          const errorMessage = asString(msg["errorMessage"]);
+          if (stopReason === "error" || errorMessage) {
+            tracker.lastError = errorMessage || "The model provider encountered an error.";
+          }
+        }
+        return;
+      }
+      case "message_update": {
+        const ev = asRecord2(event["assistantMessageEvent"]);
+        if (!ev) return;
+        const subType = asString(ev["type"]);
+        const delta = ev["delta"];
+        const content = ev["content"];
+        if (subType === "text_delta" && typeof delta === "string") {
+          tracker.currentText += delta;
+          callbacks.onMessageDelta(delta);
+        } else if (subType === "text_end" && typeof content === "string") {
+          tracker.currentText = content;
+        }
+        return;
+      }
+      case "tool_execution_start": {
+        const toolCallId = asString(event["toolCallId"]);
+        if (!toolCallId) return;
+        const index = tracker.nextIndex++;
+        const stage = {
+          index,
+          label: labelForToolCall(asString(event["toolName"], "tool"), event["args"]),
+          status: "running"
+        };
+        tracker.stages.set(toolCallId, stage);
+        emitStage(stage);
+        return;
+      }
+      case "tool_execution_end": {
+        const toolCallId = asString(event["toolCallId"]);
+        if (!toolCallId) return;
+        const isError = asBool(event["isError"]);
+        updateStageStatus(
+          toolCallId,
+          isError ? "failed" : "done",
+          isError ? errorDetail(event["result"]) : void 0
+        );
+        return;
+      }
+      case "auto_retry_start": {
+        const attempt = asNumber(event["attempt"]);
+        const maxAttempts = asNumber(event["maxAttempts"]);
+        const stage = {
+          index: tracker.nextIndex++,
+          label: `retry (${attempt}/${maxAttempts})`,
+          status: "running",
+          detail: asString(event["errorMessage"]).slice(0, 160) || void 0
+        };
+        tracker.stages.set(`retry:${attempt}`, stage);
+        emitStage(stage);
+        return;
+      }
+      case "auto_retry_end": {
+        const retryKey = Array.from(tracker.stages.keys()).reverse().find((k) => k.startsWith("retry:"));
+        if (retryKey) {
+          updateStageStatus(
+            retryKey,
+            asBool(event["success"]) ? "done" : "failed",
+            asString(event["finalError"]) || void 0
+          );
+        }
+        return;
+      }
+      case "agent_end": {
+        tracker.ended = true;
+        if (!tracker.lastError) {
+          const messages = Array.isArray(event["messages"]) ? event["messages"] : [];
+          for (const m of messages) {
+            const rec = asRecord2(m);
+            if (rec) {
+              const stopReason = asString(rec["stopReason"]);
+              const err = asString(rec["errorMessage"]);
+              if (stopReason === "error" || err) {
+                tracker.lastError = err || "The model provider encountered an error.";
+                break;
+              }
+            }
+          }
+        }
+        const hasText = tracker.currentText.trim().length > 0;
+        const hasStages = tracker.stages.size > 0;
+        if (hasText) {
+          callbacks.onAnswer(tracker.currentText.trim());
+        }
+        if (tracker.lastError) {
+          callbacks.onError(tracker.lastError);
+          return;
+        }
+        if (!hasText && !hasStages) {
+          callbacks.onError("Agent finished without a response.");
+          return;
+        }
+        callbacks.onDone();
+        return;
+      }
+      default:
+        return;
+    }
   };
 }
-var DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL, DEFAULT_GEMINI_BASE, DEFAULT_GEMINI_MODEL, DEFAULT_DEEPSEEK_BASE, DEFAULT_DEEPSEEK_MODEL, DEFAULT_TOKENROUTER_BASE, DEFAULT_TOKENROUTER_MODEL, cacheKey, active;
-var init_registry = __esm({
-  "src/main/llm/registry.ts"() {
+var init_loop = __esm({
+  "src/main/agent/loop.ts"() {
     "use strict";
-    init_aiProviders();
-    init_configStore();
-    DEFAULT_OLLAMA_BASE = "http://localhost:11434";
-    DEFAULT_OLLAMA_MODEL = "llama3.2";
-    DEFAULT_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
-    DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
-    DEFAULT_DEEPSEEK_BASE = "https://api.deepseek.com";
-    DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
-    DEFAULT_TOKENROUTER_BASE = "https://api.tokenrouter.com/v1";
-    DEFAULT_TOKENROUTER_MODEL = "moonshotai/kimi-k3-free";
-    cacheKey = "";
-    active = null;
+    init_tools();
+  }
+});
+
+// src/main/agent/observer.ts
+function asRecord(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return void 0;
+  return value;
+}
+function modelLabel(state) {
+  const m = state.model;
+  if (!m) return void 0;
+  if (m.provider && m.id) return `${m.provider}/${m.id}`;
+  return m.id;
+}
+async function observe(cwd, query) {
+  const [stateRaw, statsRaw] = await Promise.all([
+    query({ type: "get_state" }).catch(() => null),
+    query({ type: "get_session_stats" }).catch(() => null)
+  ]);
+  const state = asRecord(stateRaw)?.data ?? {};
+  const stats = asRecord(statsRaw)?.data ?? {};
+  return {
+    cwd,
+    sessionFile: state.sessionFile ?? stats.sessionFile ?? void 0,
+    model: modelLabel(state),
+    thinkingLevel: state.thinkingLevel,
+    isStreaming: state.isStreaming === true,
+    messageCount: state.messageCount ?? 0,
+    pendingMessageCount: state.pendingMessageCount ?? 0,
+    toolCalls: stats.toolCalls ?? 0,
+    contextUsage: stats.contextUsage
+  };
+}
+var init_observer = __esm({
+  "src/main/agent/observer.ts"() {
+    "use strict";
+  }
+});
+
+// src/main/agent/prompt.ts
+function rawBase64(data) {
+  const trimmed = data.trim();
+  const comma = trimmed.indexOf(",");
+  return trimmed.startsWith("data:image/") && comma >= 0 ? trimmed.slice(comma + 1) : trimmed;
+}
+function estimatedDecodedBytes(data) {
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor(data.length * 3 / 4) - padding);
+}
+function normalizeAgentImages(images) {
+  if (!images?.length) return [];
+  if (images.length > MAX_AGENT_IMAGES) {
+    throw new Error(`Agent accepts at most ${MAX_AGENT_IMAGES} images per prompt`);
+  }
+  return images.map((image) => {
+    if (!SUPPORTED_IMAGE_TYPES.has(image.mimeType)) {
+      throw new Error(`Unsupported agent image type: ${image.mimeType}`);
+    }
+    const data = rawBase64(image.data);
+    if (!data || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+      throw new Error("Agent image is not valid base64 data");
+    }
+    if (estimatedDecodedBytes(data) > MAX_AGENT_IMAGE_BYTES) {
+      throw new Error("Agent image exceeds the 8 MB limit");
+    }
+    return { type: "image", data, mimeType: image.mimeType };
+  });
+}
+function buildPromptCommand(message, images) {
+  const normalized = normalizeAgentImages(images);
+  return normalized.length > 0 ? { type: "prompt", message, images: normalized } : { type: "prompt", message };
+}
+var MAX_AGENT_IMAGES, MAX_AGENT_IMAGE_BYTES, SUPPORTED_IMAGE_TYPES;
+var init_prompt = __esm({
+  "src/main/agent/prompt.ts"() {
+    "use strict";
+    MAX_AGENT_IMAGES = 4;
+    MAX_AGENT_IMAGE_BYTES = 8 * 1024 * 1024;
+    SUPPORTED_IMAGE_TYPES = /* @__PURE__ */ new Set([
+      "image/png",
+      "image/jpeg",
+      "image/webp"
+    ]);
   }
 });
 
@@ -8972,7 +8960,7 @@ function listNativeCommands() {
   return Object.values(DESCRIPTORS);
 }
 var WINDOWS, DESCRIPTORS, RESULT_KIND_BY_ID;
-var init_registry2 = __esm({
+var init_registry = __esm({
   "src/main/nativeCommands/registry.ts"() {
     "use strict";
     WINDOWS = process.platform === "win32";
@@ -9628,11 +9616,11 @@ async function executeWindowsCommand(id) {
         message: "Use Port Manager \u2192 Open Ports in Tezbar for a structured, filterable list."
       };
     case "git-root": {
-      const path7 = await runPowerShell(
+      const path8 = await runPowerShell(
         "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path } | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $window.Document.Folder.Self.Path"
       );
       const { stdout } = await execFileAsync5("git.exe", ["rev-parse", "--show-toplevel"], {
-        cwd: path7
+        cwd: path8
       });
       const root = stdout.trim();
       clipboard.writeText(root);
@@ -9895,13 +9883,13 @@ async function executeNativeCommandRaw(id) {
         return { ok: true, message: "Opened ~/Library" };
       }
       case "copy-current-path": {
-        const path7 = await runAppleScript(
+        const path8 = await runAppleScript(
           'tell application "Finder" to try\nset thePath to POSIX path of (target of front Finder window as alias)\nset the clipboard to thePath\nreturn thePath\non error\nreturn ""\nend try'
         );
-        if (!path7) {
+        if (!path8) {
           return { ok: false, message: "No Finder window is open." };
         }
-        return { ok: true, message: path7 };
+        return { ok: true, message: path8 };
       }
       case "show-macos-version": {
         const out = await runShell("sw_vers && uname -v");
@@ -9938,18 +9926,18 @@ async function executeNativeCommandRaw(id) {
         };
       }
       case "git-root": {
-        const path7 = await runAppleScript(
+        const path8 = await runAppleScript(
           'tell application "Finder" to try\nset thePath to POSIX path of (target of front Finder window as alias)\nreturn thePath\non error\nreturn ""\nend try'
         );
-        if (!path7) {
+        if (!path8) {
           return { ok: false, message: "No Finder window is open." };
         }
         try {
-          const root = await runShell(`cd ${JSON.stringify(path7)} && git rev-parse --show-toplevel`);
+          const root = await runShell(`cd ${JSON.stringify(path8)} && git rev-parse --show-toplevel`);
           await runShell(`printf %s ${JSON.stringify(root)} | pbcopy`);
           return { ok: true, message: root };
         } catch {
-          return { ok: false, message: `${path7} is not inside a git repo.` };
+          return { ok: false, message: `${path8} is not inside a git repo.` };
         }
       }
       case "brew-outdated": {
@@ -10033,7 +10021,7 @@ var init_executor = __esm({
     import_node_os3 = require("node:os");
     import_node_path8 = require("node:path");
     import_node_util6 = require("node:util");
-    init_registry2();
+    init_registry();
     execFileAsync5 = (0, import_node_util6.promisify)(import_node_child_process6.execFile);
     backgroundProcesses = /* @__PURE__ */ new Map();
   }
@@ -10047,7 +10035,7 @@ function listSafetyDescriptors() {
   return Object.values(DESCRIPTORS2);
 }
 var DESCRIPTORS2;
-var init_registry3 = __esm({
+var init_registry2 = __esm({
   "src/main/safety/registry.ts"() {
     "use strict";
     DESCRIPTORS2 = {
@@ -10178,7 +10166,7 @@ var init_confirm = __esm({
   "src/main/safety/confirm.ts"() {
     "use strict";
     init_desktop_runtime();
-    init_registry3();
+    init_registry2();
     RISK_LABEL = {
       low: "Low risk",
       medium: "Use with care",
@@ -10414,8 +10402,8 @@ function decodeText(buffer) {
 function stripMarkup(value) {
   return value.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
-async function extractPlainText(path7) {
-  const handle = await (0, import_promises2.open)(path7, "r");
+async function extractPlainText(path8) {
+  const handle = await (0, import_promises2.open)(path8, "r");
   try {
     const stat2 = await handle.stat();
     const bytesToRead = Math.min(stat2.size, MAX_PLAIN_TEXT_EXTRACTED_BYTES);
@@ -10423,17 +10411,17 @@ async function extractPlainText(path7) {
     const { bytesRead } = await handle.read(buffer, 0, bytesToRead, 0);
     const text3 = decodeText(buffer.subarray(0, bytesRead));
     return {
-      text: /\.(?:html?|xml)$/i.test(path7) ? stripMarkup(text3) : text3.trim(),
+      text: /\.(?:html?|xml)$/i.test(path8) ? stripMarkup(text3) : text3.trim(),
       truncated: stat2.size > bytesRead
     };
   } finally {
     await handle.close();
   }
 }
-async function extractRichDocument(path7, signal) {
+async function extractRichDocument(path8, signal) {
   if (process.platform === "darwin" && (0, import_node_fs8.existsSync)("/usr/bin/textutil")) {
     try {
-      const { stdout } = await execFileAsync6("/usr/bin/textutil", ["-convert", "txt", "-stdout", path7], {
+      const { stdout } = await execFileAsync6("/usr/bin/textutil", ["-convert", "txt", "-stdout", path8], {
         encoding: "utf8",
         maxBuffer: MAX_EXTRACTED_BYTES,
         signal
@@ -10443,12 +10431,12 @@ async function extractRichDocument(path7, signal) {
     }
   }
   if ((0, import_node_fs8.existsSync)("/usr/bin/unzip")) {
-    const extension = (0, import_node_path10.extname)(path7).toLowerCase();
+    const extension = (0, import_node_path10.extname)(path8).toLowerCase();
     const members = extension === ".epub" ? ["*.xhtml", "*.html"] : extension === ".xlsx" || extension === ".ods" || extension === ".numbers" ? ["*.xml"] : ["*.xml", "*.xhtml"];
     const parts = [];
     for (const member of members) {
       try {
-        const { stdout } = await execFileAsync6("/usr/bin/unzip", ["-p", path7, member], {
+        const { stdout } = await execFileAsync6("/usr/bin/unzip", ["-p", path8, member], {
           encoding: "utf8",
           maxBuffer: MAX_EXTRACTED_BYTES,
           signal
@@ -10461,10 +10449,10 @@ async function extractRichDocument(path7, signal) {
   }
   throw new Error("No local extractor is available for this document format");
 }
-async function extractMetadataText(path7, signal) {
+async function extractMetadataText(path8, signal) {
   if (process.platform !== "darwin") return "";
   try {
-    const { stdout } = await execFileAsync6("/usr/bin/mdls", ["-raw", "-name", "kMDItemTextContent", path7], {
+    const { stdout } = await execFileAsync6("/usr/bin/mdls", ["-raw", "-name", "kMDItemTextContent", path8], {
       encoding: "utf8",
       maxBuffer: MAX_EXTRACTED_BYTES,
       signal
@@ -10475,26 +10463,26 @@ async function extractMetadataText(path7, signal) {
     return "";
   }
 }
-function isIndexablePath(path7) {
-  const extension = (0, import_node_path10.extname)(path7).toLowerCase();
+function isIndexablePath(path8) {
+  const extension = (0, import_node_path10.extname)(path8).toLowerCase();
   if (INDEXABLE_EXTENSIONS.has(extension)) return true;
-  const filename = path7.split("/").pop()?.toLowerCase() ?? "";
+  const filename = path8.split("/").pop()?.toLowerCase() ?? "";
   return ["dockerfile", "makefile", "license", "readme", "changelog"].includes(filename);
 }
-function maximumIndexableSourceBytes(path7) {
-  const extension = (0, import_node_path10.extname)(path7).toLowerCase();
+function maximumIndexableSourceBytes(path8) {
+  const extension = (0, import_node_path10.extname)(path8).toLowerCase();
   if (extension === ".pdf" || RICH_DOCUMENT_EXTENSIONS.has(extension)) {
     return MAX_DOCUMENT_SOURCE_BYTES;
   }
   if (IMAGE_EXTENSIONS2.has(extension)) return MAX_IMAGE_SOURCE_BYTES;
   return MAX_PLAIN_TEXT_SOURCE_BYTES;
 }
-async function extractLocally(path7, signal, options) {
-  const extension = (0, import_node_path10.extname)(path7).toLowerCase();
+async function extractLocally(path8, signal, options) {
+  const extension = (0, import_node_path10.extname)(path8).toLowerCase();
   const warnings = [];
   if (extension === ".pdf") {
     if (process.platform !== "darwin") {
-      const text4 = await extractMetadataText(path7, signal);
+      const text4 = await extractMetadataText(path8, signal);
       return {
         pages: [{ pageNumber: 1, extractedText: text4 }],
         images: [],
@@ -10504,7 +10492,7 @@ async function extractLocally(path7, signal, options) {
       };
     }
     const pdf = await runScreenOcr("extract-pdf", {
-      documentPath: path7,
+      documentPath: path8,
       maxPages: options.maxPagesPerDocument ?? 2e3,
       ocrScannedPages: options.enableOcr,
       maxOcrPages: options.maxOcrPagesPerDocument ?? 2e3,
@@ -10543,12 +10531,12 @@ async function extractLocally(path7, signal, options) {
       };
     }
     const ocr = await runScreenOcr("recognize-file", {
-      imagePath: path7,
+      imagePath: path8,
       languageCorrection: true,
       languages: ["en-US", "ru-RU"]
     }, signal);
     const image = {
-      id: `${path7}:image:1`,
+      id: `${path8}:image:1`,
       pageNumber: 1,
       ocrText: ocr.text,
       width: ocr.width,
@@ -10568,15 +10556,15 @@ async function extractLocally(path7, signal, options) {
   }
   let text3 = "";
   if (PLAIN_TEXT_EXTENSIONS.has(extension) || !extension) {
-    const extraction = await extractPlainText(path7);
+    const extraction = await extractPlainText(path8);
     text3 = extraction.text;
     if (extraction.truncated) {
       warnings.push("Only the first 8 MB of this large text file was indexed.");
     }
   } else if (RICH_DOCUMENT_EXTENSIONS.has(extension)) {
-    text3 = await extractRichDocument(path7, signal);
+    text3 = await extractRichDocument(path8, signal);
   }
-  if (!text3) text3 = await extractMetadataText(path7, signal);
+  if (!text3) text3 = await extractMetadataText(path8, signal);
   if (!text3) warnings.push("No textual content could be extracted from this file.");
   return {
     pages: [{ pageNumber: 1, extractedText: text3 }],
@@ -10841,10 +10829,10 @@ var init_backend2 = __esm({
 });
 
 // src/main/knowledge/core/fingerprint.ts
-async function fingerprintSource(path7, signal) {
-  const stat2 = (0, import_node_fs10.statSync)(path7);
+async function fingerprintSource(path8, signal) {
+  const stat2 = (0, import_node_fs10.statSync)(path8);
   const hash2 = (0, import_node_crypto5.createHash)("sha256");
-  const stream = (0, import_node_fs10.createReadStream)(path7);
+  const stream = (0, import_node_fs10.createReadStream)(path8);
   await new Promise((resolve6, reject) => {
     const abort = () => {
       stream.destroy(new Error("Indexing cancelled"));
@@ -10861,8 +10849,8 @@ async function fingerprintSource(path7, signal) {
     modifiedAt: stat2.mtimeMs
   };
 }
-function sourceIdForPath(path7) {
-  return (0, import_node_crypto5.createHash)("sha256").update(path7).digest("hex");
+function sourceIdForPath(path8) {
+  return (0, import_node_crypto5.createHash)("sha256").update(path8).digest("hex");
 }
 function artifactSettingsHash(value) {
   return (0, import_node_crypto5.createHash)("sha256").update(JSON.stringify(value)).digest("hex");
@@ -11532,7 +11520,7 @@ var init_store = __esm({
         });
         transaction();
       }
-      getSourceByPath(path7) {
+      getSourceByPath(path8) {
         this.ensureInitialized();
         return this.db.prepare(
           `
@@ -11541,7 +11529,7 @@ var init_store = __esm({
              indexing_profile AS indexingProfile
       FROM knowledge_sources WHERE path = ?
     `
-        ).get(path7) ?? null;
+        ).get(path8) ?? null;
       }
       markSourcePending(input) {
         this.ensureInitialized();
@@ -11581,7 +11569,7 @@ var init_store = __esm({
     `
         ).run(error.slice(0, 2e3), Date.now(), sourceId);
       }
-      saveResult(rootId, path7, fingerprint, indexingProfile, result) {
+      saveResult(rootId, path8, fingerprint, indexingProfile, result) {
         this.ensureInitialized();
         const deleteFts = this.db.prepare(`
       DELETE FROM knowledge_chunks_fts
@@ -11617,7 +11605,7 @@ var init_store = __esm({
           ).run(
             result.sourceId,
             rootId,
-            path7,
+            path8,
             fingerprint.contentHash,
             fingerprint.byteSize,
             fingerprint.modifiedAt,
@@ -11845,8 +11833,8 @@ ${page.ocr?.text ?? ""}`.trim();
       }
       storageBytes() {
         this.ensureInitialized();
-        const path7 = databasePath();
-        return [path7, `${path7}-wal`, `${path7}-shm`].reduce((total, candidate) => {
+        const path8 = databasePath();
+        return [path8, `${path8}-wal`, `${path8}-shm`].reduce((total, candidate) => {
           try {
             return total + (0, import_node_fs12.statSync)(candidate).size;
           } catch {
@@ -12263,20 +12251,20 @@ function shouldSkipKnowledgeEntry(name, isDirectory) {
   return lower.endsWith(".min.js") || lower.endsWith(".min.css");
 }
 function discoverMajorKnowledgeFolders(home = (0, import_node_os4.homedir)()) {
-  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path14.join)(home, name)).filter((path7) => {
+  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path14.join)(home, name)).filter((path8) => {
     try {
-      return (0, import_node_fs13.statSync)(path7).isDirectory();
+      return (0, import_node_fs13.statSync)(path8).isDirectory();
     } catch {
       return false;
     }
   });
 }
-function isKnowledgeCandidatePath(rootPath, path7) {
-  const relativePath = (0, import_node_path14.relative)(rootPath, path7);
+function isKnowledgeCandidatePath(rootPath, path8) {
+  const relativePath = (0, import_node_path14.relative)(rootPath, path8);
   if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path14.sep}`)) return false;
   const segments = relativePath.split(import_node_path14.sep).filter(Boolean);
   const fileName = segments.pop();
-  if (!fileName || shouldSkipKnowledgeEntry(fileName, false) || !isIndexablePath(path7)) return false;
+  if (!fileName || shouldSkipKnowledgeEntry(fileName, false) || !isIndexablePath(path8)) return false;
   return segments.every((name) => !shouldSkipKnowledgeEntry(name, true));
 }
 function initialStatus() {
@@ -12338,8 +12326,8 @@ async function chooseKnowledgeFolder() {
     const { stdout } = await execFileAsync7("/usr/bin/osascript", ["-e", script], {
       encoding: "utf8"
     });
-    const path7 = stdout.trim().replace(new RegExp(`${import_node_path14.sep}$`), "");
-    return path7 || null;
+    const path8 = stdout.trim().replace(new RegExp(`${import_node_path14.sep}$`), "");
+    return path8 || null;
   } catch {
     return null;
   } finally {
@@ -12531,9 +12519,9 @@ var init_service = __esm({
           storageBytes: this.store.storageBytes()
         };
       }
-      addRoot(path7) {
+      addRoot(path8) {
         this.initialize();
-        const normalized = (0, import_node_path14.resolve)(path7.trim());
+        const normalized = (0, import_node_path14.resolve)(path8.trim());
         if (!normalized || !(0, import_node_fs13.existsSync)(normalized) || !(0, import_node_fs13.statSync)(normalized).isDirectory()) {
           throw new Error("Choose an existing folder");
         }
@@ -12559,15 +12547,15 @@ var init_service = __esm({
         this.initialize();
         const existingRoots = new Map(this.store.listRoots().map((root) => [root.path, root]));
         const now = Date.now();
-        for (const path7 of discoverMajorKnowledgeFolders()) {
-          const existing = existingRoots.get(path7);
+        for (const path8 of discoverMajorKnowledgeFolders()) {
+          const existing = existingRoots.get(path8);
           if (existing) {
             if (!existing.enabled) this.store.upsertRoot({ ...existing, enabled: true, updatedAt: now });
             continue;
           }
           this.store.upsertRoot({
             id: (0, import_node_crypto7.randomUUID)(),
-            path: path7,
+            path: path8,
             depth: "inherit",
             processingBackend: "local",
             enabled: true,
@@ -12741,7 +12729,7 @@ var init_service = __esm({
             const scan = await this.scanRoot(root, signal);
             if (scan.complete) this.store.removeMissingSources(root.id, new Set(scan.paths));
             candidates.push(
-              ...scan.paths.filter((path7) => this.needsIndexing(root, path7)).map((path7) => ({ root, path: path7 }))
+              ...scan.paths.filter((path8) => this.needsIndexing(root, path8)).map((path8) => ({ root, path: path8 }))
             );
           }
           if (signal.aborted) return;
@@ -12878,16 +12866,16 @@ var init_service = __esm({
             if (signal.aborted) break;
             visited += 1;
             if (shouldSkipKnowledgeEntry(entry.name, entry.isDirectory())) continue;
-            const path7 = (0, import_node_path14.join)(directory, entry.name);
+            const path8 = (0, import_node_path14.join)(directory, entry.name);
             if (entry.isSymbolicLink()) continue;
             if (entry.isDirectory()) {
-              queue.push(path7);
-            } else if (entry.isFile() && isIndexablePath(path7)) {
+              queue.push(path8);
+            } else if (entry.isFile() && isIndexablePath(path8)) {
               try {
-                const fileStat = (0, import_node_fs13.statSync)(path7);
-                const isExtensionlessExecutable = !(0, import_node_path14.extname)(path7) && (fileStat.mode & 73) !== 0;
-                if (!isExtensionlessExecutable && fileStat.size <= maximumIndexableSourceBytes(path7)) {
-                  paths.push(path7);
+                const fileStat = (0, import_node_fs13.statSync)(path8);
+                const isExtensionlessExecutable = !(0, import_node_path14.extname)(path8) && (fileStat.mode & 73) !== 0;
+                if (!isExtensionlessExecutable && fileStat.size <= maximumIndexableSourceBytes(path8)) {
+                  paths.push(path8);
                 }
               } catch {
               }
@@ -12963,12 +12951,12 @@ var init_service = __esm({
           return false;
         }
       }
-      needsIndexing(root, path7) {
+      needsIndexing(root, path8) {
         const profile = profileForDepth(effectiveKnowledgeDepth(root, this.settings));
         if (!profile) return false;
         try {
-          const existing = this.store.getSourceByPath(path7);
-          const fileStat = (0, import_node_fs13.statSync)(path7);
+          const existing = this.store.getSourceByPath(path8);
+          const fileStat = (0, import_node_fs13.statSync)(path8);
           return !(existing?.status === "indexed" && existing.byteSize === fileStat.size && Math.round(existing.modifiedAt) === Math.round(fileStat.mtimeMs) && existing.indexingProfile === indexingProfileKey(profile));
         } catch {
           return false;
@@ -14132,7 +14120,7 @@ function idForImage(hash2) {
   return `image:${hash2.slice(0, 12)}`;
 }
 function captureFileEntry(paths, now) {
-  const uniquePaths = Array.from(new Set(paths.map((path7) => path7.trim()).filter(Boolean)));
+  const uniquePaths = Array.from(new Set(paths.map((path8) => path8.trim()).filter(Boolean)));
   if (uniquePaths.length === 0) return null;
   return {
     id: idForFiles(uniquePaths),
@@ -14554,7 +14542,7 @@ var commandsProvider;
 var init_commandsProvider = __esm({
   "src/main/search/providers/commandsProvider.ts"() {
     "use strict";
-    init_registry2();
+    init_registry();
     commandsProvider = {
       providerId: "commands",
       async buildDocuments() {
@@ -14565,28 +14553,28 @@ var init_commandsProvider = __esm({
 });
 
 // src/main/search/providers/filesProvider.ts
-function isAllowedFile(path7) {
-  const ext = (0, import_node_path18.extname)(path7).toLowerCase();
+function isAllowedFile(path8) {
+  const ext = (0, import_node_path18.extname)(path8).toLowerCase();
   return ALLOWED_EXTENSIONS.has(ext);
 }
-function containsSkippedDirectory(path7) {
-  return path7.split(import_node_path18.sep).some((part) => SKIP_NAMES2.has(part));
+function containsSkippedDirectory(path8) {
+  return path8.split(import_node_path18.sep).some((part) => SKIP_NAMES2.has(part));
 }
-function makeFileDocument(path7) {
+function makeFileDocument(path8) {
   try {
-    const stat2 = (0, import_node_fs17.statSync)(path7);
+    const stat2 = (0, import_node_fs17.statSync)(path8);
     if (!stat2.isFile()) return null;
-    if (!isAllowedFile(path7)) return null;
-    const title = path7.split("/").pop() ?? path7;
+    if (!isAllowedFile(path8)) return null;
+    const title = path8.split("/").pop() ?? path8;
     return {
-      id: `file:${path7}`,
+      id: `file:${path8}`,
       category: "files",
       title,
-      subtitle: path7,
-      tokens: `${title} ${path7}`,
-      action: { type: "open-file", path: path7 },
+      subtitle: path8,
+      tokens: `${title} ${path8}`,
+      action: { type: "open-file", path: path8 },
       updatedAt: stat2.mtimeMs,
-      sourcePath: path7,
+      sourcePath: path8,
       sourceMtime: stat2.mtimeMs
     };
   } catch {
@@ -15418,12 +15406,12 @@ var init_ranker = __esm({
 });
 
 // src/main/search/directoryRecommendations.ts
-function normalizePath(path7) {
-  const normalized = path7.replace(/\\/g, "/");
+function normalizePath(path8) {
+  const normalized = path8.replace(/\\/g, "/");
   return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized;
 }
-function isAbsolutePath(path7) {
-  return path7.startsWith("/") || path7.startsWith("//") || /^[A-Za-z]:\//.test(path7);
+function isAbsolutePath(path8) {
+  return path8.startsWith("/") || path8.startsWith("//") || /^[A-Za-z]:\//.test(path8);
 }
 function visitScore(visit, now) {
   const ageDays = Math.max(0, (now - visit.lastVisitedAt) / 864e5);
@@ -15435,8 +15423,8 @@ function rankDirectoryRecommendations(visits, options = {}) {
   const limit = options.limit ?? 5;
   const siblingThreshold = options.siblingThreshold ?? 3;
   const excluded = new Set(Array.from(options.excludedPaths ?? [], normalizePath));
-  const validVisits = Object.entries(visits).map(([path7, visit]) => [normalizePath(path7), visit]).filter(
-    ([path7, visit]) => isAbsolutePath(path7) && visit !== null && typeof visit === "object" && Number.isFinite(visit.count) && visit.count > 0 && Number.isFinite(visit.lastVisitedAt)
+  const validVisits = Object.entries(visits).map(([path8, visit]) => [normalizePath(path8), visit]).filter(
+    ([path8, visit]) => isAbsolutePath(path8) && visit !== null && typeof visit === "object" && Number.isFinite(visit.count) && visit.count > 0 && Number.isFinite(visit.lastVisitedAt)
   );
   const childrenByParent = /* @__PURE__ */ new Map();
   for (const entry of validVisits) {
@@ -15449,9 +15437,9 @@ function rankDirectoryRecommendations(visits, options = {}) {
     Array.from(childrenByParent.entries()).filter(([parent, children]) => !excluded.has(parent) && children.length >= siblingThreshold).map(([parent]) => parent)
   );
   const recommendations = /* @__PURE__ */ new Map();
-  for (const [path7, visit] of validVisits) {
-    const parent = import_node_path22.posix.dirname(path7);
-    const recommendationPath = collapsedParents.has(parent) ? parent : path7;
+  for (const [path8, visit] of validVisits) {
+    const parent = import_node_path22.posix.dirname(path8);
+    const recommendationPath = collapsedParents.has(parent) ? parent : path8;
     if (excluded.has(recommendationPath)) continue;
     const existing = recommendations.get(recommendationPath);
     const score = visitScore(visit, now);
@@ -20293,14 +20281,14 @@ function getTag(value) {
   return value == null ? value === void 0 ? "[object Undefined]" : "[object Null]" : Object.prototype.toString.call(value);
 }
 function createKey(key) {
-  let path7 = null;
+  let path8 = null;
   let id = null;
   let src = null;
   let weight = 1;
   let getFn = null;
   if (isString(key) || isArray2(key)) {
     src = key;
-    path7 = createKeyPath(key);
+    path8 = createKeyPath(key);
     id = createKeyId(key);
   } else {
     if (!hasOwn2.call(key, "name")) {
@@ -20314,12 +20302,12 @@ function createKey(key) {
         throw new Error(INVALID_KEY_WEIGHT_VALUE(name));
       }
     }
-    path7 = createKeyPath(name);
+    path8 = createKeyPath(name);
     id = createKeyId(name);
     getFn = key.getFn;
   }
   return {
-    path: path7,
+    path: path8,
     id,
     weight,
     src,
@@ -20332,25 +20320,25 @@ function createKeyPath(key) {
 function createKeyId(key) {
   return isArray2(key) ? key.join(".") : key;
 }
-function get(obj, path7) {
+function get(obj, path8) {
   const list = [];
   let arr = false;
-  const deepGet = (obj2, path8, index, arrayIndex) => {
+  const deepGet = (obj2, path9, index, arrayIndex) => {
     if (!isDefined(obj2)) {
       return;
     }
-    if (!path8[index]) {
+    if (!path9[index]) {
       list.push(arrayIndex !== void 0 ? {
         v: obj2,
         i: arrayIndex
       } : obj2);
     } else {
-      const key = path8[index];
+      const key = path9[index];
       const value = obj2[key];
       if (!isDefined(value)) {
         return;
       }
-      if (index === path8.length - 1 && (isString(value) || isNumber(value) || isBoolean(value) || typeof value === "bigint")) {
+      if (index === path9.length - 1 && (isString(value) || isNumber(value) || isBoolean(value) || typeof value === "bigint")) {
         list.push(arrayIndex !== void 0 ? {
           v: toString(value),
           i: arrayIndex
@@ -20358,14 +20346,14 @@ function get(obj, path7) {
       } else if (isArray2(value)) {
         arr = true;
         for (let i = 0, len = value.length; i < len; i += 1) {
-          deepGet(value[i], path8, index + 1, i);
+          deepGet(value[i], path9, index + 1, i);
         }
-      } else if (path8.length) {
-        deepGet(value, path8, index + 1, arrayIndex);
+      } else if (path9.length) {
+        deepGet(value, path9, index + 1, arrayIndex);
       }
     }
   };
-  deepGet(obj, isString(path7) ? path7.split(".") : path7, 0);
+  deepGet(obj, isString(path8) ? path8.split(".") : path8, 0);
   return arr ? list : list[0];
 }
 function norm(weight = 1, mantissa = 3) {
@@ -22400,9 +22388,9 @@ function createRaycastApi(ctx) {
     showHUD: async (message) => {
       ctx.feedback.push({ kind: "hud", message: String(message ?? "") });
     },
-    showInFinder: async (path7) => {
-      if (typeof path7 !== "string") return;
-      shell.showItemInFolder(path7);
+    showInFinder: async (path8) => {
+      if (typeof path8 !== "string") return;
+      shell.showItemInFolder(path8);
     },
     confirmAlert: async () => true,
     closeMainWindow: async () => {
@@ -23728,7 +23716,7 @@ function parseOpenPortProcesses(stdout, processNames = /* @__PURE__ */ new Map()
 }
 async function attachOpenPortProcessIcons(rows) {
   const uniqueAppPaths = Array.from(
-    new Set(rows.map((row) => row.appPath).filter((path7) => Boolean(path7)))
+    new Set(rows.map((row) => row.appPath).filter((path8) => Boolean(path8)))
   );
   const icons = /* @__PURE__ */ new Map();
   await Promise.all(
@@ -23931,18 +23919,18 @@ function resolveLauncherDirectory(input) {
     return null;
   }
 }
-function displayUserPath(path7) {
+function displayUserPath(path8) {
   const home = (0, import_node_os10.homedir)();
-  const normalizedPath = path7.replace(/\\/g, "/");
+  const normalizedPath = path8.replace(/\\/g, "/");
   const normalizedHome = home.replace(/\\/g, "/");
   if (normalizedPath === normalizedHome) return "~";
   if (normalizedPath.startsWith(`${normalizedHome}/`)) {
     return `~/${normalizedPath.slice(normalizedHome.length + 1)}`;
   }
-  return path7;
+  return path8;
 }
-function slashPathValue(path7, trailingSlash = false) {
-  const normalizedPath = path7.replace(/\\/g, "/");
+function slashPathValue(path8, trailingSlash = false) {
+  const normalizedPath = path8.replace(/\\/g, "/");
   const normalizedHome = (0, import_node_os10.homedir)().replace(/\\/g, "/").replace(/\/$/, "");
   let value = normalizedPath;
   if (normalizedPath === normalizedHome) {
@@ -24016,9 +24004,9 @@ function readDirectoryVisitStore() {
     return { version: 1, visits: {} };
   }
 }
-function recordDirectoryVisit(path7) {
+function recordDirectoryVisit(path8) {
   try {
-    const normalized = (0, import_node_path25.resolve)(path7);
+    const normalized = (0, import_node_path25.resolve)(path8);
     if (!(0, import_node_fs23.statSync)(normalized).isDirectory()) return;
     const store2 = readDirectoryVisitStore();
     const existing = store2.visits[normalized];
@@ -24074,9 +24062,9 @@ function readOpenWithUsageStore() {
   }
 }
 function writeOpenWithUsageStore(store2) {
-  const path7 = openWithUsageStorePath();
-  (0, import_node_fs23.mkdirSync)((0, import_node_path25.dirname)(path7), { recursive: true });
-  (0, import_node_fs23.writeFileSync)(path7, JSON.stringify(store2), "utf8");
+  const path8 = openWithUsageStorePath();
+  (0, import_node_fs23.mkdirSync)((0, import_node_path25.dirname)(path8), { recursive: true });
+  (0, import_node_fs23.writeFileSync)(path8, JSON.stringify(store2), "utf8");
 }
 function openWithUsageKeysForPath(targetPath) {
   try {
@@ -24181,8 +24169,8 @@ function recommendedOpenWithApps(targetPath) {
   });
   return Array.from(weights.entries()).map(([appName, score]) => ({ appName, score })).sort((a, b) => b.score - a.score || a.appName.localeCompare(b.appName));
 }
-function isApplicationsDirectory(path7) {
-  const normalized = path7.replace(/\/+$/, "");
+function isApplicationsDirectory(path8) {
+  const normalized = path8.replace(/\/+$/, "");
   return normalized === "/Applications" || normalized === "/System/Applications" || normalized === "/System/Applications/Utilities" || normalized === (0, import_node_path25.join)((0, import_node_os10.homedir)(), "Applications");
 }
 function inferredDefaultAppName(targetPath) {
@@ -24638,7 +24626,7 @@ var init_service3 = __esm({
     init_configStore();
     init_confirm();
     init_log2();
-    init_registry3();
+    init_registry2();
     init_pathIcons();
     init_appIcon();
     init_service();
@@ -24672,6 +24660,1001 @@ var init_service3 = __esm({
     searchLifecycleRegistered = false;
     fileIndexStartTimer = null;
     _benchmarkPromise = null;
+  }
+});
+
+// src/main/knowledge/agent/gateway.ts
+function searchActionTarget(action) {
+  switch (action.type) {
+    case "open-file":
+    case "open-with-app":
+      return action.path;
+    case "open-app":
+      return action.appPath ?? action.appName;
+    case "open-url":
+      return action.url;
+    case "run-extension-command":
+      return `${action.extensionId}/${action.commandName}`;
+    case "invoke-command":
+    case "run-native-command":
+      return action.commandId;
+    case "run-shell":
+      return action.command;
+    default:
+      return void 0;
+  }
+}
+function readBody(request) {
+  return new Promise((resolve6, reject) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 64 * 1024) request.destroy(new Error("Request is too large"));
+    });
+    request.once("end", () => resolve6(body));
+    request.once("error", reject);
+  });
+}
+function ensureKnowledgeAgentGateway() {
+  if (!gatewayPromise) {
+    gatewayPromise = new Promise((resolve6, reject) => {
+      const token = (0, import_node_crypto11.randomBytes)(32).toString("hex");
+      const server = (0, import_node_http.createServer)(async (request, response) => {
+        response.setHeader("Content-Type", "application/json; charset=utf-8");
+        if (request.method !== "POST" || request.headers.authorization !== `Bearer ${token}`) {
+          response.statusCode = 404;
+          response.end(JSON.stringify({ error: "Not found" }));
+          return;
+        }
+        try {
+          const parsed = JSON.parse(await readBody(request));
+          if (request.url === "/search") {
+            const query = typeof parsed.query === "string" ? parsed.query.trim() : "";
+            const limit = typeof parsed.limit === "number" ? Math.max(1, Math.min(20, Math.round(parsed.limit))) : 8;
+            if (!query) throw new Error("query is required");
+            const hits = getKnowledgeService().search(query, limit);
+            response.end(JSON.stringify({ hits }));
+            return;
+          }
+          if (request.url === "/launcher-search") {
+            const query = typeof parsed.query === "string" ? parsed.query.trim() : "";
+            const limit = typeof parsed.limit === "number" ? Math.max(1, Math.min(20, Math.round(parsed.limit))) : 10;
+            if (!query) throw new Error("query is required");
+            const results = (await searchEverything(query)).filter(
+              (result) => !result.id.startsWith(DEEP_SEARCH_RESULT_PREFIX) && !result.id.startsWith("note-add:")
+            ).slice(0, limit).map((result) => ({
+              id: result.id,
+              title: result.title,
+              subtitle: result.subtitle,
+              category: result.category,
+              score: result.score,
+              target: searchActionTarget(result.action)
+            }));
+            response.end(JSON.stringify({ results }));
+            return;
+          }
+          if (request.url === "/read") {
+            const resultId = typeof parsed.resultId === "string" ? parsed.resultId.trim() : "";
+            const maxChars = typeof parsed.maxChars === "number" ? Math.max(500, Math.min(5e4, Math.round(parsed.maxChars))) : 12e3;
+            if (!resultId) throw new Error("resultId is required");
+            const result = getKnowledgeService().read(resultId, maxChars);
+            if (!result) {
+              response.statusCode = 404;
+              response.end(JSON.stringify({ error: "Knowledge result was not found" }));
+              return;
+            }
+            response.end(JSON.stringify({ result }));
+            return;
+          }
+          response.statusCode = 404;
+          response.end(JSON.stringify({ error: "Not found" }));
+        } catch (error) {
+          response.statusCode = 400;
+          response.end(
+            JSON.stringify({ error: error instanceof Error ? error.message : String(error) })
+          );
+        }
+      });
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => {
+        const address = server.address();
+        if (!address || typeof address === "string") {
+          reject(new Error("Failed to start the local knowledge bridge"));
+          return;
+        }
+        resolve6({ endpoint: `http://127.0.0.1:${address.port}/search`, token, server });
+      });
+    });
+  }
+  return gatewayPromise.then(({ endpoint, token }) => ({ endpoint, token }));
+}
+async function stopKnowledgeAgentGateway() {
+  if (!gatewayPromise) return;
+  const gateway = await gatewayPromise.catch(() => null);
+  gatewayPromise = null;
+  if (!gateway) return;
+  await new Promise((resolve6) => gateway.server.close(() => resolve6()));
+}
+var import_node_crypto11, import_node_http, gatewayPromise;
+var init_gateway = __esm({
+  "src/main/knowledge/agent/gateway.ts"() {
+    "use strict";
+    import_node_crypto11 = require("node:crypto");
+    import_node_http = require("node:http");
+    init_searchMode();
+    init_service3();
+    init_service();
+    gatewayPromise = null;
+  }
+});
+
+// src/main/agent/bridge.ts
+var bridge_exports = {};
+__export(bridge_exports, {
+  createBridge: () => createBridge,
+  disposeSharedBridge: () => disposeSharedBridge,
+  getSharedBridge: () => getSharedBridge
+});
+function resolveRaymesPiExtension() {
+  const resourcesPath = process.resourcesPath;
+  const candidates = [
+    process.env["RAYMES_PI_EXTENSION"],
+    import_node_path26.default.join(process.cwd(), "src", "main", "agent", "raymes-pi-policy.ts"),
+    ...app.isPackaged && resourcesPath ? [import_node_path26.default.join(resourcesPath, "agent", "raymes-pi-policy.ts")] : []
+  ];
+  return candidates.find(
+    (candidate) => Boolean(candidate && (0, import_node_fs24.existsSync)(candidate))
+  );
+}
+function resolvePiBinary(override) {
+  if (override && override.trim()) return override.trim();
+  const envOverride = process.env["RAYMES_PI_BIN"];
+  if (envOverride && envOverride.trim()) return envOverride.trim();
+  for (const candidate of PI_BIN_CANDIDATES) {
+    if ((0, import_node_fs24.existsSync)(candidate)) return candidate;
+  }
+  return "pi";
+}
+function makeId() {
+  return (0, import_node_crypto12.randomUUID)();
+}
+function writeCommand(child, command3) {
+  const line = `${JSON.stringify(command3)}
+`;
+  child.stdin.write(line);
+}
+function spawnRpc(options) {
+  const args = ["--mode", "rpc"];
+  if (options.ephemeral) args.push("--no-session");
+  if (options.model) args.push("--model", options.model);
+  const raymesPiExtension = resolveRaymesPiExtension();
+  if (raymesPiExtension) args.push("--extension", raymesPiExtension);
+  if (options.model?.startsWith("opencode/") && (0, import_node_fs24.existsSync)(OPENCODE_PI_EXTENSION)) {
+    args.push("--extension", OPENCODE_PI_EXTENSION);
+  }
+  args.push(...options.extraArgs);
+  const child = (0, import_node_child_process15.spawn)(options.piBin, args, {
+    cwd: options.cwd,
+    env: {
+      ...process.env,
+      ...options.raymesProviderJson ? { RAYMES_PI_PROVIDER_JSON: options.raymesProviderJson } : {},
+      ...options.raymesAlwaysAllowJson ? { RAYMES_PI_ALWAYS_ALLOW_JSON: options.raymesAlwaysAllowJson } : {},
+      ...options.raymesAlwaysAllowExactJson ? { RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON: options.raymesAlwaysAllowExactJson } : {},
+      ...options.knowledgeEndpoint ? { TEZBAR_KNOWLEDGE_ENDPOINT: options.knowledgeEndpoint } : {},
+      ...options.knowledgeToken ? { TEZBAR_KNOWLEDGE_TOKEN: options.knowledgeToken } : {}
+    },
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  return child;
+}
+function shouldSuppressPiStderr(line) {
+  return /^Warning: No models match pattern "[^"]+"$/.test(line.trim());
+}
+async function handleExtensionUiRequest(handle, msg) {
+  const id = msg.id;
+  if (typeof id !== "string") return;
+  if (msg.method === "confirm") {
+    const title = msg.title || "Allow command?";
+    const command3 = msg.message || "";
+    let confirmed = false;
+    try {
+      confirmed = await handle.requestApproval?.({ title, command: command3 }) ?? false;
+    } catch {
+      confirmed = false;
+    }
+    writeCommand(handle.child, {
+      type: "extension_ui_response",
+      id,
+      confirmed
+    });
+    return;
+  }
+  if (msg.method === "notify") {
+    if (msg.message) {
+      handle.onStderrLine?.(msg.message);
+    }
+    writeCommand(handle.child, { type: "extension_ui_response", id, success: true });
+    return;
+  }
+  if (msg.method === "setStatus") {
+    if (msg.statusText) {
+      const clean = msg.statusText.replace(/\x1b\[[0-9;]*m/g, "").trim();
+      if (clean) handle.onStderrLine?.(clean);
+    }
+    writeCommand(handle.child, { type: "extension_ui_response", id, success: true });
+    return;
+  }
+  writeCommand(handle.child, { type: "extension_ui_response", id, cancelled: true });
+}
+function attachLineReader(stream, onLine) {
+  let buffer = "";
+  stream.on("data", (chunk) => {
+    buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    let newlineAt = buffer.indexOf("\n");
+    while (newlineAt >= 0) {
+      const raw = buffer.slice(0, newlineAt);
+      buffer = buffer.slice(newlineAt + 1);
+      const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+      if (line.length > 0) onLine(line);
+      newlineAt = buffer.indexOf("\n");
+    }
+  });
+}
+function attachHandlers(handle, onStderrLine) {
+  attachLineReader(handle.child.stdout, (line) => {
+    let parsed;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      return;
+    }
+    if (!parsed || typeof parsed !== "object") return;
+    const msg = parsed;
+    if (msg.type === "response" && typeof msg.id === "string") {
+      const pending = handle.pending.get(msg.id);
+      if (!pending) return;
+      handle.pending.delete(msg.id);
+      if (msg.success === true) {
+        pending.resolve(parsed);
+      } else {
+        pending.reject(new Error(msg.error || "pi rpc command failed"));
+      }
+      return;
+    }
+    if (msg.type === "extension_ui_request") {
+      void handleExtensionUiRequest(handle, msg);
+      return;
+    }
+    if (typeof msg.type === "string") {
+      handle.onEvent(parsed);
+    }
+  });
+  attachLineReader(handle.child.stderr, (line) => {
+    if (shouldSuppressPiStderr(line)) return;
+    handle.stderrBuffer.push(line);
+    onStderrLine?.(line);
+    if (handle.stderrBuffer.length > 50) handle.stderrBuffer.shift();
+  });
+  handle.child.on("close", () => {
+    handle.closed = true;
+    const pendings = Array.from(handle.pending.values());
+    for (let i = 0; i < pendings.length; i++) {
+      const pending = pendings[i];
+      if (pending) pending.reject(new Error("pi rpc session closed before response"));
+    }
+    handle.pending.clear();
+  });
+  handle.child.on("error", (err) => {
+    handle.closed = true;
+    const pendings = Array.from(handle.pending.values());
+    for (let i = 0; i < pendings.length; i++) {
+      const pending = pendings[i];
+      if (pending) pending.reject(err);
+    }
+    handle.pending.clear();
+  });
+}
+async function sendAndAwait(handle, command3, timeoutMs) {
+  if (handle.closed) throw new Error("pi rpc session already closed");
+  const id = makeId();
+  return new Promise((resolve6, reject) => {
+    const timer = setTimeout(() => {
+      handle.pending.delete(id);
+      reject(new Error(`pi rpc command timed out after ${timeoutMs}ms: ${command3.type}`));
+    }, timeoutMs);
+    handle.pending.set(id, {
+      resolve: (value) => {
+        clearTimeout(timer);
+        resolve6(value);
+      },
+      reject: (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    });
+    writeCommand(handle.child, { ...command3, id });
+  });
+}
+function createBridge() {
+  const ownedChildren = /* @__PURE__ */ new Set();
+  function trackChild(child) {
+    ownedChildren.add(child);
+    child.on("close", () => ownedChildren.delete(child));
+  }
+  return {
+    async run(task, options = {}) {
+      if (!task.trim()) {
+        throw new Error("agent.run: task is empty");
+      }
+      const runId = options.runId ?? makeId();
+      const cwd = options.cwd ?? process.cwd();
+      const piBin = resolvePiBinary(options.piBin);
+      const ephemeral = options.ephemeral !== false;
+      const knowledgeGateway = await ensureKnowledgeAgentGateway().catch(() => null);
+      const stages = [];
+      let finalAnswer = "";
+      let runError;
+      const driver = createLoopDriver({
+        onStage: (stage) => {
+          const existing = stages.findIndex((s) => s.index === stage.index);
+          if (existing >= 0) stages[existing] = stage;
+          else stages.push(stage);
+          options.onStage?.(stage);
+        },
+        onMessageDelta: (delta) => {
+          options.onMessageDelta?.(delta);
+        },
+        onAnswer: (text3) => {
+          finalAnswer = text3;
+          options.onAnswer?.(text3);
+        },
+        onDone: () => {
+        },
+        onError: (message) => {
+          runError = new Error(message);
+        }
+      });
+      const child = spawnRpc({
+        cwd,
+        piBin,
+        ephemeral,
+        model: options.model,
+        raymesProviderJson: options.raymesProviderJson,
+        raymesAlwaysAllowJson: options.raymesAlwaysAllowJson,
+        raymesAlwaysAllowExactJson: options.raymesAlwaysAllowExactJson,
+        knowledgeEndpoint: knowledgeGateway?.endpoint,
+        knowledgeToken: knowledgeGateway?.token,
+        extraArgs: options.extraArgs ?? []
+      });
+      trackChild(child);
+      console.log("[tezbar:agent] spawn", {
+        runId,
+        piBin,
+        cwd,
+        ephemeral,
+        model: options.model ?? "(default)",
+        taskChars: task.length
+      });
+      let agentEndResolved = false;
+      let agentEnded = () => void 0;
+      const agentEndPromise = new Promise((resolve6) => {
+        agentEnded = () => {
+          if (agentEndResolved) return;
+          agentEndResolved = true;
+          resolve6();
+        };
+      });
+      const handle = {
+        child,
+        pending: /* @__PURE__ */ new Map(),
+        stderrBuffer: [],
+        closed: false,
+        requestApproval: options.requestApproval,
+        onStderrLine: options.onStderrLine,
+        onEvent: (event) => {
+          try {
+            driver(event);
+          } catch (err) {
+            runError ??= err instanceof Error ? err : new Error(String(err));
+          }
+          if (runError || event.type === "agent_end") agentEnded();
+        }
+      };
+      attachHandlers(handle, options.onStderrLine);
+      const onAbort = () => {
+        if (handle.closed) return;
+        try {
+          writeCommand(child, { type: "abort", id: makeId() });
+        } catch {
+        }
+        setTimeout(() => {
+          if (!handle.closed && !child.killed) child.kill("SIGTERM");
+        }, 500);
+      };
+      options.signal?.addEventListener("abort", onAbort, { once: true });
+      try {
+        await sendAndAwait(handle, buildPromptCommand(task, options.images), 15e3);
+        let runTimeout;
+        try {
+          await Promise.race([
+            agentEndPromise,
+            (0, import_node_events.once)(child, "close").then(() => void 0),
+            new Promise((_resolve, reject) => {
+              runTimeout = setTimeout(
+                () => reject(
+                  new Error(`Agent run timed out after ${options.timeoutMs ?? 15 * 6e4}ms`)
+                ),
+                options.timeoutMs ?? 15 * 6e4
+              );
+            })
+          ]);
+        } finally {
+          if (runTimeout) clearTimeout(runTimeout);
+        }
+        if (options.signal?.aborted) {
+          throw new Error("Agent run aborted");
+        }
+        if (runError) {
+          throw runError;
+        }
+        if (handle.closed && !agentEndResolved) {
+          const tail = handle.stderrBuffer.slice(-8).join("\n").trim();
+          throw new Error(
+            tail ? `pi exited before finishing:
+${tail}` : "pi exited before finishing"
+          );
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const tail = handle.stderrBuffer.filter((line) => !message.includes(line)).slice(-6).join("\n").trim();
+        throw new Error(tail ? `${message}
+${tail}` : message);
+      } finally {
+        options.signal?.removeEventListener("abort", onAbort);
+        if (!handle.closed) {
+          try {
+            writeCommand(child, { type: "abort", id: makeId() });
+          } catch {
+          }
+          child.stdin.end();
+          setTimeout(() => {
+            if (!handle.closed && !child.killed) child.kill("SIGTERM");
+          }, 500);
+        }
+      }
+      return { runId, answer: finalAnswer, stages };
+    },
+    async query(command3, queryOptions = {}) {
+      const cwd = queryOptions.cwd ?? process.cwd();
+      const piBin = resolvePiBinary(queryOptions.piBin);
+      const timeoutMs = queryOptions.timeoutMs ?? 1e4;
+      const child = spawnRpc({ cwd, piBin, ephemeral: true, extraArgs: [] });
+      trackChild(child);
+      const handle = {
+        child,
+        pending: /* @__PURE__ */ new Map(),
+        stderrBuffer: [],
+        closed: false,
+        requestApproval: void 0,
+        onEvent: () => void 0
+      };
+      attachHandlers(handle);
+      try {
+        const result = await sendAndAwait(handle, command3, timeoutMs);
+        return result;
+      } finally {
+        try {
+          writeCommand(child, { type: "abort", id: makeId() });
+        } catch {
+        }
+        child.stdin.end();
+        setTimeout(() => {
+          if (!handle.closed && !child.killed) child.kill("SIGTERM");
+        }, 250);
+      }
+    },
+    async observe(observeOptions = {}) {
+      const cwd = observeOptions.cwd ?? process.cwd();
+      const piBin = resolvePiBinary(observeOptions.piBin);
+      return observe(cwd, (command3) => this.query(command3, { cwd, piBin, timeoutMs: 5e3 }));
+    },
+    dispose() {
+      const children = Array.from(ownedChildren.values());
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        if (child && !child.killed) child.kill("SIGTERM");
+      }
+      ownedChildren.clear();
+    }
+  };
+}
+function getSharedBridge() {
+  if (!sharedBridge) sharedBridge = createBridge();
+  return sharedBridge;
+}
+function disposeSharedBridge() {
+  sharedBridge?.dispose();
+  sharedBridge = void 0;
+}
+var import_node_child_process15, import_node_crypto12, import_node_events, import_node_fs24, import_node_os11, import_node_path26, PI_BIN_CANDIDATES, OPENCODE_PI_EXTENSION, sharedBridge;
+var init_bridge = __esm({
+  "src/main/agent/bridge.ts"() {
+    "use strict";
+    import_node_child_process15 = require("node:child_process");
+    import_node_crypto12 = require("node:crypto");
+    import_node_events = require("node:events");
+    import_node_fs24 = require("node:fs");
+    import_node_os11 = require("node:os");
+    import_node_path26 = __toESM(require("node:path"));
+    init_desktop_runtime();
+    init_loop();
+    init_observer();
+    init_prompt();
+    init_gateway();
+    PI_BIN_CANDIDATES = [
+      // Where pnpm installs global bins for this user (matches `which pi`
+      // at the time this bridge was written). We resolve at runtime so a
+      // reinstall or version bump does not require a rebuild.
+      import_node_path26.default.join((0, import_node_os11.homedir)(), "Library", "pnpm", "pi"),
+      import_node_path26.default.join((0, import_node_os11.homedir)(), ".local", "share", "pnpm", "pi")
+    ];
+    OPENCODE_PI_EXTENSION = import_node_path26.default.join(
+      (0, import_node_os11.homedir)(),
+      ".pi",
+      "agent",
+      "extensions",
+      "opencode",
+      "index.ts"
+    );
+  }
+});
+
+// src/main/llm/registry.ts
+var registry_exports = {};
+__export(registry_exports, {
+  buildProviderForId: () => buildProviderForId,
+  configForProvider: () => configForProvider,
+  configForTask: () => configForTask,
+  getProvider: () => getProvider,
+  getProviderForTask: () => getProviderForTask,
+  getSelectedPiModelPattern: () => getSelectedPiModelPattern,
+  getSelectedPiProviderBridge: () => getSelectedPiProviderBridge,
+  invalidateProviderCache: () => invalidateProviderCache,
+  readLLMConfig: () => readLLMConfig
+});
+function normalizeCustomProviders(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const entry = value;
+    const id = typeof entry.id === "string" ? entry.id.trim() : "";
+    const title = typeof entry.title === "string" ? entry.title.trim() : "";
+    if (!id.startsWith("custom:") || !title) return [];
+    return [{
+      id,
+      title,
+      subtitle: typeof entry.subtitle === "string" ? entry.subtitle.trim() : void 0
+    }];
+  });
+}
+function providerIds(customProviders) {
+  return [...Object.keys(DEFAULT_PROVIDER_MODELS), ...customProviders.map((provider) => provider.id)];
+}
+function normalizeProviderModels(raw, ids) {
+  if (!raw || typeof raw !== "object") return void 0;
+  const result = {};
+  for (const provider of ids) {
+    const models = raw[provider];
+    if (!Array.isArray(models)) continue;
+    result[provider] = normalizeProviderModelList(provider, models);
+  }
+  return result;
+}
+function normalizeProviderSelectedModels(raw, ids) {
+  if (!raw || typeof raw !== "object") return void 0;
+  const result = {};
+  for (const provider of ids) {
+    const value = raw[provider];
+    if (typeof value === "string" && value.trim()) result[provider] = value.trim();
+  }
+  return result;
+}
+function normalizeProviderConfigs(raw, ids) {
+  if (!raw || typeof raw !== "object") return void 0;
+  const result = {};
+  for (const provider of ids) {
+    const value = raw[provider];
+    if (!value || typeof value !== "object") continue;
+    const config = value;
+    result[provider] = {
+      apiKey: typeof config.apiKey === "string" ? config.apiKey : void 0,
+      baseURL: typeof config.baseURL === "string" ? config.baseURL : void 0,
+      openaiCompatibleBaseURL: typeof config.openaiCompatibleBaseURL === "string" ? config.openaiCompatibleBaseURL : void 0,
+      geminiApiKey: typeof config.geminiApiKey === "string" ? config.geminiApiKey : void 0,
+      copilotGithubToken: typeof config.copilotGithubToken === "string" ? config.copilotGithubToken : void 0,
+      githubOAuthClientId: typeof config.githubOAuthClientId === "string" ? config.githubOAuthClientId : void 0
+    };
+  }
+  return result;
+}
+function normalizeFromRaw(raw) {
+  const customProviders = normalizeCustomProviders(raw.customProviders);
+  const ids = providerIds(customProviders);
+  const p = raw.provider;
+  const hasCopilotToken = typeof raw.copilotGithubToken === "string" && raw.copilotGithubToken.length > 0;
+  const provider = typeof p === "string" && customProviders.some((provider2) => provider2.id === p) || p === "openai" || p === "openai-compatible" || p === "anthropic" || p === "ollama" || p === "copilot" || p === "gemini" || p === "opencode" || p === "deepseek" || p === "tokenrouter" ? p : hasCopilotToken ? "copilot" : "ollama";
+  const providerModels = normalizeProviderModels(raw.providerModels, ids);
+  const providerSelectedModels = normalizeProviderSelectedModels(raw.providerSelectedModels, ids);
+  const providerConfigs = normalizeProviderConfigs(raw.providerConfigs, ids);
+  const selectedModel = providerSelectedModels?.[provider];
+  const providerConfig = providerConfigs?.[provider] ?? {};
+  const allowLegacyProviderFields = !providerConfigs || Object.keys(providerConfigs).length === 0;
+  return {
+    provider,
+    customProviders,
+    providerConfigs,
+    apiKey: providerConfig.apiKey ?? (allowLegacyProviderFields && typeof raw.apiKey === "string" ? raw.apiKey : void 0),
+    baseURL: providerConfig.baseURL ?? (allowLegacyProviderFields && typeof raw.baseURL === "string" ? raw.baseURL : void 0),
+    openaiCompatibleBaseURL: providerConfig.openaiCompatibleBaseURL ?? (allowLegacyProviderFields && typeof raw.openaiCompatibleBaseURL === "string" ? raw.openaiCompatibleBaseURL : void 0),
+    geminiApiKey: providerConfig.geminiApiKey ?? (allowLegacyProviderFields && typeof raw.geminiApiKey === "string" ? raw.geminiApiKey : void 0),
+    model: selectedModel ?? (typeof raw.model === "string" ? raw.model : void 0),
+    providerModels,
+    providerSelectedModels,
+    copilotGithubToken: providerConfig.copilotGithubToken ?? (allowLegacyProviderFields && typeof raw.copilotGithubToken === "string" ? raw.copilotGithubToken : void 0),
+    copilotRefreshToken: typeof raw.copilotRefreshToken === "string" ? raw.copilotRefreshToken : void 0,
+    copilotExpiresAt: typeof raw.copilotExpiresAt === "number" ? raw.copilotExpiresAt : void 0,
+    githubOAuthClientId: providerConfig.githubOAuthClientId ?? (allowLegacyProviderFields && typeof raw.githubOAuthClientId === "string" ? raw.githubOAuthClientId : void 0),
+    taskProviderOverrides: typeof raw.taskProviderOverrides === "object" && raw.taskProviderOverrides ? raw.taskProviderOverrides : void 0,
+    taskModelOverrides: typeof raw.taskModelOverrides === "object" && raw.taskModelOverrides ? raw.taskModelOverrides : void 0,
+    memoryEnabled: typeof raw.memoryEnabled === "boolean" ? raw.memoryEnabled : void 0,
+    memoryMaxItems: typeof raw.memoryMaxItems === "number" ? raw.memoryMaxItems : void 0,
+    memoryIncludePrivate: typeof raw.memoryIncludePrivate === "boolean" ? raw.memoryIncludePrivate : void 0,
+    aiActionRequirePermission: typeof raw.aiActionRequirePermission === "boolean" ? raw.aiActionRequirePermission : void 0,
+    aiActionRedactionEnabled: typeof raw.aiActionRedactionEnabled === "boolean" ? raw.aiActionRedactionEnabled : void 0,
+    uiStateRetentionMs: typeof raw.uiStateRetentionMs === "number" ? raw.uiStateRetentionMs : void 0
+  };
+}
+function readLLMConfig() {
+  const raw = readRawConfig();
+  if (Object.keys(raw).length === 0) {
+    return { provider: "ollama", baseURL: DEFAULT_OLLAMA_BASE, model: DEFAULT_OLLAMA_MODEL };
+  }
+  const n = normalizeFromRaw(raw);
+  if (n.provider === "ollama") {
+    return {
+      ...n,
+      baseURL: n.baseURL ?? DEFAULT_OLLAMA_BASE,
+      model: n.model ?? DEFAULT_OLLAMA_MODEL
+    };
+  }
+  if (n.provider === "gemini") {
+    return {
+      ...n,
+      baseURL: n.baseURL ?? DEFAULT_GEMINI_BASE,
+      model: n.model ?? DEFAULT_GEMINI_MODEL
+    };
+  }
+  if (n.provider === "deepseek") {
+    return {
+      ...n,
+      baseURL: n.baseURL ?? DEFAULT_DEEPSEEK_BASE,
+      model: n.model ?? DEFAULT_DEEPSEEK_MODEL
+    };
+  }
+  if (n.provider === "tokenrouter") {
+    return {
+      ...n,
+      baseURL: n.baseURL ?? DEFAULT_TOKENROUTER_BASE,
+      model: n.model ?? DEFAULT_TOKENROUTER_MODEL
+    };
+  }
+  return n;
+}
+function configForProvider(cfg, provider) {
+  const providerConfig = cfg.providerConfigs?.[provider] ?? {};
+  const useCurrentProviderFields = cfg.provider === provider;
+  const model = cfg.providerSelectedModels?.[provider] ?? (useCurrentProviderFields ? cfg.model : void 0);
+  const next = {
+    ...cfg,
+    provider,
+    model,
+    apiKey: providerConfig.apiKey ?? (useCurrentProviderFields ? cfg.apiKey : void 0),
+    baseURL: providerConfig.baseURL ?? (useCurrentProviderFields ? cfg.baseURL : void 0),
+    openaiCompatibleBaseURL: providerConfig.openaiCompatibleBaseURL ?? (useCurrentProviderFields ? cfg.openaiCompatibleBaseURL : void 0),
+    geminiApiKey: providerConfig.geminiApiKey ?? (useCurrentProviderFields ? cfg.geminiApiKey : void 0),
+    copilotGithubToken: providerConfig.copilotGithubToken ?? (useCurrentProviderFields ? cfg.copilotGithubToken : void 0),
+    githubOAuthClientId: providerConfig.githubOAuthClientId ?? (useCurrentProviderFields ? cfg.githubOAuthClientId : void 0)
+  };
+  if (provider === "ollama") {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_OLLAMA_BASE, model: next.model ?? DEFAULT_OLLAMA_MODEL };
+  }
+  if (provider === "gemini") {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_GEMINI_BASE, model: next.model ?? DEFAULT_GEMINI_MODEL };
+  }
+  if (provider === "deepseek") {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_DEEPSEEK_BASE, model: next.model ?? DEFAULT_DEEPSEEK_MODEL };
+  }
+  if (provider === "tokenrouter") {
+    return { ...next, baseURL: next.baseURL ?? DEFAULT_TOKENROUTER_BASE, model: next.model ?? DEFAULT_TOKENROUTER_MODEL };
+  }
+  if (provider === "antigravity") {
+    return { ...next, baseURL: next.baseURL ?? "https://cloudcode-pa.googleapis.com", model: next.model ?? "gemini-3.8-flash" };
+  }
+  return {
+    ...next,
+    model: next.model ?? (recommendedModel(provider) || defaultModels(provider)[0]?.id)
+  };
+}
+function buildProviderForId(id, cfg) {
+  return buildProvider(configForProvider(cfg, id));
+}
+function configForTask(cfg, task) {
+  const providerOverride = cfg.taskProviderOverrides?.[task];
+  const modelOverride = cfg.taskModelOverrides?.[task];
+  const targetProvider = providerOverride ?? cfg.provider;
+  const targetConfig = configForProvider(cfg, targetProvider);
+  return {
+    ...targetConfig,
+    model: modelOverride ?? targetConfig.model
+  };
+}
+function buildProvider(cfg) {
+  const openAiProvider = (baseUrl, apiKey, model, label) => {
+    const { OpenAIProvider: OpenAIProvider2 } = (init_openai(), __toCommonJS(openai_exports));
+    return new OpenAIProvider2(baseUrl, apiKey, model, label);
+  };
+  if (isCustomProvider(cfg.provider)) {
+    return openAiProvider(
+      cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? "",
+      cfg.apiKey ?? "",
+      cfg.model ?? "",
+      cfg.customProviders?.find((provider) => provider.id === cfg.provider)?.title ?? "Custom provider"
+    );
+  }
+  switch (cfg.provider) {
+    case "openai":
+      return openAiProvider(
+        cfg.baseURL ?? "https://api.openai.com/v1",
+        cfg.apiKey ?? "",
+        cfg.model ?? "gpt-4o-mini",
+        "OpenAI"
+      );
+    case "openai-compatible":
+      return openAiProvider(
+        cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? "https://api.openai.com/v1",
+        cfg.apiKey ?? "",
+        cfg.model ?? "gpt-4o-mini",
+        "OpenAI-compatible provider"
+      );
+    case "anthropic":
+      const { AnthropicProvider: AnthropicProvider2 } = (init_anthropic(), __toCommonJS(anthropic_exports));
+      return new AnthropicProvider2(
+        cfg.apiKey ?? "",
+        cfg.model ?? "claude-3-5-haiku-20241022",
+        cfg.baseURL
+      );
+    case "ollama":
+      const { OllamaProvider: OllamaProvider2 } = (init_ollama(), __toCommonJS(ollama_exports));
+      return new OllamaProvider2(cfg.baseURL ?? DEFAULT_OLLAMA_BASE, cfg.model ?? DEFAULT_OLLAMA_MODEL);
+    case "copilot":
+      const { CopilotProvider: CopilotProvider2 } = (init_copilot(), __toCommonJS(copilot_exports));
+      return new CopilotProvider2(cfg.model ?? "gpt-4o");
+    case "gemini":
+      return openAiProvider(
+        cfg.baseURL ?? DEFAULT_GEMINI_BASE,
+        cfg.geminiApiKey ?? cfg.apiKey ?? "",
+        cfg.model ?? DEFAULT_GEMINI_MODEL,
+        "Gemini"
+      );
+    case "opencode":
+      const { OpenCodeProvider: OpenCodeProvider2 } = (init_opencode(), __toCommonJS(opencode_exports));
+      return new OpenCodeProvider2(cfg.model ?? "opencode/big-pickle");
+    case "deepseek":
+      return openAiProvider(
+        cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE,
+        cfg.apiKey ?? "",
+        cfg.model ?? DEFAULT_DEEPSEEK_MODEL,
+        "DeepSeek"
+      );
+    case "tokenrouter":
+      return openAiProvider(
+        cfg.baseURL ?? DEFAULT_TOKENROUTER_BASE,
+        cfg.apiKey?.trim() ? cfg.apiKey : process.env["TOKENROUTER_API_KEY"] ?? "",
+        cfg.model ?? DEFAULT_TOKENROUTER_MODEL,
+        "TokenRouter"
+      );
+    case "antigravity":
+      return new class {
+        name = "antigravity";
+        async chat(messages, _tools, options) {
+          const { getSharedBridge: getSharedBridge2 } = (init_bridge(), __toCommonJS(bridge_exports));
+          const bridge = getSharedBridge2();
+          const prompt = messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
+          const result = await bridge.run(prompt, {
+            model: `antigravity/${cfg.model || "gemini-3.8-flash"}`,
+            signal: options?.signal
+          });
+          async function* generator() {
+            if (result.answer) yield { text: result.answer };
+          }
+          return generator();
+        }
+        async isAvailable() {
+          return true;
+        }
+      }();
+    default:
+      const { OllamaProvider: DefaultOllamaProvider } = (init_ollama(), __toCommonJS(ollama_exports));
+      return new DefaultOllamaProvider(DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL);
+  }
+}
+function invalidateProviderCache() {
+  cacheKey = "";
+  active = null;
+}
+function getProvider() {
+  const cfg = readLLMConfig();
+  const key = JSON.stringify(cfg);
+  if (active && key === cacheKey) return active;
+  active = buildProvider(cfg);
+  cacheKey = key;
+  return active;
+}
+function getProviderForTask(task) {
+  const cfg = readLLMConfig();
+  return buildProvider(configForTask(cfg, task));
+}
+function getSelectedPiModelPattern(task) {
+  const baseConfig = readLLMConfig();
+  const cfg = task ? configForTask(baseConfig, task) : baseConfig;
+  const model = cfg.model?.trim();
+  if (!model) return void 0;
+  const provider = cfg.provider;
+  if (provider === "opencode") {
+    if (model.startsWith("opencode/opencode/")) return model;
+    if (model.startsWith("opencode/")) return `opencode/${model}`;
+    return `opencode/opencode/${model}`;
+  }
+  if (provider === "antigravity") {
+    if (model.startsWith("antigravity/")) return model;
+    return `antigravity/${model}`;
+  }
+  if (model.startsWith(`${provider}/`)) return model;
+  if (model.includes("/") && provider !== "tokenrouter") return model;
+  return `${provider}/${model}`;
+}
+function stripProviderPrefix(model, provider) {
+  const prefix = `${provider}/`;
+  let normalized = model.trim();
+  while (normalized.startsWith(prefix)) {
+    normalized = normalized.slice(prefix.length);
+  }
+  return normalized;
+}
+function openAiCompatBaseUrl(cfg) {
+  if (cfg.provider === "openai") return cfg.baseURL ?? "https://api.openai.com/v1";
+  if (cfg.provider === "openai-compatible") return cfg.openaiCompatibleBaseURL ?? cfg.baseURL;
+  if (cfg.provider === "gemini") return cfg.baseURL ?? DEFAULT_GEMINI_BASE;
+  if (cfg.provider === "deepseek") return cfg.baseURL ?? DEFAULT_DEEPSEEK_BASE;
+  if (cfg.provider === "tokenrouter") return cfg.baseURL ?? DEFAULT_TOKENROUTER_BASE;
+  if (isCustomProvider(cfg.provider)) return cfg.openaiCompatibleBaseURL ?? cfg.baseURL;
+  if (cfg.provider === "ollama") {
+    const base = cfg.baseURL ?? DEFAULT_OLLAMA_BASE;
+    return base.endsWith("/v1") ? base : `${base.replace(/\/+$/, "")}/v1`;
+  }
+  return void 0;
+}
+function piApiKey(cfg) {
+  if (cfg.provider === "gemini") return cfg.geminiApiKey ?? cfg.apiKey;
+  if (cfg.provider === "ollama") return "ollama";
+  if (cfg.provider === "tokenrouter") {
+    return cfg.apiKey?.trim() ? cfg.apiKey : process.env["TOKENROUTER_API_KEY"];
+  }
+  if (isCustomProvider(cfg.provider) || cfg.provider === "openai-compatible") {
+    return cfg.apiKey?.trim() || "tezbar-local";
+  }
+  return cfg.apiKey;
+}
+function officialDeepSeekAnthropicBaseUrl(baseUrl) {
+  if (!baseUrl) return void 0;
+  try {
+    const url = new URL(baseUrl);
+    const path8 = url.pathname.replace(/\/+$/, "");
+    if (url.hostname !== "api.deepseek.com" || path8 && path8 !== "/v1") return void 0;
+    return `${url.origin}/anthropic`;
+  } catch {
+    return void 0;
+  }
+}
+function getSelectedPiProviderBridge(task) {
+  const baseConfig = readLLMConfig();
+  const cfg = task ? configForTask(baseConfig, task) : baseConfig;
+  const model = cfg.model?.trim();
+  if (!model) return void 0;
+  const modelId = stripProviderPrefix(model, cfg.provider);
+  if (!modelId) return void 0;
+  const selectedModel = cfg.providerModels?.[cfg.provider]?.find(
+    (candidate) => stripProviderPrefix(candidate.id, cfg.provider) === modelId
+  );
+  const modelInput = selectedModel?.capabilities.includes("vision") ? ["text", "image"] : ["text"];
+  const isAnthropic = cfg.provider === "anthropic";
+  if (cfg.provider === "antigravity") {
+    return {
+      modelPattern: `antigravity/${modelId}`,
+      providerJson: void 0,
+      acceptsImages: true
+    };
+  }
+  const openAiBaseUrl = openAiCompatBaseUrl(cfg);
+  const deepSeekAnthropicBaseUrl = cfg.provider === "deepseek" ? officialDeepSeekAnthropicBaseUrl(openAiBaseUrl) : void 0;
+  const usesAnthropicMessages = isAnthropic || Boolean(deepSeekAnthropicBaseUrl);
+  const baseUrl = isAnthropic ? cfg.baseURL ?? "https://api.anthropic.com" : deepSeekAnthropicBaseUrl ?? openAiBaseUrl;
+  const apiKey = isAnthropic ? cfg.apiKey : piApiKey(cfg);
+  if (!baseUrl || !apiKey) return void 0;
+  const compat = deepSeekAnthropicBaseUrl ? {
+    supportsEagerToolInputStreaming: false,
+    supportsLongCacheRetention: false,
+    supportsCacheControlOnTools: false,
+    allowEmptySignature: true
+  } : cfg.provider === "deepseek" ? {
+    supportsStore: false,
+    supportsDeveloperRole: false,
+    requiresReasoningContentOnAssistantMessages: true,
+    thinkingFormat: "deepseek"
+  } : cfg.provider === "tokenrouter" ? {
+    supportsStore: false,
+    supportsDeveloperRole: false,
+    supportsReasoningEffort: false,
+    maxTokensField: "max_tokens"
+  } : isCustomProvider(cfg.provider) || cfg.provider === "openai-compatible" ? {
+    supportsStore: false,
+    supportsDeveloperRole: false,
+    supportsReasoningEffort: false,
+    maxTokensField: "max_tokens"
+  } : void 0;
+  const providerJson = JSON.stringify({
+    baseUrl,
+    apiKey,
+    api: usesAnthropicMessages ? "anthropic-messages" : "openai-completions",
+    authHeader: true,
+    models: [
+      {
+        id: modelId,
+        name: `Tezbar ${cfg.provider} ${modelId}`,
+        reasoning: /reason|think|r1|o\d|gpt-5|claude|deepseek/i.test(modelId),
+        input: modelInput,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128e3,
+        maxTokens: 8192,
+        ...compat ? { compat } : {}
+      }
+    ]
+  });
+  return {
+    modelPattern: `tezbar/${modelId}`,
+    providerJson,
+    acceptsImages: modelInput.includes("image")
+  };
+}
+var DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL, DEFAULT_GEMINI_BASE, DEFAULT_GEMINI_MODEL, DEFAULT_DEEPSEEK_BASE, DEFAULT_DEEPSEEK_MODEL, DEFAULT_TOKENROUTER_BASE, DEFAULT_TOKENROUTER_MODEL, cacheKey, active;
+var init_registry3 = __esm({
+  "src/main/llm/registry.ts"() {
+    "use strict";
+    init_aiProviders();
+    init_configStore();
+    DEFAULT_OLLAMA_BASE = "http://localhost:11434";
+    DEFAULT_OLLAMA_MODEL = "llama3.2";
+    DEFAULT_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
+    DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+    DEFAULT_DEEPSEEK_BASE = "https://api.deepseek.com";
+    DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
+    DEFAULT_TOKENROUTER_BASE = "https://api.tokenrouter.com/v1";
+    DEFAULT_TOKENROUTER_MODEL = "moonshotai/kimi-k3-free";
+    cacheKey = "";
+    active = null;
   }
 });
 
@@ -24728,7 +25711,7 @@ async function askExtensionAI(prompt) {
     { role: "user", content: normalizedPrompt }
   ];
   try {
-    const { getProviderForTask: getProviderForTask2 } = await Promise.resolve().then(() => (init_registry(), registry_exports));
+    const { getProviderForTask: getProviderForTask2 } = await Promise.resolve().then(() => (init_registry3(), registry_exports));
     const provider = getProviderForTask2("action");
     if (!await provider.isAvailable()) {
       throw new Error("The configured AI provider is unavailable");
@@ -24807,7 +25790,7 @@ function setPromiseResultMemoryCache(key, value) {
   promiseResultMemoryCache.delete(key);
   promiseResultMemoryCache.set(key, value);
 }
-function makeId(prefix) {
+function makeId2(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 function delay(ms) {
@@ -24852,8 +25835,8 @@ function promiseHookLabel(hookIdx, fn, args) {
   return `hook=${hookIdx} fn="${source}" args=${serializedArgs.slice(0, 160)}`;
 }
 function promiseResultCachePath(session2, key) {
-  const digest = (0, import_node_crypto12.createHash)("sha256").update(session2.bundledCode).update("\0").update(session2.extensionId).update("\0").update(session2.commandName).update("\0").update(key).digest("hex");
-  return (0, import_node_path29.join)(session2.packageRoot, ".tezbar-runtime-cache", `${digest}.bin.gz`);
+  const digest = (0, import_node_crypto14.createHash)("sha256").update(session2.bundledCode).update("\0").update(session2.extensionId).update("\0").update(session2.commandName).update("\0").update(key).digest("hex");
+  return (0, import_node_path30.join)(session2.packageRoot, ".tezbar-runtime-cache", `${digest}.bin.gz`);
 }
 function readPromiseResultCache(session2, key) {
   const memoryKey = `${session2.extensionId}/${session2.commandName}:${key}`;
@@ -24863,9 +25846,9 @@ function readPromiseResultCache(session2, key) {
   }
   const cachePath = promiseResultCachePath(session2, key);
   try {
-    const stats = (0, import_node_fs26.statSync)(cachePath);
+    const stats = (0, import_node_fs27.statSync)(cachePath);
     if (Date.now() - stats.mtimeMs > PROMISE_RESULT_CACHE_TTL_MS) return null;
-    const compressed = (0, import_node_fs26.readFileSync)(cachePath);
+    const compressed = (0, import_node_fs27.readFileSync)(cachePath);
     const payload = (0, import_node_v8.deserialize)((0, import_node_zlib.gunzipSync)(compressed));
     setPromiseResultMemoryCache(memoryKey, payload);
     console.log(
@@ -24887,7 +25870,7 @@ function writePromiseResultCache(session2, key, data) {
     try {
       const encoded = (0, import_node_v8.serialize)({ data, cachedAt });
       const compressed = await gzipAsync(encoded);
-      (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(cachePath), { recursive: true });
+      (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(cachePath), { recursive: true });
       await (0, import_promises5.writeFile)(cachePath, compressed);
       console.log(
         `[usePromise] Persistent cache write complete after ${elapsedMs(startedAt)}; raw=${encoded.byteLength}, compressed=${compressed.byteLength}`
@@ -24963,10 +25946,10 @@ async function recoverIncompleteChunkedCache(session2, error, promiseKey) {
   const indexPath = missingIndex[1];
   const cacheName = missingIndex[2];
   if (!indexPath || !cacheName) return false;
-  const supportRoot = (0, import_node_path29.join)(session2.packageRoot, ".tezbar-support");
-  const chunkDirectory = (0, import_node_path29.join)(indexPath, cacheName);
-  const sourcePath = (0, import_node_path29.join)(indexPath, `${cacheName}.json`);
-  if ((0, import_node_path29.dirname)(sourcePath) !== supportRoot || (0, import_node_path29.dirname)(chunkDirectory) !== supportRoot) {
+  const supportRoot = (0, import_node_path30.join)(session2.packageRoot, ".tezbar-support");
+  const chunkDirectory = (0, import_node_path30.join)(indexPath, cacheName);
+  const sourcePath = (0, import_node_path30.join)(indexPath, `${cacheName}.json`);
+  if ((0, import_node_path30.dirname)(sourcePath) !== supportRoot || (0, import_node_path30.dirname)(chunkDirectory) !== supportRoot) {
     return false;
   }
   let handle = null;
@@ -25025,34 +26008,34 @@ async function runAppleScriptForSession(session2, source) {
 }
 function nativeColorPickerBundledHelperPath() {
   const envPath = process.env.COLOR_PICKER_HELPER_PATH;
-  if (envPath && (0, import_node_fs26.existsSync)(envPath)) return envPath;
+  if (envPath && (0, import_node_fs27.existsSync)(envPath)) return envPath;
   const helperName = process.platform === "win32" ? "windows.ps1" : "color-picker-helper";
   const candidates = [
-    (0, import_node_path29.join)(process.cwd(), "native", "color-picker", helperName),
-    (0, import_node_path29.join)(app.getAppPath(), "native", "color-picker", helperName)
+    (0, import_node_path30.join)(process.cwd(), "native", "color-picker", helperName),
+    (0, import_node_path30.join)(app.getAppPath(), "native", "color-picker", helperName)
   ];
   if (app?.isPackaged) {
     const resourcesPath = process.resourcesPath;
     if (resourcesPath) {
       candidates.unshift(
-        (0, import_node_path29.join)(resourcesPath, "app.asar.unpacked", "native", "color-picker", helperName),
-        (0, import_node_path29.join)(resourcesPath, "native", "color-picker", helperName)
+        (0, import_node_path30.join)(resourcesPath, "app.asar.unpacked", "native", "color-picker", helperName),
+        (0, import_node_path30.join)(resourcesPath, "native", "color-picker", helperName)
       );
     }
   }
-  return candidates.find((candidate) => (0, import_node_fs26.existsSync)(candidate)) ?? null;
+  return candidates.find((candidate) => (0, import_node_fs27.existsSync)(candidate)) ?? null;
 }
 function nativeColorPickerCachedBinaryPath() {
-  return (0, import_node_path29.join)(app.getPath("userData"), "native", "color-picker");
+  return (0, import_node_path30.join)(app.getPath("userData"), "native", "color-picker");
 }
 function nativeColorPickerSourcePath() {
   const candidates = [
-    (0, import_node_path29.join)(process.cwd(), "native", "color-picker", "main.swift"),
-    (0, import_node_path29.join)(process.cwd(), "src", "native", "color-picker.swift"),
-    (0, import_node_path29.join)(app.getAppPath(), "native", "color-picker", "main.swift"),
-    (0, import_node_path29.join)(app.getAppPath(), "src", "native", "color-picker.swift")
+    (0, import_node_path30.join)(process.cwd(), "native", "color-picker", "main.swift"),
+    (0, import_node_path30.join)(process.cwd(), "src", "native", "color-picker.swift"),
+    (0, import_node_path30.join)(app.getAppPath(), "native", "color-picker", "main.swift"),
+    (0, import_node_path30.join)(app.getAppPath(), "src", "native", "color-picker.swift")
   ];
-  return candidates.find((candidate) => (0, import_node_fs26.existsSync)(candidate)) ?? null;
+  return candidates.find((candidate) => (0, import_node_fs27.existsSync)(candidate)) ?? null;
 }
 async function ensureNativeColorPickerHelper() {
   const bundledPath = nativeColorPickerBundledHelperPath();
@@ -25061,16 +26044,16 @@ async function ensureNativeColorPickerHelper() {
   const sourcePath = nativeColorPickerSourcePath();
   if (!sourcePath) return null;
   const binaryPath = nativeColorPickerCachedBinaryPath();
-  if ((0, import_node_fs26.existsSync)(binaryPath)) {
+  if ((0, import_node_fs27.existsSync)(binaryPath)) {
     try {
-      if ((0, import_node_fs26.statSync)(binaryPath).mtimeMs >= (0, import_node_fs26.statSync)(sourcePath).mtimeMs) return binaryPath;
+      if ((0, import_node_fs27.statSync)(binaryPath).mtimeMs >= (0, import_node_fs27.statSync)(sourcePath).mtimeMs) return binaryPath;
     } catch {
       return binaryPath;
     }
   }
-  const moduleCachePath = (0, import_node_path29.join)((0, import_node_path29.dirname)(binaryPath), "swift-module-cache");
-  (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(binaryPath), { recursive: true });
-  (0, import_node_fs26.mkdirSync)(moduleCachePath, { recursive: true });
+  const moduleCachePath = (0, import_node_path30.join)((0, import_node_path30.dirname)(binaryPath), "swift-module-cache");
+  (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(binaryPath), { recursive: true });
+  (0, import_node_fs27.mkdirSync)(moduleCachePath, { recursive: true });
   try {
     await execFileAsync15("/usr/bin/swiftc", [
       "-module-cache-path",
@@ -25082,7 +26065,7 @@ async function ensureNativeColorPickerHelper() {
       "-framework",
       "AppKit"
     ]);
-    return (0, import_node_fs26.existsSync)(binaryPath) ? binaryPath : null;
+    return (0, import_node_fs27.existsSync)(binaryPath) ? binaryPath : null;
   } catch (error) {
     console.error("[ColorPicker] Failed to compile native helper:", error);
     return null;
@@ -25168,33 +26151,33 @@ async function pickColorWithNativeSampler() {
 }
 function imageColorsHelperPath() {
   const envPath = process.env.IMAGE_COLORS_HELPER_PATH;
-  if (envPath && (0, import_node_fs26.existsSync)(envPath)) return envPath;
+  if (envPath && (0, import_node_fs27.existsSync)(envPath)) return envPath;
   const helperName = process.platform === "win32" ? "windows.ps1" : "image-colors-helper";
   const candidates = [
-    (0, import_node_path29.join)(process.cwd(), "native", "image-colors", helperName),
-    (0, import_node_path29.join)(app.getAppPath(), "native", "image-colors", helperName)
+    (0, import_node_path30.join)(process.cwd(), "native", "image-colors", helperName),
+    (0, import_node_path30.join)(app.getAppPath(), "native", "image-colors", helperName)
   ];
   if (app?.isPackaged) {
     const resourcesPath = process.resourcesPath;
     if (resourcesPath) {
       candidates.unshift(
-        (0, import_node_path29.join)(resourcesPath, "app.asar.unpacked", "native", "image-colors", helperName),
-        (0, import_node_path29.join)(resourcesPath, "native", "image-colors", helperName)
+        (0, import_node_path30.join)(resourcesPath, "app.asar.unpacked", "native", "image-colors", helperName),
+        (0, import_node_path30.join)(resourcesPath, "native", "image-colors", helperName)
       );
     }
   }
-  return candidates.find((candidate) => (0, import_node_fs26.existsSync)(candidate)) ?? null;
+  return candidates.find((candidate) => (0, import_node_fs27.existsSync)(candidate)) ?? null;
 }
-async function extractColorsFromImage(path7, colorCount = 40, dominantOnly = false) {
+async function extractColorsFromImage(path8, colorCount = 40, dominantOnly = false) {
   const isWindows = process.platform === "win32";
   if (process.platform !== "darwin" && !isWindows) {
     throw new Error("Native image color extraction is not available on this platform");
   }
-  if (!path7 || !(0, import_node_fs26.existsSync)(path7)) throw new Error("The selected image no longer exists");
+  if (!path8 || !(0, import_node_fs27.existsSync)(path8)) throw new Error("The selected image no longer exists");
   const helperPath = imageColorsHelperPath();
   if (!helperPath) throw new Error("The native image color helper is missing");
   const count = Math.max(1, Math.min(80, Math.round(Number(colorCount) || 40)));
-  const usePowerShell = isWindows && (0, import_node_path29.extname)(helperPath).toLowerCase() === ".ps1";
+  const usePowerShell = isWindows && (0, import_node_path30.extname)(helperPath).toLowerCase() === ".ps1";
   const command3 = usePowerShell ? "powershell.exe" : helperPath;
   const args = usePowerShell ? [
     "-NoLogo",
@@ -25204,10 +26187,10 @@ async function extractColorsFromImage(path7, colorCount = 40, dominantOnly = fal
     "Bypass",
     "-File",
     helperPath,
-    path7,
+    path8,
     String(count),
     dominantOnly ? "true" : "false"
-  ] : [path7, String(count), dominantOnly ? "true" : "false"];
+  ] : [path8, String(count), dominantOnly ? "true" : "false"];
   const { stdout } = await execFileAsync15(
     command3,
     args,
@@ -25226,14 +26209,14 @@ function screenOcrHelperPath2() {
   if (app?.isPackaged) {
     const resourcesPath = process.resourcesPath;
     if (resourcesPath) {
-      return (0, import_node_path29.join)(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper");
+      return (0, import_node_path30.join)(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper");
     }
   }
-  return (0, import_node_path29.join)(process.cwd(), "native", "screenocr", "screenocr-helper");
+  return (0, import_node_path30.join)(process.cwd(), "native", "screenocr", "screenocr-helper");
 }
 async function runScreenOcrHelper(command3, values) {
   const helperPath = screenOcrHelperPath2();
-  if (!(0, import_node_fs26.existsSync)(helperPath)) {
+  if (!(0, import_node_fs27.existsSync)(helperPath)) {
     throw new Error(`ScreenOCR native helper is missing at ${helperPath}`);
   }
   const visibleWindows = BrowserWindow?.getAllWindows ? BrowserWindow.getAllWindows().filter((window2) => window2.isVisible()) : [];
@@ -25268,7 +26251,7 @@ function colorWheelMarkdown() {
 function attachRuntimeRootMetadata(root, session2) {
   root.props = {
     ...root.props ?? {},
-    assetsPath: (0, import_node_path29.join)(session2.packageRoot, "assets")
+    assetsPath: (0, import_node_path30.join)(session2.packageRoot, "assets")
   };
   if (typeof root.props.markdown === "string") {
     root.props.markdown = resolveExtensionMarkdownAssets(root.props.markdown, session2.packageRoot);
@@ -25290,11 +26273,11 @@ function buildPreferenceSetupRoot(extensionId, commandName2) {
     children: []
   };
 }
-function parsePackageJson(path7) {
-  if (!(0, import_node_fs26.existsSync)(path7)) {
-    throw new Error(`Missing package.json at ${path7}`);
+function parsePackageJson(path8) {
+  if (!(0, import_node_fs27.existsSync)(path8)) {
+    throw new Error(`Missing package.json at ${path8}`);
   }
-  const raw = (0, import_node_fs26.readFileSync)(path7, "utf8");
+  const raw = (0, import_node_fs27.readFileSync)(path8, "utf8");
   const parsed = JSON.parse(raw);
   return parsed && typeof parsed === "object" ? parsed : {};
 }
@@ -25306,33 +26289,33 @@ function findCommandInManifest(pkg, commandName2) {
   return command3;
 }
 function resolveCommandEntry(packageRoot, commandName2, command3) {
-  const prebuilt = (0, import_node_path29.join)(packageRoot, ".sc-build", `${commandName2}.js`);
-  if ((0, import_node_fs26.existsSync)(prebuilt)) return prebuilt;
-  const explicit = [command3.path, command3.entrypoint, command3.entry, command3.file, command3.source].filter((entry) => typeof entry === "string" && entry.trim().length > 0).map((entry) => (0, import_node_path29.join)(packageRoot, entry));
-  const src = (0, import_node_path29.join)(packageRoot, "src");
+  const prebuilt = (0, import_node_path30.join)(packageRoot, ".sc-build", `${commandName2}.js`);
+  if ((0, import_node_fs27.existsSync)(prebuilt)) return prebuilt;
+  const explicit = [command3.path, command3.entrypoint, command3.entry, command3.file, command3.source].filter((entry) => typeof entry === "string" && entry.trim().length > 0).map((entry) => (0, import_node_path30.join)(packageRoot, entry));
+  const src = (0, import_node_path30.join)(packageRoot, "src");
   const defaults = [
-    (0, import_node_path29.join)(src, `${commandName2}.tsx`),
-    (0, import_node_path29.join)(src, `${commandName2}.ts`),
-    (0, import_node_path29.join)(src, `${commandName2}.jsx`),
-    (0, import_node_path29.join)(src, `${commandName2}.js`),
-    (0, import_node_path29.join)(src, commandName2, "index.tsx"),
-    (0, import_node_path29.join)(src, commandName2, "index.ts"),
-    (0, import_node_path29.join)(src, commandName2, "index.jsx"),
-    (0, import_node_path29.join)(src, commandName2, "index.js"),
-    (0, import_node_path29.join)(src, "commands", `${commandName2}.tsx`),
-    (0, import_node_path29.join)(src, "commands", `${commandName2}.ts`),
-    (0, import_node_path29.join)(src, "commands", `${commandName2}.jsx`),
-    (0, import_node_path29.join)(src, "commands", `${commandName2}.js`)
+    (0, import_node_path30.join)(src, `${commandName2}.tsx`),
+    (0, import_node_path30.join)(src, `${commandName2}.ts`),
+    (0, import_node_path30.join)(src, `${commandName2}.jsx`),
+    (0, import_node_path30.join)(src, `${commandName2}.js`),
+    (0, import_node_path30.join)(src, commandName2, "index.tsx"),
+    (0, import_node_path30.join)(src, commandName2, "index.ts"),
+    (0, import_node_path30.join)(src, commandName2, "index.jsx"),
+    (0, import_node_path30.join)(src, commandName2, "index.js"),
+    (0, import_node_path30.join)(src, "commands", `${commandName2}.tsx`),
+    (0, import_node_path30.join)(src, "commands", `${commandName2}.ts`),
+    (0, import_node_path30.join)(src, "commands", `${commandName2}.jsx`),
+    (0, import_node_path30.join)(src, "commands", `${commandName2}.js`)
   ];
-  const candidate = [...explicit, ...defaults].find((entry) => (0, import_node_fs26.existsSync)(entry));
+  const candidate = [...explicit, ...defaults].find((entry) => (0, import_node_fs27.existsSync)(entry));
   if (!candidate) {
     throw new Error(`Could not resolve entry file for command ${commandName2}`);
   }
   return candidate;
 }
 async function bundleCommand(entryPath, packageRoot) {
-  if (entryPath.includes(`${(0, import_node_path29.join)(".sc-build", "")}`) || entryPath.includes("/.sc-build/")) {
-    const prebuilt = (0, import_node_fs26.readFileSync)(entryPath, "utf8");
+  if (entryPath.includes(`${(0, import_node_path30.join)(".sc-build", "")}`) || entryPath.includes("/.sc-build/")) {
+    const prebuilt = (0, import_node_fs27.readFileSync)(entryPath, "utf8");
     if (!prebuilt.trim()) throw new Error(`Prebuilt extension bundle is empty: ${entryPath}`);
     return prebuilt;
   }
@@ -25342,9 +26325,9 @@ async function bundleCommand(entryPath, packageRoot) {
     name: "legacy-cheerio-default-interop",
     setup(build) {
       build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, (args) => {
-        const source = (0, import_node_fs26.readFileSync)(args.path, "utf8");
+        const source = (0, import_node_fs27.readFileSync)(args.path, "utf8");
         if (!/import\s+[A-Za-z_$][\w$]*\s+from\s+['"]cheerio['"]/.test(source)) return null;
-        const extension = (0, import_node_path29.extname)(args.path).toLowerCase();
+        const extension = (0, import_node_path30.extname)(args.path).toLowerCase();
         const loader = extension.endsWith("x") ? extension.slice(1) : extension.slice(1) || "js";
         return {
           contents: source.replace(
@@ -25373,7 +26356,7 @@ async function bundleCommand(entryPath, packageRoot) {
       "react/jsx-runtime",
       "react/jsx-dev-runtime"
     ],
-    nodePaths: [(0, import_node_path29.join)(packageRoot, "node_modules")],
+    nodePaths: [(0, import_node_path30.join)(packageRoot, "node_modules")],
     logLevel: "silent"
   });
   const output = result.outputFiles?.[0]?.text;
@@ -25592,7 +26575,7 @@ function normalizeActionTitle(typeName, props) {
   }
 }
 function stableActionId(index, typeName, title) {
-  const hash2 = (0, import_node_crypto12.createHash)("sha1").update(`${index}:${typeName}:${title}`).digest("hex").slice(0, 12);
+  const hash2 = (0, import_node_crypto14.createHash)("sha1").update(`${index}:${typeName}:${title}`).digest("hex").slice(0, 12);
   return `ext-action-${index}-${hash2}`;
 }
 function parseShortcut(shortcut) {
@@ -25616,19 +26599,19 @@ function pushEffect(session2, effect) {
   }
 }
 function createLocalStorageShim(packageRoot) {
-  const storagePath = (0, import_node_path29.join)(packageRoot, ".tezbar-local-storage.json");
+  const storagePath = (0, import_node_path30.join)(packageRoot, ".tezbar-local-storage.json");
   const readAll2 = () => {
-    if (!(0, import_node_fs26.existsSync)(storagePath)) return {};
+    if (!(0, import_node_fs27.existsSync)(storagePath)) return {};
     try {
-      const parsed = JSON.parse((0, import_node_fs26.readFileSync)(storagePath, "utf8"));
+      const parsed = JSON.parse((0, import_node_fs27.readFileSync)(storagePath, "utf8"));
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch {
       return {};
     }
   };
   const writeAll2 = (value) => {
-    (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(storagePath), { recursive: true });
-    (0, import_node_fs26.writeFileSync)(storagePath, JSON.stringify(value, null, 2), "utf8");
+    (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(storagePath), { recursive: true });
+    (0, import_node_fs27.writeFileSync)(storagePath, JSON.stringify(value, null, 2), "utf8");
   };
   return {
     getItem: async (key) => readAll2()[String(key)],
@@ -25653,20 +26636,20 @@ function createCacheShim(packageRoot) {
     constructor(options) {
       const rawNamespace = typeof options?.namespace === "string" && options.namespace.trim().length > 0 ? options.namespace.trim() : "shared";
       const safeNamespace = rawNamespace.replace(/[^a-z0-9._-]+/gi, "_");
-      this.storagePath = (0, import_node_path29.join)(packageRoot, ".tezbar-support", "cache", `${safeNamespace}.json`);
+      this.storagePath = (0, import_node_path30.join)(packageRoot, ".tezbar-support", "cache", `${safeNamespace}.json`);
     }
     readAll() {
-      if (!(0, import_node_fs26.existsSync)(this.storagePath)) return {};
+      if (!(0, import_node_fs27.existsSync)(this.storagePath)) return {};
       try {
-        const parsed = JSON.parse((0, import_node_fs26.readFileSync)(this.storagePath, "utf8"));
+        const parsed = JSON.parse((0, import_node_fs27.readFileSync)(this.storagePath, "utf8"));
         return parsed && typeof parsed === "object" ? parsed : {};
       } catch {
         return {};
       }
     }
     writeAll(value) {
-      (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(this.storagePath), { recursive: true });
-      (0, import_node_fs26.writeFileSync)(this.storagePath, JSON.stringify(value, null, 2), "utf8");
+      (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(this.storagePath), { recursive: true });
+      (0, import_node_fs27.writeFileSync)(this.storagePath, JSON.stringify(value, null, 2), "utf8");
     }
     notify(key, value) {
       for (const subscriber of this.subscribers) {
@@ -25762,12 +26745,12 @@ function createRaycastApiShim(session2) {
     tokenPath;
     constructor(options = {}) {
       const providerId = String(options.providerId ?? options.providerName ?? "oauth").replace(/[^a-z0-9._-]+/gi, "_").toLowerCase();
-      this.tokenPath = (0, import_node_path29.join)(session2.packageRoot, ".tezbar-support", "oauth", `${providerId}.json`);
+      this.tokenPath = (0, import_node_path30.join)(session2.packageRoot, ".tezbar-support", "oauth", `${providerId}.json`);
     }
     async getTokens() {
-      if (!(0, import_node_fs26.existsSync)(this.tokenPath)) return void 0;
+      if (!(0, import_node_fs27.existsSync)(this.tokenPath)) return void 0;
       try {
-        const stored = JSON.parse((0, import_node_fs26.readFileSync)(this.tokenPath, "utf8"));
+        const stored = JSON.parse((0, import_node_fs27.readFileSync)(this.tokenPath, "utf8"));
         return {
           ...stored,
           isExpired: () => typeof stored.expiresIn === "number" && stored.expiresIn <= Date.now()
@@ -25785,8 +26768,8 @@ function createRaycastApiShim(session2) {
         scope: String(response.scope ?? ""),
         expiresIn: Number.isFinite(expiresInSeconds) ? Date.now() + expiresInSeconds * 1e3 : Number(response.expiresIn) || void 0
       };
-      (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(this.tokenPath), { recursive: true });
-      (0, import_node_fs26.writeFileSync)(this.tokenPath, JSON.stringify(tokens2), "utf8");
+      (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(this.tokenPath), { recursive: true });
+      (0, import_node_fs27.writeFileSync)(this.tokenPath, JSON.stringify(tokens2), "utf8");
     }
     async removeTokens() {
       await (0, import_promises5.rm)(this.tokenPath, { force: true });
@@ -25794,7 +26777,7 @@ function createRaycastApiShim(session2) {
     async authorizationRequest(options) {
       return {
         ...options,
-        codeVerifier: makeId("pkce").replace(/[^a-z0-9]/gi, ""),
+        codeVerifier: makeId2("pkce").replace(/[^a-z0-9]/gi, ""),
         redirectURI: `raycast://oauth?extension=${encodeURIComponent(session2.extensionId)}`
       };
     }
@@ -26002,8 +26985,8 @@ function createRaycastApiShim(session2) {
       commandName: session2.commandName,
       isDevelopment: false,
       commandMode: session2.commandMode,
-      assetsPath: (0, import_node_path29.join)(session2.packageRoot, "assets"),
-      supportPath: (0, import_node_path29.join)(session2.packageRoot, ".tezbar-support"),
+      assetsPath: (0, import_node_path30.join)(session2.packageRoot, "assets"),
+      supportPath: (0, import_node_path30.join)(session2.packageRoot, ".tezbar-support"),
       canAccess: () => false,
       get searchText() {
         return session2.searchText;
@@ -26040,7 +27023,7 @@ function createRaycastApiShim(session2) {
             ],
             { timeout: 3e3, windowsHide: true }
           );
-          return stdout.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).map((path7) => ({ path: path7 }));
+          return stdout.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).map((path8) => ({ path: path8 }));
         } catch {
           return [];
         }
@@ -26058,7 +27041,7 @@ function createRaycastApiShim(session2) {
             return selectedPaths as text
           end tell
         `);
-        return output.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).map((path7) => ({ path: path7 }));
+        return output.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).map((path8) => ({ path: path8 }));
       } catch {
         return [];
       }
@@ -26077,7 +27060,7 @@ function createRaycastApiShim(session2) {
         ])
       ) : {};
       const result = await runCommandFromPackagePath(
-        (0, import_node_path29.join)(session2.packageRoot, "package.json"),
+        (0, import_node_path30.join)(session2.packageRoot, "package.json"),
         session2.extensionId,
         targetName,
         argumentValues,
@@ -26127,11 +27110,11 @@ function createRaycastApiShim(session2) {
         await shell.openExternal(target);
       }
     },
-    showInFinder: async (path7) => {
-      if (typeof path7 !== "string") return;
-      pushEffect(session2, { kind: "show-in-finder", value: path7 });
+    showInFinder: async (path8) => {
+      if (typeof path8 !== "string") return;
+      pushEffect(session2, { kind: "show-in-finder", value: path8 });
       if (session2.effectMode === "record") return;
-      shell.showItemInFolder(path7);
+      shell.showItemInFolder(path8);
     },
     getApplications: async () => {
       const now = Date.now();
@@ -26152,18 +27135,18 @@ function createRaycastApiShim(session2) {
               timeout: 3e3
             }
           );
-          const apps = stdout.trim().split("\n").filter((p) => p.endsWith(".app")).map((appPath) => ({ name: (0, import_node_path29.basename)(appPath, ".app"), path: appPath })).sort((a, b) => a.name.localeCompare(b.name));
+          const apps = stdout.trim().split("\n").filter((p) => p.endsWith(".app")).map((appPath) => ({ name: (0, import_node_path30.basename)(appPath, ".app"), path: appPath })).sort((a, b) => a.name.localeCompare(b.name));
           console.log(`[getApplications] mdfind returned ${apps.length} applications`);
           return apps;
         } catch (err) {
           console.warn("[getApplications] mdfind failed, falling back to directory scan:", err);
           const apps = [];
-          const dirs = ["/Applications", "/System/Applications", (0, import_node_path29.join)((0, import_node_os13.homedir)(), "Applications")];
+          const dirs = ["/Applications", "/System/Applications", (0, import_node_path30.join)((0, import_node_os14.homedir)(), "Applications")];
           for (const dir of dirs) {
             try {
-              for (const entry of (0, import_node_fs26.readdirSync)(dir)) {
+              for (const entry of (0, import_node_fs27.readdirSync)(dir)) {
                 if (entry.endsWith(".app")) {
-                  apps.push({ name: (0, import_node_path29.basename)(entry, ".app"), path: (0, import_node_path29.join)(dir, entry) });
+                  apps.push({ name: (0, import_node_path30.basename)(entry, ".app"), path: (0, import_node_path30.join)(dir, entry) });
                 }
               }
             } catch (dirErr) {
@@ -26653,7 +27636,7 @@ function createRaycastUtilsShim(session2) {
       this.options = options;
       this.token = typeof options.personalAccessToken === "string" && options.personalAccessToken.trim() ? options.personalAccessToken.trim() : void 0;
       this.onAuthorize = options.onAuthorize;
-      this.tokenPath = (0, import_node_path29.join)(
+      this.tokenPath = (0, import_node_path30.join)(
         session2.packageRoot,
         ".tezbar-support",
         "oauth-service",
@@ -26668,9 +27651,9 @@ function createRaycastUtilsShim(session2) {
       return true;
     }
     readStoredTokens() {
-      if (!(0, import_node_fs26.existsSync)(this.tokenPath)) return void 0;
+      if (!(0, import_node_fs27.existsSync)(this.tokenPath)) return void 0;
       try {
-        const value = JSON.parse((0, import_node_fs26.readFileSync)(this.tokenPath, "utf8"));
+        const value = JSON.parse((0, import_node_fs27.readFileSync)(this.tokenPath, "utf8"));
         return typeof value.accessToken === "string" && value.accessToken ? value : void 0;
       } catch {
         return void 0;
@@ -26694,8 +27677,8 @@ function createRaycastUtilsShim(session2) {
         expiresAt: Number.isFinite(expiresIn) ? Date.now() + expiresIn * 1e3 : void 0,
         scope: String(response.scope ?? "") || void 0
       };
-      (0, import_node_fs26.mkdirSync)((0, import_node_path29.dirname)(this.tokenPath), { recursive: true });
-      (0, import_node_fs26.writeFileSync)(this.tokenPath, JSON.stringify(stored), "utf8");
+      (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(this.tokenPath), { recursive: true });
+      (0, import_node_fs27.writeFileSync)(this.tokenPath, JSON.stringify(stored), "utf8");
       activeAccessToken = accessToken;
       await Promise.resolve(this.onAuthorize?.({ token: accessToken, type: "oauth" }));
     }
@@ -26741,9 +27724,9 @@ function createRaycastUtilsShim(session2) {
       if (!clientId || !scope) throw new Error("Google OAuth requires clientId and scope");
       const stored = this.readStoredTokens();
       if (stored?.refreshToken && await this.refreshGoogleToken(stored)) return;
-      const state = (0, import_node_crypto12.randomBytes)(24).toString("base64url");
-      const codeVerifier = (0, import_node_crypto12.randomBytes)(48).toString("base64url");
-      const codeChallenge = (0, import_node_crypto12.createHash)("sha256").update(codeVerifier).digest("base64url");
+      const state = (0, import_node_crypto14.randomBytes)(24).toString("base64url");
+      const codeVerifier = (0, import_node_crypto14.randomBytes)(48).toString("base64url");
+      const codeChallenge = (0, import_node_crypto14.createHash)("sha256").update(codeVerifier).digest("base64url");
       let settleCallback = null;
       let rejectCallback = null;
       const callbackPromise = new Promise(
@@ -26752,7 +27735,7 @@ function createRaycastUtilsShim(session2) {
           rejectCallback = reject;
         }
       );
-      const server = (0, import_node_http.createServer)((request, response) => {
+      const server = (0, import_node_http2.createServer)((request, response) => {
         const address2 = server.address();
         const port2 = address2 && typeof address2 === "object" ? address2.port : 0;
         const redirectUri2 = `http://127.0.0.1:${port2}/oauth/callback`;
@@ -26962,8 +27945,8 @@ function sanitizeValue(value) {
   }
   return void 0;
 }
-function mimeTypeForAsset(path7) {
-  switch ((0, import_node_path29.extname)(path7).toLowerCase()) {
+function mimeTypeForAsset(path8) {
+  switch ((0, import_node_path30.extname)(path8).toLowerCase()) {
     case ".svg":
       return "image/svg+xml";
     case ".png":
@@ -26989,13 +27972,13 @@ function resolveExtensionMarkdownAssets(markdown, packageRoot) {
       if (!src || /^(?:https?:|data:|file:)/i.test(src)) return match;
       const cleanSrc = src.split(/[?#]/)[0]?.replace(/^\.?\//, "") ?? "";
       if (!cleanSrc || cleanSrc.startsWith("/") || cleanSrc.includes("..")) return match;
-      const assetPath = (0, import_node_path29.join)(packageRoot, "assets", cleanSrc);
-      if (!(0, import_node_fs26.existsSync)(assetPath)) {
+      const assetPath = (0, import_node_path30.join)(packageRoot, "assets", cleanSrc);
+      if (!(0, import_node_fs27.existsSync)(assetPath)) {
         console.warn(`[ExtensionAssets] Missing markdown asset: ${assetPath}`);
         return match;
       }
       try {
-        const encoded = (0, import_node_fs26.readFileSync)(assetPath).toString("base64");
+        const encoded = (0, import_node_fs27.readFileSync)(assetPath).toString("base64");
         console.log(`[ExtensionAssets] Inlined markdown asset: ${assetPath}`);
         return `![${alt}](data:${mimeTypeForAsset(assetPath)};base64,${encoded})`;
       } catch {
@@ -27034,10 +28017,10 @@ function registerAction(typeName, props, session2) {
       }
     }
     if (kind === "show-in-finder") {
-      const path7 = typeof props.path === "string" ? props.path : "";
-      if (path7) {
-        pushEffect(session2, { kind: "show-in-finder", value: path7 });
-        if (session2.effectMode !== "record") shell.showItemInFolder(path7);
+      const path8 = typeof props.path === "string" ? props.path : "";
+      if (path8) {
+        pushEffect(session2, { kind: "show-in-finder", value: path8 });
+        if (session2.effectMode !== "record") shell.showItemInFolder(path8);
       }
     }
     if (kind === "push" && props.target !== void 0) {
@@ -27165,7 +28148,7 @@ function walkRuntimeNodes(input, session2, depth, budget, options = {}) {
     sanitizedProps.metadata = metadataNodes[0];
   }
   if (typeName === "List.Dropdown" && typeof props.onChange === "function" && sanitizedProps) {
-    const actionId = makeId("list-dropdown");
+    const actionId = makeId2("list-dropdown");
     sanitizedProps.actionId = actionId;
     session2.actionHandlers.set(actionId, async (formValues) => {
       await Promise.resolve(
@@ -27174,7 +28157,7 @@ function walkRuntimeNodes(input, session2, depth, budget, options = {}) {
     });
   }
   if (typeName.startsWith("Form.") && typeof props.onChange === "function" && sanitizedProps) {
-    const actionId = makeId("form-change");
+    const actionId = makeId2("form-change");
     sanitizedProps.actionId = actionId;
     session2.actionHandlers.set(actionId, async (formValues) => {
       const rawValue = formValues?.value;
@@ -27457,7 +28440,7 @@ function pruneSessions() {
   }
 }
 function runBundle(code, packageRoot, session2) {
-  const fileRequire = (0, import_node_module2.createRequire)((0, import_node_path29.join)(packageRoot, "package.json"));
+  const fileRequire = (0, import_node_module2.createRequire)((0, import_node_path30.join)(packageRoot, "package.json"));
   const jsxRuntimeShim = createJsxRuntimeShim();
   const reactShim = createReactShim(session2);
   const raycastApiShim = createRaycastApiShim(session2);
@@ -27518,7 +28501,7 @@ function runBundle(code, packageRoot, session2) {
           return child;
         }),
         spawn: (...args) => {
-          const child = (0, import_node_child_process17.spawn)(...args);
+          const child = (0, import_node_child_process18.spawn)(...args);
           const stdout = child.stdout;
           if (stdout) {
             const originalOn = stdout.on.bind(stdout);
@@ -27580,7 +28563,7 @@ function runBundle(code, packageRoot, session2) {
     if (specifier === "sha256-file") {
       return (filename, callback) => {
         try {
-          const sum = (0, import_node_crypto12.createHash)("sha256").update((0, import_node_fs26.readFileSync)(filename)).digest("hex");
+          const sum = (0, import_node_crypto14.createHash)("sha256").update((0, import_node_fs27.readFileSync)(filename)).digest("hex");
           callback(null, sum);
         } catch (error) {
           callback(error instanceof Error ? error : new Error(String(error)));
@@ -27717,7 +28700,7 @@ function runBundle(code, packageRoot, session2) {
     if (specifier === "tar") {
       const extract = async (options) => {
         if (!options?.file || !options.cwd) throw new Error("tar.extract requires file and cwd");
-        (0, import_node_fs26.mkdirSync)(options.cwd, { recursive: true });
+        (0, import_node_fs27.mkdirSync)(options.cwd, { recursive: true });
         const args = ["-xzf", options.file, "-C", options.cwd];
         try {
           if (typeof options.filter === "function") {
@@ -27740,7 +28723,7 @@ function runBundle(code, packageRoot, session2) {
       const extractZip = async (file, options) => {
         const dir = options?.dir;
         if (!dir) throw new Error("extract-zip requires dir");
-        (0, import_node_fs26.mkdirSync)(dir, { recursive: true });
+        (0, import_node_fs27.mkdirSync)(dir, { recursive: true });
         if (process.platform === "win32") {
           await execFileAsync15(
             "powershell.exe",
@@ -27853,11 +28836,11 @@ function runBundle(code, packageRoot, session2) {
 ${runtimeCode}
 })`;
   const script = new import_node_vm.default.Script(wrapped, {
-    filename: (0, import_node_path29.join)(packageRoot, ".tezbar-runtime-bundle.cjs")
+    filename: (0, import_node_path30.join)(packageRoot, ".tezbar-runtime-bundle.cjs")
   });
   const fn = script.runInContext(context);
   const mod = { exports: {} };
-  fn(mod.exports, customRequire, mod, (0, import_node_path29.join)(packageRoot, ".tezbar-runtime-bundle.cjs"), packageRoot);
+  fn(mod.exports, customRequire, mod, (0, import_node_path30.join)(packageRoot, ".tezbar-runtime-bundle.cjs"), packageRoot);
   return mod.exports;
 }
 function getCommandExport(moduleExports) {
@@ -27888,8 +28871,8 @@ function manifestPreferenceDefaults(pkg, command3) {
   return values;
 }
 async function runCommandFromPackagePath(packageJsonPath, extensionId, commandName2, argumentValues, preferenceValues, options) {
-  const packageRoot = (0, import_node_path29.dirname)(packageJsonPath);
-  (0, import_node_fs26.mkdirSync)((0, import_node_path29.join)(packageRoot, ".tezbar-support"), { recursive: true });
+  const packageRoot = (0, import_node_path30.dirname)(packageJsonPath);
+  (0, import_node_fs27.mkdirSync)((0, import_node_path30.join)(packageRoot, ".tezbar-support"), { recursive: true });
   const pkg = parsePackageJson(packageJsonPath);
   const command3 = findCommandInManifest(pkg, commandName2);
   const mode = String(command3.mode || "").toLowerCase();
@@ -27899,7 +28882,7 @@ async function runCommandFromPackagePath(packageJsonPath, extensionId, commandNa
   const bundled = await bundleCommand(entryPath, packageRoot);
   console.log(`[Runner] Bundle size: ${bundled.length} chars`);
   const session2 = {
-    id: makeId("ext-session"),
+    id: makeId2("ext-session"),
     extensionId,
     commandName: commandName2,
     commandMode: mode || "view",
@@ -28049,7 +29032,7 @@ async function runExtensionCommandFromPackageJson(packageJsonPath, commandName2,
   if (!normalizedPath || !normalizedCommandName) {
     return { ok: false, message: "packageJsonPath and commandName are required." };
   }
-  const extensionId = `raycast.${(0, import_node_path29.basename)((0, import_node_path29.dirname)(normalizedPath)) || "external"}`;
+  const extensionId = `raycast.${(0, import_node_path30.basename)((0, import_node_path30.dirname)(normalizedPath)) || "external"}`;
   try {
     return await runCommandFromPackagePath(
       normalizedPath,
@@ -28120,19 +29103,19 @@ function clearAllExtensionSessions() {
   }
   sessions.clear();
 }
-var import_node_fs26, import_promises5, import_node_child_process17, import_node_crypto12, import_node_http, import_node_os13, import_node_module2, import_node_path29, import_node_stream, import_web, import_node_util15, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync15, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
+var import_node_fs27, import_promises5, import_node_child_process18, import_node_crypto14, import_node_http2, import_node_os14, import_node_module2, import_node_path30, import_node_stream, import_web, import_node_util15, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync15, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
 var init_extension_runner = __esm({
   "src/main/extension-runner.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_fs26 = require("node:fs");
+    import_node_fs27 = require("node:fs");
     import_promises5 = require("node:fs/promises");
-    import_node_child_process17 = require("node:child_process");
-    import_node_crypto12 = require("node:crypto");
-    import_node_http = require("node:http");
-    import_node_os13 = require("node:os");
+    import_node_child_process18 = require("node:child_process");
+    import_node_crypto14 = require("node:crypto");
+    import_node_http2 = require("node:http");
+    import_node_os14 = require("node:os");
     import_node_module2 = require("node:module");
-    import_node_path29 = require("node:path");
+    import_node_path30 = require("node:path");
     import_node_stream = require("node:stream");
     import_web = require("node:stream/web");
     import_node_util15 = require("node:util");
@@ -28157,7 +29140,7 @@ var init_extension_runner = __esm({
     BUILTIN_SET = new Set(import_node_module2.builtinModules);
     JSX_FRAGMENT = /* @__PURE__ */ Symbol.for("tezbar.jsx.fragment");
     REACT_CONTEXT = /* @__PURE__ */ Symbol.for("react.context");
-    execFileAsync15 = (0, import_node_util15.promisify)(import_node_child_process17.execFile);
+    execFileAsync15 = (0, import_node_util15.promisify)(import_node_child_process18.execFile);
     gzipAsync = (0, import_node_util15.promisify)(import_node_zlib.gzip);
     IMAGE_MASK2 = {
       Circle: "circle",
@@ -28254,7 +29237,7 @@ function spawnBunPipeTerminal(shell2, args, cwd, env, cols, rows) {
   };
 }
 function spawnPipeTerminal(shell2, args, cwd, env, cols, rows) {
-  const child = (0, import_node_child_process18.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+  const child = (0, import_node_child_process19.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
   return {
     pid: child.pid ?? -1,
     process: shell2,
@@ -28296,8 +29279,8 @@ function clampDimension(value, min, max) {
 function normalizeTerminalPath(raw) {
   const requested = raw.trim().replace(/[\\/]\.\.\.$/, "");
   if (!requested) return "";
-  if (requested === "~") return (0, import_node_os14.homedir)();
-  if (requested.startsWith("~/")) return (0, import_node_path30.join)((0, import_node_os14.homedir)(), requested.slice(2));
+  if (requested === "~") return (0, import_node_os15.homedir)();
+  if (requested.startsWith("~/")) return (0, import_node_path31.join)((0, import_node_os15.homedir)(), requested.slice(2));
   const absolutePrefixes = [
     "/Users/",
     "/Volumes/",
@@ -28309,26 +29292,26 @@ function normalizeTerminalPath(raw) {
   ];
   const isFilesystemAbsolute = absolutePrefixes.some((prefix) => requested.startsWith(prefix)) || requested === "/Users" || requested === "/Volumes";
   if (requested.startsWith("/") && !isFilesystemAbsolute) {
-    return (0, import_node_path30.join)((0, import_node_os14.homedir)(), requested.slice(1));
+    return (0, import_node_path31.join)((0, import_node_os15.homedir)(), requested.slice(1));
   }
   return requested;
 }
 function resolveWorkingDirectory(raw) {
   const requested = raw?.trim();
   const expanded = requested ? normalizeTerminalPath(requested) : void 0;
-  const candidate = expanded ? (0, import_node_path30.resolve)(expanded) : (0, import_node_os14.homedir)();
+  const candidate = expanded ? (0, import_node_path31.resolve)(expanded) : (0, import_node_os15.homedir)();
   try {
-    return (0, import_node_fs27.existsSync)(candidate) && (0, import_node_fs27.statSync)(candidate).isDirectory() ? candidate : (0, import_node_os14.homedir)();
+    return (0, import_node_fs28.existsSync)(candidate) && (0, import_node_fs28.statSync)(candidate).isDirectory() ? candidate : (0, import_node_os15.homedir)();
   } catch {
-    return (0, import_node_os14.homedir)();
+    return (0, import_node_os15.homedir)();
   }
 }
 function resolveExistingWorkingDirectory(raw) {
   const requested = normalizeTerminalPath(raw);
   if (!requested) return null;
-  const candidate = (0, import_node_path30.resolve)(requested);
+  const candidate = (0, import_node_path31.resolve)(requested);
   try {
-    return (0, import_node_fs27.existsSync)(candidate) && (0, import_node_fs27.statSync)(candidate).isDirectory() ? candidate : null;
+    return (0, import_node_fs28.existsSync)(candidate) && (0, import_node_fs28.statSync)(candidate).isDirectory() ? candidate : null;
   } catch {
     return null;
   }
@@ -28336,16 +29319,16 @@ function resolveExistingWorkingDirectory(raw) {
 function processWorkingDirectory(pid) {
   try {
     if (process.platform === "darwin") {
-      const output = (0, import_node_child_process18.execFileSync)(
+      const output = (0, import_node_child_process19.execFileSync)(
         "/usr/sbin/lsof",
         ["-a", "-p", String(pid), "-d", "cwd", "-Fn"],
         { encoding: "utf8", timeout: 1e3 }
       );
-      const path7 = output.split(/\r?\n/).find((line) => line.startsWith("n"))?.slice(1);
-      return path7 ? resolveExistingWorkingDirectory(path7) : null;
+      const path8 = output.split(/\r?\n/).find((line) => line.startsWith("n"))?.slice(1);
+      return path8 ? resolveExistingWorkingDirectory(path8) : null;
     }
     if (process.platform === "linux") {
-      return resolveExistingWorkingDirectory((0, import_node_fs27.readlinkSync)(`/proc/${pid}/cwd`));
+      return resolveExistingWorkingDirectory((0, import_node_fs28.readlinkSync)(`/proc/${pid}/cwd`));
     }
   } catch {
   }
@@ -28360,12 +29343,12 @@ function validHistorySessionId(sessionId) {
 }
 function terminalHistoryPath(sessionId) {
   if (!validHistorySessionId(sessionId)) throw new Error("Invalid terminal session id");
-  (0, import_node_fs27.mkdirSync)(TERMINAL_HISTORY_DIR, { recursive: true, mode: 448 });
-  return (0, import_node_path30.join)(TERMINAL_HISTORY_DIR, `${sessionId}.log`);
+  (0, import_node_fs28.mkdirSync)(TERMINAL_HISTORY_DIR, { recursive: true, mode: 448 });
+  return (0, import_node_path31.join)(TERMINAL_HISTORY_DIR, `${sessionId}.log`);
 }
 function readTerminalHistory(session2) {
   try {
-    return (0, import_node_fs27.readFileSync)(session2.historyPath, "utf8");
+    return (0, import_node_fs28.readFileSync)(session2.historyPath, "utf8");
   } catch {
     return session2.outputChunks.join("");
   }
@@ -28373,7 +29356,7 @@ function readTerminalHistory(session2) {
 function removeTerminalHistory(sessionId) {
   if (!validHistorySessionId(sessionId)) return;
   try {
-    (0, import_node_fs27.rmSync)(terminalHistoryPath(sessionId), { force: true });
+    (0, import_node_fs28.rmSync)(terminalHistoryPath(sessionId), { force: true });
   } catch {
   }
 }
@@ -28451,7 +29434,7 @@ function persistSessionSummary(summary) {
 }
 function appendOutput(session2, data) {
   try {
-    (0, import_node_fs27.appendFileSync)(session2.historyPath, data, "utf8");
+    (0, import_node_fs28.appendFileSync)(session2.historyPath, data, "utf8");
   } catch {
   }
   session2.outputChunks.push(data);
@@ -28527,7 +29510,7 @@ function registerOwnerCleanup(sender) {
 }
 function resolveShell() {
   const configured = process.env.SHELL?.trim();
-  if (configured && configured.startsWith("/") && (0, import_node_fs27.existsSync)(configured)) return configured;
+  if (configured && configured.startsWith("/") && (0, import_node_fs28.existsSync)(configured)) return configured;
   return process.platform === "win32" ? "powershell.exe" : "/bin/zsh";
 }
 function terminalEnvironment() {
@@ -28562,12 +29545,12 @@ function createTerminalSession(sender, request) {
     throw new Error("Invalid terminal session id");
   }
   const restoredSummary = request.restoreSessionId ? persistedSummaries.get(request.restoreSessionId) : void 0;
-  const sessionId = restoredSummary ? restoredSummary.sessionId : (0, import_node_crypto13.randomUUID)();
+  const sessionId = restoredSummary ? restoredSummary.sessionId : (0, import_node_crypto15.randomUUID)();
   if (sessions2.has(sessionId)) throw new Error("Terminal session is already running");
   const historyPath = terminalHistoryPath(sessionId);
-  if (!restoredSummary) (0, import_node_fs27.writeFileSync)(historyPath, "", { encoding: "utf8", mode: 384 });
-  else if (!(0, import_node_fs27.existsSync)(historyPath) || (0, import_node_fs27.statSync)(historyPath).size === 0) {
-    (0, import_node_fs27.writeFileSync)(historyPath, legacyTerminalHistory(request.restoreCommand), {
+  if (!restoredSummary) (0, import_node_fs28.writeFileSync)(historyPath, "", { encoding: "utf8", mode: 384 });
+  else if (!(0, import_node_fs28.existsSync)(historyPath) || (0, import_node_fs28.statSync)(historyPath).size === 0) {
+    (0, import_node_fs28.writeFileSync)(historyPath, legacyTerminalHistory(request.restoreCommand), {
       encoding: "utf8",
       mode: 384
     });
@@ -28857,8 +29840,8 @@ function deleteTerminalSession(ownerId, sessionId) {
   return deleted;
 }
 function getTerminalPromptInfo() {
-  const user = (0, import_node_os14.userInfo)().username;
-  const host = (0, import_node_os14.hostname)().split(".")[0];
+  const user = (0, import_node_os15.userInfo)().username;
+  const host = (0, import_node_os15.hostname)().split(".")[0];
   const dir = "~";
   return { user, host, dir };
 }
@@ -28878,15 +29861,15 @@ function shutdownTerminalSessions() {
   }
   sessions2.clear();
 }
-var import_node_fs27, import_node_os14, import_node_path30, import_node_crypto13, import_node_child_process18, sessions2, ownerCleanupRegistered, persistedSummaries, persistedLoaded, OUTPUT_REPLAY_LIMIT_BYTES, TERMINAL_CONFIG_KEY, TERMINAL_HISTORY_DIR, SAVE_FOR_MS, KEEP_ALIVE_MS;
+var import_node_fs28, import_node_os15, import_node_path31, import_node_crypto15, import_node_child_process19, sessions2, ownerCleanupRegistered, persistedSummaries, persistedLoaded, OUTPUT_REPLAY_LIMIT_BYTES, TERMINAL_CONFIG_KEY, TERMINAL_HISTORY_DIR, SAVE_FOR_MS, KEEP_ALIVE_MS;
 var init_service4 = __esm({
   "src/main/terminal/service.ts"() {
     "use strict";
-    import_node_fs27 = require("node:fs");
-    import_node_os14 = require("node:os");
-    import_node_path30 = require("node:path");
-    import_node_crypto13 = require("node:crypto");
-    import_node_child_process18 = require("node:child_process");
+    import_node_fs28 = require("node:fs");
+    import_node_os15 = require("node:os");
+    import_node_path31 = require("node:path");
+    import_node_crypto15 = require("node:crypto");
+    import_node_child_process19 = require("node:child_process");
     init_terminal();
     init_configStore();
     sessions2 = /* @__PURE__ */ new Map();
@@ -28895,7 +29878,7 @@ var init_service4 = __esm({
     persistedLoaded = false;
     OUTPUT_REPLAY_LIMIT_BYTES = 512 * 1024;
     TERMINAL_CONFIG_KEY = "terminalSessions";
-    TERMINAL_HISTORY_DIR = (0, import_node_path30.join)((0, import_node_os14.homedir)(), ".openray", "terminal-history");
+    TERMINAL_HISTORY_DIR = (0, import_node_path31.join)((0, import_node_os15.homedir)(), ".openray", "terminal-history");
     SAVE_FOR_MS = {
       day: 24 * 60 * 60 * 1e3,
       week: 7 * 24 * 60 * 60 * 1e3,
@@ -28906,833 +29889,6 @@ var init_service4 = __esm({
       "8h": 8 * 60 * 60 * 1e3,
       day: 24 * 60 * 60 * 1e3
     };
-  }
-});
-
-// src/main/agent/tools.ts
-function str(value, fallback = "") {
-  return typeof value === "string" ? value : fallback;
-}
-function truncate(value, max = 60) {
-  const clean = value.replace(/\s+/g, " ").trim();
-  if (clean.length <= max) return clean;
-  return `${clean.slice(0, max - 1)}\u2026`;
-}
-function labelForToolCall(toolName, args) {
-  if (toolName === "launcher_search") {
-    const safeArgs2 = args && typeof args === "object" ? args : {};
-    return `search Tezbar: ${truncate(str(safeArgs2.query, "<query>"))}`;
-  }
-  if (toolName === "pc_search" || toolName === "search_knowledge") {
-    const safeArgs2 = args && typeof args === "object" ? args : {};
-    return `deep search: ${truncate(str(safeArgs2.query, "<query>"))}`;
-  }
-  if (toolName === "pc_read") {
-    const safeArgs2 = args && typeof args === "object" ? args : {};
-    return `read deep-search result: ${truncate(str(safeArgs2.resultId, "<result>"))}`;
-  }
-  const descriptor = PI_TOOLS[toolName];
-  if (!descriptor) return `${toolName}`;
-  const safeArgs = args && typeof args === "object" ? args : {};
-  return descriptor.label(safeArgs);
-}
-var PI_TOOLS;
-var init_tools = __esm({
-  "src/main/agent/tools.ts"() {
-    "use strict";
-    PI_TOOLS = {
-      read: {
-        name: "read",
-        description: "Read a file (optional offset/limit for large files)",
-        argKeys: ["path", "offset", "limit"],
-        mutates: false,
-        label: (args) => `read ${truncate(str(args.path, "<path>"))}`
-      },
-      bash: {
-        name: "bash",
-        description: "Run a shell command (optional timeout ms)",
-        argKeys: ["command", "timeout"],
-        mutates: true,
-        label: (args) => `bash: ${truncate(str(args.command, "<cmd>"))}`
-      },
-      edit: {
-        name: "edit",
-        description: "Apply one or more oldText/newText edits to a file",
-        argKeys: ["path", "edits"],
-        mutates: true,
-        label: (args) => {
-          const edits = Array.isArray(args.edits) ? args.edits.length : 0;
-          return `edit ${truncate(str(args.path, "<path>"))} (${edits} change${edits === 1 ? "" : "s"})`;
-        }
-      },
-      write: {
-        name: "write",
-        description: "Overwrite (or create) a file with full content",
-        argKeys: ["path", "content"],
-        mutates: true,
-        label: (args) => `write ${truncate(str(args.path, "<path>"))}`
-      },
-      grep: {
-        name: "grep",
-        description: "Ripgrep-backed content search (glob / literal / context)",
-        argKeys: ["pattern", "path", "glob", "ignoreCase", "literal", "context", "limit"],
-        mutates: false,
-        label: (args) => `grep ${truncate(str(args.pattern, "<pattern>"))}`
-      },
-      find: {
-        name: "find",
-        description: "Find files by filename pattern",
-        argKeys: ["pattern", "path", "limit"],
-        mutates: false,
-        label: (args) => `find ${truncate(str(args.pattern, "<pattern>"))}`
-      },
-      ls: {
-        name: "ls",
-        description: "List directory contents",
-        argKeys: ["path", "limit"],
-        mutates: false,
-        label: (args) => `ls ${truncate(str(args.path, "."))}`
-      }
-    };
-  }
-});
-
-// src/main/agent/loop.ts
-function errorDetail(result) {
-  if (!result || typeof result !== "object") return void 0;
-  const content = result.content;
-  if (!Array.isArray(content)) return void 0;
-  for (const item of content) {
-    if (item && typeof item === "object" && item.type === "text") {
-      const text3 = item.text;
-      if (typeof text3 === "string" && text3.trim()) {
-        return text3.replace(/\s+/g, " ").trim().slice(0, 160);
-      }
-    }
-  }
-  return void 0;
-}
-function createLoopDriver(callbacks) {
-  const tracker = {
-    stages: /* @__PURE__ */ new Map(),
-    nextIndex: 0,
-    currentText: "",
-    ended: false
-  };
-  const emitStage = (stage) => {
-    tracker.stages.set(`stage:${stage.index}`, stage);
-    callbacks.onStage(stage);
-  };
-  const updateStageStatus = (toolCallId, status, detail) => {
-    const existing = tracker.stages.get(toolCallId);
-    if (!existing) return;
-    const next = detail ? { ...existing, status, detail } : { ...existing, status };
-    tracker.stages.set(toolCallId, next);
-    callbacks.onStage(next);
-  };
-  const asString = (v, fallback = "") => typeof v === "string" ? v : fallback;
-  const asBool = (v) => v === true;
-  const asNumber = (v, fallback = 0) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
-  const asRecord2 = (v) => v && typeof v === "object" && !Array.isArray(v) ? v : void 0;
-  return function handle(event) {
-    switch (event.type) {
-      case "agent_start": {
-        tracker.stages.clear();
-        tracker.nextIndex = 0;
-        tracker.currentText = "";
-        tracker.ended = false;
-        return;
-      }
-      case "message_update": {
-        const ev = asRecord2(event["assistantMessageEvent"]);
-        if (!ev) return;
-        const subType = asString(ev["type"]);
-        const delta = ev["delta"];
-        const content = ev["content"];
-        if (subType === "text_delta" && typeof delta === "string") {
-          tracker.currentText += delta;
-          callbacks.onMessageDelta(delta);
-        } else if (subType === "text_end" && typeof content === "string") {
-          tracker.currentText = content;
-        }
-        return;
-      }
-      case "tool_execution_start": {
-        const toolCallId = asString(event["toolCallId"]);
-        if (!toolCallId) return;
-        const index = tracker.nextIndex++;
-        const stage = {
-          index,
-          label: labelForToolCall(asString(event["toolName"], "tool"), event["args"]),
-          status: "running"
-        };
-        tracker.stages.set(toolCallId, stage);
-        emitStage(stage);
-        return;
-      }
-      case "tool_execution_end": {
-        const toolCallId = asString(event["toolCallId"]);
-        if (!toolCallId) return;
-        const isError = asBool(event["isError"]);
-        updateStageStatus(
-          toolCallId,
-          isError ? "failed" : "done",
-          isError ? errorDetail(event["result"]) : void 0
-        );
-        return;
-      }
-      case "auto_retry_start": {
-        const attempt = asNumber(event["attempt"]);
-        const maxAttempts = asNumber(event["maxAttempts"]);
-        const stage = {
-          index: tracker.nextIndex++,
-          label: `retry (${attempt}/${maxAttempts})`,
-          status: "running",
-          detail: asString(event["errorMessage"]).slice(0, 160) || void 0
-        };
-        tracker.stages.set(`retry:${attempt}`, stage);
-        emitStage(stage);
-        return;
-      }
-      case "auto_retry_end": {
-        const retryKey = Array.from(tracker.stages.keys()).reverse().find((k) => k.startsWith("retry:"));
-        if (retryKey) {
-          updateStageStatus(
-            retryKey,
-            asBool(event["success"]) ? "done" : "failed",
-            asString(event["finalError"]) || void 0
-          );
-        }
-        return;
-      }
-      case "agent_end": {
-        tracker.ended = true;
-        if (tracker.currentText.trim()) {
-          callbacks.onAnswer(tracker.currentText.trim());
-        }
-        callbacks.onDone();
-        return;
-      }
-      default:
-        return;
-    }
-  };
-}
-var init_loop = __esm({
-  "src/main/agent/loop.ts"() {
-    "use strict";
-    init_tools();
-  }
-});
-
-// src/main/agent/observer.ts
-function asRecord(value) {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return void 0;
-  return value;
-}
-function modelLabel(state) {
-  const m = state.model;
-  if (!m) return void 0;
-  if (m.provider && m.id) return `${m.provider}/${m.id}`;
-  return m.id;
-}
-async function observe(cwd, query) {
-  const [stateRaw, statsRaw] = await Promise.all([
-    query({ type: "get_state" }).catch(() => null),
-    query({ type: "get_session_stats" }).catch(() => null)
-  ]);
-  const state = asRecord(stateRaw)?.data ?? {};
-  const stats = asRecord(statsRaw)?.data ?? {};
-  return {
-    cwd,
-    sessionFile: state.sessionFile ?? stats.sessionFile ?? void 0,
-    model: modelLabel(state),
-    thinkingLevel: state.thinkingLevel,
-    isStreaming: state.isStreaming === true,
-    messageCount: state.messageCount ?? 0,
-    pendingMessageCount: state.pendingMessageCount ?? 0,
-    toolCalls: stats.toolCalls ?? 0,
-    contextUsage: stats.contextUsage
-  };
-}
-var init_observer = __esm({
-  "src/main/agent/observer.ts"() {
-    "use strict";
-  }
-});
-
-// src/main/agent/prompt.ts
-function rawBase64(data) {
-  const trimmed = data.trim();
-  const comma = trimmed.indexOf(",");
-  return trimmed.startsWith("data:image/") && comma >= 0 ? trimmed.slice(comma + 1) : trimmed;
-}
-function estimatedDecodedBytes(data) {
-  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor(data.length * 3 / 4) - padding);
-}
-function normalizeAgentImages(images) {
-  if (!images?.length) return [];
-  if (images.length > MAX_AGENT_IMAGES) {
-    throw new Error(`Agent accepts at most ${MAX_AGENT_IMAGES} images per prompt`);
-  }
-  return images.map((image) => {
-    if (!SUPPORTED_IMAGE_TYPES.has(image.mimeType)) {
-      throw new Error(`Unsupported agent image type: ${image.mimeType}`);
-    }
-    const data = rawBase64(image.data);
-    if (!data || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
-      throw new Error("Agent image is not valid base64 data");
-    }
-    if (estimatedDecodedBytes(data) > MAX_AGENT_IMAGE_BYTES) {
-      throw new Error("Agent image exceeds the 8 MB limit");
-    }
-    return { type: "image", data, mimeType: image.mimeType };
-  });
-}
-function buildPromptCommand(message, images) {
-  const normalized = normalizeAgentImages(images);
-  return normalized.length > 0 ? { type: "prompt", message, images: normalized } : { type: "prompt", message };
-}
-var MAX_AGENT_IMAGES, MAX_AGENT_IMAGE_BYTES, SUPPORTED_IMAGE_TYPES;
-var init_prompt = __esm({
-  "src/main/agent/prompt.ts"() {
-    "use strict";
-    MAX_AGENT_IMAGES = 4;
-    MAX_AGENT_IMAGE_BYTES = 8 * 1024 * 1024;
-    SUPPORTED_IMAGE_TYPES = /* @__PURE__ */ new Set([
-      "image/png",
-      "image/jpeg",
-      "image/webp"
-    ]);
-  }
-});
-
-// src/main/knowledge/agent/gateway.ts
-function searchActionTarget(action) {
-  switch (action.type) {
-    case "open-file":
-    case "open-with-app":
-      return action.path;
-    case "open-app":
-      return action.appPath ?? action.appName;
-    case "open-url":
-      return action.url;
-    case "run-extension-command":
-      return `${action.extensionId}/${action.commandName}`;
-    case "invoke-command":
-    case "run-native-command":
-      return action.commandId;
-    case "run-shell":
-      return action.command;
-    default:
-      return void 0;
-  }
-}
-function readBody(request) {
-  return new Promise((resolve6, reject) => {
-    let body = "";
-    request.setEncoding("utf8");
-    request.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 64 * 1024) request.destroy(new Error("Request is too large"));
-    });
-    request.once("end", () => resolve6(body));
-    request.once("error", reject);
-  });
-}
-function ensureKnowledgeAgentGateway() {
-  if (!gatewayPromise) {
-    gatewayPromise = new Promise((resolve6, reject) => {
-      const token = (0, import_node_crypto14.randomBytes)(32).toString("hex");
-      const server = (0, import_node_http2.createServer)(async (request, response) => {
-        response.setHeader("Content-Type", "application/json; charset=utf-8");
-        if (request.method !== "POST" || request.headers.authorization !== `Bearer ${token}`) {
-          response.statusCode = 404;
-          response.end(JSON.stringify({ error: "Not found" }));
-          return;
-        }
-        try {
-          const parsed = JSON.parse(await readBody(request));
-          if (request.url === "/search") {
-            const query = typeof parsed.query === "string" ? parsed.query.trim() : "";
-            const limit = typeof parsed.limit === "number" ? Math.max(1, Math.min(20, Math.round(parsed.limit))) : 8;
-            if (!query) throw new Error("query is required");
-            const hits = getKnowledgeService().search(query, limit);
-            response.end(JSON.stringify({ hits }));
-            return;
-          }
-          if (request.url === "/launcher-search") {
-            const query = typeof parsed.query === "string" ? parsed.query.trim() : "";
-            const limit = typeof parsed.limit === "number" ? Math.max(1, Math.min(20, Math.round(parsed.limit))) : 10;
-            if (!query) throw new Error("query is required");
-            const results = (await searchEverything(query)).filter(
-              (result) => !result.id.startsWith(DEEP_SEARCH_RESULT_PREFIX) && !result.id.startsWith("note-add:")
-            ).slice(0, limit).map((result) => ({
-              id: result.id,
-              title: result.title,
-              subtitle: result.subtitle,
-              category: result.category,
-              score: result.score,
-              target: searchActionTarget(result.action)
-            }));
-            response.end(JSON.stringify({ results }));
-            return;
-          }
-          if (request.url === "/read") {
-            const resultId = typeof parsed.resultId === "string" ? parsed.resultId.trim() : "";
-            const maxChars = typeof parsed.maxChars === "number" ? Math.max(500, Math.min(5e4, Math.round(parsed.maxChars))) : 12e3;
-            if (!resultId) throw new Error("resultId is required");
-            const result = getKnowledgeService().read(resultId, maxChars);
-            if (!result) {
-              response.statusCode = 404;
-              response.end(JSON.stringify({ error: "Knowledge result was not found" }));
-              return;
-            }
-            response.end(JSON.stringify({ result }));
-            return;
-          }
-          response.statusCode = 404;
-          response.end(JSON.stringify({ error: "Not found" }));
-        } catch (error) {
-          response.statusCode = 400;
-          response.end(
-            JSON.stringify({ error: error instanceof Error ? error.message : String(error) })
-          );
-        }
-      });
-      server.once("error", reject);
-      server.listen(0, "127.0.0.1", () => {
-        const address = server.address();
-        if (!address || typeof address === "string") {
-          reject(new Error("Failed to start the local knowledge bridge"));
-          return;
-        }
-        resolve6({ endpoint: `http://127.0.0.1:${address.port}/search`, token, server });
-      });
-    });
-  }
-  return gatewayPromise.then(({ endpoint, token }) => ({ endpoint, token }));
-}
-async function stopKnowledgeAgentGateway() {
-  if (!gatewayPromise) return;
-  const gateway = await gatewayPromise.catch(() => null);
-  gatewayPromise = null;
-  if (!gateway) return;
-  await new Promise((resolve6) => gateway.server.close(() => resolve6()));
-}
-var import_node_crypto14, import_node_http2, gatewayPromise;
-var init_gateway = __esm({
-  "src/main/knowledge/agent/gateway.ts"() {
-    "use strict";
-    import_node_crypto14 = require("node:crypto");
-    import_node_http2 = require("node:http");
-    init_searchMode();
-    init_service3();
-    init_service();
-    gatewayPromise = null;
-  }
-});
-
-// src/main/agent/bridge.ts
-var bridge_exports = {};
-__export(bridge_exports, {
-  createBridge: () => createBridge,
-  disposeSharedBridge: () => disposeSharedBridge,
-  getSharedBridge: () => getSharedBridge
-});
-function resolveRaymesPiExtension() {
-  const resourcesPath = process.resourcesPath;
-  const candidates = [
-    process.env["RAYMES_PI_EXTENSION"],
-    import_node_path31.default.join(process.cwd(), "src", "main", "agent", "raymes-pi-policy.ts"),
-    ...app.isPackaged && resourcesPath ? [import_node_path31.default.join(resourcesPath, "agent", "raymes-pi-policy.ts")] : []
-  ];
-  return candidates.find(
-    (candidate) => Boolean(candidate && (0, import_node_fs28.existsSync)(candidate))
-  );
-}
-function resolvePiBinary(override) {
-  if (override && override.trim()) return override.trim();
-  const envOverride = process.env["RAYMES_PI_BIN"];
-  if (envOverride && envOverride.trim()) return envOverride.trim();
-  for (const candidate of PI_BIN_CANDIDATES) {
-    if ((0, import_node_fs28.existsSync)(candidate)) return candidate;
-  }
-  return "pi";
-}
-function makeId2() {
-  return (0, import_node_crypto15.randomUUID)();
-}
-function writeCommand(child, command3) {
-  const line = `${JSON.stringify(command3)}
-`;
-  child.stdin.write(line);
-}
-function spawnRpc(options) {
-  const args = ["--mode", "rpc"];
-  if (options.ephemeral) args.push("--no-session");
-  args.push("--no-extensions");
-  if (options.model) args.push("--model", options.model);
-  const raymesPiExtension = resolveRaymesPiExtension();
-  if (raymesPiExtension) args.push("--extension", raymesPiExtension);
-  if (options.model?.startsWith("opencode/") && (0, import_node_fs28.existsSync)(OPENCODE_PI_EXTENSION)) {
-    args.push("--extension", OPENCODE_PI_EXTENSION);
-  }
-  args.push(...options.extraArgs);
-  const child = (0, import_node_child_process19.spawn)(options.piBin, args, {
-    cwd: options.cwd,
-    env: {
-      ...process.env,
-      ...options.raymesProviderJson ? { RAYMES_PI_PROVIDER_JSON: options.raymesProviderJson } : {},
-      ...options.raymesAlwaysAllowJson ? { RAYMES_PI_ALWAYS_ALLOW_JSON: options.raymesAlwaysAllowJson } : {},
-      ...options.raymesAlwaysAllowExactJson ? { RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON: options.raymesAlwaysAllowExactJson } : {},
-      ...options.knowledgeEndpoint ? { TEZBAR_KNOWLEDGE_ENDPOINT: options.knowledgeEndpoint } : {},
-      ...options.knowledgeToken ? { TEZBAR_KNOWLEDGE_TOKEN: options.knowledgeToken } : {}
-    },
-    stdio: ["pipe", "pipe", "pipe"]
-  });
-  child.stdout.setEncoding("utf8");
-  child.stderr.setEncoding("utf8");
-  return child;
-}
-function shouldSuppressPiStderr(line) {
-  return /^Warning: No models match pattern "(?:kiro-cli\/|opencode\/opencode\/)[^"]+"$/.test(
-    line.trim()
-  );
-}
-async function handleExtensionUiRequest(handle, msg) {
-  const id = msg.id;
-  if (typeof id !== "string") return;
-  if (msg.method === "confirm") {
-    const title = msg.title || "Allow command?";
-    const command3 = msg.message || "";
-    let confirmed = false;
-    try {
-      confirmed = await handle.requestApproval?.({ title, command: command3 }) ?? false;
-    } catch {
-      confirmed = false;
-    }
-    writeCommand(handle.child, {
-      type: "extension_ui_response",
-      id,
-      confirmed
-    });
-    return;
-  }
-  writeCommand(handle.child, { type: "extension_ui_response", id, cancelled: true });
-}
-function attachLineReader(stream, onLine) {
-  let buffer = "";
-  stream.on("data", (chunk) => {
-    buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
-    let newlineAt = buffer.indexOf("\n");
-    while (newlineAt >= 0) {
-      const raw = buffer.slice(0, newlineAt);
-      buffer = buffer.slice(newlineAt + 1);
-      const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-      if (line.length > 0) onLine(line);
-      newlineAt = buffer.indexOf("\n");
-    }
-  });
-}
-function attachHandlers(handle, onStderrLine) {
-  attachLineReader(handle.child.stdout, (line) => {
-    let parsed;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      return;
-    }
-    if (!parsed || typeof parsed !== "object") return;
-    const msg = parsed;
-    if (msg.type === "response" && typeof msg.id === "string") {
-      const pending = handle.pending.get(msg.id);
-      if (!pending) return;
-      handle.pending.delete(msg.id);
-      if (msg.success === true) {
-        pending.resolve(parsed);
-      } else {
-        pending.reject(new Error(msg.error || "pi rpc command failed"));
-      }
-      return;
-    }
-    if (msg.type === "extension_ui_request") {
-      void handleExtensionUiRequest(handle, msg);
-      return;
-    }
-    if (typeof msg.type === "string") {
-      handle.onEvent(parsed);
-    }
-  });
-  attachLineReader(handle.child.stderr, (line) => {
-    if (shouldSuppressPiStderr(line)) return;
-    handle.stderrBuffer.push(line);
-    onStderrLine?.(line);
-    if (handle.stderrBuffer.length > 50) handle.stderrBuffer.shift();
-  });
-  handle.child.on("close", () => {
-    handle.closed = true;
-    const pendings = Array.from(handle.pending.values());
-    for (let i = 0; i < pendings.length; i++) {
-      const pending = pendings[i];
-      if (pending) pending.reject(new Error("pi rpc session closed before response"));
-    }
-    handle.pending.clear();
-  });
-  handle.child.on("error", (err) => {
-    handle.closed = true;
-    const pendings = Array.from(handle.pending.values());
-    for (let i = 0; i < pendings.length; i++) {
-      const pending = pendings[i];
-      if (pending) pending.reject(err);
-    }
-    handle.pending.clear();
-  });
-}
-async function sendAndAwait(handle, command3, timeoutMs) {
-  if (handle.closed) throw new Error("pi rpc session already closed");
-  const id = makeId2();
-  return new Promise((resolve6, reject) => {
-    const timer = setTimeout(() => {
-      handle.pending.delete(id);
-      reject(new Error(`pi rpc command timed out after ${timeoutMs}ms: ${command3.type}`));
-    }, timeoutMs);
-    handle.pending.set(id, {
-      resolve: (value) => {
-        clearTimeout(timer);
-        resolve6(value);
-      },
-      reject: (err) => {
-        clearTimeout(timer);
-        reject(err);
-      }
-    });
-    writeCommand(handle.child, { ...command3, id });
-  });
-}
-function createBridge() {
-  const ownedChildren = /* @__PURE__ */ new Set();
-  function trackChild(child) {
-    ownedChildren.add(child);
-    child.on("close", () => ownedChildren.delete(child));
-  }
-  return {
-    async run(task, options = {}) {
-      if (!task.trim()) {
-        throw new Error("agent.run: task is empty");
-      }
-      const runId = options.runId ?? makeId2();
-      const cwd = options.cwd ?? process.cwd();
-      const piBin = resolvePiBinary(options.piBin);
-      const ephemeral = options.ephemeral !== false;
-      const knowledgeGateway = await ensureKnowledgeAgentGateway().catch(() => null);
-      const stages = [];
-      let finalAnswer = "";
-      const driver = createLoopDriver({
-        onStage: (stage) => {
-          const existing = stages.findIndex((s) => s.index === stage.index);
-          if (existing >= 0) stages[existing] = stage;
-          else stages.push(stage);
-          options.onStage?.(stage);
-        },
-        onMessageDelta: (delta) => {
-          options.onMessageDelta?.(delta);
-        },
-        onAnswer: (text3) => {
-          finalAnswer = text3;
-          options.onAnswer?.(text3);
-        },
-        onDone: () => {
-        },
-        onError: (message) => {
-          throw new Error(message);
-        }
-      });
-      const child = spawnRpc({
-        cwd,
-        piBin,
-        ephemeral,
-        model: options.model,
-        raymesProviderJson: options.raymesProviderJson,
-        raymesAlwaysAllowJson: options.raymesAlwaysAllowJson,
-        raymesAlwaysAllowExactJson: options.raymesAlwaysAllowExactJson,
-        knowledgeEndpoint: knowledgeGateway?.endpoint,
-        knowledgeToken: knowledgeGateway?.token,
-        extraArgs: options.extraArgs ?? []
-      });
-      trackChild(child);
-      console.log("[tezbar:agent] spawn", {
-        runId,
-        piBin,
-        cwd,
-        ephemeral,
-        model: options.model ?? "(default)",
-        taskChars: task.length
-      });
-      let agentEndResolved = false;
-      let agentEnded = () => void 0;
-      const agentEndPromise = new Promise((resolve6) => {
-        agentEnded = () => {
-          if (agentEndResolved) return;
-          agentEndResolved = true;
-          resolve6();
-        };
-      });
-      const handle = {
-        child,
-        pending: /* @__PURE__ */ new Map(),
-        stderrBuffer: [],
-        closed: false,
-        requestApproval: options.requestApproval,
-        onEvent: (event) => {
-          driver(event);
-          if (event.type === "agent_end") agentEnded();
-        }
-      };
-      attachHandlers(handle, options.onStderrLine);
-      const onAbort = () => {
-        if (handle.closed) return;
-        try {
-          writeCommand(child, { type: "abort", id: makeId2() });
-        } catch {
-        }
-        setTimeout(() => {
-          if (!handle.closed && !child.killed) child.kill("SIGTERM");
-        }, 500);
-      };
-      options.signal?.addEventListener("abort", onAbort, { once: true });
-      try {
-        await sendAndAwait(handle, buildPromptCommand(task, options.images), 15e3);
-        let runTimeout;
-        try {
-          await Promise.race([
-            agentEndPromise,
-            (0, import_node_events.once)(child, "close").then(() => void 0),
-            new Promise((_resolve, reject) => {
-              runTimeout = setTimeout(
-                () => reject(
-                  new Error(`Agent run timed out after ${options.timeoutMs ?? 15 * 6e4}ms`)
-                ),
-                options.timeoutMs ?? 15 * 6e4
-              );
-            })
-          ]);
-        } finally {
-          if (runTimeout) clearTimeout(runTimeout);
-        }
-        if (options.signal?.aborted) {
-          throw new Error("Agent run aborted");
-        }
-        if (handle.closed && !agentEndResolved) {
-          const tail = handle.stderrBuffer.slice(-8).join("\n").trim();
-          throw new Error(
-            tail ? `pi exited before finishing:
-${tail}` : "pi exited before finishing"
-          );
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const tail = handle.stderrBuffer.filter((line) => !message.includes(line)).slice(-6).join("\n").trim();
-        throw new Error(tail ? `${message}
-${tail}` : message);
-      } finally {
-        options.signal?.removeEventListener("abort", onAbort);
-        if (!handle.closed) {
-          try {
-            writeCommand(child, { type: "abort", id: makeId2() });
-          } catch {
-          }
-          child.stdin.end();
-          setTimeout(() => {
-            if (!handle.closed && !child.killed) child.kill("SIGTERM");
-          }, 500);
-        }
-      }
-      return { runId, answer: finalAnswer, stages };
-    },
-    async query(command3, queryOptions = {}) {
-      const cwd = queryOptions.cwd ?? process.cwd();
-      const piBin = resolvePiBinary(queryOptions.piBin);
-      const timeoutMs = queryOptions.timeoutMs ?? 1e4;
-      const child = spawnRpc({ cwd, piBin, ephemeral: true, extraArgs: [] });
-      trackChild(child);
-      const handle = {
-        child,
-        pending: /* @__PURE__ */ new Map(),
-        stderrBuffer: [],
-        closed: false,
-        requestApproval: void 0,
-        onEvent: () => void 0
-      };
-      attachHandlers(handle);
-      try {
-        const result = await sendAndAwait(handle, command3, timeoutMs);
-        return result;
-      } finally {
-        try {
-          writeCommand(child, { type: "abort", id: makeId2() });
-        } catch {
-        }
-        child.stdin.end();
-        setTimeout(() => {
-          if (!handle.closed && !child.killed) child.kill("SIGTERM");
-        }, 250);
-      }
-    },
-    async observe(observeOptions = {}) {
-      const cwd = observeOptions.cwd ?? process.cwd();
-      const piBin = resolvePiBinary(observeOptions.piBin);
-      return observe(cwd, (command3) => this.query(command3, { cwd, piBin, timeoutMs: 5e3 }));
-    },
-    dispose() {
-      const children = Array.from(ownedChildren.values());
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i];
-        if (child && !child.killed) child.kill("SIGTERM");
-      }
-      ownedChildren.clear();
-    }
-  };
-}
-function getSharedBridge() {
-  if (!sharedBridge) sharedBridge = createBridge();
-  return sharedBridge;
-}
-function disposeSharedBridge() {
-  sharedBridge?.dispose();
-  sharedBridge = void 0;
-}
-var import_node_child_process19, import_node_crypto15, import_node_events, import_node_fs28, import_node_os15, import_node_path31, PI_BIN_CANDIDATES, OPENCODE_PI_EXTENSION, sharedBridge;
-var init_bridge = __esm({
-  "src/main/agent/bridge.ts"() {
-    "use strict";
-    import_node_child_process19 = require("node:child_process");
-    import_node_crypto15 = require("node:crypto");
-    import_node_events = require("node:events");
-    import_node_fs28 = require("node:fs");
-    import_node_os15 = require("node:os");
-    import_node_path31 = __toESM(require("node:path"));
-    init_desktop_runtime();
-    init_loop();
-    init_observer();
-    init_prompt();
-    init_gateway();
-    PI_BIN_CANDIDATES = [
-      // Where pnpm installs global bins for this user (matches `which pi`
-      // at the time this bridge was written). We resolve at runtime so a
-      // reinstall or version bump does not require a rebuild.
-      import_node_path31.default.join((0, import_node_os15.homedir)(), "Library", "pnpm", "pi"),
-      import_node_path31.default.join((0, import_node_os15.homedir)(), ".local", "share", "pnpm", "pi")
-    ];
-    OPENCODE_PI_EXTENSION = import_node_path31.default.join(
-      (0, import_node_os15.homedir)(),
-      ".pi",
-      "agent",
-      "extensions",
-      "opencode",
-      "index.ts"
-    );
   }
 });
 
@@ -29805,15 +29961,124 @@ var init_imageContext = __esm({
   }
 });
 
+// src/main/agent/piExtensions.ts
+var piExtensions_exports = {};
+__export(piExtensions_exports, {
+  getInstalledPiExtensions: () => getInstalledPiExtensions
+});
+function getInstalledPiExtensions() {
+  const agentDir = import_node_path33.default.join((0, import_node_os17.homedir)(), ".pi", "agent");
+  const settingsPath = import_node_path33.default.join(agentDir, "settings.json");
+  const nodeModulesDir = import_node_path33.default.join(agentDir, "npm", "node_modules");
+  const extensionsDir = import_node_path33.default.join(agentDir, "extensions");
+  const results = [];
+  const seenIds = /* @__PURE__ */ new Set();
+  if ((0, import_node_fs30.existsSync)(settingsPath)) {
+    try {
+      const settings = JSON.parse((0, import_node_fs30.readFileSync)(settingsPath, "utf8"));
+      const packages = Array.isArray(settings.packages) ? settings.packages : [];
+      for (const pkg of packages) {
+        const pkgName = pkg.replace(/^npm:/, "");
+        if (seenIds.has(pkgName)) continue;
+        seenIds.add(pkgName);
+        const pkgJsonPath = import_node_path33.default.join(nodeModulesDir, pkgName, "package.json");
+        if ((0, import_node_fs30.existsSync)(pkgJsonPath)) {
+          try {
+            const pkgJson = JSON.parse((0, import_node_fs30.readFileSync)(pkgJsonPath, "utf8"));
+            results.push({
+              id: pkgName,
+              name: pkgJson.name || pkgName,
+              version: pkgJson.version ? `v${pkgJson.version}` : "installed",
+              description: pkgJson.description || "Pi agent package",
+              type: "package",
+              location: import_node_path33.default.join(nodeModulesDir, pkgName),
+              enabled: true,
+              features: getPackageFeatures(pkgName, pkgJson.description)
+            });
+            continue;
+          } catch {
+          }
+        }
+        results.push({
+          id: pkgName,
+          name: pkgName,
+          version: "installed",
+          description: "Pi agent package",
+          type: "package",
+          location: pkg,
+          enabled: true,
+          features: getPackageFeatures(pkgName)
+        });
+      }
+    } catch {
+    }
+  }
+  if ((0, import_node_fs30.existsSync)(extensionsDir)) {
+    try {
+      const files = (0, import_node_fs30.readdirSync)(extensionsDir);
+      for (const file of files) {
+        if (file.endsWith(".ts") || file.endsWith(".js")) {
+          const id = import_node_path33.default.basename(file, import_node_path33.default.extname(file));
+          if (seenIds.has(id)) continue;
+          seenIds.add(id);
+          const scriptPath = import_node_path33.default.join(extensionsDir, file);
+          results.push({
+            id,
+            name: id.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+            version: "local",
+            description: `Custom extension script (${file})`,
+            type: "script",
+            location: scriptPath,
+            enabled: true,
+            features: getScriptFeatures(id)
+          });
+        }
+      }
+    } catch {
+    }
+  }
+  return results;
+}
+function getPackageFeatures(id, description) {
+  switch (id) {
+    case "pi-antigravity":
+      return ["Google Cloud Code Provider", "Image generation (generate_image)", "Claude & Gemini models"];
+    case "pi-agents":
+      return ["Multi-agent orchestration", "Parallel & sequence workflows", "Subagent spawning", "Mermaid diagrams"];
+    case "pi-multi-account":
+      return ["Multi-account rotation", "Automatic rate-limit failover", "OAuth account cycling"];
+    case "pi-notify":
+      return ["OSC / native desktop notifications", "Long-running turn alerts"];
+    case "pi-reset-usage-limit":
+      return ["Codex usage limit credit resets"];
+    default:
+      if (description?.toLowerCase().includes("provider")) return ["Custom AI provider"];
+      return [];
+  }
+}
+function getScriptFeatures(id) {
+  if (id.includes("modal")) return ["Modal GLM-5.3-Flash provider", "Serverless inference endpoint"];
+  return ["Custom extension hooks and tools"];
+}
+var import_node_fs30, import_node_os17, import_node_path33;
+var init_piExtensions = __esm({
+  "src/main/agent/piExtensions.ts"() {
+    "use strict";
+    import_node_fs30 = require("node:fs");
+    import_node_os17 = require("node:os");
+    import_node_path33 = __toESM(require("node:path"));
+  }
+});
+
 // src/main/llm/memoryStore.ts
 function memoryPath() {
-  const dir = (0, import_node_path33.join)(app.getPath("userData"), "llm");
-  (0, import_node_fs30.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path33.join)(dir, "memory.json");
+  const dir = (0, import_node_path34.join)(app.getPath("userData"), "llm");
+  (0, import_node_fs31.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path34.join)(dir, "memory.json");
 }
 function readDb2() {
   try {
-    const raw = (0, import_node_fs30.readFileSync)(memoryPath(), "utf8");
+    const raw = (0, import_node_fs31.readFileSync)(memoryPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.entries)) return { entries: [] };
     return { entries: parsed.entries };
@@ -29822,7 +30087,7 @@ function readDb2() {
   }
 }
 function writeDb3(db) {
-  (0, import_node_fs30.writeFileSync)(memoryPath(), `${JSON.stringify(db, null, 2)}
+  (0, import_node_fs31.writeFileSync)(memoryPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
 }
 function tokenize3(input) {
@@ -29867,13 +30132,13 @@ function retrieveMemories(query, policy) {
     return b.createdAt - a.createdAt;
   }).slice(0, policy.maxItems).map((entry) => entry.text);
 }
-var import_node_fs30, import_node_path33;
+var import_node_fs31, import_node_path34;
 var init_memoryStore = __esm({
   "src/main/llm/memoryStore.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_fs30 = require("node:fs");
-    import_node_path33 = require("node:path");
+    import_node_fs31 = require("node:fs");
+    import_node_path34 = require("node:path");
     init_redaction();
   }
 });
@@ -29947,7 +30212,7 @@ var init_answerStream = __esm({
   "src/main/llm/answerStream.ts"() {
     "use strict";
     init_memoryStore();
-    init_registry();
+    init_registry3();
     HERMES_ANSWER_SYSTEM = "You are Hermes, a helpful assistant. Answer briefly and clearly unless the user asks for more detail.";
   }
 });
@@ -30005,22 +30270,22 @@ async function getLoginPath() {
   return cachedLoginPath;
 }
 async function execWithUserPath(file, args, options = {}) {
-  const path7 = await getLoginPath();
+  const path8 = await getLoginPath();
   return execFileAsync17(file, args, {
     maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
-    env: { ...process.env, PATH: path7 }
+    env: { ...process.env, PATH: path8 }
   });
 }
 function voiceModelsRootDir() {
-  const dir = (0, import_node_path34.join)(app.getPath("userData"), "voice-models");
-  (0, import_node_fs31.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_node_path35.join)(app.getPath("userData"), "voice-models");
+  (0, import_node_fs32.mkdirSync)(dir, { recursive: true });
   return dir;
 }
 function modelDir(modelId) {
-  return (0, import_node_path34.join)(voiceModelsRootDir(), modelId);
+  return (0, import_node_path35.join)(voiceModelsRootDir(), modelId);
 }
 function modelAssetPath(modelId, fileName) {
-  return (0, import_node_path34.join)(modelDir(modelId), fileName);
+  return (0, import_node_path35.join)(modelDir(modelId), fileName);
 }
 function findModel(modelId) {
   const model = MODEL_CATALOG.find((entry) => entry.id === modelId);
@@ -30040,9 +30305,9 @@ function readSelectedModelId() {
   }
   return "moonshine-base-en";
 }
-function fileSizeOrZero(path7) {
+function fileSizeOrZero(path8) {
   try {
-    return (0, import_node_fs31.statSync)(path7).size;
+    return (0, import_node_fs32.statSync)(path8).size;
   } catch {
     return 0;
   }
@@ -30055,8 +30320,8 @@ function modelDownloadedBytes(model) {
 }
 function isModelFullyDownloaded(model) {
   return model.assets.every((asset) => {
-    const path7 = modelAssetPath(model.id, asset.fileName);
-    return (0, import_node_fs31.existsSync)(path7) && fileSizeOrZero(path7) > 0;
+    const path8 = modelAssetPath(model.id, asset.fileName);
+    return (0, import_node_fs32.existsSync)(path8) && fileSizeOrZero(path8) > 0;
   });
 }
 async function probeRuntime(kind) {
@@ -30085,12 +30350,12 @@ async function probeRuntime(kind) {
   };
 }
 async function runLoginShell(command3) {
-  const path7 = await getLoginPath();
+  const path8 = await getLoginPath();
   const { stdout, stderr } = await execFileAsync17("bash", ["-lc", command3], {
     maxBuffer: 32 * 1024 * 1024,
     env: {
       ...process.env,
-      PATH: path7,
+      PATH: path8,
       HOMEBREW_NO_AUTO_UPDATE: "1",
       HOMEBREW_NO_ANALYTICS: "1",
       HOMEBREW_NO_INSTALL_CLEANUP: "1",
@@ -30230,11 +30495,11 @@ async function downloadAssetWithProgress(url, destinationPath, onProgress) {
   if (!response.ok || !response.body) {
     throw new Error(`Download failed (${response.status}): ${url}`);
   }
-  await import_node_fs32.promises.mkdir((0, import_node_path34.dirname)(destinationPath), { recursive: true });
+  await import_node_fs33.promises.mkdir((0, import_node_path35.dirname)(destinationPath), { recursive: true });
   const tempPath = `${destinationPath}.part`;
   const total = Number(response.headers.get("content-length") ?? "");
   const totalBytes = Number.isFinite(total) && total > 0 ? total : null;
-  const writer = (0, import_node_fs31.createWriteStream)(tempPath);
+  const writer = (0, import_node_fs32.createWriteStream)(tempPath);
   const reader = response.body.getReader();
   let downloaded = 0;
   try {
@@ -30250,21 +30515,21 @@ async function downloadAssetWithProgress(url, destinationPath, onProgress) {
     }
     writer.end();
     await (0, import_node_events2.once)(writer, "finish");
-    await import_node_fs32.promises.rename(tempPath, destinationPath);
+    await import_node_fs33.promises.rename(tempPath, destinationPath);
   } catch (error) {
     writer.destroy();
-    await import_node_fs32.promises.rm(tempPath, { force: true });
+    await import_node_fs33.promises.rm(tempPath, { force: true });
     throw error;
   }
 }
 async function runModelDownload(modelId) {
   const model = findModel(modelId);
   const destinationRoot = modelDir(modelId);
-  await import_node_fs32.promises.mkdir(destinationRoot, { recursive: true });
+  await import_node_fs33.promises.mkdir(destinationRoot, { recursive: true });
   let baselineBytes = modelDownloadedBytes(model);
   const runtimeNeeded = !(await probeRuntime(model.runtime)).ready;
   const missingAssets = model.assets.filter(
-    (asset) => !(0, import_node_fs31.existsSync)(modelAssetPath(modelId, asset.fileName))
+    (asset) => !(0, import_node_fs32.existsSync)(modelAssetPath(modelId, asset.fileName))
   );
   if (!runtimeNeeded && missingAssets.length === 0) {
     activeDownloads.delete(modelId);
@@ -30382,8 +30647,8 @@ async function cleanupStaleVoiceModelAssets() {
         if (currentAssets.has(fileName)) continue;
         const fullPath = modelAssetPath(model.id, fileName);
         try {
-          await import_node_fs32.promises.stat(fullPath);
-          await import_node_fs32.promises.rm(fullPath, { force: true });
+          await import_node_fs33.promises.stat(fullPath);
+          await import_node_fs33.promises.rm(fullPath, { force: true });
           console.log("[stt][main] removed stale voice model asset:", fullPath);
         } catch {
         }
@@ -30413,7 +30678,7 @@ async function deleteVoiceModel(modelId) {
   if (activeDownloads.get(modelId)?.status === "downloading") {
     throw new Error("Wait for this model download to finish before deleting it.");
   }
-  await import_node_fs32.promises.rm(modelDir(modelId), { recursive: true, force: true });
+  await import_node_fs33.promises.rm(modelDir(modelId), { recursive: true, force: true });
   activeDownloads.delete(modelId);
   const selectedId = readSelectedModelId();
   if (selectedId !== modelId) return selectedId;
@@ -30453,14 +30718,14 @@ function stopSpeaking() {
 }
 async function hasBinary(binary) {
   try {
-    const path7 = await getLoginPath();
+    const path8 = await getLoginPath();
     if (process.platform === "win32") {
       await execFileAsync17("where.exe", [binary], {
-        env: { ...process.env, Path: path7, PATH: path7 }
+        env: { ...process.env, Path: path8, PATH: path8 }
       });
     } else {
       await execFileAsync17("bash", ["-lc", `command -v ${binary}`], {
-        env: { ...process.env, PATH: path7 }
+        env: { ...process.env, PATH: path8 }
       });
     }
     return true;
@@ -30608,7 +30873,7 @@ function extensionFromMime(mime) {
 }
 async function findWhisperCliModel() {
   const envPath = process.env["RAYMES_WHISPER_MODEL"];
-  if (envPath && (0, import_node_fs31.existsSync)(envPath)) return envPath;
+  if (envPath && (0, import_node_fs32.existsSync)(envPath)) return envPath;
   const selected = readSelectedModelId();
   const selectedModel = findModel(selected);
   const whisperModels = MODEL_CATALOG.filter((model) => model.family === "whisper");
@@ -30616,7 +30881,7 @@ async function findWhisperCliModel() {
   for (const model of preferredModels) {
     for (const asset of model.assets) {
       const assetPath = modelAssetPath(model.id, asset.fileName);
-      if ((0, import_node_fs31.existsSync)(assetPath)) {
+      if ((0, import_node_fs32.existsSync)(assetPath)) {
         return assetPath;
       }
     }
@@ -30628,7 +30893,7 @@ async function findWhisperCliModel() {
     "/usr/local/share/whisper-cpp/ggml-base.bin"
   ];
   for (const c of candidates) {
-    if ((0, import_node_fs31.existsSync)(c)) return c;
+    if ((0, import_node_fs32.existsSync)(c)) return c;
   }
   return null;
 }
@@ -30639,7 +30904,7 @@ function envPositiveInt(name) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 function whisperThreadCount() {
-  return envPositiveInt("RAYMES_WHISPER_THREADS") ?? Math.max(4, Math.min((0, import_node_os17.cpus)().length, 12));
+  return envPositiveInt("RAYMES_WHISPER_THREADS") ?? Math.max(4, Math.min((0, import_node_os18.cpus)().length, 12));
 }
 async function runWhisperCli(wavPath, language) {
   const binary = await hasBinary("whisper-cli") ? "whisper-cli" : await hasBinary("whisper-cpp") ? "whisper-cpp" : null;
@@ -30674,8 +30939,8 @@ async function runWhisperCli(wavPath, language) {
     const { stderr } = await execWithUserPath(binary, args);
     if (stderr.trim()) console.info("[stt][main] whisper-cli stderr:\n" + stderr.trim());
     const txtPath = wavPath.replace(/\.wav$/, ".txt");
-    const text3 = await import_node_fs32.promises.readFile(txtPath, "utf-8").catch(() => "");
-    await import_node_fs32.promises.rm(txtPath, { force: true }).catch(() => void 0);
+    const text3 = await import_node_fs33.promises.readFile(txtPath, "utf-8").catch(() => "");
+    await import_node_fs33.promises.rm(txtPath, { force: true }).catch(() => void 0);
     return text3.trim();
   } catch (err) {
     const e = err;
@@ -30705,14 +30970,14 @@ async function probeEngineBinaries() {
   return cachedEngineProbe;
 }
 async function transcribeAudio(req) {
-  const tempRoot = (0, import_node_path34.join)(app.getPath("temp"), "tezbar-voice");
-  await import_node_fs32.promises.mkdir(tempRoot, { recursive: true });
+  const tempRoot = (0, import_node_path35.join)(app.getPath("temp"), "tezbar-voice");
+  await import_node_fs33.promises.mkdir(tempRoot, { recursive: true });
   const token = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const ext = extensionFromMime(req.mimeType);
-  const sourcePath = (0, import_node_path34.join)(tempRoot, `input-${token}.${ext}`);
-  const wavPath = ext === "wav" ? sourcePath : (0, import_node_path34.join)(tempRoot, `input-${token}.wav`);
+  const sourcePath = (0, import_node_path35.join)(tempRoot, `input-${token}.${ext}`);
+  const wavPath = ext === "wav" ? sourcePath : (0, import_node_path35.join)(tempRoot, `input-${token}.wav`);
   try {
-    await import_node_fs32.promises.writeFile(sourcePath, Buffer.from(req.audioBytes));
+    await import_node_fs33.promises.writeFile(sourcePath, Buffer.from(req.audioBytes));
     console.info(
       "[stt][main] received audio",
       JSON.stringify({
@@ -30789,9 +31054,9 @@ async function transcribeAudio(req) {
     console.error("[stt][main] transcription pipeline error:", message);
     return { ok: false, error: message };
   } finally {
-    await import_node_fs32.promises.rm(sourcePath, { force: true }).catch(() => void 0);
+    await import_node_fs33.promises.rm(sourcePath, { force: true }).catch(() => void 0);
     if (wavPath !== sourcePath) {
-      await import_node_fs32.promises.rm(wavPath, { force: true }).catch(() => void 0);
+      await import_node_fs33.promises.rm(wavPath, { force: true }).catch(() => void 0);
     }
   }
 }
@@ -30803,16 +31068,16 @@ ${result.hint}` : result.error);
   }
   return { text: result.text, engine: result.engine };
 }
-var import_node_child_process21, import_node_fs31, import_node_fs32, import_node_os17, import_node_path34, import_node_events2, import_node_util17, execFileAsync17, activeSpeech, cachedLoginPath, MODEL_CATALOG, activeDownloads, VOICE_MODEL_CONFIG_KEY, runtimeCache, LEGACY_WHISPER_ASSET_NAMES, staleVoiceCleanupPromise, cachedEngineProbe, ENGINE_PROBE_TTL_MS;
+var import_node_child_process21, import_node_fs32, import_node_fs33, import_node_os18, import_node_path35, import_node_events2, import_node_util17, execFileAsync17, activeSpeech, cachedLoginPath, MODEL_CATALOG, activeDownloads, VOICE_MODEL_CONFIG_KEY, runtimeCache, LEGACY_WHISPER_ASSET_NAMES, staleVoiceCleanupPromise, cachedEngineProbe, ENGINE_PROBE_TTL_MS;
 var init_service5 = __esm({
   "src/main/voice/service.ts"() {
     "use strict";
     init_desktop_runtime();
     import_node_child_process21 = require("node:child_process");
-    import_node_fs31 = require("node:fs");
     import_node_fs32 = require("node:fs");
-    import_node_os17 = require("node:os");
-    import_node_path34 = require("node:path");
+    import_node_fs33 = require("node:fs");
+    import_node_os18 = require("node:os");
+    import_node_path35 = require("node:path");
     import_node_events2 = require("node:events");
     import_node_util17 = require("node:util");
     init_configStore();
@@ -31467,8 +31732,8 @@ var QUICK_LOOK_PREVIEWABLE_EXTENSIONS = /* @__PURE__ */ new Set([
   ".xlsm",
   ".xlsx"
 ]);
-function isQuickLookPreviewablePath(path7) {
-  const fileName = path7.split(/[\\/]/).pop() ?? "";
+function isQuickLookPreviewablePath(path8) {
+  const fileName = path8.split(/[\\/]/).pop() ?? "";
   const dot = fileName.lastIndexOf(".");
   const extension = dot >= 0 ? fileName.slice(dot).toLowerCase() : "";
   return QUICK_LOOK_PREVIEWABLE_EXTENSIONS.has(extension);
@@ -31477,8 +31742,8 @@ function isQuickLookPreviewablePath(path7) {
 // src/main/quickLook.ts
 var execFileAsync4 = (0, import_node_util4.promisify)(import_node_child_process4.execFile);
 async function quickLookFiles(paths) {
-  const requestedTargets = [...new Set(paths.map((path7) => path7.trim()))].filter(
-    (path7) => path7 && isQuickLookPreviewablePath(path7)
+  const requestedTargets = [...new Set(paths.map((path8) => path8.trim()))].filter(
+    (path8) => path8 && isQuickLookPreviewablePath(path8)
   );
   if (requestedTargets.length === 0) {
     return { ok: false, message: "The selected item cannot be previewed with Quick Look" };
@@ -31535,12 +31800,19 @@ init_githubCopilotAuth();
 // src/main/llm/listModels.ts
 init_aiProviders();
 init_copilot();
-init_registry();
-function trimSlash4(url) {
-  return url.replace(/\/+$/, "");
+init_registry3();
+function normalizeBaseUrl2(url) {
+  let cleaned = url.trim().replace(/\/+$/, "");
+  cleaned = cleaned.replace(/^(https?:\/\/)0\.0\.0\.0(?::(\d+))?/, (_match, proto, port) => {
+    return `${proto}127.0.0.1${port ? `:${port}` : ""}`;
+  });
+  return cleaned;
+}
+function trimSlash3(url) {
+  return normalizeBaseUrl2(url);
 }
 function modelsUrl2(baseURL) {
-  const base = trimSlash4(baseURL);
+  const base = normalizeBaseUrl2(baseURL);
   if (base.endsWith("/chat/completions")) {
     return `${base.slice(0, -"/chat/completions".length)}/models`;
   }
@@ -31615,59 +31887,90 @@ async function fetchCopilotModelIds(accessToken, signal) {
     return [];
   }
 }
-async function listModelsForProvider(id, signal) {
-  const cfg = configForProvider(readLLMConfig(), id);
-  if (isCustomProvider(id)) {
-    const base = cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? "";
-    const key = cfg.apiKey ?? "";
-    if (!base.trim() || !key.trim()) return [];
+async function fetchOpenAiModels(baseURL, apiKey, signal) {
+  const normBase = normalizeBaseUrl2(baseURL);
+  if (!normBase) return [];
+  const headers = { Accept: "application/json" };
+  if (apiKey?.trim()) {
+    headers.Authorization = `Bearer ${apiKey.trim()}`;
+  }
+  const candidateUrls = [modelsUrl2(normBase)];
+  if (!normBase.endsWith("/v1") && !normBase.includes("/v1/")) {
+    candidateUrls.push(`${normBase}/v1/models`);
+  } else {
+    candidateUrls.push(`${normBase.replace(/\/v1$/, "")}/models`);
+  }
+  for (const url of candidateUrls) {
     try {
-      const res = await fetch(modelsUrl2(base), {
+      const res = await fetch(url, {
         method: "GET",
-        headers: { Authorization: `Bearer ${key}` },
-        signal: signal ?? AbortSignal.timeout(12e3)
+        headers,
+        signal: signal ?? AbortSignal.timeout(1e4)
       });
-      if (!res.ok) return [];
-      return extractModelIds(await res.json());
+      if (res.ok) {
+        const ids = extractModelIds(await res.json());
+        if (ids.length > 0) return ids;
+      }
     } catch {
-      return [];
     }
   }
+  return [];
+}
+async function listModelsForProvider(id, signal, baseURLOverride, apiKeyOverride) {
+  const cfg = configForProvider(readLLMConfig(), id);
+  if (isCustomProvider(id) || typeof id === "string" && id.startsWith("custom:")) {
+    const base = baseURLOverride?.trim() || cfg.openaiCompatibleBaseURL || cfg.baseURL || "";
+    const key = apiKeyOverride !== void 0 ? apiKeyOverride : cfg.apiKey;
+    if (!base.trim()) return [];
+    return fetchOpenAiModels(base, key, signal);
+  }
   switch (id) {
-    case "openai": {
-      const base = cfg.baseURL ?? "https://api.openai.com/v1";
-      const key = cfg.apiKey ?? "";
-      if (!key.trim()) return [];
+    case "antigravity": {
       try {
-        const res = await fetch(modelsUrl2(base), {
-          method: "GET",
-          headers: { Authorization: `Bearer ${key}` },
-          signal: signal ?? AbortSignal.timeout(12e3)
-        });
-        if (!res.ok) return [];
-        return extractModelIds(await res.json());
+        const { existsSync: existsSync24, readFileSync: readFileSync22 } = await import("node:fs");
+        const { homedir: homedir14 } = await import("node:os");
+        const path8 = await import("node:path");
+        const storePath2 = path8.join(homedir14(), ".pi", "agent", "models-store.json");
+        if (existsSync24(storePath2)) {
+          const raw = JSON.parse(readFileSync22(storePath2, "utf8"));
+          const models = raw?.antigravity?.models;
+          if (Array.isArray(models)) {
+            const ids = models.map((m) => typeof m?.id === "string" ? m.id : "").filter(Boolean);
+            if (ids.length > 0) return uniqSorted(ids);
+          }
+        }
       } catch {
-        return [];
       }
+      return [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-3-flash",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3.1-pro",
+        "gemini-2.5-pro",
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+        "gpt-oss-120b"
+      ];
+    }
+    case "openai": {
+      const base = baseURLOverride?.trim() || cfg.baseURL || "https://api.openai.com/v1";
+      const key = apiKeyOverride !== void 0 ? apiKeyOverride : cfg.apiKey ?? "";
+      if (!key.trim()) return [];
+      return fetchOpenAiModels(base, key, signal);
     }
     case "openai-compatible": {
-      const base = cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? "https://api.openai.com/v1";
-      const key = cfg.apiKey ?? "";
-      if (!key.trim()) return [];
-      try {
-        const res = await fetch(modelsUrl2(base), {
-          method: "GET",
-          headers: { Authorization: `Bearer ${key}` },
-          signal: signal ?? AbortSignal.timeout(12e3)
-        });
-        if (!res.ok) return [];
-        return extractModelIds(await res.json());
-      } catch {
-        return [];
-      }
+      const base = baseURLOverride?.trim() || cfg.openaiCompatibleBaseURL || cfg.baseURL || "https://api.openai.com/v1";
+      const key = apiKeyOverride !== void 0 ? apiKeyOverride : cfg.apiKey;
+      return fetchOpenAiModels(base, key, signal);
     }
     case "anthropic": {
-      const apiBase = trimSlash4(cfg.baseURL ?? "https://api.anthropic.com");
+      const apiBase = trimSlash3(cfg.baseURL ?? "https://api.anthropic.com");
       const key = cfg.apiKey ?? "";
       if (!key.trim()) return [];
       try {
@@ -31688,7 +31991,7 @@ async function listModelsForProvider(id, signal) {
     case "ollama": {
       const base = cfg.baseURL ?? "http://localhost:11434";
       try {
-        const res = await fetch(`${trimSlash4(base)}/api/tags`, {
+        const res = await fetch(`${trimSlash3(base)}/api/tags`, {
           method: "GET",
           signal: signal ?? AbortSignal.timeout(12e3)
         });
@@ -31775,7 +32078,8 @@ async function listModelsForProvider(id, signal) {
 }
 
 // src/main/ipc.ts
-init_registry();
+init_registry3();
+init_aiProviders();
 
 // src/main/router.ts
 var QUESTION_PREFIX_RE = /^(what|why|how|who|when|is|are|can|does)\b/i;
@@ -31952,18 +32256,18 @@ async function fetchFrankfurterLatest(from) {
 }
 
 // src/main/portManager/namedPortsStore.ts
-var import_node_crypto11 = require("node:crypto");
-var import_node_fs24 = require("node:fs");
-var import_node_path26 = require("node:path");
+var import_node_crypto13 = require("node:crypto");
+var import_node_fs25 = require("node:fs");
+var import_node_path27 = require("node:path");
 init_desktop_runtime();
 function storePath() {
   return `${app.getPath("userData")}/named-ports.json`;
 }
 function readAll() {
-  const path7 = storePath();
-  if (!(0, import_node_fs24.existsSync)(path7)) return [];
+  const path8 = storePath();
+  if (!(0, import_node_fs25.existsSync)(path8)) return [];
   try {
-    const raw = (0, import_node_fs24.readFileSync)(path7, "utf8");
+    const raw = (0, import_node_fs25.readFileSync)(path8, "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.map((row) => {
@@ -31980,9 +32284,9 @@ function readAll() {
   }
 }
 function writeAll(entries) {
-  const path7 = storePath();
-  (0, import_node_fs24.mkdirSync)((0, import_node_path26.dirname)(path7), { recursive: true });
-  (0, import_node_fs24.writeFileSync)(path7, `${JSON.stringify(entries, null, 2)}
+  const path8 = storePath();
+  (0, import_node_fs25.mkdirSync)((0, import_node_path27.dirname)(path8), { recursive: true });
+  (0, import_node_fs25.writeFileSync)(path8, `${JSON.stringify(entries, null, 2)}
 `, "utf8");
 }
 function listNamedPorts() {
@@ -31992,7 +32296,7 @@ function addNamedPort(name, port) {
   const trimmed = name.trim();
   if (!trimmed || port < 1 || port > 65535) return null;
   const entries = readAll();
-  const next = { id: (0, import_node_crypto11.randomUUID)(), name: trimmed, port };
+  const next = { id: (0, import_node_crypto13.randomUUID)(), name: trimmed, port };
   entries.push(next);
   writeAll(entries);
   return next;
@@ -32006,7 +32310,7 @@ function removeNamedPort(id) {
 }
 
 // src/main/llm/actionMode.ts
-init_registry();
+init_registry3();
 init_redaction();
 async function runAiActionMode(req, options) {
   const provider = getProviderForTask("action");
@@ -32041,8 +32345,8 @@ ${appContext}` : "App context: (none)"
 }
 
 // src/main/backgroundTasks.ts
-var import_node_fs25 = require("node:fs");
-var import_node_path27 = require("node:path");
+var import_node_fs26 = require("node:fs");
+var import_node_path28 = require("node:path");
 init_desktop_runtime();
 init_service();
 function clampProgress(value) {
@@ -32091,21 +32395,21 @@ function timerBackgroundTask(fileName, rawContents, now = Date.now()) {
 function listRunningTimers(now = Date.now()) {
   const userData2 = app.getPath("userData");
   const packageJsonPath = [
-    (0, import_node_path27.join)(userData2, "extensions", "timers", "package.json"),
-    (0, import_node_path27.join)(userData2, "extensions", "raycast.timers", "package.json"),
-    (0, import_node_path27.join)(userData2, "extensions", "packages", "raycast.timers", "package.json"),
-    (0, import_node_path27.join)(userData2, "extension-registry", "packages", "raycast.timers", "package.json")
-  ].find((candidate) => (0, import_node_fs25.existsSync)(candidate));
+    (0, import_node_path28.join)(userData2, "extensions", "timers", "package.json"),
+    (0, import_node_path28.join)(userData2, "extensions", "raycast.timers", "package.json"),
+    (0, import_node_path28.join)(userData2, "extensions", "packages", "raycast.timers", "package.json"),
+    (0, import_node_path28.join)(userData2, "extension-registry", "packages", "raycast.timers", "package.json")
+  ].find((candidate) => (0, import_node_fs26.existsSync)(candidate));
   if (!packageJsonPath) return [];
-  const supportPath = (0, import_node_path27.join)((0, import_node_path27.dirname)(packageJsonPath), ".tezbar-support");
-  if (!(0, import_node_fs25.existsSync)(supportPath)) return [];
+  const supportPath = (0, import_node_path28.join)((0, import_node_path28.dirname)(packageJsonPath), ".tezbar-support");
+  if (!(0, import_node_fs26.existsSync)(supportPath)) return [];
   const tasks = [];
-  for (const fileName of (0, import_node_fs25.readdirSync)(supportPath)) {
-    if ((0, import_node_path27.extname)(fileName) !== ".timer") continue;
+  for (const fileName of (0, import_node_fs26.readdirSync)(supportPath)) {
+    if ((0, import_node_path28.extname)(fileName) !== ".timer") continue;
     try {
       const task = timerBackgroundTask(
         fileName,
-        (0, import_node_fs25.readFileSync)((0, import_node_path27.join)(supportPath, fileName), "utf8"),
+        (0, import_node_fs26.readFileSync)((0, import_node_path28.join)(supportPath, fileName), "utf8"),
         now
       );
       if (task) tasks.push(task);
@@ -32279,20 +32583,20 @@ async function requestPermission(id) {
 
 // src/main/ipc.ts
 init_log2();
-init_registry3();
 init_registry2();
+init_registry();
 
 // src/main/systemStats/service.ts
-var import_node_child_process16 = require("node:child_process");
-var import_node_os12 = require("node:os");
+var import_node_child_process17 = require("node:child_process");
+var import_node_os13 = require("node:os");
 var import_node_util14 = require("node:util");
 
 // src/main/systemStats/windows.ts
-var import_node_child_process15 = require("node:child_process");
+var import_node_child_process16 = require("node:child_process");
 var import_promises3 = require("node:fs/promises");
-var import_node_os11 = require("node:os");
+var import_node_os12 = require("node:os");
 var import_node_util13 = require("node:util");
-var execFileAsync13 = (0, import_node_util13.promisify)(import_node_child_process15.execFile);
+var execFileAsync13 = (0, import_node_util13.promisify)(import_node_child_process16.execFile);
 var MEBIBYTE = 1024 ** 2;
 var staticStatsPromise = null;
 var previousCpuTimes = null;
@@ -32406,7 +32710,7 @@ function systemDrive() {
 }
 async function loadStaticStats() {
   const payload = await powershell(STATIC_POWERSHELL);
-  const cpuRows = (0, import_node_os11.cpus)();
+  const cpuRows = (0, import_node_os12.cpus)();
   const storageTotalBytes = finiteNumber(payload.storageTotalBytes);
   const storageFreeBytes = finiteNumber(payload.storageFreeBytes);
   const manufacturer = text(payload.manufacturer);
@@ -32418,14 +32722,14 @@ async function loadStaticStats() {
   const designedCapacity = positiveNumber(payload.batteryDesignCapacity);
   const fullCapacity = positiveNumber(payload.batteryFullCapacity);
   const osVersion = [
-    text(payload.osCaption, (0, import_node_os11.version)()),
-    text(payload.osVersion, (0, import_node_os11.release)()),
+    text(payload.osCaption, (0, import_node_os12.version)()),
+    text(payload.osVersion, (0, import_node_os12.release)()),
     text(payload.osBuild) ? `build ${text(payload.osBuild)}` : ""
   ].filter(Boolean).join(" \xB7 ");
   return {
     device: {
       platform: "Windows",
-      name: (0, import_node_os11.hostname)(),
+      name: (0, import_node_os12.hostname)(),
       model: [manufacturer, model].filter(Boolean).join(" ") || "Windows PC",
       chip: text(payload.cpuModel, cpuRows[0]?.model || "Processor"),
       osVersion,
@@ -32469,7 +32773,7 @@ function staticStats() {
   return staticStatsPromise;
 }
 function aggregateCpuTimes() {
-  return (0, import_node_os11.cpus)().reduce(
+  return (0, import_node_os12.cpus)().reduce(
     (total, cpu) => ({
       user: total.user + cpu.times.user,
       nice: total.nice + cpu.times.nice,
@@ -32541,7 +32845,7 @@ function networkRates(sample) {
   };
 }
 function activeNetwork(interfaceHint) {
-  const interfaces = (0, import_node_os11.networkInterfaces)();
+  const interfaces = (0, import_node_os12.networkInterfaces)();
   const interfaceName = (interfaceHint && interfaces[interfaceHint] ? interfaceHint : void 0) ?? Object.entries(interfaces).find(
     ([, addresses]) => addresses?.some((address2) => {
       const family = String(address2.family);
@@ -32597,8 +32901,8 @@ async function getWindowsSystemStats() {
     optionalCommand("netstat.exe", ["-e"]),
     liveCpuUsage()
   ]);
-  const totalBytes = (0, import_node_os11.totalmem)();
-  const freeBytes = (0, import_node_os11.freemem)();
+  const totalBytes = (0, import_node_os12.totalmem)();
+  const freeBytes = (0, import_node_os12.freemem)();
   const interfaceHint = text(live.interfaceAlias);
   const active2 = activeNetwork(interfaceHint);
   const networkCounters = parseNetstatEthernetStatistics(networkOutput);
@@ -32610,7 +32914,7 @@ async function getWindowsSystemStats() {
     collectedAt: (/* @__PURE__ */ new Date()).toISOString(),
     device: {
       ...fixed.device,
-      uptimeSeconds: (0, import_node_os11.uptime)()
+      uptimeSeconds: (0, import_node_os12.uptime)()
     },
     cpu: {
       ...fixed.cpu,
@@ -32643,7 +32947,7 @@ async function getWindowsSystemStats() {
 }
 
 // src/main/systemStats/service.ts
-var execFileAsync14 = (0, import_node_util14.promisify)(import_node_child_process16.execFile);
+var execFileAsync14 = (0, import_node_util14.promisify)(import_node_child_process17.execFile);
 var staticStatsPromise2 = null;
 var previousNetworkSample2 = null;
 async function command2(file, args) {
@@ -32724,7 +33028,7 @@ async function loadStaticStats2() {
   return {
     device: {
       platform: "macOS",
-      name: text2(hardware.machine_name, (0, import_node_os12.hostname)()),
+      name: text2(hardware.machine_name, (0, import_node_os13.hostname)()),
       model: text2(hardware.machine_model, "Mac"),
       chip: text2(hardware.chip_type, "Apple Silicon"),
       osVersion: "",
@@ -32941,7 +33245,7 @@ async function getSystemStats() {
     device: {
       ...fixed.device,
       osVersion,
-      uptimeSeconds: (0, import_node_os12.uptime)()
+      uptimeSeconds: (0, import_node_os13.uptime)()
     },
     cpu: { ...fixed.cpu, ...live.cpu },
     gpu: fixed.gpu,
@@ -32976,26 +33280,26 @@ init_terminal();
 // src/main/storage/service.ts
 init_desktop_runtime();
 var import_promises4 = require("node:fs/promises");
-var import_node_path28 = require("node:path");
+var import_node_path29 = require("node:path");
 init_indexDb();
 init_clipboardProvider();
 async function dirSize(root) {
   let total = 0;
   const pending = [root];
   while (pending.length > 0) {
-    const path7 = pending.pop();
-    if (!path7) continue;
+    const path8 = pending.pop();
+    if (!path8) continue;
     try {
-      const stats = await (0, import_promises4.lstat)(path7);
+      const stats = await (0, import_promises4.lstat)(path8);
       if (stats.isSymbolicLink()) continue;
       if (stats.isFile()) {
         total += stats.size;
         continue;
       }
       if (stats.isDirectory()) {
-        const entries = await (0, import_promises4.readdir)(path7, { withFileTypes: true });
+        const entries = await (0, import_promises4.readdir)(path8, { withFileTypes: true });
         for (const entry of entries) {
-          pending.push((0, import_node_path28.join)(path7, entry.name));
+          pending.push((0, import_node_path29.join)(path8, entry.name));
         }
       }
     } catch {
@@ -33003,15 +33307,15 @@ async function dirSize(root) {
   }
   return total;
 }
-async function fileSize(path7) {
+async function fileSize(path8) {
   try {
-    return (await (0, import_promises4.stat)(path7)).size;
+    return (await (0, import_promises4.stat)(path8)).size;
   } catch {
     return 0;
   }
 }
 function userData(...segments) {
-  return (0, import_node_path28.join)(app.getPath("userData"), ...segments);
+  return (0, import_node_path29.join)(app.getPath("userData"), ...segments);
 }
 async function getStorageBreakdown() {
   const searchDir = getClipboardStoreDir();
@@ -33035,10 +33339,10 @@ async function getStorageBreakdown() {
     codeCacheBytes,
     knowledgeBytes
   ] = await Promise.all([
-    fileSize((0, import_node_path28.join)(searchDir, "index.sqlite3")),
-    fileSize((0, import_node_path28.join)(searchDir, "index.sqlite3-wal")),
-    fileSize((0, import_node_path28.join)(searchDir, "index.sqlite3-shm")),
-    fileSize((0, import_node_path28.join)(searchDir, "clipboard.json")),
+    fileSize((0, import_node_path29.join)(searchDir, "index.sqlite3")),
+    fileSize((0, import_node_path29.join)(searchDir, "index.sqlite3-wal")),
+    fileSize((0, import_node_path29.join)(searchDir, "index.sqlite3-shm")),
+    fileSize((0, import_node_path29.join)(searchDir, "clipboard.json")),
     dirSize(clipboardImagesDir),
     dirSize(voiceModelsDir),
     dirSize(bunDir),
@@ -33106,7 +33410,7 @@ async function clearChromiumCache() {
 }
 async function vacuumSearchDatabase() {
   const searchDir = getClipboardStoreDir();
-  const walPath = (0, import_node_path28.join)(searchDir, "index.sqlite3-wal");
+  const walPath = (0, import_node_path29.join)(searchDir, "index.sqlite3-wal");
   const beforeBytes = await fileSize(walPath);
   try {
     const db = getInstance();
@@ -33520,7 +33824,9 @@ function registerIpcHandlers(getWindow, controls) {
       "copilot",
       "gemini",
       "opencode",
-      "deepseek"
+      "deepseek",
+      "antigravity",
+      ...cfg.customProviders?.map((provider) => provider.id) ?? []
     ];
     const entries = await Promise.all(
       ids.map(async (id) => {
@@ -33534,16 +33840,28 @@ function registerIpcHandlers(getWindow, controls) {
     );
     return Object.fromEntries(entries);
   });
-  ipcMain.handle("llm-list-models", async (_event, providerId) => {
-    const id = providerId;
-    const customProvider = typeof id === "string" && readLLMConfig().customProviders?.some((provider) => provider.id === id);
-    if (id !== "openai" && id !== "openai-compatible" && id !== "tokenrouter" && id !== "anthropic" && id !== "ollama" && id !== "copilot" && id !== "gemini" && id !== "opencode" && id !== "deepseek" && !customProvider)
-      return [];
-    try {
-      return await listModelsForProvider(id);
-    } catch {
-      return [];
+  ipcMain.handle(
+    "llm-list-models",
+    async (_event, providerId, baseURLOverride, apiKeyOverride) => {
+      const id = providerId;
+      const isCustom = typeof id === "string" && (isCustomProvider(id) || id.startsWith("custom:") || readLLMConfig().customProviders?.some((provider) => provider.id === id));
+      if (id !== "openai" && id !== "openai-compatible" && id !== "tokenrouter" && id !== "anthropic" && id !== "ollama" && id !== "copilot" && id !== "gemini" && id !== "opencode" && id !== "deepseek" && id !== "antigravity" && !isCustom)
+        return [];
+      try {
+        return await listModelsForProvider(
+          id,
+          void 0,
+          typeof baseURLOverride === "string" ? baseURLOverride : void 0,
+          typeof apiKeyOverride === "string" ? apiKeyOverride : void 0
+        );
+      } catch {
+        return [];
+      }
     }
+  );
+  ipcMain.handle("pi-extensions:list", async () => {
+    const { getInstalledPiExtensions: getInstalledPiExtensions2 } = await Promise.resolve().then(() => (init_piExtensions(), piExtensions_exports));
+    return getInstalledPiExtensions2();
   });
   ipcMain.handle("window-set-content-height", async (_event, raw) => {
     const win = getWindow();
@@ -33607,19 +33925,19 @@ function registerIpcHandlers(getWindow, controls) {
     if (!raw || typeof raw !== "object") return null;
     const payload = raw;
     const kind = payload.kind;
-    const path7 = typeof payload.path === "string" ? payload.path.trim() : "";
-    if (!path7) return null;
+    const path8 = typeof payload.path === "string" ? payload.path.trim() : "";
+    if (!path8) return null;
     if (kind === "application") {
-      if (process.platform === "darwin" && !path7.endsWith(".app") || process.platform === "win32" && !path7.startsWith("shell:AppsFolder\\") && !/\.(?:exe|lnk|url)$/i.test(path7))
+      if (process.platform === "darwin" && !path8.endsWith(".app") || process.platform === "win32" && !path8.startsWith("shell:AppsFolder\\") && !/\.(?:exe|lnk|url)$/i.test(path8))
         return null;
-      return await appIconDataUrl(path7) ?? null;
+      return await appIconDataUrl(path8) ?? null;
     }
     if (kind === "extension") {
-      if (/^https?:\/\//i.test(path7)) return path7;
-      return imageFileDataUrl(path7) ?? null;
+      if (/^https?:\/\//i.test(path8)) return path8;
+      return imageFileDataUrl(path8) ?? null;
     }
     if (kind === "file") {
-      return await nativeFileIconDataUrl(path7) ?? null;
+      return await nativeFileIconDataUrl(path8) ?? null;
     }
     return null;
   });
@@ -34327,9 +34645,9 @@ function registerIpcHandlers(getWindow, controls) {
     });
   });
   ipcMain.handle("knowledge:choose-folder", async () => chooseKnowledgeFolder());
-  ipcMain.handle("knowledge:root:add", async (_event, path7) => {
-    if (typeof path7 !== "string") throw new Error("A folder path is required");
-    return getKnowledgeService().addRoot(path7);
+  ipcMain.handle("knowledge:root:add", async (_event, path8) => {
+    if (typeof path8 !== "string") throw new Error("A folder path is required");
+    return getKnowledgeService().addRoot(path8);
   });
   ipcMain.handle("knowledge:roots:add-major", async () => getKnowledgeService().addMajorRoots());
   ipcMain.handle("knowledge:root:remove", async (_event, rootId) => {
@@ -34368,11 +34686,11 @@ function registerIpcHandlers(getWindow, controls) {
   ipcMain.handle(IPC_CHANNELS.PATH_RESOLVE_DIRECTORY, async (_event, input) => {
     return typeof input === "string" ? resolveLauncherDirectory(input) : null;
   });
-  ipcMain.handle(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path7) => {
-    if (typeof path7 === "string") recordDirectoryVisit(path7);
+  ipcMain.handle(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path8) => {
+    if (typeof path8 === "string") recordDirectoryVisit(path8);
   });
   ipcMain.handle(IPC_CHANNELS.QUICK_LOOK_FILE, async (_event, input) => {
-    const paths = Array.isArray(input) ? input.filter((path7) => typeof path7 === "string") : typeof input === "string" ? [input] : [];
+    const paths = Array.isArray(input) ? input.filter((path8) => typeof path8 === "string") : typeof input === "string" ? [input] : [];
     return quickLookFiles(paths);
   });
   ipcMain.handle(IPC_CHANNELS.SEARCH_BENCHMARK_RUN, async () => {
@@ -34541,8 +34859,8 @@ function registerIpcHandlers(getWindow, controls) {
 init_clipboardProvider();
 init_configStore();
 init_desktop_runtime();
-var import_node_fs33 = require("node:fs");
-var import_node_path35 = require("node:path");
+var import_node_fs34 = require("node:fs");
+var import_node_path36 = require("node:path");
 var import_node_child_process22 = require("node:child_process");
 var import_node_net = require("node:net");
 init_service();
@@ -34556,10 +34874,10 @@ function materializePiPolicy() {
   const root = process.env.APPDATA_DIR;
   if (!root || false) return;
   try {
-    const runtimeDir = (0, import_node_path35.join)(root, "runtime");
-    const extensionPath = (0, import_node_path35.join)(runtimeDir, "raymes-pi-policy.ts");
-    (0, import_node_fs33.mkdirSync)(runtimeDir, { recursive: true });
-    (0, import_node_fs33.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\r\n\r\ntype ToolCallEvent = {\r\n  toolName: string\r\n  input?: Record<string, unknown> & { command?: unknown }\r\n}\r\n\r\ntype ToolCallResult = {\r\n  block?: boolean\r\n  reason?: string\r\n}\r\n\r\ntype ExtensionContext = {\r\n  ui: {\r\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\r\n  }\r\n}\r\n\r\ntype ExtensionAPI = {\r\n  on(\r\n    event: 'tool_call',\r\n    handler: (\r\n      event: ToolCallEvent,\r\n      ctx: ExtensionContext\r\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\r\n  ): void\r\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\r\n  registerTool(definition: {\r\n    name: string\r\n    label: string\r\n    description: string\r\n    promptSnippet?: string\r\n    promptGuidelines?: string[]\r\n    parameters: unknown\r\n    execute: (\r\n      toolCallId: string,\r\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\r\n      signal?: AbortSignal\r\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\r\n  }): void\r\n}\r\n\r\ntype RaymesPiProviderConfig = {\r\n  baseUrl: string\r\n  apiKey: string\r\n  api: 'openai-completions' | 'anthropic-messages'\r\n  authHeader?: boolean\r\n  models: Array<{\r\n    id: string\r\n    name: string\r\n    reasoning: boolean\r\n    input: Array<'text' | 'image'>\r\n    cost: {\r\n      input: number\r\n      output: number\r\n      cacheRead: number\r\n      cacheWrite: number\r\n    }\r\n    contextWindow: number\r\n    maxTokens: number\r\n    compat?: Record<string, unknown>\r\n  }>\r\n}\r\n\r\nconst TOKENROUTER_BASE_URL = 'https://api.tokenrouter.com/v1'\r\nconst TOKENROUTER_MODEL_ID = 'moonshotai/kimi-k3-free'\r\n\r\nfunction registerTokenRouterProvider(pi: ExtensionAPI): void {\r\n  pi.registerProvider('tokenrouter', {\r\n    baseUrl: TOKENROUTER_BASE_URL,\r\n    apiKey: '$TOKENROUTER_API_KEY',\r\n    authHeader: true,\r\n    api: 'openai-completions',\r\n    models: [\r\n      {\r\n        id: TOKENROUTER_MODEL_ID,\r\n        name: 'Kimi K3 Free (TokenRouter)',\r\n        reasoning: false,\r\n        input: ['text'],\r\n        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },\r\n        contextWindow: 128000,\r\n        maxTokens: 8192,\r\n        compat: {\r\n          supportsStore: false,\r\n          supportsDeveloperRole: false,\r\n          supportsReasoningEffort: false,\r\n          maxTokensField: 'max_tokens',\r\n        },\r\n      },\r\n    ],\r\n  })\r\n}\r\n\r\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\r\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\r\n  if (!raw) return\r\n  try {\r\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\r\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\r\n    pi.registerProvider('tezbar', parsed)\r\n  } catch {\r\n    /* Ignore malformed bridge env so pi can still start with its own config. */\r\n  }\r\n}\r\n\r\nfunction hasUnsafeShellSyntax(command: string): boolean {\r\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\r\n}\r\n\r\nfunction persistedAllowedCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter(\r\n          (entry): entry is string =>\r\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\r\n        )\r\n        .map((entry) => entry.toLowerCase())\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction persistedAllowedExactCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter((entry): entry is string => typeof entry === 'string')\r\n        .map((entry) => entry.trim())\r\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction executableName(command: string): string {\r\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\r\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\r\n}\r\n\r\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\r\n\r\nexport function isPersistentlyAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string>\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\r\n    return false\r\n  }\r\n\r\n  const commands = trimmed\r\n    .split(/\\s*(?:&&|\\|)\\s*/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (commands.length === 0) return false\r\n\r\n  return commands.every((part) => {\r\n    if (isSimpleCd(part)) return true\r\n    const executable = executableName(part)\r\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\r\n  })\r\n}\r\n\r\nfunction isSimpleCd(command: string): boolean {\r\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitStatus(command: string): boolean {\r\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitClone(command: string): boolean {\r\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeDirectoryRead(command: string): boolean {\r\n  const trimmed = command.trim()\r\n  return (\r\n    trimmed === 'pwd' ||\r\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\r\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\r\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\r\n  )\r\n}\r\n\r\nexport type IndexedSearchKind = 'launcher' | 'deep'\r\n\r\nconst MAJOR_HOME_FOLDER_PATTERN =\r\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\r\n\r\nfunction hasBroadHomeScope(command: string): boolean {\r\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\r\n    return true\r\n  }\r\n\r\n  const roots = new Set<string>()\r\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\r\n    const root = match[1]?.toLowerCase()\r\n    if (root) roots.add(root)\r\n  }\r\n  return roots.size >= 2\r\n}\r\n\r\n/**\r\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\r\n * inside the active project remain valid shell work.\r\n */\r\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return null\r\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\r\n  if (!hasBroadHomeScope(trimmed)) return null\r\n\r\n  if (\r\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\r\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\r\n  ) {\r\n    return 'deep'\r\n  }\r\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\r\n  return null\r\n}\r\n\r\nexport function isAutoAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\r\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return false\r\n  if (allowedExactCommands.has(trimmed)) return true\r\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\r\n  if (hasUnsafeShellSyntax(trimmed)) return false\r\n\r\n  const parts = trimmed\r\n    .split(/\\s+&&\\s+/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (parts.length === 0) return false\r\n\r\n  const commandToRun = parts[parts.length - 1]\r\n  if (\r\n    !commandToRun ||\r\n    !(\r\n      isSafeGitStatus(commandToRun) ||\r\n      isSafeGitClone(commandToRun) ||\r\n      isSafeDirectoryRead(commandToRun)\r\n    )\r\n  ) {\r\n    return false\r\n  }\r\n\r\n  return parts.slice(0, -1).every(isSimpleCd)\r\n}\r\n\r\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\r\n  registerTokenRouterProvider(pi)\r\n  registerRaymesProvider(pi)\r\n\r\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\r\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\r\n  const hasIndexedSearchTools = Boolean(\r\n    knowledgeEndpoint &&\r\n    knowledgeToken &&\r\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\r\n  )\r\n  let launcherSearchAttempted = false\r\n  let deepSearchAttempted = false\r\n\r\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\r\n    pi.registerTool({\r\n      name: 'launcher_search',\r\n      label: 'Search Tezbar',\r\n      description:\r\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\r\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\r\n      promptGuidelines: [\r\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\r\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\r\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({\r\n          description: 'The file, app, command, note, or other local item to find',\r\n        }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          results?: Array<{\r\n            id: string\r\n            title: string\r\n            subtitle: string\r\n            category: string\r\n            score: number\r\n            target?: string\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\r\n        const results = payload.results ?? []\r\n        const text =\r\n          results.length === 0\r\n            ? 'No Tezbar launcher results matched this query.'\r\n            : results\r\n                .map((result, index) => {\r\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\r\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { results } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_search',\r\n      label: 'Deep Search PC Knowledge',\r\n      description:\r\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\r\n      promptSnippet:\r\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\r\n      promptGuidelines: [\r\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\r\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\r\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\r\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint, {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\r\n          signal,\r\n        })\r\n        const result = (await response.json()) as {\r\n          hits?: Array<{\r\n            chunkId: string\r\n            path: string\r\n            pageNumber?: number\r\n            text: string\r\n            score: number\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\r\n        const hits = result.hits ?? []\r\n        const text =\r\n          hits.length === 0\r\n            ? 'No indexed knowledge matched this query.'\r\n            : hits\r\n                .map((hit, index) => {\r\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\r\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { hits } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_read',\r\n      label: 'Read PC Knowledge Result',\r\n      description:\r\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\r\n      parameters: Type.Object({\r\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\r\n        maxChars: Type.Optional(\r\n          Type.Number({\r\n            minimum: 500,\r\n            maximum: 50_000,\r\n            description: 'Maximum text characters to return',\r\n          })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({\r\n            resultId: params.resultId ?? '',\r\n            maxChars: params.maxChars ?? 12_000,\r\n          }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          result?: { path: string; pageNumber?: number; text: string }\r\n          error?: string\r\n        }\r\n        if (!response.ok || !payload.result) {\r\n          throw new Error(payload.error || 'Knowledge result could not be read')\r\n        }\r\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\r\n        return {\r\n          content: [\r\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\r\n          ],\r\n          details: payload.result,\r\n        }\r\n      },\r\n    })\r\n  }\r\n\r\n  pi.on('tool_call', async (event, ctx) => {\r\n    if (event.toolName === 'launcher_search') {\r\n      launcherSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName === 'pc_search') {\r\n      deepSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName !== 'bash') return undefined\r\n\r\n    const command = event.input?.command\r\n    if (typeof command !== 'string') {\r\n      return { block: true, reason: 'Missing bash command.' }\r\n    }\r\n\r\n    if (hasIndexedSearchTools) {\r\n      const preferredSearch = preferredIndexedSearchForBash(command)\r\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\r\n        }\r\n      }\r\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\r\n        }\r\n      }\r\n    }\r\n\r\n    if (isAutoAllowedBash(command)) return undefined\r\n\r\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\r\n    if (confirmed) return undefined\r\n\r\n    return { block: true, reason: 'Bash command was not approved.' }\r\n  })\r\n}\r\n", "utf8");
+    const runtimeDir = (0, import_node_path36.join)(root, "runtime");
+    const extensionPath = (0, import_node_path36.join)(runtimeDir, "raymes-pi-policy.ts");
+    (0, import_node_fs34.mkdirSync)(runtimeDir, { recursive: true });
+    (0, import_node_fs34.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\n\ntype ToolCallEvent = {\n  toolName: string\n  input?: Record<string, unknown> & { command?: unknown }\n}\n\ntype ToolCallResult = {\n  block?: boolean\n  reason?: string\n}\n\ntype ExtensionContext = {\n  ui: {\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\n  }\n}\n\ntype ExtensionAPI = {\n  on(\n    event: 'tool_call',\n    handler: (\n      event: ToolCallEvent,\n      ctx: ExtensionContext\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\n  ): void\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\n  registerTool(definition: {\n    name: string\n    label: string\n    description: string\n    promptSnippet?: string\n    promptGuidelines?: string[]\n    parameters: unknown\n    execute: (\n      toolCallId: string,\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\n      signal?: AbortSignal\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\n  }): void\n}\n\ntype RaymesPiProviderConfig = {\n  baseUrl: string\n  apiKey: string\n  api: 'openai-completions' | 'anthropic-messages'\n  authHeader?: boolean\n  models: Array<{\n    id: string\n    name: string\n    reasoning: boolean\n    input: Array<'text' | 'image'>\n    cost: {\n      input: number\n      output: number\n      cacheRead: number\n      cacheWrite: number\n    }\n    contextWindow: number\n    maxTokens: number\n    compat?: Record<string, unknown>\n  }>\n}\n\nconst TOKENROUTER_BASE_URL = 'https://api.tokenrouter.com/v1'\nconst TOKENROUTER_MODEL_ID = 'moonshotai/kimi-k3-free'\n\nfunction registerTokenRouterProvider(pi: ExtensionAPI): void {\n  pi.registerProvider('tokenrouter', {\n    baseUrl: TOKENROUTER_BASE_URL,\n    apiKey: '$TOKENROUTER_API_KEY',\n    authHeader: true,\n    api: 'openai-completions',\n    models: [\n      {\n        id: TOKENROUTER_MODEL_ID,\n        name: 'Kimi K3 Free (TokenRouter)',\n        reasoning: false,\n        input: ['text'],\n        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },\n        contextWindow: 128000,\n        maxTokens: 8192,\n        compat: {\n          supportsStore: false,\n          supportsDeveloperRole: false,\n          supportsReasoningEffort: false,\n          maxTokensField: 'max_tokens',\n        },\n      },\n    ],\n  })\n}\n\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\n  if (!raw) return\n  try {\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\n    pi.registerProvider('tezbar', parsed)\n  } catch {\n    /* Ignore malformed bridge env so pi can still start with its own config. */\n  }\n}\n\nfunction hasUnsafeShellSyntax(command: string): boolean {\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\n}\n\nfunction persistedAllowedCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter(\n          (entry): entry is string =>\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\n        )\n        .map((entry) => entry.toLowerCase())\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction persistedAllowedExactCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter((entry): entry is string => typeof entry === 'string')\n        .map((entry) => entry.trim())\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction executableName(command: string): string {\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\n}\n\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\n\nexport function isPersistentlyAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string>\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\n    return false\n  }\n\n  const commands = trimmed\n    .split(/\\s*(?:&&|\\|)\\s*/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (commands.length === 0) return false\n\n  return commands.every((part) => {\n    if (isSimpleCd(part)) return true\n    const executable = executableName(part)\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\n  })\n}\n\nfunction isSimpleCd(command: string): boolean {\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\n}\n\nfunction isSafeGitStatus(command: string): boolean {\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\n}\n\nfunction isSafeGitClone(command: string): boolean {\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\n}\n\nfunction isSafeDirectoryRead(command: string): boolean {\n  const trimmed = command.trim()\n  return (\n    trimmed === 'pwd' ||\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\n  )\n}\n\nexport type IndexedSearchKind = 'launcher' | 'deep'\n\nconst MAJOR_HOME_FOLDER_PATTERN =\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\n\nfunction hasBroadHomeScope(command: string): boolean {\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\n    return true\n  }\n\n  const roots = new Set<string>()\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\n    const root = match[1]?.toLowerCase()\n    if (root) roots.add(root)\n  }\n  return roots.size >= 2\n}\n\n/**\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\n * inside the active project remain valid shell work.\n */\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\n  const trimmed = command.trim()\n  if (!trimmed) return null\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\n  if (!hasBroadHomeScope(trimmed)) return null\n\n  if (\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\n  ) {\n    return 'deep'\n  }\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\n  return null\n}\n\nexport function isAutoAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed) return false\n  if (allowedExactCommands.has(trimmed)) return true\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\n  if (hasUnsafeShellSyntax(trimmed)) return false\n\n  const parts = trimmed\n    .split(/\\s+&&\\s+/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (parts.length === 0) return false\n\n  const commandToRun = parts[parts.length - 1]\n  if (\n    !commandToRun ||\n    !(\n      isSafeGitStatus(commandToRun) ||\n      isSafeGitClone(commandToRun) ||\n      isSafeDirectoryRead(commandToRun)\n    )\n  ) {\n    return false\n  }\n\n  return parts.slice(0, -1).every(isSimpleCd)\n}\n\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\n  registerTokenRouterProvider(pi)\n  registerRaymesProvider(pi)\n\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\n  const hasIndexedSearchTools = Boolean(\n    knowledgeEndpoint &&\n    knowledgeToken &&\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\n  )\n  let launcherSearchAttempted = false\n  let deepSearchAttempted = false\n\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\n    pi.registerTool({\n      name: 'launcher_search',\n      label: 'Search Tezbar',\n      description:\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\n      promptGuidelines: [\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({\n          description: 'The file, app, command, note, or other local item to find',\n        }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          results?: Array<{\n            id: string\n            title: string\n            subtitle: string\n            category: string\n            score: number\n            target?: string\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\n        const results = payload.results ?? []\n        const text =\n          results.length === 0\n            ? 'No Tezbar launcher results matched this query.'\n            : results\n                .map((result, index) => {\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { results } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_search',\n      label: 'Deep Search PC Knowledge',\n      description:\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\n      promptSnippet:\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\n      promptGuidelines: [\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint, {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\n          signal,\n        })\n        const result = (await response.json()) as {\n          hits?: Array<{\n            chunkId: string\n            path: string\n            pageNumber?: number\n            text: string\n            score: number\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\n        const hits = result.hits ?? []\n        const text =\n          hits.length === 0\n            ? 'No indexed knowledge matched this query.'\n            : hits\n                .map((hit, index) => {\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { hits } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_read',\n      label: 'Read PC Knowledge Result',\n      description:\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\n      parameters: Type.Object({\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\n        maxChars: Type.Optional(\n          Type.Number({\n            minimum: 500,\n            maximum: 50_000,\n            description: 'Maximum text characters to return',\n          })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({\n            resultId: params.resultId ?? '',\n            maxChars: params.maxChars ?? 12_000,\n          }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          result?: { path: string; pageNumber?: number; text: string }\n          error?: string\n        }\n        if (!response.ok || !payload.result) {\n          throw new Error(payload.error || 'Knowledge result could not be read')\n        }\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\n        return {\n          content: [\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\n          ],\n          details: payload.result,\n        }\n      },\n    })\n  }\n\n  pi.on('tool_call', async (event, ctx) => {\n    if (event.toolName === 'launcher_search') {\n      launcherSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName === 'pc_search') {\n      deepSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName !== 'bash') return undefined\n\n    const command = event.input?.command\n    if (typeof command !== 'string') {\n      return { block: true, reason: 'Missing bash command.' }\n    }\n\n    if (hasIndexedSearchTools) {\n      const preferredSearch = preferredIndexedSearchForBash(command)\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\n        }\n      }\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\n        }\n      }\n    }\n\n    if (isAutoAllowedBash(command)) return undefined\n\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\n    if (confirmed) return undefined\n\n    return { block: true, reason: 'Bash command was not approved.' }\n  })\n}\n", "utf8");
     process.env.RAYMES_PI_EXTENSION = extensionPath;
   } catch (error) {
     console.error("[server] failed to materialize Pi policy:", error);

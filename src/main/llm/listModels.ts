@@ -3,12 +3,20 @@ import type { ProviderId } from '../../shared/llmConfig'
 import { CopilotProvider } from './copilot'
 import { configForProvider, readLLMConfig } from './registry'
 
+function normalizeBaseUrl(url: string): string {
+  let cleaned = url.trim().replace(/\/+$/, '')
+  cleaned = cleaned.replace(/^(https?:\/\/)0\.0\.0\.0(?::(\d+))?/, (_match, proto, port) => {
+    return `${proto}127.0.0.1${port ? `:${port}` : ''}`
+  })
+  return cleaned
+}
+
 function trimSlash(url: string): string {
-  return url.replace(/\/+$/, '')
+  return normalizeBaseUrl(url)
 }
 
 function modelsUrl(baseURL: string): string {
-  const base = trimSlash(baseURL)
+  const base = normalizeBaseUrl(baseURL)
   if (base.endsWith('/chat/completions')) {
     return `${base.slice(0, -'/chat/completions'.length)}/models`
   }
@@ -102,58 +110,109 @@ async function fetchCopilotModelIds(accessToken: string, signal?: AbortSignal): 
   }
 }
 
-export async function listModelsForProvider(id: ProviderId, signal?: AbortSignal): Promise<string[]> {
+export async function fetchOpenAiModels(
+  baseURL: string,
+  apiKey?: string,
+  signal?: AbortSignal
+): Promise<string[]> {
+  const normBase = normalizeBaseUrl(baseURL)
+  if (!normBase) return []
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  if (apiKey?.trim()) {
+    headers.Authorization = `Bearer ${apiKey.trim()}`
+  }
+
+  const candidateUrls = [modelsUrl(normBase)]
+  if (!normBase.endsWith('/v1') && !normBase.includes('/v1/')) {
+    candidateUrls.push(`${normBase}/v1/models`)
+  } else {
+    candidateUrls.push(`${normBase.replace(/\/v1$/, '')}/models`)
+  }
+
+  for (const url of candidateUrls) {
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal: signal ?? AbortSignal.timeout(10_000),
+      })
+      if (res.ok) {
+        const ids = extractModelIds(await res.json())
+        if (ids.length > 0) return ids
+      }
+    } catch {
+      // try next candidate url
+    }
+  }
+  return []
+}
+
+export async function listModelsForProvider(
+  id: ProviderId,
+  signal?: AbortSignal,
+  baseURLOverride?: string,
+  apiKeyOverride?: string
+): Promise<string[]> {
   const cfg = configForProvider(readLLMConfig(), id)
 
-  if (isCustomProvider(id)) {
-    const base = cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? ''
-    const key = cfg.apiKey ?? ''
-    if (!base.trim() || !key.trim()) return []
-    try {
-      const res = await fetch(modelsUrl(base), {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${key}` },
-        signal: signal ?? AbortSignal.timeout(12_000),
-      })
-      if (!res.ok) return []
-      return extractModelIds(await res.json())
-    } catch {
-      return []
-    }
+  if (isCustomProvider(id) || (typeof id === 'string' && id.startsWith('custom:'))) {
+    const base = baseURLOverride?.trim() || cfg.openaiCompatibleBaseURL || cfg.baseURL || ''
+    const key = apiKeyOverride !== undefined ? apiKeyOverride : cfg.apiKey
+    if (!base.trim()) return []
+    return fetchOpenAiModels(base, key, signal)
   }
 
   switch (id) {
-    case 'openai': {
-      const base = cfg.baseURL ?? 'https://api.openai.com/v1'
-      const key = cfg.apiKey ?? ''
-      if (!key.trim()) return []
+    case 'antigravity': {
       try {
-        const res = await fetch(modelsUrl(base), {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${key}` },
-          signal: signal ?? AbortSignal.timeout(12_000),
-        })
-        if (!res.ok) return []
-        return extractModelIds(await res.json())
-      } catch {
-        return []
-      }
+        const { existsSync, readFileSync } = await import('node:fs')
+        const { homedir } = await import('node:os')
+        const path = await import('node:path')
+        const storePath = path.join(homedir(), '.pi', 'agent', 'models-store.json')
+        if (existsSync(storePath)) {
+          const raw = JSON.parse(readFileSync(storePath, 'utf8')) as {
+            antigravity?: { models?: Array<{ id?: unknown }> }
+          }
+          const models = raw?.antigravity?.models
+          if (Array.isArray(models)) {
+            const ids = models
+              .map((m) => (typeof m?.id === 'string' ? m.id : ''))
+              .filter(Boolean)
+            if (ids.length > 0) return uniqSorted(ids)
+          }
+        }
+      } catch {}
+      return [
+        'gemini-3.8-flash',
+        'gemini-3.7-flash',
+        'gemini-3.6-flash',
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-3-flash',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-3.1-pro',
+        'gemini-2.5-pro',
+        'claude-opus-4-6',
+        'claude-sonnet-4-6',
+        'gpt-oss-120b',
+      ]
+    }
+    case 'openai': {
+      const base = baseURLOverride?.trim() || cfg.baseURL || 'https://api.openai.com/v1'
+      const key = apiKeyOverride !== undefined ? apiKeyOverride : (cfg.apiKey ?? '')
+      if (!key.trim()) return []
+      return fetchOpenAiModels(base, key, signal)
     }
     case 'openai-compatible': {
-      const base = cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? 'https://api.openai.com/v1'
-      const key = cfg.apiKey ?? ''
-      if (!key.trim()) return []
-      try {
-        const res = await fetch(modelsUrl(base), {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${key}` },
-          signal: signal ?? AbortSignal.timeout(12_000),
-        })
-        if (!res.ok) return []
-        return extractModelIds(await res.json())
-      } catch {
-        return []
-      }
+      const base =
+        baseURLOverride?.trim() ||
+        cfg.openaiCompatibleBaseURL ||
+        cfg.baseURL ||
+        'https://api.openai.com/v1'
+      const key = apiKeyOverride !== undefined ? apiKeyOverride : cfg.apiKey
+      return fetchOpenAiModels(base, key, signal)
     }
     case 'anthropic': {
       const apiBase = trimSlash(cfg.baseURL ?? 'https://api.anthropic.com')

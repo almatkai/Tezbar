@@ -56,6 +56,7 @@ interface StageTracker {
   currentText: string
   /** Set to true on agent_end so we can coalesce a final "answered" stage. */
   ended: boolean
+  lastError?: string
 }
 
 function errorDetail(result: unknown): string | undefined {
@@ -116,6 +117,21 @@ export function createLoopDriver(callbacks: LoopCallbacks): (event: PiEvent) => 
         tracker.nextIndex = 0
         tracker.currentText = ''
         tracker.ended = false
+        tracker.lastError = undefined
+        return
+      }
+
+      case 'message_start':
+      case 'message_end':
+      case 'turn_end': {
+        const msg = asRecord(event['message'])
+        if (msg) {
+          const stopReason = asString(msg['stopReason'])
+          const errorMessage = asString(msg['errorMessage'])
+          if (stopReason === 'error' || errorMessage) {
+            tracker.lastError = errorMessage || 'The model provider encountered an error.'
+          }
+        }
         return
       }
 
@@ -190,8 +206,32 @@ export function createLoopDriver(callbacks: LoopCallbacks): (event: PiEvent) => 
 
       case 'agent_end': {
         tracker.ended = true
-        if (tracker.currentText.trim()) {
+        if (!tracker.lastError) {
+          const messages = Array.isArray(event['messages']) ? event['messages'] : []
+          for (const m of messages) {
+            const rec = asRecord(m)
+            if (rec) {
+              const stopReason = asString(rec['stopReason'])
+              const err = asString(rec['errorMessage'])
+              if (stopReason === 'error' || err) {
+                tracker.lastError = err || 'The model provider encountered an error.'
+                break
+              }
+            }
+          }
+        }
+        const hasText = tracker.currentText.trim().length > 0
+        const hasStages = tracker.stages.size > 0
+        if (hasText) {
           callbacks.onAnswer(tracker.currentText.trim())
+        }
+        if (tracker.lastError) {
+          callbacks.onError(tracker.lastError)
+          return
+        }
+        if (!hasText && !hasStages) {
+          callbacks.onError('Agent finished without a response.')
+          return
         }
         callbacks.onDone()
         return

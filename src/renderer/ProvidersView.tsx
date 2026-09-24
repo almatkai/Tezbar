@@ -491,6 +491,7 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
     ollama: false,
     copilot: false,
     opencode: false,
+    antigravity: false,
   })
   const rootRef = useRef<HTMLDivElement>(null)
 

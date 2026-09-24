@@ -82,6 +82,7 @@ import {
   readLLMConfig,
 } from './llm/registry'
 import type { ProviderId } from '../shared/llmConfig'
+import { isCustomProvider } from '../shared/aiProviders'
 import { classifyIntent } from './router'
 import {
   executeSearchAction,
@@ -656,6 +657,8 @@ export function registerIpcHandlers(
       'gemini',
       'opencode',
       'deepseek',
+      'antigravity',
+      ...(cfg.customProviders?.map((provider) => provider.id) ?? []),
     ]
     const entries = await Promise.all(
       ids.map(async (id) => {
@@ -670,29 +673,45 @@ export function registerIpcHandlers(
     return Object.fromEntries(entries) as Record<ProviderId, boolean>
   })
 
-  ipcMain.handle('llm-list-models', async (_event, providerId: unknown) => {
-    const id = providerId as ProviderId
-    const customProvider =
-      typeof id === 'string' &&
-      readLLMConfig().customProviders?.some((provider) => provider.id === id)
-    if (
-      id !== 'openai' &&
-      id !== 'openai-compatible' &&
-      id !== 'tokenrouter' &&
-      id !== 'anthropic' &&
-      id !== 'ollama' &&
-      id !== 'copilot' &&
-      id !== 'gemini' &&
-      id !== 'opencode' &&
-      id !== 'deepseek' &&
-      !customProvider
-    )
-      return []
-    try {
-      return await listModelsForProvider(id)
-    } catch {
-      return []
+  ipcMain.handle(
+    'llm-list-models',
+    async (_event, providerId: unknown, baseURLOverride?: unknown, apiKeyOverride?: unknown) => {
+      const id = providerId as ProviderId
+      const isCustom =
+        typeof id === 'string' &&
+        (isCustomProvider(id) ||
+          id.startsWith('custom:') ||
+          readLLMConfig().customProviders?.some((provider) => (provider.id as string) === (id as string)))
+      if (
+        id !== 'openai' &&
+        id !== 'openai-compatible' &&
+        id !== 'tokenrouter' &&
+        id !== 'anthropic' &&
+        id !== 'ollama' &&
+        id !== 'copilot' &&
+        id !== 'gemini' &&
+        id !== 'opencode' &&
+        id !== 'deepseek' &&
+        id !== 'antigravity' &&
+        !isCustom
+      )
+        return []
+      try {
+        return await listModelsForProvider(
+          id,
+          undefined,
+          typeof baseURLOverride === 'string' ? baseURLOverride : undefined,
+          typeof apiKeyOverride === 'string' ? apiKeyOverride : undefined
+        )
+      } catch {
+        return []
+      }
     }
+  )
+
+  ipcMain.handle('pi-extensions:list', async () => {
+    const { getInstalledPiExtensions } = await import('./agent/piExtensions')
+    return getInstalledPiExtensions()
   })
 
   // Renderer reports its measured content height. We clamp to the launcher

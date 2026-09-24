@@ -19,6 +19,7 @@ import type {
 import {
   defaultModels,
   inferCapabilities,
+  isCustomProvider,
   normalizeProviderModelList,
   providerTitle,
 } from '../shared/aiProviders'
@@ -54,7 +55,7 @@ function submitComposerOnEnter(event: ReactKeyboardEvent<HTMLTextAreaElement>): 
 
 const QUESTION_PREFIX_RE = /^(what|why|how|who|when|is|are|can|does)\b/i
 const AGENT_TASK_RE =
-  /\b(cd|git|clone|mkdir|touch|rm|mv|cp|pnpm|npm|yarn|bun|cargo|go|python|node|run|execute|install|build|test|fix|create|open|move|delete|rename|write|edit|commit|push|pull|list|show|find)\b/i
+  /\b(cd|git|clone|mkdir|touch|rm|mv|cp|pnpm|npm|yarn|bun|cargo|python\d?|node)\b|\bgo\s+(?:build|run|test|get|mod|install|vet)\b|\b(?:run|execute)\s+(?:command|script|code|terminal|test|file|program)\b|\b(?:create|edit|delete|rename|write)\s+(?:a\s+)?(?:file|folder|dir|directory|script|code)\b|\b(?:find|search|show|list)\s+(?:files?|folders?|dirs?|directories|processes|ports?|git\s+branches?|git\s+status|branches?|commits?)\b|\b(?:commit|push|pull|checkout|merge|rebase|stash)\b|\bfix\s+(?:the\s+)?(?:bug|error|issue|code|build|tests?)\b/i
 const LOCAL_PATH_RE = /(?:~\/|\.{1,2}\/|\/Users\/|\bdesktop\/|\bdesktop\\|\bcode\/|\bcode\\)/i
 const MACHINE_QUERY_RE =
   /\b(i have|my mac|my computer|my system|installed|applications?|apps?|code editors?|editors?|on this machine|on my machine)\b/i
@@ -291,9 +292,13 @@ export default function AgentChatView({
       .then(async (config) => {
         llmConfigRef.current = config
         setLlmConfig(config)
-        // Auto-discover models for CLI-based providers (open models, ollama)
+        // Auto-discover models for CLI-based providers (open models, ollama) and custom/local endpoints
         const provider = config.provider ?? 'ollama'
-        const needsDiscovery = provider === 'opencode' || provider === 'ollama'
+        const needsDiscovery =
+          provider === 'opencode' ||
+          provider === 'ollama' ||
+          provider === 'openai-compatible' ||
+          isCustomProvider(provider)
         if (!needsDiscovery) return
         try {
           const discovered = await window.tezbar.listLlmModels(provider)
@@ -303,18 +308,28 @@ export default function AgentChatView({
             const newModels: AiProviderModel[] = discovered
               .filter((id) => !existingIds.has(id))
               .map((id) => ({ id, capabilities: inferCapabilities(id) }))
-            if (newModels.length > 0) {
+            const shouldSelectModel = !config.model?.trim()
+            if (newModels.length > 0 || shouldSelectModel) {
               const updated = normalizeProviderModelList(provider, [...existing, ...newModels])
-              await window.tezbar.setLlmConfig({
+              const selectedModel = config.model?.trim() || updated[0]?.id || ''
+              const patch: Partial<LlmConfigRecord> = {
                 providerModels: { ...config.providerModels, [provider]: updated },
-              } as LlmConfigRecord)
+              }
+              if (selectedModel) {
+                patch.model = selectedModel
+                patch.providerSelectedModels = {
+                  ...config.providerSelectedModels,
+                  [provider]: selectedModel,
+                }
+              }
+              await window.tezbar.setLlmConfig(patch as LlmConfigRecord)
               llmConfigRef.current = {
                 ...llmConfigRef.current,
-                providerModels: { ...llmConfigRef.current.providerModels, [provider]: updated },
+                ...patch,
               }
               setLlmConfig((prev) => ({
                 ...prev,
-                providerModels: { ...prev.providerModels, [provider]: updated },
+                ...patch,
               }))
             }
           }
@@ -329,7 +344,7 @@ export default function AgentChatView({
   // Re-fetch the config whenever any other view writes it (e.g. a Settings
   // model-list edit), so the picker never renders a stale snapshot.
   useEffect(() => {
-    const unsubscribe = window.tezbar.onLlmConfigChanged(() => {
+    const reload = (): void => {
       void window.tezbar
         .getLlmConfig()
         .then((config) => {
@@ -339,8 +354,17 @@ export default function AgentChatView({
         .catch(() => {
           /* ignore */
         })
-    })
-    return unsubscribe
+    }
+    const unsubscribe = window.tezbar.onLlmConfigChanged(reload)
+    const onShown = window.tezbar.onWindowShown?.(reload)
+    window.addEventListener('focus', reload)
+    document.addEventListener('visibilitychange', reload)
+    return () => {
+      unsubscribe()
+      onShown?.()
+      window.removeEventListener('focus', reload)
+      document.removeEventListener('visibilitychange', reload)
+    }
   }, [])
   const refreshChatHistory = useCallback(async (): Promise<void> => {
     try {
@@ -617,8 +641,10 @@ export default function AgentChatView({
       setFollowingOutput(true)
 
       try {
+        const activeProvider = runConfig.taskProviderOverrides?.chat ?? runConfig.provider
+        const isPiExtensionProvider = activeProvider === 'antigravity'
         const result =
-          nextSession.workingDirectory || shouldRunAgent(trimmed) || image
+          nextSession.workingDirectory || shouldRunAgent(trimmed) || image || isPiExtensionProvider
             ? await window.tezbar.agentRun({
                 task: buildAgentPromptFromChat(nextSession, trimmed),
                 images: image ? [image] : undefined,
@@ -1121,7 +1147,13 @@ export default function AgentChatView({
               onOpenChange={setModelPickerOpen}
               onSelect={selectProviderModel}
               onConfigure={onOpenSettings}
-              onBeforeOpen={() => setHistoryOpen(false)}
+              onBeforeOpen={() => {
+                setHistoryOpen(false)
+                void window.tezbar.getLlmConfig().then((config) => {
+                  llmConfigRef.current = config
+                  setLlmConfig(config)
+                })
+              }}
             />
             {agentStatus === 'running' ? (
               <button

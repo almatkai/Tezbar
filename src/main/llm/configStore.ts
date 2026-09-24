@@ -30,12 +30,14 @@ export function readRawConfig(): Record<string, unknown> {
 }
 
 let writeTimeout: ReturnType<typeof setTimeout> | null = null
+let configDirty = false
 
 export function flushConfig(): void {
-  if (!configCache || !writeTimeout) return
+  if (!configCache || !configDirty) return
   try {
     mkdirSync(dirname(OPENRAY_CONFIG_PATH), { recursive: true })
     writeFileSync(OPENRAY_CONFIG_PATH, `${JSON.stringify(configCache, null, 2)}\n`, 'utf-8')
+    configDirty = false
     if (writeTimeout) {
       clearTimeout(writeTimeout)
       writeTimeout = null
@@ -48,12 +50,13 @@ export function flushConfig(): void {
 export function writeConfigPatch(patch: Record<string, unknown>): void {
   const current = readRawConfig()
   configCache = { ...current, ...patch }
+  configDirty = true
 
-  if (writeTimeout) clearTimeout(writeTimeout)
-  writeTimeout = setTimeout(() => {
-    flushConfig()
+  if (writeTimeout) {
+    clearTimeout(writeTimeout)
     writeTimeout = null
-  }, 1000) // Batch writes every 1s
+  }
+  flushConfig()
 }
 
 /** How long (ms) after hiding the palette we keep UI state (e.g. Providers) when reopening. Default 60s. */

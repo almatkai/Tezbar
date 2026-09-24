@@ -144,6 +144,7 @@ interface RpcSessionHandle {
   stderrBuffer: string[]
   closed: boolean
   requestApproval?: BridgeRunOptions['requestApproval']
+  onStderrLine?: (line: string) => void
 }
 
 function makeId(): string {
@@ -169,7 +170,6 @@ function spawnRpc(options: {
 }): ChildProcessWithoutNullStreams {
   const args: string[] = ['--mode', 'rpc']
   if (options.ephemeral) args.push('--no-session')
-  args.push('--no-extensions')
   if (options.model) args.push('--model', options.model)
   const raymesPiExtension = resolveRaymesPiExtension()
   if (raymesPiExtension) args.push('--extension', raymesPiExtension)
@@ -207,9 +207,7 @@ function spawnRpc(options: {
 }
 
 function shouldSuppressPiStderr(line: string): boolean {
-  return /^Warning: No models match pattern "(?:kiro-cli\/|opencode\/opencode\/)[^"]+"$/.test(
-    line.trim()
-  )
+  return /^Warning: No models match pattern "[^"]+"$/.test(line.trim())
 }
 
 async function handleExtensionUiRequest(
@@ -222,6 +220,8 @@ async function handleExtensionUiRequest(
     options?: string[]
     placeholder?: string
     prefill?: string
+    statusKey?: string
+    statusText?: string
   }
 ): Promise<void> {
   const id = msg.id
@@ -241,6 +241,23 @@ async function handleExtensionUiRequest(
       id,
       confirmed,
     })
+    return
+  }
+
+  if (msg.method === 'notify') {
+    if (msg.message) {
+      handle.onStderrLine?.(msg.message)
+    }
+    writeCommand(handle.child, { type: 'extension_ui_response', id, success: true })
+    return
+  }
+
+  if (msg.method === 'setStatus') {
+    if (msg.statusText) {
+      const clean = msg.statusText.replace(/\x1b\[[0-9;]*m/g, '').trim()
+      if (clean) handle.onStderrLine?.(clean)
+    }
+    writeCommand(handle.child, { type: 'extension_ui_response', id, success: true })
     return
   }
 
@@ -380,6 +397,7 @@ export function createBridge(): Bridge {
 
       const stages: Stage[] = []
       let finalAnswer = ''
+      let runError: Error | undefined
 
       const driver = createLoopDriver({
         onStage: (stage) => {
@@ -401,7 +419,7 @@ export function createBridge(): Bridge {
           /* handled by the promise chain below */
         },
         onError: (message) => {
-          throw new Error(message)
+          runError = new Error(message)
         },
       })
 
@@ -443,9 +461,14 @@ export function createBridge(): Bridge {
         stderrBuffer: [],
         closed: false,
         requestApproval: options.requestApproval,
+        onStderrLine: options.onStderrLine,
         onEvent: (event) => {
-          driver(event)
-          if (event.type === 'agent_end') agentEnded()
+          try {
+            driver(event)
+          } catch (err) {
+            runError ??= err instanceof Error ? err : new Error(String(err))
+          }
+          if (runError || event.type === 'agent_end') agentEnded()
         },
       }
       attachHandlers(handle, options.onStderrLine)
@@ -488,6 +511,10 @@ export function createBridge(): Bridge {
 
         if (options.signal?.aborted) {
           throw new Error('Agent run aborted')
+        }
+
+        if (runError) {
+          throw runError
         }
 
         if (handle.closed && !agentEndResolved) {

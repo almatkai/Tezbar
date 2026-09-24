@@ -85,6 +85,17 @@ export type HotkeyUpdateResult = {
   error?: string
 }
 
+export type PiExtensionItem = {
+  id: string
+  name: string
+  version: string
+  description: string
+  type: 'package' | 'script'
+  location: string
+  enabled: boolean
+  features?: string[]
+}
+
 export type RaymesApi = {
   hide: () => Promise<void>
   show: () => Promise<void>
@@ -207,7 +218,12 @@ export type RaymesApi = {
   getLlmConfig: () => Promise<LlmConfigRecord>
   setLlmConfig: (patch: LlmConfigRecord) => Promise<void | HotkeyUpdateResult>
   getLlmProviderStatuses: () => Promise<ProviderConnectionStatuses>
-  listLlmModels: (providerId: ProviderId) => Promise<string[]>
+  listPiExtensions: () => Promise<PiExtensionItem[]>
+  listLlmModels: (
+    providerId: ProviderId,
+    baseURLOverride?: string,
+    apiKeyOverride?: string
+  ) => Promise<string[]>
   getWindowZoomFactor: () => number
   setWindowContentHeight: (height: number, zoomFactor: number) => Promise<void>
   openExternalUrl: (url: string) => Promise<void>

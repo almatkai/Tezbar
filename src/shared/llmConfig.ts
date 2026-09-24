@@ -12,6 +12,7 @@ export type BuiltInProviderId =
   | 'gemini'
   | 'opencode'
   | 'deepseek'
+  | 'antigravity'
 
 export type ProviderId = BuiltInProviderId | `custom:${string}`
 

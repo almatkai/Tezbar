@@ -230,7 +230,9 @@ export function initTauriBridge(): void {
       return callBackend('llm-config-set', patch)
     },
     getLlmProviderStatuses: () => callBackend('llm-provider-statuses'),
-    listLlmModels: (providerId: any) => callBackend('llm-list-models', providerId),
+    listPiExtensions: () => callBackend('pi-extensions:list'),
+    listLlmModels: (providerId: any, baseURLOverride?: string, apiKeyOverride?: string) =>
+      callBackend('llm-list-models', providerId, baseURLOverride, apiKeyOverride),
 
     getWindowZoomFactor: () => 1,
     setWindowContentHeight: (height: number, zoomFactor: number) =>
