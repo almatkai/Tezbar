@@ -112,6 +112,28 @@
     background: rgba(139, 141, 247, 0.35);
     color: rgb(var(--c-text-1));
   }
+
+  :root[data-theme='white'] {
+    *::-webkit-scrollbar-thumb {
+      background: rgba(15, 23, 42, 0.14);
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+      background: rgba(15, 23, 42, 0.25);
+    }
+
+    [class*='border-white/'] {
+      border-color: rgba(15, 23, 42, 0.12);
+    }
+
+    [class*='bg-white/'] {
+      background-color: rgba(15, 23, 42, 0.045);
+    }
+
+    [class*='hover:bg-white/']:hover {
+      background-color: rgba(15, 23, 42, 0.08);
+    }
+  }
 }
 
 /* =========================================================================
@@ -379,6 +401,53 @@
     border-radius: 0;
     border: 0;
     box-shadow: none;
+  }
+
+  :root[data-theme='white'] .glass-shell,
+  :root[data-theme='white'] .glass-shell.glass-shell--terminal {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0) 40%),
+      rgba(248, 250, 252, 0.96);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+  }
+
+  :root[data-theme='white'] .glass-panel {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+  }
+
+  :root[data-theme='white'] .glass-card {
+    background: rgba(255, 255, 255, 0.76);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+  }
+
+  :root[data-theme='white'] .tezbar-popover {
+    border-color: rgba(15, 23, 42, 0.14);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 22px 52px rgba(15, 23, 42, 0.18);
+  }
+
+  :root[data-theme='white'] .tezbar-settings-window {
+    border-color: rgba(15, 23, 42, 0.1);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 42%),
+      rgba(248, 250, 252, 0.99);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  }
+
+  :root[data-theme='white'] .agent-chat-shell {
+    border-color: rgba(15, 23, 42, 0.1);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 18px 55px rgba(15, 23, 42, 0.1);
   }
 
   /* ---- CleanMyMac-style sidebar ---- */

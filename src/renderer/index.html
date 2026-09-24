@@ -14,6 +14,25 @@
       <div class="glass-shell flex h-full items-center p-6 text-[13px] text-ink-2" role="status">Starting Tezbar…</div>
     </div>
     <script>
+      // Apply the saved theme before the first paint to avoid a dark flash.
+      ;(() => {
+        try {
+          const stored = localStorage.getItem('tezbar:theme')
+          const preference =
+            stored === 'white' || stored === 'dark' || stored === 'system' ? stored : 'system'
+          const resolved =
+            preference === 'system'
+              ? matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'white'
+              : preference
+          document.documentElement.dataset.theme = resolved
+          document.documentElement.style.colorScheme = resolved
+        } catch {
+          document.documentElement.dataset.theme = 'dark'
+        }
+      })()
+
       if (new URLSearchParams(location.search).get('window') === 'snap-overlay') {
         document.getElementById('root').replaceChildren()
       }

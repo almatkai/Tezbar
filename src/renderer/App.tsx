@@ -257,7 +257,7 @@ function SettingsWindowApp(): JSX.Element {
   }, [])
 
   return (
-    <div className="flex h-screen w-full bg-[#1e1f2e]">
+    <div className="flex h-screen w-full bg-glass-shell">
       <Suspense fallback={<SurfaceFallback />}>
         {surface === 'permissions' ? (
           <PermissionsView nativeWindow onBack={() => setSurface('settings')} />
