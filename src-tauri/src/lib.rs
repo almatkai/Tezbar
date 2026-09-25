@@ -1,8 +1,9 @@
 // src-tauri/src/lib.rs
-mod native_input;
 mod backend_health;
+mod native_input;
 use backend_health::{BackendStatus, HealthCheck, CONNECT_TIMEOUT};
 mod native_terminal;
+mod qr_download;
 #[cfg(target_os = "macos")]
 mod timer_notifications;
 mod updater;
@@ -30,17 +31,17 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-use std::str::FromStr;
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[cfg(target_os = "macos")]
 use tauri::LogicalPosition;
 #[cfg(not(target_os = "macos"))]
@@ -100,8 +101,12 @@ struct BackendState {
 fn set_backend_status(app: &AppHandle, phase: &str, detail: &str) {
     let state = app.state::<BackendState>();
     let mut status = state.status.lock().unwrap();
-    if status.phase == phase && status.detail == detail { return; }
-    if phase == "ready" && status.phase != "ready" { status.generation += 1; }
+    if status.phase == phase && status.detail == detail {
+        return;
+    }
+    if phase == "ready" && status.phase != "ready" {
+        status.generation += 1;
+    }
     status.phase = phase.into();
     status.detail = detail.into();
     status.revision += 1;
@@ -123,7 +128,9 @@ fn wait_backend_retry(app: &AppHandle, delay: Duration) -> bool {
     let state = app.state::<BackendState>();
     let deadline = Instant::now() + delay;
     loop {
-        if state.shutting_down.load(Ordering::Relaxed) { return false; }
+        if state.shutting_down.load(Ordering::Relaxed) {
+            return false;
+        }
         if state.restart_requested.swap(false, Ordering::Relaxed) || Instant::now() >= deadline {
             return true;
         }
@@ -569,13 +576,17 @@ fn run_backend_generation(
     let (lines_tx, lines_rx) = mpsc::sync_channel(64);
     std::thread::spawn(move || {
         for line in BufReader::new(stdout).lines() {
-            if lines_tx.send(line).is_err() { break; }
+            if lines_tx.send(line).is_err() {
+                break;
+            }
         }
     });
     let connect_deadline = Instant::now() + CONNECT_TIMEOUT;
     let backend_stream = loop {
         while let Ok(line) = lines_rx.try_recv() {
-            if let Ok(line) = line { handle_backend_message(app, pending_requests, &line); }
+            if let Ok(line) = line {
+                handle_backend_message(app, pending_requests, &line);
+            }
         }
         let state = app.state::<BackendState>();
         if state.shutting_down.load(Ordering::Relaxed)
@@ -619,11 +630,17 @@ fn run_backend_generation(
     loop {
         let state = app.state::<BackendState>();
         if state.shutting_down.load(Ordering::Relaxed)
-            || state.restart_requested.swap(false, Ordering::Relaxed) { break; }
+            || state.restart_requested.swap(false, Ordering::Relaxed)
+        {
+            break;
+        }
         match lines_rx.recv_timeout(Duration::from_millis(250)) {
             Ok(Ok(line)) if !line.trim().is_empty() => {
                 if serde_json::from_str::<serde_json::Value>(&line)
-                    .ok().and_then(|value| value.get("type").cloned()) == Some(json!("pong")) {
+                    .ok()
+                    .and_then(|value| value.get("type").cloned())
+                    == Some(json!("pong"))
+                {
                     health.pong();
                 } else {
                     handle_backend_message(app, pending_requests, &line);
@@ -638,7 +655,9 @@ fn run_backend_generation(
             break;
         }
         let mut messages = Vec::new();
-        if health.should_ping(now) { messages.push("{\"type\":\"ping\"}"); }
+        if health.should_ping(now) {
+            messages.push("{\"type\":\"ping\"}");
+        }
         #[cfg(target_os = "windows")]
         {
             // Reading this native counter is cheap and does not open the
@@ -650,11 +669,22 @@ fn run_backend_generation(
             }
         }
         let mut connection = writer.lock().unwrap();
-        let Some(stream) = connection.as_mut() else { break; };
-        if messages.iter().any(|message| writeln!(stream, "{message}").is_err()) { break; }
+        let Some(stream) = connection.as_mut() else {
+            break;
+        };
+        if messages
+            .iter()
+            .any(|message| writeln!(stream, "{message}").is_err())
+        {
+            break;
+        }
     }
 
-    set_backend_status(app, "reconnecting", "The background service stopped responding. Reconnecting…");
+    set_backend_status(
+        app,
+        "reconnecting",
+        "The background service stopped responding. Reconnecting…",
+    );
     *writer.lock().unwrap() = None;
     let mut pending = pending_requests.lock().unwrap();
     for (_, sender) in pending.drain() {
@@ -680,8 +710,22 @@ fn supervise_backend(
 ) {
     let mut consecutive_failures = 0_u32;
     loop {
-        if app.state::<BackendState>().shutting_down.load(Ordering::Relaxed) { return; }
-        set_backend_status(&app, if consecutive_failures == 0 { "starting" } else { "reconnecting" }, "Starting the background service…");
+        if app
+            .state::<BackendState>()
+            .shutting_down
+            .load(Ordering::Relaxed)
+        {
+            return;
+        }
+        set_backend_status(
+            &app,
+            if consecutive_failures == 0 {
+                "starting"
+            } else {
+                "reconnecting"
+            },
+            "Starting the background service…",
+        );
         match run_backend_generation(&app, &config, &writer, &pending_requests) {
             Ok(uptime) if uptime >= Duration::from_secs(30) => consecutive_failures = 0,
             Ok(_) => consecutive_failures = consecutive_failures.saturating_add(1),
@@ -701,8 +745,14 @@ fn supervise_backend(
                 "backend sidecar kept failing ({} consecutive); sleeping 60s before retry",
                 consecutive_failures
             );
-            set_backend_status(&app, "failed", "The background service could not start. Retrying in 60 seconds.");
-            if !wait_backend_retry(&app, Duration::from_secs(60)) { return; }
+            set_backend_status(
+                &app,
+                "failed",
+                "The background service could not start. Retrying in 60 seconds.",
+            );
+            if !wait_backend_retry(&app, Duration::from_secs(60)) {
+                return;
+            }
             // Try one more time; if it still fails, keep the 60s sleep loop
             // without the boot-time churn. The user can restart the app.
             continue;
@@ -710,7 +760,9 @@ fn supervise_backend(
         let exponent = consecutive_failures.min(5);
         let delay_ms = (250_u64 * (1_u64 << exponent)).min(8_000);
         log::info!("restarting backend sidecar in {}ms", delay_ms);
-        if !wait_backend_retry(&app, Duration::from_millis(delay_ms)) { return; }
+        if !wait_backend_retry(&app, Duration::from_millis(delay_ms)) {
+            return;
+        }
     }
 }
 
@@ -795,7 +847,8 @@ fn install_unix_bun(app_local_data: &Path) -> Result<PathBuf, String> {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
-    let temporary_dir = std::env::temp_dir().join(format!("tezbar-bun-{}-{stamp}", std::process::id()));
+    let temporary_dir =
+        std::env::temp_dir().join(format!("tezbar-bun-{}-{stamp}", std::process::id()));
     let archive_path = temporary_dir.join("bun.zip");
     let extract_dir = temporary_dir.join("extract");
     let destination_dir = app_local_data.join("bun");
@@ -854,7 +907,9 @@ fn install_unix_bun(app_local_data: &Path) -> Result<PathBuf, String> {
             .map_err(|error| format!("failed to verify the Bun runtime: {error}"))?;
         let version = String::from_utf8_lossy(&version.stdout).trim().to_string();
         if version != BUN_VERSION {
-            return Err(format!("downloaded Bun version {version:?}, expected {BUN_VERSION}"));
+            return Err(format!(
+                "downloaded Bun version {version:?}, expected {BUN_VERSION}"
+            ));
         }
         Ok(destination)
     })();
@@ -920,18 +975,32 @@ fn locate_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
     Err("Bun is required to run the Tauri backend, and automatic installation is not supported on this platform.".to_string())
 }
 
-fn copy_backend_directory(source: &std::path::Path, destination: &std::path::Path) -> Result<(), String> {
-    fs::create_dir_all(destination)
-        .map_err(|error| format!("failed to create backend directory {}: {error}", destination.display()))?;
-    for entry in fs::read_dir(source)
-        .map_err(|error| format!("failed to read backend resources {}: {error}", source.display()))?
-    {
-        let entry = entry.map_err(|error| format!("failed to enumerate backend resources: {error}"))?;
+fn copy_backend_directory(
+    source: &std::path::Path,
+    destination: &std::path::Path,
+) -> Result<(), String> {
+    fs::create_dir_all(destination).map_err(|error| {
+        format!(
+            "failed to create backend directory {}: {error}",
+            destination.display()
+        )
+    })?;
+    for entry in fs::read_dir(source).map_err(|error| {
+        format!(
+            "failed to read backend resources {}: {error}",
+            source.display()
+        )
+    })? {
+        let entry =
+            entry.map_err(|error| format!("failed to enumerate backend resources: {error}"))?;
         let source_path = entry.path();
         let destination_path = destination.join(entry.file_name());
-        let file_type = entry
-            .file_type()
-            .map_err(|error| format!("failed to inspect backend resource {}: {error}", source_path.display()))?;
+        let file_type = entry.file_type().map_err(|error| {
+            format!(
+                "failed to inspect backend resource {}: {error}",
+                source_path.display()
+            )
+        })?;
         if file_type.is_dir() {
             copy_backend_directory(&source_path, &destination_path)?;
         } else if file_type.is_file() {
@@ -964,7 +1033,10 @@ fn stage_backend_bundle(
     for module in ["esbuild", "@esbuild"] {
         let source_module = source_node_modules.join(module);
         if source_module.is_dir() {
-            copy_backend_directory(&source_module, &destination_dir.join("node_modules").join(module))?;
+            copy_backend_directory(
+                &source_module,
+                &destination_dir.join("node_modules").join(module),
+            )?;
         }
     }
 
@@ -1108,9 +1180,7 @@ fn macos_display_uuid(display_id: CGDirectDisplayID) -> Option<String> {
         return None;
     }
     let uuid = unsafe { CFUUID::wrap_under_create_rule(uuid_ref) };
-    let string_ref = unsafe {
-        CFUUIDCreateString(kCFAllocatorDefault, uuid.as_concrete_TypeRef())
-    };
+    let string_ref = unsafe { CFUUIDCreateString(kCFAllocatorDefault, uuid.as_concrete_TypeRef()) };
     if string_ref.is_null() {
         return None;
     }
@@ -1740,8 +1810,7 @@ fn frontmost_window_monitor(window: &WebviewWindow) -> Option<Monitor> {
         return None;
     }
 
-    let monitor_handle =
-        unsafe { MonitorFromWindow(foreground_window, MONITOR_DEFAULTTONEAREST) };
+    let monitor_handle = unsafe { MonitorFromWindow(foreground_window, MONITOR_DEFAULTTONEAREST) };
     if monitor_handle.is_null() {
         return None;
     }
@@ -1759,12 +1828,12 @@ fn frontmost_window_monitor(window: &WebviewWindow) -> Option<Monitor> {
     // Tauri's monitor_from_point uses the same physical desktop coordinate
     // space as the Win32 monitor rectangles. Use the foreground monitor's
     // center to map the native handle back to Tauri's Monitor value.
-    let center_x =
-        (i64::from(monitor_info.rcMonitor.left) + i64::from(monitor_info.rcMonitor.right)) as f64
-            / 2.0;
-    let center_y =
-        (i64::from(monitor_info.rcMonitor.top) + i64::from(monitor_info.rcMonitor.bottom)) as f64
-            / 2.0;
+    let center_x = (i64::from(monitor_info.rcMonitor.left)
+        + i64::from(monitor_info.rcMonitor.right)) as f64
+        / 2.0;
+    let center_y = (i64::from(monitor_info.rcMonitor.top)
+        + i64::from(monitor_info.rcMonitor.bottom)) as f64
+        / 2.0;
     window.monitor_from_point(center_x, center_y).ok().flatten()
 }
 
@@ -1894,31 +1963,22 @@ fn monitor_for_window_position(
     }
 
     #[cfg(target_os = "macos")]
-    let center = logical_window_center(
-        position,
-        size,
-        window.scale_factor().unwrap_or(1.0),
-    );
+    let center = logical_window_center(position, size, window.scale_factor().unwrap_or(1.0));
     #[cfg(not(target_os = "macos"))]
     let center = PersistedWindowPosition {
         x: position.x + size.0 / 2.0,
         y: position.y + size.1 / 2.0,
     };
-    window
-        .monitor_from_point(center.x, center.y)
-        .ok()
-        .flatten()
+    window.monitor_from_point(center.x, center.y).ok().flatten()
 }
 
 fn persist_window_position_at(window: &WebviewWindow, position: PersistedWindowPosition) {
     let Ok(size) = window.outer_size() else {
         return;
     };
-    let Some(monitor) = monitor_for_window_position(
-        window,
-        position,
-        (size.width as f64, size.height as f64),
-    ) else {
+    let Some(monitor) =
+        monitor_for_window_position(window, position, (size.width as f64, size.height as f64))
+    else {
         return;
     };
     set_persisted_window_position_for_monitor(window, &monitor, position);
@@ -2379,15 +2439,13 @@ mod window_placement_tests {
             window_size_for_target_monitor((1520.0, 1280.0), 2.0, 1.0);
 
         assert_eq!((window_width, window_height), (760.0, 640.0));
-        let physical_position = plan_window_position(
-            external,
-            window_width,
-            window_height,
-            None,
-        );
+        let physical_position = plan_window_position(external, window_width, window_height, None);
         assert_eq!(
             logical_position_for_monitor(physical_position, 1.0),
-            PersistedWindowPosition { x: 2380.0, y: 220.0 }
+            PersistedWindowPosition {
+                x: 2380.0,
+                y: 220.0
+            }
         );
         assert!(position_is_in_bounds(physical_position, external.bounds));
 
@@ -2398,7 +2456,10 @@ mod window_placement_tests {
             x: physical_position.x / 2.0,
             y: physical_position.y / 2.0,
         };
-        assert!(!position_is_in_bounds(old_effective_position, external.bounds));
+        assert!(!position_is_in_bounds(
+            old_effective_position,
+            external.bounds
+        ));
     }
 
     #[test]
@@ -2429,7 +2490,10 @@ mod window_placement_tests {
         assert_eq!((window_width, window_height), (1520.0, 1280.0));
         assert_eq!(
             plan_window_position(target, window_width, window_height, None),
-            PersistedWindowPosition { x: -2680.0, y: 400.0 }
+            PersistedWindowPosition {
+                x: -2680.0,
+                y: 400.0
+            }
         );
     }
 
@@ -2443,15 +2507,13 @@ mod window_placement_tests {
             window_size_for_target_monitor((760.0, 640.0), 1.0, 2.0);
 
         assert_eq!((window_width, window_height), (1520.0, 1280.0));
-        let physical_position = plan_window_position(
-            retina,
-            window_width,
-            window_height,
-            None,
-        );
+        let physical_position = plan_window_position(retina, window_width, window_height, None);
         assert_eq!(
             physical_position,
-            PersistedWindowPosition { x: 1040.0, y: 529.0 }
+            PersistedWindowPosition {
+                x: 1040.0,
+                y: 529.0
+            }
         );
         assert_eq!(
             logical_position_for_monitor(physical_position, 2.0),
@@ -2685,11 +2747,7 @@ fn windows_left_mouse_button_is_down() -> bool {
     unsafe { GetAsyncKeyState(VK_LBUTTON as i32) < 0 }
 }
 
-fn finish_window_snap_drag(
-    window: &WebviewWindow,
-    app: &AppHandle,
-    state: &WindowBehaviorState,
-) {
+fn finish_window_snap_drag(window: &WebviewWindow, app: &AppHandle, state: &WindowBehaviorState) {
     persist_current_window_position(window);
     *state.snap_drag_active.lock().unwrap() = false;
     *state.snap_locked.lock().unwrap() = SnapLockState::default();
@@ -2769,14 +2827,7 @@ fn schedule_windows_snap_drag(
                 initial_cursor_position,
                 cursor_position,
             );
-            match update_window_snap_state(
-                &window,
-                &app,
-                &state,
-                raw_position,
-                false,
-                true,
-            ) {
+            match update_window_snap_state(&window, &app, &state, raw_position, false, true) {
                 Ok(true) => schedule_snap_dwell(window.clone(), generation),
                 Ok(false) => {}
                 Err(error) => {
@@ -2815,9 +2866,7 @@ fn focus_settings_window_if_visible(app: &AppHandle) -> Result<bool, String> {
     settings_window
         .unminimize()
         .map_err(|error| error.to_string())?;
-    settings_window
-        .show()
-        .map_err(|error| error.to_string())?;
+    settings_window.show().map_err(|error| error.to_string())?;
     settings_window
         .set_focus()
         .map_err(|error| error.to_string())?;
@@ -3163,10 +3212,7 @@ fn set_quick_look_window_state(window: WebviewWindow, previewing: bool) -> Resul
     Ok(())
 }
 
-fn apply_window_content_height(
-    window: &WebviewWindow,
-    clamped_height: f64,
-) -> Result<(), String> {
+fn apply_window_content_height(window: &WebviewWindow, clamped_height: f64) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     let previous_center = if window.is_visible().unwrap_or(false) {
         window
@@ -3243,13 +3289,12 @@ fn update_raymes_shortcut(app: AppHandle, shortcut_str: String) -> Result<(), St
     // Alt+Space is reserved by Windows for the native window menu. It was
     // previously the cross-platform default, so make old installations
     // usable instead of silently leaving them without a launcher shortcut.
-    let clean_shortcut = if cfg!(target_os = "windows")
-        && clean_shortcut.eq_ignore_ascii_case("Alt+Space")
-    {
-        "Control+Space".to_string()
-    } else {
-        clean_shortcut
-    };
+    let clean_shortcut =
+        if cfg!(target_os = "windows") && clean_shortcut.eq_ignore_ascii_case("Alt+Space") {
+            "Control+Space".to_string()
+        } else {
+            clean_shortcut
+        };
     let shortcut = Shortcut::from_str(&clean_shortcut)
         .map_err(|e| format!("Invalid shortcut format: {:?}", e))?;
     let _ = app.global_shortcut().unregister_all();
@@ -3402,7 +3447,9 @@ pub fn run() {
                     if event.state() == ShortcutState::Pressed {
                         if let Some(win) = app.get_webview_window("main") {
                             if let Err(error) = toggle_window(win) {
-                                log::error!("failed to toggle launcher from global shortcut: {error}");
+                                log::error!(
+                                    "failed to toggle launcher from global shortcut: {error}"
+                                );
                             }
                         }
                     }
@@ -3410,6 +3457,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(updater::UpdaterState::default())
@@ -3427,9 +3475,7 @@ pub fn run() {
             if window.label() == "settings" {
                 match event {
                     tauri::WindowEvent::Focused(true) => {
-                        if let Err(error) =
-                            hide_main_window_for_settings(&window.app_handle())
-                        {
+                        if let Err(error) = hide_main_window_for_settings(&window.app_handle()) {
                             log::debug!("failed to hide launcher behind Settings: {error}");
                         }
                     }
@@ -3621,7 +3667,8 @@ pub fn run() {
             updater::check_for_updates,
             updater::download_and_install_update,
             updater::restart_app,
-            updater::open_release_page
+            updater::open_release_page,
+            qr_download::save_qr_png_data_url
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -3677,7 +3724,7 @@ pub fn run() {
                             .join("color-picker")
                             .join("color-picker-helper")
                             .to_string_lossy()
-                        .into_owned(),
+                            .into_owned(),
                     ),
                 ]);
             }
@@ -3747,7 +3794,10 @@ pub fn run() {
                             Err(error) => {
                                 log::error!("backend bundle staging failed: {}", error);
                                 set_backend_status(&supervisor_handle, "failed", &error);
-                                if !wait_backend_retry(&supervisor_handle, Duration::from_secs(10)) { return; }
+                                if !wait_backend_retry(&supervisor_handle, Duration::from_secs(10))
+                                {
+                                    return;
+                                }
                             }
                         }
                     }
@@ -3786,11 +3836,17 @@ pub fn run() {
                 if !cfg!(debug_assertions) {
                     backend_env.push((
                         "NODE_PATH".to_string(),
-                        backend_root.join("node_modules").to_string_lossy().into_owned(),
+                        backend_root
+                            .join("node_modules")
+                            .to_string_lossy()
+                            .into_owned(),
                     ));
                     backend_env.push((
                         "BUN_RUNTIME_TRANSPILER_CACHE_PATH".to_string(),
-                        backend_root.join("bun-cache").to_string_lossy().into_owned(),
+                        backend_root
+                            .join("bun-cache")
+                            .to_string_lossy()
+                            .into_owned(),
                     ));
                 }
 
@@ -3808,11 +3864,13 @@ pub fn run() {
                             set_backend_status(&supervisor_handle, "failed", &error);
                             let exponent = failures.min(5);
                             let delay_ms = (500_u64 * (1_u64 << exponent)).min(15_000);
-                            log::info!(
-                                "retrying backend runtime discovery in {}ms",
-                                delay_ms
-                            );
-                            if !wait_backend_retry(&supervisor_handle, Duration::from_millis(delay_ms)) { return; }
+                            log::info!("retrying backend runtime discovery in {}ms", delay_ms);
+                            if !wait_backend_retry(
+                                &supervisor_handle,
+                                Duration::from_millis(delay_ms),
+                            ) {
+                                return;
+                            }
                             continue;
                         }
                     };

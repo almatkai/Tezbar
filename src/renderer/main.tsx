@@ -6,8 +6,12 @@ import BackendConnection from './BackendConnection'
 import 'highlight.js/styles/atom-one-dark.css'
 import './styles.css'
 import { initTauriBridge } from './tauri-bridge'
-import { applyTezbarTheme, isTezbarThemePreference, TEZBAR_THEME_STORAGE_KEY, type TezbarThemePreference } from './theme'
-
+import {
+  applyTezbarTheme,
+  isTezbarThemePreference,
+  TEZBAR_THEME_STORAGE_KEY,
+  type TezbarThemePreference,
+} from './theme'
 
 const App = lazy(() => import('./App'))
 
@@ -21,14 +25,22 @@ if (navigator.platform.includes('Win')) {
 }
 
 const storedTheme = window.localStorage.getItem(TEZBAR_THEME_STORAGE_KEY)
-const themePreference: TezbarThemePreference = isTezbarThemePreference(storedTheme) ? storedTheme : 'system'
+const themePreference: TezbarThemePreference = isTezbarThemePreference(storedTheme)
+  ? storedTheme
+  : 'system'
 applyTezbarTheme(themePreference)
 
 const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
 const syncSystemTheme = (): void => {
-  if (themePreference === 'system') applyTezbarTheme('system')
+  const current = window.localStorage.getItem(TEZBAR_THEME_STORAGE_KEY)
+  if (!isTezbarThemePreference(current) || current !== 'system') return
+  applyTezbarTheme('system')
 }
 colorSchemeQuery.addEventListener('change', syncSystemTheme)
+window.addEventListener('storage', (event) => {
+  if (event.key !== TEZBAR_THEME_STORAGE_KEY) return
+  applyTezbarTheme(isTezbarThemePreference(event.newValue) ? event.newValue : 'system')
+})
 
 if (!rootElement) {
   throw new Error('Tezbar renderer root element is missing')
@@ -100,7 +112,15 @@ void syncMainWindowRendering().catch((error: unknown) => {
 // Native IPC effects are not safe to replay. React StrictMode deliberately
 // mounts effects twice in development, which duplicates every startup request
 // in each WebView and can make opening Settings look like a backend freeze.
-const loading = <div className="glass-shell h-screen p-6 text-[13px] text-ink-2" role="status">Loading Tezbar…</div>
-const app = <Suspense fallback={loading}><App /></Suspense>
+const loading = (
+  <div className="glass-shell h-screen p-6 text-[13px] text-ink-2" role="status">
+    Loading Tezbar…
+  </div>
+)
+const app = (
+  <Suspense fallback={loading}>
+    <App />
+  </Suspense>
+)
 const isOverlay = new URLSearchParams(window.location.search).get('window') === 'snap-overlay'
 createRoot(rootElement).render(isOverlay ? app : <BackendConnection>{app}</BackendConnection>)

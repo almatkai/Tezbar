@@ -56,8 +56,12 @@ export function initTauriBridge(): void {
     })
   }
 
-  const setBlurHideSuppressed = async (value: boolean): Promise<{ ok: boolean }> => {
+  const setNativeBlurHideSuppressed = async (value: boolean): Promise<void> => {
     await invoke('set_suppress_blur_hide', { value })
+  }
+
+  const setBlurHideSuppressed = async (value: boolean): Promise<{ ok: boolean }> => {
+    await setNativeBlurHideSuppressed(value)
     return callBackend('window:suppress-blur-hide', value)
   }
 
@@ -169,6 +173,20 @@ export function initTauriBridge(): void {
 
     clipboardReadText: () => callBackend('clipboard:read'),
     clipboardWriteText: (text: string) => callBackend('clipboard:write', text),
+    clipboardWritePng: (dataUrl: string) => callBackend('clipboard:write-png', dataUrl),
+    saveQrPngDataUrl: async (dataUrl: string) => {
+      // Opening the native save dialog blurs the webview. Suppress the
+      // launcher's blur-hide handler before invoking it, otherwise the native
+      // dialog can be dismissed along with the launcher window.
+      await setNativeBlurHideSuppressed(true)
+      try {
+        return { ok: await invoke('save_qr_png_data_url', { dataUrl }) }
+      } catch (error: unknown) {
+        return { ok: false, error: errorMessage(error) }
+      } finally {
+        await setNativeBlurHideSuppressed(false).catch(() => undefined)
+      }
+    },
     shellOpen: (target: string) => callBackend('shell:open', target),
     getAppIconDataUrl: (appPath: string) => callBackend('app-icon:data-url', appPath),
     getAssetIconDataUrl: (kind: any, path: string) =>

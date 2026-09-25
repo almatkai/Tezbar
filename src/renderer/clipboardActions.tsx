@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ClipboardActionId, TransformResult } from '../shared/textTransform'
 import { applyClipboardAction } from '../shared/textTransform'
+import { qrDataUrlToPngDataUrl } from './qrImage'
 
 type ActionSpec = {
   id: ClipboardActionId
@@ -115,6 +116,7 @@ export function ConvertActionRow({
   const [active, setActive] = useState<ClipboardActionId | null>(null)
   const [busy, setBusy] = useState<ClipboardActionId | null>(null)
   const [result, setResult] = useState<TransformResult | null>(null)
+  const [qrPngDataUrl, setQrPngDataUrl] = useState<string | null>(null)
   const lastRunId = useRef(0)
 
   // Reset when the input swaps out — keeps the preview map 1:1 with the
@@ -124,6 +126,7 @@ export function ConvertActionRow({
     setActive(null)
     setBusy(null)
     setResult(null)
+    setQrPngDataUrl(null)
   }, [sourceText])
 
   const runTransform = useCallback(
@@ -165,6 +168,44 @@ export function ConvertActionRow({
     return result.output
   }, [isQr, result])
 
+  useEffect(() => {
+    if (!isQr || !result?.ok) {
+      setQrPngDataUrl(null)
+      return
+    }
+    let cancelled = false
+    void qrDataUrlToPngDataUrl(result.output)
+      .then((png) => {
+        if (!cancelled) setQrPngDataUrl(png)
+      })
+      .catch(() => {
+        if (!cancelled) setQrPngDataUrl(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isQr, result])
+
+  const copyQrImage = useCallback(async () => {
+    if (!qrPngDataUrl) {
+      onError('QR image is still preparing')
+      return
+    }
+    const response = await window.tezbar.clipboardWritePng(qrPngDataUrl)
+    if (response.ok) onCopied('QR image copied to clipboard')
+    else onError(response.error ?? 'Could not copy QR image')
+  }, [onCopied, onError, qrPngDataUrl])
+
+  const downloadQr = useCallback(async () => {
+    if (!qrPngDataUrl) {
+      onError('QR image is still preparing')
+      return
+    }
+    const response = await window.tezbar.saveQrPngDataUrl(qrPngDataUrl)
+    if (response.ok) onCopied('QR image saved')
+    else if (response.error) onError(response.error)
+  }, [onCopied, onError, qrPngDataUrl])
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-1">
@@ -186,11 +227,16 @@ export function ConvertActionRow({
         <div className="rounded-tezbar-row border border-white/[0.06] bg-white/[0.02] p-2">
           {result.ok ? (
             qrImageUrl ? (
-              <div className="flex flex-col items-start gap-1.5">
+              <div className="flex flex-col items-start gap-2">
                 <img
                   src={qrImageUrl}
                   alt="QR code preview"
                   className="h-[120px] w-[120px] rounded-sm border border-white/10 bg-white/90 p-1"
+                />
+                <QrActionButtons
+                  ready={qrPngDataUrl !== null}
+                  onCopyImage={() => void copyQrImage()}
+                  onDownload={() => void downloadQr()}
                 />
                 <ResultFooter url={qrImageUrl} onCopy={() => void copyResult()} />
               </div>
@@ -207,6 +253,44 @@ export function ConvertActionRow({
           )}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function QrActionButtons({
+  ready,
+  onCopyImage,
+  onDownload,
+}: {
+  ready: boolean
+  onCopyImage: () => void
+  onDownload: () => void
+}): JSX.Element {
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        disabled={!ready}
+        onClick={onCopyImage}
+        className="inline-flex items-center gap-1.5 rounded-tezbar-chip border border-emerald-300/25 bg-emerald-300/10 px-2 py-1 text-[11px] font-medium text-emerald-200 transition hover:border-emerald-300/40 hover:bg-emerald-300/20 disabled:opacity-40"
+      >
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="4" y="4.5" width="7" height="7" rx="1" />
+          <path d="M9 4.5V3.25a1 1 0 0 0-1-1H3.75a1 1 0 0 0-1 1V7.5a1 1 0 0 0 1 1H5" />
+        </svg>
+        <span>Copy Image</span>
+      </button>
+      <button
+        type="button"
+        disabled={!ready}
+        onClick={onDownload}
+        className="inline-flex items-center gap-1.5 rounded-tezbar-chip border border-blue-300/25 bg-blue-300/10 px-2 py-1 text-[11px] font-medium text-blue-200 transition hover:border-blue-300/40 hover:bg-blue-300/20 disabled:opacity-40"
+      >
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M7 2v7m0 0 2.5-2.5M7 9 4.5 6.5M2.5 10.5v1h9v-1" />
+        </svg>
+        <span>Download Image</span>
+      </button>
     </div>
   )
 }
@@ -228,7 +312,7 @@ function ResultFooter({
       <button
         type="button"
         onClick={onCopy}
-        className="inline-flex items-center gap-1 rounded-tezbar-chip border border-emerald-300/25 bg-emerald-300/10 px-1.5 py-0.5 text-[10.5px] font-medium text-emerald-200 transition hover:border-emerald-300/40 hover:bg-emerald-300/20"
+        className="inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-emerald-300/25 bg-emerald-300/10 px-1.5 py-0.5 text-[10.5px] font-medium text-emerald-200 transition hover:border-emerald-300/40 hover:bg-emerald-300/20"
       >
         <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="4" y="4.5" width="7" height="7" rx="1" />

@@ -59,21 +59,21 @@
   }
 
   :root[data-theme='white'] {
-    --c-shell: 244 246 250;
+    --c-shell: 241 244 249;
     --c-panel: 255 255 255;
     --c-row: 255 255 255;
-    --c-text-1: 28 30 38;
-    --c-text-2: 67 70 82;
-    --c-text-3: 104 108 122;
-    --c-text-4: 139 143 157;
-    --c-accent: 99 102 241;
-    --c-accent-strong: 79 70 229;
+    --c-text-1: 27 37 57;
+    --c-text-2: 62 76 101;
+    --c-text-3: 91 106 129;
+    --c-text-4: 99 113 135;
+    --c-accent: 76 68 193;
+    --c-accent-strong: 62 53 165;
     --c-success: 5 150 105;
     --c-danger: 220 38 38;
     --c-warning: 217 119 6;
-    --c-theme-line: 15 23 42;
-    --c-theme-control: 241 245 249;
-    --c-theme-control-hover: 226 232 240;
+    --c-theme-line: 97 113 140;
+    --c-theme-control: 243 246 251;
+    --c-theme-control-hover: 230 235 246;
     color-scheme: light;
   }
 
@@ -137,23 +137,32 @@
 
   :root[data-theme='white'] {
     *::-webkit-scrollbar-thumb {
-      background: rgba(15, 23, 42, 0.14);
+      background: rgba(75, 91, 120, 0.22);
     }
 
     *::-webkit-scrollbar-thumb:hover {
-      background: rgba(15, 23, 42, 0.25);
+      background: rgba(75, 91, 120, 0.34);
     }
 
     [class*='border-white/'] {
-      border-color: rgba(15, 23, 42, 0.12);
+      border-color: rgba(76, 94, 125, 0.16);
+    }
+
+    [class*='hover:border-white/']:hover {
+      border-color: rgba(76, 94, 125, 0.31);
     }
 
     [class*='bg-white/'] {
-      background-color: rgba(15, 23, 42, 0.045);
+      background-color: rgba(78, 98, 136, 0.065);
     }
 
     [class*='hover:bg-white/']:hover {
-      background-color: rgba(15, 23, 42, 0.08);
+      background-color: rgba(78, 98, 136, 0.12);
+    }
+
+    :where(button, [role='button'], [role='menuitem'], input, textarea, select, a[href]):focus-visible {
+      outline: 2px solid rgb(var(--c-accent) / 0.68);
+      outline-offset: 2px;
     }
   }
 }
@@ -427,41 +436,87 @@
 
   :root[data-theme='white'] .glass-shell,
   :root[data-theme='white'] .glass-shell.glass-shell--terminal {
+    border: 1px solid rgba(76, 94, 125, 0.2);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0) 40%),
-      rgba(248, 250, 252, 0.96);
+      linear-gradient(165deg, rgba(255, 255, 255, 0.97), rgba(241, 245, 251, 0.96) 70%),
+      rgb(var(--c-shell));
+    backdrop-filter: blur(48px) saturate(155%);
+    -webkit-backdrop-filter: blur(48px) saturate(155%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 0 0 0 1px rgba(76, 94, 125, 0.1);
   }
 
   :root[data-theme='white'] .glass-panel {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(24px) saturate(145%);
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+      inset 0 1px 0 rgba(255, 255, 255, 0.88),
+      inset 0 0 0 1px rgba(76, 94, 125, 0.13);
   }
 
   :root[data-theme='white'] .glass-card {
-    background: rgba(255, 255, 255, 0.76);
+    background: rgba(255, 255, 255, 0.84);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.96),
+      inset 0 0 0 1px rgba(76, 94, 125, 0.14),
+      0 10px 28px rgba(34, 48, 76, 0.08);
+  }
+
+  :root[data-theme='white'] .glass-field {
+    background: rgba(255, 255, 255, 0.91);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.92),
+      inset 0 0 0 1px rgba(93, 108, 145, 0.18),
+      0 2px 8px rgba(34, 48, 76, 0.04);
+  }
+
+  :root[data-theme='white'] .glass-field:hover {
+    background: #fff;
+    box-shadow: inset 0 0 0 1px rgba(76, 94, 125, 0.3);
+  }
+
+  :root[data-theme='white'] .glass-field:focus,
+  :root[data-theme='white'] .glass-field:focus-visible {
+    background: #fff;
+    box-shadow: inset 0 0 0 2px rgb(var(--c-accent) / 0.6);
+  }
+
+  :root[data-theme='white'] select.glass-field,
+  :root[data-theme='white'] select:not(.glass-field) {
+    background-color: rgba(248, 250, 253, 0.82);
+    color: rgb(var(--c-text-1));
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.95),
-      inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+      inset 0 0 0 1px rgba(93, 108, 145, 0.2),
+      0 4px 12px rgba(44, 56, 87, 0.07);
+  }
+
+  :root[data-theme='white'] option {
+    background: rgb(248, 250, 253);
+    color: rgb(31, 35, 48);
   }
 
   :root[data-theme='white'] .tezbar-popover {
-    border-color: rgba(15, 23, 42, 0.14);
+    border-color: rgba(76, 94, 125, 0.18);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.9),
       0 22px 52px rgba(15, 23, 42, 0.18);
   }
 
   :root[data-theme='white'] .tezbar-settings-window {
-    border-color: rgba(15, 23, 42, 0.1);
+    border-color: rgba(76, 94, 125, 0.17);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 42%),
-      rgba(248, 250, 252, 0.99);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+      linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(242, 246, 251, 0.97) 70%),
+      rgb(var(--c-shell));
+    backdrop-filter: blur(40px) saturate(150%);
+    -webkit-backdrop-filter: blur(40px) saturate(150%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.94),
+      inset 0 0 0 1px rgba(76, 94, 125, 0.09);
   }
 
   :root[data-theme='white'] .agent-chat-shell {
@@ -470,6 +525,200 @@
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.95),
       0 18px 55px rgba(15, 23, 42, 0.1);
+  }
+
+  :root[data-theme='white'] .extension-detail-footer {
+    border-top-color: rgba(76, 94, 125, 0.16);
+    background: rgba(255, 255, 255, 0.96);
+  }
+
+  /* Light mode uses ink-tinted interaction states so selection stays visible
+     on the pale glass surfaces used throughout the launcher. */
+  :root[data-theme='white'] .glass-inset {
+    background: rgba(78, 98, 136, 0.055);
+    box-shadow: inset 0 0 0 1px rgba(76, 94, 125, 0.12);
+  }
+
+  :root[data-theme='white'] .btn-primary {
+    color: #fff;
+    background: rgb(var(--c-accent));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+
+  :root[data-theme='white'] .btn-primary:hover:not(:disabled) {
+    background: rgb(var(--c-accent-strong));
+  }
+
+  :root[data-theme='white'] .btn-ghost,
+  :root[data-theme='white'] .kbd {
+    background: rgba(78, 98, 136, 0.07);
+    box-shadow: inset 0 0 0 1px rgba(76, 94, 125, 0.18);
+  }
+
+  :root[data-theme='white'] .btn-ghost:hover:not(:disabled),
+  :root[data-theme='white'] .btn-quiet:hover:not(:disabled) {
+    background: rgba(78, 98, 136, 0.13);
+  }
+
+  :root[data-theme='white'] .row-interactive:hover {
+    background: rgba(78, 98, 136, 0.08);
+  }
+
+  :root[data-theme='white'] .row-interactive[data-selected='true'],
+  :root[data-theme='white'] .glide-highlight {
+    background: rgba(76, 68, 193, 0.09);
+    box-shadow: inset 0 0 0 1px rgba(76, 68, 193, 0.22);
+  }
+
+  :root[data-theme='white'] .hairline {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(76, 94, 125, 0.18) 12%,
+      rgba(76, 94, 125, 0.18) 88%,
+      transparent
+    );
+  }
+
+  :root[data-theme='white'] .rolling-command-hint__shortcut {
+    border-color: rgba(76, 68, 193, 0.22);
+    background: rgba(76, 68, 193, 0.08);
+  }
+
+  /* The input is visually part of the launcher search card. Focus belongs to
+     the rounded card, not a rectangular outline around the bare text field. */
+  :root[data-theme='white'] .command-search:focus-within {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 0 0 0 1px rgba(76, 68, 193, 0.32),
+      0 0 0 2px rgba(76, 68, 193, 0.2),
+      0 10px 28px rgba(34, 48, 76, 0.08);
+  }
+
+  :root[data-theme='white'] .command-search #command-input:focus-visible {
+    outline: none;
+  }
+
+  /* Mode accents need enough contrast against the white launcher cards. */
+  :root[data-theme='white'] :is(.command-ai-icon, .command-ai-heading) {
+    color: #5c37a4;
+  }
+
+  :root[data-theme='white'] .command-ai-badge {
+    color: #5c37a4;
+    border-color: #c5b6ed;
+    background: #f0ebfc;
+  }
+
+  :root[data-theme='white'] .command-ai-badge > span {
+    background: #714dbb;
+  }
+
+  :root[data-theme='white'] .model-picker-active-dot {
+    background: #0b7651;
+  }
+
+  :root[data-theme='white'] .command-ai-chat-icon {
+    color: #5c37a4;
+    background: #f0ebfc;
+  }
+
+  :root[data-theme='white'] .group:hover .command-ai-chat-icon {
+    background: #e7def9;
+  }
+
+  :root[data-theme='white'] :is(.command-terminal-icon, .command-terminal-prompt, .command-terminal-heading),
+  :root[data-theme='white'] .command-terminal-session-status.command-terminal-running {
+    color: #0b7651;
+  }
+
+  :root[data-theme='white'] .command-terminal-session-icon.command-terminal-running {
+    color: #0b7651;
+    border-color: #9edabd;
+    background: #e9f8f0;
+  }
+
+  :root[data-theme='white'] .command-terminal-session-dot.command-terminal-running {
+    background: #0b7651;
+    box-shadow: none;
+  }
+
+  :root[data-theme='white'] .command-result-icon svg {
+    stroke-width: 1.5px;
+  }
+
+  :root[data-theme='white'] .command-result-icon:is(.text-sky-200, .text-sky-300, .text-cyan-200) {
+    color: #165d91;
+    border-color: #a9cbe4;
+    background: #eaf5fc;
+  }
+
+  :root[data-theme='white'] .command-result-icon:is(.text-violet-200, .text-violet-300) {
+    color: #6241aa;
+    border-color: #cbbaf0;
+    background: #f2edfc;
+  }
+
+  :root[data-theme='white'] .command-result-icon:is(.text-amber-200, .text-amber-300) {
+    color: #936200;
+    border-color: #e6cc8e;
+    background: #fff7e5;
+  }
+
+  :root[data-theme='white'] .command-result-icon:is(.text-emerald-200, .text-emerald-300) {
+    color: #0b7651;
+    border-color: #9edabd;
+    background: #e9f8f0;
+  }
+
+  :root[data-theme='white'] .command-result-icon.text-lime-200 {
+    color: #56721d;
+    border-color: #c2d893;
+    background: #f2f8e5;
+  }
+
+  :root[data-theme='white'] .command-result-icon.text-rose-200 {
+    color: #ad3653;
+    border-color: #e8afbd;
+    background: #fff0f3;
+  }
+
+  .theme-choice {
+    border-color: rgb(var(--c-theme-line) / 0.22);
+    background: rgb(var(--c-theme-control) / 0.08);
+    color: rgb(var(--c-text-2));
+  }
+
+  .theme-choice:hover {
+    border-color: rgb(var(--c-theme-line) / 0.36);
+    background: rgb(var(--c-theme-control-hover) / 0.14);
+    color: rgb(var(--c-text-1));
+  }
+
+  .theme-choice[aria-pressed='true'],
+  .theme-choice[aria-pressed='true']:hover {
+    border-color: rgb(var(--c-accent));
+    background: rgb(var(--c-accent));
+    color: #fff;
+    box-shadow: 0 0 0 2px rgb(var(--c-accent) / 0.18);
+  }
+
+  .theme-choice__check {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+  }
+
+  :root[data-theme='white'] .theme-choice {
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  :root[data-theme='white'] .theme-choice:hover {
+    background: #fff;
+  }
+
+  :root[data-theme='white'] .theme-choice[aria-pressed='true'],
+  :root[data-theme='white'] .theme-choice[aria-pressed='true']:hover {
+    background: rgb(var(--c-accent));
   }
 
   /* ---- CleanMyMac-style sidebar ---- */
@@ -493,6 +742,17 @@
 
   .cleanmymac-sidebar > * {
     -webkit-app-region: no-drag;
+  }
+
+  :root[data-theme='white'] .cleanmymac-sidebar {
+    border-right-color: rgba(76, 94, 125, 0.16);
+    background: rgba(226, 233, 244, 0.66);
+  }
+
+  :root[data-theme='white'] .cleanmymac-sidebar [aria-current='page'] {
+    background: rgba(255, 255, 255, 0.86);
+    color: rgb(var(--c-text-1));
+    box-shadow: inset 0 0 0 1px rgba(76, 94, 125, 0.14), 0 2px 6px rgba(34, 48, 76, 0.04);
   }
 
   /* A transparent, click-through work-area overlay renders the fixed
@@ -1209,6 +1469,77 @@
   border-color: rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.05);
 }
+
+/* Rich text sits in the same surface as ordinary copy in light mode. Code
+   blocks remain dark to keep the existing Atom One Dark syntax palette. */
+:root[data-theme='white'] .tezbar-md,
+:root[data-theme='white'] .tezbar-md th {
+  color: rgb(var(--c-text-1));
+}
+
+:root[data-theme='white'] .tezbar-md :is(h1, h2, h3, h4, h5, h6, strong) {
+  color: rgb(var(--c-text-1));
+}
+
+:root[data-theme='white'] .tezbar-md a {
+  color: rgb(var(--c-accent));
+  text-decoration-color: rgb(var(--c-accent) / 0.42);
+}
+
+:root[data-theme='white'] .tezbar-md a:hover {
+  color: rgb(var(--c-accent-strong));
+}
+
+:root[data-theme='white'] .tezbar-md blockquote {
+  color: rgb(var(--c-text-2));
+}
+
+:root[data-theme='white'] .tezbar-md :is(blockquote, thead, code:not(pre code)) {
+  background: rgba(78, 98, 136, 0.07);
+}
+
+:root[data-theme='white'] .tezbar-md :is(hr, table, th, td, input[type='checkbox']) {
+  border-color: rgba(76, 94, 125, 0.18);
+}
+
+:root[data-theme='white'] .tezbar-md code:not(pre code) {
+  color: rgb(var(--c-accent-strong));
+}
+
+:root[data-theme='white'] .tezbar-md li::marker {
+  color: rgb(var(--c-text-3));
+}
+
+:root[data-theme='white'] .terminal-session-command {
+  color: #176b4c;
+}
+
+:root[data-theme='white'] .snippet-preview-text {
+  background-color: #fff;
+}
+
+:root[data-theme='white'] .command-argument-chip {
+  border-color: #9edabd;
+  background-color: #e9f8f0;
+  color: #0b7651;
+}
+
+:root[data-theme='white'] .command-argument-chip > span {
+  background-color: #0b7651;
+  color: #fff;
+}
+
+:root[data-theme='white'] :is(.terminal-config-dialog, .command-modal, .command-tooltip) {
+  border-color: rgba(76, 94, 125, 0.2);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 20px 52px rgba(34, 48, 76, 0.18);
+}
+
+:root[data-theme='white'] .command-tooltip__arrow {
+  border-color: rgba(76, 94, 125, 0.2);
+  background: #fff;
+}
+
 /* Native service status also renders before the main application chunk loads. */
 .backend-connection {
   position: fixed;
@@ -1242,7 +1573,18 @@
   outline-offset: 2px;
 }
 
-.backend-connection__retry:disabled { opacity: 0.5; }
+.backend-connection__retry:disabled {
+  opacity: 0.5;
+}
+
+:root[data-theme='white'] .backend-connection {
+  border-color: rgba(76, 94, 125, 0.2);
+  color: rgb(var(--c-text-1));
+}
+
+:root[data-theme='white'] .backend-connection__retry {
+  background: rgba(78, 98, 136, 0.1);
+}
 
 /* Tauri's hidden WebView2 window remains document-visible on Windows. Remove
    the launcher from layout until the native host shows it again so animated

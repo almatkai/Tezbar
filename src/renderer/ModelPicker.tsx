@@ -121,7 +121,7 @@ export function ModelPicker({
           onOpenChange(nextOpen)
         }}
       >
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/80" />
+        <span className="model-picker-active-dot h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/80" />
         <span className="truncate font-medium">{activeModel}</span>
         <svg
           viewBox="0 0 16 16"

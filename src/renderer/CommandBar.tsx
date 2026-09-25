@@ -606,7 +606,7 @@ function PortArgumentChip(): ReactNode {
   return (
     <span
       aria-hidden
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
+      className="command-argument-chip inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
     >
       <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-emerald-400/25 text-emerald-100">
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
@@ -628,7 +628,7 @@ function InlineArgumentChip({ label }: { label: string }): ReactNode {
   return (
     <span
       aria-hidden
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
+      className="command-argument-chip inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
     >
       <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
       {label}
@@ -1368,7 +1368,7 @@ function ListItemIcon({
       ref={iconContainerRef}
       aria-hidden
       className={cx(
-        'relative grid h-7 w-7 shrink-0 place-items-center',
+        'command-result-icon relative grid h-7 w-7 shrink-0 place-items-center',
         resolvedIconDataUrl
           ? 'overflow-visible border border-transparent bg-transparent'
           : cx('overflow-hidden rounded-[7px] border', tone)
@@ -3913,11 +3913,12 @@ export default function CommandBar({
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2">
       {/* Primary glass card: icon + input */}
-      <div className="glass-card relative z-30 shrink-0 px-4 py-3 animate-tezbar-scale-in">
+      <div className="command-search glass-card relative z-30 shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
           <div className="flex h-7 items-center gap-3">
             <span
               className={cx(
+                isAiMode ? 'command-ai-icon' : terminalMode ? 'command-terminal-icon' : '',
                 isAiMode
                   ? 'text-violet-300'
                   : terminalMode
@@ -3940,7 +3941,7 @@ export default function CommandBar({
             {isAiMode ? (
               <span
                 aria-label="AI mode"
-                className="inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-violet-400/40 bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200"
+                className="command-ai-badge inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-violet-400/40 bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
                 AI
@@ -3974,7 +3975,7 @@ export default function CommandBar({
             ) : null}
             <div className="relative min-w-0 flex-1 flex items-center">
               {terminalMode ? (
-                <span className="shrink-0 font-mono text-[13px] text-emerald-300/80 mr-1 select-none pointer-events-none">
+                <span className="command-terminal-prompt shrink-0 font-mono text-[13px] text-emerald-300/80 mr-1 select-none pointer-events-none">
                   {terminalPrompt}
                 </span>
               ) : null}
@@ -4642,7 +4643,7 @@ export default function CommandBar({
               }}
             >
               <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
-                <div className="mb-2 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-300">
+                <div className="command-ai-heading mb-2 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-300">
                   Recent Chats
                 </div>
                 <GlideList
@@ -4666,7 +4667,7 @@ export default function CommandBar({
                           setValue('  ')
                         }}
                       >
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-300 group-hover:bg-violet-500/20">
+                        <div className="command-ai-chat-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-300 group-hover:bg-violet-500/20">
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                             <path
                               d="M7 11.5c2.485 0 4.5-2.015 4.5-4.5S9.485 2.5 7 2.5 2.5 4.515 2.5 7c0 1.05.36 2.015.964 2.783L3 11l1.217-.464c.768.604 1.733.964 2.783.964z"
@@ -4712,7 +4713,7 @@ export default function CommandBar({
               <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
                 <div className="mb-2 flex items-center justify-between px-3 pt-1">
                   <div>
-                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">
+                    <div className="command-terminal-heading text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">
                       Terminal Sessions
                     </div>
                     <div className="mt-0.5 text-[10.5px] text-ink-4">
@@ -4761,7 +4762,8 @@ export default function CommandBar({
                           <span className="flex min-w-0 flex-1 items-center gap-3">
                             <span
                               className={cx(
-                                'grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border',
+                                'command-terminal-session-icon grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border',
+                                running && 'command-terminal-running',
                                 running
                                   ? 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200'
                                   : 'border-white/10 bg-white/[0.035] text-ink-4'
@@ -4773,7 +4775,8 @@ export default function CommandBar({
                               <span className="flex min-w-0 items-center gap-2">
                                 <span
                                   className={cx(
-                                    'h-1.5 w-1.5 shrink-0 rounded-full',
+                                    'command-terminal-session-dot h-1.5 w-1.5 shrink-0 rounded-full',
+                                    running && 'command-terminal-running',
                                     running
                                       ? 'bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]'
                                       : 'bg-white/25'
@@ -4799,7 +4802,8 @@ export default function CommandBar({
                           <span className="shrink-0 text-right">
                             <span
                               className={cx(
-                                'block text-[10px] font-semibold uppercase tracking-[0.12em]',
+                                'command-terminal-session-status block text-[10px] font-semibold uppercase tracking-[0.12em]',
+                                running && 'command-terminal-running',
                                 running ? 'text-emerald-300' : 'text-ink-4'
                               )}
                             >
@@ -5312,11 +5316,11 @@ export default function CommandBar({
               id="pinned-command-tooltip"
               role="tooltip"
               style={{ left: pinnedCommandTooltip.left, top: pinnedCommandTooltip.top }}
-              className="pointer-events-none fixed z-[100] max-w-[260px] -translate-y-1/2 rounded-[10px] border border-white/[0.12] bg-[#11141c]/95 px-3 py-2 shadow-[0_12px_36px_rgba(0,0,0,0.48)] backdrop-blur-xl"
+              className="command-tooltip pointer-events-none fixed z-[100] max-w-[260px] -translate-y-1/2 rounded-[10px] border border-white/[0.12] bg-[#11141c]/95 px-3 py-2 shadow-[0_12px_36px_rgba(0,0,0,0.48)] backdrop-blur-xl"
             >
               <span
                 aria-hidden
-                className="absolute -left-[5px] top-1/2 h-[9px] w-[9px] -translate-y-1/2 rotate-45 border-b border-l border-white/[0.12] bg-[#11141c]"
+                className="command-tooltip__arrow absolute -left-[5px] top-1/2 h-[9px] w-[9px] -translate-y-1/2 rotate-45 border-b border-l border-white/[0.12] bg-[#11141c]"
               />
               <span className="block truncate text-[12px] font-semibold leading-4 text-ink-1">
                 {pinnedCommandTooltip.title}
@@ -5338,7 +5342,7 @@ export default function CommandBar({
           }}
         >
           <form
-            className="w-full max-w-[440px] rounded-[18px] border border-white/[0.1] bg-[#10131d]/96 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.5)]"
+            className="command-modal w-full max-w-[440px] rounded-[18px] border border-white/[0.1] bg-[#10131d]/96 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.5)]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="terminal-defaults-title"

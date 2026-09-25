@@ -6,10 +6,14 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  nativeImage,
   screen,
   shell,
 } from '@tezbar/desktop-runtime'
 import type { WebContents } from '@tezbar/desktop-runtime'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { decodePngDataUrl } from './clipboardPng'
 import { setSuppressBlurHide } from './windowState'
 import {
   AGENT_IPC,
@@ -586,6 +590,7 @@ function startChatRun(sender: WebContents, turns: ChatTurn[]): string {
   return runId
 }
 
+/** Called from `main/index.ts` on `will-quit` to flush subprocesses. */
 /** Called from `main/index.ts` on `will-quit` to flush subprocesses. */
 export function shutdownIpcHandlers(): void {
   answerAbort?.abort()
@@ -1646,6 +1651,21 @@ export function registerIpcHandlers(
     const text = typeof raw === 'string' ? raw : String(raw ?? '')
     clipboard.writeText(text)
     return { ok: true }
+  })
+
+  ipcMain.handle('clipboard:write-png', async (_event, raw: unknown) => {
+    const bytes = typeof raw === 'string' ? decodePngDataUrl(raw) : null
+    if (!bytes) return { ok: false, error: 'Invalid PNG data URL' }
+    const path = join(app.getPath('temp'), 'tezbar-qr-clipboard.png')
+    try {
+      writeFileSync(path, bytes)
+      const image = nativeImage.createFromPath(path)
+      if (image.isEmpty()) return { ok: false, error: 'Could not read QR image' }
+      clipboard.writeImage(image)
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Could not copy QR image' }
+    }
   })
 
   ipcMain.handle('shell:open', async (_event, raw: unknown) => {

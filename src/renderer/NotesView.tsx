@@ -547,7 +547,7 @@ export default function NotesView({
             )}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
+          <div className="min-h-0 flex-1 overflow-hidden border-l border-white/[0.06]">
             {currentNote ? (
               <div className="flex h-full min-h-0 flex-col">
                 <div className="flex items-center justify-end gap-3 border-b border-white/10 px-3 py-2 text-[10.5px] text-ink-4">
@@ -563,9 +563,9 @@ export default function NotesView({
                     {saveLabel}
                   </span>
                 </div>
-                <div className="relative min-h-0 flex-1 overflow-hidden p-3">
+                <div className="relative min-h-0 flex-1 overflow-hidden">
                   {isEditorEmpty && !isEditorFocused ? (
-                    <p className="pointer-events-none absolute left-6 top-6 text-[12px] text-ink-4">
+                    <p className="pointer-events-none absolute left-3 top-3 text-[12px] text-ink-4">
                       Title on first line. Use Cmd+B / Cmd+I / Cmd+U for formatting.
                     </p>
                   ) : null}
@@ -580,7 +580,7 @@ export default function NotesView({
                     onPaste={onEditorPaste}
                     onFocus={() => setIsEditorFocused(true)}
                     onBlur={() => setIsEditorFocused(false)}
-                    className="h-full min-h-[220px] w-full overflow-y-auto rounded-tezbar-row border border-white/10 bg-black/25 p-3 text-[13px] leading-[1.6] text-ink-1 outline-none transition focus:border-white/20"
+                    className="h-full min-h-0 w-full overflow-y-auto p-3 text-[13px] leading-[1.6] text-ink-1 outline-none"
                   />
                 </div>
               </div>

@@ -482,19 +482,40 @@ export function revealClipboardEntryInFinder(id: string): boolean {
   return false
 }
 
-/** Return a base64 data URL for the renderer to display without bending
- *  file:// security rules. We read the PNG bytes every call — these are
- *  small and cached by the OS. */
+/** Return a base64 data URL for the renderer without bending file://
+ * security rules. Pasted image entries already use PNG; copied file entries
+ * are decoded by Electron so PNG/JPEG/WebP and other supported images can be
+ * previewed without exposing arbitrary filesystem paths to the renderer. */
 export function readClipboardImagePayload(id: string): ClipboardImagePayload | null {
   const entry = getClipboardEntry(id)
-  if (!entry || entry.kind !== 'image') return null
-  if (!existsSync(entry.imagePath)) return null
-  const bytes = readFileSync(entry.imagePath)
-  return {
-    dataUrl: `data:image/png;base64,${bytes.toString('base64')}`,
-    width: entry.width,
-    height: entry.height,
-    byteSize: entry.byteSize,
+  if (!entry || (entry.kind !== 'image' && entry.kind !== 'file')) return null
+
+  if (entry.kind === 'image') {
+    if (!existsSync(entry.imagePath)) return null
+    const bytes = readFileSync(entry.imagePath)
+    return {
+      dataUrl: `data:image/png;base64,${bytes.toString('base64')}`,
+      width: entry.width,
+      height: entry.height,
+      byteSize: entry.byteSize,
+    }
+  }
+
+  const path = entry.paths[0]
+  if (!path || !existsSync(path)) return null
+  try {
+    const image = nativeImage.createFromPath(path)
+    if (image.isEmpty()) return null
+    const png = image.toPNG()
+    const size = image.getSize()
+    return {
+      dataUrl: `data:image/png;base64,${png.toString('base64')}`,
+      width: size.width,
+      height: size.height,
+      byteSize: png.length,
+    }
+  } catch {
+    return null
   }
 }
 

@@ -240,11 +240,11 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
     if (selected >= filtered.length) setSelected(filtered.length - 1)
   }, [filtered, selected])
 
-  // Hydrate the selected image lazily — one round-trip per image, then
-  // cached until the view unmounts or the entry is deleted.
+  // Hydrate the selected image or image-file lazily — one round-trip per
+  // entry, then cached until the view unmounts or the entry is deleted.
   const currentEntry = filtered[selected]
   useEffect(() => {
-    if (!currentEntry || currentEntry.kind !== 'image') return
+    if (!currentEntry || (currentEntry.kind !== 'image' && currentEntry.kind !== 'file')) return
     if (imageCache[currentEntry.id] !== undefined) return
     let cancelled = false
     void window.tezbar.readClipboardImage(currentEntry.id).then((payload) => {
@@ -256,7 +256,7 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
   }, [currentEntry, imageCache])
 
   const currentImageUrl = useMemo(() => {
-    if (!currentEntry || currentEntry.kind !== 'image') return null
+    if (!currentEntry || (currentEntry.kind !== 'image' && currentEntry.kind !== 'file')) return null
     const payload = imageCache[currentEntry.id]
     return payload ? payload.dataUrl : null
   }, [currentEntry, imageCache])
@@ -495,6 +495,9 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
                 key={currentEntry.id}
                 entry={currentEntry}
                 imageUrl={currentImageUrl}
+                imageLoading={
+                  currentEntry.kind === 'file' && imageCache[currentEntry.id] === undefined
+                }
                 onFlash={flash}
               />
             ) : (
@@ -598,10 +601,12 @@ function ClipboardRow({
 function PreviewPane({
   entry,
   imageUrl,
+  imageLoading = false,
   onFlash,
 }: {
   entry: ClipboardEntry
   imageUrl: string | null
+  imageLoading?: boolean
   onFlash: (tone: 'success' | 'error', text: string) => void
 }): JSX.Element {
   const showConvert = entry.kind === 'text' && !entry.isSecret
@@ -613,7 +618,7 @@ function PreviewPane({
         ) : entry.kind === 'image' ? (
           <ImagePreview entry={entry} imageUrl={imageUrl} />
         ) : (
-          <FilePreview entry={entry} />
+          <FilePreview entry={entry} imageUrl={imageUrl} loading={imageLoading} />
         )}
       </div>
       {showConvert ? (
@@ -686,7 +691,35 @@ function ImagePreview({
   )
 }
 
-function FilePreview({ entry }: { entry: Extract<ClipboardEntry, { kind: 'file' }> }): JSX.Element {
+function FilePreview({
+  entry,
+  imageUrl,
+  loading,
+}: {
+  entry: Extract<ClipboardEntry, { kind: 'file' }>
+  imageUrl: string | null
+  loading: boolean
+}): JSX.Element {
+  if (imageUrl) {
+    const path = entry.paths[0] ?? ''
+    return (
+      <div className="flex h-full flex-col items-center gap-2">
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/10 bg-black/20 p-2">
+          <img src={imageUrl} alt={basename(path) || 'File preview'} className="max-h-full max-w-full object-contain" />
+        </div>
+        <p className="max-w-full truncate text-[10.5px] text-ink-4">{basename(path)}</p>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="grid h-full place-items-center">
+        <p className="text-[11px] text-ink-4">Loading preview…</p>
+      </div>
+    )
+  }
+
   return (
     <ul className="flex flex-col gap-1">
       {entry.paths.map((path) => (

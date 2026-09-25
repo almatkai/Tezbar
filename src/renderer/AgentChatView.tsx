@@ -1110,7 +1110,7 @@ export default function AgentChatView({
     <div
       aria-label="AI Chat"
       tabIndex={-1}
-      className="flex h-full min-h-0 w-full flex-col outline-none"
+      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none"
     >
       <div className="agent-chat-shell flex min-h-0 flex-1 flex-col overflow-hidden animate-tezbar-scale-in">
         <div className="relative flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/[0.065] px-4">
@@ -1682,7 +1682,7 @@ export default function AgentChatView({
         </form>
       </div>
 
-      <div className="shrink-0 px-4 py-2 animate-tezbar-scale-in">
+      <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
         <HintBar>
           <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
           <Hint label="Attach screen" keys={ATTACH_SCREEN_KEYS} />

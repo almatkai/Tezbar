@@ -155,6 +155,8 @@ export type RaymesApi = {
   ) => Promise<ExtensionRefreshSessionResult>
   clipboardReadText: () => Promise<string>
   clipboardWriteText: (text: string) => Promise<{ ok: boolean }>
+  clipboardWritePng: (dataUrl: string) => Promise<{ ok: boolean; error?: string }>
+  saveQrPngDataUrl: (dataUrl: string) => Promise<{ ok: boolean; error?: string }>
   shellOpen: (target: string) => Promise<{ ok: boolean }>
   getAppIconDataUrl: (appPath: string) => Promise<string | null>
   getAssetIconDataUrl: (

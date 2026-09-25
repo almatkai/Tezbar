@@ -18,6 +18,6 @@ export function resolveTezbarTheme(
 export function applyTezbarTheme(preference: TezbarThemePreference): ResolvedTezbarTheme {
   const resolved = resolveTezbarTheme(preference)
   document.documentElement.dataset.theme = resolved
-  document.documentElement.style.colorScheme = resolved
+  document.documentElement.style.colorScheme = resolved === 'white' ? 'light' : 'dark'
   return resolved
 }

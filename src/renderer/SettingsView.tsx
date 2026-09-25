@@ -1922,7 +1922,7 @@ export default function SettingsView({
                 <div className="flex gap-3" role="group" aria-label="Color theme">
                   {(
                     [
-                      { id: 'white', label: 'White' },
+                      { id: 'white', label: 'Light' },
                       { id: 'dark', label: 'Dark' },
                       { id: 'system', label: 'System' },
                     ] as const
@@ -1936,12 +1936,7 @@ export default function SettingsView({
                         applyTezbarTheme(mode.id)
                         window.localStorage.setItem(TEZBAR_THEME_STORAGE_KEY, mode.id)
                       }}
-                      className={cx(
-                        'flex h-[58px] w-[72px] flex-col items-center justify-center gap-1 rounded-tezbar-row border text-[12px] font-semibold transition',
-                        themePreference === mode.id
-                          ? 'border-accent/70 bg-accent/10 text-ink-1'
-                          : 'border-theme-line bg-theme-control text-ink-3 hover:bg-theme-control-hover hover:text-ink-1'
-                      )}
+                      className="theme-choice relative flex h-[58px] w-[72px] flex-col items-center justify-center gap-1 rounded-tezbar-row border text-[12px] font-semibold transition"
                     >
                       <span
                         className={cx(
@@ -1953,6 +1948,9 @@ export default function SettingsView({
                               : 'border-slate-400 bg-gradient-to-br from-white via-slate-200 to-slate-900'
                         )}
                       />
+                      {themePreference === mode.id ? (
+                        <span className="theme-choice__check absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black leading-none">✓</span>
+                      ) : null}
                       {mode.label}
                     </button>
                   ))}

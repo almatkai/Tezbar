@@ -829,7 +829,7 @@ export default function ExtensionsView({
                 </section>
               </div>
 
-              <footer className="flex shrink-0 items-center gap-3 border-t border-white/10 bg-black/20 px-5 py-3">
+              <footer className="extension-detail-footer flex shrink-0 items-center gap-3 border-t border-white/10 bg-black/20 px-5 py-3">
                 <ExtensionIcon ext={selected} size="small" />
                 <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink-2">{selected.name}</span>
                 <Button

@@ -9,12 +9,16 @@
       ;(() => {
         try {
           const stored = localStorage.getItem('tezbar:theme')
-          const preference = stored === 'white' || stored === 'dark' || stored === 'system' ? stored : 'system'
-          const resolved = preference === 'system'
-            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'white')
-            : preference
+          const preference =
+            stored === 'white' || stored === 'dark' || stored === 'system' ? stored : 'system'
+          const resolved =
+            preference === 'system'
+              ? matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'white'
+              : preference
           document.documentElement.dataset.theme = resolved
-          document.documentElement.style.colorScheme = resolved
+          document.documentElement.style.colorScheme = resolved === 'white' ? 'light' : 'dark'
         } catch {
           document.documentElement.dataset.theme = 'dark'
         }
@@ -26,30 +30,13 @@
          the CSS falls back to the system font stack. This keeps startup fast,
          works offline, and avoids leaking the user's IP to a third party. -->
   </head>
-  <body class="m-0 h-screen overflow-hidden bg-transparent font-sans text-white antialiased">
+  <body class="m-0 h-screen overflow-hidden bg-transparent font-sans text-ink-1 antialiased">
     <div id="root" class="h-full w-full">
-      <div class="glass-shell flex h-full items-center p-6 text-[13px] text-ink-2" role="status">Starting Tezbar…</div>
+      <div class="glass-shell flex h-full items-center p-6 text-[13px] text-ink-2" role="status">
+        Starting Tezbar…
+      </div>
     </div>
     <script>
-      // Apply the saved theme before the first paint to avoid a dark flash.
-      ;(() => {
-        try {
-          const stored = localStorage.getItem('tezbar:theme')
-          const preference =
-            stored === 'white' || stored === 'dark' || stored === 'system' ? stored : 'system'
-          const resolved =
-            preference === 'system'
-              ? matchMedia('(prefers-color-scheme: dark)').matches
-                ? 'dark'
-                : 'white'
-              : preference
-          document.documentElement.dataset.theme = resolved
-          document.documentElement.style.colorScheme = resolved
-        } catch {
-          document.documentElement.dataset.theme = 'dark'
-        }
-      })()
-
       if (new URLSearchParams(location.search).get('window') === 'snap-overlay') {
         document.getElementById('root').replaceChildren()
       }
