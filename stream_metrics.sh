@@ -4,6 +4,8 @@ START=$(date +%s.%N)
 FIRST_TOKEN_TIME=""
 TOKEN_COUNT=0
 
+: "${ALEM_API_KEY:?Set ALEM_API_KEY before running this script}"
+
 curl -N -s https://llm.alem.ai/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${ALEM_API_KEY}" \
