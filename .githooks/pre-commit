@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# Check the staged snapshot without printing any matching credential.
+if git grep --cached --quiet -I -E 'sk-[A-Za-z0-9]{20,}' -- .; then
+  printf '%s\n' 'Commit blocked: staged files contain an API-key-shaped string.' >&2
+  exit 1
+fi
