@@ -8654,6 +8654,8 @@ function createLoopDriver(callbacks) {
     stages: /* @__PURE__ */ new Map(),
     nextIndex: 0,
     currentText: "",
+    previousTurnsText: [],
+    turnStarted: false,
     ended: false
   };
   const emitStage = (stage) => {
@@ -8677,8 +8679,19 @@ function createLoopDriver(callbacks) {
         tracker.stages.clear();
         tracker.nextIndex = 0;
         tracker.currentText = "";
+        tracker.previousTurnsText = [];
+        tracker.thinkingStage = void 0;
+        tracker.turnStarted = false;
         tracker.ended = false;
         tracker.lastError = void 0;
+        return;
+      }
+      case "turn_start": {
+        if (tracker.currentText.trim().length > 0) {
+          tracker.previousTurnsText.push(tracker.currentText.trim());
+          tracker.currentText = "";
+          tracker.turnStarted = true;
+        }
         return;
       }
       case "message_start":
@@ -8700,15 +8713,47 @@ function createLoopDriver(callbacks) {
         const subType = asString(ev["type"]);
         const delta = ev["delta"];
         const content = ev["content"];
-        if (subType === "text_delta" && typeof delta === "string") {
+        if (subType === "thinking_delta" && typeof delta === "string") {
+          if (!tracker.thinkingStage) {
+            const stage = {
+              index: tracker.nextIndex++,
+              label: "Thinking\u2026",
+              status: "running"
+            };
+            tracker.thinkingStage = stage;
+            tracker.stages.set("thinking", stage);
+            emitStage(stage);
+          }
+        } else if (subType === "thinking_end") {
+          if (tracker.thinkingStage) {
+            updateStageStatus("thinking", "done");
+            tracker.thinkingStage = void 0;
+          }
+        } else if (subType === "text_delta" && typeof delta === "string") {
+          if (tracker.thinkingStage) {
+            updateStageStatus("thinking", "done");
+            tracker.thinkingStage = void 0;
+          }
+          if (tracker.turnStarted && tracker.previousTurnsText.length > 0 && tracker.currentText.length === 0) {
+            callbacks.onMessageDelta("\n\n");
+            tracker.turnStarted = false;
+          }
           tracker.currentText += delta;
           callbacks.onMessageDelta(delta);
         } else if (subType === "text_end" && typeof content === "string") {
+          if (tracker.thinkingStage) {
+            updateStageStatus("thinking", "done");
+            tracker.thinkingStage = void 0;
+          }
           tracker.currentText = content;
         }
         return;
       }
       case "tool_execution_start": {
+        if (tracker.thinkingStage) {
+          updateStageStatus("thinking", "done");
+          tracker.thinkingStage = void 0;
+        }
         const toolCallId = asString(event["toolCallId"]);
         if (!toolCallId) return;
         const index = tracker.nextIndex++;
@@ -8758,6 +8803,10 @@ function createLoopDriver(callbacks) {
       }
       case "agent_end": {
         tracker.ended = true;
+        if (tracker.thinkingStage) {
+          updateStageStatus("thinking", "done");
+          tracker.thinkingStage = void 0;
+        }
         if (!tracker.lastError) {
           const messages = Array.isArray(event["messages"]) ? event["messages"] : [];
           for (const m of messages) {
@@ -8772,10 +8821,11 @@ function createLoopDriver(callbacks) {
             }
           }
         }
-        const hasText = tracker.currentText.trim().length > 0;
+        const allText = [...tracker.previousTurnsText, tracker.currentText.trim()].filter(Boolean).join("\n\n");
+        const hasText = allText.trim().length > 0;
         const hasStages = tracker.stages.size > 0;
         if (hasText) {
-          callbacks.onAnswer(tracker.currentText.trim());
+          callbacks.onAnswer(allText.trim());
         }
         if (tracker.lastError) {
           callbacks.onError(tracker.lastError);
@@ -24928,6 +24978,7 @@ function spawnRpc(options) {
   args.push(...options.extraArgs);
   const child = (0, import_node_child_process15.spawn)(options.piBin, args, {
     cwd: options.cwd,
+    detached: process.platform !== "win32",
     env: {
       ...process.env,
       ...options.raymesProviderJson ? { RAYMES_PI_PROVIDER_JSON: options.raymesProviderJson } : {},
@@ -24981,10 +25032,39 @@ async function handleExtensionUiRequest(handle, msg) {
   }
   writeCommand(handle.child, { type: "extension_ui_response", id, cancelled: true });
 }
+function terminateProcessTree(child, graceMs = 1500) {
+  if (child.killed) return;
+  const pid = child.pid;
+  const isUnix = process.platform !== "win32";
+  const sendSignal = (sig) => {
+    try {
+      if (isUnix && pid) {
+        try {
+          process.kill(-pid, sig);
+        } catch {
+          child.kill(sig);
+        }
+      } else {
+        child.kill(sig);
+      }
+    } catch {
+    }
+  };
+  sendSignal("SIGTERM");
+  const forceKillTimer = setTimeout(() => {
+    if (!child.killed) {
+      sendSignal("SIGKILL");
+    }
+  }, graceMs);
+  if (typeof forceKillTimer.unref === "function") {
+    forceKillTimer.unref();
+  }
+}
 function attachLineReader(stream, onLine) {
+  const decoder = new import_node_string_decoder.StringDecoder("utf8");
   let buffer = "";
   stream.on("data", (chunk) => {
-    buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    buffer += typeof chunk === "string" ? chunk : decoder.write(chunk);
     let newlineAt = buffer.indexOf("\n");
     while (newlineAt >= 0) {
       const raw = buffer.slice(0, newlineAt);
@@ -24993,6 +25073,12 @@ function attachLineReader(stream, onLine) {
       if (line.length > 0) onLine(line);
       newlineAt = buffer.indexOf("\n");
     }
+  });
+  stream.on("end", () => {
+    const trailing = decoder.end();
+    if (trailing) buffer += trailing;
+    const line = buffer.endsWith("\r") ? buffer.slice(0, -1) : buffer;
+    if (line.trim().length > 0) onLine(line);
   });
 }
 function attachHandlers(handle, onStderrLine) {
@@ -25163,12 +25249,13 @@ function createBridge() {
         } catch {
         }
         setTimeout(() => {
-          if (!handle.closed && !child.killed) child.kill("SIGTERM");
+          if (!handle.closed) terminateProcessTree(child, 1500);
         }, 500);
       };
       options.signal?.addEventListener("abort", onAbort, { once: true });
       try {
-        await sendAndAwait(handle, buildPromptCommand(task, options.images), 15e3);
+        const promptTimeoutMs = options.images && options.images.length > 0 ? 6e4 : 3e4;
+        await sendAndAwait(handle, buildPromptCommand(task, options.images), promptTimeoutMs);
         let runTimeout;
         try {
           await Promise.race([
@@ -25213,7 +25300,7 @@ ${tail}` : message);
           }
           child.stdin.end();
           setTimeout(() => {
-            if (!handle.closed && !child.killed) child.kill("SIGTERM");
+            if (!handle.closed) terminateProcessTree(child, 1500);
           }, 500);
         }
       }
@@ -25244,7 +25331,7 @@ ${tail}` : message);
         }
         child.stdin.end();
         setTimeout(() => {
-          if (!handle.closed && !child.killed) child.kill("SIGTERM");
+          if (!handle.closed) terminateProcessTree(child, 1e3);
         }, 250);
       }
     },
@@ -25257,7 +25344,7 @@ ${tail}` : message);
       const children = Array.from(ownedChildren.values());
       for (let i = 0; i < children.length; i++) {
         const child = children[i];
-        if (child && !child.killed) child.kill("SIGTERM");
+        if (child && !child.killed) terminateProcessTree(child, 1e3);
       }
       ownedChildren.clear();
     }
@@ -25271,7 +25358,7 @@ function disposeSharedBridge() {
   sharedBridge?.dispose();
   sharedBridge = void 0;
 }
-var import_node_child_process15, import_node_crypto12, import_node_events, import_node_fs24, import_node_os11, import_node_path26, PI_BIN_CANDIDATES, OPENCODE_PI_EXTENSION, sharedBridge;
+var import_node_child_process15, import_node_crypto12, import_node_events, import_node_fs24, import_node_os11, import_node_path26, import_node_string_decoder, PI_BIN_CANDIDATES, OPENCODE_PI_EXTENSION, sharedBridge;
 var init_bridge = __esm({
   "src/main/agent/bridge.ts"() {
     "use strict";
@@ -25281,6 +25368,7 @@ var init_bridge = __esm({
     import_node_fs24 = require("node:fs");
     import_node_os11 = require("node:os");
     import_node_path26 = __toESM(require("node:path"));
+    import_node_string_decoder = require("node:string_decoder");
     init_desktop_runtime();
     init_loop();
     init_observer();

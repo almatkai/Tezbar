@@ -29,6 +29,7 @@ import { once } from 'node:events'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
 import { app } from '@tezbar/desktop-runtime'
 
 import { createLoopDriver, type PiEvent } from './loop'
@@ -181,6 +182,7 @@ function spawnRpc(options: {
   // stdio: stdin/stdout for the protocol, stderr captured for diagnostics.
   const child = spawn(options.piBin, args, {
     cwd: options.cwd,
+    detached: process.platform !== 'win32',
     env: {
       ...process.env,
       ...(options.raymesProviderJson
@@ -264,15 +266,50 @@ async function handleExtensionUiRequest(
   writeCommand(handle.child, { type: 'extension_ui_response', id, cancelled: true })
 }
 
+function terminateProcessTree(child: ChildProcessWithoutNullStreams, graceMs = 1500): void {
+  if (child.killed) return
+  const pid = child.pid
+  const isUnix = process.platform !== 'win32'
+
+  const sendSignal = (sig: NodeJS.Signals): void => {
+    try {
+      if (isUnix && pid) {
+        try {
+          process.kill(-pid, sig)
+        } catch {
+          child.kill(sig)
+        }
+      } else {
+        child.kill(sig)
+      }
+    } catch {
+      // Process may already have exited
+    }
+  }
+
+  sendSignal('SIGTERM')
+
+  const forceKillTimer = setTimeout(() => {
+    if (!child.killed) {
+      sendSignal('SIGKILL')
+    }
+  }, graceMs)
+
+  if (typeof forceKillTimer.unref === 'function') {
+    forceKillTimer.unref()
+  }
+}
+
 /**
  * Stream a newline-delimited JSON reader that handles multi-chunk lines
  * correctly. Pi's RPC docs explicitly ban Node's `readline` because it
  * splits on U+2028/U+2029, which are legal inside JSON strings.
  */
 function attachLineReader(stream: NodeJS.ReadableStream, onLine: (line: string) => void): void {
+  const decoder = new StringDecoder('utf8')
   let buffer = ''
   stream.on('data', (chunk: Buffer | string) => {
-    buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+    buffer += typeof chunk === 'string' ? chunk : decoder.write(chunk)
     let newlineAt = buffer.indexOf('\n')
     while (newlineAt >= 0) {
       const raw = buffer.slice(0, newlineAt)
@@ -281,6 +318,12 @@ function attachLineReader(stream: NodeJS.ReadableStream, onLine: (line: string) 
       if (line.length > 0) onLine(line)
       newlineAt = buffer.indexOf('\n')
     }
+  })
+  stream.on('end', () => {
+    const trailing = decoder.end()
+    if (trailing) buffer += trailing
+    const line = buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer
+    if (line.trim().length > 0) onLine(line)
   })
 }
 
@@ -475,20 +518,22 @@ export function createBridge(): Bridge {
 
       const onAbort = (): void => {
         if (handle.closed) return
-        // Best-effort: tell pi to abort, then give it 500ms before SIGTERM.
+        // Best-effort: tell pi to abort, then escalate to SIGTERM/SIGKILL.
         try {
           writeCommand(child, { type: 'abort', id: makeId() })
         } catch {
           /* ignore — we're about to kill anyway */
         }
         setTimeout(() => {
-          if (!handle.closed && !child.killed) child.kill('SIGTERM')
+          if (!handle.closed) terminateProcessTree(child, 1500)
         }, 500)
       }
       options.signal?.addEventListener('abort', onAbort, { once: true })
 
       try {
-        await sendAndAwait(handle, buildPromptCommand(task, options.images), 15_000)
+        const promptTimeoutMs =
+          options.images && options.images.length > 0 ? 60_000 : 30_000
+        await sendAndAwait(handle, buildPromptCommand(task, options.images), promptTimeoutMs)
 
         let runTimeout: NodeJS.Timeout | undefined
         try {
@@ -540,9 +585,9 @@ export function createBridge(): Bridge {
             /* ignore */
           }
           child.stdin.end()
-          // Close the process politely so the next run starts cleanly.
+          // Close the process group politely with escalation to SIGKILL so the next run starts cleanly.
           setTimeout(() => {
-            if (!handle.closed && !child.killed) child.kill('SIGTERM')
+            if (!handle.closed) terminateProcessTree(child, 1500)
           }, 500)
         }
       }
@@ -579,7 +624,7 @@ export function createBridge(): Bridge {
         }
         child.stdin.end()
         setTimeout(() => {
-          if (!handle.closed && !child.killed) child.kill('SIGTERM')
+          if (!handle.closed) terminateProcessTree(child, 1000)
         }, 250)
       }
     },
@@ -594,7 +639,7 @@ export function createBridge(): Bridge {
       const children = Array.from(ownedChildren.values())
       for (let i = 0; i < children.length; i++) {
         const child = children[i]
-        if (child && !child.killed) child.kill('SIGTERM')
+        if (child && !child.killed) terminateProcessTree(child, 1000)
       }
       ownedChildren.clear()
     },

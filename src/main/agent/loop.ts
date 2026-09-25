@@ -54,6 +54,12 @@ interface StageTracker {
   /** Accumulated text for the most recent assistant message — flushed on
    *  message_update text_end or message_end. */
   currentText: string
+  /** Completed previous turns' text, to prevent intermediate turns from being overwritten. */
+  previousTurnsText: string[]
+  /** Track active thinking stage for reasoning models */
+  thinkingStage?: Stage
+  /** Whether a new turn has started and needs a separator on the next text delta */
+  turnStarted: boolean
   /** Set to true on agent_end so we can coalesce a final "answered" stage. */
   ended: boolean
   lastError?: string
@@ -82,6 +88,8 @@ export function createLoopDriver(callbacks: LoopCallbacks): (event: PiEvent) => 
     stages: new Map(),
     nextIndex: 0,
     currentText: '',
+    previousTurnsText: [],
+    turnStarted: false,
     ended: false,
   }
 
@@ -116,8 +124,20 @@ export function createLoopDriver(callbacks: LoopCallbacks): (event: PiEvent) => 
         tracker.stages.clear()
         tracker.nextIndex = 0
         tracker.currentText = ''
+        tracker.previousTurnsText = []
+        tracker.thinkingStage = undefined
+        tracker.turnStarted = false
         tracker.ended = false
         tracker.lastError = undefined
+        return
+      }
+
+      case 'turn_start': {
+        if (tracker.currentText.trim().length > 0) {
+          tracker.previousTurnsText.push(tracker.currentText.trim())
+          tracker.currentText = ''
+          tracker.turnStarted = true
+        }
         return
       }
 
@@ -141,16 +161,48 @@ export function createLoopDriver(callbacks: LoopCallbacks): (event: PiEvent) => 
         const subType = asString(ev['type'])
         const delta = ev['delta']
         const content = ev['content']
-        if (subType === 'text_delta' && typeof delta === 'string') {
+        if (subType === 'thinking_delta' && typeof delta === 'string') {
+          if (!tracker.thinkingStage) {
+            const stage: Stage = {
+              index: tracker.nextIndex++,
+              label: 'Thinking…',
+              status: 'running',
+            }
+            tracker.thinkingStage = stage
+            tracker.stages.set('thinking', stage)
+            emitStage(stage)
+          }
+        } else if (subType === 'thinking_end') {
+          if (tracker.thinkingStage) {
+            updateStageStatus('thinking', 'done')
+            tracker.thinkingStage = undefined
+          }
+        } else if (subType === 'text_delta' && typeof delta === 'string') {
+          if (tracker.thinkingStage) {
+            updateStageStatus('thinking', 'done')
+            tracker.thinkingStage = undefined
+          }
+          if (tracker.turnStarted && tracker.previousTurnsText.length > 0 && tracker.currentText.length === 0) {
+            callbacks.onMessageDelta('\n\n')
+            tracker.turnStarted = false
+          }
           tracker.currentText += delta
           callbacks.onMessageDelta(delta)
         } else if (subType === 'text_end' && typeof content === 'string') {
+          if (tracker.thinkingStage) {
+            updateStageStatus('thinking', 'done')
+            tracker.thinkingStage = undefined
+          }
           tracker.currentText = content
         }
         return
       }
 
       case 'tool_execution_start': {
+        if (tracker.thinkingStage) {
+          updateStageStatus('thinking', 'done')
+          tracker.thinkingStage = undefined
+        }
         const toolCallId = asString(event['toolCallId'])
         if (!toolCallId) return
         const index = tracker.nextIndex++
@@ -206,6 +258,10 @@ export function createLoopDriver(callbacks: LoopCallbacks): (event: PiEvent) => 
 
       case 'agent_end': {
         tracker.ended = true
+        if (tracker.thinkingStage) {
+          updateStageStatus('thinking', 'done')
+          tracker.thinkingStage = undefined
+        }
         if (!tracker.lastError) {
           const messages = Array.isArray(event['messages']) ? event['messages'] : []
           for (const m of messages) {
@@ -220,10 +276,13 @@ export function createLoopDriver(callbacks: LoopCallbacks): (event: PiEvent) => 
             }
           }
         }
-        const hasText = tracker.currentText.trim().length > 0
+        const allText = [...tracker.previousTurnsText, tracker.currentText.trim()]
+          .filter(Boolean)
+          .join('\n\n')
+        const hasText = allText.trim().length > 0
         const hasStages = tracker.stages.size > 0
         if (hasText) {
-          callbacks.onAnswer(tracker.currentText.trim())
+          callbacks.onAnswer(allText.trim())
         }
         if (tracker.lastError) {
           callbacks.onError(tracker.lastError)
