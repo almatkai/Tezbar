@@ -738,6 +738,7 @@ type ListItemIconKind = PathCompletionItem['kind'] | SearchResult['category']
 
 type CommandIconKind =
   | 'settings'
+  | 'onboarding'
   | 'deep-search'
   | 'indexing'
   | 'extensions'
@@ -789,6 +790,7 @@ type TezbarCommandId =
   | 'open-notes'
   | 'open-emoji-picker'
   | 'open-indexing'
+  | 'start-onboarding'
 
 const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'open-settings': 'settings',
@@ -799,6 +801,7 @@ const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'open-notes': 'notes',
   'open-emoji-picker': 'emoji',
   'open-indexing': 'indexing',
+  'start-onboarding': 'onboarding',
 }
 
 const NATIVE_COMMAND_ICON_BY_ID: Record<NativeCommandId, CommandIconKind> = {
@@ -868,6 +871,8 @@ function commandIconTone(kind: CommandIconKind): string {
     case 'ports':
     case 'indexing':
       return 'border-sky-300/25 bg-sky-300/10 text-sky-200'
+    case 'onboarding':
+      return 'border-accent/30 bg-accent/[0.12] text-accent-strong'
     case 'deep-search':
       return 'border-cyan-300/30 bg-cyan-300/[0.12] text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_12px_rgba(103,232,249,0.08)]'
     case 'extensions':
@@ -916,6 +921,15 @@ function commandIconTone(kind: CommandIconKind): string {
 
 function CommandIconGlyph({ kind }: { kind: CommandIconKind }): ReactNode {
   switch (kind) {
+    case 'onboarding':
+      // A flag on a pole with a path leading up to it — "start here".
+      return (
+        <>
+          <path d="M4.5 12V2.25" />
+          <path d="M4.5 2.75h5.75l-1.5 2 1.5 2H4.5" />
+          <path d="M2.5 12h4" />
+        </>
+      )
     case 'deep-search':
       return (
         <>
@@ -1461,6 +1475,7 @@ export default function CommandBar({
   onOpenSnippetsPage,
   onOpenNotesPage,
   onOpenEmojiPicker,
+  onStartOnboarding,
   onOpenTerminal,
 }: {
   initialValue?: string
@@ -1478,6 +1493,7 @@ export default function CommandBar({
   onOpenSnippetsPage: () => void
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
   onOpenEmojiPicker: () => void
+  onStartOnboarding: () => void
   onOpenTerminal: (
     initialCommand?: string,
     workingDirectory?: string,
@@ -2839,6 +2855,11 @@ export default function CommandBar({
       if (result.action.commandId === 'open-indexing') {
         await recordHandledSearchUsage()
         onOpenIndexingPage()
+        return
+      }
+      if (result.action.commandId === 'start-onboarding') {
+        await recordHandledSearchUsage()
+        onStartOnboarding()
         return
       }
       if (result.action.commandId === 'quit-tezbar') {

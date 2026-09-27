@@ -8516,9 +8516,9 @@ var init_opencode = __esm({
       }
       async isAvailable() {
         try {
-          const { execFile: execFile18 } = await import("node:child_process");
-          const execFileAsync18 = (0, import_node_util5.promisify)(execFile18);
-          const { stdout } = await execFileAsync18("which", ["opencode"], { timeout: 4e3 });
+          const { execFile: execFile19 } = await import("node:child_process");
+          const execFileAsync19 = (0, import_node_util5.promisify)(execFile19);
+          const { stdout } = await execFileAsync19("which", ["opencode"], { timeout: 4e3 });
           return stdout.trim().length > 0;
         } catch {
           return false;
@@ -14629,6 +14629,13 @@ function buildRaymesSurfaceDocuments() {
       subtitle: "Tezbar quick notes",
       keywords: ["notes", "quick notes", "/notes"],
       commandId: "open-notes"
+    },
+    {
+      id: "command:start-onboarding",
+      title: "Start Onboarding",
+      subtitle: "Walk through Tezbar setup again",
+      keywords: ["onboarding", "setup", "welcome", "tour", "get started", "intro", "/onboarding"],
+      commandId: "start-onboarding"
     },
     {
       id: "command:open-emoji-picker",
@@ -24936,7 +24943,8 @@ var bridge_exports = {};
 __export(bridge_exports, {
   createBridge: () => createBridge,
   disposeSharedBridge: () => disposeSharedBridge,
-  getSharedBridge: () => getSharedBridge
+  getSharedBridge: () => getSharedBridge,
+  resolvePiBinary: () => resolvePiBinary
 });
 function resolveRaymesPiExtension() {
   const resourcesPath = process.resourcesPath;
@@ -26175,7 +26183,7 @@ async function runAppleScript3(source) {
   if (typeof source !== "string" || source.trim().length === 0) {
     return "";
   }
-  const { stdout } = await execFileAsync15("/usr/bin/osascript", ["-e", source], {
+  const { stdout } = await execFileAsync16("/usr/bin/osascript", ["-e", source], {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024
   });
@@ -26235,7 +26243,7 @@ async function ensureNativeColorPickerHelper() {
   (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(binaryPath), { recursive: true });
   (0, import_node_fs27.mkdirSync)(moduleCachePath, { recursive: true });
   try {
-    await execFileAsync15("/usr/bin/swiftc", [
+    await execFileAsync16("/usr/bin/swiftc", [
       "-module-cache-path",
       moduleCachePath,
       "-O",
@@ -26253,7 +26261,7 @@ async function ensureNativeColorPickerHelper() {
 }
 async function runNativeColorPickerHelper(helperPath) {
   if (process.platform === "win32") {
-    const { stdout: stdout2 } = await execFileAsync15(
+    const { stdout: stdout2 } = await execFileAsync16(
       "powershell.exe",
       [
         "-NoLogo",
@@ -26273,7 +26281,7 @@ async function runNativeColorPickerHelper(helperPath) {
     );
     return stdout2;
   }
-  const { stdout } = await execFileAsync15(helperPath, [], {
+  const { stdout } = await execFileAsync16(helperPath, [], {
     encoding: "utf8",
     maxBuffer: 1024 * 1024
   });
@@ -26371,7 +26379,7 @@ async function extractColorsFromImage(path8, colorCount = 40, dominantOnly = fal
     String(count),
     dominantOnly ? "true" : "false"
   ] : [path8, String(count), dominantOnly ? "true" : "false"];
-  const { stdout } = await execFileAsync15(
+  const { stdout } = await execFileAsync16(
     command3,
     args,
     {
@@ -26408,7 +26416,7 @@ async function runScreenOcrHelper(command3, values) {
       app?.hide?.();
       await delay(120);
     }
-    const { stdout } = await execFileAsync15(helperPath, [command3, JSON.stringify(values)], {
+    const { stdout } = await execFileAsync16(helperPath, [command3, JSON.stringify(values)], {
       timeout: 18e4,
       maxBuffer: 10 * 1024 * 1024
     });
@@ -27207,7 +27215,7 @@ function createRaycastApiShim(session2) {
     getSelectedFinderItems: async () => {
       if (process.platform === "win32") {
         try {
-          const { stdout } = await execFileAsync15(
+          const { stdout } = await execFileAsync16(
             "powershell.exe",
             [
               "-NoLogo",
@@ -27322,7 +27330,7 @@ function createRaycastApiShim(session2) {
           return listApplications().sort((a, b) => a.name.localeCompare(b.name));
         }
         try {
-          const { stdout } = await execFileAsync15(
+          const { stdout } = await execFileAsync16(
             "/usr/bin/mdfind",
             ["kMDItemKind == 'Application'"],
             {
@@ -27370,7 +27378,7 @@ function createRaycastApiShim(session2) {
     getFrontmostApplication: async () => {
       if (process.platform === "win32") {
         try {
-          const { stdout } = await execFileAsync15(
+          const { stdout } = await execFileAsync16(
             "powershell.exe",
             [
               "-NoLogo",
@@ -27401,7 +27409,7 @@ function createRaycastApiShim(session2) {
           end try
           return (name of p) & linefeed & (bundle identifier of p) & linefeed & appPath
         end tell`;
-        const { stdout } = await execFileAsync15("/usr/bin/osascript", ["-e", script], {
+        const { stdout } = await execFileAsync16("/usr/bin/osascript", ["-e", script], {
           timeout: 3e3
         });
         const lines = stdout.trim().split("\n");
@@ -27686,7 +27694,7 @@ function createRaycastUtilsShim(session2) {
   const useSQLPromise = makePromiseHook();
   const useExec = (command3, args = [], options) => {
     const exec = async () => {
-      const { stdout, stderr } = await execFileAsync15(command3, args, {
+      const { stdout, stderr } = await execFileAsync16(command3, args, {
         encoding: "utf8",
         maxBuffer: 10 * 1024 * 1024
       });
@@ -27715,7 +27723,7 @@ function createRaycastUtilsShim(session2) {
   const useSQL = (databasePath2, query, options) => {
     const load3 = async (dbPath3, sql) => {
       const sqlite = process.platform === "win32" ? "sqlite3.exe" : "/usr/bin/sqlite3";
-      const { stdout } = await execFileAsync15(sqlite, ["-readonly", "-json", dbPath3, sql], {
+      const { stdout } = await execFileAsync16(sqlite, ["-readonly", "-json", dbPath3, sql], {
         encoding: "utf8",
         maxBuffer: 20 * 1024 * 1024
       });
@@ -28721,7 +28729,7 @@ function runBundle(code, packageRoot, session2) {
           return child;
         }),
         spawn: (...args) => {
-          const child = (0, import_node_child_process18.spawn)(...args);
+          const child = (0, import_node_child_process19.spawn)(...args);
           const stdout = child.stdout;
           if (stdout) {
             const originalOn = stdout.on.bind(stdout);
@@ -28930,7 +28938,7 @@ function runBundle(code, packageRoot, session2) {
           }
         } catch {
         }
-        await execFileAsync15(process.platform === "win32" ? "tar.exe" : "/usr/bin/tar", args);
+        await execFileAsync16(process.platform === "win32" ? "tar.exe" : "/usr/bin/tar", args);
       };
       return {
         extract,
@@ -28945,7 +28953,7 @@ function runBundle(code, packageRoot, session2) {
         if (!dir) throw new Error("extract-zip requires dir");
         (0, import_node_fs27.mkdirSync)(dir, { recursive: true });
         if (process.platform === "win32") {
-          await execFileAsync15(
+          await execFileAsync16(
             "powershell.exe",
             [
               "-NoLogo",
@@ -28960,7 +28968,7 @@ function runBundle(code, packageRoot, session2) {
             }
           );
         } else {
-          await execFileAsync15("/usr/bin/unzip", ["-o", file, "-d", dir]);
+          await execFileAsync16("/usr/bin/unzip", ["-o", file, "-d", dir]);
         }
       };
       return {
@@ -29323,14 +29331,14 @@ function clearAllExtensionSessions() {
   }
   sessions.clear();
 }
-var import_node_fs27, import_promises5, import_node_child_process18, import_node_crypto14, import_node_http2, import_node_os14, import_node_module2, import_node_path30, import_node_stream, import_web, import_node_util15, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync15, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
+var import_node_fs27, import_promises5, import_node_child_process19, import_node_crypto14, import_node_http2, import_node_os14, import_node_module2, import_node_path30, import_node_stream, import_web, import_node_util16, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync16, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
 var init_extension_runner = __esm({
   "src/main/extension-runner.ts"() {
     "use strict";
     init_desktop_runtime();
     import_node_fs27 = require("node:fs");
     import_promises5 = require("node:fs/promises");
-    import_node_child_process18 = require("node:child_process");
+    import_node_child_process19 = require("node:child_process");
     import_node_crypto14 = require("node:crypto");
     import_node_http2 = require("node:http");
     import_node_os14 = require("node:os");
@@ -29338,7 +29346,7 @@ var init_extension_runner = __esm({
     import_node_path30 = require("node:path");
     import_node_stream = require("node:stream");
     import_web = require("node:stream/web");
-    import_node_util15 = require("node:util");
+    import_node_util16 = require("node:util");
     import_node_v8 = require("node:v8");
     import_node_zlib = require("node:zlib");
     import_node_vm = __toESM(require("node:vm"));
@@ -29360,8 +29368,8 @@ var init_extension_runner = __esm({
     BUILTIN_SET = new Set(import_node_module2.builtinModules);
     JSX_FRAGMENT = /* @__PURE__ */ Symbol.for("tezbar.jsx.fragment");
     REACT_CONTEXT = /* @__PURE__ */ Symbol.for("react.context");
-    execFileAsync15 = (0, import_node_util15.promisify)(import_node_child_process18.execFile);
-    gzipAsync = (0, import_node_util15.promisify)(import_node_zlib.gzip);
+    execFileAsync16 = (0, import_node_util16.promisify)(import_node_child_process19.execFile);
+    gzipAsync = (0, import_node_util16.promisify)(import_node_zlib.gzip);
     IMAGE_MASK2 = {
       Circle: "circle",
       RoundedRectangle: "roundedRectangle"
@@ -29457,7 +29465,7 @@ function spawnBunPipeTerminal(shell2, args, cwd, env, cols, rows) {
   };
 }
 function spawnPipeTerminal(shell2, args, cwd, env, cols, rows) {
-  const child = (0, import_node_child_process19.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+  const child = (0, import_node_child_process20.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
   return {
     pid: child.pid ?? -1,
     process: shell2,
@@ -29539,7 +29547,7 @@ function resolveExistingWorkingDirectory(raw) {
 function processWorkingDirectory(pid) {
   try {
     if (process.platform === "darwin") {
-      const output = (0, import_node_child_process19.execFileSync)(
+      const output = (0, import_node_child_process20.execFileSync)(
         "/usr/sbin/lsof",
         ["-a", "-p", String(pid), "-d", "cwd", "-Fn"],
         { encoding: "utf8", timeout: 1e3 }
@@ -30081,7 +30089,7 @@ function shutdownTerminalSessions() {
   }
   sessions2.clear();
 }
-var import_node_fs28, import_node_os15, import_node_path31, import_node_crypto15, import_node_child_process19, sessions2, ownerCleanupRegistered, persistedSummaries, persistedLoaded, OUTPUT_REPLAY_LIMIT_BYTES, TERMINAL_CONFIG_KEY, TERMINAL_HISTORY_DIR, SAVE_FOR_MS, KEEP_ALIVE_MS;
+var import_node_fs28, import_node_os15, import_node_path31, import_node_crypto15, import_node_child_process20, sessions2, ownerCleanupRegistered, persistedSummaries, persistedLoaded, OUTPUT_REPLAY_LIMIT_BYTES, TERMINAL_CONFIG_KEY, TERMINAL_HISTORY_DIR, SAVE_FOR_MS, KEEP_ALIVE_MS;
 var init_service4 = __esm({
   "src/main/terminal/service.ts"() {
     "use strict";
@@ -30089,7 +30097,7 @@ var init_service4 = __esm({
     import_node_os15 = require("node:os");
     import_node_path31 = require("node:path");
     import_node_crypto15 = require("node:crypto");
-    import_node_child_process19 = require("node:child_process");
+    import_node_child_process20 = require("node:child_process");
     init_terminal();
     init_configStore();
     sessions2 = /* @__PURE__ */ new Map();
@@ -30143,7 +30151,7 @@ async function extractTextFromAgentImages(images) {
       if (!image) continue;
       const imagePath = import_node_path32.default.join(workDir, `attachment-${index}.${imageExtension(image.mimeType)}`);
       await (0, import_promises6.writeFile)(imagePath, Buffer.from(image.data, "base64"));
-      const { stdout } = await execFileAsync16(
+      const { stdout } = await execFileAsync17(
         helperPath,
         [
           "recognize-text",
@@ -30165,18 +30173,18 @@ async function extractTextFromAgentImages(images) {
     await (0, import_promises6.rm)(workDir, { recursive: true, force: true });
   }
 }
-var import_node_child_process20, import_node_fs29, import_promises6, import_node_os16, import_node_path32, import_node_util16, execFileAsync16, MAX_OCR_CHARS;
+var import_node_child_process21, import_node_fs29, import_promises6, import_node_os16, import_node_path32, import_node_util17, execFileAsync17, MAX_OCR_CHARS;
 var init_imageContext = __esm({
   "src/main/agent/imageContext.ts"() {
     "use strict";
-    import_node_child_process20 = require("node:child_process");
+    import_node_child_process21 = require("node:child_process");
     import_node_fs29 = require("node:fs");
     import_promises6 = require("node:fs/promises");
     import_node_os16 = require("node:os");
     import_node_path32 = __toESM(require("node:path"));
-    import_node_util16 = require("node:util");
+    import_node_util17 = require("node:util");
     init_desktop_runtime();
-    execFileAsync16 = (0, import_node_util16.promisify)(import_node_child_process20.execFile);
+    execFileAsync17 = (0, import_node_util17.promisify)(import_node_child_process21.execFile);
     MAX_OCR_CHARS = 4e4;
   }
 });
@@ -30476,7 +30484,7 @@ async function getLoginPath() {
     return cachedLoginPath;
   }
   try {
-    const { stdout } = await execFileAsync17("bash", ["-lc", 'echo -n "$PATH"']);
+    const { stdout } = await execFileAsync18("bash", ["-lc", 'echo -n "$PATH"']);
     const fromShell = stdout.trim();
     cachedLoginPath = fromShell || process.env["PATH"] || "";
   } catch {
@@ -30491,7 +30499,7 @@ async function getLoginPath() {
 }
 async function execWithUserPath(file, args, options = {}) {
   const path8 = await getLoginPath();
-  return execFileAsync17(file, args, {
+  return execFileAsync18(file, args, {
     maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
     env: { ...process.env, PATH: path8 }
   });
@@ -30571,7 +30579,7 @@ async function probeRuntime(kind) {
 }
 async function runLoginShell(command3) {
   const path8 = await getLoginPath();
-  const { stdout, stderr } = await execFileAsync17("bash", ["-lc", command3], {
+  const { stdout, stderr } = await execFileAsync18("bash", ["-lc", command3], {
     maxBuffer: 32 * 1024 * 1024,
     env: {
       ...process.env,
@@ -30910,7 +30918,7 @@ async function speakText(text3) {
   const trimmed = text3.trim();
   if (!trimmed) return;
   stopSpeaking();
-  activeSpeech = process.platform === "win32" ? (0, import_node_child_process21.spawn)(
+  activeSpeech = process.platform === "win32" ? (0, import_node_child_process22.spawn)(
     "powershell.exe",
     [
       "-NoLogo",
@@ -30924,7 +30932,7 @@ async function speakText(text3) {
       windowsHide: true,
       env: { ...process.env, TEZBAR_SPEECH_TEXT: trimmed }
     }
-  ) : (0, import_node_child_process21.spawn)("say", [trimmed], {
+  ) : (0, import_node_child_process22.spawn)("say", [trimmed], {
     stdio: "ignore"
   });
   activeSpeech.on("exit", () => {
@@ -30940,11 +30948,11 @@ async function hasBinary(binary) {
   try {
     const path8 = await getLoginPath();
     if (process.platform === "win32") {
-      await execFileAsync17("where.exe", [binary], {
+      await execFileAsync18("where.exe", [binary], {
         env: { ...process.env, Path: path8, PATH: path8 }
       });
     } else {
-      await execFileAsync17("bash", ["-lc", `command -v ${binary}`], {
+      await execFileAsync18("bash", ["-lc", `command -v ${binary}`], {
         env: { ...process.env, PATH: path8 }
       });
     }
@@ -30992,7 +31000,7 @@ function preferredMoonshineModelPath() {
   throw new Error("Moonshine model files are not downloaded yet. Download a Moonshine model first.");
 }
 async function convertToWav(inputPath, outputPath) {
-  await execFileAsync17("ffmpeg", [
+  await execFileAsync18("ffmpeg", [
     "-y",
     "-i",
     inputPath,
@@ -31288,21 +31296,21 @@ ${result.hint}` : result.error);
   }
   return { text: result.text, engine: result.engine };
 }
-var import_node_child_process21, import_node_fs32, import_node_fs33, import_node_os18, import_node_path35, import_node_events2, import_node_util17, execFileAsync17, activeSpeech, cachedLoginPath, MODEL_CATALOG, activeDownloads, VOICE_MODEL_CONFIG_KEY, runtimeCache, LEGACY_WHISPER_ASSET_NAMES, staleVoiceCleanupPromise, cachedEngineProbe, ENGINE_PROBE_TTL_MS;
+var import_node_child_process22, import_node_fs32, import_node_fs33, import_node_os18, import_node_path35, import_node_events2, import_node_util18, execFileAsync18, activeSpeech, cachedLoginPath, MODEL_CATALOG, activeDownloads, VOICE_MODEL_CONFIG_KEY, runtimeCache, LEGACY_WHISPER_ASSET_NAMES, staleVoiceCleanupPromise, cachedEngineProbe, ENGINE_PROBE_TTL_MS;
 var init_service5 = __esm({
   "src/main/voice/service.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_child_process21 = require("node:child_process");
+    import_node_child_process22 = require("node:child_process");
     import_node_fs32 = require("node:fs");
     import_node_fs33 = require("node:fs");
     import_node_os18 = require("node:os");
     import_node_path35 = require("node:path");
     import_node_events2 = require("node:events");
-    import_node_util17 = require("node:util");
+    import_node_util18 = require("node:util");
     init_configStore();
     init_voice();
-    execFileAsync17 = (0, import_node_util17.promisify)(import_node_child_process21.execFile);
+    execFileAsync18 = (0, import_node_util18.promisify)(import_node_child_process22.execFile);
     activeSpeech = null;
     cachedLoginPath = null;
     MODEL_CATALOG = [
@@ -32203,8 +32211,8 @@ async function listModelsForProvider(id, signal, baseURLOverride, apiKeyOverride
       return fetchOpenAiModels(base, key, signal);
     }
     case "anthropic": {
-      const apiBase = trimSlash3(cfg.baseURL ?? "https://api.anthropic.com");
-      const key = cfg.apiKey ?? "";
+      const apiBase = trimSlash3(baseURLOverride?.trim() || cfg.baseURL || "https://api.anthropic.com");
+      const key = apiKeyOverride !== void 0 ? apiKeyOverride : cfg.apiKey ?? "";
       if (!key.trim()) return [];
       try {
         const res = await fetch(`${apiBase}/v1/models`, {
@@ -32260,10 +32268,10 @@ async function listModelsForProvider(id, signal, baseURLOverride, apiKeyOverride
     }
     case "opencode": {
       try {
-        const { execFile: execFile18 } = await import("node:child_process");
-        const { promisify: promisify19 } = await import("node:util");
-        const execFileAsync18 = promisify19(execFile18);
-        const { stdout } = await execFileAsync18("opencode", ["models"], { timeout: 12e3, signal });
+        const { execFile: execFile19 } = await import("node:child_process");
+        const { promisify: promisify20 } = await import("node:util");
+        const execFileAsync19 = promisify20(execFile19);
+        const { stdout } = await execFileAsync19("opencode", ["models"], { timeout: 12e3, signal });
         const models = stdout.replace(/\x1b\[[0-9;]*m/g, "").split("\n").map((line) => line.trim()).filter((line) => line.startsWith("opencode/") || line.startsWith("opencode-go/"));
         return models.length > 0 ? models : ["opencode/big-pickle"];
       } catch {
@@ -32814,22 +32822,77 @@ async function requestPermission(id) {
   return { descriptor, state: probePermission(id), checkedAt: Date.now() };
 }
 
+// src/main/agent/piInstall.ts
+var import_node_child_process16 = require("node:child_process");
+var import_node_util13 = require("node:util");
+init_bridge();
+var execFileAsync13 = (0, import_node_util13.promisify)(import_node_child_process16.execFile);
+var PI_NPM_PACKAGE = "@mariozechner/pi-coding-agent";
+var PI_NPM_PAGE_URL = `https://www.npmjs.com/package/${PI_NPM_PACKAGE}`;
+async function commandWorks(bin, args) {
+  try {
+    await execFileAsync13(bin, args, { timeout: 8e3 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function checkPiAgent() {
+  try {
+    const { stdout } = await execFileAsync13(resolvePiBinary(), ["--version"], { timeout: 8e3 });
+    return { installed: true, version: stdout.trim() || void 0 };
+  } catch {
+    return { installed: false };
+  }
+}
+async function installWith(method, args) {
+  try {
+    await execFileAsync13(method, args, { timeout: 18e4 });
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "install-failed",
+      officialUrl: PI_NPM_PAGE_URL,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+  const availability = await checkPiAgent();
+  if (!availability.installed) {
+    return {
+      ok: false,
+      reason: "install-failed",
+      officialUrl: PI_NPM_PAGE_URL,
+      error: `${method} finished, but Tezbar can't find the pi command on your PATH.`
+    };
+  }
+  return { ok: true, method, version: availability.version };
+}
+async function installPiAgent() {
+  if (await commandWorks("npm", ["--version"])) {
+    return installWith("npm", ["install", "-g", PI_NPM_PACKAGE]);
+  }
+  if (await commandWorks("pnpm", ["--version"])) {
+    return installWith("pnpm", ["add", "-g", PI_NPM_PACKAGE]);
+  }
+  return { ok: false, reason: "no-package-manager", officialUrl: PI_NPM_PAGE_URL };
+}
+
 // src/main/ipc.ts
 init_log2();
 init_registry2();
 init_registry();
 
 // src/main/systemStats/service.ts
-var import_node_child_process17 = require("node:child_process");
+var import_node_child_process18 = require("node:child_process");
 var import_node_os13 = require("node:os");
-var import_node_util14 = require("node:util");
+var import_node_util15 = require("node:util");
 
 // src/main/systemStats/windows.ts
-var import_node_child_process16 = require("node:child_process");
+var import_node_child_process17 = require("node:child_process");
 var import_promises3 = require("node:fs/promises");
 var import_node_os12 = require("node:os");
-var import_node_util13 = require("node:util");
-var execFileAsync13 = (0, import_node_util13.promisify)(import_node_child_process16.execFile);
+var import_node_util14 = require("node:util");
+var execFileAsync14 = (0, import_node_util14.promisify)(import_node_child_process17.execFile);
 var MEBIBYTE = 1024 ** 2;
 var staticStatsPromise = null;
 var previousCpuTimes = null;
@@ -32891,7 +32954,7 @@ $processes = @(Get-Process)
 } | ConvertTo-Json -Compress -Depth 4
 `;
 async function command(file, args) {
-  const { stdout } = await execFileAsync13(file, args, {
+  const { stdout } = await execFileAsync14(file, args, {
     timeout: 8e3,
     maxBuffer: 8 * 1024 * 1024,
     windowsHide: true
@@ -33180,11 +33243,11 @@ async function getWindowsSystemStats() {
 }
 
 // src/main/systemStats/service.ts
-var execFileAsync14 = (0, import_node_util14.promisify)(import_node_child_process17.execFile);
+var execFileAsync15 = (0, import_node_util15.promisify)(import_node_child_process18.execFile);
 var staticStatsPromise2 = null;
 var previousNetworkSample2 = null;
 async function command2(file, args) {
-  const { stdout } = await execFileAsync14(file, args, {
+  const { stdout } = await execFileAsync15(file, args, {
     timeout: 8e3,
     maxBuffer: 8 * 1024 * 1024
   });
@@ -34105,6 +34168,8 @@ function registerIpcHandlers(getWindow, controls) {
     if (!Number.isFinite(height)) return;
     setLauncherContentHeight(win, height, zoomFactor);
   });
+  ipcMain.handle("pi:check", async () => checkPiAgent());
+  ipcMain.handle("pi:install", async () => installPiAgent());
   ipcMain.handle("permissions:snapshot", async () => snapshotPermissions());
   ipcMain.handle("permissions:request", async (_event, raw) => {
     if (typeof raw !== "string") {
@@ -35123,7 +35188,7 @@ init_configStore();
 init_desktop_runtime();
 var import_node_fs35 = require("node:fs");
 var import_node_path37 = require("node:path");
-var import_node_child_process22 = require("node:child_process");
+var import_node_child_process23 = require("node:child_process");
 var import_node_net = require("node:net");
 init_service();
 init_gateway();
@@ -35148,7 +35213,7 @@ function materializePiPolicy() {
 function fixPathSync() {
   if (process.platform === "win32") return;
   try {
-    const stdout = (0, import_node_child_process22.execFileSync)("bash", ["-lc", "echo -n $PATH"], {
+    const stdout = (0, import_node_child_process23.execFileSync)("bash", ["-lc", "echo -n $PATH"], {
       encoding: "utf8",
       timeout: 2e3
     });

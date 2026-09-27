@@ -69,7 +69,7 @@ function resolveRaymesPiExtension(): string | undefined {
   )
 }
 
-function resolvePiBinary(override?: string): string {
+export function resolvePiBinary(override?: string): string {
   if (override && override.trim()) return override.trim()
   const envOverride = process.env['RAYMES_PI_BIN']
   if (envOverride && envOverride.trim()) return envOverride.trim()

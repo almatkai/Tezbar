@@ -619,6 +619,9 @@ export default function SettingsView({
     const stored = window.localStorage.getItem(TEZBAR_THEME_STORAGE_KEY)
     return isTezbarThemePreference(stored) ? stored : 'system'
   })
+  const [runOnboardingNextLaunch, setRunOnboardingNextLaunch] = useState<boolean | null>(null)
+  const [onboardingSaving, setOnboardingSaving] = useState(false)
+  const [onboardingError, setOnboardingError] = useState<string | null>(null)
   const [retentionSec, setRetentionSec] = useState('60')
   const [extensionRuntimeTimeoutMinutes, setExtensionRuntimeTimeoutMinutes] = useState('5')
   const [aiModeTimeoutMinutes, setAiModeTimeoutMinutes] = useState('5')
@@ -817,6 +820,7 @@ export default function SettingsView({
 
   const reload = useCallback(async () => {
     const c = (await window.tezbar.getLlmConfig()) as LlmConfigRecord
+    setRunOnboardingNextLaunch(c.hasCompletedOnboarding === false)
     const provider = c.provider ?? 'ollama'
     const configuredProviders = c.customProviders ?? []
     const ms = typeof c.uiStateRetentionMs === 'number' ? c.uiStateRetentionMs : 60_000
@@ -1743,6 +1747,38 @@ export default function SettingsView({
                   <input type="checkbox" checked readOnly />
                   Launch Tezbar at login
                 </label>
+              </SettingsRow>
+              <Divider />
+              <SettingsRow
+                label="Onboarding"
+                detail="For testing: show the onboarding tour on the next app launch. Completing or skipping the tour turns this off again."
+              >
+                <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
+                  <input
+                    type="checkbox"
+                    checked={runOnboardingNextLaunch ?? false}
+                    disabled={runOnboardingNextLaunch === null || onboardingSaving}
+                    onChange={async (event) => {
+                      const enabled = event.target.checked
+                      setOnboardingSaving(true)
+                      setOnboardingError(null)
+                      try {
+                        await window.tezbar.setLlmConfig({ hasCompletedOnboarding: !enabled })
+                        setRunOnboardingNextLaunch(enabled)
+                      } catch {
+                        setOnboardingError('Could not save onboarding preference.')
+                      } finally {
+                        setOnboardingSaving(false)
+                      }
+                    }}
+                  />
+                  Run onboarding on next launch
+                </label>
+                {onboardingError ? (
+                  <p className="mt-1.5 text-[11px] text-rose-300" role="alert">
+                    {onboardingError}
+                  </p>
+                ) : null}
               </SettingsRow>
               <Divider />
               <SettingsRow

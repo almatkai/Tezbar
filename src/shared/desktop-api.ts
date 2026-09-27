@@ -275,6 +275,12 @@ export type RaymesApi = {
   ) => () => void
   getPermissions: () => Promise<PermissionsSnapshot>
   requestPermission: (id: PermissionId) => Promise<PermissionStatus>
+  checkPiAgent: () => Promise<{ installed: boolean; version?: string }>
+  installPiAgent: () => Promise<
+    | { ok: true; method: 'npm' | 'pnpm'; version?: string }
+    | { ok: false; reason: 'no-package-manager'; officialUrl: string }
+    | { ok: false; reason: 'install-failed'; officialUrl: string; error: string }
+  >
   getSafetyDescriptors: () => Promise<SafetyDescriptor[]>
   getSafetyLog: () => Promise<SafetyLogEntry[]>
   clearSafetyLog: () => Promise<void>

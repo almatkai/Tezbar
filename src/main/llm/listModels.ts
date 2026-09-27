@@ -215,8 +215,8 @@ export async function listModelsForProvider(
       return fetchOpenAiModels(base, key, signal)
     }
     case 'anthropic': {
-      const apiBase = trimSlash(cfg.baseURL ?? 'https://api.anthropic.com')
-      const key = cfg.apiKey ?? ''
+      const apiBase = trimSlash(baseURLOverride?.trim() || cfg.baseURL || 'https://api.anthropic.com')
+      const key = apiKeyOverride !== undefined ? apiKeyOverride : (cfg.apiKey ?? '')
       if (!key.trim()) return []
       try {
         const res = await fetch(`${apiBase}/v1/models`, {

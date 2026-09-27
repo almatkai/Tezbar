@@ -1194,6 +1194,215 @@
 }
 
 /* =========================================================================
+   Onboarding — first-run setup. Motion only answers what the person did
+   (a step change, a check landing, a key being recorded).
+   ========================================================================= */
+.onboarding-step-forward {
+  animation: tezbar-step-in-forward 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.onboarding-step-back {
+  animation: tezbar-step-in-back 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tezbar-step-in-forward {
+  0% {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes tezbar-step-in-back {
+  0% {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Drifting glow behind the app icon on the welcome splash. */
+.onboarding-orb {
+  animation: tezbar-orb-drift 7s ease-in-out infinite;
+}
+
+@keyframes tezbar-orb-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: translate(6px, -6px) scale(1.08);
+    opacity: 0.85;
+  }
+}
+
+.onboarding-splash-exit {
+  animation: tezbar-splash-exit 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tezbar-splash-exit {
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+
+.onboarding-splash-hint {
+  opacity: 0;
+  animation: tezbar-fade-up 400ms cubic-bezier(0.22, 1, 0.36, 1) 900ms both;
+}
+
+/* Content that swaps in as the practice bar's response changes. */
+.onboarding-cycle-in {
+  animation: tezbar-fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* A check landing on a finished step or task. */
+.onboarding-chip-pop {
+  animation: tezbar-chip-pop 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tezbar-chip-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Large physical-looking key caps for the global shortcut. */
+.onboarding-keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 52px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 3px 0 rgba(0, 0, 0, 0.35),
+    0 6px 16px rgba(0, 0, 0, 0.25);
+  font-size: 20px;
+  font-weight: 500;
+  color: rgb(var(--c-text-1));
+  animation: tezbar-chip-pop 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.onboarding-keystage.is-recording {
+  box-shadow: 0 0 0 4px rgb(var(--c-accent) / 0.08);
+}
+
+:root[data-theme='white'] .onboarding-keycap {
+  background: linear-gradient(180deg, #fff, rgba(241, 245, 251, 0.95));
+  box-shadow:
+    inset 0 0 0 1px rgba(76, 94, 125, 0.2),
+    0 3px 0 rgba(76, 94, 125, 0.18),
+    0 6px 14px rgba(34, 48, 76, 0.08);
+}
+
+/* Inline path / command inside practice-bar explanations. */
+.onboarding-code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.92em;
+  color: rgb(var(--c-text-1));
+}
+
+/* Practice bar. One border, tinted by mode like the real bar's icon colour.
+   The only motion is a single puff when the mode switches. */
+.onboarding-bar-surface {
+  background: rgb(var(--c-shell));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: box-shadow 250ms ease;
+}
+
+.onboarding-bar.is-ai .onboarding-bar-surface {
+  box-shadow: inset 0 0 0 1px rgb(167 139 250 / 0.45);
+}
+
+.onboarding-bar.is-terminal .onboarding-bar-surface {
+  box-shadow: inset 0 0 0 1px rgb(52 211 153 / 0.45);
+}
+
+.onboarding-puff-burst {
+  position: absolute;
+  top: 50%;
+  left: 24px;
+  pointer-events: none;
+}
+
+.onboarding-puff {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 9999px;
+  filter: blur(6px);
+  opacity: 0;
+  animation: onboarding-puff 700ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+@keyframes onboarding-puff {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+
+  25% {
+    opacity: 0.45;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--puff-x)), calc(-50% + var(--puff-y))) scale(1.4);
+  }
+}
+
+:root[data-theme='white'] .onboarding-bar-surface {
+  background: rgb(var(--c-panel));
+  box-shadow: inset 0 0 0 1px rgba(76, 94, 125, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-orb,
+  .onboarding-step-forward,
+  .onboarding-step-back,
+  .onboarding-keycap,
+  .onboarding-chip-pop,
+  .onboarding-cycle-in {
+    animation: none;
+  }
+
+  .onboarding-puff-burst {
+    display: none;
+  }
+}
+
+/* =========================================================================
    Markdown — `.tezbar-md` is the wrapper produced by <Markdown /> and holds
    every rich-text rule used by agent / answer streams. Kept tight (no big
    vertical margins) to fit the HUD, but supports code, tables, lists,

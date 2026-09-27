@@ -264,6 +264,8 @@ export function initTauriBridge(): void {
 
     getPermissions: () => callBackend('permissions:snapshot'),
     requestPermission: (id: any) => callBackend('permissions:request', id),
+    checkPiAgent: () => callBackend('pi:check'),
+    installPiAgent: () => callBackend('pi:install'),
     getSafetyDescriptors: () => callBackend('safety:descriptors'),
     getSafetyLog: () => callBackend('safety:log'),
     clearSafetyLog: () => callBackend('safety:log-clear'),

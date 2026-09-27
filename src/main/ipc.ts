@@ -116,6 +116,7 @@ import type { VoiceModelId } from '../shared/voice'
 import type { KnowledgeDepth, KnowledgeRootDepth } from '../shared/knowledge'
 import { listBackgroundTasks } from './backgroundTasks'
 import { requestPermission, snapshotPermissions } from './permissions/manager'
+import { checkPiAgent, installPiAgent } from './agent/piInstall'
 import type { PermissionId } from '../shared/permissions'
 import { clearSafetyLog, listSafetyLog } from './safety/log'
 import { listSafetyDescriptors } from './safety/registry'
@@ -735,6 +736,10 @@ export function registerIpcHandlers(
     if (!Number.isFinite(height)) return
     setLauncherContentHeight(win, height, zoomFactor)
   })
+
+  ipcMain.handle('pi:check', async () => checkPiAgent())
+
+  ipcMain.handle('pi:install', async () => installPiAgent())
 
   ipcMain.handle('permissions:snapshot', async () => snapshotPermissions())
 
