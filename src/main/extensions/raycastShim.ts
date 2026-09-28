@@ -266,6 +266,11 @@ export function createRaycastApi(ctx: ShimContext): Record<string, unknown> {
     getPreferenceValues: (): Record<string, unknown> => readPreferences(ctx.packageRoot),
     getSelectedText: async (): Promise<string> => '',
     getApplications: async (): Promise<Array<Record<string, unknown>>> => listApplications(),
+    getFrontmostApplication: async (): Promise<Record<string, unknown>> => {
+      const apps = listApplications()
+      return apps[0] ?? { name: 'Tezbar', path: process.execPath }
+    },
+    getDefaultApplication: async (): Promise<null> => null,
     runAppleScript,
 
     open: async (target: unknown): Promise<void> => {

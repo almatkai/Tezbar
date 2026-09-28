@@ -44,7 +44,32 @@ const TERMINAL_ZOOM_STEP = 1
 
 type TerminalZoomAction = 'in' | 'out' | 'reset'
 
-function terminalTheme(): ITerminalOptions['theme'] {
+function terminalTheme(light: boolean): ITerminalOptions['theme'] {
+  if (light) {
+    return {
+      background: '#00000000',
+      foreground: '#26334b',
+      cursor: '#4c44c1',
+      cursorAccent: '#ffffff',
+      selectionBackground: '#4c44c133',
+      black: '#26334b',
+      red: '#b42342',
+      green: '#08764c',
+      yellow: '#9a5b00',
+      blue: '#2856ad',
+      magenta: '#7c3eaa',
+      cyan: '#08788a',
+      white: '#526079',
+      brightBlack: '#61708a',
+      brightRed: '#cf3f5e',
+      brightGreen: '#16885b',
+      brightYellow: '#ae6a0c',
+      brightBlue: '#386cc7',
+      brightMagenta: '#9256c2',
+      brightCyan: '#168da0',
+      brightWhite: '#26334b',
+    }
+  }
   return {
     background: '#00000000',
     foreground: '#e8e8f0',
@@ -327,13 +352,21 @@ export default function TerminalView({
       // Native history is durable and unbounded on disk. Keep a generous
       // interactive buffer so restored sessions remain browsable in xterm.
       scrollback: 1_000_000,
-      theme: terminalTheme(),
+      theme: terminalTheme(document.documentElement.dataset.theme === 'white'),
     })
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
     terminal.open(host)
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
+
+    const themeObserver = new MutationObserver(() => {
+      terminal.options.theme = terminalTheme(document.documentElement.dataset.theme === 'white')
+    })
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
 
     let disposed = false
     let resizeFrame = 0
@@ -498,6 +531,7 @@ export default function TerminalView({
       host.removeEventListener('wheel', onZoomWheel)
       cancelAnimationFrame(resizeFrame)
       resizeObserver.disconnect()
+      themeObserver.disconnect()
       inputDisposable.dispose()
       offData()
       offExit()
@@ -641,7 +675,7 @@ export default function TerminalView({
                 aria-hidden
                 className="mx-2.5 h-3.5 w-px shrink-0 bg-gradient-to-b from-transparent via-emerald-300/45 to-transparent"
               />
-              <span className="min-w-0 truncate font-mono text-[11px] font-medium text-emerald-100/65">
+              <span className="terminal-session-command min-w-0 truncate font-mono text-[11px] font-medium text-emerald-100/65">
                 {activeSessionCommand}
               </span>
             </>
@@ -780,7 +814,7 @@ export default function TerminalView({
       {configOpen && activeSession ? (
         <div className="absolute inset-0 z-40 flex items-start justify-center bg-black/35 px-8 py-12 backdrop-blur-sm">
           <form
-            className="w-full max-w-[520px] rounded-[18px] border border-white/[0.1] bg-[#10131d]/95 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.5)]"
+            className="terminal-config-dialog w-full max-w-[520px] rounded-[18px] border border-white/[0.1] bg-[#10131d]/95 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.5)]"
             onSubmit={(event) => {
               event.preventDefault()
               void saveConfig()

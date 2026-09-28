@@ -363,7 +363,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
                       </div>
                     ) : null}
                   </div>
-                  <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-tezbar-chip border border-white/[0.06] bg-black/20 p-2.5 font-mono text-[11.5px] leading-relaxed text-ink-2">
+                  <pre className="snippet-preview-text min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-tezbar-chip border border-white/[0.06] bg-black/20 p-2.5 font-mono text-[11.5px] leading-relaxed text-ink-2">
                     {current.resolvedPreview}
                   </pre>
                   {current.bodyTemplate !== current.resolvedPreview ? (

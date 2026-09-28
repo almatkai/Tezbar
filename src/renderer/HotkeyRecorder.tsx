@@ -67,7 +67,7 @@ function mapCodeToAcceleratorToken(code: string): string | null {
   return codeMap[code] || null
 }
 
-function keyEventToAccelerator(e: KeyboardEvent): string | null {
+export function keyEventToAccelerator(e: KeyboardEvent): string | null {
   const parts: string[] = []
   if (e.metaKey) parts.push('Command')
   if (e.ctrlKey) parts.push('Control')

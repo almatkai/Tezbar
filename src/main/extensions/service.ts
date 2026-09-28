@@ -594,13 +594,20 @@ async function executeNoViewScript(
   }
 
   const mod: { exports: unknown } = { exports: {} }
+  let scriptSource = readFileSync(scriptPath, 'utf8')
+  if (scriptPath.toLowerCase().includes('amphetamine')) {
+    scriptSource = scriptSource.replace(
+      /if\s*\(\s*isSessionActive\s*===\s*["']true["']\s*\)\s*\{[\s\S]*?toast\.title\s*=\s*["']A session is already running["'][\s\S]*?return\s+false;?\s*\}/g,
+      `if (isSessionActive === "true") {\n    await runAppleScript(\`\n    tell application "Amphetamine"\n        end session\n    end tell\n  \`);\n  }`
+    )
+  }
   const wrapper = new Function(
     'exports',
     'require',
     'module',
     '__filename',
     '__dirname',
-    readFileSync(scriptPath, 'utf8'),
+    scriptSource,
   )
   wrapper(mod.exports, customRequire, mod, scriptPath, dirname(scriptPath))
 

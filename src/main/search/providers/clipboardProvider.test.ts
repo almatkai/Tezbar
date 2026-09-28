@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => {
     captureImages: false,
     image: false,
     imageBytes: Buffer.from('test-png'),
+    fileImage: false,
+    fileImageBytes: Buffer.from('test-file-png'),
     changeCount: 1,
   }
   const image = {
@@ -46,7 +48,14 @@ const mocks = vi.hoisted(() => {
 vi.mock('@tezbar/desktop-runtime', () => ({
   app: { getPath: () => mocks.userData },
   clipboard: mocks.clipboard,
-  nativeImage: { createFromPath: () => ({ isEmpty: () => true }) },
+  nativeImage: {
+    createFromPath: vi.fn((path: string) => ({
+      isEmpty: () => !mocks.state.fileImage,
+      getSize: () => ({ width: 640, height: 480 }),
+      toPNG: () => mocks.state.fileImageBytes,
+      path,
+    })),
+  },
   shell: { showItemInFolder: vi.fn() },
 }))
 
@@ -73,6 +82,7 @@ describe('clipboard watcher', () => {
     mocks.state.filePaths = []
     mocks.state.captureImages = false
     mocks.state.image = false
+    mocks.state.fileImage = false
     mocks.state.changeCount = 1
   })
 
@@ -139,6 +149,31 @@ describe('clipboard watcher', () => {
     expect(mocks.clipboard.write).toHaveBeenCalledWith(
       expect.objectContaining({ filePaths: ['/Users/example/Pictures/photo.png'] }),
     )
+  })
+
+  it('returns an image payload for a copied image file', async () => {
+    vi.resetModules()
+    rmSync(mocks.userData, { recursive: true, force: true })
+    const fixtureDir = join(mocks.userData, 'fixtures')
+    mkdirSync(fixtureDir, { recursive: true })
+    const fixturePath = join(fixtureDir, 'photo.png')
+    writeFileSync(fixturePath, mocks.state.fileImageBytes)
+    mocks.state.text = ''
+    mocks.state.filePaths = [fixturePath]
+    mocks.state.captureImages = false
+    mocks.state.image = false
+    mocks.state.fileImage = true
+
+    const provider = await import('./clipboardProvider')
+    provider.captureClipboardSnapshot()
+    const entry = provider.listClipboardEntries()[0]!
+
+    expect(provider.readClipboardImagePayload(entry.id)).toEqual({
+      dataUrl: `data:image/png;base64,${mocks.state.fileImageBytes.toString('base64')}`,
+      width: 640,
+      height: 480,
+      byteSize: mocks.state.fileImageBytes.length,
+    })
   })
 
   it('detects a file-only clipboard without copying the file contents', async () => {

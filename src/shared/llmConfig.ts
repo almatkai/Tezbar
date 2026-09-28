@@ -12,6 +12,7 @@ export type BuiltInProviderId =
   | 'gemini'
   | 'opencode'
   | 'deepseek'
+  | 'antigravity'
 
 export type ProviderId = BuiltInProviderId | `custom:${string}`
 
@@ -80,4 +81,6 @@ export type LlmConfigRecord = {
   /** Milliseconds of inactivity before terminal mode returns to the main CommandBar. 0 disables it. */
   terminalModeTimeoutMs?: number
   settingsInitialTab?: 'general' | 'ai' | 'voice' | 'knowledge' | 'extensions' | 'permissions' | 'storage' | 'advanced'
+  /** Set once the first-run onboarding tour has been completed or skipped. */
+  hasCompletedOnboarding?: boolean
 }

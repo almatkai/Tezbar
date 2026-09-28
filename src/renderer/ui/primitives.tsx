@@ -102,8 +102,8 @@ export function FieldLabel({
 /* =========================================================================
    Kbd — tiny key cap
    ========================================================================= */
-export function Kbd({ children }: { children: ReactNode }): JSX.Element {
-  return <kbd className="kbd">{children}</kbd>
+export function Kbd({ children, className }: { children: ReactNode; className?: string }): JSX.Element {
+  return <kbd className={cx('kbd', className)}>{children}</kbd>
 }
 
 /* =========================================================================
@@ -170,11 +170,19 @@ export function HintBar({ children, className }: { children: ReactNode; classNam
   )
 }
 
-export function Hint({ label, keys }: { label: string; keys: ReactNode }): JSX.Element {
+export function Hint({
+  label,
+  keys,
+  className,
+}: {
+  label: string
+  keys: ReactNode
+  className?: string
+}): JSX.Element {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className={cx('inline-flex items-center gap-1.5', className)}>
       <span className="inline-flex items-center gap-0.5">{keys}</span>
-      <span className="text-ink-3">{label}</span>
+      <span className={className ? undefined : 'text-ink-3'}>{label}</span>
     </span>
   )
 }

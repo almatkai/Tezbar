@@ -125,20 +125,38 @@ export const RAYMES_DEFAULT_TOOLS: readonly PiToolName[] = [
  * tools still render sensibly.
  */
 export function labelForToolCall(toolName: string, args: unknown): string {
+  const safeArgs = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
   if (toolName === 'launcher_search') {
-    const safeArgs = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
     return `search Tezbar: ${truncate(str(safeArgs.query, '<query>'))}`
   }
   if (toolName === 'pc_search' || toolName === 'search_knowledge') {
-    const safeArgs = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
     return `deep search: ${truncate(str(safeArgs.query, '<query>'))}`
   }
   if (toolName === 'pc_read') {
-    const safeArgs = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
     return `read deep-search result: ${truncate(str(safeArgs.resultId, '<result>'))}`
+  }
+  if (toolName === 'workflow_create') {
+    const name = str(safeArgs.name) || str(safeArgs.label)
+    return name ? `workflow: ${truncate(name)}` : 'multi-agent workflow'
+  }
+  if (toolName === 'workflow_list') {
+    return 'list workflows'
+  }
+  if (toolName === 'workflow_inspect') {
+    const run = str(safeArgs.run)
+    return run ? `inspect workflow: ${truncate(run, 24)}` : 'inspect workflow'
+  }
+  if (toolName === 'workflow_result') {
+    const run = str(safeArgs.run)
+    return run ? `workflow result: ${truncate(run, 24)}` : 'workflow result'
+  }
+  if (toolName === 'workflow_stop') {
+    return 'stop workflow'
+  }
+  if (toolName === 'generate_image') {
+    return `generate image: ${truncate(str(safeArgs.prompt, '<prompt>'))}`
   }
   const descriptor = PI_TOOLS[toolName as PiToolName]
   if (!descriptor) return `${toolName}`
-  const safeArgs = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
   return descriptor.label(safeArgs)
 }

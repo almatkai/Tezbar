@@ -1,0 +1,10 @@
+{
+  "model": "qwen3-8",
+  "stream": true,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Write a function to compute the nth Fibonacci number in C++, Rust, and Python. Provide clean, idiomatic implementations for each language."
+    }
+  ]
+}

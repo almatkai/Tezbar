@@ -14,6 +14,7 @@ import {
   shouldAutoCheckForUpdates,
 } from '../shared/updater'
 
+const OnboardingView = React.lazy(() => import('./OnboardingView'))
 const AgentChatView = React.lazy(() => import('./AgentChatView'))
 const SettingsView = React.lazy(() => import('./SettingsView'))
 const ExtensionsView = React.lazy(() => import('./ExtensionsView'))
@@ -37,6 +38,7 @@ const SurfaceFallback = (): JSX.Element => (
 
 type Surface =
   | 'command'
+  | 'onboarding'
   | 'ai-chat'
   | 'settings'
   | 'extensions'
@@ -86,6 +88,7 @@ async function openNativeSettings(tab: SettingsTab): Promise<void> {
 }
 
 const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
+  onboarding: '[aria-label="Onboarding"]',
   'ai-chat': '[aria-label="AI Chat"]',
   settings: '[aria-label="Settings"]',
   extensions: '[aria-label="Extensions"]',
@@ -257,7 +260,7 @@ function SettingsWindowApp(): JSX.Element {
   }, [])
 
   return (
-    <div className="flex h-screen w-full bg-[#1e1f2e]">
+    <div className="flex h-screen w-full bg-glass-shell">
       <Suspense fallback={<SurfaceFallback />}>
         {surface === 'permissions' ? (
           <PermissionsView nativeWindow onBack={() => setSurface('settings')} />
@@ -284,6 +287,7 @@ function SettingsWindowApp(): JSX.Element {
 
 function LauncherApp(): JSX.Element {
   const [surface, setSurface] = useState<Surface>('command')
+  const [bootReady, setBootReady] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   const [openPortsInitialTab, setOpenPortsInitialTab] = useState<'listen' | 'named'>('listen')
   const [notesInitialSelectedId, setNotesInitialSelectedId] = useState<number | null>(null)
@@ -316,6 +320,35 @@ function LauncherApp(): JSX.Element {
       document.getElementById('command-input')?.focus()
     })
   }
+
+  // Gate the very first paint on whether onboarding has been completed, so
+  // the command bar never flashes before we know which surface to show. One
+  // retry absorbs a config read that raced the backend sidecar's startup;
+  // past that we fail open to the command bar rather than block launch.
+  useEffect(() => {
+    let cancelled = false
+    const checkOnboarding = (attempt: number): void => {
+      window.tezbar
+        .getLlmConfig()
+        .then((config) => {
+          if (cancelled) return
+          if (!config.hasCompletedOnboarding) setSurface('onboarding')
+          setBootReady(true)
+        })
+        .catch(() => {
+          if (cancelled) return
+          if (attempt === 0) {
+            window.setTimeout(() => checkOnboarding(1), 400)
+            return
+          }
+          setBootReady(true)
+        })
+    }
+    checkOnboarding(0)
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Background auto-check for app updates once per 24h. Errors are swallowed —
   // losing connectivity or GitHub being down shouldn't disrupt the launcher.
@@ -583,7 +616,11 @@ function LauncherApp(): JSX.Element {
         className="relative z-0 flex h-full min-h-0 w-full animate-tezbar-fade-in flex-col"
       >
         <Suspense fallback={<SurfaceFallback />}>
-          {surface === 'settings' ? (
+          {!bootReady ? (
+            <SurfaceFallback />
+          ) : surface === 'onboarding' ? (
+            <OnboardingView onDone={() => setSurface('command')} />
+          ) : surface === 'settings' ? (
             <SettingsView
               initialTab={settingsInitialTab}
               onBack={() => setSurface('command')}
@@ -707,6 +744,10 @@ function LauncherApp(): JSX.Element {
                 setSurface('notes')
               }}
               onOpenEmojiPicker={() => setSurface('emoji-picker')}
+              onStartOnboarding={() => {
+                setCommandInitialValue('')
+                setSurface('onboarding')
+              }}
               onOpenTerminal={(initialCommand, workingDirectory, sessionId, defaults) => {
                 setTerminalInitialCommand(initialCommand)
                 setTerminalInitialSessionId(sessionId)

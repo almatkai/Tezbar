@@ -7,7 +7,7 @@ import {
 } from '../../shared/aiProviders'
 import type { AiProviderConfig, AiProviderModel, CustomAiProvider, LlmTask, ProviderId } from '../../shared/llmConfig'
 import { readRawConfig } from './configStore'
-import type { LLMProvider } from './provider'
+import type { ChatOptions, Delta, LLMProvider, Message, Tool } from './provider'
 
 export type OpenRayLLMConfig = {
   provider: ProviderId
@@ -36,7 +36,7 @@ export type OpenRayLLMConfig = {
 
 type PiProviderBridge = {
   modelPattern: string
-  providerJson: string
+  providerJson?: string
   acceptsImages: boolean
 }
 
@@ -264,6 +264,9 @@ export function configForProvider(cfg: OpenRayLLMConfig, provider: ProviderId): 
   if (provider === 'tokenrouter') {
     return { ...next, baseURL: next.baseURL ?? DEFAULT_TOKENROUTER_BASE, model: next.model ?? DEFAULT_TOKENROUTER_MODEL }
   }
+  if (provider === 'antigravity') {
+    return { ...next, baseURL: next.baseURL ?? 'https://cloudcode-pa.googleapis.com', model: next.model ?? 'gemini-3.8-flash' }
+  }
   return {
     ...next,
     model: next.model ?? (recommendedModel(provider) || defaultModels(provider)[0]?.id),
@@ -355,6 +358,26 @@ function buildProvider(cfg: OpenRayLLMConfig): LLMProvider {
         cfg.model ?? DEFAULT_TOKENROUTER_MODEL,
         'TokenRouter',
       )
+    case 'antigravity':
+      return new (class implements LLMProvider {
+        readonly name = 'antigravity'
+        async chat(messages: Message[], _tools?: Tool[], options?: ChatOptions): Promise<AsyncIterable<Delta>> {
+          const { getSharedBridge } = require('../agent/bridge') as typeof import('../agent/bridge')
+          const bridge = getSharedBridge()
+          const prompt = messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n')
+          const result = await bridge.run(prompt, {
+            model: `antigravity/${cfg.model || 'gemini-3.8-flash'}`,
+            signal: options?.signal,
+          })
+          async function* generator() {
+            if (result.answer) yield { text: result.answer }
+          }
+          return generator()
+        }
+        async isAvailable(): Promise<boolean> {
+          return true
+        }
+      })()
     default:
       const { OllamaProvider: DefaultOllamaProvider } = require('./ollama') as typeof import('./ollama')
       return new DefaultOllamaProvider(DEFAULT_OLLAMA_BASE, DEFAULT_OLLAMA_MODEL)
@@ -395,6 +418,10 @@ export function getSelectedPiModelPattern(task?: LlmTask): string | undefined {
     if (model.startsWith('opencode/')) return `opencode/${model}`
     return `opencode/opencode/${model}`
   }
+  if (provider === 'antigravity') {
+    if (model.startsWith('antigravity/')) return model
+    return `antigravity/${model}`
+  }
   if (model.startsWith(`${provider}/`)) return model
   if (model.includes('/') && provider !== 'tokenrouter') return model
   return `${provider}/${model}`
@@ -429,6 +456,9 @@ function piApiKey(cfg: OpenRayLLMConfig): string | undefined {
   if (cfg.provider === 'tokenrouter') {
     return cfg.apiKey?.trim() ? cfg.apiKey : process.env['TOKENROUTER_API_KEY']
   }
+  if (isCustomProvider(cfg.provider) || cfg.provider === 'openai-compatible') {
+    return cfg.apiKey?.trim() || 'tezbar-local'
+  }
   return cfg.apiKey
 }
 
@@ -460,6 +490,13 @@ export function getSelectedPiProviderBridge(task?: LlmTask): PiProviderBridge | 
     : ['text']
 
   const isAnthropic = cfg.provider === 'anthropic'
+  if (cfg.provider === 'antigravity') {
+    return {
+      modelPattern: `antigravity/${modelId}`,
+      providerJson: undefined,
+      acceptsImages: true,
+    }
+  }
   const openAiBaseUrl = openAiCompatBaseUrl(cfg)
   // DeepSeek V4's OpenAI-compatible streaming endpoint can occasionally leak
   // its internal DSML tool syntax into `content` instead of returning a
@@ -496,7 +533,14 @@ export function getSelectedPiProviderBridge(task?: LlmTask): PiProviderBridge | 
             supportsReasoningEffort: false,
             maxTokensField: 'max_tokens',
           }
-        : undefined
+        : isCustomProvider(cfg.provider) || cfg.provider === 'openai-compatible'
+          ? {
+              supportsStore: false,
+              supportsDeveloperRole: false,
+              supportsReasoningEffort: false,
+              maxTokensField: 'max_tokens',
+            }
+          : undefined
 
   const providerJson = JSON.stringify({
     baseUrl,

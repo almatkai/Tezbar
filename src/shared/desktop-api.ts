@@ -85,6 +85,30 @@ export type HotkeyUpdateResult = {
   error?: string
 }
 
+export type PiExtensionItem = {
+  id: string
+  name: string
+  version: string
+  description: string
+  type: 'package' | 'script'
+  location: string
+  enabled: boolean
+  features?: string[]
+}
+
+export interface ExtensionStorePage {
+  items: ExtensionManifest[]
+  total: number
+  offset: number
+  limit: number
+  hasMore: boolean
+}
+
+export type ExtensionCatalogQueryOptions = {
+  offset?: number
+  limit?: number
+}
+
 export type RaymesApi = {
   hide: () => Promise<void>
   show: () => Promise<void>
@@ -102,7 +126,10 @@ export type RaymesApi = {
   reinstallExtension: (extensionId: string) => Promise<ExtensionIntegrityReport>
   getExtensionInstallError: (extensionId: string) => Promise<string | null>
   extensionList: () => Promise<InstalledRegistryExtension[]>
-  extensionSearchStore: (query: string) => Promise<ExtensionManifest[]>
+  extensionSearchStore: (
+    query: string,
+    options?: ExtensionCatalogQueryOptions,
+  ) => Promise<ExtensionStorePage>
   extensionInstall: (extensionId: string) => Promise<InstalledRegistryExtension>
   extensionUninstall: (extensionId: string) => Promise<boolean>
   extensionRunCommand: (payload: {
@@ -128,6 +155,8 @@ export type RaymesApi = {
   ) => Promise<ExtensionRefreshSessionResult>
   clipboardReadText: () => Promise<string>
   clipboardWriteText: (text: string) => Promise<{ ok: boolean }>
+  clipboardWritePng: (dataUrl: string) => Promise<{ ok: boolean; error?: string }>
+  saveQrPngDataUrl: (dataUrl: string) => Promise<{ ok: boolean; error?: string }>
   shellOpen: (target: string) => Promise<{ ok: boolean }>
   getAppIconDataUrl: (appPath: string) => Promise<string | null>
   getAssetIconDataUrl: (
@@ -207,7 +236,12 @@ export type RaymesApi = {
   getLlmConfig: () => Promise<LlmConfigRecord>
   setLlmConfig: (patch: LlmConfigRecord) => Promise<void | HotkeyUpdateResult>
   getLlmProviderStatuses: () => Promise<ProviderConnectionStatuses>
-  listLlmModels: (providerId: ProviderId) => Promise<string[]>
+  listPiExtensions: () => Promise<PiExtensionItem[]>
+  listLlmModels: (
+    providerId: ProviderId,
+    baseURLOverride?: string,
+    apiKeyOverride?: string
+  ) => Promise<string[]>
   getWindowZoomFactor: () => number
   setWindowContentHeight: (height: number, zoomFactor: number) => Promise<void>
   openExternalUrl: (url: string) => Promise<void>
@@ -241,6 +275,12 @@ export type RaymesApi = {
   ) => () => void
   getPermissions: () => Promise<PermissionsSnapshot>
   requestPermission: (id: PermissionId) => Promise<PermissionStatus>
+  checkPiAgent: () => Promise<{ installed: boolean; version?: string }>
+  installPiAgent: () => Promise<
+    | { ok: true; method: 'npm' | 'pnpm'; version?: string }
+    | { ok: false; reason: 'no-package-manager'; officialUrl: string }
+    | { ok: false; reason: 'install-failed'; officialUrl: string; error: string }
+  >
   getSafetyDescriptors: () => Promise<SafetyDescriptor[]>
   getSafetyLog: () => Promise<SafetyLogEntry[]>
   clearSafetyLog: () => Promise<void>

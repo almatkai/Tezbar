@@ -73,6 +73,13 @@ function buildRaymesSurfaceDocuments(): IndexedDocument[] {
       commandId: 'open-notes',
     },
     {
+      id: 'command:start-onboarding',
+      title: 'Start Onboarding',
+      subtitle: 'Walk through Tezbar setup again',
+      keywords: ['onboarding', 'setup', 'welcome', 'tour', 'get started', 'intro', '/onboarding'],
+      commandId: 'start-onboarding',
+    },
+    {
       id: 'command:open-emoji-picker',
       title: 'Open Emoji Picker',
       subtitle: 'Tezbar emoji picker',

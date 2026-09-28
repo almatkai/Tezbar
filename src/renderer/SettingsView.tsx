@@ -31,6 +31,7 @@ import {
 } from '../shared/llmConfig'
 import type { VoiceModel, VoiceModelId } from '../shared/voice'
 import type { KnowledgeDepth, KnowledgeRootDepth, KnowledgeSnapshot } from '../shared/knowledge'
+import type { PiExtensionItem } from '../shared/desktop-api'
 import {
   Button,
   cx,
@@ -45,6 +46,7 @@ import {
 import { CurrencySettings } from './CurrencySettings'
 import ExtensionsSettingsTab from './ExtensionsSettingsTab'
 import { AppUpdateSettings } from './AppUpdateSettings'
+import { applyTezbarTheme, isTezbarThemePreference, TEZBAR_THEME_STORAGE_KEY, type TezbarThemePreference } from './theme'
 
 type SettingsTab =
   | 'general'
@@ -561,6 +563,10 @@ function checkProviderConfigured(
   const hasModel = pModels.length > 0
   if (provider === 'ollama' || provider === 'opencode') return hasModel
   const cfg = configs[provider] ?? {}
+  if (isCustomProvider(provider) || provider === 'openai-compatible') {
+    const url = cfg.openaiCompatibleBaseURL ?? cfg.baseURL ?? ''
+    return hasModel || Boolean(url.trim()) || Boolean(cfg.apiKey?.trim())
+  }
   if (provider === 'gemini') {
     const key = cfg.geminiApiKey ?? ''
     return hasModel && Boolean(key.trim())
@@ -576,11 +582,14 @@ function checkProviderConfigured(
 function isProviderConfigured(
   provider: ProviderId,
   apiKey: string,
-  _baseURL: string,
+  baseURL: string,
   models: AiProviderModel[]
 ): boolean {
   const hasModel = models.length > 0
   if (provider === 'ollama' || provider === 'opencode') return hasModel
+  if (isCustomProvider(provider) || provider === 'openai-compatible') {
+    return hasModel || Boolean(baseURL.trim()) || Boolean(apiKey.trim())
+  }
   return hasModel && Boolean(apiKey.trim())
 }
 
@@ -606,6 +615,13 @@ export default function SettingsView({
   nativeWindow?: boolean
 }): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
+  const [themePreference, setThemePreference] = useState<TezbarThemePreference>(() => {
+    const stored = window.localStorage.getItem(TEZBAR_THEME_STORAGE_KEY)
+    return isTezbarThemePreference(stored) ? stored : 'system'
+  })
+  const [runOnboardingNextLaunch, setRunOnboardingNextLaunch] = useState<boolean | null>(null)
+  const [onboardingSaving, setOnboardingSaving] = useState(false)
+  const [onboardingError, setOnboardingError] = useState<string | null>(null)
   const [retentionSec, setRetentionSec] = useState('60')
   const [extensionRuntimeTimeoutMinutes, setExtensionRuntimeTimeoutMinutes] = useState('5')
   const [aiModeTimeoutMinutes, setAiModeTimeoutMinutes] = useState('5')
@@ -637,7 +653,6 @@ export default function SettingsView({
   const [deviceBusy, setDeviceBusy] = useState(false)
   const [newProviderName, setNewProviderName] = useState('')
   const [newProviderBaseURL, setNewProviderBaseURL] = useState('')
-  const [newProviderModel, setNewProviderModel] = useState('')
   const [aiTaskProviderOverrides, setAiTaskProviderOverrides] = useState<
     Partial<Record<LlmTask, ProviderId>>
   >({})
@@ -671,59 +686,87 @@ export default function SettingsView({
   const [knowledge, setKnowledge] = useState<KnowledgeSnapshot | null>(null)
   const [knowledgeBusy, setKnowledgeBusy] = useState(false)
   const [knowledgeMessage, setKnowledgeMessage] = useState<string | null>(null)
+  const [piExtensions, setPiExtensions] = useState<PiExtensionItem[]>([])
+  const [piExtensionsLoading, setPiExtensionsLoading] = useState(false)
 
-  const loadAiModels = useCallback(async (provider: ProviderId) => {
-    setAiModelsLoading(true)
+  const loadPiExtensions = useCallback(async () => {
+    setPiExtensionsLoading(true)
     try {
-      const models = await window.tezbar.listLlmModels(provider)
-      if (models.length > 0) {
-        setAiProviderModels((prev) => {
-          const existing = prev[provider] ?? defaultModels(provider)
-          if (provider === 'copilot') {
-            // GitHub owns the Copilot catalog — the live `/models` response is
-            // authoritative. REPLACE the stored list instead of merging so stale
-            // or internal ids (e.g. leaked agent/search SKUs) saved by earlier
-            // merges drop out on the next refresh. Per-model flags like
-            // `hiddenFromPicker` and any stored `contextWindow` survive for ids
-            // still present in the live catalog. Entries the user added by hand
-            // (`discovered === false`) are never provider-owned, so they survive
-            // the replace untouched; discovered entries that vanish from the
-            // live catalog are dropped.
-            const keepFlags = new Map(existing.map((m) => [m.id, m]))
-            const seen = new Set<string>()
-            const merged: AiProviderModel[] = []
-            const push = (entry: AiProviderModel) => {
-              if (seen.has(entry.id)) return
-              seen.add(entry.id)
-              merged.push(entry)
-            }
-            for (const id of models) {
-              const prior = keepFlags.get(id)
-              push({
-                id,
-                capabilities: prior?.capabilities?.length ? prior.capabilities : inferCapabilities(id),
-                ...(prior?.contextWindow !== undefined ? { contextWindow: prior.contextWindow } : {}),
-                ...(prior?.hiddenFromPicker === true ? { hiddenFromPicker: true } : {}),
-              })
-            }
-            for (const m of existing) {
-              if (m.discovered === false) push(m)
-            }
-            return { ...prev, [provider]: normalizeProviderModelList(provider, merged) }
-          }
-          const discovered = models.map((id) => ({ id, capabilities: inferCapabilities(id) }))
-          return {
-            ...prev,
-            [provider]: normalizeProviderModelList(provider, [...existing, ...discovered]),
-          }
-        })
-      }
+      const list = await window.tezbar.listPiExtensions()
+      setPiExtensions(list)
     } catch {
-      /* Model discovery is optional; user-managed models remain available. */
+      /* ignore */
     } finally {
-      setAiModelsLoading(false)
+      setPiExtensionsLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    if (activeTab === 'ai') {
+      void loadPiExtensions()
+    }
+  }, [activeTab, loadPiExtensions])
+
+  const loadAiModels = useCallback(
+    async (provider: ProviderId, baseURLOverride?: string, apiKeyOverride?: string) => {
+      setAiModelsLoading(true)
+      try {
+        const models = await window.tezbar.listLlmModels(provider, baseURLOverride, apiKeyOverride)
+        if (models.length === 0) return
+        // Merge against the persisted config (the single source of truth) so
+        // hand-added models — even with typos — always survive, and discovered
+        // ids are added on top without dropping anything.
+        const config = await window.tezbar.getLlmConfig().catch(() => ({}) as LlmConfigRecord)
+        const existing = config.providerModels?.[provider] ?? defaultModels(provider)
+        const existingMap = new Map(existing.map((m) => [m.id, m]))
+        const seen = new Set<string>()
+        const merged: AiProviderModel[] = []
+        const push = (entry: AiProviderModel) => {
+          if (seen.has(entry.id)) return
+          seen.add(entry.id)
+          merged.push(entry)
+        }
+        for (const id of models) {
+          const prior = existingMap.get(id)
+          push({
+            id,
+            capabilities: prior?.capabilities?.length ? prior.capabilities : inferCapabilities(id),
+            ...(prior?.contextWindow !== undefined ? { contextWindow: prior.contextWindow } : {}),
+            ...(prior?.hiddenFromPicker === true ? { hiddenFromPicker: true } : {}),
+          })
+        }
+        // Keep every existing model (including user-added ones with custom/wrong names).
+        for (const m of existing) {
+          push(m)
+        }
+        const normalized = normalizeProviderModelList(provider, merged)
+        const patch: Partial<LlmConfigRecord> = {
+          providerModels: { ...(config.providerModels ?? {}), [provider]: normalized },
+        }
+        // Auto-select the first model when this provider has none selected yet.
+        // Merge with the existing selection map — never replace it wholesale.
+        const currentModel = (config.providerSelectedModels?.[provider] ?? '').trim()
+        if (!currentModel && normalized[0]) {
+          patch.model = normalized[0].id
+          patch.providerSelectedModels = {
+            ...(config.providerSelectedModels ?? {}),
+            [provider]: normalized[0].id,
+          }
+        }
+        setAiProviderModels((prev) => ({ ...prev, [provider]: normalized }))
+        if (patch.providerSelectedModels) {
+          setAiProviderSelectedModels((prev) => ({ ...prev, ...patch.providerSelectedModels }))
+        }
+        if (patch.model) setAiModel(patch.model)
+        void window.tezbar.setLlmConfig(patch as LlmConfigRecord)
+      } catch {
+        /* Model discovery is optional; user-managed models remain available. */
+      } finally {
+        setAiModelsLoading(false)
+      }
+    },
+    []
+  )
 
   const refreshVoiceModels = useCallback(async () => {
     const [models, selected] = await Promise.all([
@@ -777,6 +820,7 @@ export default function SettingsView({
 
   const reload = useCallback(async () => {
     const c = (await window.tezbar.getLlmConfig()) as LlmConfigRecord
+    setRunOnboardingNextLaunch(c.hasCompletedOnboarding === false)
     const provider = c.provider ?? 'ollama'
     const configuredProviders = c.customProviders ?? []
     const ms = typeof c.uiStateRetentionMs === 'number' ? c.uiStateRetentionMs : 60_000
@@ -902,20 +946,13 @@ export default function SettingsView({
   }, [])
 
   useEffect(() => {
-    const onEsc = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      if (hotkeyRecording) {
-        setHotkeyRecording(false)
-        setHotkeyMessage(null)
-        return
-      }
-      e.preventDefault()
-      e.stopPropagation()
-      onBack()
-    }
-    window.addEventListener('keydown', onEsc, true)
-    return () => window.removeEventListener('keydown', onEsc, true)
-  }, [hotkeyRecording, onBack])
+    if (!aiBaseURL.trim()) return
+    const timer = window.setTimeout(() => {
+      void loadAiModels(aiProvider)
+    }, 700)
+    return () => window.clearTimeout(timer)
+  }, [aiBaseURL, aiProvider, loadAiModels])
+
 
   const saveHotkey = useCallback(async (accelerator: string) => {
     try {
@@ -981,12 +1018,24 @@ export default function SettingsView({
     void loadAiModels(provider)
   }
 
-  const buildAiProviderPatch = (): LlmConfigRecord => {
-    const provider = aiProvider
-    const model = aiModel.trim() || recommendedModel(provider)
-    const baseURL = aiBaseURL.trim()
-    const apiKey = aiApiKey.trim()
-    const providerModels = {
+  type AiPatchOverrides = {
+    baseURL?: string
+    apiKey?: string
+    model?: string
+    provider?: ProviderId
+    activeProvider?: ProviderId
+    customProviders?: CustomAiProvider[]
+    providerModels?: Partial<Record<ProviderId, AiProviderModel[]>>
+    providerConfigs?: Partial<Record<ProviderId, AiProviderConfig>>
+  }
+
+  const buildAiProviderPatch = (overrides?: AiPatchOverrides): LlmConfigRecord => {
+    const provider = overrides?.provider ?? aiProvider
+    const model = (overrides?.model ?? aiModel).trim() || recommendedModel(provider)
+    const rawBaseURL = (overrides?.baseURL !== undefined ? overrides.baseURL : aiBaseURL).trim()
+    const baseURL = rawBaseURL.replace(/^(https?:\/\/)0\.0\.0\.0(?=[:/]|$)/, '$1127.0.0.1')
+    const apiKey = (overrides?.apiKey !== undefined ? overrides.apiKey : aiApiKey).trim()
+    const providerModels = overrides?.providerModels ?? {
       ...aiProviderModels,
       [provider]: normalizeProviderModelList(
         provider,
@@ -1014,24 +1063,26 @@ export default function SettingsView({
             ? {
                 ...aiProviderConfigs[provider],
                 apiKey,
-                openaiCompatibleBaseURL: baseURL || defaultBaseUrl(provider),
+                openaiCompatibleBaseURL: baseURL,
+                baseURL: baseURL,
               }
             : {
                 ...aiProviderConfigs[provider],
                 apiKey,
                 baseURL: baseURL || defaultBaseUrl(provider),
               }
-    const providerConfigs: Partial<Record<ProviderId, AiProviderConfig>> = {
+    const providerConfigs: Partial<Record<ProviderId, AiProviderConfig>> = overrides?.providerConfigs ?? {
       ...aiProviderConfigs,
       [provider]: providerConfig,
     }
 
-    const activeProvider = activeAiProvider
+    const activeProvider = overrides?.activeProvider ?? activeAiProvider
     const activeModel = providerSelectedModels[activeProvider] ?? recommendedModel(activeProvider)
+    const customList = overrides?.customProviders ?? customProviders
 
     const patch: LlmConfigRecord = {
       provider: activeProvider,
-      customProviders,
+      customProviders: customList,
       model: activeModel,
       providerConfigs,
       providerModels,
@@ -1053,6 +1104,7 @@ export default function SettingsView({
       patch.apiKey = activeCfg.apiKey ?? ''
       patch.openaiCompatibleBaseURL =
         activeCfg.openaiCompatibleBaseURL ?? defaultBaseUrl(activeProvider)
+      patch.baseURL = patch.openaiCompatibleBaseURL
     }
     if (activeProvider === 'gemini') {
       patch.geminiApiKey = activeCfg.geminiApiKey ?? ''
@@ -1064,6 +1116,7 @@ export default function SettingsView({
     if (isCustomProvider(activeProvider)) {
       patch.apiKey = activeCfg.apiKey ?? ''
       patch.openaiCompatibleBaseURL = activeCfg.openaiCompatibleBaseURL ?? ''
+      patch.baseURL = activeCfg.baseURL ?? activeCfg.openaiCompatibleBaseURL ?? ''
     }
     if (activeProvider === 'copilot') {
       patch.copilotGithubToken = activeCfg.copilotGithubToken ?? ''
@@ -1230,12 +1283,15 @@ export default function SettingsView({
 
   const addCustomProvider = (): void => {
     const title = newProviderName.trim()
-    const baseURL = newProviderBaseURL.trim()
-    const modelId = newProviderModel.trim()
-    if (!title || !baseURL || !modelId) {
-      setMsg({ tone: 'error', text: 'Provider name, endpoint, and initial model are required' })
+    let rawBaseURL = newProviderBaseURL.trim()
+    if (!title) {
+      setMsg({ tone: 'error', text: 'Provider name is required' })
       return
     }
+    if (!rawBaseURL) {
+      rawBaseURL = 'http://127.0.0.1:8080/v1'
+    }
+    const baseURL = rawBaseURL.replace(/^(https?:\/\/)0\.0\.0\.0(?=[:/]|$)/, '$1127.0.0.1')
     const slug =
       title
         .toLowerCase()
@@ -1248,27 +1304,104 @@ export default function SettingsView({
       suffix += 1
     }
     const provider: CustomAiProvider = { id, title, subtitle: 'Custom OpenAI-compatible endpoint' }
-    const models = normalizeProviderModelList(id, [
-      { id: modelId, capabilities: inferCapabilities(modelId) },
-    ])
-    setCustomProviders((prev) => [...prev, provider])
-    setAiProviderModels((prev) => ({ ...prev, [id]: models }))
-    setAiProviderSelectedModels((prev) => ({ ...prev, [id]: modelId }))
-    setAiProviderConfigs((prev) => ({
-      ...prev,
-      [id]: { apiKey: '', openaiCompatibleBaseURL: baseURL },
-    }))
+    const nextCustomList = [...customProviders, provider]
+    const nextModels = { ...aiProviderModels, [id]: [] }
+    const nextSelected = { ...aiProviderSelectedModels, [id]: '' }
+    const nextConfigs: Record<string, AiProviderConfig> = {
+      ...aiProviderConfigs,
+      [id]: { apiKey: '', openaiCompatibleBaseURL: baseURL, baseURL },
+    }
+
+    setCustomProviders(nextCustomList)
+    setAiProviderModels(nextModels)
+    setAiProviderSelectedModels(nextSelected)
+    setAiProviderConfigs(nextConfigs)
     setAiProvider(id)
+    setActiveAiProvider(id)
     setAiApiKey('')
     setAiBaseURL(baseURL)
-    setAiModel(modelId)
+    setAiModel('')
     setAddProviderOpen(false)
     setNewProviderName('')
     setNewProviderBaseURL('')
-    setNewProviderModel('')
+
+    // Immediately persist all changes to disk so backend and other views have it right now!
+    persistAiSettings(true, {
+      provider: id,
+      activeProvider: id,
+      baseURL,
+      apiKey: '',
+      model: '',
+      customProviders: nextCustomList,
+      providerModels: nextModels,
+      providerConfigs: nextConfigs,
+    })
+
     setMsg({
       tone: 'success',
-      text: 'Custom provider added. Add its API key, then save AI Settings.',
+      text: `Created ${title}. Fetching models from ${baseURL}...`,
+    })
+
+    // Immediately fetch models from the new endpoint!
+    void loadAiModels(id, baseURL, '')
+  }
+
+  const removeCustomProvider = (id: ProviderId): void => {
+    const target = customProviders.find((p) => p.id === id)
+    const title = target?.title ?? id
+    const nextCustomList = customProviders.filter((p) => p.id !== id)
+    const nextConfigs = { ...aiProviderConfigs }
+    delete nextConfigs[id]
+    const nextModels = { ...aiProviderModels }
+    delete nextModels[id]
+    const nextSelected = { ...aiProviderSelectedModels }
+    delete nextSelected[id]
+
+    const fallbackProvider: ProviderId = 'ollama'
+    const nextActive = activeAiProvider === id ? fallbackProvider : activeAiProvider
+    const nextCurrent = aiProvider === id ? fallbackProvider : aiProvider
+
+    setCustomProviders(nextCustomList)
+    setAiProviderConfigs(nextConfigs)
+    setAiProviderModels(nextModels)
+    setAiProviderSelectedModels(nextSelected)
+    setActiveAiProvider(nextActive)
+    setAiProvider(nextCurrent)
+
+    const fallbackConfig = nextConfigs[nextCurrent] ?? {}
+    const nextKey =
+      nextCurrent === 'gemini'
+        ? (fallbackConfig.geminiApiKey ?? '')
+        : nextCurrent === 'copilot'
+          ? (fallbackConfig.copilotGithubToken ?? '')
+          : (fallbackConfig.apiKey ?? '')
+    const nextBase =
+      fallbackConfig.openaiCompatibleBaseURL ??
+      fallbackConfig.baseURL ??
+      defaultBaseUrl(nextCurrent)
+    const nextModel =
+      nextSelected[nextCurrent] ??
+      nextModels[nextCurrent]?.[0]?.id ??
+      recommendedModel(nextCurrent)
+
+    setAiApiKey(nextKey)
+    setAiBaseURL(nextBase)
+    setAiModel(nextModel)
+
+    persistAiSettings(true, {
+      provider: nextCurrent,
+      activeProvider: nextActive,
+      baseURL: nextBase,
+      apiKey: nextKey,
+      model: nextModel,
+      customProviders: nextCustomList,
+      providerConfigs: nextConfigs,
+      providerModels: nextModels,
+    })
+
+    setMsg({
+      tone: 'success',
+      text: `Removed ${title}.`,
     })
   }
 
@@ -1281,11 +1414,32 @@ export default function SettingsView({
   // Unlike the dirty-tracked fields, this never fires on its own — only a real
   // user action (add/remove model, toggle visibility/capability, switch
   // provider/model, edit key/URL) invokes it.
-  const persistAiSettings = (immediate = false): void => {
+  const persistAiSettings = (immediate = false, overrides?: AiPatchOverrides): void => {
     if (aiSaveTimer.current !== null) window.clearTimeout(aiSaveTimer.current)
+    const patch = buildAiProviderPatch(overrides)
+    if (overrides?.baseURL !== undefined) {
+      const targetProvider = overrides.provider ?? aiProvider
+      const normalizedOverride = overrides.baseURL
+        .trim()
+        .replace(/^(https?:\/\/)0\.0\.0\.0(?=[:/]|$)/, '$1127.0.0.1')
+      setAiProviderConfigs((prev) => ({
+        ...prev,
+        [targetProvider]: {
+          ...prev[targetProvider],
+          openaiCompatibleBaseURL: normalizedOverride,
+          baseURL: normalizedOverride,
+        },
+      }))
+    }
+    if (overrides?.customProviders) {
+      setCustomProviders(overrides.customProviders)
+    }
+    if (overrides?.activeProvider) {
+      setActiveAiProvider(overrides.activeProvider)
+    }
     const write = (): void => {
       void window.tezbar
-        .setLlmConfig(buildAiProviderPatch())
+        .setLlmConfig(patch)
         .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
     }
     if (immediate) {
@@ -1295,8 +1449,74 @@ export default function SettingsView({
     aiSaveTimer.current = window.setTimeout(() => {
       aiSaveTimer.current = null
       write()
-    }, 400)
+    }, 300)
   }
+
+  const save = useCallback((): void => {
+    const n = Number(retentionSec)
+    if (!Number.isFinite(n) || n < 0) {
+      setMsg({ tone: 'error', text: 'Enter a number greater than or equal to 0' })
+      return
+    }
+    void window.tezbar
+      .setLlmConfig({ uiStateRetentionMs: Math.round(n * 1000) })
+      .then(() => {
+        setMsg({ tone: 'success', text: 'Saved' })
+        void reload()
+      })
+      .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
+  }, [retentionSec, reload])
+
+  const [saveShortcutSuccess, setSaveShortcutSuccess] = useState(false)
+  const saveShortcutTimer = useRef<number | null>(null)
+
+  const triggerSaveGreen = useCallback((): void => {
+    setSaveShortcutSuccess(true)
+    if (saveShortcutTimer.current !== null) window.clearTimeout(saveShortcutTimer.current)
+    saveShortcutTimer.current = window.setTimeout(() => {
+      setSaveShortcutSuccess(false)
+      saveShortcutTimer.current = null
+    }, 1500)
+  }, [])
+
+  const saveCurrentSettings = useCallback(
+    async (overrides?: AiPatchOverrides): Promise<void> => {
+      persistAiSettings(true, overrides)
+      if (activeTab === 'general') {
+        save()
+      }
+      triggerSaveGreen()
+      setMsg({ tone: 'success', text: 'Settings saved' })
+    },
+    [activeTab, save, triggerSaveGreen]
+  )
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        if (hotkeyRecording) {
+          setHotkeyRecording(false)
+          setHotkeyMessage(null)
+          return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        onBack()
+        return
+      }
+      if (e.key === 'Enter') {
+        const target = e.target as HTMLElement | null
+        if (target && target.tagName === 'TEXTAREA') return
+        if (target && target.getAttribute('placeholder') === 'Add model id') return
+        // The add-provider dialog handles its own Enter (adds the provider).
+        if (addProviderOpen) return
+        e.preventDefault()
+        void saveCurrentSettings()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [addProviderOpen, hotkeyRecording, onBack, saveCurrentSettings])
 
   // Flush any pending debounced AI save when the Settings window unmounts
   // (e.g. user closes it within the 400ms debounce window), so an edit isn't
@@ -1314,21 +1534,6 @@ export default function SettingsView({
       }
     }
   }, [])
-
-  const save = (): void => {
-    const n = Number(retentionSec)
-    if (!Number.isFinite(n) || n < 0) {
-      setMsg({ tone: 'error', text: 'Enter a number greater than or equal to 0' })
-      return
-    }
-    void window.tezbar
-      .setLlmConfig({ uiStateRetentionMs: Math.round(n * 1000) })
-      .then(() => {
-        setMsg({ tone: 'success', text: 'Saved' })
-        void reload()
-      })
-      .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
-  }
 
   // Autosave memory "max items" on blur / Enter, validating the number.
   const saveMemoryMaxItems = (): void => {
@@ -1545,6 +1750,38 @@ export default function SettingsView({
               </SettingsRow>
               <Divider />
               <SettingsRow
+                label="Onboarding"
+                detail="For testing: show the onboarding tour on the next app launch. Completing or skipping the tour turns this off again."
+              >
+                <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
+                  <input
+                    type="checkbox"
+                    checked={runOnboardingNextLaunch ?? false}
+                    disabled={runOnboardingNextLaunch === null || onboardingSaving}
+                    onChange={async (event) => {
+                      const enabled = event.target.checked
+                      setOnboardingSaving(true)
+                      setOnboardingError(null)
+                      try {
+                        await window.tezbar.setLlmConfig({ hasCompletedOnboarding: !enabled })
+                        setRunOnboardingNextLaunch(enabled)
+                      } catch {
+                        setOnboardingError('Could not save onboarding preference.')
+                      } finally {
+                        setOnboardingSaving(false)
+                      }
+                    }}
+                  />
+                  Run onboarding on next launch
+                </label>
+                {onboardingError ? (
+                  <p className="mt-1.5 text-[11px] text-rose-300" role="alert">
+                    {onboardingError}
+                  </p>
+                ) : null}
+              </SettingsRow>
+              <Divider />
+              <SettingsRow
                 label="Tezbar Hotkey"
                 detail={
                   hotkeyRecording
@@ -1714,21 +1951,43 @@ export default function SettingsView({
                 </div>
               ) : null}
               <Divider />
-              <SettingsRow label="Appearance">
-                <div className="flex gap-3">
-                  {['Light', 'Dark', 'System'].map((mode) => (
+              <SettingsRow
+                label="Appearance"
+                detail="Choose Tezbar's color theme. System follows your device setting."
+              >
+                <div className="flex gap-3" role="group" aria-label="Color theme">
+                  {(
+                    [
+                      { id: 'white', label: 'Light' },
+                      { id: 'dark', label: 'Dark' },
+                      { id: 'system', label: 'System' },
+                    ] as const
+                  ).map((mode) => (
                     <button
-                      key={mode}
+                      key={mode.id}
                       type="button"
-                      className={cx(
-                        'flex h-[58px] w-[72px] flex-col items-center justify-center gap-1 rounded-tezbar-row border text-[12px] font-semibold transition',
-                        mode === 'System'
-                          ? 'border-accent/70 bg-white/[0.08] text-ink-1'
-                          : 'border-white/10 bg-white/[0.035] text-ink-3 hover:text-ink-1'
-                      )}
+                      aria-pressed={themePreference === mode.id}
+                      onClick={() => {
+                        setThemePreference(mode.id)
+                        applyTezbarTheme(mode.id)
+                        window.localStorage.setItem(TEZBAR_THEME_STORAGE_KEY, mode.id)
+                      }}
+                      className="theme-choice relative flex h-[58px] w-[72px] flex-col items-center justify-center gap-1 rounded-tezbar-row border text-[12px] font-semibold transition"
                     >
-                      <span className="h-6 w-6 rounded-full border border-current" />
-                      {mode}
+                      <span
+                        className={cx(
+                          'h-6 w-6 rounded-full border',
+                          mode.id === 'white'
+                            ? 'border-slate-300 bg-white'
+                            : mode.id === 'dark'
+                              ? 'border-slate-600 bg-slate-950'
+                              : 'border-slate-400 bg-gradient-to-br from-white via-slate-200 to-slate-900'
+                        )}
+                      />
+                      {themePreference === mode.id ? (
+                        <span className="theme-choice__check absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black leading-none">✓</span>
+                      ) : null}
+                      {mode.label}
                     </button>
                   ))}
                 </div>
@@ -1749,12 +2008,11 @@ export default function SettingsView({
               {/* Two Column Provider Configurator */}
               <div className="flex gap-6 rounded-tezbar-row border border-white/10 bg-white/[0.015] p-4 min-h-[500px]">
                 {/* Left Sidebar */}
-                <div className="w-[220px] shrink-0 border-r border-white/10 pr-4 flex flex-col justify-between">
-                  <div className="space-y-1">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-ink-3 px-2 pb-2">
-                      AI Providers
-                    </div>
-                    <div className="space-y-1 overflow-y-auto max-h-[380px] pr-1">
+                <div className="w-[220px] shrink-0 border-r border-white/10 pr-4 flex flex-col min-h-0">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-ink-3 px-2 pb-2 shrink-0">
+                    AI Providers
+                  </div>
+                  <div className="space-y-1 overflow-y-auto flex-1 min-h-0 pr-1">
                       {availableProviders.map((provider) => {
                         const isActive = provider.id === activeAiProvider
                         const isSelected = provider.id === aiProvider
@@ -1811,10 +2069,9 @@ export default function SettingsView({
                         )
                       })}
                     </div>
-                  </div>
 
                   {/* Add Custom Provider */}
-                  <div className="pt-2 border-t border-white/[0.07]">
+                  <div className="pt-2 mt-2 border-t border-white/[0.07] shrink-0">
                     <Button
                       variant="ghost"
                       className="w-full text-xs justify-center py-1.5 font-semibold"
@@ -1828,20 +2085,26 @@ export default function SettingsView({
                         <TextField
                           value={newProviderName}
                           onChange={(event) => setNewProviderName(event.target.value)}
-                          placeholder="Provider name"
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              addCustomProvider()
+                            }
+                          }}
+                          placeholder="Provider name (e.g. Model)"
                           className="text-xs"
+                          autoFocus
                         />
                         <TextField
                           value={newProviderBaseURL}
                           onChange={(event) => setNewProviderBaseURL(event.target.value)}
-                          placeholder="Base URL"
-                          className="text-xs font-mono"
-                          spellCheck={false}
-                        />
-                        <TextField
-                          value={newProviderModel}
-                          onChange={(event) => setNewProviderModel(event.target.value)}
-                          placeholder="Initial model ID"
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              addCustomProvider()
+                            }
+                          }}
+                          placeholder="Base URL (e.g. http://127.0.0.1:8080/v1)"
                           className="text-xs font-mono"
                           spellCheck={false}
                         />
@@ -1872,6 +2135,14 @@ export default function SettingsView({
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {isCustomProvider(aiProvider) ? (
+                          <Button
+                            variant="danger"
+                            onClick={() => removeCustomProvider(aiProvider)}
+                          >
+                            Remove provider
+                          </Button>
+                        ) : null}
                         {activeAiProvider !== aiProvider ? (
                           <Button
                             variant="primary"
@@ -1879,8 +2150,9 @@ export default function SettingsView({
                               setActiveAiProvider(aiProvider)
                               setMsg({
                                 tone: 'success',
-                                text: `Selected ${providerTitle(aiProvider, { customProviders })} as the active provider. Remember to save settings.`,
+                                text: `Selected ${providerTitle(aiProvider, { customProviders })} as the active provider.`,
                               })
+                              persistAiSettings(true, { activeProvider: aiProvider })
                             }}
                           >
                             Use this provider
@@ -1906,13 +2178,21 @@ export default function SettingsView({
                         </div>
                       ) : null}
 
-                      {aiProvider !== 'ollama' && aiProvider !== 'opencode' ? (
+                      {aiProvider === 'antigravity' ? (
+                        <div className="rounded-tezbar-row border border-sky-400/25 bg-sky-500/10 p-3 text-[12px] text-sky-200">
+                          Uses your authenticated Google account managed by Pi Agent (~/.pi/agent/auth.json). Gemini and Claude models are available without an API key.
+                        </div>
+                      ) : null}
+
+                      {aiProvider !== 'ollama' && aiProvider !== 'opencode' && aiProvider !== 'antigravity' ? (
                         <SettingsRow
                           label={aiProvider === 'copilot' ? 'GitHub Token' : 'API Key'}
                           detail={
                             aiProvider === 'copilot'
                               ? 'Use a GitHub token or OAuth access token with Copilot Chat access.'
-                              : 'Stored in the local Tezbar config and used by the selected provider.'
+                              : isCustomProvider(aiProvider) || aiProvider === 'openai-compatible'
+                                ? 'Optional. Stored in local config. Leave blank for local runners like model-runner or Ollama.'
+                                : 'Stored in the local Tezbar config and used by the selected provider.'
                           }
                         >
                           {aiProvider === 'copilot' ? (
@@ -1970,19 +2250,27 @@ export default function SettingsView({
                                 setAiApiKey(event.target.value)
                                 persistAiSettings()
                               }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  void saveCurrentSettings({ apiKey: event.currentTarget.value })
+                                }
+                              }}
                               placeholder={
-                                aiProvider === 'anthropic'
-                                  ? 'sk-ant-...'
-                                  : aiProvider === 'gemini'
-                                    ? 'AIza...'
-                                    : 'sk-...'
+                                isCustomProvider(aiProvider) || aiProvider === 'openai-compatible'
+                                  ? 'Optional (e.g. sk-...)'
+                                  : aiProvider === 'anthropic'
+                                    ? 'sk-ant-...'
+                                    : aiProvider === 'gemini'
+                                      ? 'AIza...'
+                                      : 'sk-...'
                               }
                             />
                           )}
                         </SettingsRow>
                       ) : null}
 
-                      {aiProvider !== 'copilot' && aiProvider !== 'opencode' ? (
+                      {aiProvider !== 'copilot' && aiProvider !== 'opencode' && aiProvider !== 'antigravity' ? (
                         <SettingsRow
                           label="Base URL"
                           detail={
@@ -1996,6 +2284,12 @@ export default function SettingsView({
                             onChange={(event) => {
                               setAiBaseURL(event.target.value)
                               persistAiSettings()
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault()
+                                void saveCurrentSettings({ baseURL: event.currentTarget.value })
+                              }
                             }}
                             placeholder={defaultBaseUrl(aiProvider)}
                           />
@@ -2028,7 +2322,10 @@ export default function SettingsView({
                             <Button
                               variant="quiet"
                               disabled={aiModelsLoading}
-                              onClick={() => void loadAiModels(aiProvider)}
+                              onClick={() => {
+                                persistAiSettings(true)
+                                void loadAiModels(aiProvider, aiBaseURL, aiApiKey)
+                              }}
                             >
                               {aiModelsLoading ? 'Loading...' : 'Refresh'}
                             </Button>
@@ -2056,7 +2353,7 @@ export default function SettingsView({
                             </button>
                           </div>
 
-                          <ul className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                          <ul className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
                             {currentAiModels.map((model) => (
                               <li
                                 key={model.id}
@@ -2206,6 +2503,66 @@ export default function SettingsView({
                   </label>
                 </div>
               </SettingsRow>
+
+              {/* Pi Agent Extensions */}
+              <Divider />
+              <div className="rounded-tezbar-row border border-white/10 bg-white/[0.015] p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[13px] font-semibold text-ink-1">Pi Agent Extensions</h3>
+                      <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300">
+                        {piExtensions.length} active
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-ink-3 mt-0.5">
+                      Installed packages and extension scripts loaded by the local Pi agent runtime.
+                    </p>
+                  </div>
+                  <Button variant="quiet" disabled={piExtensionsLoading} onClick={() => void loadPiExtensions()}>
+                    {piExtensionsLoading ? 'Refreshing…' : 'Refresh'}
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                  {piExtensions.map((ext) => (
+                    <div
+                      key={ext.id}
+                      className="flex flex-col justify-between rounded-tezbar-row border border-white/[0.07] bg-white/[0.025] p-3 transition hover:border-white/15"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
+                            <span className="font-semibold text-[12px] text-ink-1 truncate">{ext.name}</span>
+                          </div>
+                          <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9.5px] font-mono text-ink-3 shrink-0">
+                            {ext.version}
+                          </span>
+                        </div>
+                        {ext.description ? (
+                          <p className="text-[11px] text-ink-3 mt-1.5 line-clamp-2 leading-relaxed">
+                            {ext.description}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      {ext.features && ext.features.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-2.5 pt-2 border-t border-white/[0.04]">
+                          {ext.features.map((feature, idx) => (
+                            <span
+                              key={idx}
+                              className="rounded-tezbar-chip bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 text-[9px] font-medium text-ink-2"
+                            >
+                              {feature}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               {/* AI settings now autosave — no global button. */}
               <div className="mt-4 flex items-center">
@@ -2906,7 +3263,22 @@ export default function SettingsView({
 
         <footer className="no-drag shrink-0 border-t border-white/[0.07] px-4 py-2">
           <HintBar>
-            <Hint label="Save" keys={<Kbd>Enter</Kbd>} />
+            <Hint
+              label={saveShortcutSuccess ? 'Saved!' : 'Save'}
+              className={saveShortcutSuccess ? 'text-emerald-400 font-semibold' : undefined}
+              keys={
+                <Kbd
+                  className={cx(
+                    'transition-all duration-200',
+                    saveShortcutSuccess
+                      ? '!border-emerald-400 !bg-emerald-500/25 !text-emerald-300 !shadow-[0_0_12px_rgba(52,211,153,0.55)] font-bold scale-105'
+                      : ''
+                  )}
+                >
+                  Enter
+                </Kbd>
+              }
+            />
             <Hint label={nativeWindow ? 'Close' : 'Back'} keys={<Kbd>Esc</Kbd>} />
           </HintBar>
         </footer>

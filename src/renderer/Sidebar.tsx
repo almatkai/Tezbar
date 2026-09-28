@@ -334,6 +334,7 @@ export default function Sidebar({ activeSurface, onSelectSurface }: SidebarProps
                   <li key={item.id}>
                     <button
                       onClick={() => onSelectSurface(item.id)}
+                      aria-current={active ? 'page' : undefined}
                       className={`group relative flex w-full items-center gap-3 rounded-lg px-2.5 py-1.5 text-left transition-all duration-200 ${
                         active
                           ? 'bg-white/[0.07] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'

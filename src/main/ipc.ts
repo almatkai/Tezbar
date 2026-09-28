@@ -6,10 +6,14 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  nativeImage,
   screen,
   shell,
 } from '@tezbar/desktop-runtime'
 import type { WebContents } from '@tezbar/desktop-runtime'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { decodePngDataUrl } from './clipboardPng'
 import { setSuppressBlurHide } from './windowState'
 import {
   AGENT_IPC,
@@ -82,6 +86,7 @@ import {
   readLLMConfig,
 } from './llm/registry'
 import type { ProviderId } from '../shared/llmConfig'
+import { isCustomProvider } from '../shared/aiProviders'
 import { classifyIntent } from './router'
 import {
   executeSearchAction,
@@ -111,6 +116,7 @@ import type { VoiceModelId } from '../shared/voice'
 import type { KnowledgeDepth, KnowledgeRootDepth } from '../shared/knowledge'
 import { listBackgroundTasks } from './backgroundTasks'
 import { requestPermission, snapshotPermissions } from './permissions/manager'
+import { checkPiAgent, installPiAgent } from './agent/piInstall'
 import type { PermissionId } from '../shared/permissions'
 import { clearSafetyLog, listSafetyLog } from './safety/log'
 import { listSafetyDescriptors } from './safety/registry'
@@ -586,6 +592,7 @@ function startChatRun(sender: WebContents, turns: ChatTurn[]): string {
 }
 
 /** Called from `main/index.ts` on `will-quit` to flush subprocesses. */
+/** Called from `main/index.ts` on `will-quit` to flush subprocesses. */
 export function shutdownIpcHandlers(): void {
   answerAbort?.abort()
   cancelPendingAgentApprovals()
@@ -656,6 +663,8 @@ export function registerIpcHandlers(
       'gemini',
       'opencode',
       'deepseek',
+      'antigravity',
+      ...(cfg.customProviders?.map((provider) => provider.id) ?? []),
     ]
     const entries = await Promise.all(
       ids.map(async (id) => {
@@ -670,29 +679,45 @@ export function registerIpcHandlers(
     return Object.fromEntries(entries) as Record<ProviderId, boolean>
   })
 
-  ipcMain.handle('llm-list-models', async (_event, providerId: unknown) => {
-    const id = providerId as ProviderId
-    const customProvider =
-      typeof id === 'string' &&
-      readLLMConfig().customProviders?.some((provider) => provider.id === id)
-    if (
-      id !== 'openai' &&
-      id !== 'openai-compatible' &&
-      id !== 'tokenrouter' &&
-      id !== 'anthropic' &&
-      id !== 'ollama' &&
-      id !== 'copilot' &&
-      id !== 'gemini' &&
-      id !== 'opencode' &&
-      id !== 'deepseek' &&
-      !customProvider
-    )
-      return []
-    try {
-      return await listModelsForProvider(id)
-    } catch {
-      return []
+  ipcMain.handle(
+    'llm-list-models',
+    async (_event, providerId: unknown, baseURLOverride?: unknown, apiKeyOverride?: unknown) => {
+      const id = providerId as ProviderId
+      const isCustom =
+        typeof id === 'string' &&
+        (isCustomProvider(id) ||
+          id.startsWith('custom:') ||
+          readLLMConfig().customProviders?.some((provider) => (provider.id as string) === (id as string)))
+      if (
+        id !== 'openai' &&
+        id !== 'openai-compatible' &&
+        id !== 'tokenrouter' &&
+        id !== 'anthropic' &&
+        id !== 'ollama' &&
+        id !== 'copilot' &&
+        id !== 'gemini' &&
+        id !== 'opencode' &&
+        id !== 'deepseek' &&
+        id !== 'antigravity' &&
+        !isCustom
+      )
+        return []
+      try {
+        return await listModelsForProvider(
+          id,
+          undefined,
+          typeof baseURLOverride === 'string' ? baseURLOverride : undefined,
+          typeof apiKeyOverride === 'string' ? apiKeyOverride : undefined
+        )
+      } catch {
+        return []
+      }
     }
+  )
+
+  ipcMain.handle('pi-extensions:list', async () => {
+    const { getInstalledPiExtensions } = await import('./agent/piExtensions')
+    return getInstalledPiExtensions()
   })
 
   // Renderer reports its measured content height. We clamp to the launcher
@@ -711,6 +736,10 @@ export function registerIpcHandlers(
     if (!Number.isFinite(height)) return
     setLauncherContentHeight(win, height, zoomFactor)
   })
+
+  ipcMain.handle('pi:check', async () => checkPiAgent())
+
+  ipcMain.handle('pi:install', async () => installPiAgent())
 
   ipcMain.handle('permissions:snapshot', async () => snapshotPermissions())
 
@@ -1449,10 +1478,27 @@ export function registerIpcHandlers(
     return listInstalledRegistryExtensions()
   })
 
-  ipcMain.handle('extension:search-store', async (_event, query: unknown) => {
-    const q = typeof query === 'string' ? query : ''
+  ipcMain.handle('extension:search-store', async (_event, payload: unknown, maybeOptions?: unknown) => {
+    let query = ''
+    let offset: number | undefined
+    let limit: number | undefined
+
+    if (typeof payload === 'string') {
+      query = payload
+      if (maybeOptions && typeof maybeOptions === 'object') {
+        const opt = maybeOptions as { offset?: unknown; limit?: unknown }
+        if (typeof opt.offset === 'number') offset = opt.offset
+        if (typeof opt.limit === 'number') limit = opt.limit
+      }
+    } else if (payload && typeof payload === 'object') {
+      const body = payload as { query?: unknown; offset?: unknown; limit?: unknown }
+      if (typeof body.query === 'string') query = body.query
+      if (typeof body.offset === 'number') offset = body.offset
+      if (typeof body.limit === 'number') limit = body.limit
+    }
+
     const { searchExtensionCatalog } = await loadExtensionRegistry()
-    return searchExtensionCatalog(q)
+    return searchExtensionCatalog(query, { offset, limit })
   })
 
   ipcMain.handle('extension:install', async (_event, extensionId: unknown) => {
@@ -1610,6 +1656,21 @@ export function registerIpcHandlers(
     const text = typeof raw === 'string' ? raw : String(raw ?? '')
     clipboard.writeText(text)
     return { ok: true }
+  })
+
+  ipcMain.handle('clipboard:write-png', async (_event, raw: unknown) => {
+    const bytes = typeof raw === 'string' ? decodePngDataUrl(raw) : null
+    if (!bytes) return { ok: false, error: 'Invalid PNG data URL' }
+    const path = join(app.getPath('temp'), 'tezbar-qr-clipboard.png')
+    try {
+      writeFileSync(path, bytes)
+      const image = nativeImage.createFromPath(path)
+      if (image.isEmpty()) return { ok: false, error: 'Could not read QR image' }
+      clipboard.writeImage(image)
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Could not copy QR image' }
+    }
   })
 
   ipcMain.handle('shell:open', async (_event, raw: unknown) => {

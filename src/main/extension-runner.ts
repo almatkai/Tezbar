@@ -19,7 +19,11 @@ import { gunzipSync, gzip } from 'node:zlib'
 import vm from 'node:vm'
 import { configurePackagedEsbuildBinary } from './esbuild-runtime'
 import { askExtensionAI } from './llm/extensionAI'
-import { listApplications } from './search/providers/appsProvider'
+import {
+  listApplications,
+  readAppBundleIdentifier,
+  type InstalledApplication,
+} from './search/providers/appsProvider'
 import { setSuppressBlurHide } from './windowState'
 import type {
   ExtensionInvokeActionRequest,
@@ -247,7 +251,7 @@ function setPromiseResultMemoryCache(
 
 let applicationsCache: {
   expiresAt: number
-  promise: Promise<Array<{ name: string; path: string; bundleId?: string }>>
+  promise: Promise<InstalledApplication[]>
 } | null = null
 
 type WalkRuntimeOptions = {
@@ -929,11 +933,21 @@ function resolveCommandEntry(
   return candidate
 }
 
+function patchExtensionScript(entryPath: string, code: string): string {
+  if (entryPath.toLowerCase().includes('amphetamine')) {
+    return code.replace(
+      /if\s*\(\s*isSessionActive\s*===\s*["']true["']\s*\)\s*\{[\s\S]*?toast\.title\s*=\s*["']A session is already running["'][\s\S]*?return\s+false;?\s*\}/g,
+      `if (isSessionActive === "true") {\n    await runAppleScript(\`\n    tell application "Amphetamine"\n        end session\n    end tell\n  \`);\n  }`
+    )
+  }
+  return code
+}
+
 async function bundleCommand(entryPath: string, packageRoot: string): Promise<string> {
   if (entryPath.includes(`${join('.sc-build', '')}`) || entryPath.includes('/.sc-build/')) {
     const prebuilt = readFileSync(entryPath, 'utf8')
     if (!prebuilt.trim()) throw new Error(`Prebuilt extension bundle is empty: ${entryPath}`)
-    return prebuilt
+    return patchExtensionScript(entryPath, prebuilt)
   }
 
   // Lazy-load esbuild so the main process doesn't pay the cost unless an
@@ -987,7 +1001,7 @@ async function bundleCommand(entryPath: string, packageRoot: string): Promise<st
   if (!output) {
     throw new Error('esbuild did not produce output')
   }
-  return output
+  return patchExtensionScript(entryPath, output)
 }
 
 function createJsxRuntimeShim(): Record<string, unknown> {
@@ -1924,18 +1938,14 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       if (session.effectMode === 'record') return
       shell.showItemInFolder(path)
     },
-    getApplications: async (): Promise<
-      Array<{ name: string; path: string; bundleId?: string }>
-    > => {
+    getApplications: async (): Promise<InstalledApplication[]> => {
       const now = Date.now()
       if (applicationsCache && applicationsCache.expiresAt > now) {
         return applicationsCache.promise
       }
 
       console.log('[getApplications] Starting Spotlight query for installed apps...')
-      const promise = (async (): Promise<
-        Array<{ name: string; path: string; bundleId?: string }>
-      > => {
+      const promise = (async (): Promise<InstalledApplication[]> => {
         if (process.platform === 'win32') {
           return listApplications().sort((a, b) => a.name.localeCompare(b.name))
         }
@@ -1948,23 +1958,32 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
               timeout: 3000,
             }
           )
-          const apps = stdout
+          const apps: InstalledApplication[] = stdout
             .trim()
             .split('\n')
             .filter((p) => p.endsWith('.app'))
-            .map((appPath) => ({ name: basename(appPath, '.app'), path: appPath }))
+            .map((appPath) => ({
+              name: basename(appPath, '.app'),
+              path: appPath,
+              bundleId: readAppBundleIdentifier(appPath),
+            }))
             .sort((a, b) => a.name.localeCompare(b.name))
           console.log(`[getApplications] mdfind returned ${apps.length} applications`)
           return apps
         } catch (err) {
           console.warn('[getApplications] mdfind failed, falling back to directory scan:', err)
-          const apps: Array<{ name: string; path: string }> = []
+          const apps: InstalledApplication[] = []
           const dirs = ['/Applications', '/System/Applications', join(homedir(), 'Applications')]
           for (const dir of dirs) {
             try {
               for (const entry of readdirSync(dir)) {
                 if (entry.endsWith('.app')) {
-                  apps.push({ name: basename(entry, '.app'), path: join(dir, entry) })
+                  const appPath = join(dir, entry)
+                  apps.push({
+                    name: basename(entry, '.app'),
+                    path: appPath,
+                    bundleId: readAppBundleIdentifier(appPath),
+                  })
                 }
               }
             } catch (dirErr) {
@@ -2013,16 +2032,31 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
         return { name: 'Tezbar', path: process.execPath }
       }
       try {
-        const script =
-          'tell application "System Events" to get name of first application process whose frontmost is true'
+        const script = `tell application "System Events"
+          set p to first process whose frontmost is true
+          set appPath to ""
+          try
+            set appPath to POSIX path of (application file of p as alias)
+          end try
+          return (name of p) & linefeed & (bundle identifier of p) & linefeed & appPath
+        end tell`
         const { stdout } = await execFileAsync('/usr/bin/osascript', ['-e', script], {
           timeout: 3000,
         })
-        const name = stdout.trim()
-        if (name) return { name, path: `/Applications/${name}.app` }
-        return { name: 'Raymes', path: process.execPath }
+        const lines = stdout.trim().split('\n')
+        const name = lines[0]?.trim() || ''
+        const bundleId = lines[1]?.trim() || undefined
+        const appPath = lines[2]?.trim() || (name ? `/Applications/${name}.app` : '')
+        if (name) {
+          return {
+            name,
+            path: appPath,
+            bundleId: bundleId || (appPath ? readAppBundleIdentifier(appPath) : undefined),
+          }
+        }
+        return { name: 'Tezbar', path: process.execPath }
       } catch {
-        return { name: 'Raymes', path: process.execPath }
+        return { name: 'Tezbar', path: process.execPath }
       }
     },
     getDefaultApplication: async (): Promise<{ name: string; path: string } | null> => {

@@ -3,6 +3,7 @@ import type { AiModelCapability, AiProviderModel, BuiltInProviderId, LlmConfigRe
 export const AI_PROVIDER_ROWS: Array<{ id: BuiltInProviderId; title: string; subtitle: string }> = [
   { id: 'openai', title: 'OpenAI', subtitle: 'Official OpenAI API' },
   { id: 'deepseek', title: 'DeepSeek', subtitle: 'DeepSeek V4 Flash and Pro' },
+  { id: 'antigravity', title: 'Antigravity', subtitle: 'Google Antigravity via Pi Agent' },
   { id: 'openai-compatible', title: 'OpenAI Compatible', subtitle: 'Custom OpenAI-style endpoint' },
   { id: 'tokenrouter', title: 'TokenRouter', subtitle: 'TokenRouter OpenAI-compatible gateway' },
   { id: 'gemini', title: 'Gemini', subtitle: 'Google Gemini via OpenAI-compatible API' },
@@ -21,6 +22,7 @@ export const AI_CAPABILITIES: Array<{ id: AiModelCapability; label: string }> = 
 export const RECOMMENDED_AI_MODEL: Record<BuiltInProviderId, string> = {
   openai: 'gpt-5.4-mini',
   deepseek: 'deepseek-v4-flash',
+  antigravity: 'gemini-3.8-flash',
   'openai-compatible': 'gpt-5.4-mini',
   tokenrouter: 'moonshotai/kimi-k3-free',
   gemini: 'gemini-3.5-flash',
@@ -33,6 +35,7 @@ export const RECOMMENDED_AI_MODEL: Record<BuiltInProviderId, string> = {
 export const DEFAULT_BASE_URL: Partial<Record<BuiltInProviderId, string>> = {
   openai: 'https://api.openai.com/v1',
   deepseek: 'https://api.deepseek.com',
+  antigravity: 'https://cloudcode-pa.googleapis.com',
   'openai-compatible': 'https://api.openai.com/v1',
   tokenrouter: 'https://api.tokenrouter.com/v1',
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
@@ -41,6 +44,16 @@ export const DEFAULT_BASE_URL: Partial<Record<BuiltInProviderId, string>> = {
 }
 
 export const DEFAULT_PROVIDER_MODELS: Record<BuiltInProviderId, AiProviderModel[]> = {
+  antigravity: [
+    { id: 'gemini-3.8-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'gemini-3.7-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'gemini-3.5-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'gemini-3.1-pro', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'gemini-2.5-pro', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    { id: 'claude-sonnet-4-6', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 200000 },
+    { id: 'claude-opus-4-6', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 250000 },
+    { id: 'gpt-oss-120b', capabilities: ['thinking', 'tools'], contextWindow: 131072 },
+  ],
   openai: [
     { id: 'gpt-5.5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1050000 },
     { id: 'gpt-5.4', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1050000 },
@@ -158,6 +171,18 @@ export function isAiProviderConfigured(config: LlmConfigRecord, provider: Provid
       providerConfig?.copilotGithubToken ??
       (isActiveLegacyProvider ? config.copilotGithubToken ?? '' : '')
     return Boolean(token.trim())
+  }
+  if (provider === 'antigravity') {
+    return models.length > 0
+  }
+
+  if (isCustomProvider(provider) || provider === 'openai-compatible') {
+    const baseUrl =
+      providerConfig?.openaiCompatibleBaseURL ??
+      providerConfig?.baseURL ??
+      (isActiveLegacyProvider ? config.openaiCompatibleBaseURL ?? config.baseURL ?? '' : '')
+    const apiKey = providerConfig?.apiKey ?? (isActiveLegacyProvider ? config.apiKey ?? '' : '')
+    return Boolean(baseUrl.trim()) || Boolean(apiKey.trim()) || models.length > 0
   }
 
   const apiKey = providerConfig?.apiKey ?? (isActiveLegacyProvider ? config.apiKey ?? '' : '')
