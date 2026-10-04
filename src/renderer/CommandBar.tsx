@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useCallback,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { StringCache } from '../shared/stringCache'
@@ -1616,6 +1617,47 @@ export default function CommandBar({
   const normalizedSearchValue = searchRequestInput(value)
   const agentTask = isAiMode ? parsedAgentTask : ''
 
+  const lastMousePosRef = useRef<{ x: number; y: number }>({ x: -1, y: -1 })
+  const userNavigatedRef = useRef(false)
+
+  const handleRowMouseMove = useCallback(
+    (e: React.MouseEvent, index: number) => {
+      if (
+        lastMousePosRef.current.x === e.clientX &&
+        lastMousePosRef.current.y === e.clientY
+      ) {
+        return
+      }
+      lastMousePosRef.current = { x: e.clientX, y: e.clientY }
+      userNavigatedRef.current = true
+      if (!isDeepSearchMode) setSearchResultNavigationActive(false)
+      setFollowSearchSelection(false)
+      setSelectedSearch(index)
+    },
+    [isDeepSearchMode]
+  )
+
+  const handleSuggestionMouseMove = useCallback((e: React.MouseEvent, index: number) => {
+    if (
+      lastMousePosRef.current.x === e.clientX &&
+      lastMousePosRef.current.y === e.clientY
+    ) {
+      return
+    }
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY }
+    setFollowSuggestionSelection(false)
+    setSelectedSuggestion(index)
+  }, [])
+
+  useEffect(() => {
+    const onFocus = () => {
+      lastMousePosRef.current = { x: -1, y: -1 }
+      userNavigatedRef.current = false
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
+
   const [pendingAction, setPendingAction] = useState<{
     extensionId: string
     commandName: string
@@ -2366,6 +2408,7 @@ export default function CommandBar({
     // When the calc row is present it owns index 0 and should stay
     // selected — typing `2+2` should not jump to a recent app.
     if (calcResultRow) return
+    if (userNavigatedRef.current) return
     const mostRecent = recentExtensionCommands[0]
     const idx = visibleSearchResults.findIndex((item) => item.id === mostRecent)
     if (idx >= 0 && idx < visibleSearchCount) {
@@ -3928,18 +3971,21 @@ export default function CommandBar({
     } else if (showChatHistory) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
+        userNavigatedRef.current = true
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.min(i + 1, filteredChatHistory.length - 1))
       }
       if (e.key === 'ArrowUp') {
         if (selectedSearch < 0) return
         e.preventDefault()
+        userNavigatedRef.current = true
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.max(i - 1, -1))
       }
     } else if (terminalMode && terminalSessionCount > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
+        userNavigatedRef.current = true
         terminalSessionSelectionActiveRef.current = true
         setFollowSearchSelection(true)
         setSelectedSearch((i) => moveTerminalSelectionDown(i, terminalSessionCount))
@@ -3947,6 +3993,7 @@ export default function CommandBar({
       if (e.key === 'ArrowUp') {
         if (selectedSearch < 0) return
         e.preventDefault()
+        userNavigatedRef.current = true
         terminalSessionSelectionActiveRef.current = true
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.max(i - 1, 0))
@@ -3954,12 +4001,14 @@ export default function CommandBar({
     } else if (visibleSearchCount && (!isDeepSearchMode || searchResultNavigationActive)) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
+        userNavigatedRef.current = true
         setSearchResultNavigationActive(true)
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.min(i + 1, visibleSearchCount - 1))
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault()
+        userNavigatedRef.current = true
         setSearchResultNavigationActive(true)
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.max(i - 1, 0))
@@ -4264,6 +4313,7 @@ export default function CommandBar({
                     nextTerminalMode !== terminalMode ||
                     nextIsAiMode !== isAiMode
                   ) {
+                    userNavigatedRef.current = false
                     setFollowSuggestionSelection(true)
                     setSelectedSuggestion(0)
                     const nextDeepSearchMode = nextSearchQuery.mode === 'deep'
@@ -4533,9 +4583,8 @@ export default function CommandBar({
                         <button
                           type="button"
                           className="relative flex w-full items-center justify-between gap-3 rounded-tezbar-row px-3 py-2 text-left text-[13px] text-ink-2 transition hover:text-ink-1"
-                          onMouseMove={() => {
-                            setFollowSuggestionSelection(false)
-                            setSelectedSuggestion(i)
+                          onMouseMove={(e) => {
+                            handleSuggestionMouseMove(e, i)
                           }}
                           onMouseDown={(ev) => ev.preventDefault()}
                           onClick={() => completePathInput(item)}
@@ -4818,9 +4867,8 @@ export default function CommandBar({
                       <button
                         type="button"
                         className="group relative flex w-full items-center gap-3 rounded-tezbar-row px-3 py-2 text-left transition"
-                        onMouseMove={() => {
-                          setFollowSearchSelection(false)
-                          setSelectedSearch(i)
+                        onMouseMove={(e) => {
+                          handleRowMouseMove(e, i)
                         }}
                         onMouseDown={(ev) => ev.preventDefault()}
                         onClick={() => {
@@ -4913,9 +4961,8 @@ export default function CommandBar({
                               ? 'bg-emerald-400/[0.08] text-ink-1'
                               : 'text-ink-3 hover:bg-white/[0.05] hover:text-ink-1'
                           )}
-                          onMouseMove={() => {
-                            setFollowSearchSelection(false)
-                            setSelectedSearch(i)
+                          onMouseMove={(e) => {
+                            handleRowMouseMove(e, i)
                           }}
                           onMouseDown={(ev) => ev.preventDefault()}
                           onClick={() => openTerminalSession(session)}
@@ -4995,7 +5042,6 @@ export default function CommandBar({
               onWheelCapture={() => setFollowSearchSelection(false)}
               onMouseLeave={() => {
                 setFollowSearchSelection(false)
-                if (!searchResultNavigationActive) setSelectedSearch(-1)
               }}
             >
               <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
@@ -5039,10 +5085,8 @@ export default function CommandBar({
                             updateDraggingSearchResult(null)
                             updatePinDropIndex(null)
                           }}
-                          onMouseMove={() => {
-                            if (!isDeepSearchMode) setSearchResultNavigationActive(false)
-                            setFollowSearchSelection(false)
-                            setSelectedSearch(i)
+                          onMouseMove={(e) => {
+                            handleRowMouseMove(e, i)
                           }}
                           onMouseDown={(ev) => ev.preventDefault()}
                           onClick={(event) => {

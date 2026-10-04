@@ -163,19 +163,48 @@ pub async fn download_and_install_update(app: AppHandle) -> Result<AppUpdateStat
     );
 
     let app_for_events = app.clone();
+    let downloaded_bytes = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let last_emitted = std::sync::Arc::new(std::sync::Mutex::new(std::time::Instant::now()));
+
+    let dl_bytes_for_chunk = downloaded_bytes.clone();
+    let last_emitted_for_chunk = last_emitted.clone();
+    let v_for_chunk = version.clone();
+    let app_for_finish = app.clone();
+    let v_for_finish = version.clone();
+    let dl_bytes_for_finish = downloaded_bytes.clone();
+
     let download_result = update
         .download_and_install(
-            move |downloaded, total| {
+            move |chunk_len, total| {
+                let current = dl_bytes_for_chunk
+                    .fetch_add(chunk_len as u64, std::sync::atomic::Ordering::Relaxed)
+                    + chunk_len as u64;
+                let now = std::time::Instant::now();
+                let mut last = last_emitted_for_chunk.lock().unwrap();
+                let is_done = total.map(|t| current >= t as u64).unwrap_or(false);
+                if now.duration_since(*last).as_millis() >= 150 || is_done {
+                    *last = now;
+                    set_status(
+                        &app_for_events,
+                        AppUpdateStatus::Downloading {
+                            version: v_for_chunk.clone(),
+                            downloaded: current,
+                            total: total.map(|t| t as u64),
+                        },
+                    );
+                }
+            },
+            move || {
+                let total_dl = dl_bytes_for_finish.load(std::sync::atomic::Ordering::Relaxed);
                 set_status(
-                    &app_for_events,
+                    &app_for_finish,
                     AppUpdateStatus::Downloading {
-                        version: version.clone(),
-                        downloaded: downloaded as u64,
-                        total: total.map(|t| t as u64),
+                        version: v_for_finish,
+                        downloaded: total_dl,
+                        total: Some(total_dl),
                     },
                 );
             },
-            || {},
         )
         .await;
 
