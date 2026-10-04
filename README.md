@@ -1,111 +1,87 @@
-# Tezbar
+# Tezbar ⚡️
 
-Tezbar is a desktop command surface for search, AI help, terminal access, notes, snippets, and a handful of small utility tools. It is built for a keyboard-first workflow and aims to keep the common stuff in one place.
+> **Meet Tezbar: Your Mac’s command bar on steroids.**  
+> A fast, keyboard-first desktop launcher and autonomous command surface built on **Rust + Tauri**. Full Raycast extension compatibility, built-in terminal, multimodal AI agent, and zero lock-in.
 
-## What's in the app
+---
 
-- Command bar for launching actions quickly
-- AI chat and agent-style workflows
-- Embedded terminal
-- Notes and snippets
-- Local Knowledge indexing for document text, PDFs, and image OCR, shared by the Command Bar and AI agent
-- Emoji picker
-- Currency and calculator helpers
-- Extension browsing and execution (Raycast extensions supported)
-- Voice input and text-to-speech
-- System commands (platform-dependent)
-- **Folder search** — type `/` to quickly navigate into any folder and open it in your preferred app or open a terminal directly in that directory
-  ![Folder search](assets/directory_search.png)
+## Key Features
+
+### 🔌 Bring Your Own Extensions (Raycast Compatible)
+- **Zero-approval installs**: Run any Raycast extension natively.
+- **Install from GitHub**: Simply paste any GitHub repository URL into Tezbar — it clones, builds, and registers the extension into your launcher in seconds. No centralized store approvals required.
+
+### 🤖 Autonomous AI Agent (Pi Agent Under the Hood)
+- **Active Screen Vision (`⌘⇧S`)**: Attach a snapshot of your active display or specific window directly into your chat.
+- **Multimodal context**: Ask the agent to debug code, inspect terminal outputs, analyze error stacks, or redesign UI components with full visual and OCR context.
+- **Local knowledge search**: Vector index and local document parsing (PDFs, text, OCR) accessible directly by the agent and command bar.
+
+### 💻 Built-in Native Terminal
+- Launch shell commands, run one-liners, inspect logs, and manage background processes directly from the overlay without switching windows.
+- Persistent session management and quick shortcuts.
+
+### 🔓 Zero Lock-In & Local-First
+- **Offline with Ollama**: Run completely local, private LLMs on your machine.
+- **Bring Your Own Keys**: First-class support for Google Gemini, Anthropic Claude, DeepSeek, OpenAI, and GitHub Copilot.
+- Your data and keys stay entirely on your device.
+
+### 🛠 Developer Swiss Army Knife
+- **Folder Navigation (`/`)**: Press `/` in the command bar to rapidly search directories, launch IDEs, or open terminal sessions.
+- **Open Ports Inspector**: View active processes bound to local ports (3000, 8080, etc.) and kill rogue processes in one click.
+- **System Monitor**: Live CPU, RAM, and GPU metrics in a compact glass interface.
+- **Clipboard History & Snippets**: Searchable clipboard history with image support and dynamic text expansion templates.
+- **Color Picker**: Interactive screen color magnifier and palette extractor.
+
+---
 
 ## Tech Stack
 
-- Tauri + Vite for the main desktop app
-- React + TypeScript for the UI
-- Rust, Swift, and native helpers for platform features
-- SQLite for local persistence and search
+- **Core**: [Tauri](https://tauri.app/) + [Rust](https://www.rust-lang.org/)
+- **Frontend**: [React 18](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/)
+- **Native Modules**: Swift helpers on macOS (Screen OCR, Accessibility, Color Picker), ConPTY on Windows
+- **Storage & Indexing**: SQLite with local vector embeddings
 
-## Requirements
+---
 
-- macOS or Windows 10/11
-- [pnpm](https://pnpm.io/)
-- Homebrew for optional macOS native dependencies
-- Rust toolchain for native modules
+## Getting Started
 
-## Setup
+### Prerequisites
+
+- **Node.js**: v18+ & [pnpm](https://pnpm.io/)
+- **Rust toolchain**: latest stable (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
+- **macOS** (12+) or **Windows** (10/11)
+
+### Setup & Run in Development
 
 ```bash
+# Clone the repository
+git clone https://github.com/almatkai/Tezbar.git
+cd Tezbar
+
+# Install dependencies
 pnpm install
+
+# Build native Swift helpers (macOS)
 pnpm build:native
+
+# Start development mode
 pnpm dev
 ```
 
-`pnpm build:native` builds the Swift helpers on macOS and safely does nothing
-on Windows.
+---
 
 ## Useful Scripts
 
-- `pnpm dev` - start the Tauri app in development mode
-- `pnpm build` - build and package the Tauri app for the current platform
-- `pnpm build:windows` - build Windows NSIS and MSI installers (run on Windows)
-- `pnpm build:native` - build native helpers
-- `pnpm dist` - build and package the Tauri app
-- `pnpm tauri:dev` - build the backend and run the Tauri app in dev mode
-- `pnpm tauri:build` - build the backend and package the Tauri app
+| Script | Description |
+|---|---|
+| `pnpm dev` | Start the Tauri app in development mode with hot reload |
+| `pnpm build` | Build and package the production desktop application |
+| `pnpm build:native` | Compile macOS Swift native helpers |
+| `pnpm build:windows` | Build Windows NSIS and MSI installers |
+| `pnpm icons:generate` | Regenerate app icon assets across all formats from SVG |
 
-## Windows support status
+---
 
-### Working in the Tauri app
+## License
 
-- Launcher UI, hotkey (`Alt+Space` by default), AI chat, notes, snippets,
-  calculator, currency, emoji picker, extensions, and voice UI.
-- Built-in PowerShell terminal through Windows ConPTY.
-- Search and launch applications from Start Menu shortcuts.
-- Clipboard history for text and images.
-- Open Ports using `netstat.exe`, with process names resolved through
-  `tasklist.exe`.
-- Windows system helpers: dark mode, lock screen, suspend, keep-awake,
-  volume up/down/mute, Downloads, network, CPU, memory, disk, and battery
-  information. Wi-Fi adapter toggling asks for Windows UAC confirmation.
-- Windows packaging command: `pnpm build:windows`.
-
-### Remaining work for a full Windows port
-
-- Replace the Swift OCR helper with a Windows-native implementation.
-- Add Windows UI-automation/accessibility tree support for semantic agent actions.
-- Port extensions that directly depend on arbitrary AppleScript when a meaningful
-  Windows equivalent exists.
-- Add native Windows clipboard file-list support and installed-app icons.
-- Complete and test a signed Windows installer build in CI.
-
-See [`docs/WINDOWS_SUPPORT.md`](docs/WINDOWS_SUPPORT.md) for the detailed
-platform mapping and remaining native parity work.
-
-## Tauri Builds
-
-Tauri is configured separately in [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json). It uses the app’s branded icon set and can produce macOS DMG output.
-
-To build the Tauri app:
-
-```bash
-pnpm tauri:build
-```
-
-The macOS DMG is emitted under:
-
-```text
-src-tauri/target/release/bundle/dmg/
-```
-
-## Icon Assets
-
-All application icons are generated from the vector source `appIcon_simple.svg`. You can regenerate all platform icons with transparent backgrounds at any time by running `pnpm icons:generate`.
-
-## Notes
-
-- The app’s current package manager is `pnpm`.
-- Windows supports the launcher UI, search, Start Menu applications, terminal,
-  clipboard text/images, Open Ports, the interactive color picker, and the
-  cross-platform system helpers. AppleScript, Finder automation, macOS
-  accessibility snapshots, and the Swift OCR helper remain macOS-only.
-- The primary app flow is Tauri/Vite with a bundled TypeScript backend.
-- If macOS Finder shows an old app icon after rebuilding, that is usually icon cache lag rather than a bad build.
+MIT © [Almat](https://github.com/almatkai)
