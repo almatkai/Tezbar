@@ -1,11 +1,11 @@
 {
-  "version": "v0.2.0-beta.6",
-  "notes": "Tezbar v0.2.0-beta.6: Fixed search selection defaulting to recent extension command on empty query.",
-  "pub_date": "2026-10-04T16:14:46.586869+00:00",
+  "version": "v0.2.0-beta.7",
+  "notes": "Tezbar v0.2.0-beta.7: Test update for in-app download and installation.",
+  "pub_date": "2026-10-04T16:21:30.842226+00:00",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEE2NUQrdFVOWTJBc054disydm9UU09nODlmRFdtMnRNRUFTRHdRcGlVT2paK2pPZEtXN05ZQjhjR1kxSk5OcjczY3FQbUpzZFJEczNOd1VEcFpQcXdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMTMwNDc3CWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKbU5wUThpN2dtUkxFR1NDSGkrN0tZeWN0cm50VzJhMDRnclAvbXpSMFNZS1g1UXhLS29JUzRVWEpST0w4VnRUWGxGclJpL0UrZkZFa05uY0xiM29pRGc9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0-beta.6/Tezbar.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNElOZ0Y2WU5sRWxUNGQvSk1TVktSZXdVbk00MFMydmtRem9sRTk0cXE4YXloVGZkWGlwTjJ5SlRXNWcyamZZaEQ2YWpSc2tlNGNBTjlTanFGMGs4REFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMTMwODgyCWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKZzd4cmZUOElZR1BwU0p0cTAzQit6U25HMWplYVRrTW9NeTEwaHBDZ01TNzVOWWphZDdEcVE2eFRTTG13QzZuY0poL3hiL2tFaXNWcmhvcW03UTZEQlE9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0-beta.7/Tezbar.app.tar.gz"
     }
   }
 }
