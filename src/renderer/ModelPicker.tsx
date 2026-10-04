@@ -122,7 +122,7 @@ export function ModelPicker({
         }}
       >
         <span className="model-picker-active-dot h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/80" />
-        <span className="truncate font-medium">{activeModel}</span>
+        <span className="truncate font-medium leading-normal py-0.5">{activeModel}</span>
         <svg
           viewBox="0 0 16 16"
           aria-hidden="true"
@@ -230,8 +230,8 @@ export function ModelPicker({
                         }}
                       >
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[12px] font-medium">{model.id}</span>
-                          <span className="mt-0.5 block truncate text-[9.5px] text-ink-4">
+                          <span className="block truncate text-[12px] font-medium leading-snug py-0.5">{model.id}</span>
+                          <span className="mt-0.5 block truncate text-[9.5px] leading-snug text-ink-4">
                             {[
                               ...model.capabilities,
                               model.contextWindow

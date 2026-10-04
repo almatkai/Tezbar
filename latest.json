@@ -1,11 +1,11 @@
 {
-  "version": "v0.2.0-beta.9",
-  "notes": "Tezbar v0.2.0-beta.9: Apple Development certificate signed, persistent permissions across updates.",
-  "pub_date": "2026-10-04T16:52:44.737446+00:00",
+  "version": "v0.2.0-beta.10",
+  "notes": "Tezbar v0.2.0-beta.10: Fix font descender clipping in model picker and persistent Apple Developer ID signing.",
+  "pub_date": "2026-10-04T17:12:00.000000+00:00",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE5tM1Arb1JYcndoSmJzN2h4Nis1RTVldzBFODBHRFpPditxRVpxendCUEtmUkI4M2dWaGM3TzVJRzYvYUZEUGpPN3laOFBSWWVuR0xWcHVuKyt1TmcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMTMyNzUzCWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKejY5eHBwb2ZEWU5OUHpadVpDd0VsMGJmdXhEN0Q5a2o0aC9HUDc4MVFSemk2dkdQSzdqbzdTRmFtbXNKMVJCUUF2SUxPRWlHV2Zqb09ZZzFKT21xQkE9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0-beta.9/Tezbar.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEdwYzY1bUc5TFNuamROME43cWpJalVyU0laT3NtbXlkcURKQUo3amNIU3dhT0ZIdW5WaWZocjZFcGM4d2ZmYzloTU03L2E5MWIyRVhqcUhBZXZXMkFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMTMzODgwCWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKdVFnbWIvd0JLYkpaMHI5b0tUUlR5bERLYVJzazc0SDY1T05QMVhGdW15UHBUZVpjdDBrOXZiRE10UXdhK24ycEFEYy9xczVVRnJWLzN5U3JTTmRBQ1E9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0-beta.10/Tezbar.app.tar.gz"
     }
   }
 }
