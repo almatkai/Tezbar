@@ -1,4 +1,4 @@
-export type BackgroundTaskKind = 'indexing' | 'timer'
+export type BackgroundTaskKind = 'indexing' | 'timer' | 'update'
 
 export type BackgroundTask = {
   id: string

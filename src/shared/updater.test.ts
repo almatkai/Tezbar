@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  readAutoUpdatePreference,
   readLastUpdateCheck,
   recordUpdateCheck,
   shouldAutoCheckForUpdates,
   UPDATE_CHECK_INTERVAL_MS,
+  writeAutoUpdatePreference,
 } from './updater'
 
 describe('shouldAutoCheckForUpdates', () => {
@@ -28,9 +30,8 @@ describe('shouldAutoCheckForUpdates', () => {
 })
 
 describe('last-check storage', () => {
-  const makeStorage = (initial?: string) => {
-    const map = new Map<string, string>()
-    if (initial !== undefined) map.set('tezbar:last-update-check', initial)
+  const makeStorage = (initial?: Record<string, string>) => {
+    const map = new Map<string, string>(Object.entries(initial ?? {}))
     return {
       getItem: (key: string) => map.get(key) ?? null,
       setItem: (key: string, value: string) => void map.set(key, value),
@@ -45,6 +46,15 @@ describe('last-check storage', () => {
 
   it('returns null when unset or corrupt', () => {
     expect(readLastUpdateCheck(makeStorage())).toBeNull()
-    expect(readLastUpdateCheck(makeStorage('not-a-number'))).toBeNull()
+    expect(readLastUpdateCheck(makeStorage({ 'tezbar:last-update-check': 'not-a-number' }))).toBeNull()
+  })
+
+  it('reads and writes auto-update preference', () => {
+    const storage = makeStorage()
+    expect(readAutoUpdatePreference(storage)).toBe(false)
+    writeAutoUpdatePreference(storage, true)
+    expect(readAutoUpdatePreference(storage)).toBe(true)
+    writeAutoUpdatePreference(storage, false)
+    expect(readAutoUpdatePreference(storage)).toBe(false)
   })
 })

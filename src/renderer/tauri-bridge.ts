@@ -490,9 +490,48 @@ export function initTauriBridge(): void {
     },
 
     getUpdateStatus: () => invoke('get_update_status') as Promise<AppUpdateStatus>,
-    checkForUpdates: () => invoke('check_for_updates') as Promise<AppUpdateStatus>,
-    downloadAndInstallUpdate: () =>
-      invoke('download_and_install_update') as Promise<AppUpdateStatus>,
+    checkForUpdates: async () => {
+      const res = (await invoke('check_for_updates')) as AppUpdateStatus
+      if (res.kind === 'error') {
+        try {
+          const ghRes = await fetch('https://api.github.com/repos/almatkai/Tezbar/releases/latest', {
+            headers: { Accept: 'application/vnd.github.v3+json' },
+          })
+          if (ghRes.ok) {
+            const data = (await ghRes.json()) as {
+              tag_name?: string
+              body?: string
+              html_url?: string
+            }
+            const tag = (data.tag_name || '').replace(/^v/, '')
+            const current = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.2'
+            if (tag && tag !== current) {
+              return {
+                kind: 'available',
+                version: tag,
+                notes: data.body || '',
+                releaseUrl: data.html_url || 'https://github.com/almatkai/Tezbar/releases/latest',
+              }
+            } else if (tag === current) {
+              return { kind: 'upToDate', version: current }
+            }
+          }
+        } catch {
+          // ignore fallback fetch error
+        }
+      }
+      return res
+    },
+    downloadAndInstallUpdate: async () => {
+      try {
+        return (await invoke('download_and_install_update')) as AppUpdateStatus
+      } catch (err) {
+        await invoke('open_release_page', {
+          url: 'https://github.com/almatkai/Tezbar/releases/latest',
+        })
+        throw err
+      }
+    },
     restartApp: () => invoke('restart_app'),
     openReleasePage: (url: string) => invoke('open_release_page', { url }),
     onUpdateStatus: (listener: (status: AppUpdateStatus) => void) =>

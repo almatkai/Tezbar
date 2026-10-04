@@ -9,9 +9,11 @@ import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../shared/llmConfig'
 import type { TerminalSessionsAction } from '../shared/terminal'
 import type { TerminalDefaults } from './terminalPreferences'
 import {
+  readAutoUpdatePreference,
   readLastUpdateCheck,
   recordUpdateCheck,
   shouldAutoCheckForUpdates,
+  UPDATE_CHECK_INTERVAL_MS,
 } from '../shared/updater'
 
 const OnboardingView = React.lazy(() => import('./OnboardingView'))
@@ -151,13 +153,13 @@ type SnapGuidesState = {
 }
 
 function SnapOverlayApp(): JSX.Element {
-  const [snapGuides, setSnapGuides] = useState<SnapGuidesState>({
+  const [snapGuides, setSnapGuides] = useState<SnapGuidesState>(({
     visible: true,
     snapX: false,
     snapY: false,
     centered: false,
     targetRect: null,
-  })
+  }))
 
   useEffect(() => {
     let mounted = true
@@ -350,12 +352,41 @@ function LauncherApp(): JSX.Element {
     }
   }, [])
 
-  // Background auto-check for app updates once per 24h. Errors are swallowed —
-  // losing connectivity or GitHub being down shouldn't disrupt the launcher.
+  // Background auto-check for app updates. Follows nezametniy pattern:
+  // Startup check after 5s delay, and periodic recurring check every 4h.
   useEffect(() => {
-    if (!shouldAutoCheckForUpdates(readLastUpdateCheck(window.localStorage))) return
-    recordUpdateCheck(window.localStorage)
-    void window.tezbar.checkForUpdates().catch(() => undefined)
+    let cancelled = false
+
+    const checkUpdates = async () => {
+      try {
+        const next = await window.tezbar.checkForUpdates()
+        if (cancelled) return
+        recordUpdateCheck(window.localStorage)
+        if (next.kind === 'available' && readAutoUpdatePreference(window.localStorage)) {
+          void window.tezbar.downloadAndInstallUpdate().catch(() => undefined)
+        }
+      } catch {
+        // losing connectivity or GitHub being down shouldn't disrupt the launcher
+      }
+    }
+
+    const startup = window.setTimeout(() => {
+      if (!cancelled && shouldAutoCheckForUpdates(readLastUpdateCheck(window.localStorage))) {
+        void checkUpdates()
+      }
+    }, 5000)
+
+    const interval = window.setInterval(() => {
+      if (!cancelled) {
+        void checkUpdates()
+      }
+    }, UPDATE_CHECK_INTERVAL_MS)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(startup)
+      window.clearInterval(interval)
+    }
   }, [])
 
   useEffect(() => {

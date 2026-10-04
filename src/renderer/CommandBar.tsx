@@ -48,6 +48,7 @@ import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 import { ModelPicker } from './ModelPicker'
 import { moveTerminalSelectionDown, terminalSessionAtIndex } from './terminalSessionSelection'
+import type { AppUpdateStatus } from '../shared/updater'
 import BackgroundTaskStatus from './BackgroundTaskStatus'
 import {
   addLauncherQueryHistoryEntry,
@@ -780,6 +781,7 @@ type CommandIconKind =
   | 'ports'
   | 'git'
   | 'brew'
+  | 'update'
 
 type TezbarCommandId =
   | 'open-settings'
@@ -791,6 +793,10 @@ type TezbarCommandId =
   | 'open-emoji-picker'
   | 'open-indexing'
   | 'start-onboarding'
+  | 'download-app-update'
+  | 'restart-app-update'
+  | 'check-for-updates'
+  | 'open-settings-updates'
 
 const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'open-settings': 'settings',
@@ -802,6 +808,10 @@ const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'open-emoji-picker': 'emoji',
   'open-indexing': 'indexing',
   'start-onboarding': 'onboarding',
+  'download-app-update': 'update',
+  'restart-app-update': 'update',
+  'check-for-updates': 'update',
+  'open-settings-updates': 'update',
 }
 
 const NATIVE_COMMAND_ICON_BY_ID: Record<NativeCommandId, CommandIconKind> = {
@@ -871,6 +881,8 @@ function commandIconTone(kind: CommandIconKind): string {
     case 'ports':
     case 'indexing':
       return 'border-sky-300/25 bg-sky-300/10 text-sky-200'
+    case 'update':
+      return 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200'
     case 'onboarding':
       return 'border-accent/30 bg-accent/[0.12] text-accent-strong'
     case 'deep-search':
@@ -954,6 +966,16 @@ function CommandIconGlyph({ kind }: { kind: CommandIconKind }): ReactNode {
           <ellipse cx="7" cy="3.25" rx="4.25" ry="1.75" />
           <path d="M2.75 3.25v3.25c0 .97 1.9 1.75 4.25 1.75s4.25-.78 4.25-1.75V3.25M2.75 6.5v3.25c0 .97 1.9 1.75 4.25 1.75s4.25-.78 4.25-1.75V6.5" />
         </>
+      )
+    case 'update':
+      return (
+        <path
+          d="M7 2v6.5M4.5 6L7 8.5 9.5 6M2.5 11.5h9"
+          stroke="currentColor"
+          strokeWidth="1.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       )
     case 'snippets':
       return (
@@ -1628,6 +1650,24 @@ export default function CommandBar({
   const [killPortMode, setKillPortMode] = useState(false)
   const [killPortQuery, setKillPortQuery] = useState('')
   const [killPortValue, setKillPortValue] = useState('')
+  const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>({ kind: 'idle' })
+
+  useEffect(() => {
+    let mounted = true
+    void window.tezbar
+      .getUpdateStatus()
+      .then((s) => {
+        if (mounted && s) setUpdateStatus(s)
+      })
+      .catch(() => undefined)
+    const off = window.tezbar.onUpdateStatus((s) => {
+      if (mounted && s) setUpdateStatus(s)
+    })
+    return () => {
+      mounted = false
+      off()
+    }
+  }, [])
   const [killPortArgumentDismissed, setKillPortArgumentDismissed] = useState(false)
   const [terminalPrompt, setTerminalPrompt] = useState('')
   const [terminalSessions, setTerminalSessions] = useState<TerminalSessionSummary[]>([])
@@ -2069,7 +2109,66 @@ export default function CommandBar({
       ...colorConversionRows,
       ...withoutDuplicateColorRows,
     ]
-    return calcResultRow ? [calcResultRow, ...base] : base
+    const withCalc = calcResultRow ? [calcResultRow, ...base] : base
+
+    const q = value.trim().toLowerCase()
+    const matchesUpdateQuery =
+      !q ||
+      'update'.includes(q) ||
+      'tezbar'.includes(q) ||
+      'upgrade'.includes(q) ||
+      'обновление'.includes(q) ||
+      'обнова'.includes(q) ||
+      'версия'.includes(q)
+
+    let updateItem: SearchResult | null = null
+    if (matchesUpdateQuery) {
+      if (updateStatus.kind === 'available') {
+        updateItem = {
+          id: 'app-update:available',
+          category: 'commands',
+          title: `Update Tezbar to v${updateStatus.version}`,
+          subtitle: 'New version available · Press Enter to download',
+          score: 1_000_000,
+          action: {
+            type: 'invoke-command',
+            commandId: 'download-app-update',
+          },
+        }
+      } else if (updateStatus.kind === 'downloading') {
+        const pct =
+          updateStatus.total && updateStatus.total > 0
+            ? `${Math.round((updateStatus.downloaded / updateStatus.total) * 100)}%`
+            : `${(updateStatus.downloaded / 1024 / 1024).toFixed(1)} MB`
+        updateItem = {
+          id: 'app-update:downloading',
+          category: 'commands',
+          title: `Downloading Tezbar v${updateStatus.version}… (${pct})`,
+          subtitle: updateStatus.total
+            ? `${(updateStatus.downloaded / 1024 / 1024).toFixed(1)} / ${(updateStatus.total / 1024 / 1024).toFixed(1)} MB · In progress`
+            : 'Downloading in background…',
+          score: 1_000_000,
+          action: {
+            type: 'invoke-command',
+            commandId: 'open-settings-updates',
+          },
+        }
+      } else if (updateStatus.kind === 'ready') {
+        updateItem = {
+          id: 'app-update:ready',
+          category: 'commands',
+          title: `Restart Tezbar to update (v${updateStatus.version})`,
+          subtitle: 'Update ready · Press Enter to restart and install',
+          score: 1_000_000,
+          action: {
+            type: 'invoke-command',
+            commandId: 'restart-app-update',
+          },
+        }
+      }
+    }
+
+    return updateItem ? [updateItem, ...withCalc] : withCalc
   }, [
     calcResultRow,
     colorConversionRows,
@@ -2082,6 +2181,7 @@ export default function CommandBar({
     pinnedCommands,
     parsedSearchQuery.query,
     searchResults,
+    updateStatus,
     value,
   ])
   const visibleSearchCount = visibleSearchResults.length
@@ -2820,6 +2920,46 @@ export default function CommandBar({
       if (result.action.commandId === 'open-providers') {
         await recordHandledSearchUsage()
         onConfigureAi()
+        return
+      }
+      if (result.action.commandId === 'download-app-update') {
+        await recordHandledSearchUsage()
+        showActionMsg('Downloading update…')
+        void window.tezbar.downloadAndInstallUpdate().catch((err: unknown) => {
+          showActionMsg(`Update download failed: ${err instanceof Error ? err.message : String(err)}`)
+        })
+        return
+      }
+      if (result.action.commandId === 'restart-app-update') {
+        await recordHandledSearchUsage()
+        showActionMsg('Restarting Tezbar…')
+        window.tezbar.restartApp()
+        return
+      }
+      if (result.action.commandId === 'open-settings-updates') {
+        await recordHandledSearchUsage()
+        onOpenSettings()
+        return
+      }
+      if (result.action.commandId === 'check-for-updates') {
+        await recordHandledSearchUsage()
+        showActionMsg('Checking for updates…')
+        void window.tezbar
+          .checkForUpdates()
+          .then((res) => {
+            if (res.kind === 'upToDate') {
+              showActionMsg(`Tezbar v${res.version} is up to date`)
+            } else if (res.kind === 'available') {
+              showActionMsg(`Tezbar v${res.version} is available!`)
+            } else if (res.kind === 'error') {
+              showActionMsg(`Update check failed: ${res.message}`)
+            }
+          })
+          .catch((err: unknown) => {
+            showActionMsg(
+              `Update check failed: ${err instanceof Error ? err.message : String(err)}`
+            )
+          })
         return
       }
       if (result.action.commandId === 'open-settings') {
@@ -5327,6 +5467,7 @@ export default function CommandBar({
           <BackgroundTaskStatus
             onOpenIndexing={onOpenIndexingPage}
             onOpenExtensionRuntime={onOpenExtensionRuntime}
+            onOpenUpdate={onOpenSettings}
           />
         </div>
       </div>

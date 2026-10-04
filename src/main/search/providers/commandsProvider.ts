@@ -86,6 +86,13 @@ function buildRaymesSurfaceDocuments(): IndexedDocument[] {
       keywords: ['emoji', 'symbols', '/emoji'],
       commandId: 'open-emoji-picker',
     },
+    {
+      id: 'command:check-for-updates',
+      title: 'Check for Updates',
+      subtitle: 'Check for new Tezbar updates',
+      keywords: ['update', 'updates', 'check for updates', 'upgrade', 'version', 'обновление', 'обновы', '/update'],
+      commandId: 'check-for-updates',
+    },
   ].map((item) => ({
     id: item.id,
     category: 'commands' as const,

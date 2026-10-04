@@ -41,4 +41,23 @@ describe('commandsProvider', () => {
       }),
     ])
   })
+
+  it('indexes the Tezbar surface command for checking updates', async () => {
+    const documents = await commandsProvider.buildDocuments()
+    const updateDocuments = documents.filter(
+      (document) =>
+        document.action.type === 'invoke-command' &&
+        document.action.commandId === 'check-for-updates'
+    )
+
+    expect(updateDocuments).toEqual([
+      expect.objectContaining({
+        id: 'command:check-for-updates',
+        title: 'Check for Updates',
+        subtitle: 'Check for new Tezbar updates',
+        category: 'commands',
+        action: { type: 'invoke-command', commandId: 'check-for-updates' },
+      }),
+    ])
+  })
 })

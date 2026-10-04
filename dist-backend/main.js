@@ -14649,6 +14649,13 @@ function buildRaymesSurfaceDocuments() {
       subtitle: "Tezbar emoji picker",
       keywords: ["emoji", "symbols", "/emoji"],
       commandId: "open-emoji-picker"
+    },
+    {
+      id: "command:check-for-updates",
+      title: "Check for Updates",
+      subtitle: "Check for new Tezbar updates",
+      keywords: ["update", "updates", "check for updates", "upgrade", "version", "\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435", "\u043E\u0431\u043D\u043E\u0432\u044B", "/update"],
+      commandId: "check-for-updates"
     }
   ].map((item) => ({
     id: item.id,

@@ -34,7 +34,7 @@
   "plugins": {
     "updater": {
       "active": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU2MUMwODBDMjk5QUQ3RkYKUldULzE1b3BEQWdjNW0zY0NvTHAyem1KQnc0R0xia2hVRnZlN1NzeWgzK2wxMUMrMkhnS2pXTkwK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUwOUQ1QTBDOEQ2M0VCN0MKUldSODYyT05ERnFkNFBmWm9YRFZzdUpVa295eHdTMUNSVzFpa0wrbi9WRytoa3pqRTdWd3BHSnUK",
       "endpoints": [
         "https://github.com/almatkai/Tezbar/releases/latest/download/latest.json"
       ]

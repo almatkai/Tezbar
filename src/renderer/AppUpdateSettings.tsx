@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AppUpdateStatus } from '../shared/updater'
-import { RELEASES_PAGE_URL } from '../shared/updater'
+import {
+  readAutoUpdatePreference,
+  RELEASES_PAGE_URL,
+  writeAutoUpdatePreference,
+} from '../shared/updater'
 import { Button } from './ui/primitives'
 
-const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.0.4'
+const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.2'
 
 type Status = AppUpdateStatus
 
@@ -17,6 +21,9 @@ function renderNotes(notes: string): string[] {
 
 export function AppUpdateSettings(): JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  const [autoUpdate, setAutoUpdate] = useState<boolean>(() =>
+    readAutoUpdatePreference(window.localStorage)
+  )
 
   useEffect(() => {
     let mounted = true
@@ -69,7 +76,7 @@ export function AppUpdateSettings(): JSX.Element {
   const busy = status.kind === 'checking' || status.kind === 'downloading'
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.05] px-2 py-1 text-[11px] font-semibold text-ink-2">
           v{CURRENT_VERSION}
@@ -110,6 +117,14 @@ export function AppUpdateSettings(): JSX.Element {
           </Button>
         )}
 
+        <Button
+          variant="ghost"
+          onClick={() => openRelease(RELEASES_PAGE_URL)}
+          title="Download latest installer from GitHub Releases"
+        >
+          Download Installer
+        </Button>
+
         {status.kind === 'error' && (
           <Button variant="ghost" onClick={() => void check()}>
             Retry
@@ -117,9 +132,28 @@ export function AppUpdateSettings(): JSX.Element {
         )}
       </div>
 
-      <p className="text-[11.5px] leading-snug text-ink-4">
-        Only stable releases are offered — beta builds are skipped automatically.
-      </p>
+      <div className="pt-2 border-t border-white/[0.06]">
+        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={autoUpdate}
+            onChange={(e) => {
+              const next = e.target.checked
+              setAutoUpdate(next)
+              writeAutoUpdatePreference(window.localStorage, next)
+            }}
+            className="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/10 text-accent focus:ring-accent/40"
+          />
+          <div>
+            <span className="block text-[12px] font-medium text-ink-2">
+              Automatically download updates
+            </span>
+            <span className="block text-[11px] leading-snug text-ink-4">
+              When enabled, updates will download automatically in the background. When disabled, updates will appear as the first item in your search bar so you can choose when to download.
+            </span>
+          </div>
+        </label>
+      </div>
 
       {status.kind === 'upToDate' && (
         <p className="text-[12px] text-emerald-300">
@@ -134,7 +168,7 @@ export function AppUpdateSettings(): JSX.Element {
               v{status.version} available
             </span>
             <span className="text-[10px] uppercase tracking-[0.08em] text-emerald-300">
-              Stable
+              Update Available
             </span>
           </div>
           {renderNotes(status.notes).length > 0 ? (

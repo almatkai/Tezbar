@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BackgroundTask } from '../shared/backgroundTasks'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
+import type { AppUpdateStatus } from '../shared/updater'
 import { cx } from './ui/primitives'
 
 type ExtensionRuntimeViewPayload = Extract<ExtensionRunCommandResult, { ok: true; mode: 'view' }>
@@ -24,6 +25,27 @@ function TaskIcon({
   compact?: boolean
 }): JSX.Element {
   const size = compact ? 13 : 15
+  if (kind === 'update') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        className={compact ? '' : 'animate-pulse'}
+        aria-hidden
+      >
+        <path
+          d="M8 2.5v7M5.5 7L8 9.5l2.5-2.5M3 13.5h10"
+          stroke="currentColor"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+
   if (kind === 'indexing') {
     return (
       <svg
@@ -66,16 +88,21 @@ function TaskIcon({
 }
 
 function taskValue(task: BackgroundTask): string {
-  if (task.kind === 'indexing') return `${Math.round((task.progress ?? 0) * 100)}%`
+  if (task.kind === 'indexing' || task.kind === 'update') {
+    if (task.progress !== undefined) return `${Math.round(task.progress * 100)}%`
+    return 'Updating…'
+  }
   return formatDuration(task.remainingSeconds ?? 0)
 }
 
 export default function BackgroundTaskStatus({
   onOpenIndexing,
   onOpenExtensionRuntime,
+  onOpenUpdate,
 }: {
   onOpenIndexing: () => void
   onOpenExtensionRuntime: (initial: ExtensionRuntimeViewPayload) => void
+  onOpenUpdate?: () => void
 }): JSX.Element | null {
   const rootRef = useRef<HTMLDivElement>(null)
   const refreshInFlightRef = useRef(false)
@@ -83,7 +110,59 @@ export default function BackgroundTaskStatus({
   const pollTimerRef = useRef<number | null>(null)
   const tasksRef = useRef<BackgroundTask[]>([])
   const [tasks, setTasks] = useState<BackgroundTask[]>([])
+  const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>({ kind: 'idle' })
   const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    void window.tezbar
+      .getUpdateStatus()
+      .then((s) => {
+        if (mounted && s) setUpdateStatus(s)
+      })
+      .catch(() => undefined)
+    const off = window.tezbar.onUpdateStatus((s) => {
+      if (mounted && s) setUpdateStatus(s)
+    })
+    return () => {
+      mounted = false
+      off()
+    }
+  }, [])
+
+  const updateTask = useMemo<BackgroundTask | null>(() => {
+    if (updateStatus.kind === 'downloading') {
+      const progress =
+        updateStatus.total && updateStatus.total > 0
+          ? Math.max(0, Math.min(1, updateStatus.downloaded / updateStatus.total))
+          : undefined
+      const downloadedMb = (updateStatus.downloaded / 1024 / 1024).toFixed(1)
+      const totalMb = updateStatus.total ? (updateStatus.total / 1024 / 1024).toFixed(1) : null
+      return {
+        id: 'app-update:downloading',
+        kind: 'update',
+        title: 'Updating…',
+        detail: totalMb
+          ? `v${updateStatus.version} · ${downloadedMb} / ${totalMb} MB`
+          : `v${updateStatus.version} · ${downloadedMb} MB`,
+        progress,
+      }
+    }
+    if (updateStatus.kind === 'ready') {
+      return {
+        id: 'app-update:ready',
+        kind: 'update',
+        title: 'Update ready',
+        detail: `v${updateStatus.version} · Restart to apply`,
+        progress: 1,
+      }
+    }
+    return null
+  }, [updateStatus])
+
+  const allTasks = useMemo(() => {
+    return updateTask ? [updateTask, ...tasks] : tasks
+  }, [updateTask, tasks])
 
   const refresh = useCallback(async (): Promise<void> => {
     // Indexing can emit progress much faster than the backend round trip. Keep
@@ -155,18 +234,29 @@ export default function BackgroundTaskStatus({
   }, [open])
 
   useEffect(() => {
-    if (tasks.length === 0) setOpen(false)
-  }, [tasks.length])
+    if (allTasks.length === 0) setOpen(false)
+  }, [allTasks.length])
 
   const primaryTask = useMemo(
-    () => tasks.find((task) => task.kind === 'indexing') ?? tasks[0],
-    [tasks]
+    () =>
+      allTasks.find((task) => task.kind === 'update') ??
+      allTasks.find((task) => task.kind === 'indexing') ??
+      allTasks[0],
+    [allTasks]
   )
 
   if (!primaryTask) return null
 
   const openTask = async (task: BackgroundTask): Promise<void> => {
     setOpen(false)
+    if (task.kind === 'update') {
+      if (updateStatus.kind === 'ready') {
+        void window.tezbar.restartApp()
+      } else if (onOpenUpdate) {
+        onOpenUpdate()
+      }
+      return
+    }
     if (task.kind === 'indexing') {
       onOpenIndexing()
       return
@@ -193,7 +283,7 @@ export default function BackgroundTaskStatus({
                 Background tasks
               </p>
               <p className="mt-0.5 text-[9.5px] text-ink-4">
-                {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} running
+                {allTasks.length} {allTasks.length === 1 ? 'task' : 'tasks'} running
               </p>
             </div>
             <span
@@ -215,7 +305,7 @@ export default function BackgroundTaskStatus({
           </div>
 
           <div className="p-1.5">
-            {tasks.map((task) => {
+            {allTasks.map((task) => {
               const progress = Math.round((task.progress ?? 0) * 100)
               return (
                 <button
@@ -227,9 +317,11 @@ export default function BackgroundTaskStatus({
                   <span
                     className={cx(
                       'grid h-8 w-8 shrink-0 place-items-center rounded-[9px] border',
-                      task.kind === 'indexing'
-                        ? 'border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200'
-                        : 'border-amber-300/20 bg-amber-300/[0.08] text-amber-200'
+                      task.kind === 'update'
+                        ? 'border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200'
+                        : task.kind === 'indexing'
+                          ? 'border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200'
+                          : 'border-amber-300/20 bg-amber-300/[0.08] text-amber-200'
                     )}
                   >
                     <TaskIcon kind={task.kind} />
@@ -246,10 +338,15 @@ export default function BackgroundTaskStatus({
                     <span className="mt-0.5 block truncate text-[9.5px] text-ink-4">
                       {task.detail}
                     </span>
-                    {task.kind === 'indexing' ? (
+                    {task.kind === 'indexing' || task.kind === 'update' ? (
                       <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-white/[0.06]">
                         <span
-                          className="block h-full rounded-full bg-[linear-gradient(90deg,#5ea7ff,#6de1c2)] transition-[width] duration-300"
+                          className={cx(
+                            'block h-full rounded-full transition-[width] duration-300',
+                            task.kind === 'update'
+                              ? 'bg-[linear-gradient(90deg,#34d399,#10b981)]'
+                              : 'bg-[linear-gradient(90deg,#5ea7ff,#6de1c2)]'
+                          )}
                           style={{ width: `${progress}%` }}
                         />
                       </span>
@@ -285,9 +382,11 @@ export default function BackgroundTaskStatus({
         onClick={() => setOpen((current) => !current)}
         className={cx(
           'group inline-flex h-7 items-center gap-1 rounded-[9px] border px-2 text-[10.5px] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
-          primaryTask.kind === 'indexing'
-            ? 'border-cyan-300/[0.14] bg-cyan-300/[0.055] text-cyan-100 hover:border-cyan-300/25 hover:bg-cyan-300/[0.09]'
-            : 'border-amber-300/[0.14] bg-amber-300/[0.05] text-amber-100 hover:border-amber-300/25 hover:bg-amber-300/[0.08]'
+          primaryTask.kind === 'update'
+            ? 'border-emerald-300/[0.18] bg-emerald-300/[0.07] text-emerald-100 hover:border-emerald-300/30 hover:bg-emerald-300/[0.11]'
+            : primaryTask.kind === 'indexing'
+              ? 'border-cyan-300/[0.14] bg-cyan-300/[0.055] text-cyan-100 hover:border-cyan-300/25 hover:bg-cyan-300/[0.09]'
+              : 'border-amber-300/[0.14] bg-amber-300/[0.05] text-amber-100 hover:border-amber-300/25 hover:bg-amber-300/[0.08]'
         )}
       >
         <TaskIcon kind={primaryTask.kind} compact />
@@ -308,9 +407,9 @@ export default function BackgroundTaskStatus({
             strokeLinecap="round"
           />
         </svg>
-        {tasks.length > 1 ? (
+        {allTasks.length > 1 ? (
           <span className="grid h-4 min-w-4 place-items-center rounded-full bg-current/10 px-1 font-mono text-[8.5px] tabular-nums">
-            {tasks.length}
+            {allTasks.length}
           </span>
         ) : null}
       </button>

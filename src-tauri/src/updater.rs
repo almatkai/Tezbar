@@ -1,9 +1,6 @@
 // src-tauri/src/updater.rs
 //
-// GitHub Releases–based update tracking. Only stable (non-prerelease,
-// non-draft) releases are surfaced: beta tags are skipped, and the client
-// additionally ignores versions with a pre-release suffix (e.g. 0.1.0-beta.1)
-// even if the release was not flagged as a prerelease on GitHub.
+// GitHub Releases–based update tracking using tauri-plugin-updater.
 
 use serde::Serialize;
 use std::sync::Mutex;
@@ -11,7 +8,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 /// GitHub repository that publishes Tezbar releases ("owner/repo").
-const GITHUB_REPO: &str = "almatkai/Raymes";
+const GITHUB_REPO: &str = "almatkai/Tezbar";
 
 /// Mirrors the renderer's `AppUpdateStatus` union (`src/shared/updater.ts`).
 #[derive(Clone, Debug, Serialize)]
@@ -90,9 +87,8 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
     let updater = app
         .updater_builder()
         .version_comparator(|current, release| {
-            // Only offer updates that are (a) strictly newer than the running
-            // build and (b) stable releases — never beta/pre-release versions.
-            release.version.pre.is_empty() && release.version > current
+            // Offer updates that are strictly newer than the running build.
+            release.version > current
         })
         .build()
         .map_err(|e| e.to_string())?;
@@ -138,6 +134,10 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
 
 #[tauri::command]
 pub async fn download_and_install_update(app: AppHandle) -> Result<AppUpdateStatus, String> {
+    if let AppUpdateStatus::Downloading { .. } | AppUpdateStatus::Ready { .. } = current_status(&app) {
+        return Ok(current_status(&app));
+    }
+
     let update = {
         let state = app
             .try_state::<UpdaterState>()
