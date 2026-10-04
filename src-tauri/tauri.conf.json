@@ -1,12 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Tezbar",
-  "version": "0.2.0-beta.8",
+  "version": "0.2.0-beta.9",
   "identifier": "com.tezbar.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:5174",
-    "additionalWatchFolders": ["../dist-backend"],
+    "additionalWatchFolders": [
+      "../dist-backend"
+    ],
     "beforeDevCommand": "pnpm exec tsx scripts/build-backend.ts && pnpm exec vite",
     "beforeBuildCommand": "pnpm exec tsx scripts/build-backend.ts && pnpm exec vite build"
   },
@@ -61,6 +63,9 @@
       "../native/color-picker/windows.ps1": "native/color-picker/windows.ps1",
       "../native/image-colors/windows.ps1": "native/image-colors/windows.ps1",
       "../resources/trayIconTemplate@2x.png": "trayIconTemplate@2x.png"
+    },
+    "macOS": {
+      "signingIdentity": "Apple Development: almat.2003@icloud.com (ABGRBU6DGZ)"
     }
   }
 }

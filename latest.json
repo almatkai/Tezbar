@@ -1,11 +1,11 @@
 {
-  "version": "v0.2.0-beta.8",
-  "notes": "Tezbar v0.2.0-beta.8: In-place update progress and visual status directly on command element.",
-  "pub_date": "2026-10-04T16:29:27.264498+00:00",
+  "version": "v0.2.0-beta.9",
+  "notes": "Tezbar v0.2.0-beta.9: Apple Development certificate signed, persistent permissions across updates.",
+  "pub_date": "2026-10-04T16:52:44.737446+00:00",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEJONHpXbERXTUZacE5VcEFzSVBDMjh2ZWZIZGt1Mk5YbFlnekVqbTdTejluT1NRSlpmdXVmYzJnZ3p1M0xPVmpjcms3Z0QwSENrWDFaSEE1ODlORmdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMTMxMzU5CWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKMWZKUEt2SjFiM0dxNFVtRVZuNFVYUG4wMkEvU1k1MWpFT2FOMnZ1NXZQTjNtVmJkbm1zYkRZTlhnaEMwM1RqeHJGVFduWUxYMFhEeXF1SFdXbllYRFE9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0-beta.8/Tezbar.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE5tM1Arb1JYcndoSmJzN2h4Nis1RTVldzBFODBHRFpPditxRVpxendCUEtmUkI4M2dWaGM3TzVJRzYvYUZEUGpPN3laOFBSWWVuR0xWcHVuKyt1TmcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMTMyNzUzCWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKejY5eHBwb2ZEWU5OUHpadVpDd0VsMGJmdXhEN0Q5a2o0aC9HUDc4MVFSemk2dkdQSzdqbzdTRmFtbXNKMVJCUUF2SUxPRWlHV2Zqb09ZZzFKT21xQkE9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0-beta.9/Tezbar.app.tar.gz"
     }
   }
 }

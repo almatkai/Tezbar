@@ -7,7 +7,7 @@ import {
 } from '../shared/updater'
 import { Button } from './ui/primitives'
 
-const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.8'
+const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.9'
 
 type Status = AppUpdateStatus
 
