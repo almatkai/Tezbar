@@ -15796,10 +15796,7 @@ function resolveInstalledExtensionPath(extName) {
   return match?.extPath || null;
 }
 function getExtensionIconDataUrl(extPath, iconFile) {
-  const candidates = [
-    path2.join(extPath, "assets", iconFile),
-    path2.join(extPath, iconFile)
-  ];
+  const candidates = [path2.join(extPath, "assets", iconFile), path2.join(extPath, iconFile)];
   for (const p of candidates) {
     if (!fs.existsSync(p)) continue;
     try {
@@ -15847,10 +15844,7 @@ function discoverInstalledExtensionCommands() {
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
       if (!isManifestPlatformCompatible(pkg)) continue;
-      const iconDataUrl = getExtensionIconDataUrl(
-        extPath,
-        pkg.icon || "icon.png"
-      );
+      const iconDataUrl = getExtensionIconDataUrl(extPath, pkg.icon || "icon.png");
       const ownerRaw = pkg.owner || pkg.author || "";
       const owner = (typeof ownerRaw === "object" ? ownerRaw?.name || "" : String(ownerRaw || "")).trim();
       for (const cmd of pkg.commands || []) {
@@ -15875,13 +15869,7 @@ function discoverInstalledExtensionCommands() {
             title: arg.title,
             data: Array.isArray(arg.data) ? arg.data : void 0
           })) : [],
-          keywords: [
-            extName,
-            pkg.title || "",
-            cmd.name,
-            cmd.title || "",
-            cmd.description || ""
-          ].filter(Boolean).map((s) => s.toLowerCase()),
+          keywords: [extName, pkg.title || "", cmd.name, cmd.title || "", cmd.description || ""].filter(Boolean).map((s) => s.toLowerCase()),
           iconDataUrl
         });
       }
@@ -16102,8 +16090,8 @@ async function buildAllCommands(extName, extPathOverride) {
   const extNodeModules = path2.join(extPath, "node_modules");
   if (requiresNodeModules && !fs.existsSync(extNodeModules)) {
     try {
-      const { installExtensionDeps: installExtensionDeps2 } = (init_extension_registry(), __toCommonJS(extension_registry_exports));
-      await installExtensionDeps2(extPath);
+      const { installExtensionDeps: installDeps } = { installExtensionDeps };
+      await installDeps(extPath);
     } catch (e) {
       console.error(`Failed to install dependencies for ${extName}:`, e?.message || e);
       return 0;
@@ -16142,10 +16130,7 @@ async function buildAllCommands(extName, extPathOverride) {
           platform: "node",
           conditions: ["require", "node"],
           outfile: outFile,
-          plugins: [
-            legacyCheerioInteropPlugin(),
-            nativeExtensionModulePlugin()
-          ],
+          plugins: [legacyCheerioInteropPlugin(), nativeExtensionModulePlugin()],
           external: [
             // React — provided by the renderer at runtime
             "react",
@@ -16186,7 +16171,7 @@ async function buildAllCommands(extName, extPathOverride) {
           tsconfigRaw: getEsbuildTsconfigRaw(extPath),
           define: {
             "process.env.NODE_ENV": '"production"',
-            "global": "globalThis"
+            global: "globalThis"
           },
           logLevel: "warning"
         },
@@ -16309,8 +16294,8 @@ async function buildSingleCommand(extName, cmdName) {
   if (requiresNodeModules && !fs.existsSync(extNodeModules)) {
     console.log(`  node_modules missing for ${extName}, installing dependencies\u2026`);
     try {
-      const { installExtensionDeps: installExtensionDeps2 } = (init_extension_registry(), __toCommonJS(extension_registry_exports));
-      await installExtensionDeps2(extPath);
+      const { installExtensionDeps: installDeps } = { installExtensionDeps };
+      await installDeps(extPath);
     } catch (e) {
       console.error(`  Failed to install dependencies for ${extName}:`, e?.message);
       return false;
@@ -16330,10 +16315,7 @@ async function buildSingleCommand(extName, cmdName) {
         platform: "node",
         conditions: ["require", "node"],
         outfile: outFile,
-        plugins: [
-          legacyCheerioInteropPlugin(),
-          nativeExtensionModulePlugin()
-        ],
+        plugins: [legacyCheerioInteropPlugin(), nativeExtensionModulePlugin()],
         external: [
           "react",
           "react-dom",
@@ -16363,7 +16345,7 @@ async function buildSingleCommand(extName, cmdName) {
         tsconfigRaw: getEsbuildTsconfigRaw(extPath),
         define: {
           "process.env.NODE_ENV": '"production"',
-          "global": "globalThis"
+          global: "globalThis"
         },
         logLevel: "warning"
       },
@@ -16403,12 +16385,9 @@ async function runEsbuildBuild(esbuild, options, extPath, label) {
   } catch (error) {
     const missing = extractMissingBareImports(error);
     if (missing.length === 0) throw error;
-    console.log(
-      `  Missing packages for ${label} (${missing.join(", ")}); installing and retrying\u2026`
-    );
-    const { installSpecificPackages: installSpecificPackages2 } = (init_extension_registry(), __toCommonJS(extension_registry_exports));
+    console.log(`  Missing packages for ${label} (${missing.join(", ")}); installing and retrying\u2026`);
     try {
-      await installSpecificPackages2(extPath, missing);
+      await installSpecificPackages(extPath, missing);
     } catch (installError) {
       console.error(
         `  Failed to install missing packages for ${label}: ${installError?.message || installError}`
@@ -16429,11 +16408,15 @@ async function getExtensionBundle(extName, cmdName) {
   }
   let outFile = path2.join(extPath, ".sc-build", `${cmdName}.js`);
   if (!fs.existsSync(outFile)) {
-    console.log(`Pre-built bundle not found for ${normalizedExtName}/${cmdName}, building on-demand\u2026`);
+    console.log(
+      `Pre-built bundle not found for ${normalizedExtName}/${cmdName}, building on-demand\u2026`
+    );
     const built = await buildSingleCommand(normalizedExtName, cmdName);
     if (!built || !fs.existsSync(outFile)) {
       try {
-        console.log(`Single-command build failed for ${normalizedExtName}/${cmdName}; trying full extension rebuild\u2026`);
+        console.log(
+          `Single-command build failed for ${normalizedExtName}/${cmdName}; trying full extension rebuild\u2026`
+        );
         await buildAllCommands(normalizedExtName);
       } catch (rebuildError) {
         console.warn(`Full rebuild fallback failed for ${normalizedExtName}:`, rebuildError);
@@ -16545,6 +16528,7 @@ var init_extension_builder = __esm({
     path2 = __toESM(require("path"));
     init_extension_platform();
     init_esbuild_runtime();
+    init_extension_registry();
     nodeBuiltins = [
       "assert",
       "buffer",
@@ -22309,6 +22293,137 @@ var init_fuse = __esm({
   }
 });
 
+// src/main/extension-confirm-alert.ts
+async function confirmExtensionAlert(options = {}) {
+  const result = await dialog.showMessageBox({
+    title: String(options.title || "Confirm"),
+    message: String(options.title || "Confirm"),
+    detail: options.message ? String(options.message) : void 0,
+    buttons: [
+      String(options.dismissAction?.title || "Cancel"),
+      String(options.primaryAction?.title || "OK")
+    ],
+    defaultId: 0,
+    cancelId: 0,
+    type: options.primaryAction?.style === "destructive" ? "warning" : "question",
+    noLink: true
+  });
+  const accepted = result.response === 1;
+  const callback = accepted ? options.primaryAction?.onAction : options.dismissAction?.onAction;
+  if (callback) await Promise.resolve(callback());
+  return accepted;
+}
+var init_extension_confirm_alert = __esm({
+  "src/main/extension-confirm-alert.ts"() {
+    "use strict";
+    init_desktop_runtime();
+  }
+});
+
+// src/main/powershell-script.ts
+function powerShellScriptArguments(source) {
+  const script = `[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+${source}`;
+  return [
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-EncodedCommand",
+    Buffer.from(script, "utf16le").toString("base64")
+  ];
+}
+async function runPowerShellScript(source, options = {}) {
+  if (process.platform !== "win32") throw new Error("PowerShell is only available on Windows");
+  if (typeof source !== "string" || !source.trim()) return "";
+  const { stdout } = await execFileAsync11("powershell.exe", powerShellScriptArguments(source), {
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: options.timeout ?? 1e4,
+    signal: options.signal,
+    windowsHide: true
+  });
+  return stdout.replace(/\r?\n$/, "");
+}
+var import_node_child_process13, import_node_util11, execFileAsync11;
+var init_powershell_script = __esm({
+  "src/main/powershell-script.ts"() {
+    "use strict";
+    import_node_child_process13 = require("node:child_process");
+    import_node_util11 = require("node:util");
+    execFileAsync11 = (0, import_node_util11.promisify)(import_node_child_process13.execFile);
+  }
+});
+
+// src/main/selected-text.ts
+async function readSelectedText() {
+  let selected;
+  if (process.platform === "win32") {
+    const encoded = await runPowerShellScript(windowsSelectedTextScript, { timeout: 3e3 });
+    selected = Buffer.from(encoded, "base64").toString("utf8");
+  } else if (process.platform === "darwin") {
+    const { stdout } = await execFileAsync12("/usr/bin/osascript", ["-e", macSelectedTextScript], {
+      encoding: "utf8",
+      timeout: 3e3,
+      maxBuffer: 1024 * 1024
+    });
+    selected = stdout.replace(/\r?\n$/, "");
+  } else {
+    throw new Error("Reading selected text is only supported on macOS and Windows");
+  }
+  if (!selected) throw new Error("No text is selected in the focused application");
+  return selected;
+}
+var import_node_child_process14, import_node_util12, execFileAsync12, macSelectedTextScript, windowsSelectedTextScript;
+var init_selected_text = __esm({
+  "src/main/selected-text.ts"() {
+    "use strict";
+    import_node_child_process14 = require("node:child_process");
+    import_node_util12 = require("node:util");
+    init_powershell_script();
+    execFileAsync12 = (0, import_node_util12.promisify)(import_node_child_process14.execFile);
+    macSelectedTextScript = `tell application "System Events"
+  set frontmostProcess to first application process whose frontmost is true
+  tell frontmostProcess
+    set focusedElement to value of attribute "AXFocusedUIElement"
+    set selectedValue to value of attribute "AXSelectedText" of focusedElement
+    if selectedValue is missing value then return ""
+    return selectedValue as text
+  end tell
+end tell`;
+    windowsSelectedTextScript = `
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+$focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+if ($null -eq $focused) { throw 'No focused text element' }
+$pattern = $null
+if (-not $focused.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$pattern)) {
+  throw 'The focused application does not expose text selection through UI Automation'
+}
+$selection = $pattern.GetSelection()
+$text = (@($selection | ForEach-Object { $_.GetText(-1) }) -join '')
+[Console]::Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text)))
+`;
+  }
+});
+
+// src/main/extension-sql.ts
+async function executeExtensionSQL(databasePath2, query) {
+  const database = new better_sqlite3_shim_default(databasePath2, { readonly: true, fileMustExist: true });
+  try {
+    return database.prepare(query).all();
+  } finally {
+    database.close();
+  }
+}
+var init_extension_sql = __esm({
+  "src/main/extension-sql.ts"() {
+    "use strict";
+    init_better_sqlite3_shim();
+  }
+});
+
 // src/main/extensions/raycastShim.ts
 async function runAppleScript2(source) {
   if (process.platform !== "darwin") {
@@ -22317,7 +22432,7 @@ async function runAppleScript2(source) {
   if (typeof source !== "string" || source.trim().length === 0) {
     return "";
   }
-  const { stdout } = await execFileAsync11("/usr/bin/osascript", ["-e", source], {
+  const { stdout } = await execFileAsync13("/usr/bin/osascript", ["-e", source], {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024
   });
@@ -22487,7 +22602,7 @@ function createRaycastApi(ctx) {
     },
     Clipboard: createClipboardShim(),
     getPreferenceValues: () => readPreferences(ctx.packageRoot),
-    getSelectedText: async () => "",
+    getSelectedText: readSelectedText,
     getApplications: async () => listApplications(),
     getFrontmostApplication: async () => {
       const apps = listApplications();
@@ -22534,7 +22649,7 @@ function createRaycastApi(ctx) {
       if (typeof path8 !== "string") return;
       shell.showItemInFolder(path8);
     },
-    confirmAlert: async () => true,
+    confirmAlert: (options) => confirmExtensionAlert(options),
     closeMainWindow: async () => {
     },
     popToRoot: async () => {
@@ -22554,6 +22669,8 @@ function createRaycastApi(ctx) {
 function createRaycastUtils(ctx) {
   const localStorage = createLocalStorage(ctx.packageRoot);
   return {
+    runPowerShellScript,
+    executeSQL: executeExtensionSQL,
     useCachedState: (_, initialValue) => {
       let state = initialValue;
       const setState = (next) => {
@@ -22649,7 +22766,9 @@ function createRaycastUtils(ctx) {
       const hostMatch = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i.exec(String(baseUrl ?? "").trim());
       const host = hostMatch?.[1];
       if (host) {
-        return { source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}` };
+        return {
+          source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}`
+        };
       }
       return { source: String(options?.fallback ?? "Icon.Globe") };
     }
@@ -22664,17 +22783,21 @@ function formatRuntimeFeedback(feedback) {
   if (title && message) return `${title}: ${message}`;
   return title || message || "Extension command completed.";
 }
-var import_node_child_process13, import_node_fs21, import_node_os8, import_node_path23, import_node_util11, TOAST_STYLE, IMAGE_MASK, execFileAsync11;
+var import_node_child_process15, import_node_fs21, import_node_os8, import_node_path23, import_node_util13, TOAST_STYLE, IMAGE_MASK, execFileAsync13;
 var init_raycastShim = __esm({
   "src/main/extensions/raycastShim.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_child_process13 = require("node:child_process");
+    import_node_child_process15 = require("node:child_process");
     import_node_fs21 = require("node:fs");
     import_node_os8 = require("node:os");
     import_node_path23 = require("node:path");
-    import_node_util11 = require("node:util");
+    import_node_util13 = require("node:util");
     init_appsProvider();
+    init_extension_confirm_alert();
+    init_selected_text();
+    init_powershell_script();
+    init_extension_sql();
     TOAST_STYLE = {
       Success: "success",
       Failure: "failure",
@@ -22684,7 +22807,7 @@ var init_raycastShim = __esm({
       Circle: "circle",
       RoundedRectangle: "roundedRectangle"
     };
-    execFileAsync11 = (0, import_node_util11.promisify)(import_node_child_process13.execFile);
+    execFileAsync13 = (0, import_node_util13.promisify)(import_node_child_process15.execFile);
   }
 });
 
@@ -23826,7 +23949,7 @@ function parseProcessNameMap(stdout) {
 }
 async function readProcessNameMap() {
   try {
-    const { stdout } = await execFileAsync12("/bin/ps", ["-axo", "pid=,comm="]);
+    const { stdout } = await execFileAsync14("/bin/ps", ["-axo", "pid=,comm="]);
     return parseProcessNameMap(stdout);
   } catch {
     return /* @__PURE__ */ new Map();
@@ -24499,7 +24622,7 @@ async function searchPortManagerOpenPorts(query) {
 async function listOpenPorts() {
   if (process.platform === "win32") {
     try {
-      const { stdout } = await execFileAsync12("netstat.exe", ["-ano", "-p", "tcp"]);
+      const { stdout } = await execFileAsync14("netstat.exe", ["-ano", "-p", "tcp"]);
       const pids = Array.from(
         new Set(
           stdout.split(/\r?\n/).map((line) => line.trim().split(/\s+/).at(-1) ?? "").filter((pid) => /^\d+$/.test(pid))
@@ -24509,7 +24632,7 @@ async function listOpenPorts() {
       await Promise.all(
         pids.map(async (pid) => {
           try {
-            const { stdout: task } = await execFileAsync12("tasklist.exe", [
+            const { stdout: task } = await execFileAsync14("tasklist.exe", [
               "/fi",
               `PID eq ${pid}`,
               "/fo",
@@ -24551,13 +24674,13 @@ async function listOpenPorts() {
     }
   }
   try {
-    const { stdout } = await execFileAsync12("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
+    const { stdout } = await execFileAsync14("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
     const processNames = await readProcessNameMap();
     return attachOpenPortProcessIcons(parseOpenPortProcesses(stdout, processNames));
   } catch (error) {
     console.error("[OpenPorts] Failed to list listening ports:", error);
     try {
-      const { stdout } = await execFileAsync12("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
+      const { stdout } = await execFileAsync14("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
       return attachOpenPortProcessIcons(parseOpenPortProcesses(stdout));
     } catch (fallbackError) {
       console.error("[OpenPorts] Fallback listing failed:", fallbackError);
@@ -24570,13 +24693,13 @@ async function executeActionInner(action) {
     case "open-app": {
       if (process.platform === "win32" && action.appPath) {
         if (action.appPath.startsWith("shell:AppsFolder\\")) {
-          await execFileAsync12("explorer.exe", [action.appPath]);
+          await execFileAsync14("explorer.exe", [action.appPath]);
           return { ok: true, message: `Opened ${action.appName}` };
         }
         const opened = await shell.openPath(action.appPath);
         return opened ? { ok: false, message: opened } : { ok: true, message: `Opened ${action.appName}` };
       }
-      await execFileAsync12("open", ["-a", action.appName]);
+      await execFileAsync14("open", ["-a", action.appName]);
       return { ok: true, message: `Opened ${action.appName}` };
     }
     case "open-file": {
@@ -24597,7 +24720,7 @@ async function executeActionInner(action) {
             const opened2 = await shell.openPath(targetPath);
             return opened2 ? { ok: false, message: opened2 } : { ok: true, message: "Opened with the default application" };
           }
-          await execFileAsync12(
+          await execFileAsync14(
             "powershell.exe",
             [
               "-NoLogo",
@@ -24618,7 +24741,7 @@ async function executeActionInner(action) {
           recordOpenWithUsage(targetPath, action.appName);
           return { ok: true, message: `Opened with ${action.appName}` };
         }
-        await execFileAsync12("open", ["-a", action.appName, targetPath]);
+        await execFileAsync14("open", ["-a", action.appName, targetPath]);
         recordOpenWithUsage(targetPath, action.appName);
         return { ok: true, message: `Opened with ${action.appName}` };
       }
@@ -24638,14 +24761,14 @@ async function executeActionInner(action) {
       app.hide();
       await new Promise((resolve6) => setTimeout(resolve6, 50));
       if (process.platform === "win32") {
-        await execFileAsync12("powershell.exe", [
+        await execFileAsync14("powershell.exe", [
           "-NoProfile",
           "-NonInteractive",
           "-Command",
           '(New-Object -ComObject WScript.Shell).SendKeys("^v")'
         ]);
       } else {
-        await execFileAsync12("osascript", [
+        await execFileAsync14("osascript", [
           "-e",
           'tell application "System Events" to keystroke "v" using {command down}'
         ]);
@@ -24703,7 +24826,7 @@ async function executeActionInner(action) {
       if (!validation.ok) {
         return { ok: false, message: validation.message };
       }
-      const { stdout } = await execFileAsync12("bash", ["-lc", command3]);
+      const { stdout } = await execFileAsync14("bash", ["-lc", command3]);
       const message = stdout.trim();
       return { ok: true, message: message || "Command completed" };
     }
@@ -24766,16 +24889,16 @@ async function recordSearchActionUsage(action, context) {
     indexDb.recordClick(context.query, actionId, context.rank, true);
   }
 }
-var import_node_child_process14, import_node_fs23, import_node_os10, import_node_path25, import_node_util12, execFileAsync12, MAX_RESULTS, PROVIDER_REFRESH_MIN_AGE_MS, FILE_INDEX_LIMIT, FILE_INDEX_WRITE_BATCH_SIZE, BACKGROUND_FILE_INDEX_START_DELAY_MS, SHELL_METACHAR_RE, indexDb, searchReadyPromise, fileBootstrapPromise, volatileRefreshPromise, stopFileWatcher, lastVolatileRefreshAt, initialProviderRefreshStarted, volatileRefreshScheduled, searchLifecycleRegistered, fileIndexStartTimer, _benchmarkPromise;
+var import_node_child_process16, import_node_fs23, import_node_os10, import_node_path25, import_node_util14, execFileAsync14, MAX_RESULTS, PROVIDER_REFRESH_MIN_AGE_MS, FILE_INDEX_LIMIT, FILE_INDEX_WRITE_BATCH_SIZE, BACKGROUND_FILE_INDEX_START_DELAY_MS, SHELL_METACHAR_RE, indexDb, searchReadyPromise, fileBootstrapPromise, volatileRefreshPromise, stopFileWatcher, lastVolatileRefreshAt, initialProviderRefreshStarted, volatileRefreshScheduled, searchLifecycleRegistered, fileIndexStartTimer, _benchmarkPromise;
 var init_service3 = __esm({
   "src/main/search/service.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_child_process14 = require("node:child_process");
+    import_node_child_process16 = require("node:child_process");
     import_node_fs23 = require("node:fs");
     import_node_os10 = require("node:os");
     import_node_path25 = require("node:path");
-    import_node_util12 = require("node:util");
+    import_node_util14 = require("node:util");
     init_searchMode();
     init_executor();
     init_configStore();
@@ -24797,7 +24920,7 @@ var init_service3 = __esm({
     init_ranker();
     init_directoryRecommendations();
     init_providerRefreshPolicy();
-    execFileAsync12 = (0, import_node_util12.promisify)(import_node_child_process14.execFile);
+    execFileAsync14 = (0, import_node_util14.promisify)(import_node_child_process16.execFile);
     MAX_RESULTS = 80;
     PROVIDER_REFRESH_MIN_AGE_MS = 1e4;
     FILE_INDEX_LIMIT = 75e3;
@@ -24990,7 +25113,7 @@ function spawnRpc(options) {
     args.push("--extension", OPENCODE_PI_EXTENSION);
   }
   args.push(...options.extraArgs);
-  const child = (0, import_node_child_process15.spawn)(options.piBin, args, {
+  const child = (0, import_node_child_process17.spawn)(options.piBin, args, {
     cwd: options.cwd,
     detached: process.platform !== "win32",
     env: {
@@ -25372,11 +25495,11 @@ function disposeSharedBridge() {
   sharedBridge?.dispose();
   sharedBridge = void 0;
 }
-var import_node_child_process15, import_node_crypto12, import_node_events, import_node_fs24, import_node_os11, import_node_path26, import_node_string_decoder, PI_BIN_CANDIDATES, OPENCODE_PI_EXTENSION, sharedBridge;
+var import_node_child_process17, import_node_crypto12, import_node_events, import_node_fs24, import_node_os11, import_node_path26, import_node_string_decoder, PI_BIN_CANDIDATES, OPENCODE_PI_EXTENSION, sharedBridge;
 var init_bridge = __esm({
   "src/main/agent/bridge.ts"() {
     "use strict";
-    import_node_child_process15 = require("node:child_process");
+    import_node_child_process17 = require("node:child_process");
     import_node_crypto12 = require("node:crypto");
     import_node_events = require("node:events");
     import_node_fs24 = require("node:fs");
@@ -25891,94 +26014,6 @@ var init_terminal = __esm({
       EXIT: "terminal:exit",
       GET_PROMPT_INFO: "terminal:get-prompt-info"
     };
-  }
-});
-
-// src/main/powershell-script.ts
-function powerShellScriptArguments(source) {
-  const script = `[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
-${source}`;
-  return [
-    "-NoLogo",
-    "-NoProfile",
-    "-NonInteractive",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-EncodedCommand",
-    Buffer.from(script, "utf16le").toString("base64")
-  ];
-}
-async function runPowerShellScript(source, options = {}) {
-  if (process.platform !== "win32") throw new Error("PowerShell is only available on Windows");
-  if (typeof source !== "string" || !source.trim()) return "";
-  const { stdout } = await execFileAsync16("powershell.exe", powerShellScriptArguments(source), {
-    encoding: "utf8",
-    maxBuffer: 10 * 1024 * 1024,
-    timeout: options.timeout ?? 1e4,
-    signal: options.signal,
-    windowsHide: true
-  });
-  return stdout.replace(/\r?\n$/, "");
-}
-var import_node_child_process19, import_node_util16, execFileAsync16;
-var init_powershell_script = __esm({
-  "src/main/powershell-script.ts"() {
-    "use strict";
-    import_node_child_process19 = require("node:child_process");
-    import_node_util16 = require("node:util");
-    execFileAsync16 = (0, import_node_util16.promisify)(import_node_child_process19.execFile);
-  }
-});
-
-// src/main/selected-text.ts
-async function readSelectedText() {
-  let selected;
-  if (process.platform === "win32") {
-    const encoded = await runPowerShellScript(windowsSelectedTextScript, { timeout: 3e3 });
-    selected = Buffer.from(encoded, "base64").toString("utf8");
-  } else if (process.platform === "darwin") {
-    const { stdout } = await execFileAsync17("/usr/bin/osascript", ["-e", macSelectedTextScript], {
-      encoding: "utf8",
-      timeout: 3e3,
-      maxBuffer: 1024 * 1024
-    });
-    selected = stdout.replace(/\r?\n$/, "");
-  } else {
-    throw new Error("Reading selected text is only supported on macOS and Windows");
-  }
-  if (!selected) throw new Error("No text is selected in the focused application");
-  return selected;
-}
-var import_node_child_process20, import_node_util17, execFileAsync17, macSelectedTextScript, windowsSelectedTextScript;
-var init_selected_text = __esm({
-  "src/main/selected-text.ts"() {
-    "use strict";
-    import_node_child_process20 = require("node:child_process");
-    import_node_util17 = require("node:util");
-    init_powershell_script();
-    execFileAsync17 = (0, import_node_util17.promisify)(import_node_child_process20.execFile);
-    macSelectedTextScript = `tell application "System Events"
-  set frontmostProcess to first application process whose frontmost is true
-  tell frontmostProcess
-    set focusedElement to value of attribute "AXFocusedUIElement"
-    set selectedValue to value of attribute "AXSelectedText" of focusedElement
-    if selectedValue is missing value then return ""
-    return selectedValue as text
-  end tell
-end tell`;
-    windowsSelectedTextScript = `
-Add-Type -AssemblyName UIAutomationClient
-Add-Type -AssemblyName UIAutomationTypes
-$focused = [System.Windows.Automation.AutomationElement]::FocusedElement
-if ($null -eq $focused) { throw 'No focused text element' }
-$pattern = $null
-if (-not $focused.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$pattern)) {
-  throw 'The focused application does not expose text selection through UI Automation'
-}
-$selection = $pattern.GetSelection()
-$text = (@($selection | ForEach-Object { $_.GetText(-1) }) -join '')
-[Console]::Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text)))
-`;
   }
 });
 
@@ -27260,6 +27295,13 @@ function createRaycastApiShim(session2) {
     },
     Action,
     ActionPanel,
+    CopyToClipboardAction: Action.CopyToClipboard,
+    OpenInBrowserAction: Action.OpenInBrowser,
+    PushAction: Action.Push,
+    PopToRootType: { Default: "default", Immediate: "immediate", Suspended: "suspended" },
+    // Tezbar does not forward extension exceptions to Raycast telemetry.
+    captureException: () => {
+    },
     Icon: iconProxy,
     Color: iconProxy,
     Keyboard: {
@@ -27311,6 +27353,7 @@ function createRaycastApiShim(session2) {
     },
     getPreferenceValues: () => session2.preferences,
     getSelectedFinderItems: async () => {
+      if (session2.effectMode === "record") return [];
       if (process.platform === "win32") {
         try {
           const { stdout } = await execFileAsync18(
@@ -27365,9 +27408,11 @@ function createRaycastApiShim(session2) {
         session2.extensionId,
         targetName,
         argumentValues,
-        getExtensionPreferences(session2.extensionId, targetName)
+        void 0,
+        { effectMode: session2.effectMode }
       );
       if (!result.ok) throw new Error(result.message);
+      for (const effect of result.effects ?? []) pushEffect(session2, effect);
     },
     useNavigation: () => ({
       push: (next) => {
@@ -27533,7 +27578,10 @@ function createRaycastApiShim(session2) {
     getDefaultApplication: async () => {
       return null;
     },
-    confirmAlert: async () => true,
+    confirmAlert: async (options) => {
+      if (session2.effectMode === "record") return false;
+      return confirmExtensionAlert(options);
+    },
     openExtensionPreferences: async () => {
     },
     openCommandPreferences: async () => {
@@ -27552,6 +27600,7 @@ function createRaycastUtilsShim(session2) {
   const CacheShim = createCacheShim(session2.packageRoot);
   const cache2 = new CacheShim();
   const functionCache = /* @__PURE__ */ new Map();
+  const useState = createReactShim(session2).useState;
   const useCachedState = (key, initialValue) => {
     const hookIdx = session2.hookIndex++;
     const existing = session2.hookStates[hookIdx];
@@ -27794,6 +27843,7 @@ function createRaycastUtilsShim(session2) {
   const useFetchPromise = makePromiseHook();
   const useAIPromise = makePromiseHook();
   const useSQLPromise = makePromiseHook();
+  const useStoragePromise = makePromiseHook();
   const useExec = (command3, args = [], options) => {
     const exec = async () => {
       const { stdout, stderr } = await execFileAsync18(command3, args, {
@@ -27823,27 +27873,15 @@ function createRaycastUtilsShim(session2) {
     return useFetchPromise(load3, [String(input), requestInit], options);
   };
   const useSQL = (databasePath2, query, options) => {
-    const load3 = async (dbPath3, sql) => {
-      const database = new better_sqlite3_shim_default(dbPath3, { readonly: true, fileMustExist: true });
-      try {
-        return database.prepare(sql).all();
-      } finally {
-        database.close();
-      }
-    };
-    const result = useSQLPromise(load3, [databasePath2, query], options);
+    const result = useSQLPromise(executeExtensionSQL, [databasePath2, query], options);
     return { ...result, permissionView: void 0 };
   };
   const FormValidation = { Required: "required" };
   const useForm = (options = {}) => {
-    const [values, setValues] = useCachedState(
-      `form-values:${session2.commandName}`,
-      options.initialValues ?? {}
-    );
-    const [errors, setErrors] = useCachedState(
-      `form-errors:${session2.commandName}`,
-      {}
-    );
+    cache2.remove(`form-values:${session2.commandName}`);
+    cache2.remove(`form-errors:${session2.commandName}`);
+    const [values, setValues] = useState(options.initialValues ?? {});
+    const [errors, setErrors] = useState({});
     const validate = (candidate) => {
       const nextErrors = {};
       for (const [key, rule] of Object.entries(options.validation ?? {})) {
@@ -28164,16 +28202,25 @@ function createRaycastUtilsShim(session2) {
     useCachedPromise: makePromiseHook(true),
     useExec,
     useSQL,
+    executeSQL: executeExtensionSQL,
     useLocalStorage: (key, initialValue) => {
-      const [value, setValue] = useCachedState(key, initialValue);
+      const storage = createLocalStorageShim(session2.packageRoot);
+      const load3 = async (storageKey) => {
+        const raw = await storage.getItem(storageKey);
+        return raw === void 0 ? initialValue : JSON.parse(raw);
+      };
+      const state = useStoragePromise(load3, [String(key)], { initialData: initialValue });
       return {
-        value,
-        setValue: async (next) => setValue(next),
-        removeValue: async () => {
-          cache2.remove(String(key));
-          setValue(initialValue);
+        value: state.data ?? initialValue,
+        setValue: async (next) => {
+          await storage.setItem(String(key), JSON.stringify(next));
+          await state.mutate(next);
         },
-        isLoading: false
+        removeValue: async () => {
+          await storage.removeItem(String(key));
+          await state.mutate(initialValue);
+        },
+        isLoading: state.isLoading
       };
     },
     getFavicon: (baseUrl, options) => {
@@ -28337,15 +28384,15 @@ function registerAction(typeName, props, session2) {
     if (kind === "copy") {
       const content = props.content ?? props.title ?? "";
       copyToSystemClipboard(session2, content);
-      if (typeof props.onPaste === "function") {
-        await Promise.resolve(props.onPaste());
-      }
+      const callback = typeName === "Action.Paste" ? props.onPaste : props.onCopy;
+      if (typeof callback === "function") await Promise.resolve(callback());
     }
     if (kind === "open") {
       const url = typeof props.url === "string" ? props.url : "";
       if (url) {
         pushEffect(session2, { kind: "open", value: url });
         if (session2.effectMode !== "record") await shell.openExternal(url);
+        if (typeof props.onOpen === "function") await Promise.resolve(props.onOpen());
       }
     }
     if (kind === "show-in-finder") {
@@ -29144,8 +29191,11 @@ function manifestPreferenceDefaults(pkg, command3) {
   const apply = (preferences) => {
     for (const preference of preferences ?? []) {
       if (!preference?.name) continue;
-      if (preference.default !== void 0) values[preference.name] = preference.default;
-      else if (preference.type === "checkbox") values[preference.name] = false;
+      if (preference.default !== void 0) {
+        const value = preference.default;
+        const platform = process.platform === "win32" ? "Windows" : "macOS";
+        values[preference.name] = value && typeof value === "object" && !Array.isArray(value) && ("macOS" in value || "Windows" in value) ? value[platform] ?? value.macOS ?? value.Windows : value;
+      } else if (preference.type === "checkbox") values[preference.name] = false;
       else if (preference.type === "dropdown")
         values[preference.name] = preference.data?.[0]?.value ?? "";
       else values[preference.name] = "";
@@ -29396,7 +29446,8 @@ var init_extension_runner = __esm({
     import_node_fs27 = require("node:fs");
     import_promises5 = require("node:fs/promises");
     import_node_child_process21 = require("node:child_process");
-    init_better_sqlite3_shim();
+    init_extension_sql();
+    init_extension_confirm_alert();
     init_powershell_script();
     init_selected_text();
     import_node_crypto14 = require("node:crypto");
@@ -32883,15 +32934,15 @@ async function requestPermission(id) {
 }
 
 // src/main/agent/piInstall.ts
-var import_node_child_process16 = require("node:child_process");
-var import_node_util13 = require("node:util");
+var import_node_child_process18 = require("node:child_process");
+var import_node_util15 = require("node:util");
 init_bridge();
-var execFileAsync13 = (0, import_node_util13.promisify)(import_node_child_process16.execFile);
+var execFileAsync15 = (0, import_node_util15.promisify)(import_node_child_process18.execFile);
 var PI_NPM_PACKAGE = "@mariozechner/pi-coding-agent";
 var PI_NPM_PAGE_URL = `https://www.npmjs.com/package/${PI_NPM_PACKAGE}`;
 async function commandWorks(bin, args) {
   try {
-    await execFileAsync13(bin, args, { timeout: 8e3 });
+    await execFileAsync15(bin, args, { timeout: 8e3 });
     return true;
   } catch {
     return false;
@@ -32899,7 +32950,7 @@ async function commandWorks(bin, args) {
 }
 async function checkPiAgent() {
   try {
-    const { stdout } = await execFileAsync13(resolvePiBinary(), ["--version"], { timeout: 8e3 });
+    const { stdout } = await execFileAsync15(resolvePiBinary(), ["--version"], { timeout: 8e3 });
     return { installed: true, version: stdout.trim() || void 0 };
   } catch {
     return { installed: false };
@@ -32907,7 +32958,7 @@ async function checkPiAgent() {
 }
 async function installWith(method, args) {
   try {
-    await execFileAsync13(method, args, { timeout: 18e4 });
+    await execFileAsync15(method, args, { timeout: 18e4 });
   } catch (error) {
     return {
       ok: false,
@@ -32943,16 +32994,16 @@ init_registry2();
 init_registry();
 
 // src/main/systemStats/service.ts
-var import_node_child_process18 = require("node:child_process");
+var import_node_child_process20 = require("node:child_process");
 var import_node_os13 = require("node:os");
-var import_node_util15 = require("node:util");
+var import_node_util17 = require("node:util");
 
 // src/main/systemStats/windows.ts
-var import_node_child_process17 = require("node:child_process");
+var import_node_child_process19 = require("node:child_process");
 var import_promises3 = require("node:fs/promises");
 var import_node_os12 = require("node:os");
-var import_node_util14 = require("node:util");
-var execFileAsync14 = (0, import_node_util14.promisify)(import_node_child_process17.execFile);
+var import_node_util16 = require("node:util");
+var execFileAsync16 = (0, import_node_util16.promisify)(import_node_child_process19.execFile);
 var MEBIBYTE = 1024 ** 2;
 var staticStatsPromise = null;
 var previousCpuTimes = null;
@@ -33014,7 +33065,7 @@ $processes = @(Get-Process)
 } | ConvertTo-Json -Compress -Depth 4
 `;
 async function command(file, args) {
-  const { stdout } = await execFileAsync14(file, args, {
+  const { stdout } = await execFileAsync16(file, args, {
     timeout: 8e3,
     maxBuffer: 8 * 1024 * 1024,
     windowsHide: true
@@ -33303,11 +33354,11 @@ async function getWindowsSystemStats() {
 }
 
 // src/main/systemStats/service.ts
-var execFileAsync15 = (0, import_node_util15.promisify)(import_node_child_process18.execFile);
+var execFileAsync17 = (0, import_node_util17.promisify)(import_node_child_process20.execFile);
 var staticStatsPromise2 = null;
 var previousNetworkSample2 = null;
 async function command2(file, args) {
-  const { stdout } = await execFileAsync15(file, args, {
+  const { stdout } = await execFileAsync17(file, args, {
     timeout: 8e3,
     maxBuffer: 8 * 1024 * 1024
   });

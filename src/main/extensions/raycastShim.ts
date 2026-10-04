@@ -22,6 +22,10 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { listApplications } from '../search/providers/appsProvider'
+import { confirmExtensionAlert, type ExtensionAlertOptions } from '../extension-confirm-alert'
+import { readSelectedText } from '../selected-text'
+import { runPowerShellScript } from '../powershell-script'
+import { executeExtensionSQL } from '../extension-sql'
 
 export type RuntimeFeedback = {
   kind: 'toast' | 'hud'
@@ -264,7 +268,7 @@ export function createRaycastApi(ctx: ShimContext): Record<string, unknown> {
     Clipboard: createClipboardShim(),
 
     getPreferenceValues: (): Record<string, unknown> => readPreferences(ctx.packageRoot),
-    getSelectedText: async (): Promise<string> => '',
+    getSelectedText: readSelectedText,
     getApplications: async (): Promise<Array<Record<string, unknown>>> => listApplications(),
     getFrontmostApplication: async (): Promise<Record<string, unknown>> => {
       const apps = listApplications()
@@ -309,7 +313,8 @@ export function createRaycastApi(ctx: ShimContext): Record<string, unknown> {
       if (typeof path !== 'string') return
       shell.showItemInFolder(path)
     },
-    confirmAlert: async (): Promise<boolean> => true,
+    confirmAlert: (options?: ExtensionAlertOptions): Promise<boolean> =>
+      confirmExtensionAlert(options),
     closeMainWindow: async (): Promise<void> => {
       // Hiding the launcher is handled elsewhere; extensions just expect
       // this to exist. The main window will re-open when the user hits
@@ -338,6 +343,8 @@ export function createRaycastUtils(ctx: ShimContext): Record<string, unknown> {
   }
 
   return {
+    runPowerShellScript,
+    executeSQL: executeExtensionSQL,
     useCachedState: <T>(_: string, initialValue: T): [T, (next: T | ((prev: T) => T)) => void] => {
       let state = initialValue
       const setState = (next: T | ((prev: T) => T)): void => {
@@ -418,12 +425,17 @@ export function createRaycastUtils(ctx: ShimContext): Record<string, unknown> {
         title: error instanceof Error ? error.message : String(error),
       })
     },
-    getFavicon: (baseUrl: string, options?: { fallback?: string; size?: number }): { source: string } => {
+    getFavicon: (
+      baseUrl: string,
+      options?: { fallback?: string; size?: number }
+    ): { source: string } => {
       const size = Math.max(16, Math.min(256, Number(options?.size) || 64))
       const hostMatch = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i.exec(String(baseUrl ?? '').trim())
       const host = hostMatch?.[1]
       if (host) {
-        return { source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}` }
+        return {
+          source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}`,
+        }
       }
       return { source: String(options?.fallback ?? 'Icon.Globe') }
     },

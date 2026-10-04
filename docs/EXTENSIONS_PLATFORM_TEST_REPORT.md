@@ -15,7 +15,10 @@
 
 Повторная проверка первого раунда: штатная suite Tezbar **342 passed / 1 Windows-only skipped**, portability **30/30**, Google Translate audio tests **6/6**, Raycast build/typecheck **7/7**, backend build и Tezbar typecheck успешно. Добавлены отдельные штатные регрессии для spawn, PowerShell и read-only SQLite.
 
+
 Следующий раунд охватил ещё 8 установленных пакетов: [отчёт](./INSTALLED_EXTENSIONS_PLATFORM_AUDIT.md). Исправлены дополнительные API gaps и безопасный platform fallback; итоговая штатная suite — **351 passed / 1 Windows-only skipped**, installed probes — **21/21**. Read-only SQLite также проверен непосредственно под Bun на macOS.
+
+Завершающий проход охватил весь курируемый каталог: все 91 расширение (187 команд) скачаны из своих репозиториев и проверены статически. Каждый указанный на импорт runtime export присутствует в шимах (**92/92 probe-тестов**), каждая совместимая команда собирается production-билдером на macOS и в симуляции Windows (**182/182**), а Bun принимает remote-tarball зависимость csv-to-excel (**183-й тест**). Дополнительно закреплены контракты безопасности: `confirmAlert` больше не автоматически возвращает успех, record-mode не выполняет callbacks действий и не читает реальный Finder selection, `launchCommand` наследует record-mode, платформенные preference defaults выбирают значение текущей платформы, а `executeSQL`/`useLocalStorage`/`useForm` больше не мутируют пользовательские данные или не сохраняют пароли в общий cache. Финальная штатная suite — **362 passed / 1 skipped**.
 
 **Полную Windows-совместимость пока нельзя объявить:** реального Windows-хоста и проверок аккаунтов нет. Ограничения non-premium Spotify и macOS-only команд намеренно остаются.
 

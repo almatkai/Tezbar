@@ -2,7 +2,8 @@ import { app, BrowserWindow, clipboard, nativeImage, shell } from '@tezbar/deskt
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { open as openFile, rm as removePath, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
-import Database from 'better-sqlite3'
+import { executeExtensionSQL } from './extension-sql'
+import { confirmExtensionAlert, type ExtensionAlertOptions } from './extension-confirm-alert'
 import { runPowerShellScript, type PowerShellScriptOptions } from './powershell-script'
 import { readSelectedText } from './selected-text'
 import { createHash, randomBytes } from 'node:crypto'
@@ -1778,6 +1779,12 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     },
     Action,
     ActionPanel,
+    CopyToClipboardAction: Action.CopyToClipboard,
+    OpenInBrowserAction: Action.OpenInBrowser,
+    PushAction: Action.Push,
+    PopToRootType: { Default: 'default', Immediate: 'immediate', Suspended: 'suspended' },
+    // Tezbar does not forward extension exceptions to Raycast telemetry.
+    captureException: (): void => {},
     Icon: iconProxy,
     Color: iconProxy,
     Keyboard: {
@@ -1829,6 +1836,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     },
     getPreferenceValues: (): Record<string, unknown> => session.preferences,
     getSelectedFinderItems: async (): Promise<Array<{ path: string }>> => {
+      if (session.effectMode === 'record') return []
       if (process.platform === 'win32') {
         try {
           const { stdout } = await execFileAsync(
@@ -1897,9 +1905,11 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
         session.extensionId,
         targetName,
         argumentValues,
-        getExtensionPreferences(session.extensionId, targetName)
+        undefined,
+        { effectMode: session.effectMode }
       )
       if (!result.ok) throw new Error(result.message)
+      for (const effect of result.effects ?? []) pushEffect(session, effect)
     },
     useNavigation: () => ({
       push: (next: unknown): void => {
@@ -2087,7 +2097,10 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     getDefaultApplication: async (): Promise<{ name: string; path: string } | null> => {
       return null
     },
-    confirmAlert: async (): Promise<boolean> => true,
+    confirmAlert: async (options?: ExtensionAlertOptions): Promise<boolean> => {
+      if (session.effectMode === 'record') return false
+      return confirmExtensionAlert(options)
+    },
     openExtensionPreferences: async (): Promise<void> => {
       // Preferences editing is handled by Tezbar settings.
     },
@@ -2108,6 +2121,9 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
   const CacheShim = createCacheShim(session.packageRoot)
   const cache = new CacheShim()
   const functionCache = new Map<string, { expiresAt: number; value: unknown }>()
+  const useState = createReactShim(session).useState as <T>(
+    initial: T | (() => T)
+  ) => [T, (next: T | ((previous: T) => T)) => void]
 
   const useCachedState = <T>(
     key: string,
@@ -2413,6 +2429,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
   const useFetchPromise = makePromiseHook()
   const useAIPromise = makePromiseHook()
   const useSQLPromise = makePromiseHook()
+  const useStoragePromise = makePromiseHook()
   const useExec = (
     command: string,
     args: string[] = [],
@@ -2474,15 +2491,10 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       onWillExecute?: (args: unknown[]) => unknown
     }
   ): unknown => {
-    const load = async (dbPath: string, sql: string): Promise<unknown[]> => {
-      const database = new Database(dbPath, { readonly: true, fileMustExist: true })
-      try {
-        return database.prepare(sql).all()
-      } finally {
-        database.close()
-      }
-    }
-    const result = useSQLPromise(load, [databasePath, query], options) as Record<string, unknown>
+    const result = useSQLPromise(executeExtensionSQL, [databasePath, query], options) as Record<
+      string,
+      unknown
+    >
     return { ...result, permissionView: undefined }
   }
 
@@ -2494,14 +2506,12 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       validation?: Record<string, unknown>
     } = {}
   ): Record<string, unknown> => {
-    const [values, setValues] = useCachedState<Record<string, unknown>>(
-      `form-values:${session.commandName}`,
-      options.initialValues ?? {}
-    )
-    const [errors, setErrors] = useCachedState<Record<string, string>>(
-      `form-errors:${session.commandName}`,
-      {}
-    )
+    // Form fields (including passwords) are ephemeral state, not a persistent
+    // cache. Remove only the old implicit form entries, preserving other data.
+    cache.remove(`form-values:${session.commandName}`)
+    cache.remove(`form-errors:${session.commandName}`)
+    const [values, setValues] = useState<Record<string, unknown>>(options.initialValues ?? {})
+    const [errors, setErrors] = useState<Record<string, string>>({})
     const validate = (candidate: Record<string, unknown>): boolean => {
       const nextErrors: Record<string, string> = {}
       for (const [key, rule] of Object.entries(options.validation ?? {})) {
@@ -2913,16 +2923,33 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
     useCachedPromise: makePromiseHook(true),
     useExec,
     useSQL,
-    useLocalStorage: <T>(key: string, initialValue: T) => {
-      const [value, setValue] = useCachedState(key, initialValue)
+    executeSQL: executeExtensionSQL,
+    useLocalStorage: <T>(key: string, initialValue?: T) => {
+      const storage = createLocalStorageShim(session.packageRoot) as {
+        getItem: (key: string) => Promise<string | undefined>
+        setItem: (key: string, value: string) => Promise<void>
+        removeItem: (key: string) => Promise<void>
+      }
+      const load = async (storageKey: string): Promise<T | undefined> => {
+        const raw = await storage.getItem(storageKey)
+        return raw === undefined ? initialValue : (JSON.parse(raw) as T)
+      }
+      const state = useStoragePromise(load, [String(key)], { initialData: initialValue }) as {
+        data: T | undefined
+        isLoading: boolean
+        mutate: (value: T | undefined) => Promise<unknown>
+      }
       return {
-        value,
-        setValue: async (next: T): Promise<void> => setValue(next),
-        removeValue: async (): Promise<void> => {
-          cache.remove(String(key))
-          setValue(initialValue)
+        value: state.data ?? initialValue,
+        setValue: async (next: T): Promise<void> => {
+          await storage.setItem(String(key), JSON.stringify(next))
+          await state.mutate(next)
         },
-        isLoading: false,
+        removeValue: async (): Promise<void> => {
+          await storage.removeItem(String(key))
+          await state.mutate(initialValue)
+        },
+        isLoading: state.isLoading,
       }
     },
     getFavicon: (
@@ -3141,9 +3168,8 @@ function registerAction(
     if (kind === 'copy') {
       const content = props.content ?? props.title ?? ''
       copyToSystemClipboard(session, content)
-      if (typeof props.onPaste === 'function') {
-        await Promise.resolve((props.onPaste as () => unknown)())
-      }
+      const callback = typeName === 'Action.Paste' ? props.onPaste : props.onCopy
+      if (typeof callback === 'function') await Promise.resolve(callback())
     }
 
     if (kind === 'open') {
@@ -3151,6 +3177,7 @@ function registerAction(
       if (url) {
         pushEffect(session, { kind: 'open', value: url })
         if (session.effectMode !== 'record') await shell.openExternal(url)
+        if (typeof props.onOpen === 'function') await Promise.resolve(props.onOpen())
       }
     }
 
@@ -4218,8 +4245,19 @@ function manifestPreferenceDefaults(
   const apply = (preferences: PackagePreference[] | undefined) => {
     for (const preference of preferences ?? []) {
       if (!preference?.name) continue
-      if (preference.default !== undefined) values[preference.name] = preference.default
-      else if (preference.type === 'checkbox') values[preference.name] = false
+      if (preference.default !== undefined) {
+        const value = preference.default
+        const platform = process.platform === 'win32' ? 'Windows' : 'macOS'
+        values[preference.name] =
+          value &&
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          ('macOS' in value || 'Windows' in value)
+            ? ((value as Record<string, unknown>)[platform] ??
+              (value as Record<string, unknown>).macOS ??
+              (value as Record<string, unknown>).Windows)
+            : value
+      } else if (preference.type === 'checkbox') values[preference.name] = false
       else if (preference.type === 'dropdown')
         values[preference.name] = preference.data?.[0]?.value ?? ''
       else values[preference.name] = ''
