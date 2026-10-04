@@ -711,8 +711,14 @@ var StatementShim = class {
 };
 var DatabaseShim = class {
   _db;
-  constructor(filename) {
-    this._db = new import_bun_sqlite.Database(filename);
+  constructor(filename, options) {
+    this._db = new import_bun_sqlite.Database(filename, {
+      readonly: options?.readonly ?? false,
+      create: !options?.fileMustExist
+    });
+  }
+  close() {
+    this._db.close();
   }
   pragma(value) {
     this._db.exec(`PRAGMA ${value}`);

@@ -35,6 +35,7 @@ interface Statement {
 }
 
 interface DatabaseLike {
+  close(): void
   pragma(value: string): void
   exec(sql: string): void
   prepare(sql: string): Statement
@@ -69,8 +70,15 @@ class StatementShim implements Statement {
 class DatabaseShim implements DatabaseLike {
   private _db: any
 
-  constructor(filename: string) {
-    this._db = new BunDatabase(filename)
+  constructor(filename: string, options?: { readonly?: boolean; fileMustExist?: boolean }) {
+    this._db = new BunDatabase(filename, {
+      readonly: options?.readonly ?? false,
+      create: !options?.fileMustExist,
+    })
+  }
+
+  close(): void {
+    this._db.close()
   }
 
   pragma(value: string): void {

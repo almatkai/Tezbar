@@ -645,8 +645,14 @@ var init_better_sqlite3_shim = __esm({
     };
     DatabaseShim = class {
       _db;
-      constructor(filename) {
-        this._db = new import_bun_sqlite.Database(filename);
+      constructor(filename, options) {
+        this._db = new import_bun_sqlite.Database(filename, {
+          readonly: options?.readonly ?? false,
+          create: !options?.fileMustExist
+        });
+      }
+      close() {
+        this._db.close();
       }
       pragma(value) {
         this._db.exec(`PRAGMA ${value}`);
@@ -8516,9 +8522,9 @@ var init_opencode = __esm({
       }
       async isAvailable() {
         try {
-          const { execFile: execFile19 } = await import("node:child_process");
-          const execFileAsync19 = (0, import_node_util5.promisify)(execFile19);
-          const { stdout } = await execFileAsync19("which", ["opencode"], { timeout: 4e3 });
+          const { execFile: execFile20 } = await import("node:child_process");
+          const execFileAsync20 = (0, import_node_util5.promisify)(execFile20);
+          const { stdout } = await execFileAsync20("which", ["opencode"], { timeout: 4e3 });
           return stdout.trim().length > 0;
         } catch {
           return false;
@@ -25888,6 +25894,42 @@ var init_terminal = __esm({
   }
 });
 
+// src/main/powershell-script.ts
+function powerShellScriptArguments(source) {
+  const script = `[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+${source}`;
+  return [
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-EncodedCommand",
+    Buffer.from(script, "utf16le").toString("base64")
+  ];
+}
+async function runPowerShellScript(source, options = {}) {
+  if (process.platform !== "win32") throw new Error("PowerShell is only available on Windows");
+  if (typeof source !== "string" || !source.trim()) return "";
+  const { stdout } = await execFileAsync16("powershell.exe", powerShellScriptArguments(source), {
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: options.timeout ?? 1e4,
+    signal: options.signal,
+    windowsHide: true
+  });
+  return stdout.replace(/\r?\n$/, "");
+}
+var import_node_child_process19, import_node_util16, execFileAsync16;
+var init_powershell_script = __esm({
+  "src/main/powershell-script.ts"() {
+    "use strict";
+    import_node_child_process19 = require("node:child_process");
+    import_node_util16 = require("node:util");
+    execFileAsync16 = (0, import_node_util16.promisify)(import_node_child_process19.execFile);
+  }
+});
+
 // src/main/llm/extensionAI.ts
 async function askExtensionAI(prompt) {
   const normalizedPrompt = String(prompt || "").trim();
@@ -26183,7 +26225,7 @@ async function runAppleScript3(source) {
   if (typeof source !== "string" || source.trim().length === 0) {
     return "";
   }
-  const { stdout } = await execFileAsync16("/usr/bin/osascript", ["-e", source], {
+  const { stdout } = await execFileAsync17("/usr/bin/osascript", ["-e", source], {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024
   });
@@ -26193,6 +26235,11 @@ async function runAppleScriptForSession(session2, source) {
   pushEffect(session2, { kind: "apple-script", value: String(source ?? "").slice(0, 2e3) });
   if (session2.effectMode === "record") return "";
   return runAppleScript3(source);
+}
+async function runPowerShellScriptForSession(session2, source, options) {
+  pushEffect(session2, { kind: "powershell-script", value: String(source ?? "").slice(0, 2e3) });
+  if (session2.effectMode === "record") return "";
+  return runPowerShellScript(source, options);
 }
 function nativeColorPickerBundledHelperPath() {
   const envPath = process.env.COLOR_PICKER_HELPER_PATH;
@@ -26243,7 +26290,7 @@ async function ensureNativeColorPickerHelper() {
   (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(binaryPath), { recursive: true });
   (0, import_node_fs27.mkdirSync)(moduleCachePath, { recursive: true });
   try {
-    await execFileAsync16("/usr/bin/swiftc", [
+    await execFileAsync17("/usr/bin/swiftc", [
       "-module-cache-path",
       moduleCachePath,
       "-O",
@@ -26261,7 +26308,7 @@ async function ensureNativeColorPickerHelper() {
 }
 async function runNativeColorPickerHelper(helperPath) {
   if (process.platform === "win32") {
-    const { stdout: stdout2 } = await execFileAsync16(
+    const { stdout: stdout2 } = await execFileAsync17(
       "powershell.exe",
       [
         "-NoLogo",
@@ -26281,7 +26328,7 @@ async function runNativeColorPickerHelper(helperPath) {
     );
     return stdout2;
   }
-  const { stdout } = await execFileAsync16(helperPath, [], {
+  const { stdout } = await execFileAsync17(helperPath, [], {
     encoding: "utf8",
     maxBuffer: 1024 * 1024
   });
@@ -26379,15 +26426,11 @@ async function extractColorsFromImage(path8, colorCount = 40, dominantOnly = fal
     String(count),
     dominantOnly ? "true" : "false"
   ] : [path8, String(count), dominantOnly ? "true" : "false"];
-  const { stdout } = await execFileAsync16(
-    command3,
-    args,
-    {
-      timeout: 6e4,
-      maxBuffer: 10 * 1024 * 1024,
-      ...isWindows ? { windowsHide: true } : {}
-    }
-  );
+  const { stdout } = await execFileAsync17(command3, args, {
+    timeout: 6e4,
+    maxBuffer: 10 * 1024 * 1024,
+    ...isWindows ? { windowsHide: true } : {}
+  });
   const parsed = JSON.parse(stdout.trim());
   if (!Array.isArray(parsed)) throw new Error("The native image color helper returned invalid data");
   return parsed;
@@ -26416,7 +26459,7 @@ async function runScreenOcrHelper(command3, values) {
       app?.hide?.();
       await delay(120);
     }
-    const { stdout } = await execFileAsync16(helperPath, [command3, JSON.stringify(values)], {
+    const { stdout } = await execFileAsync17(helperPath, [command3, JSON.stringify(values)], {
       timeout: 18e4,
       maxBuffer: 10 * 1024 * 1024
     });
@@ -27215,7 +27258,7 @@ function createRaycastApiShim(session2) {
     getSelectedFinderItems: async () => {
       if (process.platform === "win32") {
         try {
-          const { stdout } = await execFileAsync16(
+          const { stdout } = await execFileAsync17(
             "powershell.exe",
             [
               "-NoLogo",
@@ -27330,7 +27373,7 @@ function createRaycastApiShim(session2) {
           return listApplications().sort((a, b) => a.name.localeCompare(b.name));
         }
         try {
-          const { stdout } = await execFileAsync16(
+          const { stdout } = await execFileAsync17(
             "/usr/bin/mdfind",
             ["kMDItemKind == 'Application'"],
             {
@@ -27378,7 +27421,7 @@ function createRaycastApiShim(session2) {
     getFrontmostApplication: async () => {
       if (process.platform === "win32") {
         try {
-          const { stdout } = await execFileAsync16(
+          const { stdout } = await execFileAsync17(
             "powershell.exe",
             [
               "-NoLogo",
@@ -27409,7 +27452,7 @@ function createRaycastApiShim(session2) {
           end try
           return (name of p) & linefeed & (bundle identifier of p) & linefeed & appPath
         end tell`;
-        const { stdout } = await execFileAsync16("/usr/bin/osascript", ["-e", script], {
+        const { stdout } = await execFileAsync17("/usr/bin/osascript", ["-e", script], {
           timeout: 3e3
         });
         const lines = stdout.trim().split("\n");
@@ -27694,7 +27737,7 @@ function createRaycastUtilsShim(session2) {
   const useSQLPromise = makePromiseHook();
   const useExec = (command3, args = [], options) => {
     const exec = async () => {
-      const { stdout, stderr } = await execFileAsync16(command3, args, {
+      const { stdout, stderr } = await execFileAsync17(command3, args, {
         encoding: "utf8",
         maxBuffer: 10 * 1024 * 1024
       });
@@ -27722,13 +27765,12 @@ function createRaycastUtilsShim(session2) {
   };
   const useSQL = (databasePath2, query, options) => {
     const load3 = async (dbPath3, sql) => {
-      const sqlite = process.platform === "win32" ? "sqlite3.exe" : "/usr/bin/sqlite3";
-      const { stdout } = await execFileAsync16(sqlite, ["-readonly", "-json", dbPath3, sql], {
-        encoding: "utf8",
-        maxBuffer: 20 * 1024 * 1024
-      });
-      const trimmed = stdout.trim();
-      return trimmed ? JSON.parse(trimmed) : [];
+      const database = new better_sqlite3_shim_default(dbPath3, { readonly: true, fileMustExist: true });
+      try {
+        return database.prepare(sql).all();
+      } finally {
+        database.close();
+      }
     };
     const result = useSQLPromise(load3, [databasePath2, query], options);
     return { ...result, permissionView: void 0 };
@@ -28080,7 +28122,9 @@ function createRaycastUtilsShim(session2) {
       const hostMatch = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i.exec(String(baseUrl ?? "").trim());
       const host = hostMatch?.[1];
       if (host) {
-        return { source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}` };
+        return {
+          source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}`
+        };
       }
       return { source: String(options?.fallback ?? "Icon.Globe") };
     },
@@ -28114,6 +28158,7 @@ function createRaycastUtilsShim(session2) {
       return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
     },
     runAppleScript: (source) => runAppleScriptForSession(session2, source),
+    runPowerShellScript: (source, options) => runPowerShellScriptForSession(session2, source, options),
     OAuthService: OAuthServiceShim,
     getAccessToken: () => {
       if (!activeAccessToken) throw new Error("No extension access token is configured");
@@ -28727,57 +28772,9 @@ function runBundle(code, packageRoot, session2) {
             }
           });
           return child;
-        }),
-        spawn: (...args) => {
-          const child = (0, import_node_child_process19.spawn)(...args);
-          const stdout = child.stdout;
-          if (stdout) {
-            const originalOn = stdout.on.bind(stdout);
-            const dataListeners = /* @__PURE__ */ new Set();
-            const pendingChunks = [];
-            let buffer = "";
-            const flushLine = (line) => {
-              const trimmed = line.trim();
-              if (!trimmed) return;
-              const payload = Buffer.from(trimmed);
-              if (dataListeners.size === 0) {
-                pendingChunks.push(payload);
-                return;
-              }
-              for (const listener of dataListeners) {
-                listener(payload);
-              }
-            };
-            const flushBuffer = () => {
-              if (!buffer.trim()) return;
-              flushLine(buffer);
-              buffer = "";
-            };
-            originalOn("data", (chunk) => {
-              buffer += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
-              let newlineIndex = buffer.indexOf("\n");
-              while (newlineIndex >= 0) {
-                flushLine(buffer.slice(0, newlineIndex));
-                buffer = buffer.slice(newlineIndex + 1);
-                newlineIndex = buffer.indexOf("\n");
-              }
-            });
-            child.once("exit", flushBuffer);
-            stdout.on = ((event, listener) => {
-              if (event === "data") {
-                const dataListener = listener;
-                dataListeners.add(dataListener);
-                while (pendingChunks.length > 0) {
-                  const chunk = pendingChunks.shift();
-                  if (chunk) dataListener(chunk);
-                }
-                return stdout;
-              }
-              return originalOn(event, listener);
-            });
-          }
-          return child;
-        }
+        })
+        // Preserve native spawn stream semantics. Trimming/splitting stdout
+        // corrupts binary output and line-oriented lsof/netstat parsers.
       };
     }
     if (specifier === "raycast-cross-extension") {
@@ -28938,7 +28935,7 @@ function runBundle(code, packageRoot, session2) {
           }
         } catch {
         }
-        await execFileAsync16(process.platform === "win32" ? "tar.exe" : "/usr/bin/tar", args);
+        await execFileAsync17(process.platform === "win32" ? "tar.exe" : "/usr/bin/tar", args);
       };
       return {
         extract,
@@ -28953,7 +28950,7 @@ function runBundle(code, packageRoot, session2) {
         if (!dir) throw new Error("extract-zip requires dir");
         (0, import_node_fs27.mkdirSync)(dir, { recursive: true });
         if (process.platform === "win32") {
-          await execFileAsync16(
+          await execFileAsync17(
             "powershell.exe",
             [
               "-NoLogo",
@@ -28968,7 +28965,7 @@ function runBundle(code, packageRoot, session2) {
             }
           );
         } else {
-          await execFileAsync16("/usr/bin/unzip", ["-o", file, "-d", dir]);
+          await execFileAsync17("/usr/bin/unzip", ["-o", file, "-d", dir]);
         }
       };
       return {
@@ -29090,7 +29087,8 @@ function manifestPreferenceDefaults(pkg, command3) {
       if (!preference?.name) continue;
       if (preference.default !== void 0) values[preference.name] = preference.default;
       else if (preference.type === "checkbox") values[preference.name] = false;
-      else if (preference.type === "dropdown") values[preference.name] = preference.data?.[0]?.value ?? "";
+      else if (preference.type === "dropdown")
+        values[preference.name] = preference.data?.[0]?.value ?? "";
       else values[preference.name] = "";
     }
   };
@@ -29331,14 +29329,16 @@ function clearAllExtensionSessions() {
   }
   sessions.clear();
 }
-var import_node_fs27, import_promises5, import_node_child_process19, import_node_crypto14, import_node_http2, import_node_os14, import_node_module2, import_node_path30, import_node_stream, import_web, import_node_util16, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync16, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
+var import_node_fs27, import_promises5, import_node_child_process20, import_node_crypto14, import_node_http2, import_node_os14, import_node_module2, import_node_path30, import_node_stream, import_web, import_node_util17, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync17, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
 var init_extension_runner = __esm({
   "src/main/extension-runner.ts"() {
     "use strict";
     init_desktop_runtime();
     import_node_fs27 = require("node:fs");
     import_promises5 = require("node:fs/promises");
-    import_node_child_process19 = require("node:child_process");
+    import_node_child_process20 = require("node:child_process");
+    init_better_sqlite3_shim();
+    init_powershell_script();
     import_node_crypto14 = require("node:crypto");
     import_node_http2 = require("node:http");
     import_node_os14 = require("node:os");
@@ -29346,7 +29346,7 @@ var init_extension_runner = __esm({
     import_node_path30 = require("node:path");
     import_node_stream = require("node:stream");
     import_web = require("node:stream/web");
-    import_node_util16 = require("node:util");
+    import_node_util17 = require("node:util");
     import_node_v8 = require("node:v8");
     import_node_zlib = require("node:zlib");
     import_node_vm = __toESM(require("node:vm"));
@@ -29368,8 +29368,8 @@ var init_extension_runner = __esm({
     BUILTIN_SET = new Set(import_node_module2.builtinModules);
     JSX_FRAGMENT = /* @__PURE__ */ Symbol.for("tezbar.jsx.fragment");
     REACT_CONTEXT = /* @__PURE__ */ Symbol.for("react.context");
-    execFileAsync16 = (0, import_node_util16.promisify)(import_node_child_process19.execFile);
-    gzipAsync = (0, import_node_util16.promisify)(import_node_zlib.gzip);
+    execFileAsync17 = (0, import_node_util17.promisify)(import_node_child_process20.execFile);
+    gzipAsync = (0, import_node_util17.promisify)(import_node_zlib.gzip);
     IMAGE_MASK2 = {
       Circle: "circle",
       RoundedRectangle: "roundedRectangle"
@@ -29465,7 +29465,7 @@ function spawnBunPipeTerminal(shell2, args, cwd, env, cols, rows) {
   };
 }
 function spawnPipeTerminal(shell2, args, cwd, env, cols, rows) {
-  const child = (0, import_node_child_process20.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+  const child = (0, import_node_child_process21.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
   return {
     pid: child.pid ?? -1,
     process: shell2,
@@ -29547,7 +29547,7 @@ function resolveExistingWorkingDirectory(raw) {
 function processWorkingDirectory(pid) {
   try {
     if (process.platform === "darwin") {
-      const output = (0, import_node_child_process20.execFileSync)(
+      const output = (0, import_node_child_process21.execFileSync)(
         "/usr/sbin/lsof",
         ["-a", "-p", String(pid), "-d", "cwd", "-Fn"],
         { encoding: "utf8", timeout: 1e3 }
@@ -30089,7 +30089,7 @@ function shutdownTerminalSessions() {
   }
   sessions2.clear();
 }
-var import_node_fs28, import_node_os15, import_node_path31, import_node_crypto15, import_node_child_process20, sessions2, ownerCleanupRegistered, persistedSummaries, persistedLoaded, OUTPUT_REPLAY_LIMIT_BYTES, TERMINAL_CONFIG_KEY, TERMINAL_HISTORY_DIR, SAVE_FOR_MS, KEEP_ALIVE_MS;
+var import_node_fs28, import_node_os15, import_node_path31, import_node_crypto15, import_node_child_process21, sessions2, ownerCleanupRegistered, persistedSummaries, persistedLoaded, OUTPUT_REPLAY_LIMIT_BYTES, TERMINAL_CONFIG_KEY, TERMINAL_HISTORY_DIR, SAVE_FOR_MS, KEEP_ALIVE_MS;
 var init_service4 = __esm({
   "src/main/terminal/service.ts"() {
     "use strict";
@@ -30097,7 +30097,7 @@ var init_service4 = __esm({
     import_node_os15 = require("node:os");
     import_node_path31 = require("node:path");
     import_node_crypto15 = require("node:crypto");
-    import_node_child_process20 = require("node:child_process");
+    import_node_child_process21 = require("node:child_process");
     init_terminal();
     init_configStore();
     sessions2 = /* @__PURE__ */ new Map();
@@ -30151,7 +30151,7 @@ async function extractTextFromAgentImages(images) {
       if (!image) continue;
       const imagePath = import_node_path32.default.join(workDir, `attachment-${index}.${imageExtension(image.mimeType)}`);
       await (0, import_promises6.writeFile)(imagePath, Buffer.from(image.data, "base64"));
-      const { stdout } = await execFileAsync17(
+      const { stdout } = await execFileAsync18(
         helperPath,
         [
           "recognize-text",
@@ -30173,18 +30173,18 @@ async function extractTextFromAgentImages(images) {
     await (0, import_promises6.rm)(workDir, { recursive: true, force: true });
   }
 }
-var import_node_child_process21, import_node_fs29, import_promises6, import_node_os16, import_node_path32, import_node_util17, execFileAsync17, MAX_OCR_CHARS;
+var import_node_child_process22, import_node_fs29, import_promises6, import_node_os16, import_node_path32, import_node_util18, execFileAsync18, MAX_OCR_CHARS;
 var init_imageContext = __esm({
   "src/main/agent/imageContext.ts"() {
     "use strict";
-    import_node_child_process21 = require("node:child_process");
+    import_node_child_process22 = require("node:child_process");
     import_node_fs29 = require("node:fs");
     import_promises6 = require("node:fs/promises");
     import_node_os16 = require("node:os");
     import_node_path32 = __toESM(require("node:path"));
-    import_node_util17 = require("node:util");
+    import_node_util18 = require("node:util");
     init_desktop_runtime();
-    execFileAsync17 = (0, import_node_util17.promisify)(import_node_child_process21.execFile);
+    execFileAsync18 = (0, import_node_util18.promisify)(import_node_child_process22.execFile);
     MAX_OCR_CHARS = 4e4;
   }
 });
@@ -30484,7 +30484,7 @@ async function getLoginPath() {
     return cachedLoginPath;
   }
   try {
-    const { stdout } = await execFileAsync18("bash", ["-lc", 'echo -n "$PATH"']);
+    const { stdout } = await execFileAsync19("bash", ["-lc", 'echo -n "$PATH"']);
     const fromShell = stdout.trim();
     cachedLoginPath = fromShell || process.env["PATH"] || "";
   } catch {
@@ -30499,7 +30499,7 @@ async function getLoginPath() {
 }
 async function execWithUserPath(file, args, options = {}) {
   const path8 = await getLoginPath();
-  return execFileAsync18(file, args, {
+  return execFileAsync19(file, args, {
     maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
     env: { ...process.env, PATH: path8 }
   });
@@ -30579,7 +30579,7 @@ async function probeRuntime(kind) {
 }
 async function runLoginShell(command3) {
   const path8 = await getLoginPath();
-  const { stdout, stderr } = await execFileAsync18("bash", ["-lc", command3], {
+  const { stdout, stderr } = await execFileAsync19("bash", ["-lc", command3], {
     maxBuffer: 32 * 1024 * 1024,
     env: {
       ...process.env,
@@ -30918,7 +30918,7 @@ async function speakText(text3) {
   const trimmed = text3.trim();
   if (!trimmed) return;
   stopSpeaking();
-  activeSpeech = process.platform === "win32" ? (0, import_node_child_process22.spawn)(
+  activeSpeech = process.platform === "win32" ? (0, import_node_child_process23.spawn)(
     "powershell.exe",
     [
       "-NoLogo",
@@ -30932,7 +30932,7 @@ async function speakText(text3) {
       windowsHide: true,
       env: { ...process.env, TEZBAR_SPEECH_TEXT: trimmed }
     }
-  ) : (0, import_node_child_process22.spawn)("say", [trimmed], {
+  ) : (0, import_node_child_process23.spawn)("say", [trimmed], {
     stdio: "ignore"
   });
   activeSpeech.on("exit", () => {
@@ -30948,11 +30948,11 @@ async function hasBinary(binary) {
   try {
     const path8 = await getLoginPath();
     if (process.platform === "win32") {
-      await execFileAsync18("where.exe", [binary], {
+      await execFileAsync19("where.exe", [binary], {
         env: { ...process.env, Path: path8, PATH: path8 }
       });
     } else {
-      await execFileAsync18("bash", ["-lc", `command -v ${binary}`], {
+      await execFileAsync19("bash", ["-lc", `command -v ${binary}`], {
         env: { ...process.env, PATH: path8 }
       });
     }
@@ -31000,7 +31000,7 @@ function preferredMoonshineModelPath() {
   throw new Error("Moonshine model files are not downloaded yet. Download a Moonshine model first.");
 }
 async function convertToWav(inputPath, outputPath) {
-  await execFileAsync18("ffmpeg", [
+  await execFileAsync19("ffmpeg", [
     "-y",
     "-i",
     inputPath,
@@ -31296,21 +31296,21 @@ ${result.hint}` : result.error);
   }
   return { text: result.text, engine: result.engine };
 }
-var import_node_child_process22, import_node_fs32, import_node_fs33, import_node_os18, import_node_path35, import_node_events2, import_node_util18, execFileAsync18, activeSpeech, cachedLoginPath, MODEL_CATALOG, activeDownloads, VOICE_MODEL_CONFIG_KEY, runtimeCache, LEGACY_WHISPER_ASSET_NAMES, staleVoiceCleanupPromise, cachedEngineProbe, ENGINE_PROBE_TTL_MS;
+var import_node_child_process23, import_node_fs32, import_node_fs33, import_node_os18, import_node_path35, import_node_events2, import_node_util19, execFileAsync19, activeSpeech, cachedLoginPath, MODEL_CATALOG, activeDownloads, VOICE_MODEL_CONFIG_KEY, runtimeCache, LEGACY_WHISPER_ASSET_NAMES, staleVoiceCleanupPromise, cachedEngineProbe, ENGINE_PROBE_TTL_MS;
 var init_service5 = __esm({
   "src/main/voice/service.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_child_process22 = require("node:child_process");
+    import_node_child_process23 = require("node:child_process");
     import_node_fs32 = require("node:fs");
     import_node_fs33 = require("node:fs");
     import_node_os18 = require("node:os");
     import_node_path35 = require("node:path");
     import_node_events2 = require("node:events");
-    import_node_util18 = require("node:util");
+    import_node_util19 = require("node:util");
     init_configStore();
     init_voice();
-    execFileAsync18 = (0, import_node_util18.promisify)(import_node_child_process22.execFile);
+    execFileAsync19 = (0, import_node_util19.promisify)(import_node_child_process23.execFile);
     activeSpeech = null;
     cachedLoginPath = null;
     MODEL_CATALOG = [
@@ -32268,10 +32268,10 @@ async function listModelsForProvider(id, signal, baseURLOverride, apiKeyOverride
     }
     case "opencode": {
       try {
-        const { execFile: execFile19 } = await import("node:child_process");
-        const { promisify: promisify20 } = await import("node:util");
-        const execFileAsync19 = promisify20(execFile19);
-        const { stdout } = await execFileAsync19("opencode", ["models"], { timeout: 12e3, signal });
+        const { execFile: execFile20 } = await import("node:child_process");
+        const { promisify: promisify21 } = await import("node:util");
+        const execFileAsync20 = promisify21(execFile20);
+        const { stdout } = await execFileAsync20("opencode", ["models"], { timeout: 12e3, signal });
         const models = stdout.replace(/\x1b\[[0-9;]*m/g, "").split("\n").map((line) => line.trim()).filter((line) => line.startsWith("opencode/") || line.startsWith("opencode-go/"));
         return models.length > 0 ? models : ["opencode/big-pickle"];
       } catch {
@@ -35188,7 +35188,7 @@ init_configStore();
 init_desktop_runtime();
 var import_node_fs35 = require("node:fs");
 var import_node_path37 = require("node:path");
-var import_node_child_process23 = require("node:child_process");
+var import_node_child_process24 = require("node:child_process");
 var import_node_net = require("node:net");
 init_service();
 init_gateway();
@@ -35213,7 +35213,7 @@ function materializePiPolicy() {
 function fixPathSync() {
   if (process.platform === "win32") return;
   try {
-    const stdout = (0, import_node_child_process23.execFileSync)("bash", ["-lc", "echo -n $PATH"], {
+    const stdout = (0, import_node_child_process24.execFileSync)("bash", ["-lc", "echo -n $PATH"], {
       encoding: "utf8",
       timeout: 2e3
     });

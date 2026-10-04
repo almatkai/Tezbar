@@ -10,11 +10,12 @@ describe('createBunInstallEnvironment', () => {
       KEEP_ME: 'yes',
     }
 
-    const env = createBunInstallEnvironment('C:\\Tezbar\\bun\\bun.exe', source)
+    const bunDirectory = path.join(path.parse(process.cwd()).root, 'Tezbar', 'bun')
+    const env = createBunInstallEnvironment(path.join(bunDirectory, 'bun.exe'), source)
 
     expect(env.ESBUILD_BINARY_PATH).toBeUndefined()
     expect(env.KEEP_ME).toBe('yes')
-    expect(env.PATH).toBe([`C:\\Tezbar\\bun`, source.PATH].join(path.delimiter))
+    expect(env.PATH).toBe([bunDirectory, source.PATH].join(path.delimiter))
     expect(source.ESBUILD_BINARY_PATH).toBe('C:\\tezbar\\esbuild.exe')
   })
 

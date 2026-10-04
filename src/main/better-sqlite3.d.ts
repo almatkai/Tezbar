@@ -8,6 +8,7 @@ declare module 'better-sqlite3' {
   }
 
   export type Database = {
+    close: () => void
     pragma: (value: string) => void
     exec: (sql: string) => void
     prepare: (sql: string) => Statement
@@ -15,7 +16,7 @@ declare module 'better-sqlite3' {
   }
 
   const DatabaseCtor: {
-    new (filename: string): Database
+    new (filename: string, options?: { readonly?: boolean; fileMustExist?: boolean }): Database
   }
 
   export default DatabaseCtor

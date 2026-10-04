@@ -27,8 +27,15 @@ class StatementShim {
 class DatabaseShim {
   private readonly database: DatabaseSync
 
-  constructor(filename: string) {
-    this.database = new DatabaseSync(filename, { allowExtension: true })
+  constructor(filename: string, options?: { readonly?: boolean; fileMustExist?: boolean }) {
+    this.database = new DatabaseSync(filename, {
+      allowExtension: true,
+      readOnly: options?.readonly ?? false,
+    })
+  }
+
+  close(): void {
+    this.database.close()
   }
 
   pragma(value: string): void {

@@ -1,7 +1,9 @@
 import { app, BrowserWindow, clipboard, nativeImage, shell } from '@tezbar/desktop-runtime'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { open as openFile, rm as removePath, writeFile } from 'node:fs/promises'
-import { execFile, spawn as nodeSpawn } from 'node:child_process'
+import { execFile } from 'node:child_process'
+import Database from 'better-sqlite3'
+import { runPowerShellScript, type PowerShellScriptOptions } from './powershell-script'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 import { homedir } from 'node:os'
@@ -46,7 +48,15 @@ import {
   shouldShowExtensionPreferenceSetup,
 } from './extension-registry'
 
+type PackagePreference = {
+  name?: string
+  default?: unknown
+  type?: string
+  data?: Array<{ value?: unknown }>
+}
+
 type PackageCommand = {
+  preferences?: PackagePreference[]
   name?: string
   title?: string
   mode?: string
@@ -58,6 +68,7 @@ type PackageCommand = {
 }
 
 type ExtensionPackageJson = {
+  preferences?: PackagePreference[]
   name?: string
   title?: string
   commands?: PackageCommand[]
@@ -546,6 +557,16 @@ async function runAppleScriptForSession(session: RuntimeSession, source: string)
   return runAppleScript(source)
 }
 
+async function runPowerShellScriptForSession(
+  session: RuntimeSession,
+  source: string,
+  options?: PowerShellScriptOptions
+): Promise<string> {
+  pushEffect(session, { kind: 'powershell-script', value: String(source ?? '').slice(0, 2_000) })
+  if (session.effectMode === 'record') return ''
+  return runPowerShellScript(source, options)
+}
+
 function nativeColorPickerBundledHelperPath(): string | null {
   const envPath = process.env.COLOR_PICKER_HELPER_PATH
   if (envPath && existsSync(envPath)) return envPath
@@ -780,15 +801,11 @@ async function extractColorsFromImage(
         dominantOnly ? 'true' : 'false',
       ]
     : [path, String(count), dominantOnly ? 'true' : 'false']
-  const { stdout } = await execFileAsync(
-    command,
-    args,
-    {
-      timeout: 60_000,
-      maxBuffer: 10 * 1024 * 1024,
-      ...(isWindows ? { windowsHide: true } : {}),
-    }
-  )
+  const { stdout } = await execFileAsync(command, args, {
+    timeout: 60_000,
+    maxBuffer: 10 * 1024 * 1024,
+    ...(isWindows ? { windowsHide: true } : {}),
+  })
   const parsed = JSON.parse(stdout.trim()) as unknown
   if (!Array.isArray(parsed)) throw new Error('The native image color helper returned invalid data')
   return parsed as ExtractedImageColor[]
@@ -2450,13 +2467,12 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
     }
   ): unknown => {
     const load = async (dbPath: string, sql: string): Promise<unknown[]> => {
-      const sqlite = process.platform === 'win32' ? 'sqlite3.exe' : '/usr/bin/sqlite3'
-      const { stdout } = await execFileAsync(sqlite, ['-readonly', '-json', dbPath, sql], {
-        encoding: 'utf8',
-        maxBuffer: 20 * 1024 * 1024,
-      })
-      const trimmed = stdout.trim()
-      return trimmed ? (JSON.parse(trimmed) as unknown[]) : []
+      const database = new Database(dbPath, { readonly: true, fileMustExist: true })
+      try {
+        return database.prepare(sql).all()
+      } finally {
+        database.close()
+      }
     }
     const result = useSQLPromise(load, [databasePath, query], options) as Record<string, unknown>
     return { ...result, permissionView: undefined }
@@ -2901,12 +2917,17 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
         isLoading: false,
       }
     },
-    getFavicon: (baseUrl: string, options?: { fallback?: string; size?: number }): { source: string } => {
+    getFavicon: (
+      baseUrl: string,
+      options?: { fallback?: string; size?: number }
+    ): { source: string } => {
       const size = Math.max(16, Math.min(256, Number(options?.size) || 64))
       const hostMatch = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i.exec(String(baseUrl ?? '').trim())
       const host = hostMatch?.[1]
       if (host) {
-        return { source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}` }
+        return {
+          source: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}`,
+        }
       }
       return { source: String(options?.fallback ?? 'Icon.Globe') }
     },
@@ -2947,6 +2968,8 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
     },
     runAppleScript: (source: string): Promise<string> => runAppleScriptForSession(session, source),
+    runPowerShellScript: (source: string, options?: PowerShellScriptOptions): Promise<string> =>
+      runPowerShellScriptForSession(session, source, options),
     OAuthService: OAuthServiceShim,
     getAccessToken: (): { token: string } => {
       if (!activeAccessToken) throw new Error('No extension access token is configured')
@@ -3763,69 +3786,8 @@ function runBundle(code: string, packageRoot: string, session: RuntimeSession): 
           })
           return child
         }) as typeof originalExec,
-        spawn: (...args: Parameters<typeof nodeSpawn>) => {
-          const child = nodeSpawn(...args)
-          const stdout = child.stdout as
-            | (typeof child.stdout & {
-                on: (
-                  event: string,
-                  listener: (...listenerArgs: unknown[]) => void
-                ) => typeof child.stdout
-              })
-            | null
-
-          if (stdout) {
-            const originalOn = stdout.on.bind(stdout)
-            const dataListeners = new Set<(chunk: Buffer) => void>()
-            const pendingChunks: Buffer[] = []
-            let buffer = ''
-
-            const flushLine = (line: string): void => {
-              const trimmed = line.trim()
-              if (!trimmed) return
-              const payload = Buffer.from(trimmed)
-              if (dataListeners.size === 0) {
-                pendingChunks.push(payload)
-                return
-              }
-              for (const listener of dataListeners) {
-                listener(payload)
-              }
-            }
-
-            const flushBuffer = (): void => {
-              if (!buffer.trim()) return
-              flushLine(buffer)
-              buffer = ''
-            }
-
-            originalOn('data', (chunk: Buffer | string) => {
-              buffer += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk)
-              let newlineIndex = buffer.indexOf('\n')
-              while (newlineIndex >= 0) {
-                flushLine(buffer.slice(0, newlineIndex))
-                buffer = buffer.slice(newlineIndex + 1)
-                newlineIndex = buffer.indexOf('\n')
-              }
-            })
-            child.once('exit', flushBuffer)
-
-            stdout.on = ((event: string, listener: (...listenerArgs: unknown[]) => void) => {
-              if (event === 'data') {
-                const dataListener = listener as (chunk: Buffer) => void
-                dataListeners.add(dataListener)
-                while (pendingChunks.length > 0) {
-                  const chunk = pendingChunks.shift()
-                  if (chunk) dataListener(chunk)
-                }
-                return stdout
-              }
-              return originalOn(event, listener)
-            }) as typeof stdout.on
-          }
-
-          return child
-        },
+        // Preserve native spawn stream semantics. Trimming/splitting stdout
+        // corrupts binary output and line-oriented lsof/netstat parsers.
       }
     }
     if (specifier === 'raycast-cross-extension') {
@@ -4240,14 +4202,18 @@ function getCommandExport(
   return null
 }
 
-function manifestPreferenceDefaults(pkg: any, command: any): Record<string, unknown> {
+function manifestPreferenceDefaults(
+  pkg: ExtensionPackageJson,
+  command: PackageCommand
+): Record<string, unknown> {
   const values: Record<string, unknown> = {}
-  const apply = (preferences: any[] | undefined) => {
+  const apply = (preferences: PackagePreference[] | undefined) => {
     for (const preference of preferences ?? []) {
       if (!preference?.name) continue
       if (preference.default !== undefined) values[preference.name] = preference.default
       else if (preference.type === 'checkbox') values[preference.name] = false
-      else if (preference.type === 'dropdown') values[preference.name] = preference.data?.[0]?.value ?? ''
+      else if (preference.type === 'dropdown')
+        values[preference.name] = preference.data?.[0]?.value ?? ''
       else values[preference.name] = ''
     }
   }
@@ -4292,12 +4258,10 @@ async function runCommandFromPackagePath(
     effects: [],
     effectMode: options?.effectMode ?? 'system',
     stack: [],
-    preferences:
-      preferenceValues ??
-      {
-        ...manifestPreferenceDefaults(pkg, command),
-        ...getExtensionPreferences(extensionId, commandName),
-      },
+    preferences: preferenceValues ?? {
+      ...manifestPreferenceDefaults(pkg, command),
+      ...getExtensionPreferences(extensionId, commandName),
+    },
     searchTextChangeHandler: null,
     commandFn: null,
     commandArgs: argumentValues,

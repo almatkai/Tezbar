@@ -1,5 +1,5 @@
 import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import Database from 'better-sqlite3'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -186,6 +186,77 @@ describe('extension runtime API compatibility', () => {
         mask: 'circle',
       })
       expect(result.root.children[0].props.accessories).toEqual([{ text: 'roundedRectangle' }])
+    } finally {
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('extension runtime platform contracts', () => {
+  it('preserves spawn output byte-for-byte including CRLF, whitespace, unicode and trailing data', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'tezbar-spawn-output-'))
+    const text = '  first\r\n\nこんにちは 🌍\nlast  '
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({ name: 'spawn-fixture', commands: [{ name: 'index', mode: 'no-view' }] })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'index.js'),
+      `
+      const { spawn } = require('node:child_process')
+      const { Clipboard } = require('@raycast/api')
+      module.exports.default = async () => {
+        const data = await new Promise((resolve, reject) => {
+          const child = spawn(process.execPath, ['-e', ${JSON.stringify(`process.stdout.write(${JSON.stringify(text)})`)}])
+          const chunks = []
+          child.stdout.on('data', chunk => chunks.push(chunk))
+          child.once('error', reject)
+          child.once('close', code => code === 0 ? resolve(Buffer.concat(chunks).toString('hex')) : reject(new Error(String(code))))
+        })
+        await Clipboard.copy(data)
+      }`
+    )
+    try {
+      const result = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index',
+        undefined,
+        {},
+        { effectMode: 'record' }
+      )
+      expect(result.ok, JSON.stringify(result)).toBe(true)
+      if (!result.ok || result.mode !== 'no-view') return
+      expect(result.effects).toEqual([
+        { kind: 'clipboard', value: Buffer.from(text).toString('hex') },
+      ])
+    } finally {
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('records PowerShell calls without executing them, including from a macOS test host', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'tezbar-powershell-record-'))
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({ name: 'powershell-fixture', commands: [{ name: 'index', mode: 'no-view' }] })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'index.js'),
+      `const {runPowerShellScript} = require('@raycast/utils'); module.exports.default = async () => { await runPowerShellScript('Write-Output "héllo"', {timeout: 500}); }`
+    )
+    try {
+      const result = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index',
+        undefined,
+        {},
+        { effectMode: 'record' }
+      )
+      expect(result.ok, JSON.stringify(result)).toBe(true)
+      if (!result.ok || result.mode !== 'no-view') return
+      expect(result.effects).toEqual([{ kind: 'powershell-script', value: 'Write-Output "héllo"' }])
     } finally {
       rmSync(extensionRoot, { recursive: true, force: true })
     }
@@ -424,54 +495,57 @@ describe('extension runtime list pagination', () => {
     }
   })
 
-  it('bridges ScreenOCR Swift imports to the packaged helper', async () => {
-    const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-screenocr-extension-'))
-    const helperPath = join(extensionRoot, 'screenocr-helper')
-    mkdirSync(join(extensionRoot, '.sc-build'))
-    writeFileSync(
-      helperPath,
-      '#!/bin/sh\nprintf \'%s\\n\' \'{"ok":true,"value":"recognized fixture text"}\'\n'
-    )
-    chmodSync(helperPath, 0o755)
-    writeFileSync(
-      join(extensionRoot, 'package.json'),
-      JSON.stringify({
-        name: 'screenocr-fixture',
-        title: 'ScreenOCR Fixture',
-        commands: [{ name: 'index', title: 'Index', mode: 'no-view' }],
-      })
-    )
-    writeFileSync(
-      join(extensionRoot, '.sc-build', 'index.js'),
-      `const { Clipboard } = require('@raycast/api')
+  it.runIf(process.platform === 'darwin')(
+    'bridges ScreenOCR Swift imports to the packaged helper',
+    async () => {
+      const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-screenocr-extension-'))
+      const helperPath = join(extensionRoot, 'screenocr-helper')
+      mkdirSync(join(extensionRoot, '.sc-build'))
+      writeFileSync(
+        helperPath,
+        '#!/bin/sh\nprintf \'%s\\n\' \'{"ok":true,"value":"recognized fixture text"}\'\n'
+      )
+      chmodSync(helperPath, 0o755)
+      writeFileSync(
+        join(extensionRoot, 'package.json'),
+        JSON.stringify({
+          name: 'screenocr-fixture',
+          title: 'ScreenOCR Fixture',
+          commands: [{ name: 'index', title: 'Index', mode: 'no-view' }],
+        })
+      )
+      writeFileSync(
+        join(extensionRoot, '.sc-build', 'index.js'),
+        `const { Clipboard } = require('@raycast/api')
        const { recognizeText } = require('swift:../swift')
        module.exports.default = async function Command() {
          await Clipboard.copy(await recognizeText(true, false, true, false, false, [], ['en-US'], false))
        }`
-    )
-
-    const previousHelperPath = process.env.SCREENOCR_HELPER_PATH
-    process.env.SCREENOCR_HELPER_PATH = helperPath
-    try {
-      const result = await runExtensionCommandFromPackageJson(
-        join(extensionRoot, 'package.json'),
-        'index',
-        undefined,
-        undefined,
-        { effectMode: 'record' }
       )
-      expect(result.ok, JSON.stringify(result)).toBe(true)
-      if (!result.ok || result.mode !== 'no-view') return
-      expect(result.effects).toContainEqual({
-        kind: 'clipboard',
-        value: 'recognized fixture text',
-      })
-    } finally {
-      if (previousHelperPath === undefined) delete process.env.SCREENOCR_HELPER_PATH
-      else process.env.SCREENOCR_HELPER_PATH = previousHelperPath
-      rmSync(extensionRoot, { recursive: true, force: true })
+
+      const previousHelperPath = process.env.SCREENOCR_HELPER_PATH
+      process.env.SCREENOCR_HELPER_PATH = helperPath
+      try {
+        const result = await runExtensionCommandFromPackageJson(
+          join(extensionRoot, 'package.json'),
+          'index',
+          undefined,
+          undefined,
+          { effectMode: 'record' }
+        )
+        expect(result.ok, JSON.stringify(result)).toBe(true)
+        if (!result.ok || result.mode !== 'no-view') return
+        expect(result.effects).toContainEqual({
+          kind: 'clipboard',
+          value: 'recognized fixture text',
+        })
+      } finally {
+        if (previousHelperPath === undefined) delete process.env.SCREENOCR_HELPER_PATH
+        else process.env.SCREENOCR_HELPER_PATH = previousHelperPath
+        rmSync(extensionRoot, { recursive: true, force: true })
+      }
     }
-  })
+  )
 
   it.runIf(process.platform === 'win32')(
     'bridges the Windows color picker helper into the pick-color command',
@@ -584,10 +658,9 @@ describe('extension runtime list pagination', () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-utils-extension-'))
     const databasePath = join(extensionRoot, 'fixture.sqlite')
     mkdirSync(join(extensionRoot, 'src'))
-    execFileSync('/usr/bin/sqlite3', [
-      databasePath,
-      'create table items (name text); insert into items values ("ready");',
-    ])
+    const database = new Database(databasePath)
+    database.exec("create table items (name text); insert into items values ('ready');")
+    database.close()
     writeFileSync(
       join(extensionRoot, 'package.json'),
       JSON.stringify({
@@ -1357,7 +1430,9 @@ describe('extension runtime list pagination', () => {
       expect(result.ok, JSON.stringify(result)).toBe(true)
       if (!result.ok || result.mode !== 'view') return
       const rows = result.root.children ?? []
-      const sources = rows.map((row: { props?: { icon?: { source?: string } } }) => row.props?.icon?.source)
+      const sources = rows.map(
+        (row: { props?: { icon?: { source?: string } } }) => row.props?.icon?.source
+      )
       expect(sources[0]).toMatch(/^https:\/\/www\.google\.com\/s2\/favicons\?domain=/)
       expect(sources[0]).toContain(encodeURIComponent('www.npmjs.com'))
       expect(sources[1]).toBe('Globe')
@@ -1437,7 +1512,9 @@ describe('extension runtime list pagination', () => {
       expect(result.ok, JSON.stringify(result)).toBe(true)
       if (!result.ok || result.mode !== 'view') return
       const rows = result.root.children ?? []
-      const sources = rows.map((row: { props?: { icon?: { source?: string } } }) => row.props?.icon?.source)
+      const sources = rows.map(
+        (row: { props?: { icon?: { source?: string } } }) => row.props?.icon?.source
+      )
       expect(sources[0]).toMatch(/^https:\/\/www\.google\.com\/s2\/favicons\?domain=/)
       expect(sources[0]).toContain(encodeURIComponent('www.npmjs.com'))
       expect(sources[1]).toBe('Globe')

@@ -124,7 +124,7 @@ describe('hash', () => {
     expect(md5Hex(utf8Bytes('hello'))).toBe('5d41402abc4b2a76b9719d911017c592')
     expect(md5Hex(utf8Bytes(''))).toBe('d41d8cd98f00b204e9800998ecf8427e')
     expect(md5Hex(utf8Bytes('The quick brown fox jumps over the lazy dog'))).toBe(
-      '9e107d9d372bb6826bd81d3542a419d6',
+      '9e107d9d372bb6826bd81d3542a419d6'
     )
   })
 
@@ -347,7 +347,10 @@ describe('QR code data URL', () => {
       const vb = /viewBox="0 0 (\d+) (\d+)"/.exec(svg)
       const total = parseInt(vb?.[1] ?? '0', 10)
       const size = total - 8 // subtract 4-module quiet zone
-      const grid: number[][] = Array.from({ length: size }, () => new Array(size).fill(0) as number[])
+      const grid: number[][] = Array.from(
+        { length: size },
+        () => new Array(size).fill(0) as number[]
+      )
       const cellRe = /M(\d+),(\d+)h1v1h-1z/g
       for (let m = cellRe.exec(svg); m; m = cellRe.exec(svg)) {
         const cx = parseInt(m[1]!, 10) - 4
@@ -369,13 +372,26 @@ describe('QR code data URL', () => {
         // Alignment pattern positions per version (level-M subset mirrors impl)
         const v = (size - 17) / 4
         const ALIGN: number[][] = [
-          [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34],
-          [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50],
+          [],
+          [6, 18],
+          [6, 22],
+          [6, 26],
+          [6, 30],
+          [6, 34],
+          [6, 22, 38],
+          [6, 24, 42],
+          [6, 26, 46],
+          [6, 28, 50],
         ]
         for (const ar of ALIGN[v - 1] ?? []) {
           for (const ac of ALIGN[v - 1] ?? []) {
             // skip the three corners overlapping the finders
-            if ((ar === 6 && ac === 6) || (ar === 6 && ac === size - 7) || (ar === size - 7 && ac === 6)) continue
+            if (
+              (ar === 6 && ac === 6) ||
+              (ar === 6 && ac === size - 7) ||
+              (ar === size - 7 && ac === 6)
+            )
+              continue
             if (Math.abs(r - ar) <= 2 && Math.abs(c - ac) <= 2) return true
           }
         }
@@ -392,7 +408,15 @@ describe('QR code data URL', () => {
         (r: number, c: number) => (((r + c) % 2) + ((r * c) % 3)) % 2 === 0,
       ]
       const version = (size - 17) / 4
-      for (let mask = 0; mask < 8; mask++) {
+      // Read the actual format-information mask; guessing masks can produce
+      // a superficially valid byte header from corrupted/interleaved data.
+      let format = 0
+      for (let i = 0; i < 15; i++) {
+        const row = i < 6 ? i : i < 8 ? i + 1 : size - 15 + i
+        format |= grid[row]![8]! << i
+      }
+      const selectedMask = ((format ^ 0x5412) >>> 10) & 7
+      for (const mask of [selectedMask]) {
         const bits: number[] = []
         let inc = -1
         let row = size - 1
@@ -415,15 +439,41 @@ describe('QR code data URL', () => {
             }
           }
         }
-        const mode = bits.slice(0, 4).join('')
+        // QR codewords are interleaved across RS blocks, not a contiguous
+        // payload. Undo that interleaving before reading byte mode/count.
+        const blockLengths = [
+          [16],
+          [28],
+          [44],
+          [32, 32],
+          [43, 43],
+          [27, 27, 27, 27],
+          [20, 20, 20, 20],
+          [38, 38, 39, 39],
+          [36, 36, 36, 37, 37],
+          [43, 43, 43, 43, 44],
+        ][version - 1]!
+        const blocks = blockLengths.map(() => [] as number[])
+        let codeword = 0
+        for (let i = 0; i < Math.max(...blockLengths); i++) {
+          for (let block = 0; block < blocks.length; block++) {
+            if (i < blockLengths[block]!) {
+              blocks[block]!.push(parseInt(bits.slice(codeword * 8, ++codeword * 8).join(''), 2))
+            }
+          }
+        }
+        const payloadBits = blocks
+          .flat()
+          .flatMap((byte) => byte.toString(2).padStart(8, '0').split('').map(Number))
+        const mode = payloadBits.slice(0, 4).join('')
         if (mode !== '0100') continue
         const lenBits = version < 10 ? 8 : 16
-        const length = parseInt(bits.slice(4, 4 + lenBits).join(''), 2)
+        const length = parseInt(payloadBits.slice(4, 4 + lenBits).join(''), 2)
         const bytes: number[] = []
         for (let i = 0; i < length; i++) {
           const start = 4 + lenBits + i * 8
-          if (start + 8 > bits.length) break
-          bytes.push(parseInt(bits.slice(start, start + 8).join(''), 2))
+          if (start + 8 > payloadBits.length) break
+          bytes.push(parseInt(payloadBits.slice(start, start + 8).join(''), 2))
         }
         // Length sanity: payload shouldn't exceed version-10-M capacity.
         if (bytes.length === length && length > 0) {
@@ -444,10 +494,12 @@ describe('QR code data URL', () => {
     it('round-trips longer inputs (forces multi-block RS, alignment patterns)', () => {
       // 200 chars ⇒ version 10 ⇒ exercises two-group RS interleaving +
       // alignment patterns + version-info blocks.
-      const text = 'x'.repeat(200)
-      const r = qrCodeDataUrl(text)
-      expect(r.ok).toBe(true)
-      if (r.ok) expect(decodeOwnQr(r.result)).toBe(text)
+      for (const length of [70, 100, 150, 200, 213]) {
+        const text = 'x'.repeat(length)
+        const r = qrCodeDataUrl(text)
+        expect(r.ok).toBe(true)
+        if (r.ok) expect(decodeOwnQr(r.result)).toBe(text)
+      }
     })
 
     it('round-trips unicode payloads', () => {

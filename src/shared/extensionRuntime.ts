@@ -43,7 +43,14 @@ export type ExtensionRuntimeAction = {
 }
 
 export type ExtensionRuntimeEffect = {
-  kind: 'clipboard' | 'open' | 'show-in-finder' | 'toast' | 'hud' | 'apple-script'
+  kind:
+    | 'clipboard'
+    | 'open'
+    | 'show-in-finder'
+    | 'toast'
+    | 'hud'
+    | 'apple-script'
+    | 'powershell-script'
   value?: string
   style?: string
   title?: string
