@@ -2163,54 +2163,108 @@ export default function CommandBar({
       'обнова'.includes(q) ||
       'версия'.includes(q)
 
-    let updateItem: SearchResult | null = null
-    if (matchesUpdateQuery) {
+    const formatUpdateSearchResult = (base?: SearchResult): SearchResult => {
+      const fallback: SearchResult = {
+        id: 'command:check-for-updates',
+        category: 'commands',
+        title: 'Check for Updates',
+        subtitle: 'Check for new Tezbar updates',
+        score: base?.score ?? 1_000_000,
+        action: { type: 'invoke-command', commandId: 'check-for-updates' },
+      }
+      if (updateStatus.kind === 'checking') {
+        return {
+          ...(base ?? fallback),
+          id: 'command:check-for-updates',
+          category: 'commands',
+          title: 'Checking for Updates…',
+          subtitle: 'Connecting to update server…',
+          score: 1_000_000,
+          action: { type: 'invoke-command', commandId: 'check-for-updates' },
+        }
+      }
       if (updateStatus.kind === 'available') {
-        updateItem = {
-          id: 'app-update:available',
+        return {
+          ...(base ?? fallback),
+          id: 'command:check-for-updates',
           category: 'commands',
           title: `Update Tezbar to v${updateStatus.version}`,
-          subtitle: 'New version available · Press Enter to download',
+          subtitle: 'New version available · Press Enter to download and install',
           score: 1_000_000,
-          action: {
-            type: 'invoke-command',
-            commandId: 'download-app-update',
-          },
+          action: { type: 'invoke-command', commandId: 'download-app-update' },
         }
-      } else if (updateStatus.kind === 'downloading') {
+      }
+      if (updateStatus.kind === 'downloading') {
         const pct =
           updateStatus.total && updateStatus.total > 0
-            ? `${Math.round((updateStatus.downloaded / updateStatus.total) * 100)}%`
-            : `${(updateStatus.downloaded / 1024 / 1024).toFixed(1)} MB`
-        updateItem = {
-          id: 'app-update:downloading',
+            ? Math.min(100, Math.round((updateStatus.downloaded / updateStatus.total) * 100))
+            : 0
+        const downloadedMB = (updateStatus.downloaded / 1024 / 1024).toFixed(1)
+        const totalMB = updateStatus.total ? (updateStatus.total / 1024 / 1024).toFixed(1) : '?'
+        return {
+          ...(base ?? fallback),
+          id: 'command:check-for-updates',
           category: 'commands',
-          title: `Downloading Tezbar v${updateStatus.version}… (${pct})`,
-          subtitle: updateStatus.total
-            ? `${(updateStatus.downloaded / 1024 / 1024).toFixed(1)} / ${(updateStatus.total / 1024 / 1024).toFixed(1)} MB · In progress`
-            : 'Downloading in background…',
+          title: `Downloading Tezbar v${updateStatus.version}… (${pct}%)`,
+          subtitle: `${downloadedMB} / ${totalMB} MB · Downloading update…`,
           score: 1_000_000,
-          action: {
-            type: 'invoke-command',
-            commandId: 'open-settings-updates',
-          },
+          action: { type: 'invoke-command', commandId: 'download-app-update' },
         }
-      } else if (updateStatus.kind === 'ready') {
-        updateItem = {
-          id: 'app-update:ready',
+      }
+      if (updateStatus.kind === 'ready') {
+        return {
+          ...(base ?? fallback),
+          id: 'command:check-for-updates',
           category: 'commands',
           title: `Restart Tezbar to update (v${updateStatus.version})`,
           subtitle: 'Update ready · Press Enter to restart and install',
           score: 1_000_000,
-          action: {
-            type: 'invoke-command',
-            commandId: 'restart-app-update',
-          },
+          action: { type: 'invoke-command', commandId: 'restart-app-update' },
         }
+      }
+      if (updateStatus.kind === 'upToDate') {
+        return {
+          ...(base ?? fallback),
+          id: 'command:check-for-updates',
+          category: 'commands',
+          title: `Tezbar is up to date (v${updateStatus.version})`,
+          subtitle: 'Latest version installed · Press Enter to check again',
+          score: base?.score ?? 1_000_000,
+          action: { type: 'invoke-command', commandId: 'check-for-updates' },
+        }
+      }
+      if (updateStatus.kind === 'error') {
+        return {
+          ...(base ?? fallback),
+          id: 'command:check-for-updates',
+          category: 'commands',
+          title: 'Update check failed',
+          subtitle: `${updateStatus.message} · Press Enter to retry`,
+          score: base?.score ?? 1_000_000,
+          action: { type: 'invoke-command', commandId: 'check-for-updates' },
+        }
+      }
+      return base ?? fallback
+    }
+
+    const hasExistingUpdateCommand = withCalc.some((it) => it.id === 'command:check-for-updates')
+    let processedResults = withCalc.map((it) =>
+      it.id === 'command:check-for-updates' ? formatUpdateSearchResult(it) : it
+    )
+
+    if (matchesUpdateQuery && !hasExistingUpdateCommand && updateStatus.kind !== 'idle') {
+      processedResults = [formatUpdateSearchResult(), ...processedResults]
+    }
+
+    if (updateStatus.kind !== 'idle') {
+      const updateIdx = processedResults.findIndex((it) => it.id === 'command:check-for-updates')
+      if (updateIdx > 0) {
+        const [updateRow] = processedResults.splice(updateIdx, 1)
+        if (updateRow) processedResults.unshift(updateRow)
       }
     }
 
-    return updateItem ? [updateItem, ...withCalc] : withCalc
+    return processedResults
   }, [
     calcResultRow,
     colorConversionRows,
@@ -2938,44 +2992,38 @@ export default function CommandBar({
         onConfigureAi()
         return
       }
-      if (result.action.commandId === 'download-app-update') {
+      if (
+        result.action.commandId === 'check-for-updates' ||
+        result.action.commandId === 'download-app-update' ||
+        result.action.commandId === 'restart-app-update'
+      ) {
         await recordHandledSearchUsage()
-        showActionMsg('Downloading update…')
-        void window.tezbar.downloadAndInstallUpdate().catch((err: unknown) => {
-          showActionMsg(`Update download failed: ${err instanceof Error ? err.message : String(err)}`)
-        })
-        return
-      }
-      if (result.action.commandId === 'restart-app-update') {
-        await recordHandledSearchUsage()
-        showActionMsg('Restarting Tezbar…')
-        window.tezbar.restartApp()
+        if (updateStatus.kind === 'ready') {
+          window.tezbar.restartApp()
+          return
+        }
+        if (updateStatus.kind === 'available') {
+          void window.tezbar.downloadAndInstallUpdate().catch((err: unknown) => {
+            showActionMsg(`Update download failed: ${err instanceof Error ? err.message : String(err)}`)
+          })
+          return
+        }
+        if (updateStatus.kind === 'downloading') {
+          return
+        }
+        void window.tezbar
+          .checkForUpdates()
+          .then((res) => {
+            if (res.kind === 'available') {
+              void window.tezbar.downloadAndInstallUpdate().catch(() => undefined)
+            }
+          })
+          .catch(() => undefined)
         return
       }
       if (result.action.commandId === 'open-settings-updates') {
         await recordHandledSearchUsage()
         onOpenSettings()
-        return
-      }
-      if (result.action.commandId === 'check-for-updates') {
-        await recordHandledSearchUsage()
-        showActionMsg('Checking for updates…')
-        void window.tezbar
-          .checkForUpdates()
-          .then((res) => {
-            if (res.kind === 'upToDate') {
-              showActionMsg(`Tezbar v${res.version} is up to date`)
-            } else if (res.kind === 'available') {
-              showActionMsg(`Tezbar v${res.version} is available!`)
-            } else if (res.kind === 'error') {
-              showActionMsg(`Update check failed: ${res.message}`)
-            }
-          })
-          .catch((err: unknown) => {
-            showActionMsg(
-              `Update check failed: ${err instanceof Error ? err.message : String(err)}`
-            )
-          })
         return
       }
       if (result.action.commandId === 'open-settings') {
@@ -5161,6 +5209,110 @@ export default function CommandBar({
                               <span className="shrink-0 flex items-center gap-1.5 text-[10px] font-mono text-ink-3">
                                 <Kbd>↵</Kbd>
                                 <span>copy</span>
+                              </span>
+                            </>
+                          ) : item.id === 'command:check-for-updates' ? (
+                            <>
+                              <span className="flex min-w-0 flex-1 items-center gap-3">
+                                {updateStatus.kind === 'checking' ? (
+                                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-sky-300/25 bg-sky-300/10 text-sky-200">
+                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    </svg>
+                                  </span>
+                                ) : updateStatus.kind === 'downloading' ? (
+                                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-emerald-300/25 bg-emerald-300/10 text-emerald-200">
+                                    <svg className="animate-bounce h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <path d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  </span>
+                                ) : updateStatus.kind === 'ready' ? (
+                                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-emerald-300/30 bg-emerald-300/20 text-emerald-200 shadow-[0_0_12px_rgba(52,211,153,0.25)]">
+                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  </span>
+                                ) : updateStatus.kind === 'upToDate' ? (
+                                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-emerald-300/20 bg-emerald-300/10 text-emerald-300">
+                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  </span>
+                                ) : (
+                                  <ListItemIcon
+                                    kind={item.category}
+                                    iconDataUrl={item.iconDataUrl}
+                                    assetKind={iconAsset?.kind}
+                                    assetPath={iconAsset?.path}
+                                    commandIcon={commandIcon}
+                                  />
+                                )}
+                                <span className="min-w-0 flex-1">
+                                  <span className={cx(
+                                    'block truncate text-[13px] font-medium',
+                                    updateStatus.kind === 'ready' ? 'text-emerald-200 font-semibold' : 'text-ink-1'
+                                  )}>
+                                    {item.title}
+                                  </span>
+                                  {updateStatus.kind === 'downloading' ? (
+                                    <div className="mt-1 flex items-center gap-2.5">
+                                      <div className="h-1.5 w-32 sm:w-44 rounded-full bg-white/10 overflow-hidden">
+                                        <div
+                                          className="h-full bg-emerald-400 rounded-full transition-all duration-150"
+                                          style={{
+                                            width: `${
+                                              updateStatus.total && updateStatus.total > 0
+                                                ? Math.min(100, Math.round((updateStatus.downloaded / updateStatus.total) * 100))
+                                                : 0
+                                            }%`,
+                                          }}
+                                        />
+                                      </div>
+                                      <span className="text-[11px] font-mono text-ink-3 tabular-nums">
+                                        {(updateStatus.downloaded / 1024 / 1024).toFixed(1)} /{' '}
+                                        {updateStatus.total ? (updateStatus.total / 1024 / 1024).toFixed(1) : '?'} MB
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="mt-0.5 block truncate text-[11px] text-ink-3">
+                                      <span className="text-ink-4">{item.category}</span>
+                                      {item.subtitle ? <span className="mx-1.5 text-ink-4">·</span> : null}
+                                      {item.subtitle}
+                                    </span>
+                                  )}
+                                </span>
+                              </span>
+                              <span className="shrink-0 flex items-center gap-2">
+                                {updateStatus.kind === 'checking' ? (
+                                  <span className="rounded-full bg-sky-500/15 border border-sky-400/20 px-2 py-0.5 text-[10px] font-medium text-sky-300 animate-pulse">
+                                    Checking…
+                                  </span>
+                                ) : updateStatus.kind === 'downloading' ? (
+                                  <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono font-semibold text-emerald-300">
+                                    {updateStatus.total && updateStatus.total > 0
+                                      ? `${Math.min(100, Math.round((updateStatus.downloaded / updateStatus.total) * 100))}%`
+                                      : 'Downloading'}
+                                  </span>
+                                ) : updateStatus.kind === 'available' ? (
+                                  <span className="rounded-full bg-teal-500/20 border border-teal-500/30 px-2.5 py-0.5 text-[10px] font-medium text-teal-300">
+                                    Press ↵ to install
+                                  </span>
+                                ) : updateStatus.kind === 'ready' ? (
+                                  <span className="rounded-full bg-emerald-500/25 border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.2)]">
+                                    Press ↵ to restart
+                                  </span>
+                                ) : updateStatus.kind === 'upToDate' ? (
+                                  <span className="rounded-full bg-white/[0.05] border border-white/10 px-2 py-0.5 text-[10px] text-ink-3">
+                                    Up to date
+                                  </span>
+                                ) : (
+                                  i === selectedSearch ? (
+                                    <span className="text-[10px] font-mono text-ink-3">
+                                      <Kbd>↵</Kbd>
+                                    </span>
+                                  ) : null
+                                )}
                               </span>
                             </>
                           ) : (
