@@ -1,11 +1,11 @@
 {
-  "version": "v0.2.0-beta.5",
-  "notes": "Tezbar v0.2.0-beta.5: Fixed download progress tracking and stuttering selection.",
-  "pub_date": "2026-10-04T16:07:19.380560+00:00",
+  "version": "v0.2.0-beta.6",
+  "notes": "Tezbar v0.2.0-beta.6: Fixed search selection defaulting to recent extension command on empty query.",
+  "pub_date": "2026-10-04T16:14:46.586869+00:00",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNENzNDNQMmg1eHpZUVFXem9hUC93alBiTGg4V25HN2RLZXl5TitUOTJUTUpuWWJaZWRqVDJKSi9KdE5NZ3NWYmVRS1pXMCtQVStxYVBna3JZdTF5eWdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMTMwMDE5CWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKMktEMzBQaU9OK1Z5YjdkZEI3VG1iRnJPMHhycUJoNyt4VG4yWmZNaFdhNy9uMTUxMUU4Qnd4MWFOczhON3FwaitEcDRkdDVCQTQ5UThQVnVzU09ERGc9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0-beta.5/Tezbar.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEE2NUQrdFVOWTJBc054disydm9UU09nODlmRFdtMnRNRUFTRHdRcGlVT2paK2pPZEtXN05ZQjhjR1kxSk5OcjczY3FQbUpzZFJEczNOd1VEcFpQcXdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMTMwNDc3CWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKbU5wUThpN2dtUkxFR1NDSGkrN0tZeWN0cm50VzJhMDRnclAvbXpSMFNZS1g1UXhLS29JUzRVWEpST0w4VnRUWGxGclJpL0UrZkZFa05uY0xiM29pRGc9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0-beta.6/Tezbar.app.tar.gz"
     }
   }
 }

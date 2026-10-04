@@ -2396,34 +2396,7 @@ export default function CommandBar({
     terminalMode,
   ])
 
-  useEffect(() => {
-    if (
-      terminalMode ||
-      isCompletionInput ||
-      searchResults.length === 0 ||
-      recentExtensionCommands.length === 0
-    )
-      return
-    if (value.trim()) return
-    // When the calc row is present it owns index 0 and should stay
-    // selected — typing `2+2` should not jump to a recent app.
-    if (calcResultRow) return
-    if (userNavigatedRef.current) return
-    const mostRecent = recentExtensionCommands[0]
-    const idx = visibleSearchResults.findIndex((item) => item.id === mostRecent)
-    if (idx >= 0 && idx < visibleSearchCount) {
-      setSelectedSearch(idx)
-    }
-  }, [
-    isCompletionInput,
-    terminalMode,
-    recentExtensionCommands,
-    searchResults,
-    value,
-    visibleSearchResults,
-    visibleSearchCount,
-    calcResultRow,
-  ])
+
 
   // Keep the selection inside the rendered range whenever the result set
   // changes (e.g. user starts typing a narrower query).

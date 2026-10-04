@@ -504,7 +504,7 @@ export function initTauriBridge(): void {
               html_url?: string
             }
             const tag = (data.tag_name || '').replace(/^v/, '')
-            const current = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.5'
+            const current = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.6'
             if (tag && tag !== current) {
               return {
                 kind: 'available',
