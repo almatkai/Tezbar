@@ -7,7 +7,7 @@ import {
 } from '../shared/updater'
 import { Button } from './ui/primitives'
 
-const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.3'
+const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.4'
 
 type Status = AppUpdateStatus
 
@@ -211,7 +211,19 @@ export function AppUpdateSettings(): JSX.Element {
       )}
 
       {status.kind === 'error' && (
-        <p className="text-[12px] text-rose-300">Update check failed: {status.message}</p>
+        <div className="rounded-tezbar-row border border-rose-500/25 bg-rose-500/10 p-3 space-y-2">
+          <p className="text-[12px] font-medium text-rose-300">
+            Update check failed: {status.message}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => void check()}>
+              Retry
+            </Button>
+            <Button variant="ghost" onClick={() => openRelease(RELEASES_PAGE_URL)}>
+              Open GitHub Releases
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )

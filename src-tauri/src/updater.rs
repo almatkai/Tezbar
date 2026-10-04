@@ -86,6 +86,8 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
 
     let updater = app
         .updater_builder()
+        .header("User-Agent", "Tezbar-App/0.2.0 (Macintosh; Intel Mac OS X)")
+        .map_err(|e| e.to_string())?
         .version_comparator(|current, release| {
             // Offer updates that are strictly newer than the running build.
             release.version > current

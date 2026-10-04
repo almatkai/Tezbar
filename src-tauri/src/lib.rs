@@ -3458,7 +3458,12 @@ pub fn run() {
         )
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .header("User-Agent", "Tezbar-App/0.2.0 (Macintosh; Intel Mac OS X)")
+                .expect("valid user agent header")
+                .build(),
+        )
         .plugin(tauri_plugin_process::init())
         .manage(updater::UpdaterState::default())
         .manage(BackendState {

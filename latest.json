@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0-beta.4",
+  "notes": "Tezbar v0.2.0-beta.4: native TLS updater with dual fallback endpoints, User-Agent header, and retry UI.",
+  "pub_date": "2026-10-04T15:52:00Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEh3THlyTzMrN2kyTGtTaTNQWS8wektKelNnZ29scFhkbndFOTZpVVZ2VjFVTGJDaUt1N2NoWlBQZWpyWEZ1ZFBtR0llNm5NbFkwdjdxeThUeGNRM1F3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMTI5MDM3CWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKNXkvcFRmU3JWZ1JqcTJwWVI1dGZvcHFnUFZXays5bHVjazlQNXZhRHZ0Z3VCT05sS29JellQdVVwR1ZoQ2p6WVJWbkpEMThVYXU3eFdXR1hQSTJSRGc9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0-beta.4/Tezbar.app.tar.gz"
+    }
+  }
+}

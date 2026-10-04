@@ -1,6 +1,6 @@
 [package]
 name = "tezbar"
-version = "0.2.0-beta.3"
+version = "0.2.0-beta.4"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -30,7 +30,7 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-positioner = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
-tauri-plugin-updater = "2"
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "zip"] }
 tauri-plugin-process = "2"
 tokio = { version = "1", features = ["full"] }
 image = { version = "0.25", default-features = false, features = ["png"] }

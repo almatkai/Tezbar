@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Tezbar",
-  "version": "0.2.0-beta.3",
+  "version": "0.2.0-beta.4",
   "identifier": "com.tezbar.app",
   "build": {
     "frontendDist": "../dist",
@@ -36,7 +36,8 @@
       "active": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUwOUQ1QTBDOEQ2M0VCN0MKUldSODYyT05ERnFkNFBmWm9YRFZzdUpVa295eHdTMUNSVzFpa0wrbi9WRytoa3pqRTdWd3BHSnUK",
       "endpoints": [
-        "https://github.com/almatkai/Tezbar/releases/latest/download/latest.json"
+        "https://github.com/almatkai/Tezbar/releases/latest/download/latest.json",
+        "https://raw.githubusercontent.com/almatkai/Tezbar/main/latest.json"
       ]
     }
   },
