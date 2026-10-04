@@ -84,4 +84,4 @@ pnpm dev
 
 ## License
 
-MIT © [Almat](https://github.com/almatkai)
+Apache License 2.0 © [Almat](https://github.com/almatkai)
