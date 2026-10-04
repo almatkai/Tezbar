@@ -4,6 +4,7 @@ import { open as openFile, rm as removePath, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import Database from 'better-sqlite3'
 import { runPowerShellScript, type PowerShellScriptOptions } from './powershell-script'
+import { readSelectedText } from './selected-text'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 import { homedir } from 'node:os'
@@ -1790,6 +1791,9 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       Key: iconProxy,
     },
     Toast: ToastShim,
+    Alert: {
+      ActionStyle: { Default: 'default', Destructive: 'destructive', Cancel: 'cancel' },
+    },
     LaunchType: {
       UserInitiated: 'userInitiated',
       Background: 'background',
@@ -2017,6 +2021,10 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
         promise,
       }
       return promise
+    },
+    getSelectedText: async (): Promise<string> => {
+      if (session.effectMode === 'record') return ''
+      return readSelectedText()
     },
     getFrontmostApplication: async (): Promise<{
       name: string

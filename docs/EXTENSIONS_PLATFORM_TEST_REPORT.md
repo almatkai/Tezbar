@@ -13,7 +13,9 @@
 - `useSQL` использует встроенный read-only SQLite с закрытием соединения вместо внешнего `sqlite3.exe`.
 - Исправлены две ошибочные предпосылки тестов: Windows-путь в POSIX path-тесте и отсутствие RS deinterleaving в тестовом QR-декодере. Production QR-генератор не изменялся.
 
-Повторная проверка: штатная suite Tezbar **342 passed / 1 Windows-only skipped**, portability **30/30**, Google Translate audio tests **6/6**, Raycast build/typecheck **7/7**, backend build и Tezbar typecheck успешно. Добавлены отдельные штатные регрессии для spawn, PowerShell и read-only SQLite.
+Повторная проверка первого раунда: штатная suite Tezbar **342 passed / 1 Windows-only skipped**, portability **30/30**, Google Translate audio tests **6/6**, Raycast build/typecheck **7/7**, backend build и Tezbar typecheck успешно. Добавлены отдельные штатные регрессии для spawn, PowerShell и read-only SQLite.
+
+Следующий раунд охватил ещё 8 установленных пакетов: [отчёт](./INSTALLED_EXTENSIONS_PLATFORM_AUDIT.md). Исправлены дополнительные API gaps и безопасный platform fallback; итоговая штатная suite — **351 passed / 1 Windows-only skipped**, installed probes — **21/21**. Read-only SQLite также проверен непосредственно под Bun на macOS.
 
 **Полную Windows-совместимость пока нельзя объявить:** реального Windows-хоста и проверок аккаунтов нет. Ограничения non-premium Spotify и macOS-only команд намеренно остаются.
 

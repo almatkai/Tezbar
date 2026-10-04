@@ -22,6 +22,7 @@ describe('extension command builds', () => {
       join(extensionRoot, 'package.json'),
       JSON.stringify({
         name: 'native-extension-fixture',
+        platforms: ['macOS', 'Windows'],
         commands: [{ name: 'native-command', mode: 'view' }],
       }),
       'utf8'

@@ -1,49 +1,53 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export type RaycastPlatform = 'macOS' | 'Windows' | 'Linux';
+export type RaycastPlatform = 'macOS' | 'Windows' | 'Linux'
 
 function normalizePlatform(value: unknown): RaycastPlatform | null {
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return null;
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return null
 
   if (normalized === 'macos' || normalized === 'darwin' || normalized === 'mac') {
-    return 'macOS';
+    return 'macOS'
   }
   if (normalized === 'windows' || normalized === 'win32' || normalized === 'win') {
-    return 'Windows';
+    return 'Windows'
   }
   if (normalized === 'linux') {
-    return 'Linux';
+    return 'Linux'
   }
-  return null;
+  return null
 }
 
 export function getCurrentRaycastPlatform(): RaycastPlatform {
-  if (process.platform === 'win32') return 'Windows';
-  if (process.platform === 'linux') return 'Linux';
-  return 'macOS';
+  if (process.platform === 'win32') return 'Windows'
+  if (process.platform === 'linux') return 'Linux'
+  return 'macOS'
 }
 
 export function getManifestPlatforms(manifest: any): RaycastPlatform[] {
-  if (!manifest || typeof manifest !== 'object') return [];
-  if (!Array.isArray(manifest.platforms)) return [];
+  if (!manifest || typeof manifest !== 'object') return []
+  const declared = Array.isArray(manifest.platforms)
+    ? manifest.platforms
+    : Array.isArray(manifest.tezbar?.platforms)
+      ? manifest.tezbar.platforms
+      : ['macOS'] // Legacy Raycast extensions predate Windows support.
 
-  const supported = new Set<RaycastPlatform>();
-  for (const raw of manifest.platforms) {
-    const normalized = normalizePlatform(raw);
-    if (normalized) supported.add(normalized);
+  const supported = new Set<RaycastPlatform>()
+  for (const raw of declared) {
+    const normalized = normalizePlatform(raw)
+    if (normalized) supported.add(normalized)
   }
-  return [...supported];
+  return [...supported]
 }
 
 export function isManifestPlatformCompatible(manifest: any): boolean {
-  const supported = getManifestPlatforms(manifest);
-  if (supported.length === 0) return true;
-  return supported.includes(getCurrentRaycastPlatform());
+  const supported = getManifestPlatforms(manifest)
+  if (supported.length === 0) return false
+  return supported.includes(getCurrentRaycastPlatform())
 }
 
 export function isCommandPlatformCompatible(cmd: any): boolean {
-  if (!cmd || typeof cmd !== 'object') return false;
-  if (!Object.prototype.hasOwnProperty.call(cmd, 'platforms')) return true;
-  return isManifestPlatformCompatible(cmd);
+  if (!cmd || typeof cmd !== 'object') return false
+  if (!Object.prototype.hasOwnProperty.call(cmd, 'platforms')) return true
+  return isManifestPlatformCompatible(cmd)
 }

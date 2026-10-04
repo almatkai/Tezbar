@@ -46,6 +46,7 @@ import {
   clearAllExtensionSessions,
   refreshExtensionSession,
   runExtensionCommandFromPackageJson,
+  updateSearchText,
 } from '../../src/main/extension-runner'
 
 afterAll(() => {
@@ -203,12 +204,23 @@ describe('cross-platform API contracts', () => {
       )
       expect(initial.ok, JSON.stringify(initial)).toBe(true)
       if (!initial.ok || initial.mode !== 'view') return
-      await new Promise((resolve) => setTimeout(resolve, 350))
-      const refreshed = await refreshExtensionSession({ sessionId: initial.sessionId })
-      expect(
-        JSON.stringify(refreshed),
-        `Runtime failed to detect the real port ${address.port}: ${JSON.stringify(refreshed)}`
-      ).toContain(String(address.port))
+      // Other local applications may occupy the first 30 rows. Active search
+      // exposes all client-filtered items instead of testing just page one.
+      let current = await updateSearchText({
+        sessionId: initial.sessionId,
+        searchText: String(address.port),
+      })
+      await vi.waitFor(
+        async () => {
+          const refreshed = await refreshExtensionSession({ sessionId: initial.sessionId })
+          if (refreshed.ok && refreshed.mode === 'view') current = refreshed
+          expect(
+            JSON.stringify(current),
+            `Runtime did not expose controlled port ${address.port}`
+          ).toContain(String(address.port))
+        },
+        { timeout: 3000, interval: 50 }
+      )
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }

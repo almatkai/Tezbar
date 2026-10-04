@@ -67,6 +67,7 @@ describe('extension preference onboarding', () => {
       join(extensionRoot, 'package.json'),
       JSON.stringify({
         name: 'credential-gate-fixture',
+        platforms: ['macOS', 'Windows'],
         title: 'Credential Gate Fixture',
         preferences: [{ name: 'apiKey', title: 'API Key', type: 'password', required: false }],
         commands: [
@@ -193,6 +194,33 @@ describe('extension runtime API compatibility', () => {
 })
 
 describe('extension runtime platform contracts', () => {
+  it('exports Alert styles and suppresses desktop selection reads in record mode', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'tezbar-alert-selection-'))
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({ name: 'alert-fixture', commands: [{ name: 'index', mode: 'no-view' }] })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'index.js'),
+      `const {Alert, Clipboard, getSelectedText} = require('@raycast/api'); module.exports.default = async () => { await Clipboard.copy([Alert.ActionStyle.Default, Alert.ActionStyle.Destructive, Alert.ActionStyle.Cancel, await getSelectedText()].join(':')); }`
+    )
+    try {
+      const result = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index',
+        undefined,
+        {},
+        { effectMode: 'record' }
+      )
+      expect(result.ok, JSON.stringify(result)).toBe(true)
+      if (!result.ok || result.mode !== 'no-view') return
+      expect(result.effects).toEqual([{ kind: 'clipboard', value: 'default:destructive:cancel:' }])
+    } finally {
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
   it('preserves spawn output byte-for-byte including CRLF, whitespace, unicode and trailing data', async () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'tezbar-spawn-output-'))
     const text = '  first\r\n\nこんにちは 🌍\nlast  '
