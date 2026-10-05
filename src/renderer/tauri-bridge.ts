@@ -504,7 +504,7 @@ export function initTauriBridge(): void {
               html_url?: string
             }
             const tag = (data.tag_name || '').replace(/^v/, '')
-            const current = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.10'
+            const current = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.11'
             if (tag && tag !== current) {
               return {
                 kind: 'available',
@@ -544,6 +544,10 @@ export function initTauriBridge(): void {
       setupEventListener('stream-error', listener),
     onWindowShown: (listener: (payload: { resetUi: boolean }) => void) =>
       setupEventListener('window-shown', listener),
+    onWindowHidden: (listener: () => void) =>
+      setupEventListener('window-hidden', listener),
+    onWindowVisibility: (listener: (visible: boolean) => void) =>
+      setupEventListener('window-visibility', listener),
     onWindowSnapGuides: (
       listener: (payload: {
         visible: boolean

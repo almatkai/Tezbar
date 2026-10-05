@@ -49,7 +49,15 @@ import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 import { ModelPicker } from './ModelPicker'
 import { moveTerminalSelectionDown, terminalSessionAtIndex } from './terminalSessionSelection'
-import type { AppUpdateStatus } from '../shared/updater'
+import {
+  type AppUpdateStatus,
+  computeEffectiveUpdateStatus,
+  getUpdateCommandScore,
+  matchesUpdateSearchQuery,
+  readLastUpdateCheck,
+  recordUpdateCheck,
+  shouldPromoteUpdateCommand,
+} from '../shared/updater'
 import BackgroundTaskStatus from './BackgroundTaskStatus'
 import {
   addLauncherQueryHistoryEntry,
@@ -1693,23 +1701,60 @@ export default function CommandBar({
   const [killPortQuery, setKillPortQuery] = useState('')
   const [killPortValue, setKillPortValue] = useState('')
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>({ kind: 'idle' })
+  const [windowSessionId, setWindowSessionId] = useState(1)
+  const [activeCheckSessionId, setActiveCheckSessionId] = useState<number | null>(null)
+  const [lastCheckTimestamp, setLastCheckTimestamp] = useState<number | null>(() => {
+    try {
+      return readLastUpdateCheck(window.localStorage)
+    } catch {
+      return null
+    }
+  })
 
   useEffect(() => {
     let mounted = true
     void window.tezbar
       .getUpdateStatus()
       .then((s) => {
-        if (mounted && s) setUpdateStatus(s)
+        if (mounted && s) {
+          setUpdateStatus(s)
+          try {
+            setLastCheckTimestamp(readLastUpdateCheck(window.localStorage))
+          } catch {
+            // ignore
+          }
+        }
       })
       .catch(() => undefined)
     const off = window.tezbar.onUpdateStatus((s) => {
-      if (mounted && s) setUpdateStatus(s)
+      if (mounted && s) {
+        setUpdateStatus(s)
+        try {
+          setLastCheckTimestamp(readLastUpdateCheck(window.localStorage))
+        } catch {
+          // ignore
+        }
+      }
+    })
+    const offShown = window.tezbar.onWindowShown?.(() => {
+      if (!mounted) return
+      setWindowSessionId((prev) => prev + 1)
+      try {
+        setLastCheckTimestamp(readLastUpdateCheck(window.localStorage))
+      } catch {
+        // ignore
+      }
     })
     return () => {
       mounted = false
       off()
+      offShown?.()
     }
   }, [])
+
+  const effectiveUpdateStatus = useMemo<AppUpdateStatus>(() => {
+    return computeEffectiveUpdateStatus(updateStatus, lastCheckTimestamp)
+  }, [updateStatus, lastCheckTimestamp])
   const [killPortArgumentDismissed, setKillPortArgumentDismissed] = useState(false)
   const [terminalPrompt, setTerminalPrompt] = useState('')
   const [terminalSessions, setTerminalSessions] = useState<TerminalSessionSummary[]>([])
@@ -2153,15 +2198,19 @@ export default function CommandBar({
     ]
     const withCalc = calcResultRow ? [calcResultRow, ...base] : base
 
-    const q = value.trim().toLowerCase()
-    const matchesUpdateQuery =
-      !q ||
-      'update'.includes(q) ||
-      'tezbar'.includes(q) ||
-      'upgrade'.includes(q) ||
-      'обновление'.includes(q) ||
-      'обнова'.includes(q) ||
-      'версия'.includes(q)
+    const isUpToDateCheckedInCurrentWindow =
+      effectiveUpdateStatus.kind === 'upToDate' &&
+      activeCheckSessionId !== null &&
+      activeCheckSessionId === windowSessionId
+
+    const isUpToDateDowngraded =
+      effectiveUpdateStatus.kind === 'upToDate' && !isUpToDateCheckedInCurrentWindow
+
+    const matchesUpdateQuery = matchesUpdateSearchQuery(
+      value,
+      effectiveUpdateStatus,
+      isUpToDateCheckedInCurrentWindow
+    )
 
     const formatUpdateSearchResult = (base?: SearchResult): SearchResult => {
       const fallback: SearchResult = {
@@ -2169,10 +2218,10 @@ export default function CommandBar({
         category: 'commands',
         title: 'Check for Updates',
         subtitle: 'Check for new Tezbar updates',
-        score: base?.score ?? 1_000_000,
+        score: getUpdateCommandScore(effectiveUpdateStatus, base?.score, isUpToDateDowngraded),
         action: { type: 'invoke-command', commandId: 'check-for-updates' },
       }
-      if (updateStatus.kind === 'checking') {
+      if (effectiveUpdateStatus.kind === 'checking') {
         return {
           ...(base ?? fallback),
           id: 'command:check-for-updates',
@@ -2183,64 +2232,64 @@ export default function CommandBar({
           action: { type: 'invoke-command', commandId: 'check-for-updates' },
         }
       }
-      if (updateStatus.kind === 'available') {
+      if (effectiveUpdateStatus.kind === 'available') {
         return {
           ...(base ?? fallback),
           id: 'command:check-for-updates',
           category: 'commands',
-          title: `Update Tezbar to v${updateStatus.version}`,
+          title: `Update Tezbar to v${effectiveUpdateStatus.version}`,
           subtitle: 'New version available · Press Enter to download and install',
           score: 1_000_000,
           action: { type: 'invoke-command', commandId: 'download-app-update' },
         }
       }
-      if (updateStatus.kind === 'downloading') {
+      if (effectiveUpdateStatus.kind === 'downloading') {
         const pct =
-          updateStatus.total && updateStatus.total > 0
-            ? Math.min(100, Math.round((updateStatus.downloaded / updateStatus.total) * 100))
+          effectiveUpdateStatus.total && effectiveUpdateStatus.total > 0
+            ? Math.min(100, Math.round((effectiveUpdateStatus.downloaded / effectiveUpdateStatus.total) * 100))
             : 0
-        const downloadedMB = (updateStatus.downloaded / 1024 / 1024).toFixed(1)
-        const totalMB = updateStatus.total ? (updateStatus.total / 1024 / 1024).toFixed(1) : '?'
+        const downloadedMB = (effectiveUpdateStatus.downloaded / 1024 / 1024).toFixed(1)
+        const totalMB = effectiveUpdateStatus.total ? (effectiveUpdateStatus.total / 1024 / 1024).toFixed(1) : '?'
         return {
           ...(base ?? fallback),
           id: 'command:check-for-updates',
           category: 'commands',
-          title: `Downloading Tezbar v${updateStatus.version}… (${pct}%)`,
+          title: `Downloading Tezbar v${effectiveUpdateStatus.version}… (${pct}%)`,
           subtitle: `${downloadedMB} / ${totalMB} MB · Downloading update…`,
           score: 1_000_000,
           action: { type: 'invoke-command', commandId: 'download-app-update' },
         }
       }
-      if (updateStatus.kind === 'ready') {
+      if (effectiveUpdateStatus.kind === 'ready') {
         return {
           ...(base ?? fallback),
           id: 'command:check-for-updates',
           category: 'commands',
-          title: `Restart Tezbar to update (v${updateStatus.version})`,
+          title: `Restart Tezbar to update (v${effectiveUpdateStatus.version})`,
           subtitle: 'Update ready · Press Enter to restart and install',
           score: 1_000_000,
           action: { type: 'invoke-command', commandId: 'restart-app-update' },
         }
       }
-      if (updateStatus.kind === 'upToDate') {
+      if (effectiveUpdateStatus.kind === 'upToDate') {
         return {
           ...(base ?? fallback),
           id: 'command:check-for-updates',
           category: 'commands',
-          title: `Tezbar is up to date (v${updateStatus.version})`,
+          title: `Tezbar is up to date (v${effectiveUpdateStatus.version})`,
           subtitle: 'Latest version installed · Press Enter to check again',
-          score: base?.score ?? 1_000_000,
+          score: getUpdateCommandScore(effectiveUpdateStatus, base?.score, isUpToDateDowngraded),
           action: { type: 'invoke-command', commandId: 'check-for-updates' },
         }
       }
-      if (updateStatus.kind === 'error') {
+      if (effectiveUpdateStatus.kind === 'error') {
         return {
           ...(base ?? fallback),
           id: 'command:check-for-updates',
           category: 'commands',
           title: 'Update check failed',
-          subtitle: `${updateStatus.message} · Press Enter to retry`,
-          score: base?.score ?? 1_000_000,
+          subtitle: `${effectiveUpdateStatus.message} · Press Enter to retry`,
+          score: base?.score ?? 100,
           action: { type: 'invoke-command', commandId: 'check-for-updates' },
         }
       }
@@ -2252,11 +2301,20 @@ export default function CommandBar({
       it.id === 'command:check-for-updates' ? formatUpdateSearchResult(it) : it
     )
 
-    if (matchesUpdateQuery && !hasExistingUpdateCommand && updateStatus.kind !== 'idle') {
+    if (!value.trim() && isUpToDateDowngraded) {
+      processedResults = processedResults.filter((it) => it.id !== 'command:check-for-updates')
+    }
+
+    if (matchesUpdateQuery && !hasExistingUpdateCommand && effectiveUpdateStatus.kind !== 'idle') {
       processedResults = [formatUpdateSearchResult(), ...processedResults]
     }
 
-    if (updateStatus.kind !== 'idle') {
+    const shouldPromoteUpdate = shouldPromoteUpdateCommand(
+      effectiveUpdateStatus,
+      isUpToDateCheckedInCurrentWindow
+    )
+
+    if (shouldPromoteUpdate) {
       const updateIdx = processedResults.findIndex((it) => it.id === 'command:check-for-updates')
       if (updateIdx > 0) {
         const [updateRow] = processedResults.splice(updateIdx, 1)
@@ -2266,19 +2324,21 @@ export default function CommandBar({
 
     return processedResults
   }, [
+    activeCheckSessionId,
     calcResultRow,
     colorConversionRows,
+    effectiveUpdateStatus,
+    isDeepSearchMode,
     killPortCommandResult,
     killPortMode,
-    isDeepSearchMode,
     pendingAction,
     pendingColorConversionRows,
     pendingInlineActionResult,
     pinnedCommands,
     parsedSearchQuery.query,
     searchResults,
-    updateStatus,
     value,
+    windowSessionId,
   ])
   const visibleSearchCount = visibleSearchResults.length
   const topResult = visibleSearchResults[0] ?? null
@@ -2815,6 +2875,54 @@ export default function CommandBar({
     setModelMenuOpen(false)
   }
 
+  const precomputeHomeResults = useCallback(() => {
+    setValue('')
+    setSelectedSearch(0)
+    setSearchResultNavigationActive(false)
+    clearPendingAction()
+    setKillPortMode(false)
+    setKillPortValue('')
+    setKillPortQuery('')
+    setActiveCheckSessionId(null)
+
+    setTimeout(() => {
+      void window.tezbar
+        .searchAll('')
+        .then((items) => {
+          if (items && items.length > 0) {
+            homeSearchResultsRef.current = items
+            searchCandidatesRef.current = mergeSearchCandidates(
+              searchCandidatesRef.current,
+              items
+            )
+            setSearchResults(items)
+            writeCachedHomeSearchResults(items)
+          }
+        })
+        .catch(() => undefined)
+    }, 60)
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    const handleClose = () => {
+      if (!mounted) return
+      precomputeHomeResults()
+    }
+    const offHidden = window.tezbar.onWindowHidden?.(handleClose)
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        handleClose()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      mounted = false
+      offHidden?.()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [precomputeHomeResults])
+
   const activateDeepSearch = (): void => {
     const query = parseSearchQuery(valueRef.current).query
     setValue(deepSearchInput(query))
@@ -2864,6 +2972,21 @@ export default function CommandBar({
 
     await ensureExtensionInstalled('raycast.port-manager')
 
+    void window.tezbar
+      .recordSearchActionUsage(
+        {
+          type: 'run-extension-command',
+          extensionId: 'raycast.port-manager',
+          commandName: 'kill-listening-process',
+          title: 'Kill Process Listening On',
+        },
+        {
+          query: killPortQuery || 'kill port',
+          resultId: 'extcmd:raycast.port-manager:kill-listening-process',
+        }
+      )
+      .catch(() => undefined)
+
     const ok = await executeExtensionCommandViaRuntime({
       extensionId: 'raycast.port-manager',
       commandName: 'kill-listening-process',
@@ -2886,6 +3009,7 @@ export default function CommandBar({
   async function executeExtensionCommandViaRuntime(payload: {
     extensionId: string
     commandName: string
+    title?: string
     argumentValues?: Record<string, string>
   }): Promise<boolean> {
     try {
@@ -2902,6 +3026,19 @@ export default function CommandBar({
         clearPendingAction()
         setValue('')
         trackExtensionCommand(payload.extensionId, payload.commandName)
+        void window.tezbar
+          .recordSearchActionUsage(
+            {
+              type: 'run-extension-command',
+              extensionId: payload.extensionId,
+              commandName: payload.commandName,
+              title: payload.title || payload.commandName,
+            },
+            {
+              resultId: `extcmd:${payload.extensionId}:${payload.commandName}`,
+            }
+          )
+          .catch(() => undefined)
         onOpenExtensionRuntime(result)
         return true
       }
@@ -2910,6 +3047,19 @@ export default function CommandBar({
       clearPendingAction()
       setValue('')
       trackExtensionCommand(payload.extensionId, payload.commandName)
+      void window.tezbar
+        .recordSearchActionUsage(
+          {
+            type: 'run-extension-command',
+            extensionId: payload.extensionId,
+            commandName: payload.commandName,
+            title: payload.title || payload.commandName,
+          },
+          {
+            resultId: `extcmd:${payload.extensionId}:${payload.commandName}`,
+          }
+        )
+        .catch(() => undefined)
       focusCommandInput()
       return true
     } catch (err) {
@@ -2935,6 +3085,21 @@ export default function CommandBar({
     if (isAiPoweredExtensionAction(pendingAction)) {
       await modelSelectionSaveRef.current
     }
+
+    void window.tezbar
+      .recordSearchActionUsage(
+        {
+          type: 'run-extension-command',
+          extensionId: pendingAction.extensionId,
+          commandName: pendingAction.commandName,
+          title: pendingAction.title,
+        },
+        {
+          query: value.trim(),
+          resultId: `extcmd:${pendingAction.extensionId}:${pendingAction.commandName}`,
+        }
+      )
+      .catch(() => undefined)
 
     await executeExtensionCommandViaRuntime({
       extensionId: pendingAction.extensionId,
@@ -2998,22 +3163,30 @@ export default function CommandBar({
         result.action.commandId === 'restart-app-update'
       ) {
         await recordHandledSearchUsage()
-        if (updateStatus.kind === 'ready') {
+        if (effectiveUpdateStatus.kind === 'ready') {
           window.tezbar.restartApp()
           return
         }
-        if (updateStatus.kind === 'available') {
+        if (effectiveUpdateStatus.kind === 'available') {
           void window.tezbar.downloadAndInstallUpdate().catch((err: unknown) => {
             showActionMsg(`Update download failed: ${err instanceof Error ? err.message : String(err)}`)
           })
           return
         }
-        if (updateStatus.kind === 'downloading') {
+        if (effectiveUpdateStatus.kind === 'downloading') {
           return
         }
+        setActiveCheckSessionId(windowSessionId)
         void window.tezbar
           .checkForUpdates()
           .then((res) => {
+            const now = Date.now()
+            try {
+              recordUpdateCheck(window.localStorage, now)
+              setLastCheckTimestamp(now)
+            } catch {
+              // ignore
+            }
             if (res.kind === 'available') {
               void window.tezbar.downloadAndInstallUpdate().catch(() => undefined)
             }
@@ -3195,6 +3368,7 @@ export default function CommandBar({
     }
 
     if (result.action.type === 'run-extension-command') {
+      await recordHandledSearchUsage()
       if (
         result.action.extensionId === 'raycast.port-manager' &&
         result.action.commandName === 'kill-listening-process'
@@ -5214,26 +5388,26 @@ export default function CommandBar({
                           ) : item.id === 'command:check-for-updates' ? (
                             <>
                               <span className="flex min-w-0 flex-1 items-center gap-3">
-                                {updateStatus.kind === 'checking' ? (
+                                {effectiveUpdateStatus.kind === 'checking' ? (
                                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-sky-300/25 bg-sky-300/10 text-sky-200">
                                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                     </svg>
                                   </span>
-                                ) : updateStatus.kind === 'downloading' ? (
+                                ) : effectiveUpdateStatus.kind === 'downloading' ? (
                                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-emerald-300/25 bg-emerald-300/10 text-emerald-200">
                                     <svg className="animate-bounce h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <path d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
                                   </span>
-                                ) : updateStatus.kind === 'ready' ? (
+                                ) : effectiveUpdateStatus.kind === 'ready' ? (
                                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-emerald-300/30 bg-emerald-300/20 text-emerald-200 shadow-[0_0_12px_rgba(52,211,153,0.25)]">
                                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
                                   </span>
-                                ) : updateStatus.kind === 'upToDate' ? (
+                                ) : effectiveUpdateStatus.kind === 'upToDate' ? (
                                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-emerald-300/20 bg-emerald-300/10 text-emerald-300">
                                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
@@ -5251,27 +5425,27 @@ export default function CommandBar({
                                 <span className="min-w-0 flex-1">
                                   <span className={cx(
                                     'block truncate text-[13px] font-medium',
-                                    updateStatus.kind === 'ready' ? 'text-emerald-200 font-semibold' : 'text-ink-1'
+                                    effectiveUpdateStatus.kind === 'ready' ? 'text-emerald-200 font-semibold' : 'text-ink-1'
                                   )}>
                                     {item.title}
                                   </span>
-                                  {updateStatus.kind === 'downloading' ? (
+                                  {effectiveUpdateStatus.kind === 'downloading' ? (
                                     <div className="mt-1 flex items-center gap-2.5">
                                       <div className="h-1.5 w-32 sm:w-44 rounded-full bg-white/10 overflow-hidden">
                                         <div
                                           className="h-full bg-emerald-400 rounded-full transition-all duration-150"
                                           style={{
                                             width: `${
-                                              updateStatus.total && updateStatus.total > 0
-                                                ? Math.min(100, Math.round((updateStatus.downloaded / updateStatus.total) * 100))
+                                              effectiveUpdateStatus.total && effectiveUpdateStatus.total > 0
+                                                ? Math.min(100, Math.round((effectiveUpdateStatus.downloaded / effectiveUpdateStatus.total) * 100))
                                                 : 0
                                             }%`,
                                           }}
                                         />
                                       </div>
                                       <span className="text-[11px] font-mono text-ink-3 tabular-nums">
-                                        {(updateStatus.downloaded / 1024 / 1024).toFixed(1)} /{' '}
-                                        {updateStatus.total ? (updateStatus.total / 1024 / 1024).toFixed(1) : '?'} MB
+                                        {(effectiveUpdateStatus.downloaded / 1024 / 1024).toFixed(1)} /{' '}
+                                        {effectiveUpdateStatus.total ? (effectiveUpdateStatus.total / 1024 / 1024).toFixed(1) : '?'} MB
                                       </span>
                                     </div>
                                   ) : (
@@ -5284,25 +5458,25 @@ export default function CommandBar({
                                 </span>
                               </span>
                               <span className="shrink-0 flex items-center gap-2">
-                                {updateStatus.kind === 'checking' ? (
+                                {effectiveUpdateStatus.kind === 'checking' ? (
                                   <span className="rounded-full bg-sky-500/15 border border-sky-400/20 px-2 py-0.5 text-[10px] font-medium text-sky-300 animate-pulse">
                                     Checking…
                                   </span>
-                                ) : updateStatus.kind === 'downloading' ? (
+                                ) : effectiveUpdateStatus.kind === 'downloading' ? (
                                   <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono font-semibold text-emerald-300">
-                                    {updateStatus.total && updateStatus.total > 0
-                                      ? `${Math.min(100, Math.round((updateStatus.downloaded / updateStatus.total) * 100))}%`
+                                    {effectiveUpdateStatus.total && effectiveUpdateStatus.total > 0
+                                      ? `${Math.min(100, Math.round((effectiveUpdateStatus.downloaded / effectiveUpdateStatus.total) * 100))}%`
                                       : 'Downloading'}
                                   </span>
-                                ) : updateStatus.kind === 'available' ? (
+                                ) : effectiveUpdateStatus.kind === 'available' ? (
                                   <span className="rounded-full bg-teal-500/20 border border-teal-500/30 px-2.5 py-0.5 text-[10px] font-medium text-teal-300">
                                     Press ↵ to install
                                   </span>
-                                ) : updateStatus.kind === 'ready' ? (
+                                ) : effectiveUpdateStatus.kind === 'ready' ? (
                                   <span className="rounded-full bg-emerald-500/25 border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.2)]">
                                     Press ↵ to restart
                                   </span>
-                                ) : updateStatus.kind === 'upToDate' ? (
+                                ) : effectiveUpdateStatus.kind === 'upToDate' ? (
                                   <span className="rounded-full bg-white/[0.05] border border-white/10 px-2 py-0.5 text-[10px] text-ink-3">
                                     Up to date
                                   </span>

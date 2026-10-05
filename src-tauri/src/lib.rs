@@ -269,6 +269,9 @@ struct SnapTargetRect {
 fn emit_main_window_visibility(window: &WebviewWindow, visible: bool) {
     if window.label() == "main" {
         let _ = window.emit("window-visibility", visible);
+        if !visible {
+            let _ = window.emit("window-hidden", ());
+        }
     }
 }
 

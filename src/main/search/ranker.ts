@@ -44,7 +44,7 @@ const CATEGORY_PRIOR: Record<SearchCategory, number> = {
 }
 
 function normalizeRecency(ms: number): number {
-  if (ms <= 0) return 0
+  if (!Number.isFinite(ms) || ms < 0) return 1
   const oneDay = 24 * 60 * 60 * 1000
   const ageDays = ms / oneDay
   return 1 / (1 + ageDays)
@@ -84,7 +84,19 @@ export function computeLearnedUsageBoost(input: LearnedUsageFeatures): number {
   const ageMs = Math.max(0, now - input.lastUsedAt)
   const oneDay = 24 * 60 * 60 * 1000
   const recencyBoost =
-    ageMs < oneDay ? 360 : ageMs < 7 * oneDay ? 220 : ageMs < 30 * oneDay ? 100 : 0
+    ageMs < 5 * 60 * 1000
+      ? 500
+      : ageMs < 30 * 60 * 1000
+        ? 450
+        : ageMs < 60 * 60 * 1000
+          ? 400
+          : ageMs < oneDay
+            ? 360
+            : ageMs < 7 * oneDay
+              ? 220
+              : ageMs < 30 * oneDay
+                ? 100
+                : 0
   const frequencyBoost = Math.min(900, Math.log2(input.frequency + 1) * 220)
   const successBoost = input.successRate >= 0.5 ? 120 : 0
 

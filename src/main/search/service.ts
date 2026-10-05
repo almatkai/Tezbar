@@ -781,15 +781,24 @@ function buildRecommendations(): SearchResult[] {
         recommendationBoost(seed.id)
 
       return {
-        id: seed.id,
-        title: seed.title,
-        subtitle: seed.subtitle,
-        category: seed.category,
-        score,
-        action: seed.action,
-      } satisfies SearchResult
+        result: {
+          id: seed.id,
+          title: seed.title,
+          subtitle: seed.subtitle,
+          category: seed.category,
+          score,
+          action: seed.action,
+        } satisfies SearchResult,
+        lastUsedAt: seed.lastUsedAt,
+        frequency: seed.frequency,
+      }
     })
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => {
+      if (b.result.score !== a.result.score) return b.result.score - a.result.score
+      if (b.lastUsedAt !== a.lastUsedAt) return b.lastUsedAt - a.lastUsedAt
+      return b.frequency - a.frequency
+    })
+    .map((item) => item.result)
     .slice(0, MAX_RESULTS)
 }
 

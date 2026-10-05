@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import type { AppUpdateStatus } from '../shared/updater'
 import {
   readAutoUpdatePreference,
+  recordUpdateCheck,
   RELEASES_PAGE_URL,
   writeAutoUpdatePreference,
 } from '../shared/updater'
 import { Button } from './ui/primitives'
 
-const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.10'
+const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.11'
 
 type Status = AppUpdateStatus
 
@@ -45,7 +46,13 @@ export function AppUpdateSettings(): JSX.Element {
   const check = useCallback(async () => {
     setStatus({ kind: 'checking' })
     try {
-      setStatus(await window.tezbar.checkForUpdates())
+      const next = await window.tezbar.checkForUpdates()
+      setStatus(next)
+      try {
+        recordUpdateCheck(window.localStorage)
+      } catch {
+        // ignore
+      }
     } catch (error) {
       setStatus({
         kind: 'error',

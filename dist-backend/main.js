@@ -15447,7 +15447,7 @@ var init_snippetsProvider = __esm({
 
 // src/main/search/ranker.ts
 function normalizeRecency(ms) {
-  if (ms <= 0) return 0;
+  if (!Number.isFinite(ms) || ms < 0) return 1;
   const oneDay = 24 * 60 * 60 * 1e3;
   const ageDays = ms / oneDay;
   return 1 / (1 + ageDays);
@@ -15473,7 +15473,7 @@ function computeLearnedUsageBoost(input) {
   const now = input.now ?? Date.now();
   const ageMs = Math.max(0, now - input.lastUsedAt);
   const oneDay = 24 * 60 * 60 * 1e3;
-  const recencyBoost = ageMs < oneDay ? 360 : ageMs < 7 * oneDay ? 220 : ageMs < 30 * oneDay ? 100 : 0;
+  const recencyBoost = ageMs < 5 * 60 * 1e3 ? 500 : ageMs < 30 * 60 * 1e3 ? 450 : ageMs < 60 * 60 * 1e3 ? 400 : ageMs < oneDay ? 360 : ageMs < 7 * oneDay ? 220 : ageMs < 30 * oneDay ? 100 : 0;
   const frequencyBoost = Math.min(900, Math.log2(input.frequency + 1) * 220);
   const successBoost = input.successRate >= 0.5 ? 120 : 0;
   return Math.round(recencyBoost + frequencyBoost + successBoost);
@@ -23918,14 +23918,22 @@ function buildRecommendations() {
       now
     }) + computeHotUsageBoost(seed.recentUseCount) + recommendationBoost(seed.id);
     return {
-      id: seed.id,
-      title: seed.title,
-      subtitle: seed.subtitle,
-      category: seed.category,
-      score,
-      action: seed.action
+      result: {
+        id: seed.id,
+        title: seed.title,
+        subtitle: seed.subtitle,
+        category: seed.category,
+        score,
+        action: seed.action
+      },
+      lastUsedAt: seed.lastUsedAt,
+      frequency: seed.frequency
     };
-  }).sort((a, b) => b.score - a.score).slice(0, MAX_RESULTS);
+  }).sort((a, b) => {
+    if (b.result.score !== a.result.score) return b.result.score - a.result.score;
+    if (b.lastUsedAt !== a.lastUsedAt) return b.lastUsedAt - a.lastUsedAt;
+    return b.frequency - a.frequency;
+  }).map((item) => item.result).slice(0, MAX_RESULTS);
 }
 function decodeLsofCommandName(value) {
   return value.replace(

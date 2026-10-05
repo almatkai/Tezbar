@@ -255,6 +255,8 @@ export type RaymesApi = {
   githubDevicePoll: () => Promise<GithubPollResult>
   githubDeviceCancel: () => Promise<void>
   onWindowShown: (listener: (payload: { resetUi: boolean }) => void) => () => void
+  onWindowHidden?: (listener: () => void) => () => void
+  onWindowVisibility?: (listener: (visible: boolean) => void) => () => void
   startWindowSnapDrag: () => Promise<void>
   endWindowSnapDrag: () => Promise<void>
   getWindowSnapGuides: () => Promise<{
