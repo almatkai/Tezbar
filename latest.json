@@ -1,15 +1,15 @@
 {
-  "version": "0.2.3",
-  "notes": "## Release Notes\n\n- The launcher command is now named **Release Notes**.\n- It uses a document icon to distinguish it from **Check for Updates**.\n- After an update, it appears first in the launcher. Select it and press **Enter** to read the notes inside Tezbar.\n\nRelease notes remain available offline. Press **Escape** or use the back arrow to return to the launcher.",
-  "pub_date": "2026-10-07T06:43:58.074Z",
+  "version": "0.2.4",
+  "notes": "## Cleaner update checking\n\n- Replaced the bulky update-check spinner with a thin rounded arc and a subtle track.\n- The **Checking** badge stays steady while the spinner rotates.\n- The spinner respects your reduced-motion preference.",
+  "pub_date": "2026-10-07T06:51:00.325Z",
   "platforms": {
     "windows-x86_64-nsis": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEpkNmlEOEw4VkhraDMyR1lMQTFCNmF5VG9yR0FnNlZSU2p2REJuMXgwM21XSzNpb1Vna21WTXFrL2duRU5id2FDRkVvOFJxYWkxbS9CZFJYbkhYQkFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU1NDE1CWZpbGU6VGV6YmFyXzAuMi4zX3g2NC1zZXR1cC5leGUKazdCbDF3aEQ0YlNaeFJpeHFqdGM1ZE9wci9scjZEMXM0bTlRclh0SFlpWmwzYmordzhzaVRSTUZWbkdhcTNITHJONmN5SVdXYXpweU1KeElidGxjREE9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.3/Tezbar_0.2.3_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE1XOEordWFIMlNyajgvbE9Ua29QSG9mZFpYeWtGb3k2R1R4TG1KWHdOdFZJdVREUlNNRGNodVdaWjRaU01WUVNHc2pUNXdnNUtJcHUwczBPL2NadUFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU1ODMyCWZpbGU6VGV6YmFyXzAuMi40X3g2NC1zZXR1cC5leGUKUUgwbmllTlQ4QkZncTVPMm5SVTF3dFQycjBMb0RUc0ZwaTdveFY4bHo3SnJMeFN5Smt1Ty9QUi90bEUwU2pWUUR0T2wySnhpejg2TWZIcEJ5L0FkQXc9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.4/Tezbar_0.2.4_x64-setup.exe"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEpkNmlEOEw4VkhraDMyR1lMQTFCNmF5VG9yR0FnNlZSU2p2REJuMXgwM21XSzNpb1Vna21WTXFrL2duRU5id2FDRkVvOFJxYWkxbS9CZFJYbkhYQkFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU1NDE1CWZpbGU6VGV6YmFyXzAuMi4zX3g2NC1zZXR1cC5leGUKazdCbDF3aEQ0YlNaeFJpeHFqdGM1ZE9wci9scjZEMXM0bTlRclh0SFlpWmwzYmordzhzaVRSTUZWbkdhcTNITHJONmN5SVdXYXpweU1KeElidGxjREE9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.3/Tezbar_0.2.3_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE1XOEordWFIMlNyajgvbE9Ua29QSG9mZFpYeWtGb3k2R1R4TG1KWHdOdFZJdVREUlNNRGNodVdaWjRaU01WUVNHc2pUNXdnNUtJcHUwczBPL2NadUFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU1ODMyCWZpbGU6VGV6YmFyXzAuMi40X3g2NC1zZXR1cC5leGUKUUgwbmllTlQ4QkZncTVPMm5SVTF3dFQycjBMb0RUc0ZwaTdveFY4bHo3SnJMeFN5Smt1Ty9QUi90bEUwU2pWUUR0T2wySnhpejg2TWZIcEJ5L0FkQXc9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.4/Tezbar_0.2.4_x64-setup.exe"
     }
   }
 }
