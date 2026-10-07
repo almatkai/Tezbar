@@ -311,6 +311,14 @@ function readClipboardSnapshot(): ClipboardSnapshot {
   }
 }
 
+export function windowsClipboardWriteTextScript(): string {
+  return '[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); Set-Clipboard -Value ([Console]::In.ReadToEnd())'
+}
+
+export function windowsClipboardReadTextScript(): string {
+  return '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::Write((Get-Clipboard -Raw))'
+}
+
 export const clipboard = {
   async readSnapshotAsync(): Promise<ClipboardSnapshot> {
     if (process.platform !== 'win32') return readClipboardSnapshot()
@@ -332,7 +340,7 @@ export const clipboard = {
       if (process.platform === 'win32') {
         return execFileSync(
           'powershell.exe',
-          ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw'],
+          ['-NoProfile', '-NonInteractive', '-Command', windowsClipboardReadTextScript()],
           { encoding: 'utf8', windowsHide: true, timeout: 3_000 }
         )
       }
@@ -348,7 +356,7 @@ export const clipboard = {
           '-NoProfile',
           '-NonInteractive',
           '-Command',
-          'Set-Clipboard -Value ([Console]::In.ReadToEnd())',
+          windowsClipboardWriteTextScript(),
         ], { windowsHide: true })
         child.stdin.write(text)
         child.stdin.end()

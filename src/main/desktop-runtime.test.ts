@@ -1,13 +1,41 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { execFileSync } from 'node:child_process'
 
 import {
   app,
   clipboardImageAppleScript,
   fileClipboardJavaScript,
   imageClipboardAppleScript,
+  windowsClipboardReadTextScript,
+  windowsClipboardWriteTextScript,
 } from './desktop-runtime'
 
 describe('Tauri desktop runtime', () => {
+  it.skipIf(process.platform !== 'win32')(
+    'preserves Unicode across Windows clipboard process pipes',
+    () => {
+      const text = '😄 👩🏽‍💻 🇰🇿 Қазақша 日本語\r\nsecond line'
+      // Exercise the actual PowerShell pipe encodings without changing the user's clipboard.
+      const script = [
+        'function Set-Clipboard { param([string]$Value) $script:clipboardText = $Value }',
+        'function Get-Clipboard { param([switch]$Raw) return $script:clipboardText }',
+        windowsClipboardWriteTextScript(),
+        windowsClipboardReadTextScript(),
+      ].join('; ')
+      const copied = execFileSync(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Command', script],
+        {
+          input: text,
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: 5_000,
+        }
+      )
+      expect(copied).toBe(text)
+    }
+  )
+
   const previousIsTauri = process.env.IS_TAURI
 
   afterEach(() => {
@@ -42,7 +70,7 @@ describe('Tauri desktop runtime', () => {
 
   it('writes clipboard image data to one reusable temporary file', () => {
     expect(clipboardImageAppleScript('/tmp/clipboard-image.png')).toContain(
-      'write (the clipboard as «class PNGf») to fileRef',
+      'write (the clipboard as «class PNGf») to fileRef'
     )
   })
 
