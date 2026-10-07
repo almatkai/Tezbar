@@ -72,6 +72,10 @@ pnpm dev
 
 ## Useful Scripts
 
+When preparing a Tezbar release, add its user-facing Markdown notes to
+`docs/releases/<package.json version>.md`. The frontend build requires this file
+and bundles it into the app for the post-update What's New dialog.
+
 | Script | Description |
 |---|---|
 | `pnpm dev` | Start the Tauri app in development mode with hot reload |

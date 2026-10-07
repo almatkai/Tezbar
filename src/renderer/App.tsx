@@ -19,6 +19,9 @@ import {
 const OnboardingView = React.lazy(() => import('./OnboardingView'))
 const AgentChatView = React.lazy(() => import('./AgentChatView'))
 const SettingsView = React.lazy(() => import('./SettingsView'))
+const PostUpdateReleaseNotes = React.lazy(() =>
+  import('./ReleaseNotesDialog').then((module) => ({ default: module.PostUpdateReleaseNotes }))
+)
 const ExtensionsView = React.lazy(() => import('./ExtensionsView'))
 const ExtensionRuntimeView = React.lazy(() => import('./ExtensionRuntimeView'))
 const OpenPortsView = React.lazy(() => import('./OpenPortsView'))
@@ -290,6 +293,7 @@ function SettingsWindowApp(): JSX.Element {
 function LauncherApp(): JSX.Element {
   const [surface, setSurface] = useState<Surface>('command')
   const [bootReady, setBootReady] = useState(false)
+  const [firstInstall, setFirstInstall] = useState<boolean | null>(null)
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   const [openPortsInitialTab, setOpenPortsInitialTab] = useState<'listen' | 'named'>('listen')
   const [notesInitialSelectedId, setNotesInitialSelectedId] = useState<number | null>(null)
@@ -312,6 +316,7 @@ function LauncherApp(): JSX.Element {
 
   const focusSurface = (nextSurface: Surface): void => {
     requestAnimationFrame(() => {
+      if (document.querySelector('dialog[open]')) return
       if (nextSurface !== 'command') {
         const panel = document.querySelector<HTMLElement>(PANEL_SELECTORS[nextSurface])
         if (panel) {
@@ -334,6 +339,7 @@ function LauncherApp(): JSX.Element {
         .getLlmConfig()
         .then((config) => {
           if (cancelled) return
+          setFirstInstall(!config.hasCompletedOnboarding)
           if (!config.hasCompletedOnboarding) setSurface('onboarding')
           setBootReady(true)
         })
@@ -557,6 +563,7 @@ function LauncherApp(): JSX.Element {
   // Local ⌘N / Ctrl+N — route by surface when the app is focused
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      if (document.querySelector('dialog[open]')) return
       const isCmdOrCtrl = e.metaKey || e.ctrlKey
       if (isCmdOrCtrl && e.key.toLowerCase() === 'n') {
         e.preventDefault()
@@ -597,6 +604,7 @@ function LauncherApp(): JSX.Element {
   // `escapeGate` so we never hide the window while that UI is open.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      if (document.querySelector('dialog[open]')) return
       if (e.key === 'Escape') {
         e.preventDefault()
         if (surface === 'ai-chat') {
@@ -790,6 +798,11 @@ function LauncherApp(): JSX.Element {
             />
           )}
         </Suspense>
+        {bootReady && firstInstall !== null && (
+          <Suspense fallback={null}>
+            <PostUpdateReleaseNotes firstInstall={firstInstall} />
+          </Suspense>
+        )}
       </div>
     </div>
   )

@@ -7,20 +7,16 @@ import {
   writeAutoUpdatePreference,
 } from '../shared/updater'
 import { Button } from './ui/primitives'
+import { Markdown } from './ui/Markdown'
+import { ReleaseNotesDialog } from './ReleaseNotesDialog'
+import { CURRENT_APP_VERSION } from './releaseNotes'
 
-const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.2.0'
+const CURRENT_VERSION = CURRENT_APP_VERSION
 
 type Status = AppUpdateStatus
 
-function renderNotes(notes: string): string[] {
-  return notes
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 12)
-}
-
 export function AppUpdateSettings(): JSX.Element {
+  const [releaseNotesVersion, setReleaseNotesVersion] = useState<string | null>(null)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [autoUpdate, setAutoUpdate] = useState<boolean>(() =>
     readAutoUpdatePreference(window.localStorage)
@@ -84,6 +80,20 @@ export function AppUpdateSettings(): JSX.Element {
 
   return (
     <div className="space-y-3">
+      {releaseNotesVersion && (
+        <ReleaseNotesDialog
+          key={releaseNotesVersion}
+          version={releaseNotesVersion}
+          initialNotes={
+            status.kind === 'available' &&
+            status.version === releaseNotesVersion &&
+            status.notes.trim()
+              ? { version: status.version, body: status.notes, publishedAt: null }
+              : undefined
+          }
+          onClose={() => setReleaseNotesVersion(null)}
+        />
+      )}
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.05] px-2 py-1 text-[11px] font-semibold text-ink-2">
           v{CURRENT_VERSION}
@@ -109,10 +119,7 @@ export function AppUpdateSettings(): JSX.Element {
             <Button variant="primary" onClick={() => void install()}>
               Download & Install
             </Button>
-            <Button
-              variant="ghost"
-              onClick={() => openRelease(status.releaseUrl || RELEASES_PAGE_URL)}
-            >
+            <Button variant="ghost" onClick={() => setReleaseNotesVersion(status.version)}>
               What's New
             </Button>
           </>
@@ -156,7 +163,9 @@ export function AppUpdateSettings(): JSX.Element {
               Automatically download updates
             </span>
             <span className="block text-[11px] leading-snug text-ink-4">
-              When enabled, updates will download automatically in the background. When disabled, updates will appear as the first item in your search bar so you can choose when to download.
+              When enabled, updates will download automatically in the background. When disabled,
+              updates will appear as the first item in your search bar so you can choose when to
+              download.
             </span>
             <span className="block text-[11px] leading-snug text-ink-4/80 mt-1">
               Only stable releases are offered — beta builds are skipped automatically.
@@ -171,6 +180,9 @@ export function AppUpdateSettings(): JSX.Element {
         </p>
       )}
 
+      <Button onClick={() => setReleaseNotesVersion(CURRENT_VERSION)}>
+        What’s New in v{CURRENT_VERSION}
+      </Button>
       {status.kind === 'available' && (
         <div className="rounded-tezbar-row border border-white/10 bg-white/[0.03] p-3">
           <div className="mb-1.5 flex items-center justify-between">
@@ -181,12 +193,8 @@ export function AppUpdateSettings(): JSX.Element {
               Update Available
             </span>
           </div>
-          {renderNotes(status.notes).length > 0 ? (
-            <ul className="list-disc space-y-0.5 pl-4 text-[11.5px] leading-snug text-ink-3">
-              {renderNotes(status.notes).map((line, i) => (
-                <li key={i}>{line.replace(/^[-*•]\s*/, '')}</li>
-              ))}
-            </ul>
+          {status.notes.trim() ? (
+            <Markdown text={status.notes} className="max-h-64 overflow-y-auto" />
           ) : (
             <p className="text-[11.5px] text-ink-4">No release notes provided.</p>
           )}
