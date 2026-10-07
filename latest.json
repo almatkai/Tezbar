@@ -1,11 +1,15 @@
 {
-  "version": "v0.2.0-beta.11",
-  "notes": "Tezbar v0.2.0-beta.11: Precompute recommendations on window close, graduated recency bonus, and usage tracking for inline commands.",
-  "pub_date": "2026-10-05T09:15:00.000000+00:00",
+  "version": "0.2.0",
+  "notes": "Windows x64 updater test: signed installer, platform-aware update checks, and compatible-artifact detection. This release includes Windows x64 only.",
+  "pub_date": "2026-10-07T04:36:11.828623+00:00",
   "platforms": {
-    "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNENzSzlrSlR2MjVydEgvL0ZqazAzUS9Wd1czd2VRd1RvQzBuUmt2WElQOGkxdldPVzZxcUZrVnlnVGRIU2I1L1gxUzY0dTl6dHdPUjg5R3FLR3RidlFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMTk0NzI4CWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKUkJ1V3dFYmFFdDFJU3owdm95MU9pMFZjZUUwT2RnaUNaMnM0eVNpT0pMU3ArcUVuZXdoNGlIcURWL29VMElPRENxVFBvcy9ORmtkVE05VkUzb2drRHc9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0-beta.11/Tezbar.app.tar.gz"
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNERzTllJMmliaGpDTE9FZTZ1Qnltd1phRnpjbjNzOVR1ei85U3FKZ3ZTOEEyKzNIUTEvVWZNYjJoZHRRdDloOTQ1a2p0amhQVlhMbHBGdFptdlAxRFFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzQ3NzU2CWZpbGU6VGV6YmFyXzAuMi4wX3g2NC1zZXR1cC5leGUKTzdmczNrekVOeG9tM3l0MHRuTDJQeVNsSTFnenlTMlBCcC95YTJhakR3UTgxNEdsWStMYlpXb0hzd3UvTXdHN1lFZzh0MmxtWTREck9JTUFmbUdoRFE9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0/Tezbar_0.2.0_x64-setup.exe"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNERzTllJMmliaGpDTE9FZTZ1Qnltd1phRnpjbjNzOVR1ei85U3FKZ3ZTOEEyKzNIUTEvVWZNYjJoZHRRdDloOTQ1a2p0amhQVlhMbHBGdFptdlAxRFFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzQ3NzU2CWZpbGU6VGV6YmFyXzAuMi4wX3g2NC1zZXR1cC5leGUKTzdmczNrekVOeG9tM3l0MHRuTDJQeVNsSTFnenlTMlBCcC95YTJhakR3UTgxNEdsWStMYlpXb0hzd3UvTXdHN1lFZzh0MmxtWTREck9JTUFmbUdoRFE9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.0/Tezbar_0.2.0_x64-setup.exe"
     }
   }
 }
