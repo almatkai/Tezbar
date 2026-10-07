@@ -1,15 +1,15 @@
 {
-  "version": "0.2.4",
-  "notes": "## Cleaner update checking\n\n- Replaced the bulky update-check spinner with a thin rounded arc and a subtle track.\n- The **Checking** badge stays steady while the spinner rotates.\n- The spinner respects your reduced-motion preference.",
-  "pub_date": "2026-10-07T06:51:00.325Z",
-  "platforms": {
-    "windows-x86_64-nsis": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE1XOEordWFIMlNyajgvbE9Ua29QSG9mZFpYeWtGb3k2R1R4TG1KWHdOdFZJdVREUlNNRGNodVdaWjRaU01WUVNHc2pUNXdnNUtJcHUwczBPL2NadUFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU1ODMyCWZpbGU6VGV6YmFyXzAuMi40X3g2NC1zZXR1cC5leGUKUUgwbmllTlQ4QkZncTVPMm5SVTF3dFQycjBMb0RUc0ZwaTdveFY4bHo3SnJMeFN5Smt1Ty9QUi90bEUwU2pWUUR0T2wySnhpejg2TWZIcEJ5L0FkQXc9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.4/Tezbar_0.2.4_x64-setup.exe"
-    },
-    "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE1XOEordWFIMlNyajgvbE9Ua29QSG9mZFpYeWtGb3k2R1R4TG1KWHdOdFZJdVREUlNNRGNodVdaWjRaU01WUVNHc2pUNXdnNUtJcHUwczBPL2NadUFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU1ODMyCWZpbGU6VGV6YmFyXzAuMi40X3g2NC1zZXR1cC5leGUKUUgwbmllTlQ4QkZncTVPMm5SVTF3dFQycjBMb0RUc0ZwaTdveFY4bHo3SnJMeFN5Smt1Ty9QUi90bEUwU2pWUUR0T2wySnhpejg2TWZIcEJ5L0FkQXc9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.4/Tezbar_0.2.4_x64-setup.exe"
-    }
-  }
+    "version":  "0.2.5",
+    "notes":  "## Emoji clipboard fix\n\n- Fixed emoji pasted as Cyrillic characters on Windows, such as `😄` appearing as `ЁЯШД`.\n- Clipboard text now uses UTF-8 when copying and reading emoji and other Unicode text.",
+    "pub_date":  "2026-10-07T07:43:13.327Z",
+    "platforms":  {
+                      "windows-x86_64-nsis":  {
+                                                  "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNENjM2U0cmZ6TGViU1BTMlRLenAvd3laRnlVNjIxaFRWUUZPaDFhZm1IREl0QW9LZ01ITXQ5cnpVdDdPbDdqcWZiNVBUL3hYT0Q2eU96b1JWbGNLUndjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU4OTY4CWZpbGU6VGV6YmFyXzAuMi41X3g2NC1zZXR1cC5leGUKUVVTaWtwR1I3dEMxSE5yM3F3d1N6azdwUVVYb1d2d282SGg3c3RqcmoyNDNFdjBLbFhNRUZFNGsvVWhNSkVndWVJenJBOUYyQWVETzdvenhTQkkzREE9PQo=",
+                                                  "url":  "https://github.com/almatkai/Tezbar/releases/download/v0.2.5/Tezbar_0.2.5_x64-setup.exe"
+                                              },
+                      "windows-x86_64":  {
+                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNENjM2U0cmZ6TGViU1BTMlRLenAvd3laRnlVNjIxaFRWUUZPaDFhZm1IREl0QW9LZ01ITXQ5cnpVdDdPbDdqcWZiNVBUL3hYT0Q2eU96b1JWbGNLUndjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU4OTY4CWZpbGU6VGV6YmFyXzAuMi41X3g2NC1zZXR1cC5leGUKUVVTaWtwR1I3dEMxSE5yM3F3d1N6azdwUVVYb1d2d282SGg3c3RqcmoyNDNFdjBLbFhNRUZFNGsvVWhNSkVndWVJenJBOUYyQWVETzdvenhTQkkzREE9PQo=",
+                                             "url":  "https://github.com/almatkai/Tezbar/releases/download/v0.2.5/Tezbar_0.2.5_x64-setup.exe"
+                                         }
+                  }
 }
