@@ -3995,8 +3995,17 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Ready = event {
+                // Place the initially hidden launcher before showing it on
+                // every launch, including the new process after an update.
+                if let Err(error) = restore_main_window(app) {
+                    log::error!("failed to show Tezbar on startup: {error}");
+                }
+            }
+        });
 }
 
 #[cfg(test)]
