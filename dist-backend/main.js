@@ -168,6 +168,12 @@ function readClipboardSnapshot() {
     return { text: "", filePaths: [], hasImage: false, changeCount: 0 };
   }
 }
+function windowsClipboardWriteTextScript() {
+  return "[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); Set-Clipboard -Value ([Console]::In.ReadToEnd())";
+}
+function windowsClipboardReadTextScript() {
+  return "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::Write((Get-Clipboard -Raw))";
+}
 var import_node_path, import_node_os, import_node_child_process, import_node_fs, import_node_util, execFileAsync, backendWebContents, IpcMain, ipcMain, app, shell, clipboard, dialog, session, screen, desktopCapturer, nativeImage, globalShortcut, BrowserWindow, systemPreferences;
 var init_desktop_runtime = __esm({
   "src/main/desktop-runtime.ts"() {
@@ -299,7 +305,7 @@ var init_desktop_runtime = __esm({
           if (process.platform === "win32") {
             return (0, import_node_child_process.execFileSync)(
               "powershell.exe",
-              ["-NoProfile", "-NonInteractive", "-Command", "Get-Clipboard -Raw"],
+              ["-NoProfile", "-NonInteractive", "-Command", windowsClipboardReadTextScript()],
               { encoding: "utf8", windowsHide: true, timeout: 3e3 }
             );
           }
@@ -315,7 +321,7 @@ var init_desktop_runtime = __esm({
               "-NoProfile",
               "-NonInteractive",
               "-Command",
-              "Set-Clipboard -Value ([Console]::In.ReadToEnd())"
+              windowsClipboardWriteTextScript()
             ], { windowsHide: true });
             child2.stdin.write(text3);
             child2.stdin.end();
@@ -1850,7 +1856,7 @@ var init_openai = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/tslib.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/tslib.mjs
 function __classPrivateFieldSet(receiver, state, value, kind, f) {
   if (kind === "m")
     throw new TypeError("Private method is not writable");
@@ -1868,14 +1874,14 @@ function __classPrivateFieldGet(receiver, state, kind, f) {
   return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
 }
 var init_tslib = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/tslib.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/tslib.mjs"() {
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs
 var uuid4;
 var init_uuid = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs"() {
     uuid4 = function() {
       const { crypto } = globalThis;
       if (crypto?.randomUUID) {
@@ -1889,7 +1895,7 @@ var init_uuid = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/errors.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/errors.mjs
 function isAbortError(err) {
   return typeof err === "object" && err !== null && // Spec-compliant fetch implementations
   ("name" in err && err.name === "AbortError" || // Expo fetch
@@ -1897,7 +1903,7 @@ function isAbortError(err) {
 }
 var castToError;
 var init_errors = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/errors.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/errors.mjs"() {
     castToError = (err) => {
       if (err instanceof Error)
         return err;
@@ -1925,10 +1931,10 @@ var init_errors = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/error.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/error.mjs
 var AnthropicError, APIError, APIUserAbortError, APIConnectionError, APIConnectionTimeoutError, BadRequestError, AuthenticationError, PermissionDeniedError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError;
 var init_error = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/error.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/error.mjs"() {
     init_errors();
     AnthropicError = class extends Error {
     };
@@ -2023,7 +2029,7 @@ var init_error = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs
 function maybeObj(x) {
   if (typeof x !== "object") {
     return {};
@@ -2042,7 +2048,7 @@ function hasOwn(obj, key) {
 }
 var startsWithSchemeRegexp, isAbsoluteURL, isArray, isReadonlyArray, validatePositiveInteger, safeJSON;
 var init_values = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs"() {
     init_error();
     startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
     isAbsoluteURL = (url) => {
@@ -2069,23 +2075,23 @@ var init_values = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs
 var sleep;
 var init_sleep = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs"() {
     sleep = (ms) => new Promise((resolve6) => setTimeout(resolve6, ms));
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/version.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/version.mjs
 var VERSION;
 var init_version = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/version.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/version.mjs"() {
     VERSION = "0.90.0";
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
 function getDetectedPlatform() {
   if (typeof Deno !== "undefined" && Deno.build != null) {
     return "deno";
@@ -2123,7 +2129,7 @@ function getBrowserInfo() {
 }
 var isRunningInBrowser, getPlatformProperties, normalizeArch, normalizePlatform, _platformHeaders, getPlatformHeaders;
 var init_detect_platform = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs"() {
     init_version();
     isRunningInBrowser = () => {
       return (
@@ -2224,7 +2230,7 @@ var init_detect_platform = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/shims.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/shims.mjs
 function getDefaultFetch() {
   if (typeof fetch !== "undefined") {
     return fetch;
@@ -2296,14 +2302,14 @@ async function CancelReadableStream(stream) {
   await cancelPromise;
 }
 var init_shims = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/shims.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/shims.mjs"() {
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/request-options.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/request-options.mjs
 var FallbackEncoder;
 var init_request_options = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/request-options.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/request-options.mjs"() {
     FallbackEncoder = ({ headers, body }) => {
       return {
         bodyHeaders: {
@@ -2315,7 +2321,7 @@ var init_request_options = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs
 function stringifyQuery(query) {
   return Object.entries(query).filter(([_, value]) => typeof value !== "undefined").map(([key, value]) => {
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -2328,12 +2334,12 @@ function stringifyQuery(query) {
   }).join("&");
 }
 var init_query = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs"() {
     init_error();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs
 function concatBytes(buffers) {
   let length = 0;
   for (const buffer of buffers) {
@@ -2357,11 +2363,11 @@ function decodeUTF8(bytes) {
 }
 var encodeUTF8_, decodeUTF8_;
 var init_bytes = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs"() {
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs
 function findNewlineIndex(buffer, startIndex) {
   const newline = 10;
   const carriage = 13;
@@ -2393,7 +2399,7 @@ function findDoubleNewlineIndex(buffer) {
 }
 var _LineDecoder_buffer, _LineDecoder_carriageReturnIndex, LineDecoder;
 var init_line = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs"() {
     init_tslib();
     init_bytes();
     LineDecoder = class {
@@ -2443,7 +2449,7 @@ var init_line = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs
 function noop() {
 }
 function makeLogFn(fnLevel, logger, logLevel) {
@@ -2474,7 +2480,7 @@ function loggerFor(client) {
 }
 var levelNumbers, parseLogLevel, noopLogger, cachedLoggers, formatRequestDetails;
 var init_log = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs"() {
     init_values();
     levelNumbers = {
       off: 0,
@@ -2522,7 +2528,7 @@ var init_log = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/streaming.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/streaming.mjs
 async function* _iterSSEMessages(response, controller) {
   if (!response.body) {
     controller.abort();
@@ -2577,7 +2583,7 @@ function partition(str2, delimiter3) {
 }
 var _Stream_client, Stream, SSEDecoder;
 var init_streaming = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/streaming.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/streaming.mjs"() {
     init_tslib();
     init_error();
     init_shims();
@@ -2787,7 +2793,7 @@ var init_streaming = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/parse.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/parse.mjs
 async function defaultParseResponse(client, props) {
   const { response, requestLogID, retryOfRequestLogID, startTime } = props;
   const body = await (async () => {
@@ -2837,16 +2843,16 @@ function addRequestID(value, response) {
   });
 }
 var init_parse = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/parse.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/parse.mjs"() {
     init_streaming();
     init_log();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/api-promise.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/api-promise.mjs
 var _APIPromise_client, APIPromise;
 var init_api_promise = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/api-promise.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/api-promise.mjs"() {
     init_tslib();
     init_parse();
     APIPromise = class _APIPromise extends Promise {
@@ -2912,10 +2918,10 @@ var init_api_promise = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/pagination.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/pagination.mjs
 var _AbstractPage_client, AbstractPage, PagePromise, Page, PageCursor;
 var init_pagination = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/pagination.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/pagination.mjs"() {
     init_tslib();
     init_error();
     init_parse();
@@ -3046,7 +3052,7 @@ var init_pagination = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/uploads.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/uploads.mjs
 function makeFile(fileBits, fileName, options) {
   checkFileSupport();
   return new File(fileBits, fileName ?? "unknown_file", options);
@@ -3077,7 +3083,7 @@ function supportsFormData(fetchObject) {
 }
 var checkFileSupport, isAsyncIterable, multipartFormRequestOptions, supportsFormDataMap, createForm, isNamedBlob, addFormValue;
 var init_uploads = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/uploads.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/uploads.mjs"() {
     init_shims();
     checkFileSupport = () => {
       if (typeof File === "undefined") {
@@ -3130,7 +3136,7 @@ var init_uploads = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/to-file.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/to-file.mjs
 async function toFile(value, name, options) {
   checkFileSupport();
   value = await value;
@@ -3184,7 +3190,7 @@ function propsForError(value) {
 }
 var isBlobLike, isFileLike, isResponseLike;
 var init_to_file = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/to-file.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/to-file.mjs"() {
     init_uploads();
     init_uploads();
     isBlobLike = (value) => value != null && typeof value === "object" && typeof value.size === "number" && typeof value.type === "string" && typeof value.text === "function" && typeof value.slice === "function" && typeof value.arrayBuffer === "function";
@@ -3193,23 +3199,23 @@ var init_to_file = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/uploads.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/uploads.mjs
 var init_uploads2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/uploads.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/uploads.mjs"() {
     init_to_file();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/shared.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/shared.mjs
 var init_shared = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/shared.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/shared.mjs"() {
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/resource.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/resource.mjs
 var APIResource;
 var init_resource = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/resource.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/resource.mjs"() {
     APIResource = class {
       constructor(client) {
         this._client = client;
@@ -3218,7 +3224,7 @@ var init_resource = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/headers.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/headers.mjs
 function* iterateHeaders(headers) {
   if (!headers)
     return;
@@ -3259,7 +3265,7 @@ function* iterateHeaders(headers) {
 }
 var brand_privateNullableHeaders, buildHeaders;
 var init_headers = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/headers.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/headers.mjs"() {
     init_values();
     brand_privateNullableHeaders = /* @__PURE__ */ Symbol.for("brand.privateNullableHeaders");
     buildHeaders = (newHeaders) => {
@@ -3287,13 +3293,13 @@ var init_headers = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs
 function encodeURIPath(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 var EMPTY, createPathTagFunction, path;
 var init_path = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs"() {
     init_error();
     EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
     createPathTagFunction = (pathEncoder = encodeURIPath) => function path8(statics, ...params) {
@@ -3348,10 +3354,10 @@ ${underline}`);
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs
 var Environments;
 var init_environments = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -3491,7 +3497,7 @@ var init_environments = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs
 function wasCreatedByStainlessHelper(value) {
   return typeof value === "object" && value !== null && SDK_HELPER_SYMBOL in value;
 }
@@ -3534,15 +3540,15 @@ function stainlessHelperHeaderFromFile(file) {
 }
 var SDK_HELPER_SYMBOL;
 var init_stainless_helper_header = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs"() {
     SDK_HELPER_SYMBOL = /* @__PURE__ */ Symbol("anthropic.sdk.stainlessHelper");
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs
 var Files;
 var init_files = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -3664,10 +3670,10 @@ var init_files = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs
 var Models;
 var init_models = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -3725,10 +3731,10 @@ var init_models = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs
 var UserProfiles;
 var init_user_profiles = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -3844,10 +3850,10 @@ var init_user_profiles = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs
 var Versions;
 var init_versions = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -3881,10 +3887,10 @@ var init_versions = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs
 var Agents;
 var init_agents = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs"() {
     init_resource();
     init_versions();
     init_versions();
@@ -4012,17 +4018,17 @@ var init_agents = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/error.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/error.mjs
 var init_error2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/error.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/error.mjs"() {
     init_error();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/constants.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/constants.mjs
 var MODEL_NONSTREAMING_TOKENS;
 var init_constants = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/constants.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/constants.mjs"() {
     MODEL_NONSTREAMING_TOKENS = {
       "claude-opus-4-20250514": 8192,
       "claude-opus-4-0": 8192,
@@ -4036,7 +4042,7 @@ var init_constants = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs
 function getOutputFormat(params) {
   return params?.output_format ?? params?.output_config?.format;
 }
@@ -4109,15 +4115,15 @@ function parseBetaOutputFormat(params, content) {
   }
 }
 var init_beta_parser = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs"() {
     init_error();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs
 var tokenize, strip, unstrip, generate, partialParse;
 var init_parser = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs"() {
     tokenize = (input) => {
       let current = 0;
       let tokens2 = [];
@@ -4339,14 +4345,14 @@ var init_parser = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/streaming.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/streaming.mjs
 var init_streaming2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/streaming.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/streaming.mjs"() {
     init_streaming();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs
 function tracksToolInput(content) {
   return content.type === "tool_use" || content.type === "server_tool_use" || content.type === "mcp_tool_use";
 }
@@ -4354,7 +4360,7 @@ function checkNever(x) {
 }
 var _BetaMessageStream_instances, _BetaMessageStream_currentMessageSnapshot, _BetaMessageStream_params, _BetaMessageStream_connectedPromise, _BetaMessageStream_resolveConnectedPromise, _BetaMessageStream_rejectConnectedPromise, _BetaMessageStream_endPromise, _BetaMessageStream_resolveEndPromise, _BetaMessageStream_rejectEndPromise, _BetaMessageStream_listeners, _BetaMessageStream_ended, _BetaMessageStream_errored, _BetaMessageStream_aborted, _BetaMessageStream_catchingPromiseCreated, _BetaMessageStream_response, _BetaMessageStream_request_id, _BetaMessageStream_logger, _BetaMessageStream_getFinalMessage, _BetaMessageStream_getFinalText, _BetaMessageStream_handleError, _BetaMessageStream_beginRequest, _BetaMessageStream_addStreamEvent, _BetaMessageStream_endRequest, _BetaMessageStream_accumulateMessage, JSON_BUF_PROPERTY, BetaMessageStream;
 var init_BetaMessageStream = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs"() {
     init_tslib();
     init_parser();
     init_error2();
@@ -4948,10 +4954,10 @@ var init_BetaMessageStream = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs
 var ToolError;
 var init_ToolError = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs"() {
     ToolError = class extends Error {
       constructor(content) {
         const message = typeof content === "string" ? content : content.map((block) => {
@@ -4967,10 +4973,10 @@ var init_ToolError = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs
 var DEFAULT_TOKEN_THRESHOLD, DEFAULT_SUMMARY_PROMPT;
 var init_CompactionControl = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs"() {
     DEFAULT_TOKEN_THRESHOLD = 1e5;
     DEFAULT_SUMMARY_PROMPT = `You have been working on the task described above but have not yet completed it. Write a continuation summary that will allow you (or another instance of yourself) to resume work efficiently in a future context window where the conversation history will be replaced with this summary. Your summary should be structured, concise, and actionable. Include:
 1. Task Overview
@@ -4998,7 +5004,7 @@ Wrap your summary in <summary></summary> tags.`;
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs
 function promiseWithResolvers() {
   let resolve6;
   let reject;
@@ -5056,7 +5062,7 @@ async function generateToolResponse(params, lastMessage = params.messages.at(-1)
 }
 var _BetaToolRunner_instances, _BetaToolRunner_consumed, _BetaToolRunner_mutated, _BetaToolRunner_state, _BetaToolRunner_options, _BetaToolRunner_message, _BetaToolRunner_toolResponse, _BetaToolRunner_completion, _BetaToolRunner_iterationCount, _BetaToolRunner_checkAndCompact, _BetaToolRunner_generateToolResponse, BetaToolRunner;
 var init_BetaToolRunner = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs"() {
     init_tslib();
     init_ToolError();
     init_error();
@@ -5350,10 +5356,10 @@ var init_BetaToolRunner = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs
 var JSONLDecoder;
 var init_jsonl = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs"() {
     init_error();
     init_shims();
     init_line();
@@ -5390,10 +5396,10 @@ var init_jsonl = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs
 var Batches;
 var init_batches = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -5593,7 +5599,7 @@ var init_batches = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs
 function transformOutputFormat(params) {
   if (!params.output_format) {
     return params;
@@ -5612,7 +5618,7 @@ function transformOutputFormat(params) {
 }
 var DEPRECATED_MODELS, MODELS_TO_WARN_WITH_THINKING_ENABLED, Messages;
 var init_messages = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs"() {
     init_error2();
     init_resource();
     init_constants();
@@ -5745,10 +5751,10 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs
 var Events;
 var init_events = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -5839,10 +5845,10 @@ var init_events = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs
 var Resources;
 var init_resources = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -5972,10 +5978,10 @@ var init_resources = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs
 var Sessions;
 var init_sessions = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs"() {
     init_resource();
     init_events();
     init_events();
@@ -6126,10 +6132,10 @@ var init_sessions = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs
 var Versions2;
 var init_versions2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -6227,10 +6233,10 @@ var init_versions2 = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs
 var Skills;
 var init_skills = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs"() {
     init_resource();
     init_versions2();
     init_versions2();
@@ -6325,10 +6331,10 @@ var init_skills = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs
 var Credentials;
 var init_credentials = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -6481,10 +6487,10 @@ var init_credentials = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs
 var Vaults;
 var init_vaults = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs"() {
     init_resource();
     init_credentials();
     init_credentials();
@@ -6630,10 +6636,10 @@ var init_vaults = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs
 var Beta;
 var init_beta = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs"() {
     init_resource();
     init_environments();
     init_environments();
@@ -6679,10 +6685,10 @@ var init_beta = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/completions.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/completions.mjs
 var Completions;
 var init_completions = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/completions.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/completions.mjs"() {
     init_resource();
     init_headers();
     Completions = class extends APIResource {
@@ -6703,7 +6709,7 @@ var init_completions = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/parser.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/parser.mjs
 function getOutputFormat2(params) {
   return params?.output_config?.format;
 }
@@ -6764,12 +6770,12 @@ function parseOutputFormat(params, content) {
   }
 }
 var init_parser2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/parser.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/parser.mjs"() {
     init_error();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs
 function tracksToolInput2(content) {
   return content.type === "tool_use" || content.type === "server_tool_use";
 }
@@ -6777,7 +6783,7 @@ function checkNever2(x) {
 }
 var _MessageStream_instances, _MessageStream_currentMessageSnapshot, _MessageStream_params, _MessageStream_connectedPromise, _MessageStream_resolveConnectedPromise, _MessageStream_rejectConnectedPromise, _MessageStream_endPromise, _MessageStream_resolveEndPromise, _MessageStream_rejectEndPromise, _MessageStream_listeners, _MessageStream_ended, _MessageStream_errored, _MessageStream_aborted, _MessageStream_catchingPromiseCreated, _MessageStream_response, _MessageStream_request_id, _MessageStream_logger, _MessageStream_getFinalMessage, _MessageStream_getFinalText, _MessageStream_handleError, _MessageStream_beginRequest, _MessageStream_addStreamEvent, _MessageStream_endRequest, _MessageStream_accumulateMessage, JSON_BUF_PROPERTY2, MessageStream;
 var init_MessageStream = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs"() {
     init_tslib();
     init_errors();
     init_error2();
@@ -7346,10 +7352,10 @@ var init_MessageStream = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs
 var Batches2;
 var init_batches2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -7498,10 +7504,10 @@ var init_batches2 = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs
 var Messages2, DEPRECATED_MODELS2, MODELS_TO_WARN_WITH_THINKING_ENABLED2;
 var init_messages2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs"() {
     init_resource();
     init_headers();
     init_stainless_helper_header();
@@ -7628,10 +7634,10 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/models.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/models.mjs
 var Models2;
 var init_models2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/models.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/models.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -7674,9 +7680,9 @@ var init_models2 = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/index.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/index.mjs
 var init_resources2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/index.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/index.mjs"() {
     init_shared();
     init_beta();
     init_completions();
@@ -7685,10 +7691,10 @@ var init_resources2 = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs
 var readEnv;
 var init_env = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs"() {
     readEnv = (env) => {
       if (typeof globalThis.process !== "undefined") {
         return globalThis.process.env?.[env]?.trim() || void 0;
@@ -7701,10 +7707,10 @@ var init_env = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/client.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/client.mjs
 var _BaseAnthropic_instances, _a, _BaseAnthropic_encoder, _BaseAnthropic_baseURLOverridden, HUMAN_PROMPT, AI_PROMPT, BaseAnthropic, Anthropic;
 var init_client = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/client.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/client.mjs"() {
     init_tslib();
     init_uuid();
     init_values();
@@ -8197,9 +8203,9 @@ var init_client = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/index.mjs
+// ../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/index.mjs
 var init_sdk = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/index.mjs"() {
+  "../Tezbar/node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/index.mjs"() {
     init_client();
     init_uploads2();
     init_api_promise();
@@ -20367,7 +20373,7 @@ var init_extensionsProvider = __esm({
   }
 });
 
-// node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs
+// ../Tezbar/node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs
 function isArray2(value) {
   return !Array.isArray ? getTag(value) === "[object Array]" : Array.isArray(value);
 }
@@ -21035,7 +21041,7 @@ function removeFromInvertedIndex(index, docIdx) {
 }
 var INCORRECT_INDEX_TYPE, LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY, PATTERN_LENGTH_TOO_LARGE, MISSING_KEY_PROPERTY, INVALID_KEY_WEIGHT_VALUE, hasOwn2, KeyStore, MatchOptions, BasicOptions, FuzzyOptions, AdvancedOptions, Config, SPACE, FuseIndex, MAX_BITS, NON_DECOMPOSABLE_MAP, NON_DECOMPOSABLE_RE, stripDiacritics, BitapSearch, BaseMatch, ExactMatch, InverseExactMatch, PrefixExactMatch, InversePrefixExactMatch, SuffixExactMatch, InverseSuffixExactMatch, FuzzyMatch, IncludeMatch, searchers, searchersLen, ESCAPED_PIPE, OR_TOKEN, MultiMatchSet, ExtendedSearch, registeredSearchers, LogicalOperator, KeyType, isExpression, isPath, isLeaf, convertToExplicit, MaxHeap, WORD, Fuse, TokenSearch;
 var init_fuse = __esm({
-  "node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs"() {
+  "../Tezbar/node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs"() {
     INCORRECT_INDEX_TYPE = "Incorrect 'index' type";
     LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY = (key) => `Invalid value for key ${key}`;
     PATTERN_LENGTH_TOO_LARGE = (max) => `Pattern length exceeds max of ${max}.`;
@@ -35330,7 +35336,7 @@ function materializePiPolicy() {
     const runtimeDir = (0, import_node_path37.join)(root, "runtime");
     const extensionPath = (0, import_node_path37.join)(runtimeDir, "raymes-pi-policy.ts");
     (0, import_node_fs35.mkdirSync)(runtimeDir, { recursive: true });
-    (0, import_node_fs35.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\n\ntype ToolCallEvent = {\n  toolName: string\n  input?: Record<string, unknown> & { command?: unknown }\n}\n\ntype ToolCallResult = {\n  block?: boolean\n  reason?: string\n}\n\ntype ExtensionContext = {\n  ui: {\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\n  }\n}\n\ntype ExtensionAPI = {\n  on(\n    event: 'tool_call',\n    handler: (\n      event: ToolCallEvent,\n      ctx: ExtensionContext\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\n  ): void\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\n  registerTool(definition: {\n    name: string\n    label: string\n    description: string\n    promptSnippet?: string\n    promptGuidelines?: string[]\n    parameters: unknown\n    execute: (\n      toolCallId: string,\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\n      signal?: AbortSignal\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\n  }): void\n}\n\ntype RaymesPiProviderConfig = {\n  baseUrl: string\n  apiKey: string\n  api: 'openai-completions' | 'anthropic-messages'\n  authHeader?: boolean\n  models: Array<{\n    id: string\n    name: string\n    reasoning: boolean\n    input: Array<'text' | 'image'>\n    cost: {\n      input: number\n      output: number\n      cacheRead: number\n      cacheWrite: number\n    }\n    contextWindow: number\n    maxTokens: number\n    compat?: Record<string, unknown>\n  }>\n}\n\nconst TOKENROUTER_BASE_URL = 'https://api.tokenrouter.com/v1'\nconst TOKENROUTER_MODEL_ID = 'moonshotai/kimi-k3-free'\n\nfunction registerTokenRouterProvider(pi: ExtensionAPI): void {\n  pi.registerProvider('tokenrouter', {\n    baseUrl: TOKENROUTER_BASE_URL,\n    apiKey: '$TOKENROUTER_API_KEY',\n    authHeader: true,\n    api: 'openai-completions',\n    models: [\n      {\n        id: TOKENROUTER_MODEL_ID,\n        name: 'Kimi K3 Free (TokenRouter)',\n        reasoning: false,\n        input: ['text'],\n        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },\n        contextWindow: 128000,\n        maxTokens: 8192,\n        compat: {\n          supportsStore: false,\n          supportsDeveloperRole: false,\n          supportsReasoningEffort: false,\n          maxTokensField: 'max_tokens',\n        },\n      },\n    ],\n  })\n}\n\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\n  if (!raw) return\n  try {\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\n    pi.registerProvider('tezbar', parsed)\n  } catch {\n    /* Ignore malformed bridge env so pi can still start with its own config. */\n  }\n}\n\nfunction hasUnsafeShellSyntax(command: string): boolean {\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\n}\n\nfunction persistedAllowedCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter(\n          (entry): entry is string =>\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\n        )\n        .map((entry) => entry.toLowerCase())\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction persistedAllowedExactCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter((entry): entry is string => typeof entry === 'string')\n        .map((entry) => entry.trim())\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction executableName(command: string): string {\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\n}\n\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\n\nexport function isPersistentlyAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string>\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\n    return false\n  }\n\n  const commands = trimmed\n    .split(/\\s*(?:&&|\\|)\\s*/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (commands.length === 0) return false\n\n  return commands.every((part) => {\n    if (isSimpleCd(part)) return true\n    const executable = executableName(part)\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\n  })\n}\n\nfunction isSimpleCd(command: string): boolean {\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\n}\n\nfunction isSafeGitStatus(command: string): boolean {\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\n}\n\nfunction isSafeGitClone(command: string): boolean {\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\n}\n\nfunction isSafeDirectoryRead(command: string): boolean {\n  const trimmed = command.trim()\n  return (\n    trimmed === 'pwd' ||\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\n  )\n}\n\nexport type IndexedSearchKind = 'launcher' | 'deep'\n\nconst MAJOR_HOME_FOLDER_PATTERN =\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\n\nfunction hasBroadHomeScope(command: string): boolean {\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\n    return true\n  }\n\n  const roots = new Set<string>()\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\n    const root = match[1]?.toLowerCase()\n    if (root) roots.add(root)\n  }\n  return roots.size >= 2\n}\n\n/**\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\n * inside the active project remain valid shell work.\n */\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\n  const trimmed = command.trim()\n  if (!trimmed) return null\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\n  if (!hasBroadHomeScope(trimmed)) return null\n\n  if (\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\n  ) {\n    return 'deep'\n  }\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\n  return null\n}\n\nexport function isAutoAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed) return false\n  if (allowedExactCommands.has(trimmed)) return true\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\n  if (hasUnsafeShellSyntax(trimmed)) return false\n\n  const parts = trimmed\n    .split(/\\s+&&\\s+/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (parts.length === 0) return false\n\n  const commandToRun = parts[parts.length - 1]\n  if (\n    !commandToRun ||\n    !(\n      isSafeGitStatus(commandToRun) ||\n      isSafeGitClone(commandToRun) ||\n      isSafeDirectoryRead(commandToRun)\n    )\n  ) {\n    return false\n  }\n\n  return parts.slice(0, -1).every(isSimpleCd)\n}\n\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\n  registerTokenRouterProvider(pi)\n  registerRaymesProvider(pi)\n\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\n  const hasIndexedSearchTools = Boolean(\n    knowledgeEndpoint &&\n    knowledgeToken &&\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\n  )\n  let launcherSearchAttempted = false\n  let deepSearchAttempted = false\n\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\n    pi.registerTool({\n      name: 'launcher_search',\n      label: 'Search Tezbar',\n      description:\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\n      promptGuidelines: [\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({\n          description: 'The file, app, command, note, or other local item to find',\n        }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          results?: Array<{\n            id: string\n            title: string\n            subtitle: string\n            category: string\n            score: number\n            target?: string\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\n        const results = payload.results ?? []\n        const text =\n          results.length === 0\n            ? 'No Tezbar launcher results matched this query.'\n            : results\n                .map((result, index) => {\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { results } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_search',\n      label: 'Deep Search PC Knowledge',\n      description:\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\n      promptSnippet:\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\n      promptGuidelines: [\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint, {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\n          signal,\n        })\n        const result = (await response.json()) as {\n          hits?: Array<{\n            chunkId: string\n            path: string\n            pageNumber?: number\n            text: string\n            score: number\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\n        const hits = result.hits ?? []\n        const text =\n          hits.length === 0\n            ? 'No indexed knowledge matched this query.'\n            : hits\n                .map((hit, index) => {\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { hits } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_read',\n      label: 'Read PC Knowledge Result',\n      description:\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\n      parameters: Type.Object({\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\n        maxChars: Type.Optional(\n          Type.Number({\n            minimum: 500,\n            maximum: 50_000,\n            description: 'Maximum text characters to return',\n          })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({\n            resultId: params.resultId ?? '',\n            maxChars: params.maxChars ?? 12_000,\n          }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          result?: { path: string; pageNumber?: number; text: string }\n          error?: string\n        }\n        if (!response.ok || !payload.result) {\n          throw new Error(payload.error || 'Knowledge result could not be read')\n        }\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\n        return {\n          content: [\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\n          ],\n          details: payload.result,\n        }\n      },\n    })\n  }\n\n  pi.on('tool_call', async (event, ctx) => {\n    if (event.toolName === 'launcher_search') {\n      launcherSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName === 'pc_search') {\n      deepSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName !== 'bash') return undefined\n\n    const command = event.input?.command\n    if (typeof command !== 'string') {\n      return { block: true, reason: 'Missing bash command.' }\n    }\n\n    if (hasIndexedSearchTools) {\n      const preferredSearch = preferredIndexedSearchForBash(command)\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\n        }\n      }\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\n        }\n      }\n    }\n\n    if (isAutoAllowedBash(command)) return undefined\n\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\n    if (confirmed) return undefined\n\n    return { block: true, reason: 'Bash command was not approved.' }\n  })\n}\n", "utf8");
+    (0, import_node_fs35.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\r\n\r\ntype ToolCallEvent = {\r\n  toolName: string\r\n  input?: Record<string, unknown> & { command?: unknown }\r\n}\r\n\r\ntype ToolCallResult = {\r\n  block?: boolean\r\n  reason?: string\r\n}\r\n\r\ntype ExtensionContext = {\r\n  ui: {\r\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\r\n  }\r\n}\r\n\r\ntype ExtensionAPI = {\r\n  on(\r\n    event: 'tool_call',\r\n    handler: (\r\n      event: ToolCallEvent,\r\n      ctx: ExtensionContext\r\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\r\n  ): void\r\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\r\n  registerTool(definition: {\r\n    name: string\r\n    label: string\r\n    description: string\r\n    promptSnippet?: string\r\n    promptGuidelines?: string[]\r\n    parameters: unknown\r\n    execute: (\r\n      toolCallId: string,\r\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\r\n      signal?: AbortSignal\r\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\r\n  }): void\r\n}\r\n\r\ntype RaymesPiProviderConfig = {\r\n  baseUrl: string\r\n  apiKey: string\r\n  api: 'openai-completions' | 'anthropic-messages'\r\n  authHeader?: boolean\r\n  models: Array<{\r\n    id: string\r\n    name: string\r\n    reasoning: boolean\r\n    input: Array<'text' | 'image'>\r\n    cost: {\r\n      input: number\r\n      output: number\r\n      cacheRead: number\r\n      cacheWrite: number\r\n    }\r\n    contextWindow: number\r\n    maxTokens: number\r\n    compat?: Record<string, unknown>\r\n  }>\r\n}\r\n\r\nconst TOKENROUTER_BASE_URL = 'https://api.tokenrouter.com/v1'\r\nconst TOKENROUTER_MODEL_ID = 'moonshotai/kimi-k3-free'\r\n\r\nfunction registerTokenRouterProvider(pi: ExtensionAPI): void {\r\n  pi.registerProvider('tokenrouter', {\r\n    baseUrl: TOKENROUTER_BASE_URL,\r\n    apiKey: '$TOKENROUTER_API_KEY',\r\n    authHeader: true,\r\n    api: 'openai-completions',\r\n    models: [\r\n      {\r\n        id: TOKENROUTER_MODEL_ID,\r\n        name: 'Kimi K3 Free (TokenRouter)',\r\n        reasoning: false,\r\n        input: ['text'],\r\n        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },\r\n        contextWindow: 128000,\r\n        maxTokens: 8192,\r\n        compat: {\r\n          supportsStore: false,\r\n          supportsDeveloperRole: false,\r\n          supportsReasoningEffort: false,\r\n          maxTokensField: 'max_tokens',\r\n        },\r\n      },\r\n    ],\r\n  })\r\n}\r\n\r\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\r\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\r\n  if (!raw) return\r\n  try {\r\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\r\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\r\n    pi.registerProvider('tezbar', parsed)\r\n  } catch {\r\n    /* Ignore malformed bridge env so pi can still start with its own config. */\r\n  }\r\n}\r\n\r\nfunction hasUnsafeShellSyntax(command: string): boolean {\r\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\r\n}\r\n\r\nfunction persistedAllowedCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter(\r\n          (entry): entry is string =>\r\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\r\n        )\r\n        .map((entry) => entry.toLowerCase())\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction persistedAllowedExactCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter((entry): entry is string => typeof entry === 'string')\r\n        .map((entry) => entry.trim())\r\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction executableName(command: string): string {\r\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\r\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\r\n}\r\n\r\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\r\n\r\nexport function isPersistentlyAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string>\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\r\n    return false\r\n  }\r\n\r\n  const commands = trimmed\r\n    .split(/\\s*(?:&&|\\|)\\s*/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (commands.length === 0) return false\r\n\r\n  return commands.every((part) => {\r\n    if (isSimpleCd(part)) return true\r\n    const executable = executableName(part)\r\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\r\n  })\r\n}\r\n\r\nfunction isSimpleCd(command: string): boolean {\r\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitStatus(command: string): boolean {\r\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitClone(command: string): boolean {\r\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeDirectoryRead(command: string): boolean {\r\n  const trimmed = command.trim()\r\n  return (\r\n    trimmed === 'pwd' ||\r\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\r\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\r\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\r\n  )\r\n}\r\n\r\nexport type IndexedSearchKind = 'launcher' | 'deep'\r\n\r\nconst MAJOR_HOME_FOLDER_PATTERN =\r\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\r\n\r\nfunction hasBroadHomeScope(command: string): boolean {\r\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\r\n    return true\r\n  }\r\n\r\n  const roots = new Set<string>()\r\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\r\n    const root = match[1]?.toLowerCase()\r\n    if (root) roots.add(root)\r\n  }\r\n  return roots.size >= 2\r\n}\r\n\r\n/**\r\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\r\n * inside the active project remain valid shell work.\r\n */\r\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return null\r\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\r\n  if (!hasBroadHomeScope(trimmed)) return null\r\n\r\n  if (\r\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\r\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\r\n  ) {\r\n    return 'deep'\r\n  }\r\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\r\n  return null\r\n}\r\n\r\nexport function isAutoAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\r\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return false\r\n  if (allowedExactCommands.has(trimmed)) return true\r\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\r\n  if (hasUnsafeShellSyntax(trimmed)) return false\r\n\r\n  const parts = trimmed\r\n    .split(/\\s+&&\\s+/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (parts.length === 0) return false\r\n\r\n  const commandToRun = parts[parts.length - 1]\r\n  if (\r\n    !commandToRun ||\r\n    !(\r\n      isSafeGitStatus(commandToRun) ||\r\n      isSafeGitClone(commandToRun) ||\r\n      isSafeDirectoryRead(commandToRun)\r\n    )\r\n  ) {\r\n    return false\r\n  }\r\n\r\n  return parts.slice(0, -1).every(isSimpleCd)\r\n}\r\n\r\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\r\n  registerTokenRouterProvider(pi)\r\n  registerRaymesProvider(pi)\r\n\r\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\r\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\r\n  const hasIndexedSearchTools = Boolean(\r\n    knowledgeEndpoint &&\r\n    knowledgeToken &&\r\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\r\n  )\r\n  let launcherSearchAttempted = false\r\n  let deepSearchAttempted = false\r\n\r\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\r\n    pi.registerTool({\r\n      name: 'launcher_search',\r\n      label: 'Search Tezbar',\r\n      description:\r\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\r\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\r\n      promptGuidelines: [\r\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\r\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\r\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({\r\n          description: 'The file, app, command, note, or other local item to find',\r\n        }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          results?: Array<{\r\n            id: string\r\n            title: string\r\n            subtitle: string\r\n            category: string\r\n            score: number\r\n            target?: string\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\r\n        const results = payload.results ?? []\r\n        const text =\r\n          results.length === 0\r\n            ? 'No Tezbar launcher results matched this query.'\r\n            : results\r\n                .map((result, index) => {\r\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\r\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { results } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_search',\r\n      label: 'Deep Search PC Knowledge',\r\n      description:\r\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\r\n      promptSnippet:\r\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\r\n      promptGuidelines: [\r\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\r\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\r\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\r\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint, {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\r\n          signal,\r\n        })\r\n        const result = (await response.json()) as {\r\n          hits?: Array<{\r\n            chunkId: string\r\n            path: string\r\n            pageNumber?: number\r\n            text: string\r\n            score: number\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\r\n        const hits = result.hits ?? []\r\n        const text =\r\n          hits.length === 0\r\n            ? 'No indexed knowledge matched this query.'\r\n            : hits\r\n                .map((hit, index) => {\r\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\r\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { hits } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_read',\r\n      label: 'Read PC Knowledge Result',\r\n      description:\r\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\r\n      parameters: Type.Object({\r\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\r\n        maxChars: Type.Optional(\r\n          Type.Number({\r\n            minimum: 500,\r\n            maximum: 50_000,\r\n            description: 'Maximum text characters to return',\r\n          })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({\r\n            resultId: params.resultId ?? '',\r\n            maxChars: params.maxChars ?? 12_000,\r\n          }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          result?: { path: string; pageNumber?: number; text: string }\r\n          error?: string\r\n        }\r\n        if (!response.ok || !payload.result) {\r\n          throw new Error(payload.error || 'Knowledge result could not be read')\r\n        }\r\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\r\n        return {\r\n          content: [\r\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\r\n          ],\r\n          details: payload.result,\r\n        }\r\n      },\r\n    })\r\n  }\r\n\r\n  pi.on('tool_call', async (event, ctx) => {\r\n    if (event.toolName === 'launcher_search') {\r\n      launcherSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName === 'pc_search') {\r\n      deepSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName !== 'bash') return undefined\r\n\r\n    const command = event.input?.command\r\n    if (typeof command !== 'string') {\r\n      return { block: true, reason: 'Missing bash command.' }\r\n    }\r\n\r\n    if (hasIndexedSearchTools) {\r\n      const preferredSearch = preferredIndexedSearchForBash(command)\r\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\r\n        }\r\n      }\r\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\r\n        }\r\n      }\r\n    }\r\n\r\n    if (isAutoAllowedBash(command)) return undefined\r\n\r\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\r\n    if (confirmed) return undefined\r\n\r\n    return { block: true, reason: 'Bash command was not approved.' }\r\n  })\r\n}\r\n", "utf8");
     process.env.RAYMES_PI_EXTENSION = extensionPath;
   } catch (error) {
     console.error("[server] failed to materialize Pi policy:", error);
