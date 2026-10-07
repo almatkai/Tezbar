@@ -1,11 +1,13 @@
 import { version as packageVersion } from '../../package.json'
+import type { SearchResult } from '../shared/search'
 
 export const CURRENT_APP_VERSION = import.meta.env.VITE_APP_VERSION ?? packageVersion
 export const LAST_RELEASE_NOTES_VERSION_KEY = 'tezbar:release-notes-version'
+export const RELEASE_NOTES_COMMAND_ID = 'show-updated-version'
 
 export type ReleaseNotes = { version: string; body: string; publishedAt: string | null }
 
-export function shouldShowPostUpdateNotes(
+export function shouldOfferPostUpdateNotes(
   storage: Pick<Storage, 'getItem' | 'setItem'>,
   firstInstall: boolean,
   version: string = CURRENT_APP_VERSION
@@ -15,6 +17,31 @@ export function shouldShowPostUpdateNotes(
     return false
   }
   return storage.getItem(LAST_RELEASE_NOTES_VERSION_KEY) !== version
+}
+
+/** Keep unread app notes first on the home list, and searchable after reading. */
+export function withReleaseNotesResult(
+  results: SearchResult[],
+  query: string,
+  unread: boolean,
+  version: string = CURRENT_APP_VERSION
+): SearchResult[] {
+  const normalized = query.trim().toLowerCase()
+  const matchesQuery =
+    normalized &&
+    ['show updated version', 'release notes', "what's new", 'tezbar version'].some((phrase) =>
+      phrase.includes(normalized)
+    )
+  if (!(normalized ? matchesQuery : unread)) return results
+  const row: SearchResult = {
+    id: `command:${RELEASE_NOTES_COMMAND_ID}`,
+    title: 'Show Updated Version',
+    subtitle: `Tezbar v${version} · Press Enter to read what’s new`,
+    category: 'commands',
+    score: 1_000_001,
+    action: { type: 'invoke-command', commandId: RELEASE_NOTES_COMMAND_ID },
+  }
+  return [row, ...results.filter((result) => result.id !== row.id)]
 }
 
 export async function fetchReleaseNotes(

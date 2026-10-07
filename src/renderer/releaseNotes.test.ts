@@ -3,8 +3,11 @@ import {
   CURRENT_APP_VERSION,
   fetchReleaseNotes,
   LAST_RELEASE_NOTES_VERSION_KEY,
-  shouldShowPostUpdateNotes,
+  shouldOfferPostUpdateNotes,
+  withReleaseNotesResult,
+  RELEASE_NOTES_COMMAND_ID,
 } from './releaseNotes'
+import type { SearchResult } from '../shared/search'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -83,21 +86,62 @@ describe('post-update release notes', () => {
 
   it('skips a fresh install and records its version', () => {
     const saved = storage(null)
-    expect(shouldShowPostUpdateNotes(saved, true, '0.2.0')).toBe(false)
+    expect(shouldOfferPostUpdateNotes(saved, true, '0.2.0')).toBe(false)
     expect(saved.setItem).toHaveBeenCalledWith(LAST_RELEASE_NOTES_VERSION_KEY, '0.2.0')
-    expect(shouldShowPostUpdateNotes(saved, false, '0.2.0')).toBe(false)
-    expect(shouldShowPostUpdateNotes(saved, false, '0.3.0')).toBe(true)
+    expect(shouldOfferPostUpdateNotes(saved, false, '0.2.0')).toBe(false)
+    expect(shouldOfferPostUpdateNotes(saved, false, '0.3.0')).toBe(true)
   })
 
   it('shows an upgraded version until the user dismisses it', () => {
     const saved = storage('0.1.0')
-    expect(shouldShowPostUpdateNotes(saved, false, '0.2.0')).toBe(true)
+    expect(shouldOfferPostUpdateNotes(saved, false, '0.2.0')).toBe(true)
     expect(saved.setItem).not.toHaveBeenCalled()
     saved.setItem(LAST_RELEASE_NOTES_VERSION_KEY, '0.2.0')
-    expect(shouldShowPostUpdateNotes(saved, false, '0.2.0')).toBe(false)
+    expect(shouldOfferPostUpdateNotes(saved, false, '0.2.0')).toBe(false)
   })
 
   it('shows notes to existing users upgrading from before version tracking', () => {
-    expect(shouldShowPostUpdateNotes(storage(null), false, '0.2.0')).toBe(true)
+    expect(shouldOfferPostUpdateNotes(storage(null), false, '0.2.0')).toBe(true)
+  })
+})
+
+describe('Show Updated Version launcher command', () => {
+  const update: SearchResult = {
+    id: 'command:check-for-updates',
+    title: 'Check for Updates',
+    subtitle: '',
+    category: 'commands',
+    score: 1_000_000,
+    action: { type: 'invoke-command', commandId: 'check-for-updates' },
+  }
+
+  it('puts unread app notes first, ahead of the updater command', () => {
+    const rows = withReleaseNotesResult([update], '', true, '0.2.2')
+    expect(rows.map((row) => row.title)).toEqual(['Show Updated Version', 'Check for Updates'])
+    expect(rows[0]?.subtitle).toContain('v0.2.2')
+    expect(rows[0]?.action).toEqual({ type: 'invoke-command', commandId: RELEASE_NOTES_COMMAND_ID })
+  })
+
+  it('keeps the home list unchanged after notes have been read', () => {
+    const rows = [update]
+    expect(withReleaseNotesResult(rows, '', false)).toBe(rows)
+  })
+
+  it('lets users find the notes again by searching', () => {
+    for (const query of ['show updated version', 'release notes', "what's new", 'version']) {
+      expect(withReleaseNotesResult([], query, false)[0]?.title).toBe('Show Updated Version')
+    }
+  })
+
+  it('does not interfere with file, deep, or unrelated searches', () => {
+    const rows = [update]
+    for (const query of ['/notes', '!release notes', '`tezbar', 'spreadsheet']) {
+      expect(withReleaseNotesResult(rows, query, true)).toBe(rows)
+    }
+  })
+
+  it('does not duplicate an existing release-notes command', () => {
+    const rows = withReleaseNotesResult([], '', true)
+    expect(withReleaseNotesResult(rows, '', true)).toHaveLength(1)
   })
 })

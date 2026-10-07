@@ -82,6 +82,7 @@ import {
   searchRequestInput,
 } from '../shared/searchMode'
 import { aiChatBootForInput, commandBarInputMode } from './commandBarInputMode'
+import { RELEASE_NOTES_COMMAND_ID, withReleaseNotesResult } from './releaseNotes'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
@@ -806,6 +807,7 @@ type TezbarCommandId =
   | 'restart-app-update'
   | 'check-for-updates'
   | 'open-settings-updates'
+  | typeof RELEASE_NOTES_COMMAND_ID
 
 const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'open-settings': 'settings',
@@ -821,6 +823,7 @@ const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'restart-app-update': 'update',
   'check-for-updates': 'update',
   'open-settings-updates': 'update',
+  [RELEASE_NOTES_COMMAND_ID]: 'update',
 }
 
 const NATIVE_COMMAND_ICON_BY_ID: Record<NativeCommandId, CommandIconKind> = {
@@ -1491,6 +1494,8 @@ function searchResultIconAsset(item: SearchResult): {
 }
 
 export default function CommandBar({
+  hasUnreadReleaseNotes,
+  onOpenReleaseNotes,
   initialValue = '',
   initialSelectedChatId = null,
   onOpenAiChat,
@@ -1509,6 +1514,8 @@ export default function CommandBar({
   onStartOnboarding,
   onOpenTerminal,
 }: {
+  hasUnreadReleaseNotes: boolean
+  onOpenReleaseNotes: () => void
   initialValue?: string
   initialSelectedChatId?: string | null
   onOpenAiChat: (boot: AiChatBoot) => void
@@ -2322,12 +2329,15 @@ export default function CommandBar({
       }
     }
 
-    return processedResults
+    return isDeepSearchMode
+      ? processedResults
+      : withReleaseNotesResult(processedResults, value, hasUnreadReleaseNotes)
   }, [
     activeCheckSessionId,
     calcResultRow,
     colorConversionRows,
     effectiveUpdateStatus,
+    hasUnreadReleaseNotes,
     isDeepSearchMode,
     killPortCommandResult,
     killPortMode,
@@ -3152,6 +3162,11 @@ export default function CommandBar({
       showActionMsg(null)
       setValue('')
 
+      if (result.action.commandId === RELEASE_NOTES_COMMAND_ID) {
+        onOpenReleaseNotes()
+        return
+      }
+
       if (result.action.commandId === 'open-providers') {
         await recordHandledSearchUsage()
         onConfigureAi()
@@ -3952,6 +3967,18 @@ export default function CommandBar({
       : -1
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLElement>): void => {
+    if (
+      e.key === 'Enter' &&
+      !e.metaKey && !e.ctrlKey && !e.altKey &&
+      !isAiMode && !terminalMode && !isDeepSearchMode && !isCompletionInput &&
+      !killPortMode && !pendingAction &&
+      activeSearchResult?.id === `command:${RELEASE_NOTES_COMMAND_ID}`
+    ) {
+      e.preventDefault()
+      void runSelectedSearchResult(activeSearchResult, selectedSearch + 1)
+      return
+    }
+
     if (isDeepSearchMode && searchResultNavigationActive && e.key === 'Escape') {
       e.preventDefault()
       setSearchResultNavigationActive(false)

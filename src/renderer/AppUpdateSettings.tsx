@@ -8,7 +8,7 @@ import {
 } from '../shared/updater'
 import { Button } from './ui/primitives'
 import { Markdown } from './ui/Markdown'
-import { ReleaseNotesDialog } from './ReleaseNotesDialog'
+import ReleaseNotesView from './ReleaseNotesView'
 import { CURRENT_APP_VERSION } from './releaseNotes'
 
 const CURRENT_VERSION = CURRENT_APP_VERSION
@@ -78,10 +78,10 @@ export function AppUpdateSettings(): JSX.Element {
 
   const busy = status.kind === 'checking' || status.kind === 'downloading'
 
-  return (
-    <div className="space-y-3">
-      {releaseNotesVersion && (
-        <ReleaseNotesDialog
+  if (releaseNotesVersion) {
+    return (
+      <div className="h-[min(480px,65vh)]">
+        <ReleaseNotesView
           key={releaseNotesVersion}
           version={releaseNotesVersion}
           initialNotes={
@@ -91,9 +91,14 @@ export function AppUpdateSettings(): JSX.Element {
               ? { version: status.version, body: status.notes, publishedAt: null }
               : undefined
           }
-          onClose={() => setReleaseNotesVersion(null)}
+          onBack={() => setReleaseNotesVersion(null)}
         />
-      )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.05] px-2 py-1 text-[11px] font-semibold text-ink-2">
           v{CURRENT_VERSION}

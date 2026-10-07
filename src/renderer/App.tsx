@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useRef, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { tryConsumeCommandSurfaceEscape } from './escapeGate'
 import CommandBar from './CommandBar'
 import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
@@ -15,13 +15,16 @@ import {
   shouldAutoCheckForUpdates,
   UPDATE_CHECK_INTERVAL_MS,
 } from '../shared/updater'
+import {
+  CURRENT_APP_VERSION,
+  LAST_RELEASE_NOTES_VERSION_KEY,
+  shouldOfferPostUpdateNotes,
+} from './releaseNotes'
 
 const OnboardingView = React.lazy(() => import('./OnboardingView'))
 const AgentChatView = React.lazy(() => import('./AgentChatView'))
 const SettingsView = React.lazy(() => import('./SettingsView'))
-const PostUpdateReleaseNotes = React.lazy(() =>
-  import('./ReleaseNotesDialog').then((module) => ({ default: module.PostUpdateReleaseNotes }))
-)
+const ReleaseNotesView = React.lazy(() => import('./ReleaseNotesView'))
 const ExtensionsView = React.lazy(() => import('./ExtensionsView'))
 const ExtensionRuntimeView = React.lazy(() => import('./ExtensionRuntimeView'))
 const OpenPortsView = React.lazy(() => import('./OpenPortsView'))
@@ -57,6 +60,7 @@ type Surface =
   | 'notes'
   | 'emoji-picker'
   | 'terminal'
+  | 'release-notes'
 
 type SettingsTab =
   | 'general'
@@ -107,6 +111,7 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
   notes: '[aria-label="Quick Notes"]',
   'emoji-picker': '[aria-label="Emoji Picker"]',
   terminal: '[aria-label="Terminal"]',
+  'release-notes': '[aria-label="Release Notes"]',
 }
 
 const TIMED_SURFACE_CONFIG = {
@@ -293,7 +298,8 @@ function SettingsWindowApp(): JSX.Element {
 function LauncherApp(): JSX.Element {
   const [surface, setSurface] = useState<Surface>('command')
   const [bootReady, setBootReady] = useState(false)
-  const [firstInstall, setFirstInstall] = useState<boolean | null>(null)
+  const [hasUnreadReleaseNotes, setHasUnreadReleaseNotes] = useState(false)
+  const markReleaseNotesRead = useCallback(() => setHasUnreadReleaseNotes(false), [])
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   const [openPortsInitialTab, setOpenPortsInitialTab] = useState<'listen' | 'named'>('listen')
   const [notesInitialSelectedId, setNotesInitialSelectedId] = useState<number | null>(null)
@@ -339,7 +345,13 @@ function LauncherApp(): JSX.Element {
         .getLlmConfig()
         .then((config) => {
           if (cancelled) return
-          setFirstInstall(!config.hasCompletedOnboarding)
+          try {
+            setHasUnreadReleaseNotes(
+              shouldOfferPostUpdateNotes(window.localStorage, !config.hasCompletedOnboarding)
+            )
+          } catch {
+            // Storage availability must not block launch.
+          }
           if (!config.hasCompletedOnboarding) setSurface('onboarding')
           setBootReady(true)
         })
@@ -356,6 +368,16 @@ function LauncherApp(): JSX.Element {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent): void => {
+      if (event.key === LAST_RELEASE_NOTES_VERSION_KEY && event.newValue === CURRENT_APP_VERSION) {
+        setHasUnreadReleaseNotes(false)
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
   }, [])
 
   // Background auto-check for app updates. Follows nezametniy pattern:
@@ -659,6 +681,11 @@ function LauncherApp(): JSX.Element {
             <SurfaceFallback />
           ) : surface === 'onboarding' ? (
             <OnboardingView onDone={() => setSurface('command')} />
+          ) : surface === 'release-notes' ? (
+            <ReleaseNotesView
+              onBack={() => setSurface('command')}
+              onRead={markReleaseNotesRead}
+            />
           ) : surface === 'settings' ? (
             <SettingsView
               initialTab={settingsInitialTab}
@@ -731,6 +758,11 @@ function LauncherApp(): JSX.Element {
             />
           ) : (
             <CommandBar
+              hasUnreadReleaseNotes={hasUnreadReleaseNotes}
+              onOpenReleaseNotes={() => {
+                setCommandInitialValue('')
+                setSurface('release-notes')
+              }}
               initialValue={commandInitialValue}
               initialSelectedChatId={commandInitialSelectedChatId}
               onOpenAiChat={(nextBoot) => {
@@ -798,11 +830,6 @@ function LauncherApp(): JSX.Element {
             />
           )}
         </Suspense>
-        {bootReady && firstInstall !== null && (
-          <Suspense fallback={null}>
-            <PostUpdateReleaseNotes firstInstall={firstInstall} />
-          </Suspense>
-        )}
       </div>
     </div>
   )
