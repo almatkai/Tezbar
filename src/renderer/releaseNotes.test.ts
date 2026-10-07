@@ -105,7 +105,7 @@ describe('post-update release notes', () => {
   })
 })
 
-describe('Show Updated Version launcher command', () => {
+describe('Release Notes launcher command', () => {
   const update: SearchResult = {
     id: 'command:check-for-updates',
     title: 'Check for Updates',
@@ -117,7 +117,7 @@ describe('Show Updated Version launcher command', () => {
 
   it('puts unread app notes first, ahead of the updater command', () => {
     const rows = withReleaseNotesResult([update], '', true, '0.2.2')
-    expect(rows.map((row) => row.title)).toEqual(['Show Updated Version', 'Check for Updates'])
+    expect(rows.map((row) => row.title)).toEqual(['Release Notes', 'Check for Updates'])
     expect(rows[0]?.subtitle).toContain('v0.2.2')
     expect(rows[0]?.action).toEqual({ type: 'invoke-command', commandId: RELEASE_NOTES_COMMAND_ID })
   })
@@ -129,7 +129,7 @@ describe('Show Updated Version launcher command', () => {
 
   it('lets users find the notes again by searching', () => {
     for (const query of ['show updated version', 'release notes', "what's new", 'version']) {
-      expect(withReleaseNotesResult([], query, false)[0]?.title).toBe('Show Updated Version')
+      expect(withReleaseNotesResult([], query, false)[0]?.title).toBe('Release Notes')
     }
   })
 

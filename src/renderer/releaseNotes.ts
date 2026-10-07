@@ -35,7 +35,7 @@ export function withReleaseNotesResult(
   if (!(normalized ? matchesQuery : unread)) return results
   const row: SearchResult = {
     id: `command:${RELEASE_NOTES_COMMAND_ID}`,
-    title: 'Show Updated Version',
+    title: 'Release Notes',
     subtitle: `Tezbar v${version} · Press Enter to read what’s new`,
     category: 'commands',
     score: 1_000_001,

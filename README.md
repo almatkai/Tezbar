@@ -74,7 +74,7 @@ pnpm dev
 
 When preparing a Tezbar release, add its user-facing Markdown notes to
 `docs/releases/<package.json version>.md`. The frontend build requires this file
-and bundles it into the app for the Show Updated Version launcher command and release-notes page.
+and bundles it into the app for the Release Notes launcher command and release-notes page.
 
 | Script | Description |
 |---|---|

@@ -823,7 +823,7 @@ const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'restart-app-update': 'update',
   'check-for-updates': 'update',
   'open-settings-updates': 'update',
-  [RELEASE_NOTES_COMMAND_ID]: 'update',
+  [RELEASE_NOTES_COMMAND_ID]: 'notes',
 }
 
 const NATIVE_COMMAND_ICON_BY_ID: Record<NativeCommandId, CommandIconKind> = {
