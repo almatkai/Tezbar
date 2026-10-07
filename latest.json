@@ -1,15 +1,15 @@
 {
-    "version":  "0.2.5",
-    "notes":  "## Emoji clipboard fix\n\n- Fixed emoji pasted as Cyrillic characters on Windows, such as `😄` appearing as `ЁЯШД`.\n- Clipboard text now uses UTF-8 when copying and reading emoji and other Unicode text.",
-    "pub_date":  "2026-10-07T07:43:13.327Z",
-    "platforms":  {
-                      "windows-x86_64-nsis":  {
-                                                  "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNENjM2U0cmZ6TGViU1BTMlRLenAvd3laRnlVNjIxaFRWUUZPaDFhZm1IREl0QW9LZ01ITXQ5cnpVdDdPbDdqcWZiNVBUL3hYT0Q2eU96b1JWbGNLUndjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU4OTY4CWZpbGU6VGV6YmFyXzAuMi41X3g2NC1zZXR1cC5leGUKUVVTaWtwR1I3dEMxSE5yM3F3d1N6azdwUVVYb1d2d282SGg3c3RqcmoyNDNFdjBLbFhNRUZFNGsvVWhNSkVndWVJenJBOUYyQWVETzdvenhTQkkzREE9PQo=",
-                                                  "url":  "https://github.com/almatkai/Tezbar/releases/download/v0.2.5/Tezbar_0.2.5_x64-setup.exe"
-                                              },
-                      "windows-x86_64":  {
-                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNENjM2U0cmZ6TGViU1BTMlRLenAvd3laRnlVNjIxaFRWUUZPaDFhZm1IREl0QW9LZ01ITXQ5cnpVdDdPbDdqcWZiNVBUL3hYT0Q2eU96b1JWbGNLUndjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU4OTY4CWZpbGU6VGV6YmFyXzAuMi41X3g2NC1zZXR1cC5leGUKUVVTaWtwR1I3dEMxSE5yM3F3d1N6azdwUVVYb1d2d282SGg3c3RqcmoyNDNFdjBLbFhNRUZFNGsvVWhNSkVndWVJenJBOUYyQWVETzdvenhTQkkzREE9PQo=",
-                                             "url":  "https://github.com/almatkai/Tezbar/releases/download/v0.2.5/Tezbar_0.2.5_x64-setup.exe"
-                                         }
-                  }
+  "version": "0.2.6",
+  "notes": "## Tezbar opens when you launch it\n\n- The Tezbar launcher now opens automatically when you start the app.\n- After an update restarts Tezbar, the launcher opens again so you can continue immediately and read **Release Notes**.\n- The window uses your usual monitor placement and focuses the launcher input.",
+  "pub_date": "2026-10-07T07:49:10.768Z",
+  "platforms": {
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE5LVXZEbXlhMEtEaUxoMGNDd1htaHVSVVZOMEJVT3NWemcrdHhjaXRHTnVGQXYyeVVvQkMzMkxvblNpNG1KU0NINlJBTE9OZUlrdkhlT2M0Y0RrSFFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU5MzMwCWZpbGU6VGV6YmFyXzAuMi42X3g2NC1zZXR1cC5leGUKUlV2Uk1Yd0h4bndpRStBa1dJQ1lmZjZQek5ueGJjR1dUWjk0YkZOU09SL2FvQVI2bjVzUnNNd3ljc1JIY0piSStXaEZ6Q0l5MitqWHVHRHNodzgrQVE9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar_0.2.6_x64-setup.exe"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE5LVXZEbXlhMEtEaUxoMGNDd1htaHVSVVZOMEJVT3NWemcrdHhjaXRHTnVGQXYyeVVvQkMzMkxvblNpNG1KU0NINlJBTE9OZUlrdkhlT2M0Y0RrSFFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU5MzMwCWZpbGU6VGV6YmFyXzAuMi42X3g2NC1zZXR1cC5leGUKUlV2Uk1Yd0h4bndpRStBa1dJQ1lmZjZQek5ueGJjR1dUWjk0YkZOU09SL2FvQVI2bjVzUnNNd3ljc1JIY0piSStXaEZ6Q0l5MitqWHVHRHNodzgrQVE9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar_0.2.6_x64-setup.exe"
+    }
+  }
 }
