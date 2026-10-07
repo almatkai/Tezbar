@@ -8,7 +8,7 @@ import {
 } from '../shared/updater'
 import { Button } from './ui/primitives'
 
-const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.11'
+const CURRENT_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.2.0'
 
 type Status = AppUpdateStatus
 
@@ -157,6 +157,9 @@ export function AppUpdateSettings(): JSX.Element {
             </span>
             <span className="block text-[11px] leading-snug text-ink-4">
               When enabled, updates will download automatically in the background. When disabled, updates will appear as the first item in your search bar so you can choose when to download.
+            </span>
+            <span className="block text-[11px] leading-snug text-ink-4/80 mt-1">
+              Only stable releases are offered — beta builds are skipped automatically.
             </span>
           </div>
         </label>

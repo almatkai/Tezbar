@@ -75,6 +75,19 @@ fn github_release_url(tag: &str, draft_fallback: &str) -> String {
     }
 }
 
+fn is_platform_not_found_error(err: &tauri_plugin_updater::Error) -> bool {
+    match err {
+        tauri_plugin_updater::Error::TargetNotFound(_) => true,
+        _ => {
+            let msg = err.to_string();
+            msg.contains("None of the fallback platforms")
+                || msg.contains("response 'platforms' object")
+                || msg.contains("response `platforms` object")
+                || msg.contains("TargetNotFound")
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn get_update_status(app: AppHandle) -> Result<AppUpdateStatus, String> {
     Ok(current_status(&app))
@@ -84,9 +97,19 @@ pub async fn get_update_status(app: AppHandle) -> Result<AppUpdateStatus, String
 pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String> {
     set_status(&app, AppUpdateStatus::Checking);
 
+    let os_info = if cfg!(target_os = "windows") {
+        "Windows; Windows NT"
+    } else if cfg!(target_os = "macos") {
+        "Macintosh; Intel Mac OS X"
+    } else {
+        "Linux; X11"
+    };
+    let current_version = app.package_info().version.to_string();
+    let user_agent = format!("Tezbar-App/{current_version} ({os_info})");
+
     let updater = app
         .updater_builder()
-        .header("User-Agent", "Tezbar-App/0.2.0 (Macintosh; Intel Mac OS X)")
+        .header("User-Agent", user_agent)
         .map_err(|e| e.to_string())?
         .version_comparator(|current, release| {
             // Offer updates that are strictly newer than the running build.
@@ -125,6 +148,19 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
             Ok(status)
         }
         Err(error) => {
+            if is_platform_not_found_error(&error) {
+                // The release manifest is valid, but doesn't have an updater artifact
+                // for this target platform (e.g. macOS-only release or Windows installer pending).
+                // From the viewpoint of the running OS, this build is up to date.
+                if let Some(state) = app.try_state::<UpdaterState>() {
+                    *state.pending.lock().unwrap() = None;
+                }
+                let version = app.package_info().version.to_string();
+                let status = AppUpdateStatus::UpToDate { version };
+                set_status(&app, status.clone());
+                return Ok(status);
+            }
+
             let status = AppUpdateStatus::Error {
                 message: error.to_string(),
             };

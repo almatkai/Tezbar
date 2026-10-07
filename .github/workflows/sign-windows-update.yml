@@ -1,0 +1,39 @@
+name: Sign Windows test update
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Draft release tag containing the Windows installer
+        required: true
+        default: v0.2.0
+permissions:
+  contents: write
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download draft installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release download "$TAG" --pattern '*_x64-setup.exe' --dir release
+      - name: Install signing CLI
+        run: npm install --prefix "$RUNNER_TEMP/signer" @tauri-apps/cli@2.11.2
+      - name: Sign and verify installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: |
+          for artifact in release/*_x64-setup.exe; do
+            node "$RUNNER_TEMP/signer/node_modules/@tauri-apps/cli/tauri.js" signer sign "$artifact"
+            node scripts/verify-updater-signature.mjs "$artifact" "$artifact.sig"
+          done
+      - name: Upload verified signature
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" release/*.sig --clobber

@@ -1,7 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
-    "targets": ["nsis", "msi"],
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "resources": {
       "../dist-backend/vec0.dll": "dist-backend/vec0.dll",
       "../native/color-picker/windows.ps1": "native/color-picker/windows.ps1",

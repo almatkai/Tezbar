@@ -303,7 +303,7 @@ export function initTauriBridge(): void {
       await Promise.all([eventListeners.get('terminal:data'), eventListeners.get('terminal:exit')])
       const created = (await invoke('native_terminal_create', { request })) as any
       // Persisting the session summary goes through the backend sidecar. If that
-      // process is down, the native PTY still works — don't fail the open.
+      // process is down, the native PTY still works вЂ” don't fail the open.
       let summary: any = null
       try {
         summary = request?.restoreSessionId
@@ -490,38 +490,7 @@ export function initTauriBridge(): void {
     },
 
     getUpdateStatus: () => invoke('get_update_status') as Promise<AppUpdateStatus>,
-    checkForUpdates: async () => {
-      const res = (await invoke('check_for_updates')) as AppUpdateStatus
-      if (res.kind === 'error') {
-        try {
-          const ghRes = await fetch('https://api.github.com/repos/almatkai/Tezbar/releases/latest', {
-            headers: { Accept: 'application/vnd.github.v3+json' },
-          })
-          if (ghRes.ok) {
-            const data = (await ghRes.json()) as {
-              tag_name?: string
-              body?: string
-              html_url?: string
-            }
-            const tag = (data.tag_name || '').replace(/^v/, '')
-            const current = import.meta.env.VITE_APP_VERSION ?? '0.2.0-beta.11'
-            if (tag && tag !== current) {
-              return {
-                kind: 'available',
-                version: tag,
-                notes: data.body || '',
-                releaseUrl: data.html_url || 'https://github.com/almatkai/Tezbar/releases/latest',
-              }
-            } else if (tag === current) {
-              return { kind: 'upToDate', version: current }
-            }
-          }
-        } catch {
-          // ignore fallback fetch error
-        }
-      }
-      return res
-    },
+    checkForUpdates: () => invoke('check_for_updates') as Promise<AppUpdateStatus>,
     downloadAndInstallUpdate: async () => {
       try {
         return (await invoke('download_and_install_update')) as AppUpdateStatus
