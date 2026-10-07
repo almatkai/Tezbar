@@ -1,15 +1,15 @@
 {
-  "version": "0.2.1",
-  "notes": "## What's new in Tezbar\n\n- After installing an update, Tezbar now opens its own release notes the first time you launch it.\n- Release notes are included with the app, so you can read them offline.\n- Reopen the notes for your installed version from **Settings → App Updates → What's New**.\n- Dismiss the notes with **Got it** or **Escape**. They stay dismissed until your next update.\n\nFresh installations continue to open onboarding first.",
-  "pub_date": "2026-10-07T05:42:15.304Z",
+  "version": "0.2.2",
+  "notes": "## Release notes on your terms\n\n- **Show Updated Version** now appears first in the launcher list after an update.\n- Select it and press **Enter** to read what's new on a page inside Tezbar.\n- Press **Escape** or use the back arrow to return to the launcher.\n- The automatic release-notes popup has been removed. The launcher item stays until you open the notes.\n- You can find the notes again by searching **Show Updated Version** or through **Settings → App Updates → What's New**.\n\nRelease notes remain available offline. Fresh installations continue to start with onboarding.",
+  "pub_date": "2026-10-07T06:23:21.412Z",
   "platforms": {
     "windows-x86_64-nsis": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEY4ZzVDVk5lb3F1Z1poaWJGUnJKK2d0NVBLbC9vSVR3blRiQVRtZVAyRmdXZHNTaW1kbGhaWEhlc2xIdkZ4RGs0QUx4TXRibUpOWEU3U3AzMmNDaHdnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzUxNzExCWZpbGU6VGV6YmFyXzAuMi4xX3g2NC1zZXR1cC5leGUKc09CNzVCUHJBQnMyc0tWVnlZZXV0NU1jUDJmeGZzaTNKTnVNSEgvTVdYTDdpNFNjTk9obUZiQTczVWsrYjB2d3l2KzFxNXB0WjBaK05QNkxGdURYQVE9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.1/Tezbar_0.2.1_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEV4VFpMNmwyN0dmZVRvVlZ4YUFIaWZJbHJOMUZnSEQ4dU1rNGhOdi9aWElSOUxGUU9lTFBZdzNnQUFzbDdML0k2UTErWDhhOW92VWhJRWQvdlhPb1FjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU0MTc0CWZpbGU6VGV6YmFyXzAuMi4yX3g2NC1zZXR1cC5leGUKZ2JTaTVqQi9yUS8ySFhRN0RFd2s0MXJhM1hHVGxsalpnaW54S3hUUVZNMWpPNm9EQmtFOU05RnJIWm90bHg5WDJoZWNmOVUxR05qajNBaHIzNVlnQVE9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.2/Tezbar_0.2.2_x64-setup.exe"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEY4ZzVDVk5lb3F1Z1poaWJGUnJKK2d0NVBLbC9vSVR3blRiQVRtZVAyRmdXZHNTaW1kbGhaWEhlc2xIdkZ4RGs0QUx4TXRibUpOWEU3U3AzMmNDaHdnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzUxNzExCWZpbGU6VGV6YmFyXzAuMi4xX3g2NC1zZXR1cC5leGUKc09CNzVCUHJBQnMyc0tWVnlZZXV0NU1jUDJmeGZzaTNKTnVNSEgvTVdYTDdpNFNjTk9obUZiQTczVWsrYjB2d3l2KzFxNXB0WjBaK05QNkxGdURYQVE9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.1/Tezbar_0.2.1_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEV4VFpMNmwyN0dmZVRvVlZ4YUFIaWZJbHJOMUZnSEQ4dU1rNGhOdi9aWElSOUxGUU9lTFBZdzNnQUFzbDdML0k2UTErWDhhOW92VWhJRWQvdlhPb1FjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU0MTc0CWZpbGU6VGV6YmFyXzAuMi4yX3g2NC1zZXR1cC5leGUKZ2JTaTVqQi9yUS8ySFhRN0RFd2s0MXJhM1hHVGxsalpnaW54S3hUUVZNMWpPNm9EQmtFOU05RnJIWm90bHg5WDJoZWNmOVUxR05qajNBaHIzNVlnQVE9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.2/Tezbar_0.2.2_x64-setup.exe"
     }
   }
 }
