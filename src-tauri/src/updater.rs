@@ -76,16 +76,11 @@ fn github_release_url(tag: &str, draft_fallback: &str) -> String {
 }
 
 fn is_platform_not_found_error(err: &tauri_plugin_updater::Error) -> bool {
-    match err {
-        tauri_plugin_updater::Error::TargetNotFound(_) => true,
-        _ => {
-            let msg = err.to_string();
-            msg.contains("None of the fallback platforms")
-                || msg.contains("response 'platforms' object")
-                || msg.contains("response `platforms` object")
-                || msg.contains("TargetNotFound")
-        }
-    }
+    matches!(
+        err,
+        tauri_plugin_updater::Error::TargetNotFound(_)
+            | tauri_plugin_updater::Error::TargetsNotFound(_)
+    )
 }
 
 #[tauri::command]
@@ -150,7 +145,7 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
         Err(error) => {
             if is_platform_not_found_error(&error) {
                 // The release manifest is valid, but doesn't have an updater artifact
-                // for this target platform (e.g. macOS-only release or Windows installer pending).
+                // for this target platform (e.g. a Windows-only release checked on macOS).
                 // From the viewpoint of the running OS, this build is up to date.
                 if let Some(state) = app.try_state::<UpdaterState>() {
                     *state.pending.lock().unwrap() = None;
@@ -269,4 +264,53 @@ pub fn restart_app(app: AppHandle) {
 #[tauri::command]
 pub fn open_release_page(url: String) -> Result<(), String> {
     open::that_detached(&url).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_platform_not_found_error;
+    use tauri_plugin_updater::{Error, RemoteRelease};
+
+    #[test]
+    fn skips_releases_missing_macos_installer_and_architecture_fallbacks() {
+        for arch in ["aarch64", "x86_64"] {
+            let targets = vec![format!("darwin-{arch}-app"), format!("darwin-{arch}")];
+            assert!(is_platform_not_found_error(&Error::TargetsNotFound(targets)));
+        }
+    }
+
+    #[test]
+    fn windows_only_manifest_has_no_macos_update() {
+        let release: RemoteRelease = serde_json::from_value(serde_json::json!({
+            "version": "0.2.6",
+            "platforms": {
+                "windows-x86_64-nsis": {
+                    "url": "https://example.com/Tezbar_0.2.6_x64-setup.exe",
+                    "signature": "windows-signature"
+                }
+            }
+        }))
+        .unwrap();
+
+        assert!(release.download_url("windows-x86_64-nsis").is_ok());
+        for target in ["darwin-aarch64-app", "darwin-aarch64", "darwin-x86_64"] {
+            let error = release.download_url(target).unwrap_err();
+            assert!(is_platform_not_found_error(&error));
+        }
+    }
+
+    #[test]
+    fn keeps_real_update_failures_visible() {
+        for error in [
+            Error::ReleaseNotFound,
+            Error::UnsupportedArch,
+            Error::UnsupportedOs,
+            Error::Network("connection timed out".into()),
+            Error::Network("response `platforms` object could not be fetched".into()),
+            Error::Serialization(serde_json::from_str::<serde_json::Value>("{").unwrap_err()),
+            Error::SignatureUtf8("invalid signature".into()),
+        ] {
+            assert!(!is_platform_not_found_error(&error), "{error}");
+        }
+    }
 }

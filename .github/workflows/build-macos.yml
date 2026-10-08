@@ -1,0 +1,63 @@
+name: Build macOS app
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'build/macos-*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pnpm and dependencies
+        run: |
+          npm install --global pnpm@11.17.0
+          pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install loadable SQLite
+        run: |
+          brew list sqlite >/dev/null 2>&1 || brew install sqlite
+          echo "TEZBAR_SQLITE_LIBRARY_PATH=$(brew --prefix sqlite)/lib/libsqlite3.dylib" >> "$GITHUB_ENV"
+      - name: Check frontend and updater
+        run: |
+          pnpm typecheck
+          pnpm exec vitest run src/shared/updater.test.ts src/renderer/releaseNotes.test.ts
+          pnpm build:native
+          pnpm build:backend
+          pnpm build:frontend
+          cargo test --manifest-path src-tauri/Cargo.toml --locked --lib updater::tests
+      - name: Build Apple Silicon app and disk image
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: |
+          pnpm exec tauri build --target aarch64-apple-darwin --bundles app,dmg --config '{"bundle":{"macOS":{"signingIdentity":"-"}}}'
+      - name: Verify app and updater signature
+        run: |
+          bundle=src-tauri/target/aarch64-apple-darwin/release/bundle
+          codesign --verify --deep --strict "$bundle/macos/Tezbar.app"
+          node scripts/verify-updater-signature.mjs "$bundle/macos/Tezbar.app.tar.gz" "$bundle/macos/Tezbar.app.tar.gz.sig"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$bundle/macos/Tezbar.app/Contents/Info.plist")" = "$(node -p 'require("./package.json").version')"
+          lipo -info "$bundle/macos/Tezbar.app/Contents/MacOS/tezbar"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tezbar-macOS-AppleSilicon
+          path: |
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Tezbar.app.tar.gz
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Tezbar.app.tar.gz.sig
+          if-no-files-found: error
