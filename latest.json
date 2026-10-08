@@ -1,8 +1,16 @@
 {
   "version": "0.2.6",
-  "notes": "## Tezbar opens when you launch it\n\n- The Tezbar launcher now opens automatically when you start the app.\n- After an update restarts Tezbar, the launcher opens again so you can continue immediately and read **Release Notes**.\n- The window uses your usual monitor placement and focuses the launcher input.",
-  "pub_date": "2026-10-07T07:49:10.768Z",
+  "notes": "## Tezbar opens when you launch it\n\n- The Tezbar launcher now opens automatically when you start the app.\n- After an update restarts Tezbar, the launcher opens again so you can continue immediately and read **Release Notes**.\n- Cross-platform release for macOS (Apple Silicon) and Windows.\n- The window uses your usual monitor placement and focuses the launcher input.",
+  "pub_date": "2026-10-08T11:55:00.000Z",
   "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE1TZmFUUWkzMHhaazAvVUJOT0pjVlk0VHNrSEtjKzFXdzBsK0tWK3puRG9lOVhEMFAyckNGd1BVUUJzUTVPUHN1TGFpekxnYUVuK3RremRObDFKVGdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDYwNDI4CWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKZHdlSitwMjhwM0pHMWIxWE9yd1UzT0V1Si90dUMyYXF0OFRDelBMYkNtSDNORGs2OU9tOWVCL0drQ2s3QnFTUmFDZnRVYW0vRU9SdjJzUllPcVp5QVE9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar.app.tar.gz"
+    },
+    "darwin-aarch64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE1TZmFUUWkzMHhaazAvVUJOT0pjVlk0VHNrSEtjKzFXdzBsK0tWK3puRG9lOVhEMFAyckNGd1BVUUJzUTVPUHN1TGFpekxnYUVuK3RremRObDFKVGdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDYwNDI4CWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKZHdlSitwMjhwM0pHMWIxWE9yd1UzT0V1Si90dUMyYXF0OFRDelBMYkNtSDNORGs2OU9tOWVCL0drQ2s3QnFTUmFDZnRVYW0vRU9SdjJzUllPcVp5QVE9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar.app.tar.gz"
+    },
     "windows-x86_64-nsis": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE5LVXZEbXlhMEtEaUxoMGNDd1htaHVSVVZOMEJVT3NWemcrdHhjaXRHTnVGQXYyeVVvQkMzMkxvblNpNG1KU0NINlJBTE9OZUlrdkhlT2M0Y0RrSFFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU5MzMwCWZpbGU6VGV6YmFyXzAuMi42X3g2NC1zZXR1cC5leGUKUlV2Uk1Yd0h4bndpRStBa1dJQ1lmZjZQek5ueGJjR1dUWjk0YkZOU09SL2FvQVI2bjVzUnNNd3ljc1JIY0piSStXaEZ6Q0l5MitqWHVHRHNodzgrQVE9PQo=",
       "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar_0.2.6_x64-setup.exe"
