@@ -7,6 +7,8 @@ mod qr_download;
 #[cfg(target_os = "macos")]
 mod timer_notifications;
 mod updater;
+#[cfg(target_os = "macos")]
+mod updater_temp;
 
 #[cfg(target_os = "macos")]
 use core_foundation::base::{kCFAllocatorDefault, CFType, TCFType};
@@ -3443,7 +3445,7 @@ pub fn run() {
                 log::debug!("failed to focus existing Tezbar instance: {error}");
             }
         }))
-        .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(tauri_plugin_log::Builder::default().max_file_size(5_000_000).build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, _shortcut, event| {
@@ -3463,7 +3465,16 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_updater::Builder::new()
-                .header("User-Agent", "Tezbar-App/0.2.0 (Macintosh; Intel Mac OS X)")
+                .header(
+                    "User-Agent",
+                    if cfg!(target_os = "windows") {
+                        "Tezbar-App/0.2.0 (Windows; Windows NT)"
+                    } else if cfg!(target_os = "macos") {
+                        "Tezbar-App/0.2.0 (Macintosh; Intel Mac OS X)"
+                    } else {
+                        "Tezbar-App/0.2.0 (Linux; X11)"
+                    },
+                )
                 .expect("valid user agent header")
                 .build(),
         )
@@ -3992,6 +4003,13 @@ pub fn run() {
             if let Err(error) = handle.global_shortcut().register(default_shortcut) {
                 log::error!("failed to register default launcher shortcut: {:?}", error);
             }
+
+            let handle_for_updater = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                log::info!("updater: startup background check triggered");
+                let _ = updater::check_for_updates(handle_for_updater).await;
+            });
 
             Ok(())
         })

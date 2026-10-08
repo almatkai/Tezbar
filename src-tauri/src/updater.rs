@@ -11,7 +11,7 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 const GITHUB_REPO: &str = "almatkai/Tezbar";
 
 /// Mirrors the renderer's `AppUpdateStatus` union (`src/shared/updater.ts`).
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AppUpdateStatus {
     Idle,
@@ -53,6 +53,7 @@ impl Default for UpdaterState {
 }
 
 fn set_status(app: &AppHandle, status: AppUpdateStatus) {
+    log::info!("Updater status set to: {status:?}");
     if let Some(state) = app.try_state::<UpdaterState>() {
         *state.status.lock().unwrap() = status.clone();
     }
@@ -75,16 +76,44 @@ fn github_release_url(tag: &str, draft_fallback: &str) -> String {
     }
 }
 
-fn is_platform_not_found_error(err: &tauri_plugin_updater::Error) -> bool {
-    match err {
-        tauri_plugin_updater::Error::TargetNotFound(_) => true,
-        _ => {
-            let msg = err.to_string();
-            msg.contains("None of the fallback platforms")
-                || msg.contains("response 'platforms' object")
-                || msg.contains("response `platforms` object")
-                || msg.contains("TargetNotFound")
-        }
+/// Returns true if the updater error indicates that the current platform was not
+/// found in the release manifest's platforms map.
+pub fn is_platform_not_found_error(error: &tauri_plugin_updater::Error) -> bool {
+    matches!(
+        error,
+        tauri_plugin_updater::Error::TargetNotFound(_)
+            | tauri_plugin_updater::Error::TargetsNotFound(_)
+    )
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpdateMetadata {
+    pub version: String,
+    pub notes: String,
+    pub release_url: String,
+}
+
+#[allow(dead_code)]
+pub fn resolve_update_status(
+    check_result: Result<Option<UpdateMetadata>, &tauri_plugin_updater::Error>,
+    current_version: &str,
+) -> AppUpdateStatus {
+    match check_result {
+        Ok(Some(meta)) => AppUpdateStatus::Available {
+            version: meta.version,
+            notes: meta.notes,
+            release_url: meta.release_url,
+        },
+        Ok(None) => AppUpdateStatus::UpToDate {
+            version: current_version.to_string(),
+        },
+        Err(err) if is_platform_not_found_error(err) => AppUpdateStatus::UpToDate {
+            version: current_version.to_string(),
+        },
+        Err(err) => AppUpdateStatus::Error {
+            message: err.to_string(),
+        },
     }
 }
 
@@ -95,6 +124,7 @@ pub async fn get_update_status(app: AppHandle) -> Result<AppUpdateStatus, String
 
 #[tauri::command]
 pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String> {
+    log::info!("Updater: check_for_updates requested");
     set_status(&app, AppUpdateStatus::Checking);
 
     let os_info = if cfg!(target_os = "windows") {
@@ -147,20 +177,18 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
             set_status(&app, status.clone());
             Ok(status)
         }
-        Err(error) => {
-            if is_platform_not_found_error(&error) {
-                // The release manifest is valid, but doesn't have an updater artifact
-                // for this target platform (e.g. macOS-only release or Windows installer pending).
-                // From the viewpoint of the running OS, this build is up to date.
-                if let Some(state) = app.try_state::<UpdaterState>() {
-                    *state.pending.lock().unwrap() = None;
-                }
-                let version = app.package_info().version.to_string();
-                let status = AppUpdateStatus::UpToDate { version };
-                set_status(&app, status.clone());
-                return Ok(status);
+        Err(ref error) if is_platform_not_found_error(error) => {
+            log::info!("Updater: platform not found for this architecture ({error:?}). Setting UpToDate.");
+            if let Some(state) = app.try_state::<UpdaterState>() {
+                *state.pending.lock().unwrap() = None;
             }
-
+            let version = app.package_info().version.to_string();
+            let status = AppUpdateStatus::UpToDate { version };
+            set_status(&app, status.clone());
+            Ok(status)
+        }
+        Err(error) => {
+            log::error!("Updater: check error: {error:?}");
             let status = AppUpdateStatus::Error {
                 message: error.to_string(),
             };
@@ -172,8 +200,24 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
 
 #[tauri::command]
 pub async fn download_and_install_update(app: AppHandle) -> Result<AppUpdateStatus, String> {
-    if let AppUpdateStatus::Downloading { .. } | AppUpdateStatus::Ready { .. } = current_status(&app) {
+    if let AppUpdateStatus::Downloading { .. } | AppUpdateStatus::Ready { .. } =
+        current_status(&app)
+    {
         return Ok(current_status(&app));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let preparation = app
+            .path()
+            .app_cache_dir()
+            .map_err(|error| format!("Cannot locate update cache directory: {error}"))
+            .and_then(|cache| crate::updater_temp::prepare_temp_dir(&cache.join("updater-temp")));
+        if let Err(message) = preparation {
+            let status = AppUpdateStatus::Error { message };
+            set_status(&app, status.clone());
+            return Ok(status);
+        }
     }
 
     let update = {
@@ -269,4 +313,195 @@ pub fn restart_app(app: AppHandle) {
 #[tauri::command]
 pub fn open_release_page(url: String) -> Result<(), String> {
     open::that_detached(&url).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const WINDOWS_ONLY_MANIFEST: &str = r#"{
+      "version": "0.2.6",
+      "notes": "Tezbar Windows release notes",
+      "pub_date": "2026-10-07T07:49:10.768Z",
+      "platforms": {
+        "windows-x86_64-nsis": {
+          "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZQ==",
+          "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar_0.2.6_x64-setup.exe"
+        },
+        "windows-x86_64": {
+          "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZQ==",
+          "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar_0.2.6_x64-setup.exe"
+        }
+      }
+    }"#;
+
+    const MACOS_AND_WINDOWS_MANIFEST: &str = r#"{
+      "version": "0.2.6",
+      "notes": "Cross platform release",
+      "pub_date": "2026-10-07T07:49:10.768Z",
+      "platforms": {
+        "darwin-aarch64": {
+          "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZQ==",
+          "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar_aarch64.app.tar.gz"
+        },
+        "darwin-x86_64": {
+          "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZQ==",
+          "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar_x64.app.tar.gz"
+        },
+        "windows-x86_64": {
+          "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZQ==",
+          "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar_0.2.6_x64-setup.exe"
+        }
+      }
+    }"#;
+
+    /// Helper mirroring Tauri updater's fallback platform lookup logic.
+    fn resolve_platform<'a>(
+        release: &'a tauri_plugin_updater::RemoteRelease,
+        targets: &[&str],
+    ) -> Result<(&'a tauri::Url, &'a String), tauri_plugin_updater::Error> {
+        for target in targets {
+            if let (Ok(url), Ok(sig)) = (release.download_url(target), release.signature(target)) {
+                return Ok((url, sig));
+            }
+        }
+        if targets.len() == 1 {
+            Err(tauri_plugin_updater::Error::TargetNotFound(targets[0].to_string()))
+        } else {
+            Err(tauri_plugin_updater::Error::TargetsNotFound(
+                targets.iter().map(|s| s.to_string()).collect(),
+            ))
+        }
+    }
+
+    #[test]
+    fn test_windows_only_manifest_macos_apple_silicon_targets_not_found() {
+        let release: tauri_plugin_updater::RemoteRelease =
+            serde_json::from_str(WINDOWS_ONLY_MANIFEST).expect("valid manifest JSON");
+
+        // Tauri searches ["darwin-aarch64-app", "darwin-aarch64"] on Apple Silicon
+        let targets = ["darwin-aarch64-app", "darwin-aarch64"];
+        let result = resolve_platform(&release, &targets);
+
+        match result {
+            Err(ref err @ tauri_plugin_updater::Error::TargetsNotFound(ref missing)) => {
+                assert_eq!(missing, &["darwin-aarch64-app", "darwin-aarch64"]);
+                assert!(is_platform_not_found_error(err));
+                let status = resolve_update_status(Err(err), "0.2.0-beta.11");
+                assert_eq!(
+                    status,
+                    AppUpdateStatus::UpToDate {
+                        version: "0.2.0-beta.11".to_string()
+                    }
+                );
+            }
+            other => panic!("expected TargetsNotFound error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_windows_only_manifest_macos_intel_targets_not_found() {
+        let release: tauri_plugin_updater::RemoteRelease =
+            serde_json::from_str(WINDOWS_ONLY_MANIFEST).expect("valid manifest JSON");
+
+        // Tauri searches ["darwin-x86_64-app", "darwin-x86_64"] on Intel Mac
+        let targets = ["darwin-x86_64-app", "darwin-x86_64"];
+        let result = resolve_platform(&release, &targets);
+
+        match result {
+            Err(ref err @ tauri_plugin_updater::Error::TargetsNotFound(ref missing)) => {
+                assert_eq!(missing, &["darwin-x86_64-app", "darwin-x86_64"]);
+                assert!(is_platform_not_found_error(err));
+                let status = resolve_update_status(Err(err), "0.2.0-beta.11");
+                assert_eq!(
+                    status,
+                    AppUpdateStatus::UpToDate {
+                        version: "0.2.0-beta.11".to_string()
+                    }
+                );
+            }
+            other => panic!("expected TargetsNotFound error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_single_target_not_found_error_treated_as_up_to_date() {
+        let err_apple_silicon =
+            tauri_plugin_updater::Error::TargetNotFound("darwin-aarch64".to_string());
+        assert!(is_platform_not_found_error(&err_apple_silicon));
+        assert_eq!(
+            resolve_update_status(Err(&err_apple_silicon), "0.2.0-beta.11"),
+            AppUpdateStatus::UpToDate {
+                version: "0.2.0-beta.11".to_string()
+            }
+        );
+
+        let err_intel =
+            tauri_plugin_updater::Error::TargetNotFound("darwin-x86_64".to_string());
+        assert!(is_platform_not_found_error(&err_intel));
+        assert_eq!(
+            resolve_update_status(Err(&err_intel), "0.2.0-beta.11"),
+            AppUpdateStatus::UpToDate {
+                version: "0.2.0-beta.11".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_real_network_and_signature_errors_remain_errors() {
+        let network_err = tauri_plugin_updater::Error::Network("connection refused".to_string());
+        assert!(!is_platform_not_found_error(&network_err));
+        assert_eq!(
+            resolve_update_status(Err(&network_err), "0.2.0-beta.11"),
+            AppUpdateStatus::Error {
+                message: network_err.to_string()
+            }
+        );
+
+        let release_not_found = tauri_plugin_updater::Error::ReleaseNotFound;
+        assert!(!is_platform_not_found_error(&release_not_found));
+        match resolve_update_status(Err(&release_not_found), "0.2.0-beta.11") {
+            AppUpdateStatus::Error { message } => {
+                assert!(message.contains("Could not fetch a valid release JSON"));
+            }
+            other => panic!("expected Error status, got {:?}", other),
+        }
+
+        let empty_endpoints = tauri_plugin_updater::Error::EmptyEndpoints;
+        assert!(!is_platform_not_found_error(&empty_endpoints));
+        assert_eq!(
+            resolve_update_status(Err(&empty_endpoints), "0.2.0-beta.11"),
+            AppUpdateStatus::Error {
+                message: empty_endpoints.to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_macos_manifest_with_platform_available() {
+        let release: tauri_plugin_updater::RemoteRelease =
+            serde_json::from_str(MACOS_AND_WINDOWS_MANIFEST).expect("valid manifest JSON");
+
+        let targets = ["darwin-aarch64-app", "darwin-aarch64"];
+        let result = resolve_platform(&release, &targets);
+        assert!(result.is_ok());
+
+        let targets_intel = ["darwin-x86_64-app", "darwin-x86_64"];
+        let result_intel = resolve_platform(&release, &targets_intel);
+        assert!(result_intel.is_ok());
+
+        let meta = UpdateMetadata {
+            version: "0.2.6".to_string(),
+            notes: "Cross platform release".to_string(),
+            release_url: "https://github.com/almatkai/Tezbar/releases/tag/v0.2.6".to_string(),
+        };
+        assert_eq!(
+            resolve_update_status(Ok(Some(meta)), "0.2.0-beta.11"),
+            AppUpdateStatus::Available {
+                version: "0.2.6".to_string(),
+                notes: "Cross platform release".to_string(),
+                release_url: "https://github.com/almatkai/Tezbar/releases/tag/v0.2.6".to_string(),
+            }
+        );
+    }
 }

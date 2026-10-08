@@ -39,6 +39,7 @@ alloc-stdlib = "=0.2.2"
 brotli-decompressor = "=5.0.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+tempfile = "3.27"
 block2 = "0.6.2"
 core-graphics = { version = "0.23", features = ["highsierra"] }
 core-foundation = "0.9"
