@@ -1874,7 +1874,7 @@ async function executeActionInner(action: SearchAction): Promise<SearchExecuteRe
     }
 
     case 'copy-and-paste-text': {
-      clipboard.writeText(action.text)
+      await clipboard.writeTextAsync(action.text)
       // Give the window time to hide before firing the paste keystroke.
       await new Promise<void>((resolve) => setTimeout(resolve, 120))
       // Deactivate the app so the previously frontmost application

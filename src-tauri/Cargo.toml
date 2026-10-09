@@ -1,6 +1,6 @@
 [package]
 name = "tezbar"
-version = "0.2.6"
+version = "0.2.7"
 description = "A Tauri App"
 authors = ["you"]
 license = "Apache-2.0"

@@ -11,12 +11,13 @@ import {
 } from './desktop-runtime'
 
 describe('Tauri desktop runtime', () => {
-  it.skipIf(process.platform !== 'win32')(
-    'preserves Unicode across Windows clipboard process pipes',
-    () => {
+  it.skipIf(process.platform !== 'win32').each([866, 1251, 65001])(
+    'preserves Unicode across Windows clipboard process pipes with code page %i',
+    (codePage) => {
       const text = '😄 👩🏽‍💻 🇰🇿 Қазақша 日本語\r\nsecond line'
       // Exercise the actual PowerShell pipe encodings without changing the user's clipboard.
       const script = [
+        `[Console]::InputEncoding = [System.Text.Encoding]::GetEncoding(${codePage})`,
         'function Set-Clipboard { param([string]$Value) $script:clipboardText = $Value }',
         'function Get-Clipboard { param([switch]$Raw) return $script:clipboardText }',
         windowsClipboardWriteTextScript(),
@@ -26,7 +27,7 @@ describe('Tauri desktop runtime', () => {
         'powershell.exe',
         ['-NoProfile', '-NonInteractive', '-Command', script],
         {
-          input: text,
+          input: Buffer.from(text, 'utf8').toString('base64'),
           encoding: 'utf8',
           windowsHide: true,
           timeout: 5_000,

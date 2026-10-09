@@ -1654,7 +1654,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('clipboard:write', async (_event, raw: unknown) => {
     const text = typeof raw === 'string' ? raw : String(raw ?? '')
-    clipboard.writeText(text)
+    await clipboard.writeTextAsync(text)
     return { ok: true }
   })
 

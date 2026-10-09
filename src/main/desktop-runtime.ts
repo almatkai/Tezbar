@@ -268,9 +268,7 @@ function readMacClipboardSnapshot(): ClipboardSnapshot {
 }
 
 function windowsClipboardSnapshotScript(): string {
-  return (
-    '$ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; $text=if([System.Windows.Forms.Clipboard]::ContainsText()){[System.Windows.Forms.Clipboard]::GetText()}else{""}; $paths=@(); if([System.Windows.Forms.Clipboard]::ContainsFileDropList()){$paths=@([System.Windows.Forms.Clipboard]::GetFileDropList())}; $hasImage=[System.Windows.Forms.Clipboard]::ContainsImage(); [Console]::Write(([PSCustomObject]@{text=$text;filePaths=$paths;hasImage=$hasImage}|ConvertTo-Json -Compress))'
-  )
+  return '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $ErrorActionPreference="Stop"; Add-Type -AssemblyName System.Windows.Forms; $text=if([System.Windows.Forms.Clipboard]::ContainsText()){[System.Windows.Forms.Clipboard]::GetText()}else{""}; $paths=@(); if([System.Windows.Forms.Clipboard]::ContainsFileDropList()){$paths=@([System.Windows.Forms.Clipboard]::GetFileDropList())}; $hasImage=[System.Windows.Forms.Clipboard]::ContainsImage(); [Console]::Write(([PSCustomObject]@{text=$text;filePaths=$paths;hasImage=$hasImage}|ConvertTo-Json -Compress))'
 }
 
 function readWindowsClipboardSnapshot(): ClipboardSnapshot {
@@ -312,7 +310,8 @@ function readClipboardSnapshot(): ClipboardSnapshot {
 }
 
 export function windowsClipboardWriteTextScript(): string {
-  return '[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); Set-Clipboard -Value ([Console]::In.ReadToEnd())'
+  // ASCII transport avoids the active Windows console code page entirely.
+  return '$ErrorActionPreference="Stop"; $encoded=[Console]::In.ReadToEnd(); Set-Clipboard -Value ([System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)))'
 }
 
 export function windowsClipboardReadTextScript(): string {
@@ -320,6 +319,26 @@ export function windowsClipboardReadTextScript(): string {
 }
 
 export const clipboard = {
+  async writeTextAsync(text: string): Promise<void> {
+    if (process.platform !== 'win32') {
+      this.writeText(text)
+      return
+    }
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Sta', '-Command', windowsClipboardWriteTextScript()],
+        { windowsHide: true }
+      )
+      child.on('error', reject)
+      child.stdin.on('error', reject)
+      child.on('close', (code) => {
+        if (code === 0) resolve()
+        else reject(new Error(`Windows clipboard write failed (${code})`))
+      })
+      child.stdin.end(Buffer.from(text, 'utf8').toString('base64'))
+    })
+  },
   async readSnapshotAsync(): Promise<ClipboardSnapshot> {
     if (process.platform !== 'win32') return readClipboardSnapshot()
     const { stdout } = await execFileAsync(
@@ -352,14 +371,9 @@ export const clipboard = {
   writeText(text: string): void {
     try {
       if (process.platform === 'win32') {
-        const child = spawn('powershell.exe', [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          windowsClipboardWriteTextScript(),
-        ], { windowsHide: true })
-        child.stdin.write(text)
-        child.stdin.end()
+        void this.writeTextAsync(text).catch((error) =>
+          console.error('[desktop-runtime] clipboard text copy failed:', error)
+        )
         return
       }
       const child = spawn('pbcopy')

@@ -4522,7 +4522,7 @@ dependencies = [
 
 [[package]]
 name = "tezbar"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "alloc-stdlib",
  "base64 0.22.1",
