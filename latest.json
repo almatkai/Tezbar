@@ -1,23 +1,15 @@
 {
-  "version": "0.2.6",
-  "notes": "## Tezbar opens when you launch it\n\n- The Tezbar launcher now opens automatically when you start the app.\n- After an update restarts Tezbar, the launcher opens again so you can continue immediately and read **Release Notes**.\n- Cross-platform release for macOS (Apple Silicon) and Windows.\n- The window uses your usual monitor placement and focuses the launcher input.",
-  "pub_date": "2026-10-08T11:55:00.000Z",
+  "version": "0.2.7",
+  "notes": "## Windows emoji and clipboard fix\n\n- Emoji paste correctly on Windows, including systems using Russian console code pages.\n- Pasting waits for the clipboard write to finish before sending Ctrl+V.\n- Clipboard history preserves emoji and other Unicode text.\n\nThis patch release is for Windows x64.",
+  "pub_date": "2026-10-09T06:17:34.700Z",
   "platforms": {
-    "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNExCdTI1MDQvWTA0RVNPaUUxY0ozUkVWZWx0b2xiT1k3cTBSQnp4eGg5Wkw1RFhtZlhQQnQ4RmVMTkVqZGlpQWdjb3ZiZlM5djErU3l1STBkdUhkT0F3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDYwNjM3CWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKRndodEhORHlPemhBTmdFT2xSOExmWUdWOG9wMHlMNzViUml1M3BtMzYzeUR6emhmaUxFbjJLalJkaW5aa1hRdWpqV1JITmFNL3R5aTZ1OEIyOTloRGc9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar.app.tar.gz"
-    },
-    "darwin-aarch64-app": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNExCdTI1MDQvWTA0RVNPaUUxY0ozUkVWZWx0b2xiT1k3cTBSQnp4eGg5Wkw1RFhtZlhQQnQ4RmVMTkVqZGlpQWdjb3ZiZlM5djErU3l1STBkdUhkT0F3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNDYwNjM3CWZpbGU6VGV6YmFyLmFwcC50YXIuZ3oKRndodEhORHlPemhBTmdFT2xSOExmWUdWOG9wMHlMNzViUml1M3BtMzYzeUR6emhmaUxFbjJLalJkaW5aa1hRdWpqV1JITmFNL3R5aTZ1OEIyOTloRGc9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar.app.tar.gz"
-    },
     "windows-x86_64-nsis": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE5LVXZEbXlhMEtEaUxoMGNDd1htaHVSVVZOMEJVT3NWemcrdHhjaXRHTnVGQXYyeVVvQkMzMkxvblNpNG1KU0NINlJBTE9OZUlrdkhlT2M0Y0RrSFFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU5MzMwCWZpbGU6VGV6YmFyXzAuMi42X3g2NC1zZXR1cC5leGUKUlV2Uk1Yd0h4bndpRStBa1dJQ1lmZjZQek5ueGJjR1dUWjk0YkZOU09SL2FvQVI2bjVzUnNNd3ljc1JIY0piSStXaEZ6Q0l5MitqWHVHRHNodzgrQVE9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar_0.2.6_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNERPb1AvdzlkWWpiU29WUEkzYUQwVXVJeUNkanRIL1pkUHd2bFVxbTNtc3ZYUjJyaDVxU0lsYyszVTMvc2lkNm5XNTRrRUlodEpLU0p1eUI0WTFDZWdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTI2NjM0CWZpbGU6VGV6YmFyXzAuMi43X3g2NC1zZXR1cC5leGUKdEZhSzNJcU1nTGhyVm5sZU44azNjMTU0RlBDSVpHc2V1dEwvREVGL1ZsZDFFMWJaYndieUtaTW5JdHEza0pCMWdPT3E3U2dPaDVzbTJ3OGNlUnhaRHc9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.7/Tezbar_0.2.7_x64-setup.exe"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE5LVXZEbXlhMEtEaUxoMGNDd1htaHVSVVZOMEJVT3NWemcrdHhjaXRHTnVGQXYyeVVvQkMzMkxvblNpNG1KU0NINlJBTE9OZUlrdkhlT2M0Y0RrSFFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMzU5MzMwCWZpbGU6VGV6YmFyXzAuMi42X3g2NC1zZXR1cC5leGUKUlV2Uk1Yd0h4bndpRStBa1dJQ1lmZjZQek5ueGJjR1dUWjk0YkZOU09SL2FvQVI2bjVzUnNNd3ljc1JIY0piSStXaEZ6Q0l5MitqWHVHRHNodzgrQVE9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.6/Tezbar_0.2.6_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNERPb1AvdzlkWWpiU29WUEkzYUQwVXVJeUNkanRIL1pkUHd2bFVxbTNtc3ZYUjJyaDVxU0lsYyszVTMvc2lkNm5XNTRrRUlodEpLU0p1eUI0WTFDZWdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTI2NjM0CWZpbGU6VGV6YmFyXzAuMi43X3g2NC1zZXR1cC5leGUKdEZhSzNJcU1nTGhyVm5sZU44azNjMTU0RlBDSVpHc2V1dEwvREVGL1ZsZDFFMWJaYndieUtaTW5JdHEza0pCMWdPT3E3U2dPaDVzbTJ3OGNlUnhaRHc9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.7/Tezbar_0.2.7_x64-setup.exe"
     }
   }
 }
