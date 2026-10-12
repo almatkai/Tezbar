@@ -10,7 +10,9 @@ beforeAll(() => {
   process.env.APPDATA_DIR = appDataDirectory
 })
 
-afterAll(() => {
+afterAll(async () => {
+  const { closeChatSessionStore } = await import('./sessionStore')
+  closeChatSessionStore()
   if (previousAppDataDirectory === undefined) delete process.env.APPDATA_DIR
   else process.env.APPDATA_DIR = previousAppDataDirectory
   rmSync(appDataDirectory, { recursive: true, force: true })

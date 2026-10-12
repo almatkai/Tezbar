@@ -1,14 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../../shared/llmConfig'
+import { configurationDirectory, defaultLauncherShortcut } from '../profile'
 
-export const OPENRAY_CONFIG_DIR = join(homedir(), '.openray')
+export const OPENRAY_CONFIG_DIR = configurationDirectory()
 export const OPENRAY_CONFIG_PATH = join(OPENRAY_CONFIG_DIR, 'config.json')
 // Alt+Space opens the native window menu on Windows, so it cannot be used as
 // a reliable global launcher shortcut there. Keep the macOS default intact
 // while giving Windows a shortcut that the OS does not reserve.
-export const DEFAULT_RAYMES_HOTKEY = process.platform === 'win32' ? 'Control+Space' : 'Alt+Space'
+export const DEFAULT_RAYMES_HOTKEY = defaultLauncherShortcut()
 
 let configCache: Record<string, unknown> | null = null
 

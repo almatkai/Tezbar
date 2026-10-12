@@ -1,4 +1,5 @@
 import type { WebContents } from '@tezbar/desktop-runtime'
+import { configurationDirectory } from '../profile'
 import {
   appendFileSync,
   existsSync,
@@ -196,7 +197,7 @@ const persistedSummaries = new Map<string, TerminalSessionSummary>()
 let persistedLoaded = false
 const OUTPUT_REPLAY_LIMIT_BYTES = 512 * 1024
 const TERMINAL_CONFIG_KEY = 'terminalSessions'
-const TERMINAL_HISTORY_DIR = join(homedir(), '.openray', 'terminal-history')
+const TERMINAL_HISTORY_DIR = join(configurationDirectory(), 'terminal-history')
 
 const SAVE_FOR_MS: Record<Exclude<TerminalSaveFor, 'forever'>, number> = {
   day: 24 * 60 * 60 * 1000,

@@ -8,21 +8,23 @@ import { SearchIndexDatabase } from './indexDb'
 describe('search index hot usage window', () => {
   let appDataDir = ''
   let previousAppDataDir: string | undefined
+  let index: SearchIndexDatabase
 
   beforeEach(() => {
     previousAppDataDir = process.env.APPDATA_DIR
     appDataDir = mkdtempSync(join(tmpdir(), 'raymes-search-index-'))
     process.env.APPDATA_DIR = appDataDir
+    index = new SearchIndexDatabase()
   })
 
   afterEach(() => {
+    index.close()
     if (previousAppDataDir === undefined) delete process.env.APPDATA_DIR
     else process.env.APPDATA_DIR = previousAppDataDir
     rmSync(appDataDir, { recursive: true, force: true })
   })
 
   it('persists each successful action and exposes its five-minute use count', async () => {
-    const index = new SearchIndexDatabase()
     await index.ensureInitialized()
     index.upsertDocuments([
       {
@@ -85,7 +87,6 @@ describe('search index hot usage window', () => {
     `)
     ;(legacy as unknown as { close?: () => void }).close?.()
 
-    const index = new SearchIndexDatabase()
     await index.ensureInitialized()
     expect(index.search('legacy', 10).map((row) => row.id)).toContain('legacy:one')
 

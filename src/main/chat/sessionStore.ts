@@ -136,6 +136,12 @@ class ChatSessionDatabase {
   private _db: InstanceType<typeof Database> | null = null
   private _initPromise: Promise<void> | null = null
 
+  close(): void {
+    this._db?.close()
+    this._db = null
+    this._initPromise = null
+  }
+
   private get db(): InstanceType<typeof Database> {
     if (!this._db) {
       throw new Error('Database not initialized - call ensureInitialized() first')
@@ -353,6 +359,11 @@ class ChatSessionDatabase {
 }
 
 let instance: ChatSessionDatabase | null = null
+
+export function closeChatSessionStore(): void {
+  instance?.close()
+  instance = null
+}
 
 function store(): ChatSessionDatabase {
   if (!instance) instance = new ChatSessionDatabase()

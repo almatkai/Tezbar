@@ -4,6 +4,7 @@ mod native_input;
 use backend_health::{BackendStatus, HealthCheck, CONNECT_TIMEOUT};
 mod native_terminal;
 mod qr_download;
+mod release_channels;
 #[cfg(target_os = "macos")]
 mod timer_notifications;
 mod updater;
@@ -779,6 +780,9 @@ extern "system" {
 }
 
 fn openray_config_path() -> Option<PathBuf> {
+    if let Some(path) = PROFILE_CONFIG_PATH.get() {
+        return Some(path.clone());
+    }
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(|home| PathBuf::from(home).join(".openray").join("config.json"))
@@ -791,6 +795,8 @@ fn bun_executable_name() -> &'static str {
         "bun"
     }
 }
+
+static PROFILE_CONFIG_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
 fn bun_in_user_profile() -> Option<PathBuf> {
     std::env::var_os("HOME")
@@ -2897,7 +2903,7 @@ fn open_settings_window(app: AppHandle) -> Result<(), String> {
         tauri::WebviewUrl::App("index.html?window=settings".into()),
     )
     .initialization_script("window.__TEZBAR_WINDOW_LABEL__ = 'settings';")
-    .title("Tezbar Settings")
+    .title(format!("{} Settings", app.package_info().name))
     .inner_size(920.0, 680.0)
     .resizable(true)
     .decorations(true)
@@ -3683,6 +3689,8 @@ pub fn run() {
             native_terminal::native_terminal_delete_history,
             native_terminal::native_terminal_prune_history,
             updater::get_update_status,
+            updater::get_update_channel,
+            updater::set_update_channel,
             updater::check_for_updates,
             updater::download_and_install_update,
             updater::restart_app,
@@ -3693,8 +3701,21 @@ pub fn run() {
             let handle = app.handle().clone();
             #[cfg(target_os = "macos")]
             timer_notifications::setup(&handle);
-            let app_local_data = handle.path().app_local_data_dir().unwrap_or_default();
+            let app_local_data = handle.path().app_local_data_dir()?;
+            let alpha_build = handle.config().identifier == release_channels::ALPHA_APP_ID;
+            let config_path = if alpha_build {
+                Some(app_local_data.join("config").join("config.json"))
+            } else {
+                openray_config_path()
+            };
+            if let Some(path) = &config_path {
+                let _ = PROFILE_CONFIG_PATH.set(path.clone());
+            }
             let mut backend_env = vec![
+                (
+                    "TEZBAR_RELEASE_CHANNEL".to_string(),
+                    if alpha_build { "alpha" } else { "stable" }.to_string(),
+                ),
                 (
                     "APPDATA_DIR".to_string(),
                     app_local_data.to_string_lossy().into_owned(),
@@ -3714,6 +3735,18 @@ pub fn run() {
                 ),
                 ("IS_TAURI".to_string(), "true".to_string()),
             ];
+            if let Some(directory) = config_path.as_ref().and_then(|path| path.parent()) {
+                backend_env.push((
+                    "TEZBAR_CONFIG_DIR".into(),
+                    directory.to_string_lossy().into_owned(),
+                ));
+            }
+            if alpha_build {
+                backend_env.push((
+                    "PI_CODING_AGENT_DIR".into(),
+                    app_local_data.join("pi-agent").to_string_lossy().into_owned(),
+                ));
+            }
 
             #[cfg(target_os = "macos")]
             if let Ok(resource_dir) = handle.path().resource_dir() {
@@ -3913,10 +3946,15 @@ pub fn run() {
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-            let show_item = MenuItem::with_id(&handle, "show", "Show Tezbar", true, None::<&str>)?;
+            let app_name = handle.package_info().name.clone();
+            let show_item = MenuItem::with_id(
+                &handle, "show", format!("Show {app_name}"), true, None::<&str>,
+            )?;
             let settings_item =
                 MenuItem::with_id(&handle, "settings", "Settings", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(&handle, "quit", "Quit Tezbar", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(
+                &handle, "quit", format!("Quit {app_name}"), true, None::<&str>,
+            )?;
 
             let menu = Menu::with_items(&handle, &[&show_item, &settings_item, &quit_item])?;
 
@@ -3992,12 +4030,16 @@ pub fn run() {
                 })
                 .build(&handle_tray)?;
 
+            let mut shortcut_modifiers = if cfg!(target_os = "windows") {
+                tauri_plugin_global_shortcut::Modifiers::CONTROL
+            } else {
+                tauri_plugin_global_shortcut::Modifiers::ALT
+            };
+            if alpha_build {
+                shortcut_modifiers |= tauri_plugin_global_shortcut::Modifiers::SHIFT;
+            }
             let default_shortcut = Shortcut::new(
-                if cfg!(target_os = "windows") {
-                    Some(tauri_plugin_global_shortcut::Modifiers::CONTROL)
-                } else {
-                    Some(tauri_plugin_global_shortcut::Modifiers::ALT)
-                },
+                Some(shortcut_modifiers),
                 tauri_plugin_global_shortcut::Code::Space,
             );
             if let Err(error) = handle.global_shortcut().register(default_shortcut) {

@@ -2,6 +2,7 @@
 //
 // GitHub Releases–based update tracking using tauri-plugin-updater.
 
+use crate::release_channels::{self, ReleaseChannel};
 use serde::Serialize;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
@@ -39,6 +40,7 @@ pub enum AppUpdateStatus {
 }
 
 pub struct UpdaterState {
+    operation: tokio::sync::Mutex<()>,
     status: Mutex<AppUpdateStatus>,
     pending: Mutex<Option<Update>>,
 }
@@ -46,10 +48,113 @@ pub struct UpdaterState {
 impl Default for UpdaterState {
     fn default() -> Self {
         Self {
+            operation: tokio::sync::Mutex::new(()),
             status: Mutex::new(AppUpdateStatus::Idle),
             pending: Mutex::new(None),
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateChannelInfo {
+    channel: ReleaseChannel,
+    alpha_build: bool,
+    version: String,
+}
+
+fn selected_channel(app: &AppHandle) -> Result<ReleaseChannel, String> {
+    let directory = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    release_channels::read_channel(
+        &directory,
+        &app.config().identifier,
+        &app.package_info().version,
+    )
+}
+
+#[tauri::command]
+pub async fn get_update_channel(app: AppHandle) -> Result<UpdateChannelInfo, String> {
+    let state = app.state::<UpdaterState>();
+    let _operation = state.operation.lock().await;
+    channel_info(&app)
+}
+
+fn channel_info(app: &AppHandle) -> Result<UpdateChannelInfo, String> {
+    Ok(UpdateChannelInfo {
+        channel: selected_channel(app)?,
+        alpha_build: app.config().identifier == release_channels::ALPHA_APP_ID,
+        version: app.package_info().version.to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn set_update_channel(
+    app: AppHandle,
+    channel: ReleaseChannel,
+) -> Result<UpdateChannelInfo, String> {
+    let state = app.state::<UpdaterState>();
+    let _operation = state.operation.lock().await;
+    if matches!(
+        current_status(&app),
+        AppUpdateStatus::Downloading { .. } | AppUpdateStatus::Ready { .. }
+    ) {
+        return Err("Finish the current update before changing channels".into());
+    }
+    if app.config().identifier == release_channels::ALPHA_APP_ID || channel == ReleaseChannel::Alpha
+    {
+        return Err("Alpha uses a separate Tezbar Alpha installation".into());
+    }
+    let directory = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    release_channels::write_channel(&directory, channel)?;
+    *state.pending.lock().unwrap() = None;
+    set_status(&app, AppUpdateStatus::Idle);
+    channel_info(&app)
+}
+
+fn validate_update(
+    app: &AppHandle,
+    channel: ReleaseChannel,
+    update: &Update,
+) -> Result<(), String> {
+    let version = semver::Version::parse(&update.version).map_err(|e| e.to_string())?;
+    release_channels::validate_manifest_identity(
+        channel,
+        &app.config().identifier,
+        &version,
+        &update.raw_json,
+    )?;
+    validate_download_url(channel, &version, &update.download_url)
+}
+
+fn validate_download_url(
+    channel: ReleaseChannel,
+    version: &semver::Version,
+    url: &tauri::Url,
+) -> Result<(), String> {
+    let prefix = format!("/{GITHUB_REPO}/releases/download/v{version}/");
+    let filename = url.path().strip_prefix(&prefix).unwrap_or("");
+    let product = if channel == ReleaseChannel::Alpha {
+        "Tezbar%20Alpha"
+    } else {
+        "Tezbar"
+    };
+    if url.scheme() != "https"
+        || url.host_str() != Some("github.com")
+        || url.port().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || filename.contains('/')
+        || filename.to_ascii_lowercase().contains("%2f")
+        || (!filename.starts_with(&format!("{product}_"))
+            && filename != format!("{product}.app.tar.gz"))
+    {
+        return Err(
+            "Update must reference an immutable release asset for this Tezbar installation".into(),
+        );
+    }
+    Ok(())
 }
 
 fn set_status(app: &AppHandle, status: AppUpdateStatus) {
@@ -124,6 +229,16 @@ pub async fn get_update_status(app: AppHandle) -> Result<AppUpdateStatus, String
 
 #[tauri::command]
 pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String> {
+    let state = app.state::<UpdaterState>();
+    let _operation = state.operation.lock().await;
+    if matches!(
+        current_status(&app),
+        AppUpdateStatus::Downloading { .. } | AppUpdateStatus::Ready { .. }
+    ) {
+        return Ok(current_status(&app));
+    }
+    *state.pending.lock().unwrap() = None;
+    let channel = selected_channel(&app)?;
     log::info!("Updater: check_for_updates requested");
     set_status(&app, AppUpdateStatus::Checking);
 
@@ -139,11 +254,21 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
 
     let updater = app
         .updater_builder()
+        .endpoints(
+            channel
+                .endpoints()
+                .iter()
+                .map(|url| url.parse())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| format!("Invalid update endpoint: {e}"))?,
+        )
+        .map_err(|e| e.to_string())?
+        .timeout(std::time::Duration::from_secs(15))
         .header("User-Agent", user_agent)
         .map_err(|e| e.to_string())?
-        .version_comparator(|current, release| {
+        .version_comparator(move |current, release| {
             // Offer updates that are strictly newer than the running build.
-            release.version > current
+            release.version > current && channel.accepts(&release.version)
         })
         .build()
         .map_err(|e| e.to_string())?;
@@ -152,6 +277,11 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
 
     match result {
         Ok(Some(update)) => {
+            if let Err(message) = validate_update(&app, channel, &update) {
+                let status = AppUpdateStatus::Error { message };
+                set_status(&app, status.clone());
+                return Ok(status);
+            }
             let version = update.version.clone();
             let notes = update.body.clone().unwrap_or_default();
             // tag is embedded in the version string; release page URL is derived
@@ -178,7 +308,9 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
             Ok(status)
         }
         Err(ref error) if is_platform_not_found_error(error) => {
-            log::info!("Updater: platform not found for this architecture ({error:?}). Setting UpToDate.");
+            log::info!(
+                "Updater: platform not found for this architecture ({error:?}). Setting UpToDate."
+            );
             if let Some(state) = app.try_state::<UpdaterState>() {
                 *state.pending.lock().unwrap() = None;
             }
@@ -200,6 +332,8 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
 
 #[tauri::command]
 pub async fn download_and_install_update(app: AppHandle) -> Result<AppUpdateStatus, String> {
+    let state = app.state::<UpdaterState>();
+    let _operation = state.operation.lock().await;
     if let AppUpdateStatus::Downloading { .. } | AppUpdateStatus::Ready { .. } =
         current_status(&app)
     {
@@ -231,6 +365,7 @@ pub async fn download_and_install_update(app: AppHandle) -> Result<AppUpdateStat
     let Some(update) = update else {
         return Err("No pending update. Run check_for_updates first.".to_string());
     };
+    validate_update(&app, selected_channel(&app)?, &update)?;
 
     let version = update.version.clone();
     set_status(
@@ -319,6 +454,40 @@ pub fn open_release_page(url: String) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn download_urls_are_version_pinned_and_belong_to_the_installed_product() {
+        let version = semver::Version::parse("0.3.0-alpha.1").unwrap();
+        let alpha = "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-alpha.1/Tezbar%20Alpha_0.3.0-alpha.1_x64-setup.exe";
+        assert!(
+            validate_download_url(ReleaseChannel::Alpha, &version, &alpha.parse().unwrap()).is_ok()
+        );
+        assert!(
+            validate_download_url(ReleaseChannel::Beta, &version, &alpha.parse().unwrap()).is_err()
+        );
+        for wrong in [
+            alpha.replace("v0.3.0-alpha.1/", "latest/"),
+            alpha.replace("Tezbar%20Alpha_", "Tezbar_"),
+            alpha.replace("github.com/", "github.com.evil.example/"),
+            format!("{alpha}?redirect=another-product"),
+            alpha.replace("x64-setup.exe", "subdir/installer.exe"),
+        ] {
+            assert!(validate_download_url(
+                ReleaseChannel::Alpha,
+                &version,
+                &wrong.parse().unwrap()
+            )
+            .is_err());
+        }
+        let stable_version = semver::Version::parse("0.2.7").unwrap();
+        let legacy = "https://github.com/almatkai/Tezbar/releases/download/v0.2.7/Tezbar_0.2.7_x64-setup.exe";
+        assert!(validate_download_url(
+            ReleaseChannel::Stable,
+            &stable_version,
+            &legacy.parse().unwrap()
+        )
+        .is_ok());
+    }
+
     const WINDOWS_ONLY_MANIFEST: &str = r#"{
       "version": "0.2.6",
       "notes": "Tezbar Windows release notes",
@@ -366,7 +535,9 @@ mod tests {
             }
         }
         if targets.len() == 1 {
-            Err(tauri_plugin_updater::Error::TargetNotFound(targets[0].to_string()))
+            Err(tauri_plugin_updater::Error::TargetNotFound(
+                targets[0].to_string(),
+            ))
         } else {
             Err(tauri_plugin_updater::Error::TargetsNotFound(
                 targets.iter().map(|s| s.to_string()).collect(),
@@ -436,8 +607,7 @@ mod tests {
             }
         );
 
-        let err_intel =
-            tauri_plugin_updater::Error::TargetNotFound("darwin-x86_64".to_string());
+        let err_intel = tauri_plugin_updater::Error::TargetNotFound("darwin-x86_64".to_string());
         assert!(is_platform_not_found_error(&err_intel));
         assert_eq!(
             resolve_update_status(Err(&err_intel), "0.2.0-beta.11"),

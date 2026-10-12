@@ -1,0 +1,44 @@
+name: Quality checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+    inputs:
+      source_commit:
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  quality:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, macos-15-intel, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_commit || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm release:test
+      - run: pnpm test
+      - name: Install loadable SQLite for macOS packaging
+        if: runner.os == 'macOS'
+        run: brew list sqlite >/dev/null 2>&1 || brew install sqlite
+      - run: pnpm build:native
+      - run: pnpm build:backend
+      - run: pnpm build:frontend
+      - run: cargo test --lib --locked
+        working-directory: src-tauri

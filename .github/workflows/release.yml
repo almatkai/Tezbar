@@ -1,0 +1,149 @@
+name: Reviewed channel release
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        type: choice
+        options: [alpha, beta, stable]
+        default: alpha
+        required: true
+      version:
+        description: 'Exact version: 0.3.0-alpha.1, 0.3.0-beta.1, or 0.3.0'
+        required: true
+        type: string
+      source_ref:
+        description: Reviewed commit or feature/release ref; Stable must already be in main
+        required: true
+        type: string
+      artifact_run_id:
+        description: Recovery only; reuse original build artifacts from this workflow run ID
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: tezbar-release-publication
+  cancel-in-progress: false
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          node scripts/validate-release-source.mjs "$CHANNEL" "$VERSION" "$SOURCE_REF"
+          node scripts/verify-release-environments.mjs "$CHANNEL"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  quality:
+    needs: source
+    uses: ./.github/workflows/ci.yml
+    with:
+      source_commit: ${{ needs.source.outputs.commit }}
+  build:
+    needs: [source, quality]
+    if: inputs.artifact_run_id == ''
+    environment: release-build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, macos-15-intel, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - name: Install loadable SQLite for macOS packaging
+        if: runner.os == 'macOS'
+        run: brew list sqlite >/dev/null 2>&1 || brew install sqlite
+      - name: Prepare runner signing credentials
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: node scripts/prepare-release-signing.mjs
+      - name: Build and verify signed installers
+        shell: bash
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ inputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: node scripts/build-release.mjs --channel "$CHANNEL" --version "$VERSION" --output build/release-output
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          path: build/release-output/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove runner signing files
+        if: always()
+        run: node scripts/prepare-release-signing.mjs --cleanup
+  publish:
+    needs: [source, quality, build]
+    if: ${{ always() && needs.source.result == 'success' && needs.quality.result == 'success' && (needs.build.result == 'success' || (needs.build.result == 'skipped' && inputs.artifact_run_id != '')) }}
+    environment: release-${{ inputs.channel }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-artifacts
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
+      - name: Validate and publish immutable artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PUBLICATION_APPROVED: 'true'
+          CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+          RESUME_RUN: ${{ inputs.artifact_run_id }}
+        run: |
+          args=()
+          if [ -n "$RESUME_RUN" ]; then args+=(--resume); fi
+          node scripts/publish-release.mjs --channel "$CHANNEL" --version "$VERSION" --source-commit "$SOURCE_COMMIT" "${args[@]}"

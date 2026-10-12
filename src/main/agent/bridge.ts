@@ -37,6 +37,7 @@ import type { AgentInputImage, Stage } from '../../shared/agent'
 import { observe, type Observation } from './observer'
 import { buildPromptCommand } from './prompt'
 import { ensureKnowledgeAgentGateway } from '../knowledge/agent/gateway'
+import { piAgentDirectory } from '../profile'
 
 const PI_BIN_CANDIDATES = [
   // Where pnpm installs global bins for this user (matches `which pi`
@@ -47,9 +48,7 @@ const PI_BIN_CANDIDATES = [
 ]
 
 const OPENCODE_PI_EXTENSION = path.join(
-  homedir(),
-  '.pi',
-  'agent',
+  piAgentDirectory(),
   'extensions',
   'opencode',
   'index.ts'

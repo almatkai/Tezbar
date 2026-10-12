@@ -38,6 +38,7 @@
       "active": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUwOUQ1QTBDOEQ2M0VCN0MKUldSODYyT05ERnFkNFBmWm9YRFZzdUpVa295eHdTMUNSVzFpa0wrbi9WRytoa3pqRTdWd3BHSnUK",
       "endpoints": [
+        "https://github.com/almatkai/Tezbar/releases/download/channel-stable/latest.json",
         "https://github.com/almatkai/Tezbar/releases/latest/download/latest.json",
         "https://raw.githubusercontent.com/almatkai/Tezbar/main/latest.json"
       ]

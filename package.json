@@ -8,6 +8,8 @@
     "dev": "tauri dev",
     "build": "pnpm build:native && tauri build",
     "build:windows": "node scripts/build-windows.mjs",
+    "release:build": "node scripts/build-release.mjs",
+    "release:test": "node --test scripts/release-policy.test.mjs",
     "build:frontend": "vite build",
     "preview": "vite preview --config vite.config.ts",
     "lint": "eslint .",

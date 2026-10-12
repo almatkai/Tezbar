@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as appsProvider from '../search/providers/appsProvider'
 
 /** We can't import the real `electron` module in a vitest (node) env — it
  *  only exposes the main/renderer APIs when loaded from an Electron
@@ -57,6 +58,7 @@ describe('raycast shim API surface', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     rmSync(ctx.packageRoot, { recursive: true, force: true })
   })
 
@@ -147,16 +149,10 @@ describe('raycast shim API surface', () => {
   })
 
   it('getApplications returns applications with bundle identifiers', async () => {
+    vi.spyOn(appsProvider, 'listApplications').mockReturnValue([{ name: 'Sample', path: '/Applications/Sample.app', bundleId: 'com.example.Sample' }])
     const api = createRaycastApi(ctx) as Record<string, any>
     const apps = await api.getApplications()
-    expect(Array.isArray(apps)).toBe(true)
-    if (process.platform === 'darwin' && apps.length > 0) {
-      const amphetamine = apps.find((app: any) => app.bundleId === 'com.if.Amphetamine')
-      if (amphetamine) {
-        expect(amphetamine.bundleId).toBe('com.if.Amphetamine')
-        expect(amphetamine.name).toBe('Amphetamine')
-      }
-    }
+    expect(apps).toEqual([{ name: 'Sample', path: '/Applications/Sample.app', bundleId: 'com.example.Sample' }])
   })
 
   it('getFrontmostApplication and getDefaultApplication return expected shapes', async () => {

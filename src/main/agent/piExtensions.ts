@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import path from 'node:path'
+import { piAgentDirectory } from '../profile'
 
 export interface PiExtensionItem {
   id: string
@@ -13,8 +13,7 @@ export interface PiExtensionItem {
   features?: string[]
 }
 
-export function getInstalledPiExtensions(): PiExtensionItem[] {
-  const agentDir = path.join(homedir(), '.pi', 'agent')
+export function getInstalledPiExtensions(agentDir = piAgentDirectory()): PiExtensionItem[] {
   const settingsPath = path.join(agentDir, 'settings.json')
   const nodeModulesDir = path.join(agentDir, 'npm', 'node_modules')
   const extensionsDir = path.join(agentDir, 'extensions')

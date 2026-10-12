@@ -1,0 +1,8 @@
+{
+  "version": "0.0.0-alpha.1",
+  "channel": "alpha",
+  "appIdentifier": "com.tezbar.app.alpha",
+  "notes": "No Alpha release has been published yet.",
+  "pub_date": "2026-10-12T00:00:00Z",
+  "platforms": {}
+}

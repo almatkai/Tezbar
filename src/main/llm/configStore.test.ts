@@ -9,6 +9,7 @@ async function isolatedConfigStore() {
   const home = mkdtempSync(join(tmpdir(), 'tezbar-config-store-'))
   temporaryHomes.push(home)
   vi.stubEnv('HOME', home)
+  vi.stubEnv('TEZBAR_CONFIG_DIR', home)
   vi.resetModules()
   return import('./configStore')
 }

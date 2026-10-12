@@ -166,9 +166,9 @@ export async function listModelsForProvider(
     case 'antigravity': {
       try {
         const { existsSync, readFileSync } = await import('node:fs')
-        const { homedir } = await import('node:os')
         const path = await import('node:path')
-        const storePath = path.join(homedir(), '.pi', 'agent', 'models-store.json')
+        const { piAgentDirectory } = await import('../profile')
+        const storePath = path.join(piAgentDirectory(), 'models-store.json')
         if (existsSync(storePath)) {
           const raw = JSON.parse(readFileSync(storePath, 'utf8')) as {
             antigravity?: { models?: Array<{ id?: unknown }> }

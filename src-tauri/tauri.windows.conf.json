@@ -9,6 +9,7 @@
       "../native/image-colors/windows.ps1": "native/image-colors/windows.ps1"
     },
     "windows": {
+      "allowDowngrades": false,
       "nsis": {
         "installMode": "currentUser"
       }

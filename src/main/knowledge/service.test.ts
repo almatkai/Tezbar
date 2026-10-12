@@ -15,6 +15,7 @@ import { isIndexablePath } from './extractors/localExtractor'
 const cleanup: string[] = []
 
 afterEach(async () => {
+  getKnowledgeStore().close()
   await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
