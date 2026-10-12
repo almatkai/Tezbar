@@ -1,15 +1,15 @@
 "use strict";
 
 // src/main/knowledge/worker.ts
-var import_node_os3 = require("node:os");
+var import_node_os4 = require("node:os");
 
 // src/main/knowledge/service.ts
-var import_node_child_process4 = require("node:child_process");
-var import_node_crypto4 = require("node:crypto");
-var import_node_fs7 = require("node:fs");
-var import_node_os2 = require("node:os");
-var import_node_path7 = require("node:path");
-var import_node_util3 = require("node:util");
+var import_node_child_process5 = require("node:child_process");
+var import_node_crypto5 = require("node:crypto");
+var import_node_fs8 = require("node:fs");
+var import_node_os3 = require("node:os");
+var import_node_path9 = require("node:path");
+var import_node_util4 = require("node:util");
 
 // src/main/knowledge/backends/local/backend.ts
 var import_node_fs2 = require("node:fs");
@@ -741,7 +741,7 @@ var better_sqlite3_shim_default = DatabaseShim;
 
 // src/main/knowledge/database/store.ts
 var import_node_fs6 = require("node:fs");
-var import_node_path5 = require("node:path");
+var import_node_path6 = require("node:path");
 var import_node_crypto3 = require("node:crypto");
 
 // src/main/sqlite-vec-bundled.ts
@@ -765,6 +765,7 @@ function buildContentFtsQuery(query) {
 // src/main/knowledge/depth.ts
 var DEFAULT_KNOWLEDGE_SETTINGS = {
   depth: "smart",
+  embeddingModel: "built-in",
   maxConcurrentExtractors: 1,
   maxConcurrentOcrJobs: 1,
   runOnBattery: false,
@@ -809,6 +810,248 @@ function indexingProfileKey(profile) {
   });
 }
 
+// src/main/knowledge/embeddings/gemmaIndex.ts
+var import_node_path5 = require("node:path");
+
+// src/main/knowledge/embeddings/gemmaManifest.ts
+var GEMMA_MODEL = {
+  id: "google/embeddinggemma-2",
+  revision: "bfcd298762cc34d0357ece5ebdd31791a3a374d8",
+  dimensions: 256,
+  file: "embeddinggemma-2-Q8_0.gguf",
+  bytes: 309855456,
+  sha256: "2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135"
+};
+var GEMMA_INDEX_KEY = `${GEMMA_MODEL.id}:${GEMMA_MODEL.revision}:q8:256:search-v1`;
+var GEMMA_MODEL_URL = `https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/${GEMMA_MODEL.revision}/${GEMMA_MODEL.file}`;
+var RUNTIMES = {
+  "win32-x64": {
+    file: "llama-b11474-bin-win-cpu-x64.zip",
+    bytes: 19440991,
+    sha256: "5a39102a1b27d75ab8a9d777c6cf2ce373c468265dc1797a2566dec085501a95"
+  },
+  "win32-arm64": {
+    file: "llama-b11474-bin-win-cpu-arm64.zip",
+    bytes: 12269479,
+    sha256: "2874f37ef48f12edfab2346f3857d7c866f4d423b2e9da045baf14312201db71"
+  },
+  "darwin-arm64": {
+    file: "llama-b11474-bin-macos-arm64.tar.gz",
+    bytes: 12011955,
+    sha256: "ae7f002f2b477d14fea8ac4d93438684344cd18ec10d2b0ee9d5518b2a74def5"
+  },
+  "darwin-x64": {
+    file: "llama-b11474-bin-macos-x64.tar.gz",
+    bytes: 11530937,
+    sha256: "46381da99834f84ead41c78d091c9137755bac27d9423e56ea1fd0bc51104d60"
+  },
+  "linux-x64": {
+    file: "llama-b11474-bin-ubuntu-x64.tar.gz",
+    bytes: 17737147,
+    sha256: "98abe0fac169db55712ce96b0e30adf99fa47fa5386fddef8fef84fe21f4a690"
+  }
+};
+function gemmaRuntime(platform = process.platform, arch = process.arch) {
+  const runtime = RUNTIMES[`${platform}-${arch}`];
+  return runtime ? {
+    ...runtime,
+    url: `https://github.com/ggml-org/llama.cpp/releases/download/b11474/${runtime.file}`
+  } : void 0;
+}
+function normalizeGemmaVector(value) {
+  if (!Array.isArray(value) || value.length !== 768 || value.some((component) => typeof component !== "number" || !Number.isFinite(component))) {
+    throw new Error("EmbeddingGemma returned an invalid vector");
+  }
+  const truncated = value.slice(0, GEMMA_MODEL.dimensions);
+  const magnitude = Math.sqrt(truncated.reduce((sum, component) => sum + component * component, 0));
+  if (magnitude === 0) throw new Error("EmbeddingGemma returned an empty vector");
+  return truncated.map((component) => component / magnitude);
+}
+function gemmaDocument(text, title) {
+  return `title: ${title?.trim() || "none"} | text: ${text}`;
+}
+function gemmaQuery(text) {
+  return `task: search result | query: ${text}`;
+}
+
+// src/main/knowledge/embeddings/gemmaIndex.ts
+function encode(vector) {
+  if (vector.length !== GEMMA_MODEL.dimensions || vector.some((v) => !Number.isFinite(v))) {
+    throw new Error("Invalid vector for the Gemma index");
+  }
+  const buffer = Buffer.alloc(vector.length * 4);
+  vector.forEach((v, index) => buffer.writeFloatLE(v, index * 4));
+  return buffer;
+}
+function decode(buffer) {
+  const bytes = Buffer.from(buffer);
+  return Array.from({ length: bytes.length / 4 }, (_, index) => bytes.readFloatLE(index * 4));
+}
+var GemmaIndex = class {
+  constructor(db, vectorAvailable) {
+    this.db = db;
+    this.vectorAvailable = vectorAvailable;
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS knowledge_gemma_embeddings (
+        chunk_id TEXT PRIMARY KEY,
+        model_key TEXT NOT NULL,
+        vector BLOB NOT NULL
+      );
+      CREATE TRIGGER IF NOT EXISTS knowledge_gemma_chunk_delete
+      BEFORE DELETE ON knowledge_chunks BEGIN
+        DELETE FROM knowledge_gemma_embeddings WHERE chunk_id = OLD.id;
+      END;
+    `);
+    if (vectorAvailable) {
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_gemma_vectors USING vec0(
+          embedding float[256] distance_metric=cosine,
+          root_id text
+        );
+        CREATE TRIGGER IF NOT EXISTS knowledge_gemma_vector_delete
+        BEFORE DELETE ON knowledge_chunks BEGIN
+          DELETE FROM knowledge_gemma_vectors WHERE rowid = OLD.rowid;
+        END;
+      `);
+    }
+  }
+  db;
+  vectorAvailable;
+  counts(rootIds) {
+    if (!rootIds.length) return { indexedChunks: 0, totalChunks: 0 };
+    return this.db.prepare(
+      `
+      SELECT COUNT(*) AS totalChunks,
+             COALESCE(SUM(CASE WHEN g.model_key = ? THEN 1 ELSE 0 END), 0) AS indexedChunks
+      FROM knowledge_chunks c
+      JOIN knowledge_sources s ON s.id = c.source_id
+      LEFT JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id
+      WHERE s.status = 'indexed' AND c.embedding_json IS NOT NULL
+        AND s.root_id IN (${rootIds.map(() => "?").join(",")})
+    `
+    ).get(GEMMA_INDEX_KEY, ...rootIds);
+  }
+  hasEmbeddings(rootIds) {
+    if (!rootIds.length) return false;
+    return Boolean(
+      this.db.prepare(
+        `
+      SELECT 1 FROM knowledge_gemma_embeddings g
+      JOIN knowledge_chunks c ON c.id = g.chunk_id
+      JOIN knowledge_sources s ON s.id = c.source_id
+      WHERE g.model_key = ? AND s.status = 'indexed'
+        AND s.root_id IN (${rootIds.map(() => "?").join(",")}) LIMIT 1
+    `
+      ).get(GEMMA_INDEX_KEY, ...rootIds)
+    );
+  }
+  pending(rootIds, limit = 4) {
+    if (!rootIds.length) return [];
+    const rows = this.db.prepare(
+      `
+      SELECT c.id, c.text, s.path
+      FROM knowledge_chunks c JOIN knowledge_sources s ON s.id = c.source_id
+      LEFT JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id
+      WHERE s.status = 'indexed' AND c.embedding_json IS NOT NULL
+        AND s.root_id IN (${rootIds.map(() => "?").join(",")})
+        AND (g.chunk_id IS NULL OR g.model_key != ?)
+      ORDER BY c.rowid LIMIT ?
+    `
+    ).all(...rootIds, GEMMA_INDEX_KEY, limit);
+    return rows.map((row) => ({ id: row.id, text: row.text, title: (0, import_node_path5.basename)(row.path) }));
+  }
+  save(chunks, vectors) {
+    if (chunks.length !== vectors.length) throw new Error("Embedding batch size does not match");
+    const encoded = vectors.map(encode);
+    const find = this.db.prepare(`
+      SELECT c.rowid AS rowId, s.root_id AS rootId FROM knowledge_chunks c
+      JOIN knowledge_sources s ON s.id = c.source_id
+      WHERE c.id = ? AND c.text = ? AND s.status = 'indexed' AND c.embedding_json IS NOT NULL
+    `);
+    const insert = this.db.prepare(
+      "INSERT OR REPLACE INTO knowledge_gemma_embeddings(chunk_id, model_key, vector) VALUES (?, ?, ?)"
+    );
+    const deleteVector = this.vectorAvailable ? this.db.prepare("DELETE FROM knowledge_gemma_vectors WHERE rowid = ?") : null;
+    const insertVector = this.vectorAvailable ? this.db.prepare(
+      "INSERT INTO knowledge_gemma_vectors(rowid, embedding, root_id) VALUES (?, ?, ?)"
+    ) : null;
+    this.db.transaction(() => {
+      chunks.forEach((chunk, index) => {
+        const current = find.get(chunk.id, chunk.text);
+        if (!current) return;
+        insert.run(chunk.id, GEMMA_INDEX_KEY, encoded[index]);
+        deleteVector?.run(BigInt(current.rowId));
+        insertVector?.run(BigInt(current.rowId), encoded[index], current.rootId);
+      });
+    })();
+  }
+  search(vector, rootIds, limit) {
+    if (!rootIds.length || limit <= 0) return [];
+    const encoded = encode(vector);
+    const rootFilter = rootIds.map(() => "?").join(",");
+    const rows = this.vectorAvailable ? this.db.prepare(
+      `
+      WITH nearest AS (
+        SELECT rowid, distance FROM knowledge_gemma_vectors
+        WHERE embedding MATCH ? AND k = ? AND root_id IN (${rootFilter})
+      )
+      SELECT c.id, c.source_id AS sourceId, c.text, c.page_number AS pageNumber,
+             s.path, g.vector, nearest.distance
+      FROM nearest JOIN knowledge_chunks c ON c.rowid = nearest.rowid
+      JOIN knowledge_sources s ON s.id = c.source_id
+      JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id
+      WHERE s.status = 'indexed' AND g.model_key = ? ORDER BY nearest.distance
+    `
+    ).all(encoded, Math.max(40, limit * 4), ...rootIds, GEMMA_INDEX_KEY) : this.db.prepare(
+      `
+      SELECT c.id, c.source_id AS sourceId, c.text, c.page_number AS pageNumber,
+             s.path, g.vector
+      FROM knowledge_gemma_embeddings g JOIN knowledge_chunks c ON c.id = g.chunk_id
+      JOIN knowledge_sources s ON s.id = c.source_id
+      WHERE g.model_key = ? AND s.status = 'indexed' AND s.root_id IN (${rootFilter})
+    `
+    ).all(GEMMA_INDEX_KEY, ...rootIds);
+    return rows.map((row) => {
+      const similarity = Math.max(0, cosineSimilarity(vector, decode(row.vector)));
+      return {
+        chunkId: row.id,
+        sourceId: row.sourceId,
+        path: row.path,
+        title: (0, import_node_path5.basename)(row.path),
+        pageNumber: row.pageNumber ?? void 0,
+        text: row.text,
+        score: similarity,
+        semanticScore: similarity,
+        lexicalScore: 0
+      };
+    }).sort((left, right) => right.score - left.score).slice(0, limit);
+  }
+  clear() {
+    this.db.transaction(() => {
+      this.db.prepare("DELETE FROM knowledge_gemma_embeddings").run();
+      if (this.vectorAvailable) this.db.prepare("DELETE FROM knowledge_gemma_vectors").run();
+    })();
+  }
+};
+function fuseKnowledgeHits(lexical, semantic, limit) {
+  const scores = /* @__PURE__ */ new Map();
+  for (const [kind, hits] of [
+    ["lexical", lexical],
+    ["semantic", semantic]
+  ]) {
+    hits.forEach((hit, rank) => {
+      const previous = scores.get(hit.chunkId);
+      scores.set(hit.chunkId, {
+        ...hit,
+        lexicalScore: kind === "lexical" ? hit.lexicalScore : previous?.lexicalScore ?? 0,
+        semanticScore: kind === "semantic" ? hit.semanticScore : previous?.semanticScore ?? 0,
+        score: (previous?.score ?? 0) + 30 / (60 + rank + 1)
+      });
+    });
+  }
+  return [...scores.values()].sort((left, right) => right.score - left.score).slice(0, limit);
+}
+
 // src/main/knowledge/database/store.ts
 var DEFAULT_STATUS = {
   state: "idle",
@@ -825,9 +1068,9 @@ var DEFAULT_STATUS = {
   sourceBytes: 0
 };
 function databasePath() {
-  const directory = (0, import_node_path5.join)(app.getPath("userData"), "knowledge");
+  const directory = (0, import_node_path6.join)(app.getPath("userData"), "knowledge");
   (0, import_node_fs6.mkdirSync)(directory, { recursive: true });
-  return (0, import_node_path5.join)(directory, "knowledge.sqlite3");
+  return (0, import_node_path6.join)(directory, "knowledge.sqlite3");
 }
 function parseJson(value, fallback) {
   if (!value) return fallback;
@@ -871,6 +1114,16 @@ function getKnowledgeStore() {
   return singleton;
 }
 var KnowledgeStore = class {
+  gemmaIndex = null;
+  getGemmaIndex() {
+    this.ensureInitialized();
+    return this.gemmaIndex;
+  }
+  close() {
+    this.database?.close();
+    this.database = null;
+    this.gemmaIndex = null;
+  }
   database = null;
   vectorIndexAvailable = false;
   get db() {
@@ -1070,6 +1323,7 @@ var KnowledgeStore = class {
     ).run();
     this.ensureMaterializedStats();
     this.ensureVectorIndex();
+    this.gemmaIndex = new GemmaIndex(this.db, this.vectorIndexAvailable);
   }
   ensureVectorIndex() {
     if (!this.vectorIndexAvailable) return;
@@ -1642,7 +1896,7 @@ ${page.ocr?.text ?? ""}`.trim();
     return {
       sources: rows.map((row) => ({
         ...row,
-        title: (0, import_node_path5.basename)(row.path),
+        title: (0, import_node_path6.basename)(row.path),
         indexedAt: row.indexedAt ?? void 0,
         error: row.error ?? void 0
       })),
@@ -1671,7 +1925,7 @@ ${page.ocr?.text ?? ""}`.trim();
     return rows.map((row, index) => ({
       sourceId: row.sourceId,
       path: row.path,
-      title: (0, import_node_path5.basename)(row.path),
+      title: (0, import_node_path6.basename)(row.path),
       score: Math.max(0.2, 1 - index / Math.max(rows.length, 1))
     }));
   }
@@ -1772,7 +2026,8 @@ ${page.ocr?.text ?? ""}`.trim();
     const row = this.db.prepare("SELECT value_json AS valueJson FROM knowledge_metadata WHERE key = 'settings'").get();
     const persisted = parseJson(row?.valueJson, {});
     const depth = ["off", "basic", "smart", "deep"].includes(persisted.depth ?? "") ? persisted.depth : DEFAULT_KNOWLEDGE_SETTINGS.depth;
-    return { ...DEFAULT_KNOWLEDGE_SETTINGS, ...persisted, depth };
+    const embeddingModel = persisted.embeddingModel === "embeddinggemma-2" ? "embeddinggemma-2" : "built-in";
+    return { ...DEFAULT_KNOWLEDGE_SETTINGS, ...persisted, depth, embeddingModel };
   }
   saveSettings(settings) {
     this.ensureInitialized();
@@ -1783,7 +2038,7 @@ ${page.ocr?.text ?? ""}`.trim();
     `
     ).run(JSON.stringify(settings));
   }
-  search(query, limit = 12, rootIds) {
+  search(query, limit = 12, rootIds, lexicalOnly = false) {
     this.ensureInitialized();
     const trimmed = query.trim();
     if (!trimmed || limit <= 0 || rootIds?.length === 0) return [];
@@ -1799,12 +2054,13 @@ ${page.ocr?.text ?? ""}`.trim();
           JOIN knowledge_sources s ON s.id = c.source_id
           JOIN knowledge_roots r ON r.id = s.root_id
           WHERE knowledge_chunks_fts MATCH ? AND r.enabled = 1 ${rootFilter}
+          ORDER BY rank
           LIMIT ?
         `
     ).all(ftsQuery, ...rootIds ?? [], Math.max(40, limit * 5)) : [];
     lexicalRows.sort((left, right) => (left.rank ?? 0) - (right.rank ?? 0));
     const queryEmbedding = embedText(trimmed);
-    const semanticRows = this.vectorIndexAvailable ? this.db.prepare(
+    const semanticRows = lexicalOnly ? [] : this.vectorIndexAvailable ? this.db.prepare(
       `
           WITH nearest AS (
             SELECT rowid, distance
@@ -1842,7 +2098,7 @@ ${page.ocr?.text ?? ""}`.trim();
     const candidates = /* @__PURE__ */ new Map();
     for (const row of [...lexicalRows, ...semanticRows]) candidates.set(row.id, row);
     for (const row of candidates.values()) {
-      const semanticScore = Math.max(
+      const semanticScore = lexicalOnly ? 0 : Math.max(
         0,
         cosineSimilarity(queryEmbedding, decodeEmbedding(row.embeddingJson) ?? [])
       );
@@ -1854,7 +2110,7 @@ ${page.ocr?.text ?? ""}`.trim();
         chunkId: row.id,
         sourceId: row.sourceId,
         path: row.path,
-        title: (0, import_node_path5.basename)(row.path),
+        title: (0, import_node_path6.basename)(row.path),
         pageNumber: row.pageNumber ?? void 0,
         text: row.text,
         score,
@@ -1898,7 +2154,7 @@ ${page.ocr?.text ?? ""}`.trim();
       resultId: chunkId,
       sourceId: selected.sourceId,
       path: selected.path,
-      title: (0, import_node_path5.basename)(selected.path),
+      title: (0, import_node_path6.basename)(selected.path),
       pageNumber: selected.pageNumber ?? void 0,
       text
     };
@@ -1907,7 +2163,7 @@ ${page.ocr?.text ?? ""}`.trim();
 
 // src/main/knowledge/workerHost.ts
 var import_node_child_process3 = require("node:child_process");
-var import_node_path6 = require("node:path");
+var import_node_path7 = require("node:path");
 var KnowledgeWorkerHost = class {
   constructor(onStatus, onExit) {
     this.onStatus = onStatus;
@@ -1922,7 +2178,7 @@ var KnowledgeWorkerHost = class {
   }
   start() {
     if (this.child) return;
-    const workerPath = (0, import_node_path6.join)(__dirname, "knowledge-worker.js");
+    const workerPath = (0, import_node_path7.join)(__dirname, "knowledge-worker.js");
     const child = (0, import_node_child_process3.spawn)(process.execPath, [workerPath], {
       env: { ...process.env, TEZBAR_KNOWLEDGE_WORKER: "1" },
       // EOF on this pipe tells the worker its backend owner has exited.
@@ -2006,8 +2262,502 @@ var KnowledgeWorkerHost = class {
   }
 };
 
-// src/main/knowledge/service.ts
+// src/main/knowledge/embeddings/gemmaRuntime.ts
+var import_node_child_process4 = require("node:child_process");
+var import_node_crypto4 = require("node:crypto");
+var import_node_fs7 = require("node:fs");
+var import_promises2 = require("node:fs/promises");
+var import_node_os2 = require("node:os");
+var import_node_path8 = require("node:path");
+var import_node_net = require("node:net");
+var import_node_util3 = require("node:util");
+var import_node_stream = require("node:stream");
+var import_promises3 = require("node:stream/promises");
 var execFileAsync3 = (0, import_node_util3.promisify)(import_node_child_process4.execFile);
+var IDLE_MS = 12e4;
+function findServer(directory) {
+  if (!(0, import_node_fs7.existsSync)(directory)) return void 0;
+  for (const entry of (0, import_node_fs7.readdirSync)(directory, { withFileTypes: true })) {
+    const path = (0, import_node_path8.join)(directory, entry.name);
+    if (entry.isFile() && entry.name === (process.platform === "win32" ? "llama-server.exe" : "llama-server"))
+      return path;
+    if (entry.isDirectory()) {
+      const found = findServer(path);
+      if (found) return found;
+    }
+  }
+  return void 0;
+}
+async function freePort() {
+  const server = (0, import_node_net.createServer)();
+  return new Promise((resolve2, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close((error) => {
+        if (error || !address || typeof address === "string")
+          reject(error ?? new Error("Cannot allocate embedding port"));
+        else resolve2(address.port);
+      });
+    });
+  });
+}
+var GemmaRuntime = class {
+  directory = (0, import_node_path8.join)(
+    app.getPath("userData"),
+    "knowledge",
+    "models",
+    "embeddinggemma-2"
+  );
+  download = null;
+  downloadPromise = null;
+  child = null;
+  startup = null;
+  idleTimer = null;
+  endpoint = "";
+  token = "";
+  queue = Promise.resolve();
+  error;
+  downloadedBytes = 0;
+  modelState = "not-downloaded";
+  closed = false;
+  removing = false;
+  stopping = Promise.resolve();
+  snapshot() {
+    const runtime = gemmaRuntime();
+    let installed = false;
+    try {
+      const manifest = JSON.parse((0, import_node_fs7.readFileSync)((0, import_node_path8.join)(this.directory, "installed.json"), "utf8"));
+      installed = manifest.revision === GEMMA_MODEL.revision && manifest.runtime === runtime?.file && (0, import_node_fs7.existsSync)((0, import_node_path8.join)(this.directory, GEMMA_MODEL.file)) && Boolean(findServer((0, import_node_path8.join)(this.directory, "runtime")));
+    } catch {
+    }
+    const total = GEMMA_MODEL.bytes + (runtime?.bytes ?? 0);
+    return {
+      supported: Boolean(runtime),
+      modelState: this.download ? "downloading" : installed ? "ready" : this.modelState,
+      downloadProgress: installed ? 1 : Math.min(1, this.downloadedBytes / total),
+      downloadBytes: installed ? total : this.downloadedBytes,
+      downloadTotalBytes: total,
+      error: this.error
+    };
+  }
+  startDownload() {
+    if (this.closed) throw new Error("Embedding runtime is shutting down");
+    if (this.removing) throw new Error("Embedding model is being removed");
+    if (this.download || this.snapshot().modelState === "ready") return;
+    const runtime = gemmaRuntime();
+    if (!runtime) throw new Error("EmbeddingGemma is not available for this platform yet");
+    this.download = new AbortController();
+    this.downloadedBytes = 0;
+    this.error = void 0;
+    this.modelState = "downloading";
+    const signal = this.download.signal;
+    this.downloadPromise = (async () => {
+      await (0, import_promises2.mkdir)(this.directory, { recursive: true });
+      const runtimeDirectory = (0, import_node_path8.join)(this.directory, "runtime");
+      const archive = (0, import_node_path8.join)(this.directory, runtime.file);
+      await this.downloadFile(runtime.url, archive, runtime.sha256, runtime.bytes, signal);
+      await (0, import_promises2.mkdir)(runtimeDirectory, { recursive: true });
+      if (runtime.file.endsWith(".zip")) {
+        await execFileAsync3(
+          "powershell.exe",
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Expand-Archive -LiteralPath $env:TEZBAR_GEMMA_ARCHIVE -DestinationPath $env:TEZBAR_GEMMA_DESTINATION -Force"
+          ],
+          {
+            windowsHide: true,
+            signal,
+            env: {
+              ...process.env,
+              TEZBAR_GEMMA_ARCHIVE: archive,
+              TEZBAR_GEMMA_DESTINATION: runtimeDirectory
+            }
+          }
+        );
+      } else {
+        await execFileAsync3("tar", ["-xzf", archive, "-C", runtimeDirectory], { signal });
+      }
+      const server = findServer(runtimeDirectory);
+      if (!server) throw new Error("Downloaded runtime does not contain llama-server");
+      if (process.platform !== "win32") await (0, import_promises2.chmod)(server, 493);
+      await (0, import_promises2.rm)(archive, { force: true });
+      await this.downloadFile(
+        GEMMA_MODEL_URL,
+        (0, import_node_path8.join)(this.directory, GEMMA_MODEL.file),
+        GEMMA_MODEL.sha256,
+        GEMMA_MODEL.bytes,
+        signal
+      );
+      signal.throwIfAborted();
+      await (0, import_promises2.writeFile)(
+        (0, import_node_path8.join)(this.directory, "installed.json"),
+        JSON.stringify({ revision: GEMMA_MODEL.revision, runtime: runtime.file })
+      );
+      this.modelState = "ready";
+    })().catch((error) => {
+      this.modelState = signal.aborted ? "not-downloaded" : "error";
+      if (!signal.aborted) this.error = error instanceof Error ? error.message : String(error);
+    }).finally(() => {
+      this.download = null;
+      this.downloadPromise = null;
+    });
+  }
+  async cancelDownload() {
+    const wasDownloading = Boolean(this.download);
+    this.download?.abort();
+    await this.downloadPromise;
+    if (wasDownloading && this.modelState !== "ready") {
+      await (0, import_promises2.rm)(this.directory, { recursive: true, force: true });
+      this.downloadedBytes = 0;
+    }
+  }
+  async remove() {
+    this.removing = true;
+    try {
+      await this.cancelDownload();
+      this.stop();
+      await this.queue.catch(() => {
+      });
+      await this.stopping;
+      await (0, import_promises2.rm)(this.directory, { recursive: true, force: true });
+      this.modelState = "not-downloaded";
+      this.downloadedBytes = 0;
+      this.error = void 0;
+    } finally {
+      this.removing = false;
+    }
+  }
+  embedQuery(text, signal) {
+    return this.embed([gemmaQuery(text)], signal).then((vectors) => vectors[0]);
+  }
+  embedDocuments(documents, signal) {
+    return this.embed(
+      documents.map(({ text, title }) => gemmaDocument(text, title)),
+      signal
+    );
+  }
+  embed(inputs, signal) {
+    const run = this.queue.catch(() => {
+    }).then(async () => {
+      if (this.closed) throw new Error("Embedding runtime is shutting down");
+      if (this.removing) throw new Error("Embedding model is being removed");
+      signal?.throwIfAborted();
+      if (this.idleTimer) clearTimeout(this.idleTimer);
+      const abort = () => this.stop();
+      signal?.addEventListener("abort", abort, { once: true });
+      try {
+        await this.ensureStarted(signal);
+        signal?.throwIfAborted();
+        const response = await fetch(`${this.endpoint}/v1/embeddings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
+          body: JSON.stringify({ input: inputs, encoding_format: "float" }),
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(6e4)]) : AbortSignal.timeout(6e4)
+        });
+        if (!response.ok) throw new Error(`Local embedding request failed (${response.status})`);
+        const result = await response.json();
+        const rows = result.data?.sort((left, right) => left.index - right.index);
+        if (!rows || rows.length !== inputs.length || rows.some((row, index) => row.index !== index)) {
+          throw new Error("Local embedding response is incomplete");
+        }
+        this.error = void 0;
+        return rows.map((row) => normalizeGemmaVector(row.embedding));
+      } catch (error) {
+        if (!signal?.aborted) this.error = error instanceof Error ? error.message : String(error);
+        throw error;
+      } finally {
+        signal?.removeEventListener("abort", abort);
+        this.idleTimer = setTimeout(() => this.stop(), IDLE_MS);
+        this.idleTimer.unref();
+      }
+    });
+    this.queue = run;
+    return run;
+  }
+  async ensureStarted(signal) {
+    if (this.startup) return this.startup;
+    if (this.child) return;
+    this.startup = this.launch(signal).finally(() => {
+      this.startup = null;
+    });
+    return this.startup;
+  }
+  async launch(signal) {
+    await this.stopping;
+    if (this.closed) throw new Error("Embedding runtime is shutting down");
+    if (this.removing) throw new Error("Embedding model is being removed");
+    if (this.snapshot().modelState !== "ready")
+      throw new Error("Download EmbeddingGemma before enabling it");
+    const server = findServer((0, import_node_path8.join)(this.directory, "runtime"));
+    const port = await freePort();
+    signal?.throwIfAborted();
+    if (this.removing || this.closed) throw new Error("Embedding runtime is stopping");
+    this.token = (0, import_node_crypto4.randomBytes)(32).toString("hex");
+    this.endpoint = `http://127.0.0.1:${port}`;
+    const child = (0, import_node_child_process4.spawn)(
+      process.execPath,
+      [
+        (0, import_node_path8.join)(__dirname, "gemma-supervisor.cjs"),
+        server,
+        "--model",
+        (0, import_node_path8.join)(this.directory, GEMMA_MODEL.file),
+        "--embedding",
+        "--pooling",
+        "mean",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+        "--api-key",
+        this.token,
+        "--ctx-size",
+        "8192",
+        "--batch-size",
+        "8192",
+        "--ubatch-size",
+        "8192",
+        "--parallel",
+        "1",
+        "--threads",
+        String(Math.min(4, (0, import_node_os2.availableParallelism)()))
+      ],
+      { windowsHide: true, stdio: ["pipe", "ignore", "pipe"] }
+    );
+    this.child = child;
+    child.stdin?.on("error", () => {
+    });
+    let failure;
+    let stderr = "";
+    child.stderr?.on("data", (data) => {
+      stderr = (stderr + data.toString()).slice(-4e3);
+    });
+    child.once("error", (error) => {
+      failure = error.message;
+    });
+    child.once("exit", (code) => {
+      failure = `Local embedding runtime exited (${code}): ${stderr.slice(-700)}`;
+      if (this.child === child) this.child = null;
+    });
+    try {
+      const deadline = Date.now() + 6e4;
+      while (Date.now() < deadline) {
+        signal?.throwIfAborted();
+        if (failure || this.child !== child)
+          throw new Error(failure ?? "Local embedding runtime stopped");
+        try {
+          const response = await fetch(`${this.endpoint}/health`, {
+            headers: { Authorization: `Bearer ${this.token}` },
+            signal: AbortSignal.timeout(1e3)
+          });
+          if (response.ok) return;
+        } catch {
+        }
+        await new Promise((resolve2) => setTimeout(resolve2, 200));
+      }
+      throw new Error("Local embedding runtime took too long to start");
+    } catch (error) {
+      this.stop();
+      throw error;
+    }
+  }
+  stop() {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+    const child = this.child;
+    this.child = null;
+    if (child) {
+      this.stopping = new Promise((resolve2) => {
+        const force = setTimeout(() => {
+          child.kill();
+          resolve2();
+        }, 3e3);
+        force.unref();
+        child.once("close", () => {
+          clearTimeout(force);
+          resolve2();
+        });
+        child.stdin?.end();
+      });
+    }
+  }
+  shutdown() {
+    this.closed = true;
+    this.download?.abort();
+    this.stop();
+  }
+  async downloadFile(url, path, expectedHash, expectedBytes, signal) {
+    const temporary = `${path}.part`;
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(30 * 6e4)])
+      });
+      if (!response.ok || !response.body)
+        throw new Error(`Model download failed (${response.status})`);
+      const hash2 = (0, import_node_crypto4.createHash)("sha256");
+      let size = 0;
+      const source = import_node_stream.Readable.fromWeb(response.body);
+      source.on("data", (chunk) => {
+        size += chunk.length;
+        this.downloadedBytes += chunk.length;
+        hash2.update(chunk);
+        if (size > expectedBytes)
+          source.destroy(new Error("Downloaded file exceeds its expected size"));
+      });
+      await (0, import_promises3.pipeline)(source, (0, import_node_fs7.createWriteStream)(temporary), { signal });
+      if (size !== expectedBytes || hash2.digest("hex") !== expectedHash)
+        throw new Error("Downloaded file failed checksum verification");
+      signal.throwIfAborted();
+      await (0, import_promises2.rename)(temporary, path);
+    } finally {
+      await (0, import_promises2.rm)(temporary, { force: true });
+    }
+  }
+};
+
+// src/main/knowledge/embeddings/semanticSearch.ts
+var SemanticSearch = class {
+  constructor(store, options, runtime = new GemmaRuntime()) {
+    this.store = store;
+    this.options = options;
+    this.runtime = runtime;
+  }
+  store;
+  options;
+  runtime;
+  timer = null;
+  controller = null;
+  run = null;
+  error;
+  closed = false;
+  rescheduleRequested = false;
+  queryCache = /* @__PURE__ */ new Map();
+  countsCache = null;
+  snapshot() {
+    const runtime = this.runtime.snapshot();
+    const counts = runtime.modelState === "ready" && this.options.enabled() ? this.counts() : { indexedChunks: 0, totalChunks: 0 };
+    return {
+      ...runtime,
+      ...counts,
+      indexing: this.controller !== null,
+      error: this.error ?? runtime.error
+    };
+  }
+  counts() {
+    const rootIds = this.options.roots();
+    const roots = rootIds.join("\n");
+    if (!this.countsCache || this.countsCache.roots !== roots || Date.now() - this.countsCache.at > 1e4) {
+      this.countsCache = { roots, at: Date.now(), ...this.store.getGemmaIndex().counts(rootIds) };
+    }
+    return this.countsCache;
+  }
+  download() {
+    this.runtime.startDownload();
+  }
+  cancelDownload() {
+    return this.runtime.cancelDownload();
+  }
+  async remove() {
+    await this.pause();
+    await this.runtime.remove();
+    this.store.getGemmaIndex().clear();
+    this.queryCache.clear();
+    this.countsCache = null;
+    this.error = void 0;
+  }
+  schedule(delay = 1e3) {
+    if (this.closed || !this.options.enabled() || !this.options.canIndex()) return;
+    if (this.run) {
+      this.rescheduleRequested = true;
+      return;
+    }
+    if (this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      if (!this.options.enabled() || !this.options.canIndex() || this.runtime.snapshot().modelState !== "ready")
+        return;
+      this.controller = new AbortController();
+      const signal = this.controller.signal;
+      this.run = this.backfill(signal).catch((error) => {
+        if (!signal.aborted) this.error = error instanceof Error ? error.message : String(error);
+      }).finally(() => {
+        this.run = null;
+        this.controller = null;
+        this.countsCache = null;
+        if (this.rescheduleRequested) {
+          this.rescheduleRequested = false;
+          this.schedule();
+        }
+      });
+    }, delay);
+    this.timer.unref();
+  }
+  async backfill(signal) {
+    this.error = void 0;
+    while (!signal.aborted && this.options.enabled() && this.options.canIndex()) {
+      await this.options.waitForIdle(signal);
+      signal.throwIfAborted();
+      const chunks = this.store.getGemmaIndex().pending(this.options.roots());
+      if (!chunks.length) return;
+      const vectors = await this.runtime.embedDocuments(chunks, signal);
+      signal.throwIfAborted();
+      this.store.getGemmaIndex().save(chunks, vectors);
+      await new Promise((resolve2) => setTimeout(resolve2, 100));
+    }
+  }
+  async search(query, limit, allRootIds) {
+    if (!query.trim() || limit <= 0) return [];
+    const lexical = this.store.search(query, Math.max(40, limit * 4), allRootIds, true);
+    if (!this.options.enabled()) return lexical.slice(0, limit);
+    const rootIds = this.options.roots();
+    if (!rootIds.length || !this.store.getGemmaIndex().hasEmbeddings(rootIds))
+      return lexical.slice(0, limit);
+    try {
+      const trimmed = query.trim();
+      let vector = this.queryCache.get(trimmed);
+      if (!vector) {
+        vector = await this.runtime.embedQuery(trimmed);
+        if (this.queryCache.size >= 100)
+          this.queryCache.delete(this.queryCache.keys().next().value);
+        this.queryCache.set(trimmed, vector);
+      }
+      const currentLexical = this.store.search(
+        query,
+        Math.max(40, limit * 4),
+        this.options.allRoots(),
+        true
+      );
+      if (!this.options.enabled()) return currentLexical.slice(0, limit);
+      const currentRoots = this.options.roots().filter((id) => allRootIds.includes(id));
+      const semantic = this.store.getGemmaIndex().search(vector, currentRoots, Math.max(40, limit * 4));
+      this.error = void 0;
+      return fuseKnowledgeHits(currentLexical, semantic, limit);
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : String(error);
+      return this.store.search(query, limit, this.options.allRoots(), true);
+    }
+  }
+  async pause() {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.rescheduleRequested = false;
+    this.controller?.abort();
+    await this.run;
+  }
+  shutdown() {
+    this.closed = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.controller?.abort();
+    this.runtime.shutdown();
+  }
+};
+
+// src/main/knowledge/service.ts
+var execFileAsync4 = (0, import_node_util4.promisify)(import_node_child_process5.execFile);
 var MAX_SCANNED_FILES = 75e3;
 var STATUS_EVENT_INTERVAL_MS = 100;
 var STATUS_PERSIST_INTERVAL_MS = 1e3;
@@ -2089,19 +2839,19 @@ function shouldSkipKnowledgeEntry(name, isDirectory) {
   if (SENSITIVE_FILE_PATTERNS.some((pattern) => pattern.test(name))) return true;
   return lower.endsWith(".min.js") || lower.endsWith(".min.css");
 }
-function discoverMajorKnowledgeFolders(home = (0, import_node_os2.homedir)()) {
-  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path7.join)(home, name)).filter((path) => {
+function discoverMajorKnowledgeFolders(home = (0, import_node_os3.homedir)()) {
+  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path9.join)(home, name)).filter((path) => {
     try {
-      return (0, import_node_fs7.statSync)(path).isDirectory();
+      return (0, import_node_fs8.statSync)(path).isDirectory();
     } catch {
       return false;
     }
   });
 }
 function isKnowledgeCandidatePath(rootPath, path) {
-  const relativePath = (0, import_node_path7.relative)(rootPath, path);
-  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path7.sep}`)) return false;
-  const segments = relativePath.split(import_node_path7.sep).filter(Boolean);
+  const relativePath = (0, import_node_path9.relative)(rootPath, path);
+  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path9.sep}`)) return false;
+  const segments = relativePath.split(import_node_path9.sep).filter(Boolean);
   const fileName = segments.pop();
   if (!fileName || shouldSkipKnowledgeEntry(fileName, false) || !isIndexablePath(path)) return false;
   return segments.every((name) => !shouldSkipKnowledgeEntry(name, true));
@@ -2130,6 +2880,16 @@ function emitStatus(status) {
 }
 var KnowledgeService = class {
   store = getKnowledgeStore();
+  semanticSearch = new SemanticSearch(this.store, {
+    enabled: () => this.settings.embeddingModel === "embeddinggemma-2",
+    allRoots: () => this.activeRoots().map((root) => root.id),
+    roots: () => this.activeRoots().filter((root) => {
+      const depth = effectiveKnowledgeDepth(root, this.settings);
+      return depth === "smart" || depth === "deep";
+    }).map((root) => root.id),
+    canIndex: () => this.mode !== "worker" && !this.manuallyPaused,
+    waitForIdle: (signal) => this.waitForInteractiveIdle(signal)
+  });
   backends = /* @__PURE__ */ new Map([
     ["local", new LocalIndexingBackend()],
     ["tezbar-cloud", new TezbarCloudIndexingBackend()]
@@ -2199,6 +2959,7 @@ var KnowledgeService = class {
     }
     this.refreshCounts();
     this.initialized = true;
+    if (this.mode !== "worker") this.semanticSearch.schedule(STARTUP_INDEXING_DELAY_MS);
     if (this.mode !== "worker") this.syncWatchers();
     if (this.mode !== "worker") this.scheduleVectorBackfill(STARTUP_VECTOR_BACKFILL_DELAY_MS);
     if (this.mode !== "worker" && !this.manuallyPaused && this.activeRoots().length > 0) {
@@ -2218,13 +2979,14 @@ var KnowledgeService = class {
       localBackendAvailable: true,
       cloudBackendAvailable: false,
       settings: { ...this.settings },
-      storageBytes: this.store.storageBytes()
+      storageBytes: this.store.storageBytes(),
+      semanticSearch: this.mode !== "worker" ? this.semanticSearch.snapshot() : void 0
     };
   }
   addRoot(path) {
     this.initialize();
-    const normalized = (0, import_node_path7.resolve)(path.trim());
-    if (!normalized || !(0, import_node_fs7.existsSync)(normalized) || !(0, import_node_fs7.statSync)(normalized).isDirectory()) {
+    const normalized = (0, import_node_path9.resolve)(path.trim());
+    if (!normalized || !(0, import_node_fs8.existsSync)(normalized) || !(0, import_node_fs8.statSync)(normalized).isDirectory()) {
       throw new Error("Choose an existing folder");
     }
     const current = this.store.listRoots();
@@ -2232,7 +2994,7 @@ var KnowledgeService = class {
     if (duplicate) return this.snapshot();
     const now = Date.now();
     this.store.upsertRoot({
-      id: (0, import_node_crypto4.randomUUID)(),
+      id: (0, import_node_crypto5.randomUUID)(),
       path: normalized,
       depth: "inherit",
       processingBackend: "local",
@@ -2256,7 +3018,7 @@ var KnowledgeService = class {
         continue;
       }
       this.store.upsertRoot({
-        id: (0, import_node_crypto4.randomUUID)(),
+        id: (0, import_node_crypto5.randomUUID)(),
         path,
         depth: "inherit",
         processingBackend: "local",
@@ -2314,8 +3076,37 @@ var KnowledgeService = class {
     this.syncWatchers();
     return this.restartForConfigurationChange("Folder Knowledge Depth changed");
   }
-  search(query, limit = 12) {
+  async setEmbeddingModel(model) {
     this.initialize();
+    if (model !== "built-in" && model !== "embeddinggemma-2") throw new Error("Invalid embedding model");
+    if (model === "embeddinggemma-2" && this.semanticSearch.snapshot().modelState !== "ready") {
+      throw new Error("Download EmbeddingGemma before enabling it");
+    }
+    await this.semanticSearch.pause();
+    this.settings = { ...this.settings, embeddingModel: model };
+    this.store.saveSettings(this.settings);
+    this.semanticSearch.schedule();
+    return this.snapshot();
+  }
+  downloadEmbeddingModel() {
+    this.initialize();
+    this.semanticSearch.download();
+    return this.snapshot();
+  }
+  async cancelEmbeddingDownload() {
+    await this.semanticSearch.cancelDownload();
+    return this.snapshot();
+  }
+  async removeEmbeddingModel() {
+    await this.setEmbeddingModel("built-in");
+    await this.semanticSearch.remove();
+    return this.snapshot();
+  }
+  async search(query, limit = 12) {
+    this.initialize();
+    if (this.settings.embeddingModel === "embeddinggemma-2") {
+      return this.semanticSearch.search(query, limit, this.activeRoots().map((root) => root.id));
+    }
     return this.store.search(
       query,
       limit,
@@ -2354,7 +3145,7 @@ var KnowledgeService = class {
     const roots = this.activeRoots();
     if (roots.length === 0) return this.snapshot();
     const checkpoint = this.store.getIndexingCheckpoint();
-    const jobId = checkpoint?.jobId ?? (0, import_node_crypto4.randomUUID)();
+    const jobId = checkpoint?.jobId ?? (0, import_node_crypto5.randomUUID)();
     if (checkpoint) {
       const processed = Math.min(checkpoint.processedSources, checkpoint.totalSources);
       this.updateStatus({
@@ -2397,6 +3188,7 @@ var KnowledgeService = class {
   }
   async pause() {
     this.manuallyPaused = true;
+    await this.semanticSearch.pause();
     this.rescanRequested = false;
     if (this.rescanTimer) clearTimeout(this.rescanTimer);
     this.rescanTimer = null;
@@ -2413,6 +3205,7 @@ var KnowledgeService = class {
   }
   async resume() {
     this.manuallyPaused = false;
+    this.semanticSearch.schedule();
     this.rescanRequested = false;
     if (this.mode === "coordinator") await this.workerHost?.stop();
     else if (this.activePromise) await this.activePromise.catch(() => {
@@ -2528,7 +3321,7 @@ var KnowledgeService = class {
           completed += 1;
           if (!succeeded) failed += 1;
           this.updateStatus({ ...this.status, processedSources: completed, failedSources: failed });
-          this.updateProgress(completed, total, `Processed ${(0, import_node_path7.basename)(candidate.path)}`);
+          this.updateProgress(completed, total, `Processed ${(0, import_node_path9.basename)(candidate.path)}`);
           if (this.mode === "worker") {
             await new Promise((resolve2) => setTimeout(resolve2, BACKGROUND_FILE_DELAY_MS));
           }
@@ -2548,6 +3341,7 @@ var KnowledgeService = class {
       lastCompletedAt: Date.now()
     });
     this.store.clearIndexingCheckpoint(checkpoint.jobId);
+    this.semanticSearch.schedule();
   }
   async scanRoot(root, signal) {
     const queue = [root.path];
@@ -2559,7 +3353,7 @@ var KnowledgeService = class {
       if (!directory) break;
       let entries;
       try {
-        entries = (0, import_node_fs7.readdirSync)(directory, { withFileTypes: true });
+        entries = (0, import_node_fs8.readdirSync)(directory, { withFileTypes: true });
       } catch {
         complete = false;
         continue;
@@ -2568,14 +3362,14 @@ var KnowledgeService = class {
         if (signal.aborted) break;
         visited += 1;
         if (shouldSkipKnowledgeEntry(entry.name, entry.isDirectory())) continue;
-        const path = (0, import_node_path7.join)(directory, entry.name);
+        const path = (0, import_node_path9.join)(directory, entry.name);
         if (entry.isSymbolicLink()) continue;
         if (entry.isDirectory()) {
           queue.push(path);
         } else if (entry.isFile() && isIndexablePath(path)) {
           try {
-            const fileStat = (0, import_node_fs7.statSync)(path);
-            const isExtensionlessExecutable = !(0, import_node_path7.extname)(path) && (fileStat.mode & 73) !== 0;
+            const fileStat = (0, import_node_fs8.statSync)(path);
+            const isExtensionlessExecutable = !(0, import_node_path9.extname)(path) && (fileStat.mode & 73) !== 0;
             if (!isExtensionlessExecutable && fileStat.size <= maximumIndexableSourceBytes(path)) {
               paths.push(path);
             }
@@ -2596,7 +3390,7 @@ var KnowledgeService = class {
     const sourceId = sourceIdForPath(candidate.path);
     try {
       const existing = this.store.getSourceByPath(candidate.path);
-      const stat = (0, import_node_fs7.statSync)(candidate.path);
+      const stat = (0, import_node_fs8.statSync)(candidate.path);
       if (existing?.status === "indexed" && existing.byteSize === stat.size && Math.round(existing.modifiedAt) === Math.round(stat.mtimeMs) && existing.indexingProfile === profileKey) {
         return true;
       }
@@ -2607,7 +3401,7 @@ var KnowledgeService = class {
         rootId: candidate.root.id,
         path: candidate.path,
         fingerprint,
-        mediaType: (0, import_node_path7.extname)(candidate.path).slice(1).toLowerCase(),
+        mediaType: (0, import_node_path9.extname)(candidate.path).slice(1).toLowerCase(),
         indexingProfile: profileKey
       });
       const reusable = this.store.findReusableResult(fingerprint.contentHash, sourceId, profileKey);
@@ -2639,7 +3433,7 @@ var KnowledgeService = class {
           this.updateStatus({
             ...this.status,
             progress: Math.max(this.status.progress, overall),
-            detail: detail ? `${detail} \xB7 ${(0, import_node_path7.basename)(candidate.path)}` : (0, import_node_path7.basename)(candidate.path)
+            detail: detail ? `${detail} \xB7 ${(0, import_node_path9.basename)(candidate.path)}` : (0, import_node_path9.basename)(candidate.path)
           });
         }
       });
@@ -2658,7 +3452,7 @@ var KnowledgeService = class {
     if (!profile) return false;
     try {
       const existing = this.store.getSourceByPath(path);
-      const fileStat = (0, import_node_fs7.statSync)(path);
+      const fileStat = (0, import_node_fs8.statSync)(path);
       return !(existing?.status === "indexed" && existing.byteSize === fileStat.size && Math.round(existing.modifiedAt) === Math.round(fileStat.mtimeMs) && existing.indexingProfile === indexingProfileKey(profile));
     } catch {
       return false;
@@ -2734,6 +3528,7 @@ var KnowledgeService = class {
     }
   }
   shutdown() {
+    this.semanticSearch.shutdown();
     this.workerHost?.shutdown();
     this.controller?.abort();
     if (this.startupTimer) clearTimeout(this.startupTimer);
@@ -2791,7 +3586,7 @@ var KnowledgeService = class {
     for (const root of enabledRoots.values()) {
       if (this.watchers.has(root.id)) continue;
       try {
-        const watcher = (0, import_node_fs7.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
+        const watcher = (0, import_node_fs8.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
         watcher.on("error", () => {
           watcher.close();
           this.watchers.delete(root.id);
@@ -2809,6 +3604,7 @@ var KnowledgeService = class {
   }
   acceptWorkerStatus(status) {
     this.status = { ...status };
+    if (status.state === "completed") this.semanticSearch.schedule();
     this.statusSink(this.status);
   }
   handleWorkerExit(exit) {
@@ -2835,7 +3631,7 @@ var KnowledgeService = class {
 
 // src/main/knowledge/worker.ts
 try {
-  (0, import_node_os3.setPriority)(0, 10);
+  (0, import_node_os4.setPriority)(0, 10);
 } catch {
 }
 function emitStatus2(status) {

@@ -57,6 +57,7 @@
     "resources": {
       "../dist-backend/main.js": "dist-backend/main.js",
       "../dist-backend/knowledge-worker.js": "dist-backend/knowledge-worker.js",
+      "../dist-backend/gemma-supervisor.cjs": "dist-backend/gemma-supervisor.cjs",
       "../dist-backend/vec0": "dist-backend/vec0",
       "../dist-backend/node_modules": "dist-backend/node_modules",
       "../resources/icons": "dist-backend/resources/icons",

@@ -30,6 +30,7 @@ import {
   profileForDepth,
 } from './depth'
 import { KnowledgeWorkerHost } from './workerHost'
+import { SemanticSearch } from './embeddings/semanticSearch'
 
 const execFileAsync = promisify(execFile)
 const MAX_SCANNED_FILES = 75_000
@@ -182,6 +183,16 @@ type KnowledgeServiceOptions = {
 
 export class KnowledgeService {
   private readonly store = getKnowledgeStore()
+  private readonly semanticSearch = new SemanticSearch(this.store, {
+    enabled: () => this.settings.embeddingModel === 'embeddinggemma-2',
+    allRoots: () => this.activeRoots().map((root) => root.id),
+    roots: () => this.activeRoots().filter((root) => {
+      const depth = effectiveKnowledgeDepth(root, this.settings)
+      return depth === 'smart' || depth === 'deep'
+    }).map((root) => root.id),
+    canIndex: () => this.mode !== 'worker' && !this.manuallyPaused,
+    waitForIdle: (signal) => this.waitForInteractiveIdle(signal),
+  })
   private readonly backends = new Map<string, IndexingBackend>([
     ['local', new LocalIndexingBackend()],
     ['tezbar-cloud', new TezbarCloudIndexingBackend()],
@@ -258,6 +269,7 @@ export class KnowledgeService {
     }
     this.refreshCounts()
     this.initialized = true
+    if (this.mode !== 'worker') this.semanticSearch.schedule(STARTUP_INDEXING_DELAY_MS)
     if (this.mode !== 'worker') this.syncWatchers()
     // Let the launcher and its IPC channel settle before touching the local
     // vector index. This work is useful but never needed for the first paint.
@@ -281,6 +293,7 @@ export class KnowledgeService {
       cloudBackendAvailable: false,
       settings: { ...this.settings },
       storageBytes: this.store.storageBytes(),
+      semanticSearch: this.mode !== 'worker' ? this.semanticSearch.snapshot() : undefined,
     }
   }
 
@@ -383,8 +396,41 @@ export class KnowledgeService {
     return this.restartForConfigurationChange('Folder Knowledge Depth changed')
   }
 
-  search(query: string, limit = 12): KnowledgeSearchHit[] {
+  async setEmbeddingModel(model: KnowledgeSettings['embeddingModel']): Promise<KnowledgeSnapshot> {
     this.initialize()
+    if (model !== 'built-in' && model !== 'embeddinggemma-2') throw new Error('Invalid embedding model')
+    if (model === 'embeddinggemma-2' && this.semanticSearch.snapshot().modelState !== 'ready') {
+      throw new Error('Download EmbeddingGemma before enabling it')
+    }
+    await this.semanticSearch.pause()
+    this.settings = { ...this.settings, embeddingModel: model }
+    this.store.saveSettings(this.settings)
+    this.semanticSearch.schedule()
+    return this.snapshot()
+  }
+
+  downloadEmbeddingModel(): KnowledgeSnapshot {
+    this.initialize()
+    this.semanticSearch.download()
+    return this.snapshot()
+  }
+
+  async cancelEmbeddingDownload(): Promise<KnowledgeSnapshot> {
+    await this.semanticSearch.cancelDownload()
+    return this.snapshot()
+  }
+
+  async removeEmbeddingModel(): Promise<KnowledgeSnapshot> {
+    await this.setEmbeddingModel('built-in')
+    await this.semanticSearch.remove()
+    return this.snapshot()
+  }
+
+  async search(query: string, limit = 12): Promise<KnowledgeSearchHit[]> {
+    this.initialize()
+    if (this.settings.embeddingModel === 'embeddinggemma-2') {
+      return this.semanticSearch.search(query, limit, this.activeRoots().map((root) => root.id))
+    }
     return this.store.search(
       query,
       limit,
@@ -476,6 +522,7 @@ export class KnowledgeService {
 
   async pause(): Promise<KnowledgeSnapshot> {
     this.manuallyPaused = true
+    await this.semanticSearch.pause()
     this.rescanRequested = false
     if (this.rescanTimer) clearTimeout(this.rescanTimer)
     this.rescanTimer = null
@@ -493,6 +540,7 @@ export class KnowledgeService {
 
   async resume(): Promise<KnowledgeSnapshot> {
     this.manuallyPaused = false
+    this.semanticSearch.schedule()
     this.rescanRequested = false
     if (this.mode === 'coordinator') await this.workerHost?.stop()
     else if (this.activePromise) await this.activePromise.catch(() => {})
@@ -654,6 +702,7 @@ export class KnowledgeService {
       lastCompletedAt: Date.now(),
     })
     this.store.clearIndexingCheckpoint(checkpoint.jobId)
+    this.semanticSearch.schedule()
   }
 
   private async scanRoot(
@@ -873,6 +922,7 @@ export class KnowledgeService {
   }
 
   shutdown(): void {
+    this.semanticSearch.shutdown()
     this.workerHost?.shutdown()
     this.controller?.abort()
     if (this.startupTimer) clearTimeout(this.startupTimer)
@@ -955,6 +1005,7 @@ export class KnowledgeService {
 
   private acceptWorkerStatus(status: KnowledgeStatus): void {
     this.status = { ...status }
+    if (status.state === 'completed') this.semanticSearch.schedule()
     this.statusSink(this.status)
   }
 

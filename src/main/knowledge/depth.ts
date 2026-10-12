@@ -7,6 +7,7 @@ import type {
 
 export const DEFAULT_KNOWLEDGE_SETTINGS: KnowledgeSettings = {
   depth: 'smart',
+  embeddingModel: 'built-in',
   maxConcurrentExtractors: 1,
   maxConcurrentOcrJobs: 1,
   runOnBattery: false,

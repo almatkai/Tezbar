@@ -13,6 +13,7 @@ export type KnowledgeRootDepth = 'inherit' | KnowledgeDepth
 
 export type KnowledgeSettings = {
   depth: KnowledgeDepth
+  embeddingModel: 'built-in' | 'embeddinggemma-2'
   runOnBattery: boolean
   onlyRunHeavyJobsWhenIdle: boolean
   maxConcurrentExtractors: number
@@ -195,4 +196,17 @@ export type KnowledgeSnapshot = {
   cloudBackendAvailable: false
   settings: KnowledgeSettings
   storageBytes: number
+  semanticSearch?: SemanticSearchStatus
+}
+
+export type SemanticSearchStatus = {
+  supported: boolean
+  modelState: 'not-downloaded' | 'downloading' | 'ready' | 'error'
+  downloadProgress: number
+  downloadBytes: number
+  downloadTotalBytes: number
+  indexing: boolean
+  indexedChunks: number
+  totalChunks: number
+  error?: string
 }

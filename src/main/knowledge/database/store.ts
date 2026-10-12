@@ -23,6 +23,7 @@ import {
 } from '../embeddings/featureEmbedding'
 import { artifactSettingsHash } from '../core/fingerprint'
 import { DEFAULT_KNOWLEDGE_SETTINGS } from '../depth'
+import { GemmaIndex } from '../embeddings/gemmaIndex'
 
 type SourceRow = {
   id: string
@@ -137,6 +138,18 @@ export function getKnowledgeStore(): KnowledgeStore {
 }
 
 export class KnowledgeStore {
+  private gemmaIndex: GemmaIndex | null = null
+
+  getGemmaIndex(): GemmaIndex {
+    this.ensureInitialized()
+    return this.gemmaIndex!
+  }
+
+  close(): void {
+    this.database?.close()
+    this.database = null
+    this.gemmaIndex = null
+  }
   private database: DatabaseType | null = null
   private vectorIndexAvailable = false
 
@@ -346,6 +359,7 @@ export class KnowledgeStore {
       .run()
     this.ensureMaterializedStats()
     this.ensureVectorIndex()
+    this.gemmaIndex = new GemmaIndex(this.db, this.vectorIndexAvailable)
   }
 
   private ensureVectorIndex(): void {
@@ -1250,7 +1264,8 @@ export class KnowledgeStore {
     const depth = ['off', 'basic', 'smart', 'deep'].includes(persisted.depth ?? '')
       ? (persisted.depth as KnowledgeSettings['depth'])
       : DEFAULT_KNOWLEDGE_SETTINGS.depth
-    return { ...DEFAULT_KNOWLEDGE_SETTINGS, ...persisted, depth }
+    const embeddingModel = persisted.embeddingModel === 'embeddinggemma-2' ? 'embeddinggemma-2' : 'built-in'
+    return { ...DEFAULT_KNOWLEDGE_SETTINGS, ...persisted, depth, embeddingModel }
   }
 
   saveSettings(settings: KnowledgeSettings): void {
@@ -1265,7 +1280,7 @@ export class KnowledgeStore {
       .run(JSON.stringify(settings))
   }
 
-  search(query: string, limit = 12, rootIds?: string[]): KnowledgeSearchHit[] {
+  search(query: string, limit = 12, rootIds?: string[], lexicalOnly = false): KnowledgeSearchHit[] {
     this.ensureInitialized()
     const trimmed = query.trim()
     if (!trimmed || limit <= 0 || rootIds?.length === 0) return []
@@ -1283,6 +1298,7 @@ export class KnowledgeStore {
           JOIN knowledge_sources s ON s.id = c.source_id
           JOIN knowledge_roots r ON r.id = s.root_id
           WHERE knowledge_chunks_fts MATCH ? AND r.enabled = 1 ${rootFilter}
+          ORDER BY rank
           LIMIT ?
         `
           )
@@ -1291,7 +1307,7 @@ export class KnowledgeStore {
     lexicalRows.sort((left, right) => (left.rank ?? 0) - (right.rank ?? 0))
 
     const queryEmbedding = embedText(trimmed)
-    const semanticRows = this.vectorIndexAvailable
+    const semanticRows = lexicalOnly ? [] : this.vectorIndexAvailable
       ? (this.db
           .prepare(
             `
@@ -1337,7 +1353,7 @@ export class KnowledgeStore {
     for (const row of [...lexicalRows, ...semanticRows]) candidates.set(row.id, row)
 
     for (const row of candidates.values()) {
-      const semanticScore = Math.max(
+      const semanticScore = lexicalOnly ? 0 : Math.max(
         0,
         cosineSimilarity(queryEmbedding, decodeEmbedding(row.embeddingJson) ?? [])
       )
