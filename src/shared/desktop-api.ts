@@ -28,7 +28,7 @@ import type {
   KnowledgeStatus,
 } from './knowledge'
 import type { NativeCommandDescriptor } from './nativeCommands'
-import type { AppUpdateStatus, UpdateChannelInfo } from './updater'
+import type { AppUpdateStatus, ReleaseChannel, UpdateChannelInfo } from './updater'
 import type { SystemStatsSnapshot } from './systemStats'
 import type { PermissionId, PermissionStatus, PermissionsSnapshot } from './permissions'
 import type { SafetyDescriptor, SafetyLogEntry } from './safety'
@@ -481,7 +481,7 @@ export type RaymesApi = {
   /** Current app-update tracker state. */
   getUpdateStatus: () => Promise<AppUpdateStatus>
   getUpdateChannel: () => Promise<UpdateChannelInfo>
-  setUpdateChannel: (channel: 'stable' | 'beta') => Promise<UpdateChannelInfo>
+  setUpdateChannel: (channel: ReleaseChannel) => Promise<UpdateChannelInfo>
   /** Check for a newer release eligible for the installation's selected channel. */
   checkForUpdates: () => Promise<AppUpdateStatus>
   /** Download and install the update found by checkForUpdates. */

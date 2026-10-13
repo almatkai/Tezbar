@@ -59,7 +59,6 @@ impl Default for UpdaterState {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateChannelInfo {
     channel: ReleaseChannel,
-    alpha_build: bool,
     version: String,
 }
 
@@ -82,7 +81,6 @@ pub async fn get_update_channel(app: AppHandle) -> Result<UpdateChannelInfo, Str
 fn channel_info(app: &AppHandle) -> Result<UpdateChannelInfo, String> {
     Ok(UpdateChannelInfo {
         channel: selected_channel(app)?,
-        alpha_build: app.config().identifier == release_channels::ALPHA_APP_ID,
         version: app.package_info().version.to_string(),
     })
 }
@@ -100,9 +98,8 @@ pub async fn set_update_channel(
     ) {
         return Err("Finish the current update before changing channels".into());
     }
-    if app.config().identifier == release_channels::ALPHA_APP_ID || channel == ReleaseChannel::Alpha
-    {
-        return Err("Alpha uses a separate Tezbar Alpha installation".into());
+    if app.config().identifier != release_channels::NORMAL_APP_ID {
+        return Err("This installation has an unsupported updater identity".into());
     }
     let directory = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
     release_channels::write_channel(&directory, channel)?;
@@ -123,21 +120,13 @@ fn validate_update(
         &version,
         &update.raw_json,
     )?;
-    validate_download_url(channel, &version, &update.download_url)
+    validate_download_url(&version, &update.download_url)
 }
 
-fn validate_download_url(
-    channel: ReleaseChannel,
-    version: &semver::Version,
-    url: &tauri::Url,
-) -> Result<(), String> {
+fn validate_download_url(version: &semver::Version, url: &tauri::Url) -> Result<(), String> {
     let prefix = format!("/{GITHUB_REPO}/releases/download/v{version}/");
     let filename = url.path().strip_prefix(&prefix).unwrap_or("");
-    let product = if channel == ReleaseChannel::Alpha {
-        "Tezbar%20Alpha"
-    } else {
-        "Tezbar"
-    };
+    let product = "Tezbar";
     if url.scheme() != "https"
         || url.host_str() != Some("github.com")
         || url.port().is_some()
@@ -457,35 +446,20 @@ mod tests {
     #[test]
     fn download_urls_are_version_pinned_and_belong_to_the_installed_product() {
         let version = semver::Version::parse("0.3.0-alpha.1").unwrap();
-        let alpha = "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-alpha.1/Tezbar%20Alpha_0.3.0-alpha.1_x64-setup.exe";
-        assert!(
-            validate_download_url(ReleaseChannel::Alpha, &version, &alpha.parse().unwrap()).is_ok()
-        );
-        assert!(
-            validate_download_url(ReleaseChannel::Beta, &version, &alpha.parse().unwrap()).is_err()
-        );
+        let alpha = "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-alpha.1/Tezbar_0.3.0-alpha.1_x64-setup.exe";
+        assert!(validate_download_url(&version, &alpha.parse().unwrap()).is_ok());
         for wrong in [
             alpha.replace("v0.3.0-alpha.1/", "latest/"),
-            alpha.replace("Tezbar%20Alpha_", "Tezbar_"),
+            alpha.replace("Tezbar_", "Tezbar%20Alpha_"),
             alpha.replace("github.com/", "github.com.evil.example/"),
             format!("{alpha}?redirect=another-product"),
             alpha.replace("x64-setup.exe", "subdir/installer.exe"),
         ] {
-            assert!(validate_download_url(
-                ReleaseChannel::Alpha,
-                &version,
-                &wrong.parse().unwrap()
-            )
-            .is_err());
+            assert!(validate_download_url(&version, &wrong.parse().unwrap()).is_err());
         }
         let stable_version = semver::Version::parse("0.2.7").unwrap();
         let legacy = "https://github.com/almatkai/Tezbar/releases/download/v0.2.7/Tezbar_0.2.7_x64-setup.exe";
-        assert!(validate_download_url(
-            ReleaseChannel::Stable,
-            &stable_version,
-            &legacy.parse().unwrap()
-        )
-        .is_ok());
+        assert!(validate_download_url(&stable_version, &legacy.parse().unwrap()).is_ok());
     }
 
     const WINDOWS_ONLY_MANIFEST: &str = r#"{

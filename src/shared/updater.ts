@@ -13,14 +13,18 @@ export type AppUpdateStatus =
 
 export const RELEASES_PAGE_URL = 'https://github.com/almatkai/Tezbar/releases'
 export type ReleaseChannel = 'stable' | 'beta' | 'alpha'
-export type UpdateChannelInfo = { channel: ReleaseChannel; alphaBuild: boolean; version: string }
+export type UpdateChannelInfo = { channel: ReleaseChannel; version: string }
 
 export function channelDescription(info: UpdateChannelInfo): string {
-  if (info.alphaBuild) return 'Alpha is an isolated installation for experimental releases. Its data is separate from Tezbar.'
-  if (info.channel === 'beta') return 'Beta includes early releases and completed stable releases. It shares this installation’s data; switching to Stable never downgrades the app.'
-  return info.version.includes('-beta.')
-    ? 'You’ll receive the next stable version newer than this Beta build. Your current version and data stay in place.'
-    : 'Only completed stable releases are offered. Alpha and Beta builds are excluded.'
+  if (info.channel === 'alpha')
+    return 'Experimental Alpha releases, plus Beta and Stable updates. Early releases use your current settings and data; switching channels never downgrades the app.'
+  if (info.channel === 'beta')
+    return info.version.includes('-alpha.')
+      ? 'You’ll receive the next Beta or Stable release newer than this Alpha build. Your settings and data stay in place.'
+      : 'Beta and Stable updates. Early releases use your current settings and data; Alpha releases are excluded.'
+  return /-(alpha|beta)\./.test(info.version)
+    ? 'You’ll receive the next Stable release newer than this prerelease build. Your settings and data stay in place.'
+    : 'Recommended for everyday use. Only Stable updates are offered.'
 }
 
 export const LAST_UPDATE_CHECK_KEY = 'tezbar:last-update-check'

@@ -10,6 +10,7 @@ import {
   validateManifest,
   validatePromotion,
   REPOSITORY,
+  promotionTargets,
 } from './lib/release-policy.mjs'
 import { manifestFromReceipts } from './lib/release-artifacts.mjs'
 import { verifyReleaseEnvironments } from './lib/release-environment.mjs'
@@ -225,10 +226,10 @@ if (flags.has('dry-run')) {
     else gh(['release', 'upload', pointerTag, manifestPath, '--repo', REPOSITORY, '--clobber'])
   }
   updatePointer(options.channel)
-  if (options.channel === 'stable') {
-    const beta = readPointer('beta')
-    if (beta) validateManifest(beta, 'beta')
-    if (!beta || compareVersions(manifest.version, beta.version) > 0) updatePointer('beta')
+  for (const channel of promotionTargets(options.channel).slice(1)) {
+    const previous = readPointer(channel)
+    if (previous) validateManifest(previous, channel)
+    if (!previous || compareVersions(manifest.version, previous.version) > 0) updatePointer(channel)
   }
   console.log(`Published ${tag} and advanced ${options.channel}`)
 }

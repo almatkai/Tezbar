@@ -12,6 +12,7 @@ import {
   immutableAssetUrl,
   validateManifest,
   validatePromotion,
+  promotionTargets,
 } from './lib/release-policy.mjs'
 import {
   validateReceipt,
@@ -53,15 +54,12 @@ const base = JSON.parse(
 const manifest = (version = '0.3.0', channel = 'stable') => ({
   version,
   channel,
-  appIdentifier: channel === 'alpha' ? 'com.tezbar.app.alpha' : 'com.tezbar.app',
+  appIdentifier: 'com.tezbar.app',
   notes: 'Reviewed release',
   pub_date: '2026-10-12T00:00:00Z',
   platforms: {
     'windows-x86_64-nsis': {
-      url: immutableAssetUrl(
-        version,
-        `${channel === 'alpha' ? 'Tezbar Alpha' : 'Tezbar'}_${version}_x64-setup.exe`
-      ),
+      url: immutableAssetUrl(version, `Tezbar_${version}_x64-setup.exe`),
       signature: 'fixture',
     },
   },
@@ -72,24 +70,37 @@ test('channels cannot be confused by semver precedence', () => {
   assert.throws(() => assertRelease('stable', '0.3.0-beta.1'))
   assert.equal(acceptsRelease('beta', '0.4.0-alpha.1'), false)
   assert.equal(acceptsRelease('beta', '0.3.0'), true)
-  assert.equal(acceptsRelease('alpha', '0.3.0'), false)
+  assert.equal(acceptsRelease('alpha', '0.3.0'), true)
+  assert.equal(acceptsRelease('alpha', '0.3.0-beta.1'), true)
   assert(compareVersions('0.3.0', '0.3.0-beta.20') > 0)
   assert(compareVersions('0.3.0-beta.10', '0.3.0-beta.2') > 0)
   for (const invalid of ['0.3.0-beta.0', '0.3.0-rc.1', '0.3.0+foo', '0.3.0-alpha.01'])
     assert.throws(() => assertRelease('beta', invalid))
 })
 
-test('installer identities preserve normal upgrades and isolate Alpha', () => {
+test('all channels keep the same installation and preserve normal upgrades', () => {
   const stable = buildConfiguration(base, 'stable', '0.3.0')
   const beta = buildConfiguration(base, 'beta', '0.3.0-beta.1')
   const alpha = buildConfiguration(base, 'alpha', '0.3.0-alpha.1')
   assert.equal(stable.identifier, beta.identifier)
   assert.equal(stable.bundle.windows.wix.upgradeCode, 'b6c1d3d9-cb62-5b2a-8c9b-0386470a3947')
-  assert.notEqual(alpha.identifier, stable.identifier)
-  assert.notEqual(alpha.mainBinaryName, stable.mainBinaryName)
-  assert.notEqual(alpha.bundle.windows.wix.upgradeCode, stable.bundle.windows.wix.upgradeCode)
-  assert.equal(alpha.app.windows[0].title, 'Tezbar Alpha')
+  assert.equal(alpha.identifier, stable.identifier)
+  assert.equal(alpha.mainBinaryName, stable.mainBinaryName)
+  assert.equal(alpha.bundle.windows.wix.upgradeCode, stable.bundle.windows.wix.upgradeCode)
+  assert.equal(alpha.app.windows[0].title, 'Tezbar')
   assert.equal(stable.bundle.windows.allowDowngrades, false)
+})
+
+test('release promotion follows the channel hierarchy and never rolls it back', () => {
+  assert.deepEqual(promotionTargets('stable'), ['stable', 'beta', 'alpha'])
+  assert.deepEqual(promotionTargets('beta'), ['beta', 'alpha'])
+  assert.deepEqual(promotionTargets('alpha'), ['alpha'])
+  const alpha = manifest('0.3.0-alpha.1', 'alpha')
+  const beta = manifest('0.3.0-beta.1', 'beta')
+  validatePromotion(alpha, beta, 'alpha')
+  validatePromotion(beta, manifest(), 'alpha')
+  assert.throws(() => validatePromotion(manifest('0.4.0-alpha.1', 'alpha'), beta, 'alpha'))
+  assert.throws(() => validatePromotion(manifest(), alpha, 'stable'))
 })
 
 test('wrong feeds, identities, assets, and rollbacks are rejected', () => {
@@ -183,14 +194,14 @@ test('a complete release requires matching signed receipts for every platform', 
     const receipts = REQUIRED_PLATFORMS.map((platform) => {
       const suffix =
         platform === 'windows-x86_64-nsis' ? 'x64-setup.exe' : `${platform.slice(7)}.app.tar.gz`
-      const filename = `Tezbar Alpha_${expected.version}_${suffix}`
+      const filename = `Tezbar_${expected.version}_${suffix}`
       writeFileSync(join(directory, filename), bytes)
       writeFileSync(join(directory, `${filename}.sig`), encodedSignature)
       return {
         ...expected,
         platform,
-        productName: 'Tezbar Alpha',
-        appIdentifier: 'com.tezbar.app.alpha',
+        productName: 'Tezbar',
+        appIdentifier: 'com.tezbar.app',
         platformVerified: true,
         artifacts: [
           { filename, sha256: createHash('sha256').update(bytes).digest('hex'), updater: true },

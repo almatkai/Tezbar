@@ -1,8 +1,17 @@
 {
-  "version": "0.0.0-alpha.1",
-  "channel": "alpha",
-  "appIdentifier": "com.tezbar.app.alpha",
-  "notes": "No Alpha release has been published yet.",
-  "pub_date": "2026-10-12T00:00:00Z",
-  "platforms": {}
+  "version": "0.2.7",
+  "notes": "## Windows emoji and clipboard fix\n\n- Emoji paste correctly on Windows, including systems using Russian console code pages.\n- Pasting waits for the clipboard write to finish before sending Ctrl+V.\n- Clipboard history preserves emoji and other Unicode text.\n\nThis patch release is for Windows x64.",
+  "pub_date": "2026-10-09T06:17:34.700Z",
+  "platforms": {
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNERPb1AvdzlkWWpiU29WUEkzYUQwVXVJeUNkanRIL1pkUHd2bFVxbTNtc3ZYUjJyaDVxU0lsYyszVTMvc2lkNm5XNTRrRUlodEpLU0p1eUI0WTFDZWdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTI2NjM0CWZpbGU6VGV6YmFyXzAuMi43X3g2NC1zZXR1cC5leGUKdEZhSzNJcU1nTGhyVm5sZU44azNjMTU0RlBDSVpHc2V1dEwvREVGL1ZsZDFFMWJaYndieUtaTW5JdHEza0pCMWdPT3E3U2dPaDVzbTJ3OGNlUnhaRHc9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.7/Tezbar_0.2.7_x64-setup.exe"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNERPb1AvdzlkWWpiU29WUEkzYUQwVXVJeUNkanRIL1pkUHd2bFVxbTNtc3ZYUjJyaDVxU0lsYyszVTMvc2lkNm5XNTRrRUlodEpLU0p1eUI0WTFDZWdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTI2NjM0CWZpbGU6VGV6YmFyXzAuMi43X3g2NC1zZXR1cC5leGUKdEZhSzNJcU1nTGhyVm5sZU44azNjMTU0RlBDSVpHc2V1dEwvREVGL1ZsZDFFMWJaYndieUtaTW5JdHEza0pCMWdPT3E3U2dPaDVzbTJ3OGNlUnhaRHc9PQo=",
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.7/Tezbar_0.2.7_x64-setup.exe"
+    }
+  },
+  "channel": "stable",
+  "appIdentifier": "com.tezbar.app"
 }

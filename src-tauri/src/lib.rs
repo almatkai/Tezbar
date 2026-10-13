@@ -3702,20 +3702,11 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             timer_notifications::setup(&handle);
             let app_local_data = handle.path().app_local_data_dir()?;
-            let alpha_build = handle.config().identifier == release_channels::ALPHA_APP_ID;
-            let config_path = if alpha_build {
-                Some(app_local_data.join("config").join("config.json"))
-            } else {
-                openray_config_path()
-            };
+            let config_path = openray_config_path();
             if let Some(path) = &config_path {
                 let _ = PROFILE_CONFIG_PATH.set(path.clone());
             }
             let mut backend_env = vec![
-                (
-                    "TEZBAR_RELEASE_CHANNEL".to_string(),
-                    if alpha_build { "alpha" } else { "stable" }.to_string(),
-                ),
                 (
                     "APPDATA_DIR".to_string(),
                     app_local_data.to_string_lossy().into_owned(),
@@ -3739,12 +3730,6 @@ pub fn run() {
                 backend_env.push((
                     "TEZBAR_CONFIG_DIR".into(),
                     directory.to_string_lossy().into_owned(),
-                ));
-            }
-            if alpha_build {
-                backend_env.push((
-                    "PI_CODING_AGENT_DIR".into(),
-                    app_local_data.join("pi-agent").to_string_lossy().into_owned(),
                 ));
             }
 
@@ -4030,14 +4015,11 @@ pub fn run() {
                 })
                 .build(&handle_tray)?;
 
-            let mut shortcut_modifiers = if cfg!(target_os = "windows") {
+            let shortcut_modifiers = if cfg!(target_os = "windows") {
                 tauri_plugin_global_shortcut::Modifiers::CONTROL
             } else {
                 tauri_plugin_global_shortcut::Modifiers::ALT
             };
-            if alpha_build {
-                shortcut_modifiers |= tauri_plugin_global_shortcut::Modifiers::SHIFT;
-            }
             let default_shortcut = Shortcut::new(
                 Some(shortcut_modifiers),
                 tauri_plugin_global_shortcut::Code::Space,

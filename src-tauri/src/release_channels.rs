@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
 pub const NORMAL_APP_ID: &str = "com.tezbar.app";
-pub const ALPHA_APP_ID: &str = "com.tezbar.app.alpha";
 pub const REPOSITORY: &str = "almatkai/Tezbar";
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -28,7 +27,7 @@ impl ReleaseChannel {
             Some(release) => match self {
                 Self::Stable => release == Self::Stable,
                 Self::Beta => release == Self::Stable || release == Self::Beta,
-                Self::Alpha => release == Self::Alpha,
+                Self::Alpha => true,
             },
             None => false,
         }
@@ -39,17 +38,15 @@ impl ReleaseChannel {
             "https://github.com/{REPOSITORY}/releases/download/channel-{}/latest.json",
             self.name()
         )];
-        // Bootstrap/mirror belongs to this channel, never to Alpha.
+        // The selected channel has its own bootstrap manifest.
         endpoints.push(format!(
             "https://raw.githubusercontent.com/{REPOSITORY}/main/updates/{}.json",
             self.name()
         ));
-        if self != Self::Alpha {
-            // Existing stable installations remain reachable during migration.
-            endpoints.push(format!(
-                "https://github.com/{REPOSITORY}/releases/latest/download/latest.json"
-            ));
-        }
+        // Every channel accepts completed stable releases during bootstrap.
+        endpoints.push(format!(
+            "https://github.com/{REPOSITORY}/releases/latest/download/latest.json"
+        ));
         endpoints
     }
 }
@@ -74,9 +71,7 @@ pub fn version_channel(version: &Version) -> Option<ReleaseChannel> {
 
 pub fn default_channel(identifier: &str, version: &Version) -> Result<ReleaseChannel, String> {
     match (identifier, version_channel(version)) {
-        (ALPHA_APP_ID, Some(ReleaseChannel::Alpha)) => Ok(ReleaseChannel::Alpha),
-        (NORMAL_APP_ID, Some(ReleaseChannel::Beta)) => Ok(ReleaseChannel::Beta),
-        (NORMAL_APP_ID, Some(ReleaseChannel::Stable)) => Ok(ReleaseChannel::Stable),
+        (NORMAL_APP_ID, Some(channel)) => Ok(channel),
         _ => Err("The build's release channel does not match its application identity".into()),
     }
 }
@@ -92,24 +87,16 @@ pub fn read_channel(
     version: &Version,
 ) -> Result<ReleaseChannel, String> {
     let default = default_channel(identifier, version)?;
-    if default == ReleaseChannel::Alpha {
-        return Ok(default);
-    }
     let path = directory.join("update-channel.json");
     let channel = match fs::read(&path) {
         Ok(bytes) => match serde_json::from_slice::<Preference>(&bytes) {
-            Ok(Preference {
-                channel: ReleaseChannel::Stable,
-            }) => ReleaseChannel::Stable,
-            Ok(Preference {
-                channel: ReleaseChannel::Beta,
-            }) => ReleaseChannel::Beta,
-            _ => ReleaseChannel::Stable, // Unknown/Alpha preferences fail closed.
+            Ok(Preference { channel }) => channel,
+            _ => ReleaseChannel::Stable, // Unknown preferences fail closed.
         },
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => default,
         Err(error) => return Err(format!("Cannot read update preferences: {error}")),
     };
-    // Persist an installer-selected Beta channel across promotion to Stable.
+    // Keep the selected channel across Alpha/Beta promotion to Stable.
     if !path.exists() {
         write_channel(directory, channel)?;
     }
@@ -171,23 +158,26 @@ mod tests {
         assert!(ReleaseChannel::Beta.accepts(&version("0.3.0")));
         assert!(!ReleaseChannel::Beta.accepts(&version("0.4.0-alpha.1")));
         assert!(!ReleaseChannel::Stable.accepts(&version("0.4.0-beta.1")));
-        assert!(!ReleaseChannel::Alpha.accepts(&version("0.3.0")));
+        assert!(ReleaseChannel::Alpha.accepts(&version("0.3.0")));
+        assert!(ReleaseChannel::Alpha.accepts(&version("0.3.0-beta.1")));
+        assert!(ReleaseChannel::Alpha.accepts(&version("0.3.0-alpha.1")));
         for invalid in ["0.3.0-rc.1", "0.3.0-alpha", "0.3.0-beta.0", "0.3.0+build.2"] {
             assert!(!ReleaseChannel::Beta.accepts(&version(invalid)));
         }
     }
 
     #[test]
-    fn alpha_requires_its_own_identity_and_feed() {
+    fn all_channels_share_the_app_identity_and_normal_builds_default_to_stable() {
         assert_eq!(
-            default_channel(ALPHA_APP_ID, &version("0.3.0-alpha.1")).unwrap(),
+            default_channel(NORMAL_APP_ID, &version("0.3.0-alpha.1")).unwrap(),
             ReleaseChannel::Alpha
         );
-        assert!(default_channel(NORMAL_APP_ID, &version("0.3.0-alpha.1")).is_err());
-        assert!(ReleaseChannel::Alpha
-            .endpoints()
-            .iter()
-            .all(|url| url.contains("alpha")));
+        assert_eq!(
+            default_channel(NORMAL_APP_ID, &version("0.2.7")).unwrap(),
+            ReleaseChannel::Stable
+        );
+        assert!(default_channel("com.tezbar.app.alpha", &version("0.3.0-alpha.1")).is_err());
+        assert!(ReleaseChannel::Alpha.endpoints()[0].contains("channel-alpha"));
         assert!(ReleaseChannel::Beta
             .endpoints()
             .iter()
@@ -195,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn beta_selection_survives_promotion_and_corruption_fails_closed() {
+    fn three_way_selection_survives_upgrades_and_corruption_fails_closed() {
         let directory = std::env::temp_dir().join(format!(
             "tezbar-channels-{}-{}",
             std::process::id(),
@@ -217,9 +207,26 @@ mod tests {
             read_channel(&directory, NORMAL_APP_ID, &version("0.3.0-beta.1")).unwrap(),
             ReleaseChannel::Stable
         );
+        write_channel(&directory, ReleaseChannel::Alpha).unwrap();
+        for release in ["0.3.0-alpha.1", "0.3.0-beta.1", "0.3.0"] {
+            assert_eq!(
+                read_channel(&directory, NORMAL_APP_ID, &version(release)).unwrap(),
+                ReleaseChannel::Alpha
+            );
+        }
+        write_channel(&directory, ReleaseChannel::Beta).unwrap();
+        assert_eq!(
+            read_channel(&directory, NORMAL_APP_ID, &version("0.3.0-alpha.1")).unwrap(),
+            ReleaseChannel::Beta
+        );
+        write_channel(&directory, ReleaseChannel::Stable).unwrap();
+        assert_eq!(
+            read_channel(&directory, NORMAL_APP_ID, &version("0.3.0-alpha.1")).unwrap(),
+            ReleaseChannel::Stable
+        );
         fs::write(
             directory.join("update-channel.json"),
-            br#"{"channel":"alpha"}"#,
+            br#"{"channel":"nightly"}"#,
         )
         .unwrap();
         assert_eq!(
@@ -236,10 +243,10 @@ mod tests {
 
     #[test]
     fn a_validly_signed_release_still_needs_the_correct_app_identity() {
-        let alpha = serde_json::json!({"appIdentifier":ALPHA_APP_ID,"channel":"alpha"});
+        let alpha = serde_json::json!({"appIdentifier":NORMAL_APP_ID,"channel":"alpha"});
         assert!(validate_manifest_identity(
             ReleaseChannel::Alpha,
-            ALPHA_APP_ID,
+            NORMAL_APP_ID,
             &version("0.3.0-alpha.1"),
             &alpha
         )
@@ -249,6 +256,15 @@ mod tests {
             NORMAL_APP_ID,
             &version("0.3.0-beta.1"),
             &alpha
+        )
+        .is_err());
+        let other_app =
+            serde_json::json!({"appIdentifier":"com.tezbar.app.alpha","channel":"alpha"});
+        assert!(validate_manifest_identity(
+            ReleaseChannel::Alpha,
+            NORMAL_APP_ID,
+            &version("0.3.0-alpha.1"),
+            &other_app
         )
         .is_err());
         assert!(validate_manifest_identity(

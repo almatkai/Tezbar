@@ -1,14 +1,16 @@
 # Tezbar release channels
 
-| Audience | Installation                                         | Updates                        | Data                                                                                    |
-| -------- | ---------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------- |
-| Stable   | Tezbar                                               | Newer stable versions          | Existing profile                                                                        |
-| Beta     | Tezbar, with Beta selected in Settings → App updates | Newer beta and stable versions | Same profile as Stable                                                                  |
-| Alpha    | Tezbar Alpha                                         | Newer alpha versions only      | Separate settings, webview storage, databases, terminal history, and Pi agent directory |
+| Channel          | Installation | Updates                                | Data             |
+| ---------------- | ------------ | -------------------------------------- | ---------------- |
+| Stable (default) | Tezbar       | Newer Stable versions                  | Existing profile |
+| Beta             | Tezbar       | Newer Beta and Stable versions         | Same profile     |
+| Alpha            | Tezbar       | Newer Alpha, Beta, and Stable versions | Same profile     |
 
-Alpha and normal Tezbar can run side by side. Alpha defaults to Control+Shift+Space on Windows and Alt+Shift+Space on macOS; normal Tezbar keeps its current shortcut. Alpha has its own installer identity and executable. OS permissions, accounts, extensions, and indexing roots must be configured in that profile. User documents and globally installed executables remain shared resources; Alpha is profile isolation, not an OS sandbox.
+Users can switch between all three channels in **Settings → App updates → Release channel**. Normal Tezbar starts on Stable, the recommended channel. An explicitly installed prerelease starts on its matching channel only when no preference already exists. Selection persists across upgrades and is independent of the currently installed version. Changing channels clears the old pending update and immediately checks the selected feed. Changes are disabled during an update check/download or while a downloaded update awaits restart.
 
-Beta is an explicit opt-in. Switching back to Stable never downgrades: a running Beta waits for a newer eligible stable release. Beta selection persists when a stable release is installed. Before introducing an incompatible database migration in Beta, implement and test a backup/migration recovery path; channel selection cannot reverse a schema migration.
+Every release uses the same app identifier, executable, installer upgrade identity, shortcut, settings, webview storage, databases, terminal history, and Pi agent state. Channels do not create separate installations or copy/migrate profiles. All channel installers must use the shared `com.tezbar.app` / `Tezbar` identity so updates replace the current installation and retain its data.
+
+Beta and Alpha are explicit opt-ins for early releases. Switching back to Stable never downgrades: a running prerelease waits for a newer eligible Stable release. For example, `0.3.0-alpha.1` on Stable waits for `0.3.0` or a newer Stable version; it does not install `0.2.7`. Switching to Beta from Alpha similarly waits for a newer Beta/Stable release. Before introducing an incompatible database migration in Alpha/Beta, implement and test a backup/migration recovery path; channel selection cannot reverse a schema migration. Users testing prereleases should back up important data.
 
 These channels separate update cohorts, not access permissions. Public Alpha/Beta installers can be downloaded by anyone. If Alpha must be invite-only, use a private distribution host and authenticated feeds; a hidden setting or prerelease label does not enforce membership.
 
@@ -16,11 +18,11 @@ These channels separate update cohorts, not access permissions. Public Alpha/Bet
 
 Use `0.3.0-alpha.1`, `0.3.0-beta.1`, then `0.3.0`. Increase the positive numeric sequence for each prerelease. Build metadata and other prerelease labels are rejected. Every channel pointer advances strictly forward. For hotfixes use a new version; never replace a published installer or silently downgrade a user's data.
 
-Installers and updater signatures live at immutable `v<version>` GitHub release URLs. Three mutable **prerelease** pointer releases (`channel-alpha`, `channel-beta`, `channel-stable`) each hold only `latest.json`, preventing pointer releases from becoming GitHub's latest stable release. Stable publication also advances Beta if it is newer; it never changes Alpha. Every real stable release includes `latest.json` for older app versions that use GitHub's latest release endpoint.
+Installers and updater signatures live at immutable `v<version>` GitHub release URLs. Three mutable **prerelease** pointer releases (`channel-alpha`, `channel-beta`, `channel-stable`) each hold only `latest.json`, preventing pointer releases from becoming GitHub's latest stable release. A newer Stable release also advances Beta and Alpha; a newer Beta release also advances Alpha. Each pointer advances only if that version is newer than its current release. Alpha publication never changes Beta or Stable. Every real Stable release includes `latest.json` for older app versions that use GitHub's latest release endpoint.
 
 The old standalone Windows test-signing workflow is retired. All publications now use verified platform receipts and the reviewed release pipeline; no helper overwrites signatures on an existing release.
 
-`updates/*.json` are static bootstrap files, not live mirrors. Stable/Beta bootstrap the existing 0.2.7 Windows release. Alpha starts with no platforms. The native updater tries its selected pointer first, then its bootstrap; normal Tezbar also retains the legacy stable endpoint. A missing platform produces no offered update. Bootstrap data can be stale during a feed outage; the next successful pointer check supplies the current release. Never put Alpha artifacts in normal feeds.
+`updates/*.json` are static bootstrap files, not live mirrors. All channels bootstrap the existing 0.2.7 Windows Stable release. The native updater tries its selected pointer first, then its bootstrap, and retains the legacy Stable endpoint. A missing platform produces no offered update. Bootstrap data can be stale during a feed outage; the next successful pointer check supplies the current release. Never put Alpha releases in Beta/Stable feeds or Beta releases in Stable.
 
 The updater independently checks SemVer eligibility, app identity, an immutable repository download URL, and the configured updater signature before installation. Checks, channel changes, and downloads are serialized so a pending update cannot survive a channel switch. Windows installers disallow downgrade and retain the existing normal WiX upgrade identity.
 
@@ -65,4 +67,4 @@ If upload failed before the draft had every required asset/manifest, recovery fa
 
 ## Required smoke test before the first live release
 
-Local Windows tests do not prove signed installer behavior or macOS notarization. Use an Alpha release to verify clean install, side-by-side launch with Stable, distinct settings/history/indexes, shortcut handling, uninstall isolation, and an Alpha-to-Alpha signed update. Then verify Stable-to-Beta, Beta-to-newer-Stable, preserved Beta subscription, Stable opt-out without downgrade, offline checking, and interrupted downloads on real test installations. Establish crash/error monitoring with explicit user consent and use the observed Alpha/Beta results to decide when a release qualifies for Stable.
+Local Windows tests do not prove signed installer behavior or macOS notarization. Verify clean install defaults to Stable, opt-in to Beta/Alpha, signed Stable-to-Beta-to-Alpha updates, Alpha-to-newer-Beta/Stable promotion, subscription persistence across builds, preservation of settings/history/indexes, returning to Stable without downgrade, offline checking, and interrupted downloads on real test installations. Establish crash/error monitoring with explicit user consent and use the observed Alpha/Beta results to decide when a release qualifies for Stable.

@@ -4,9 +4,9 @@ export const REPOSITORY = 'almatkai/Tezbar'
 export const APP_IDS = {
   stable: 'com.tezbar.app',
   beta: 'com.tezbar.app',
-  alpha: 'com.tezbar.app.alpha',
+  alpha: 'com.tezbar.app',
 }
-export const PRODUCT_NAMES = { stable: 'Tezbar', beta: 'Tezbar', alpha: 'Tezbar Alpha' }
+export const PRODUCT_NAMES = { stable: 'Tezbar', beta: 'Tezbar', alpha: 'Tezbar' }
 export const CHANNELS = ['stable', 'beta', 'alpha']
 
 export function parseVersion(version) {
@@ -38,13 +38,21 @@ export function compareVersions(left, right) {
 export function acceptsRelease(feed, version) {
   if (!CHANNELS.includes(feed)) throw new Error('Unknown update channel')
   const channel = parseVersion(version).channel
-  return feed === 'beta' ? channel === 'beta' || channel === 'stable' : channel === feed
+  return (
+    feed === 'alpha' ||
+    (feed === 'beta' ? channel === 'beta' || channel === 'stable' : channel === feed)
+  )
 }
 
 export function assertRelease(channel, version) {
   if (!CHANNELS.includes(channel) || parseVersion(version).channel !== channel) {
     throw new Error('Release version and channel disagree')
   }
+}
+
+export function promotionTargets(channel) {
+  if (!CHANNELS.includes(channel)) throw new Error('Unknown release channel')
+  return CHANNELS.slice(CHANNELS.indexOf(channel))
 }
 
 function wixUpgradeCode(product) {
@@ -67,7 +75,7 @@ export function buildConfiguration(base, channel, version) {
     version,
     productName,
     identifier: APP_IDS[channel],
-    mainBinaryName: channel === 'alpha' ? 'tezbar-alpha' : 'tezbar',
+    mainBinaryName: 'tezbar',
     app: {
       windows: base.app.windows.map((window) => ({
         ...window,

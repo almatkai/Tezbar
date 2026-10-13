@@ -19,16 +19,11 @@ fn main() {
     let identifier = config["identifier"]
         .as_str()
         .expect("application identifier");
-    let channel = release_channels::default_channel(identifier, &version)
+    release_channels::default_channel(identifier, &version)
         .expect("release version and app identity must agree");
-    let expected_name = if channel == release_channels::ReleaseChannel::Alpha {
-        "Tezbar Alpha"
-    } else {
-        "Tezbar"
-    };
     assert_eq!(
         config["productName"].as_str(),
-        Some(expected_name),
+        Some("Tezbar"),
         "Installer product name must match its release identity"
     );
     println!("cargo:rerun-if-changed=../dist-backend/main.js");
