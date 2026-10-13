@@ -9,6 +9,14 @@ export const APP_IDS = {
 export const PRODUCT_NAMES = { stable: 'Tezbar', beta: 'Tezbar', alpha: 'Tezbar' }
 export const CHANNELS = ['stable', 'beta', 'alpha']
 
+export function resolveBuildMode(channel, { allowUnsigned = false, localPreview = false } = {}) {
+  if (!CHANNELS.includes(channel)) throw new Error('Unknown build channel')
+  if (allowUnsigned && localPreview) throw new Error('Choose one local build mode')
+  if (allowUnsigned && channel === 'stable')
+    throw new Error('Unsigned stable releases are forbidden')
+  return { unsigned: allowUnsigned || localPreview, localPreview }
+}
+
 export function parseVersion(version) {
   const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(alpha|beta)\.([1-9]\d*))?$/.exec(
     version

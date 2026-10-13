@@ -55,7 +55,7 @@ pnpm release:build --channel alpha --version 0.3.0-alpha.1 --notes docs/releases
 pnpm release:test
 ```
 
-For local Alpha/Beta development, `--allow-unsigned` builds cannot be published: their receipts have `platformVerified: false`. Stable forbids unsigned builds. Use the wrapper instead of manually changing the main app's identity/version. Generated configuration and artifacts stay in `build/release-*`; existing unrelated build folders are untouched. Choose a fresh bundle output when stale artifacts cause validation to fail.
+For local Alpha/Beta development, `--allow-unsigned` builds have `platformVerified: false` and cannot enter the protected updater release pipeline. Stable requires verified signing for public updater releases. To privately test a normal Stable installation with its default channel and the complete channel selector, use `--local-preview`, for example `pnpm release:build --channel stable --version 0.2.7 --notes docs/releases/0.2.7.md --local-preview`. Local previews disable updater artifact signing, retain `platformVerified: false`, and explicitly record `distribution: local-preview`; the publisher rejects their receipts. They do not change public releases or updater feeds. Use the wrapper instead of manually changing the main app's identity/version. Generated configuration and artifacts stay in `build/release-*`; existing unrelated build folders are untouched. Choose a fresh bundle output when stale artifacts cause validation to fail.
 
 ## Interrupted publication and recovery
 

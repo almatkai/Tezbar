@@ -10,13 +10,13 @@ import {
 } from 'node:fs'
 import { dirname, join, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildConfiguration, PRODUCT_NAMES } from './lib/release-policy.mjs'
+import { buildConfiguration, PRODUCT_NAMES, resolveBuildMode } from './lib/release-policy.mjs'
 import { verifyUpdaterSignature } from './verify-updater-signature.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const values = {},
   flags = new Set()
-const booleanFlags = ['dry-run', 'allow-unsigned']
+const booleanFlags = ['dry-run', 'allow-unsigned', 'local-preview']
 for (let i = 2; i < process.argv.length; i++) {
   const arg = process.argv[i]
   if (arg === '--') continue
@@ -34,17 +34,20 @@ const base = JSON.parse(readFileSync(join(root, 'src-tauri/tauri.conf.json'), 'u
 const channel = values.channel ?? 'stable',
   version = values.version ?? base.version
 const override = buildConfiguration(base, channel, version)
-if (flags.has('allow-unsigned') && channel === 'stable')
-  throw new Error('Unsigned stable builds are forbidden')
+const mode = resolveBuildMode(channel, {
+  allowUnsigned: flags.has('allow-unsigned'),
+  localPreview: flags.has('local-preview'),
+})
 const directory = resolve(
   root,
-  values.output ?? `build/release-${channel}-${version}-${process.platform}-${process.arch}`
+  values.output ??
+    `build/release-${mode.localPreview ? 'local-preview-' : ''}${channel}-${version}-${process.platform}-${process.arch}`
 )
 const notesPath = resolve(root, values.notes ?? `docs/releases/${version}.md`)
 if (!readFileSync(notesPath, 'utf8').trim()) throw new Error('Release notes must not be empty')
 mkdirSync(directory, { recursive: true })
 const configPath = join(directory, 'tauri-release.json')
-if (flags.has('allow-unsigned')) {
+if (mode.unsigned) {
   override.bundle.createUpdaterArtifacts = false
   if (process.platform === 'darwin') override.bundle.macOS = { signingIdentity: '-' }
 }
@@ -53,11 +56,7 @@ if (process.platform === 'win32' && process.env.WINDOWS_CERTIFICATE_THUMBPRINT) 
   override.bundle.windows.digestAlgorithm = 'sha256'
   override.bundle.windows.timestampUrl = 'http://timestamp.digicert.com'
 }
-if (
-  !flags.has('allow-unsigned') &&
-  process.platform === 'darwin' &&
-  process.env.APPLE_SIGNING_IDENTITY
-)
+if (!mode.unsigned && process.platform === 'darwin' && process.env.APPLE_SIGNING_IDENTITY)
   override.bundle.macOS = { signingIdentity: process.env.APPLE_SIGNING_IDENTITY }
 writeFileSync(configPath, `${JSON.stringify(override, null, 2)}\n`)
 if (flags.has('dry-run')) {
@@ -70,6 +69,8 @@ if (flags.has('dry-run')) {
         productName: override.productName,
         configPath,
         notesPath,
+        localPreview: mode.localPreview,
+        unsigned: mode.unsigned,
       },
       null,
       2
@@ -83,7 +84,7 @@ if (flags.has('dry-run')) {
     (process.platform === 'win32' && process.arch !== 'x64')
   )
     throw new Error('Unsupported release architecture')
-  if (!flags.has('allow-unsigned')) {
+  if (!mode.unsigned) {
     if (
       execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], {
         cwd: root,
@@ -144,7 +145,7 @@ if (flags.has('dry-run')) {
       ? 'windows-x86_64-nsis'
       : `darwin-${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}`
   const product = PRODUCT_NAMES[channel]
-  if (flags.has('allow-unsigned') && process.platform === 'darwin') {
+  if (mode.unsigned && process.platform === 'darwin') {
     execFileSync('tar', [
       '-czf',
       join(bundle, 'macos', `${product}.app.tar.gz`),
@@ -175,7 +176,7 @@ if (flags.has('dry-run')) {
       'Expected exactly one updater artifact; clean stale bundle output before building'
     )
   let platformVerified = false
-  if (!flags.has('allow-unsigned')) {
+  if (!mode.unsigned) {
     if (process.platform === 'win32') {
       execFileSync(
         'powershell.exe',
@@ -203,7 +204,7 @@ if (flags.has('dry-run')) {
       : basename(path)
     const bytes = readFileSync(path)
     copyFileSync(path, join(directory, filename))
-    if (isUpdater && !flags.has('allow-unsigned')) {
+    if (isUpdater && !mode.unsigned) {
       if (!existsSync(`${path}.sig`)) throw new Error('Updater signature is missing')
       verifyUpdaterSignature(
         bytes,
@@ -228,6 +229,11 @@ if (flags.has('dry-run')) {
         appIdentifier: override.identifier,
         platform,
         platformVerified,
+        distribution: mode.localPreview
+          ? 'local-preview'
+          : mode.unsigned
+            ? 'testing-preview'
+            : 'signed-release',
         sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: root,
           encoding: 'utf8',
@@ -238,5 +244,5 @@ if (flags.has('dry-run')) {
       2
     )
   )
-  console.log(`Verified release artifacts: ${directory}`)
+  console.log(`${mode.unsigned ? 'Local installer' : 'Verified release'} artifacts: ${directory}`)
 }

@@ -13,6 +13,7 @@ import {
   validateManifest,
   validatePromotion,
   promotionTargets,
+  resolveBuildMode,
 } from './lib/release-policy.mjs'
 import {
   validateReceipt,
@@ -51,6 +52,18 @@ test('missing or weakened GitHub environment approval rules fail closed', () => 
 const base = JSON.parse(
   readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8')
 )
+
+test('a private local preview can start on Stable without enabling unsigned Stable publication', () => {
+  assert.deepEqual(resolveBuildMode('stable'), { unsigned: false, localPreview: false })
+  assert.deepEqual(resolveBuildMode('stable', { localPreview: true }), {
+    unsigned: true,
+    localPreview: true,
+  })
+  assert.throws(() => resolveBuildMode('stable', { allowUnsigned: true }))
+  assert.throws(() => resolveBuildMode('stable', { allowUnsigned: true, localPreview: true }))
+  assert.throws(() => resolveBuildMode('unknown', { localPreview: true }))
+  assert.equal(buildConfiguration(base, 'stable', '0.2.7').version, '0.2.7')
+})
 const manifest = (version = '0.3.0', channel = 'stable') => ({
   version,
   channel,
