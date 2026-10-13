@@ -156,10 +156,13 @@ describe('raycast shim API surface', () => {
   })
 
   it('getFrontmostApplication and getDefaultApplication return expected shapes', async () => {
+    const sample = { name: 'Sample', path: '/Applications/Sample.app', bundleId: 'com.example.Sample' }
+    const listApplications = vi.spyOn(appsProvider, 'listApplications').mockReturnValue([sample])
     const api = createRaycastApi(ctx) as Record<string, any>
     const frontmost = await api.getFrontmostApplication()
-    expect(frontmost).toBeDefined()
-    expect(typeof frontmost.name).toBe('string')
+    expect(frontmost).toEqual(sample)
+    listApplications.mockReturnValue([])
+    expect(await api.getFrontmostApplication()).toEqual({ name: 'Tezbar', path: process.execPath })
     const defaultApp = await api.getDefaultApplication('/path/to/file')
     expect(defaultApp).toBeNull()
   })
