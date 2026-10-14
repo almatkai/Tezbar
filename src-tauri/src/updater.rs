@@ -26,6 +26,14 @@ pub enum AppUpdateStatus {
         #[serde(rename = "releaseUrl")]
         release_url: String,
     },
+    ManualAvailable {
+        version: String,
+        notes: String,
+        #[serde(rename = "releaseUrl")]
+        release_url: String,
+        #[serde(rename = "installerUrl")]
+        installer_url: String,
+    },
     Downloading {
         version: String,
         downloaded: u64,
@@ -170,6 +178,32 @@ fn github_release_url(tag: &str, draft_fallback: &str) -> String {
     }
 }
 
+fn manual_status(release: &crate::manual_releases::ManualRelease) -> AppUpdateStatus {
+    AppUpdateStatus::ManualAvailable {
+        version: release.version.to_string(),
+        notes: release.notes.clone(),
+        release_url: release.release_url.clone(),
+        installer_url: release.installer_url.clone(),
+    }
+}
+
+fn published_release_status(
+    published: Result<Option<crate::manual_releases::ManualRelease>, String>,
+    current: &str,
+    signed_error: Option<String>,
+) -> AppUpdateStatus {
+    match published {
+        Ok(Some(release)) => manual_status(&release),
+        Ok(None) => match signed_error {
+            Some(message) => AppUpdateStatus::Error { message },
+            None => AppUpdateStatus::UpToDate {
+                version: current.into(),
+            },
+        },
+        Err(message) => AppUpdateStatus::Error { message },
+    }
+}
+
 /// Returns true if the updater error indicates that the current platform was not
 /// found in the release manifest's platforms map.
 pub fn is_platform_not_found_error(error: &tauri_plugin_updater::Error) -> bool {
@@ -262,7 +296,11 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
         .build()
         .map_err(|e| e.to_string())?;
 
-    let result = updater.check().await;
+    let current = app.package_info().version.clone();
+    let (result, published) = tokio::join!(
+        updater.check(),
+        crate::manual_releases::check(&current, channel)
+    );
 
     match result {
         Ok(Some(update)) => {
@@ -270,6 +308,13 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
                 let status = AppUpdateStatus::Error { message };
                 set_status(&app, status.clone());
                 return Ok(status);
+            }
+            if let Ok(Some(ref release)) = published {
+                if release.version > semver::Version::parse(&update.version).unwrap() {
+                    let status = manual_status(release);
+                    set_status(&app, status.clone());
+                    return Ok(status);
+                }
             }
             let version = update.version.clone();
             let notes = update.body.clone().unwrap_or_default();
@@ -292,27 +337,30 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
                 *state.pending.lock().unwrap() = None;
             }
             let version = app.package_info().version.to_string();
-            let status = AppUpdateStatus::UpToDate { version };
+            let status = published_release_status(published, &version, None);
             set_status(&app, status.clone());
             Ok(status)
         }
         Err(ref error) if is_platform_not_found_error(error) => {
             log::info!(
-                "Updater: platform not found for this architecture ({error:?}). Setting UpToDate."
+                "Updater: no signed artifact for this architecture ({error:?}); checking published installers."
             );
             if let Some(state) = app.try_state::<UpdaterState>() {
                 *state.pending.lock().unwrap() = None;
             }
             let version = app.package_info().version.to_string();
-            let status = AppUpdateStatus::UpToDate { version };
+            let status = published_release_status(published, &version, None);
             set_status(&app, status.clone());
             Ok(status)
         }
         Err(error) => {
             log::error!("Updater: check error: {error:?}");
-            let status = AppUpdateStatus::Error {
-                message: error.to_string(),
+            let signed_error = if matches!(error, tauri_plugin_updater::Error::ReleaseNotFound) {
+                None
+            } else {
+                Some(error.to_string())
             };
+            let status = published_release_status(published, &current_version, signed_error);
             set_status(&app, status.clone());
             Ok(status)
         }
@@ -323,6 +371,12 @@ pub async fn check_for_updates(app: AppHandle) -> Result<AppUpdateStatus, String
 pub async fn download_and_install_update(app: AppHandle) -> Result<AppUpdateStatus, String> {
     let state = app.state::<UpdaterState>();
     let _operation = state.operation.lock().await;
+    if matches!(
+        current_status(&app),
+        AppUpdateStatus::ManualAvailable { .. }
+    ) {
+        return Err("This release requires manual installation. Use Download Installer.".into());
+    }
     if let AppUpdateStatus::Downloading { .. } | AppUpdateStatus::Ready { .. } =
         current_status(&app)
     {
@@ -442,6 +496,22 @@ pub fn open_release_page(url: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_public_release_discovery_never_claims_the_app_is_up_to_date() {
+        assert_eq!(
+            published_release_status(Err("GitHub unavailable".into()), "0.2.8", None),
+            AppUpdateStatus::Error {
+                message: "GitHub unavailable".into()
+            }
+        );
+        assert_eq!(
+            published_release_status(Ok(None), "0.2.8", None),
+            AppUpdateStatus::UpToDate {
+                version: "0.2.8".into()
+            }
+        );
+    }
 
     #[test]
     fn download_urls_are_version_pinned_and_belong_to_the_installed_product() {

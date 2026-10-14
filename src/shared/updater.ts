@@ -7,6 +7,13 @@ export type AppUpdateStatus =
   | { kind: 'checking' }
   | { kind: 'upToDate'; version: string }
   | { kind: 'available'; version: string; notes: string; releaseUrl: string }
+  | {
+      kind: 'manualAvailable'
+      version: string
+      notes: string
+      releaseUrl: string
+      installerUrl: string
+    }
   | { kind: 'downloading'; version: string; downloaded: number; total: number | null }
   | { kind: 'ready'; version: string }
   | { kind: 'error'; message: string }
@@ -36,10 +43,7 @@ export const UPDATE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000
 /** 12 hours validity period for up-to-date checks. */
 export const UP_TO_DATE_VALIDITY_MS = 12 * 60 * 60 * 1000
 
-export function isUpToDateFresh(
-  lastCheckedAt: number | null,
-  now: number = Date.now()
-): boolean {
+export function isUpToDateFresh(lastCheckedAt: number | null, now: number = Date.now()): boolean {
   if (lastCheckedAt === null || !Number.isFinite(lastCheckedAt)) return false
   const elapsed = now - lastCheckedAt
   return elapsed >= 0 && elapsed < UP_TO_DATE_VALIDITY_MS
@@ -92,6 +96,7 @@ export function computeEffectiveUpdateStatus(
 export function isUrgentUpdateNotification(status: AppUpdateStatus): boolean {
   return (
     status.kind === 'available' ||
+    status.kind === 'manualAvailable' ||
     status.kind === 'ready' ||
     status.kind === 'downloading'
   )
@@ -105,8 +110,7 @@ export function matchesUpdateSearchQuery(
   const q = rawQuery.trim().toLowerCase()
   if (!q) {
     return (
-      isUrgentUpdateNotification(status) ||
-      (status.kind === 'checking' && isCheckedInCurrentWindow)
+      isUrgentUpdateNotification(status) || (status.kind === 'checking' && isCheckedInCurrentWindow)
     )
   }
   return (

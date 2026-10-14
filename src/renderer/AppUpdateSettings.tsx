@@ -86,7 +86,7 @@ export function AppUpdateSettings(): JSX.Element {
           key={releaseNotesVersion}
           version={releaseNotesVersion}
           initialNotes={
-            status.kind === 'available' &&
+            (status.kind === 'available' || status.kind === 'manualAvailable') &&
             status.version === releaseNotesVersion &&
             status.notes.trim()
               ? { version: status.version, body: status.notes, publishedAt: null }
@@ -135,6 +135,12 @@ export function AppUpdateSettings(): JSX.Element {
           </>
         )}
 
+        {status.kind === 'manualAvailable' && (
+          <Button variant="ghost" onClick={() => setReleaseNotesVersion(status.version)}>
+            What's New
+          </Button>
+        )}
+
         {status.kind === 'ready' && (
           <Button variant="primary" onClick={restart}>
             Relaunch to Update
@@ -143,8 +149,16 @@ export function AppUpdateSettings(): JSX.Element {
 
         <Button
           variant="ghost"
-          onClick={() => openRelease(RELEASES_PAGE_URL)}
-          title="Download latest installer from GitHub Releases"
+          onClick={() =>
+            openRelease(
+              status.kind === 'manualAvailable'
+                ? status.installerUrl
+                : status.kind === 'available'
+                  ? status.releaseUrl
+                  : RELEASES_PAGE_URL
+            )
+          }
+          title="Download an installer from GitHub Releases"
         >
           Download Installer
         </Button>
@@ -173,9 +187,8 @@ export function AppUpdateSettings(): JSX.Element {
               Automatically download updates
             </span>
             <span className="block text-[11px] leading-snug text-ink-4">
-              When enabled, updates will download automatically in the background. When disabled,
-              updates will appear as the first item in your search bar so you can choose when to
-              download.
+              Signed updates can download automatically in the background. Releases that require
+              manual installation appear in Settings and your search bar with a download link.
             </span>
             <span className="block text-[11px] leading-snug text-ink-4/80 mt-1">
               Updates follow your selected release channel.
@@ -193,7 +206,7 @@ export function AppUpdateSettings(): JSX.Element {
       <Button onClick={() => setReleaseNotesVersion(CURRENT_VERSION)}>
         What’s New in v{CURRENT_VERSION}
       </Button>
-      {status.kind === 'available' && (
+      {(status.kind === 'available' || status.kind === 'manualAvailable') && (
         <div className="rounded-tezbar-row border border-white/10 bg-white/[0.03] p-3">
           <div className="mb-1.5 flex items-center justify-between">
             <span className="text-[12px] font-semibold text-ink-1">
@@ -203,6 +216,12 @@ export function AppUpdateSettings(): JSX.Element {
               Update Available
             </span>
           </div>
+          {status.kind === 'manualAvailable' && (
+            <p role="status" className="mb-3 text-[12px] leading-relaxed text-ink-2">
+              This release requires manual installation. Choose Download Installer, then install it
+              to replace your current version. Your settings and data stay in place.
+            </p>
+          )}
           {status.notes.trim() ? (
             <Markdown text={status.notes} className="max-h-64 overflow-y-auto" />
           ) : (
