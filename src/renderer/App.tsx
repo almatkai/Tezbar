@@ -785,6 +785,10 @@ function LauncherApp(): JSX.Element {
               onConfigureAi={() => {
                 void openNativeSettings('ai')
               }}
+              onOpenKnowledgeSettings={() => {
+                setSettingsInitialTab('knowledge')
+                void openNativeSettings('knowledge')
+              }}
               onOpenExtensions={() => {
                 setCommandInitialValue('')
                 setSurface('extensions')

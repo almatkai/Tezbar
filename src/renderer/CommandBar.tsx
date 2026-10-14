@@ -1513,6 +1513,7 @@ export default function CommandBar({
   onOpenEmojiPicker,
   onStartOnboarding,
   onOpenTerminal,
+  onOpenKnowledgeSettings,
 }: {
   hasUnreadReleaseNotes: boolean
   onOpenReleaseNotes: () => void
@@ -1532,6 +1533,7 @@ export default function CommandBar({
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
   onOpenEmojiPicker: () => void
   onStartOnboarding: () => void
+  onOpenKnowledgeSettings?: () => void
   onOpenTerminal: (
     initialCommand?: string,
     workingDirectory?: string,
@@ -5862,6 +5864,7 @@ export default function CommandBar({
             onOpenIndexing={onOpenIndexingPage}
             onOpenExtensionRuntime={onOpenExtensionRuntime}
             onOpenUpdate={onOpenSettings}
+            onOpenKnowledgeSettings={onOpenKnowledgeSettings}
           />
         </div>
       </div>

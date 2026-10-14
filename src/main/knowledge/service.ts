@@ -199,6 +199,7 @@ export class KnowledgeService {
     canIndex: () => this.mode !== 'worker' && !this.manuallyPaused,
     waitForIdle: (signal) => this.waitForInteractiveIdle(signal),
     speed: () => this.settings.indexingSpeed ?? 'medium',
+    onProgress: (force) => this.emitSemanticStatusEvent(force),
   })
   private readonly backends = new Map<string, IndexingBackend>([
     ['local', new LocalIndexingBackend()],
@@ -922,6 +923,14 @@ export class KnowledgeService {
   private refreshCounts(): void {
     const counts = this.store.counts()
     this.status = { ...this.status, ...counts }
+  }
+
+  private emitSemanticStatusEvent(force = false): void {
+    const now = Date.now()
+    if (force || now - this.lastStatusEventAt >= STATUS_EVENT_INTERVAL_MS) {
+      this.statusSink(this.status)
+      this.lastStatusEventAt = now
+    }
   }
 
   private updateStatus(status: KnowledgeStatus): void {

@@ -32,6 +32,15 @@ function statusLabel(snapshot: KnowledgeSnapshot | null): string {
   if (state === 'indexing') return 'Indexing now'
   if (state === 'paused') return 'Paused'
   if (state === 'failed') return 'Needs attention'
+  if (
+    snapshot?.settings.embeddingModel === 'embeddinggemma-2' &&
+    snapshot?.semanticSearch?.modelState === 'ready' &&
+    (snapshot.semanticSearch.indexing ||
+      (snapshot.semanticSearch.totalChunks > 0 &&
+        snapshot.semanticSearch.indexedChunks < snapshot.semanticSearch.totalChunks))
+  ) {
+    return 'Building semantic index'
+  }
   if (state === 'completed') return 'Up to date'
   return 'Standing by'
 }
@@ -133,8 +142,27 @@ export default function IndexingView({
   }, [page.sources, selected])
 
   const selectedSource = page.sources[selected]
-  const progress = Math.round((snapshot?.status.progress ?? 0) * 100)
-  const isActive = snapshot?.status.state === 'indexing' || snapshot?.status.state === 'scanning'
+  const isScanningOrIndexing =
+    snapshot?.status.state === 'indexing' || snapshot?.status.state === 'scanning'
+  const isSemanticIndexing = Boolean(
+    !isScanningOrIndexing &&
+      snapshot?.settings.embeddingModel === 'embeddinggemma-2' &&
+      snapshot?.semanticSearch?.modelState === 'ready' &&
+      snapshot?.status.state !== 'paused' &&
+      (snapshot?.semanticSearch?.indexing ||
+        ((snapshot?.semanticSearch?.totalChunks ?? 0) > 0 &&
+          (snapshot?.semanticSearch?.indexedChunks ?? 0) <
+            (snapshot?.semanticSearch?.totalChunks ?? 0))) &&
+      (snapshot?.semanticSearch?.totalChunks ?? 0) > 0
+  )
+  const progress = isSemanticIndexing
+    ? Math.round(
+        ((snapshot?.semanticSearch?.indexedChunks ?? 0) /
+          Math.max(1, snapshot?.semanticSearch?.totalChunks ?? 1)) *
+          100
+      )
+    : Math.round((snapshot?.status.progress ?? 0) * 100)
+  const isActive = isScanningOrIndexing || isSemanticIndexing
   const depth = snapshot?.settings.depth ?? 'smart'
 
   const metricCards = useMemo(() => [
@@ -235,7 +263,9 @@ export default function IndexingView({
                 </span>
               </div>
               <p className="mt-1.5 max-w-[630px] truncate text-[10.5px] text-ink-3">
-                {snapshot?.status.detail ?? 'Preparing local knowledge status…'}
+                {isSemanticIndexing
+                  ? `${(snapshot?.semanticSearch?.indexedChunks ?? 0).toLocaleString()} / ${(snapshot?.semanticSearch?.totalChunks ?? 0).toLocaleString()} chunks`
+                  : snapshot?.status.detail ?? 'Preparing local knowledge status…'}
               </p>
             </div>
             <span className="font-mono text-[19px] font-medium tabular-nums text-cyan-100">{progress}%</span>
@@ -247,8 +277,24 @@ export default function IndexingView({
             />
           </div>
           <div className="relative mt-1.5 flex justify-between font-mono text-[9.5px] text-ink-4">
-            <span>{snapshot?.status.processedSources ?? 0} processed</span>
-            <span>{snapshot?.status.queuedSources ?? 0} remaining · {snapshot?.status.failedSources ?? 0} failed</span>
+            {isSemanticIndexing ? (
+              <>
+                <span>{(snapshot?.semanticSearch?.indexedChunks ?? 0).toLocaleString()} chunks indexed</span>
+                <span>
+                  {Math.max(
+                    0,
+                    (snapshot?.semanticSearch?.totalChunks ?? 0) -
+                      (snapshot?.semanticSearch?.indexedChunks ?? 0)
+                  ).toLocaleString()}{' '}
+                  remaining
+                </span>
+              </>
+            ) : (
+              <>
+                <span>{snapshot?.status.processedSources ?? 0} processed</span>
+                <span>{snapshot?.status.queuedSources ?? 0} remaining · {snapshot?.status.failedSources ?? 0} failed</span>
+              </>
+            )}
           </div>
         </div>
 
