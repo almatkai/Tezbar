@@ -105,6 +105,12 @@ export class SearchIndexDatabase {
   private _db: DatabaseType | null = null
   private _initPromise: Promise<void> | null = null
 
+  close(): void {
+    this._db?.close()
+    this._db = null
+    this._initPromise = null
+  }
+
   private get db(): DatabaseType {
     if (!this._db) {
       throw new Error('Database not initialized - call ensureInitialized() first')

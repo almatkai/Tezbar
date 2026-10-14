@@ -8,7 +8,10 @@ describe('appsProvider and bundle identifiers', () => {
   let testDir: string
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `apps-provider-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    testDir = join(
+      tmpdir(),
+      `apps-provider-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    )
     mkdirSync(testDir, { recursive: true })
   })
 
@@ -52,17 +55,22 @@ describe('appsProvider and bundle identifiers', () => {
     }
   })
 
-  it('listApplications returns application entries with bundleId on macOS', () => {
-    const apps = listApplications()
-    expect(Array.isArray(apps)).toBe(true)
-    if (process.platform === 'darwin' && apps.length > 0) {
-      const amp = apps.find((a) => a.name === 'Amphetamine' || a.bundleId === 'com.if.Amphetamine')
-      if (amp) {
-        expect(amp.bundleId).toBe('com.if.Amphetamine')
+  it.runIf(process.platform === 'darwin')(
+    'listApplications returns application entries with bundleId on macOS',
+    () => {
+      const apps = listApplications()
+      expect(Array.isArray(apps)).toBe(true)
+      if (process.platform === 'darwin' && apps.length > 0) {
+        const amp = apps.find(
+          (a) => a.name === 'Amphetamine' || a.bundleId === 'com.if.Amphetamine'
+        )
+        if (amp) {
+          expect(amp.bundleId).toBe('com.if.Amphetamine')
+        }
+        // At least some apps on macOS should have bundleId resolved
+        const withBundleId = apps.filter((a) => Boolean(a.bundleId))
+        expect(withBundleId.length).toBeGreaterThan(0)
       }
-      // At least some apps on macOS should have bundleId resolved
-      const withBundleId = apps.filter((a) => Boolean(a.bundleId))
-      expect(withBundleId.length).toBeGreaterThan(0)
     }
-  })
+  )
 })

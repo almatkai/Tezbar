@@ -10,6 +10,7 @@ import { Button } from './ui/primitives'
 import { Markdown } from './ui/Markdown'
 import ReleaseNotesView from './ReleaseNotesView'
 import { CURRENT_APP_VERSION } from './releaseNotes'
+import { UpdateChannelSettings } from './UpdateChannelSettings'
 
 const CURRENT_VERSION = CURRENT_APP_VERSION
 
@@ -99,6 +100,10 @@ export function AppUpdateSettings(): JSX.Element {
 
   return (
     <div className="space-y-3">
+      <UpdateChannelSettings
+        updateBusy={busy || status.kind === 'ready'}
+        onChannelChanged={check}
+      />
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.05] px-2 py-1 text-[11px] font-semibold text-ink-2">
           v{CURRENT_VERSION}
@@ -173,7 +178,7 @@ export function AppUpdateSettings(): JSX.Element {
               download.
             </span>
             <span className="block text-[11px] leading-snug text-ink-4/80 mt-1">
-              Only stable releases are offered — beta builds are skipped automatically.
+              Updates follow your selected release channel.
             </span>
           </div>
         </label>
@@ -181,7 +186,7 @@ export function AppUpdateSettings(): JSX.Element {
 
       {status.kind === 'upToDate' && (
         <p className="text-[12px] text-emerald-300">
-          You're on the latest version ({status.version}).
+          No newer update is available for your selected channel. Current version: {status.version}.
         </p>
       )}
 

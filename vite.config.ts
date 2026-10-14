@@ -3,12 +3,12 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 
-const appVersion: string = JSON.parse(
+const appVersion: string = process.env.TEZBAR_RELEASE_VERSION ?? JSON.parse(
   readFileSync(resolve(__dirname, 'package.json'), 'utf8')
 ).version
 // Every installer carries its own app notes, including when the user is offline.
 const appReleaseNotes = readFileSync(
-  resolve(__dirname, 'docs/releases', `${appVersion}.md`),
+  process.env.TEZBAR_RELEASE_NOTES_PATH ?? resolve(__dirname, 'docs/releases', `${appVersion}.md`),
   'utf8'
 )
 

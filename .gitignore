@@ -36,3 +36,10 @@ native/**/Cargo.lock
 /keys/
 *.key
 *.key.pub
+
+# Generated release artifacts and signing material
+/build/release-*/
+/release-artifacts/
+*.p12
+*.pfx
+*.p8

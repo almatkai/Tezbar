@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  channelDescription,
   computeEffectiveUpdateStatus,
   getUpdateCommandScore,
   isUpToDateFresh,
@@ -14,6 +15,26 @@ import {
   UPDATE_CHECK_INTERVAL_MS,
   writeAutoUpdatePreference,
 } from './updater'
+
+describe('channel descriptions', () => {
+  it('uses Stable as the recommended channel and explains shared Alpha data', () => {
+    expect(channelDescription({ channel: 'stable', version: '0.2.7' })).toContain('Recommended')
+    expect(channelDescription({ channel: 'alpha', version: '0.2.7' })).toContain(
+      'current settings and data'
+    )
+  })
+  it('explains waiting for a newer release after opting out of a prerelease', () => {
+    expect(channelDescription({ channel: 'stable', version: '0.3.0-alpha.1' })).toContain(
+      'next Stable release newer'
+    )
+    expect(channelDescription({ channel: 'stable', version: '0.3.0-beta.1' })).toContain(
+      'next Stable release newer'
+    )
+    expect(channelDescription({ channel: 'beta', version: '0.3.0-alpha.1' })).toContain(
+      'next Beta or Stable release newer'
+    )
+  })
+})
 
 describe('isUpToDateFresh', () => {
   it('returns false when never checked', () => {
@@ -80,7 +101,9 @@ describe('last-check storage', () => {
 
   it('returns null when unset or corrupt', () => {
     expect(readLastUpdateCheck(makeStorage())).toBeNull()
-    expect(readLastUpdateCheck(makeStorage({ 'tezbar:last-update-check': 'not-a-number' }))).toBeNull()
+    expect(
+      readLastUpdateCheck(makeStorage({ 'tezbar:last-update-check': 'not-a-number' }))
+    ).toBeNull()
   })
 
   it('reads and writes auto-update preference', () => {

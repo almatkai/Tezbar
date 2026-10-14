@@ -140,6 +140,12 @@ export class KnowledgeStore {
   private database: DatabaseType | null = null
   private vectorIndexAvailable = false
 
+  close(): void {
+    this.database?.close()
+    this.database = null
+    this.vectorIndexAvailable = false
+  }
+
   private get db(): DatabaseType {
     if (!this.database) throw new Error('Knowledge database is not initialized')
     return this.database

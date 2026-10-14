@@ -625,7 +625,9 @@ describe('extension runtime list pagination', () => {
         else process.env.COLOR_PICKER_HELPER_PATH = previousHelperPath
         rmSync(extensionRoot, { recursive: true, force: true })
       }
-    }
+    },
+    // Launching Windows PowerShell can exceed five seconds on a busy CI runner.
+    15_000
   )
 
   it('bridges native image color extraction for extension commands', async () => {

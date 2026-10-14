@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { emitTo, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { RaymesApi } from '../shared/desktop-api'
-import type { AppUpdateStatus } from '../shared/updater'
+import type { AppUpdateStatus, UpdateChannelInfo } from '../shared/updater'
 import { formatTerminalSessionName, type TerminalSessionsAction } from '../shared/terminal'
 
 type TauriRaymesApi = RaymesApi & {
@@ -490,6 +490,8 @@ export function initTauriBridge(): void {
     },
 
     getUpdateStatus: () => invoke('get_update_status') as Promise<AppUpdateStatus>,
+    getUpdateChannel: () => invoke('get_update_channel') as Promise<UpdateChannelInfo>,
+    setUpdateChannel: (channel) => invoke('set_update_channel', { channel }) as Promise<UpdateChannelInfo>,
     checkForUpdates: () => invoke('check_for_updates') as Promise<AppUpdateStatus>,
     downloadAndInstallUpdate: async () => {
       try {

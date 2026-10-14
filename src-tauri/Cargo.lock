@@ -4522,7 +4522,7 @@ dependencies = [
 
 [[package]]
 name = "tezbar"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "alloc-stdlib",
  "base64 0.22.1",
@@ -4537,6 +4537,7 @@ dependencies = [
  "objc2-user-notifications",
  "open",
  "portable-pty",
+ "semver",
  "serde",
  "serde_json",
  "tauri",
