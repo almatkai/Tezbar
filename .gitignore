@@ -43,3 +43,11 @@ native/**/Cargo.lock
 *.p12
 *.pfx
 *.p8
+
+# Agent instructions and skills
+AGENTS.md
+AGENT.md
+.agents/
+.gemini/
+CLAUDE.md
+.claude/
