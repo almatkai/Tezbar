@@ -31,7 +31,7 @@ for (let i = 2; i < process.argv.length; i++) {
   else throw new Error(`Unknown or incomplete release argument ${arg}`)
 }
 const base = JSON.parse(readFileSync(join(root, 'src-tauri/tauri.conf.json'), 'utf8'))
-const channel = values.channel ?? 'stable',\
+const channel = values.channel ?? 'stable',
   version = values.version ?? base.version
 const override = buildConfiguration(base, channel, version)
 const mode = resolveBuildMode(channel, {
