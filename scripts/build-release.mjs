@@ -226,10 +226,10 @@ if (flags.has('dry-run')) {
     copyFileSync(path, join(directory, filename))
     if (isUpdater) {
       const sigPath = `${path}.sig`
-      if (!existsSync(sigPath) && process.env.TAURI_SIGNING_PRIVATE_KEY) {
+      if (process.env.TAURI_SIGNING_PRIVATE_KEY) {
         spawnSync(
           process.execPath,
-          [join(root, 'node_modules/@tauri-apps/cli/tauri.js'), 'signer', 'sign', path],
+          [join(root, 'node_modules/@tauri-apps/cli/tauri.js'), 'signer', 'sign', '-f', path],
           {
             env: {
               ...process.env,
