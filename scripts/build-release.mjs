@@ -7,6 +7,7 @@ import {
   readdirSync,
   copyFileSync,
   existsSync,
+  unlinkSync,
 } from 'node:fs'
 import { dirname, join, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -226,10 +227,13 @@ if (flags.has('dry-run')) {
     copyFileSync(path, join(directory, filename))
     if (isUpdater) {
       const sigPath = `${path}.sig`
+      if (existsSync(sigPath)) {
+        try { unlinkSync(sigPath) } catch {}
+      }
       if (process.env.TAURI_SIGNING_PRIVATE_KEY) {
         spawnSync(
           process.execPath,
-          [join(root, 'node_modules/@tauri-apps/cli/tauri.js'), 'signer', 'sign', '-f', path],
+          [join(root, 'node_modules/@tauri-apps/cli/tauri.js'), 'signer', 'sign', path],
           {
             env: {
               ...process.env,
