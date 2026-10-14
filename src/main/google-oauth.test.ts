@@ -60,7 +60,7 @@ describe('Google OAuth authorization', () => {
     const result = await authorizeGoogleOAuth({
       clientId: RAYCAST_GOOGLE_CLIENT_ID,
       scope: 'calendar',
-      manualFallbackDelayMs: 20,
+      manualFallbackDelayMs: 10_000,
       openUrl: async (url) => {
         opened.push(url)
         const authorization = new URL(url)

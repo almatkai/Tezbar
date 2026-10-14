@@ -230,7 +230,7 @@ export async function authorizeGoogleOAuth(options: GoogleAuthorizationOptions):
                 finish(undefined, error instanceof Error ? error : new Error(String(error)))
               )
         },
-        protocolFailed ? 0 : (options.manualFallbackDelayMs ?? 15_000)
+        options.manualFallbackDelayMs ?? (protocolFailed ? 0 : 15_000)
       )
     }
     await options.openUrl(authorizationUrl)
