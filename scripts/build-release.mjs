@@ -149,7 +149,7 @@ if (flags.has('dry-run')) {
   )
   if (result.error || result.status !== 0)
     throw result.error ?? new Error('Native release build failed')
-  const bundle = join(root, 'src-tauri/target/release/bundle')
+  const bundle = existsSync(join(root, 'src-tauri/target/release/bundle')) ? join(root, 'src-tauri/target/release/bundle') : join(root, 'target/release/bundle')
   const platform =
     process.platform === 'win32'
       ? 'windows-x86_64-nsis'
