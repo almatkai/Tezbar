@@ -30,7 +30,7 @@ import {
   type ProviderId,
 } from '../shared/llmConfig'
 import type { VoiceModel, VoiceModelId } from '../shared/voice'
-import type { KnowledgeDepth, KnowledgeIndexingSpeed, KnowledgeRootDepth, KnowledgeSnapshot } from '../shared/knowledge'
+import type { KnowledgeDepth, KnowledgeRootDepth, KnowledgeSnapshot } from '../shared/knowledge'
 import { KnowledgeEmbeddingSettings } from './KnowledgeEmbeddingSettings'
 import type { PiExtensionItem } from '../shared/desktop-api'
 import {
@@ -107,36 +107,6 @@ const KNOWLEDGE_DEPTH_OPTIONS: Array<{
     summary: 'Maximum recall',
     detail: 'Full text and embeddings with thorough page OCR.',
     accent: 'bg-violet-300',
-  },
-]
-
-const KNOWLEDGE_SPEED_OPTIONS: Array<{
-  id: KnowledgeIndexingSpeed
-  title: string
-  summary: string
-  detail: string
-  accent: string
-}> = [
-  {
-    id: 'slow',
-    title: 'Slow',
-    summary: 'Light',
-    detail: 'Minimal CPU & battery usage. Small batches and quiet pauses between chunks.',
-    accent: 'bg-emerald-400',
-  },
-  {
-    id: 'medium',
-    title: 'Medium',
-    summary: 'Balanced',
-    detail: 'Steady background indexing without overheating or pegging CPU.',
-    accent: 'bg-cyan-300',
-  },
-  {
-    id: 'fast',
-    title: 'Fast',
-    summary: 'Heavy',
-    detail: 'Maximum throughput with larger batches and continuous processing.',
-    accent: 'bg-amber-400',
   },
 ]
 
@@ -2750,76 +2720,6 @@ export default function SettingsView({
                           setKnowledgeMessage(null)
                           void window.tezbar
                             .setKnowledgeDepth(option.id)
-                            .then(setKnowledge)
-                            .catch((error: unknown) =>
-                              setKnowledgeMessage(
-                                error instanceof Error ? error.message : String(error)
-                              )
-                            )
-                            .finally(() => setKnowledgeBusy(false))
-                        }}
-                        className={cx(
-                          'relative min-h-[88px] rounded-[13px] border p-3 text-left transition',
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50',
-                          selected
-                            ? 'border-cyan-300/35 bg-cyan-300/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-                            : 'border-white/[0.08] bg-white/[0.025] hover:border-white/[0.15] hover:bg-white/[0.045]',
-                          knowledgeBusy ? 'cursor-wait opacity-65' : ''
-                        )}
-                      >
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="flex items-center gap-2">
-                            <span className={cx('h-1.5 w-1.5 rounded-full', option.accent)} />
-                            <span className="text-[12.5px] font-semibold text-ink-1">
-                              {option.title}
-                            </span>
-                          </span>
-                          <span
-                            className={cx(
-                              'text-[9.5px] font-medium uppercase tracking-[0.08em]',
-                              selected ? 'text-cyan-200' : 'text-ink-4'
-                            )}
-                          >
-                            {option.summary}
-                          </span>
-                        </span>
-                        <span className="mt-2 block text-[10.5px] leading-[1.45] text-ink-3">
-                          {option.detail}
-                        </span>
-                        {selected ? (
-                          <span className="absolute inset-y-3 left-0 w-0.5 rounded-r-full bg-cyan-300" />
-                        ) : null}
-                      </button>
-                    )
-                  })}
-                </div>
-              </SettingsRow>
-              <Divider />
-
-              <SettingsRow
-                label="Chunking speed"
-                detail="Choose how fast Tezbar processes files and chunks. Fast finishes sooner using more CPU; Slow is quiet and gentle on battery."
-              >
-                <div
-                  role="radiogroup"
-                  aria-label="Chunking speed"
-                  className="grid grid-cols-3 gap-2.5"
-                >
-                  {KNOWLEDGE_SPEED_OPTIONS.map((option) => {
-                    const selected =
-                      (knowledge?.settings.indexingSpeed ?? 'medium') === option.id
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        disabled={knowledgeBusy || !knowledge}
-                        onClick={() => {
-                          setKnowledgeBusy(true)
-                          setKnowledgeMessage(null)
-                          void window.tezbar
-                            .setKnowledgeIndexingSpeed(option.id)
                             .then(setKnowledge)
                             .catch((error: unknown) =>
                               setKnowledgeMessage(
