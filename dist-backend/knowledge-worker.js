@@ -2796,9 +2796,12 @@ var SemanticSearch = class {
   }
   download() {
     this.runtime.startDownload();
+    this.options.onProgress?.(true);
   }
   cancelDownload() {
-    return this.runtime.cancelDownload();
+    const cancel = this.runtime.cancelDownload();
+    this.options.onProgress?.(true);
+    return cancel;
   }
   async remove() {
     await this.pause();
@@ -2807,6 +2810,7 @@ var SemanticSearch = class {
     this.queryCache.clear();
     this.countsCache = null;
     this.error = void 0;
+    this.options.onProgress?.(true);
   }
   schedule(delay = 1e3) {
     if (this.closed || !this.options.enabled() || !this.options.canIndex()) return;
@@ -2821,12 +2825,14 @@ var SemanticSearch = class {
         return;
       this.controller = new AbortController();
       const signal = this.controller.signal;
+      this.options.onProgress?.(true);
       this.run = this.backfill(signal).catch((error) => {
         if (!signal.aborted) this.error = error instanceof Error ? error.message : String(error);
       }).finally(() => {
         this.run = null;
         this.controller = null;
         this.countsCache = null;
+        this.options.onProgress?.(true);
         if (this.rescheduleRequested) {
           this.rescheduleRequested = false;
           this.schedule();
@@ -2856,6 +2862,7 @@ var SemanticSearch = class {
           this.countsCache.indexedChunks + saved
         );
       }
+      this.options.onProgress?.(false);
       if (profile.gemmaDelayMs > 0) {
         await new Promise((resolve2) => setTimeout(resolve2, profile.gemmaDelayMs));
       } else {
@@ -2901,6 +2908,7 @@ var SemanticSearch = class {
     this.rescheduleRequested = false;
     this.controller?.abort();
     await this.run;
+    this.options.onProgress?.(true);
   }
   shutdown() {
     this.closed = true;
@@ -3041,7 +3049,8 @@ var KnowledgeService = class {
     }).map((root) => root.id),
     canIndex: () => this.mode !== "worker" && !this.manuallyPaused,
     waitForIdle: (signal) => this.waitForInteractiveIdle(signal),
-    speed: () => this.settings.indexingSpeed ?? "medium"
+    speed: () => this.settings.indexingSpeed ?? "medium",
+    onProgress: (force) => this.emitSemanticStatusEvent(force)
   });
   backends = /* @__PURE__ */ new Map([
     ["local", new LocalIndexingBackend()],
@@ -3677,6 +3686,13 @@ var KnowledgeService = class {
   refreshCounts() {
     const counts = this.store.counts();
     this.status = { ...this.status, ...counts };
+  }
+  emitSemanticStatusEvent(force = false) {
+    const now = Date.now();
+    if (force || now - this.lastStatusEventAt >= STATUS_EVENT_INTERVAL_MS) {
+      this.statusSink(this.status);
+      this.lastStatusEventAt = now;
+    }
   }
   updateStatus(status) {
     const stateChanged = status.state !== this.status.state;
