@@ -2,6 +2,7 @@
 mod backend_health;
 mod native_input;
 use backend_health::{BackendStatus, HealthCheck, CONNECT_TIMEOUT};
+mod manual_releases;
 mod native_terminal;
 mod qr_download;
 mod release_channels;

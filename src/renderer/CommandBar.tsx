@@ -2250,6 +2250,17 @@ export default function CommandBar({
           action: { type: 'invoke-command', commandId: 'download-app-update' },
         }
       }
+      if (effectiveUpdateStatus.kind === 'manualAvailable') {
+        return {
+          ...(base ?? fallback),
+          id: 'command:check-for-updates',
+          category: 'commands',
+          title: `Tezbar v${effectiveUpdateStatus.version} available`,
+          subtitle: 'Manual installation required · Press Enter to download the installer',
+          score: 1_000_000,
+          action: { type: 'invoke-command', commandId: 'download-app-update' },
+        }
+      }
       if (effectiveUpdateStatus.kind === 'downloading') {
         const pct =
           effectiveUpdateStatus.total && effectiveUpdateStatus.total > 0
@@ -3185,6 +3196,12 @@ export default function CommandBar({
         if (effectiveUpdateStatus.kind === 'available') {
           void window.tezbar.downloadAndInstallUpdate().catch((err: unknown) => {
             showActionMsg(`Update download failed: ${err instanceof Error ? err.message : String(err)}`)
+          })
+          return
+        }
+        if (effectiveUpdateStatus.kind === 'manualAvailable') {
+          void window.tezbar.openReleasePage(effectiveUpdateStatus.installerUrl).catch((err: unknown) => {
+            showActionMsg(`Could not open installer: ${err instanceof Error ? err.message : String(err)}`)
           })
           return
         }

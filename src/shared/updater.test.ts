@@ -171,6 +171,16 @@ describe('isUrgentUpdateNotification', () => {
       })
     ).toBe(true)
     expect(isUrgentUpdateNotification({ kind: 'upToDate', version: '1.0' })).toBe(false)
+    expect(
+      isUrgentUpdateNotification({
+        kind: 'manualAvailable',
+        version: '0.2.9-beta.1',
+        notes: 'Gemma',
+        releaseUrl: 'https://github.com/almatkai/Tezbar/releases/tag/v0.2.9-beta.1',
+        installerUrl:
+          'https://github.com/almatkai/Tezbar/releases/download/v0.2.9-beta.1/Tezbar_0.2.9-beta.1_aarch64.dmg',
+      })
+    ).toBe(true)
     expect(isUrgentUpdateNotification({ kind: 'idle' })).toBe(false)
     expect(isUrgentUpdateNotification({ kind: 'checking' })).toBe(false)
     expect(isUrgentUpdateNotification({ kind: 'error', message: 'fail' })).toBe(false)
