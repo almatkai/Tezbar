@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process'
-import { existsSync, readdirSync, statSync, watch } from 'node:fs'
+import { existsSync } from 'node:fs'
+import { readdir, stat } from 'node:fs/promises'
+import { watchFolder } from '../../fs/isolatedFileWatcher'
 import { homedir } from 'node:os'
 import { basename, extname, join, sep } from 'node:path'
 import { promisify } from 'node:util'
@@ -57,10 +59,10 @@ function containsSkippedDirectory(path: string): boolean {
   return path.split(sep).some((part) => SKIP_NAMES.has(part))
 }
 
-function makeFileDocument(path: string): IndexedDocument | null {
+async function makeFileDocument(path: string): Promise<IndexedDocument | null> {
   try {
-    const stat = statSync(path)
-    if (!stat.isFile()) return null
+    const metadata = await stat(path)
+    if (!metadata.isFile()) return null
     if (!isAllowedFile(path)) return null
 
     const title = path.split('/').pop() ?? path
@@ -71,9 +73,9 @@ function makeFileDocument(path: string): IndexedDocument | null {
       subtitle: path,
       tokens: `${title} ${path}`,
       action: { type: 'open-file', path },
-      updatedAt: stat.mtimeMs,
+      updatedAt: metadata.mtimeMs,
       sourcePath: path,
-      sourceMtime: stat.mtimeMs,
+      sourceMtime: metadata.mtimeMs,
     }
   } catch {
     return null
@@ -112,7 +114,7 @@ export async function* scanInitialFileDocumentBatches(
     const current = queue.shift()
     if (!current) continue
     try {
-      const entries = readdirSync(current, { withFileTypes: true })
+      const entries = await readdir(current, { withFileTypes: true })
       for (const entry of entries) {
         if (emittedDocuments >= limit) break
         visitedEntries += 1
@@ -124,7 +126,7 @@ export async function* scanInitialFileDocumentBatches(
           if (!SKIP_NAMES.has(entry.name)) queue.push(absolute)
           continue
         }
-        const doc = makeFileDocument(absolute)
+        const doc = await makeFileDocument(absolute)
         if (!doc) continue
         batch.push(doc)
         emittedDocuments += 1
@@ -146,6 +148,7 @@ export function startFileWatcher(listener: FileChangeListener): () => void {
   const pendingUpserts = new Map<string, IndexedDocument>()
   const pendingRemovals = new Set<string>()
   let flushTimer: NodeJS.Timeout | null = null
+  let stopped = false
 
   const flush = (): void => {
     flushTimer = null
@@ -166,32 +169,39 @@ export function startFileWatcher(listener: FileChangeListener): () => void {
 
   for (const root of roots) {
     try {
-      const watcher = watch(root, { recursive: true }, (_event, filename) => {
+      const stop = watchFolder(root, (filename) => {
         if (!filename) return
         const relative = filename.toString()
         if (containsSkippedDirectory(relative)) return
         const absolute = join(root, relative)
-        const doc = makeFileDocument(absolute)
-        if (doc) {
-          pendingRemovals.delete(doc.id)
-          pendingUpserts.set(doc.id, doc)
-          scheduleFlush()
-          return
-        }
-        if (!existsSync(absolute)) {
-          const id = `file:${absolute}`
-          pendingUpserts.delete(id)
-          pendingRemovals.add(id)
-          scheduleFlush()
-        }
+        void makeFileDocument(absolute).then(async (doc) => {
+          if (stopped) return
+          if (doc) {
+            pendingRemovals.delete(doc.id)
+            pendingUpserts.set(doc.id, doc)
+            scheduleFlush()
+            return
+          }
+          try {
+            await stat(absolute)
+          } catch (error) {
+            if (stopped) return
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return
+            const id = `file:${absolute}`
+            pendingUpserts.delete(id)
+            pendingRemovals.add(id)
+            scheduleFlush()
+          }
+        })
       })
-      unsubs.push(() => watcher.close())
+      unsubs.push(stop)
     } catch {
       // If recursive watch is unsupported, we still have Spotlight fallback.
     }
   }
 
   return () => {
+    stopped = true
     if (flushTimer) clearTimeout(flushTimer)
     flush()
     for (const stop of unsubs) stop()

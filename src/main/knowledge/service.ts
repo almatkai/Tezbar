@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, readdirSync, statSync, watch, type FSWatcher } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
+import { watchFolder } from '../fs/isolatedFileWatcher'
 import { homedir } from 'node:os'
 import { basename, extname, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
@@ -186,10 +187,13 @@ export class KnowledgeService {
   private readonly semanticSearch = new SemanticSearch(this.store, {
     enabled: () => this.settings.embeddingModel === 'embeddinggemma-2',
     allRoots: () => this.activeRoots().map((root) => root.id),
-    roots: () => this.activeRoots().filter((root) => {
-      const depth = effectiveKnowledgeDepth(root, this.settings)
-      return depth === 'smart' || depth === 'deep'
-    }).map((root) => root.id),
+    roots: () =>
+      this.activeRoots()
+        .filter((root) => {
+          const depth = effectiveKnowledgeDepth(root, this.settings)
+          return depth === 'smart' || depth === 'deep'
+        })
+        .map((root) => root.id),
     canIndex: () => this.mode !== 'worker' && !this.manuallyPaused,
     waitForIdle: (signal) => this.waitForInteractiveIdle(signal),
   })
@@ -202,7 +206,7 @@ export class KnowledgeService {
   private controller: AbortController | null = null
   private activePromise: Promise<void> | null = null
   private initialized = false
-  private readonly watchers = new Map<string, FSWatcher>()
+  private readonly watchers = new Map<string, () => void>()
   private rescanTimer: NodeJS.Timeout | null = null
   private startupTimer: NodeJS.Timeout | null = null
   private vectorBackfillTimer: NodeJS.Timeout | null = null
@@ -398,7 +402,8 @@ export class KnowledgeService {
 
   async setEmbeddingModel(model: KnowledgeSettings['embeddingModel']): Promise<KnowledgeSnapshot> {
     this.initialize()
-    if (model !== 'built-in' && model !== 'embeddinggemma-2') throw new Error('Invalid embedding model')
+    if (model !== 'built-in' && model !== 'embeddinggemma-2')
+      throw new Error('Invalid embedding model')
     if (model === 'embeddinggemma-2' && this.semanticSearch.snapshot().modelState !== 'ready') {
       throw new Error('Download EmbeddingGemma before enabling it')
     }
@@ -429,7 +434,11 @@ export class KnowledgeService {
   async search(query: string, limit = 12): Promise<KnowledgeSearchHit[]> {
     this.initialize()
     if (this.settings.embeddingModel === 'embeddinggemma-2') {
-      return this.semanticSearch.search(query, limit, this.activeRoots().map((root) => root.id))
+      return this.semanticSearch.search(
+        query,
+        limit,
+        this.activeRoots().map((root) => root.id)
+      )
     }
     return this.store.search(
       query,
@@ -931,7 +940,7 @@ export class KnowledgeService {
     this.rescanTimer = null
     if (this.vectorBackfillTimer) clearTimeout(this.vectorBackfillTimer)
     this.vectorBackfillTimer = null
-    for (const watcher of this.watchers.values()) watcher.close()
+    for (const stop of this.watchers.values()) stop()
     this.watchers.clear()
     if (this.initialized) this.persistStatus()
   }
@@ -977,17 +986,13 @@ export class KnowledgeService {
     const enabledRoots = new Map(this.activeRoots().map((root) => [root.id, root]))
     for (const [rootId, watcher] of this.watchers) {
       if (enabledRoots.has(rootId)) continue
-      watcher.close()
+      watcher()
       this.watchers.delete(rootId)
     }
     for (const root of enabledRoots.values()) {
       if (this.watchers.has(root.id)) continue
       try {
-        const watcher = watch(root.path, { recursive: true }, () => this.scheduleRescan())
-        watcher.on('error', () => {
-          watcher.close()
-          this.watchers.delete(root.id)
-        })
+        const watcher = watchFolder(root.path, () => this.scheduleRescan())
         this.watchers.set(root.id, watcher)
       } catch {
         // Manual reindex remains available when recursive watching is unsupported.

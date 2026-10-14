@@ -1,13 +1,17 @@
 // src/main/server.ts
 import { registerIpcHandlers, shutdownIpcHandlers } from './ipc'
-import { startClipboardWatcher, stopClipboardWatcher, notifyClipboardChanged } from './search/providers/clipboardProvider'
+import {
+  startClipboardWatcher,
+  stopClipboardWatcher,
+  notifyClipboardChanged,
+} from './search/providers/clipboardProvider'
 import { flushConfig, writeConfigPatch } from './llm/configStore'
 import { BrowserWindow, ipcMain } from '@tezbar/desktop-runtime'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { createConnection } from 'node:net'
-import { shutdownKnowledgeService } from './knowledge/service'
+import { getKnowledgeService, shutdownKnowledgeService } from './knowledge/service'
 import { stopKnowledgeAgentGateway } from './knowledge/agent/gateway'
 import { warmSearchIndex } from './search/service'
 
@@ -214,3 +218,12 @@ setTimeout(() => {
     console.warn('[server] failed to warm the cached search index:', error)
   })
 }, 0)
+
+// Resume selected semantic indexing even when the user never opens Settings.
+setTimeout(() => {
+  try {
+    getKnowledgeService()
+  } catch (error) {
+    console.warn('[server] failed to resume knowledge indexing:', error)
+  }
+}, 1_000).unref()
