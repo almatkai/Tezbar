@@ -14,6 +14,10 @@
  */
 
 import { app } from '@tezbar/desktop-runtime';
+import {
+  GOOGLE_DESKTOP_CLIENT_ID_PREFERENCE,
+  GOOGLE_DESKTOP_CLIENT_SECRET_PREFERENCE,
+} from './google-oauth';
 import { execFileSync } from 'child_process';
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
@@ -1738,6 +1742,22 @@ export function getExtensionPreferenceSetup(
         commandTitle: String(command?.title || commandName),
       }))
     : [];
+  if (slug === 'google-calendar') {
+    extensionPreferences.push({
+      name: GOOGLE_DESKTOP_CLIENT_ID_PREFERENCE,
+      title: 'Google Desktop Client ID (optional)',
+      description: 'Leave blank to use the built-in sign-in. For your own Google Cloud project, enter a Desktop app OAuth Client ID and enable the Google Calendar API. Tokens are kept separately for each client.',
+      type: 'textfield',
+      required: false,
+    });
+    extensionPreferences.push({
+      name: GOOGLE_DESKTOP_CLIENT_SECRET_PREFERENCE,
+      title: 'Google Desktop Client Secret (optional)',
+      description: 'If your Desktop app credentials include a client secret, enter it here along with the Client ID. Leave both fields blank for the built-in sign-in.',
+      type: 'password',
+      required: false,
+    });
+  }
   const preferences = [...extensionPreferences, ...commandPreferences];
   const preferencesPath = path.join(extensionPath, 'preferences.json');
 
@@ -1763,6 +1783,7 @@ export function shouldShowExtensionPreferenceSetup(extensionId: string, commandN
   if (needsRequiredValue) return true;
 
   const needsCredentialValue = setup.preferences.some((pref: any) => {
+    if (pref?.name === GOOGLE_DESKTOP_CLIENT_SECRET_PREFERENCE) return false;
     if (pref?.type !== 'password' || !pref?.name) return false;
     const value = setup.values[pref.name];
     return value === undefined || value === null || String(value).trim() === '';
