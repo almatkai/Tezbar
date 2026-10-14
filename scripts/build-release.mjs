@@ -146,13 +146,23 @@ if (flags.has('dry-run')) {
       : `darwin-${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}`
   const product = PRODUCT_NAMES[channel]
   if (mode.unsigned && process.platform === 'darwin') {
-    execFileSync('tar', [
-      '-czf',
-      join(bundle, 'macos', `${product}.app.tar.gz`),
-      '-C',
-      join(bundle, 'macos'),
-      `${product}.app`,
-    ])
+    execFileSync(
+      'tar',
+      [
+        '--exclude=._*',
+        '-czf',
+        join(bundle, 'macos', `${product}.app.tar.gz`),
+        '-C',
+        join(bundle, 'macos'),
+        `${product}.app`,
+      ],
+      {
+        env: {
+          ...process.env,
+          COPYFILE_DISABLE: '1',
+        },
+      }
+    )
   }
   const paths = []
   const collect = (path) => {
@@ -160,107 +170,4 @@ if (flags.has('dry-run')) {
       const file = join(path, entry.name)
       if (entry.isDirectory()) {
         if (!entry.name.endsWith('.app')) collect(file)
-      } else if (
-        (entry.name.startsWith(`${product}_${version}_`) && /\.(exe|dmg)$/.test(entry.name)) ||
-        entry.name === `${product}.app.tar.gz`
-      )
-        paths.push(file)
-    }
-  }
-  collect(bundle)
-  const updater = paths.filter((path) =>
-    process.platform === 'win32' ? path.endsWith('.exe') : path.endsWith('.app.tar.gz')
-  )
-  if (updater.length !== 1)
-    throw new Error(
-      'Expected exactly one updater artifact; clean stale bundle output before building'
-    )
-  let platformVerified = false
-  if (!mode.unsigned) {
-    if (process.platform === 'win32') {
-      execFileSync(
-        'powershell.exe',
-        [
-          '-NoLogo',
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          "$s=Get-AuthenticodeSignature -LiteralPath $env:TEZBAR_RELEASE_ARTIFACT; if($s.Status -ne 'Valid' -or $s.SignerCertificate.Thumbprint -ne $env:WINDOWS_CERTIFICATE_THUMBPRINT){throw 'Invalid Windows code signature'}",
-        ],
-        { windowsHide: true, env: { ...process.env, TEZBAR_RELEASE_ARTIFACT: updater[0] } }
-      )
-    } else {
-      const app = join(bundle, 'macos', `${product}.app`)
-      execFileSync('codesign', ['--verify', '--deep', '--strict', app])
-      execFileSync('spctl', ['--assess', '--type', 'execute', app])
-      execFileSync('xcrun', ['stapler', 'validate', app])
-    }
-    platformVerified = true
-  }
-  const artifacts = paths.map((path) => {
-    const isUpdater = path === updater[0]
-    const filename = path.endsWith('.app.tar.gz')
-      ? `${product}_${version}_${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}.app.tar.gz`
-      : basename(path)
-    const bytes = readFileSync(path)
-    copyFileSync(path, join(directory, filename))
-    if (isUpdater) {
-      const sigPath = `${path}.sig`
-      if (!existsSync(sigPath) && process.env.TAURI_SIGNING_PRIVATE_KEY) {
-        spawnSync(
-          process.execPath,
-          [join(root, 'node_modules/@tauri-apps/cli/tauri.js'), 'signer', 'sign', path],
-          {
-            env: {
-              ...process.env,
-              TAURI_SIGNING_PRIVATE_KEY: process.env.TAURI_SIGNING_PRIVATE_KEY,
-              TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '',
-            },
-            stdio: 'inherit',
-          }
-        )
-      }
-      if (existsSync(sigPath)) {
-        verifyUpdaterSignature(
-          bytes,
-          readFileSync(sigPath, 'utf8'),
-          base.plugins.updater.pubkey
-        )
-        copyFileSync(sigPath, join(directory, `${filename}.sig`))
-      } else if (!mode.unsigned) {
-        throw new Error('Updater signature is missing')
-      }
-    }
-    return {
-      filename,
-      sha256: createHash('sha256').update(bytes).digest('hex'),
-      updater: isUpdater,
-    }
-  })
-  writeFileSync(
-    join(directory, `receipt-${platform}.json`),
-    JSON.stringify(
-      {
-        channel,
-        version,
-        productName: product,
-        appIdentifier: override.identifier,
-        platform,
-        platformVerified,
-        distribution: mode.localPreview
-          ? 'local-preview'
-          : mode.unsigned
-            ? 'testing-preview'
-            : 'signed-release',
-        sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], {
-          cwd: root,
-          encoding: 'utf8',
-        }).trim(),
-        artifacts,
-      },
-      null,
-      2
-    )
-  )
-  console.log(`${mode.unsigned ? 'Local installer' : 'Verified release'} artifacts: ${directory}`)
-}
+      } else if (\n        (entry.name.startsWith(`${product}_${version}_`) && /\\.(exe|dmg)$/.test(entry.name)) ||\n        entry.name === `${product}.app.tar.gz`\n      )\n        paths.push(file)\n    }\n  }\n  collect(bundle)\n  const updater = paths.filter((path) =>\n    process.platform === 'win32' ? path.endsWith('.exe') : path.endsWith('.app.tar.gz')\n  )\n  if (updater.length !== 1)\n    throw new Error(\n      'Expected exactly one updater artifact; clean stale bundle output before building'\n    )\n  let platformVerified = false\n  if (!mode.unsigned) {\n    if (process.platform === 'win32') {\n      execFileSync(\n        'powershell.exe',\n        [\n          '-NoLogo',\n          '-NoProfile',\n          '-NonInteractive',\n          '-Command',\n          \"$s=Get-AuthenticodeSignature -LiteralPath $env:TEZBAR_RELEASE_ARTIFACT; if($s.Status -ne 'Valid' -or $s.SignerCertificate.Thumbprint -ne $env:WINDOWS_CERTIFICATE_THUMBPRINT){throw 'Invalid Windows code signature'}\",\n        ],\n        { windowsHide: true, env: { ...process.env, TEZBAR_RELEASE_ARTIFACT: updater[0] } }\n      )\n    } else {\n      const app = join(bundle, 'macos', `${product}.app`)\n      execFileSync('codesign', ['--verify', '--deep', '--strict', app])\n      execFileSync('spctl', ['--assess', '--type', 'execute', app])\n      execFileSync('xcrun', ['stapler', 'validate', app])\n    }\n    platformVerified = true\n  }\n  const artifacts = paths.map((path) => {\n    const isUpdater = path === updater[0]\n    const filename = path.endsWith('.app.tar.gz')\n      ? `${product}_${version}_${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}.app.tar.gz`\n      : basename(path)\n    const bytes = readFileSync(path)\n    copyFileSync(path, join(directory, filename))\n    if (isUpdater) {\n      const sigPath = `${path}.sig`\n      if (!existsSync(sigPath) && process.env.TAURI_SIGNING_PRIVATE_KEY) {\n        spawnSync(\n          process.execPath,\n          [join(root, 'node_modules/@tauri-apps/cli/tauri.js'), 'signer', 'sign', path],\n          { \n            env: {\n              ...process.env,\n              TAURI_SIGNING_PRIVATE_KEY: process.env.TAURI_SIGNING_PRIVATE_KEY,\n              TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '',\n            },\n            stdio: 'inherit',\n          }\n        )\n      }\n      if (existsSync(sigPath)) {\n        verifyUpdaterSignature(\n          bytes,\n          readFileSync(sigPath, 'utf8'),\n          base.plugins.updater.pubkey\n        )\n        copyFileSync(sigPath, join(directory, `${filename}.sig`))\n      } else if (!mode.unsigned) {\n        throw new Error('Updater signature is missing')\n      }\n    }\n    return {\n      filename,\n      sha256: createHash('sha256').update(bytes).digest('hex'),\n      updater: isUpdater,\n    }\n  })\n  writeFileSync(\n    join(directory, `receipt-${platform}.json`),\n    JSON.stringify(\n      {\n        channel,\n        version,\n        productName: product,\n        appIdentifier: override.identifier,\n        platform,\n        platformVerified,\n        distribution: mode.localPreview\n          ? 'local-preview'\n          : mode.unsigned\n            ? 'testing-preview'\n            : 'signed-release',\n        sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], {\n          cwd: root,\n          encoding: 'utf8',\n        }).trim(),\n        artifacts,\n      },\n      null,\n      2\n    )\n  )\n  console.log(`${mode.unsigned ? 'Local installer' : 'Verified release'} artifacts: ${directory}`)\n}\n
