@@ -23,6 +23,8 @@ Before submitting PRs or finalizing tasks:
 To prevent bloating everyday context with domain-specific procedures, detailed workflows are maintained as Agent Skills under `.agents/skills/`:
 
 - [release-guidelines](.agents/skills/release-guidelines/SKILL.md): **Release Guidelines Skill**
-  - Mandatory dual-platform release rule (Windows & macOS Apple Silicon must always be updated together).
-  - Cross-platform build procedure over Tailscale (SSH to MacBook, sync repo, build, transfer artifacts).
+  - Mandatory dual-platform release rule (Windows & macOS Apple Silicon must always be updated together in `latest.json`).
+  - Bidirectional Tailscale remote build workflow:
+    - If on Windows: connect to MacBook (`100.67.107.38`), build macOS artifacts, pull them to Windows (or direct upload), build Windows locally, release together.
+    - If on macOS: connect to Windows PC (`100.77.254.64`), build Windows artifacts, pull them to Mac (or direct upload), build macOS locally, release together.
   - Tauri minisign signing and universal `latest.json` feed generation.
