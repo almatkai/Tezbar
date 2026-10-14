@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { KnowledgeSnapshot } from '../shared/knowledge'
+import { cx } from './ui/primitives'
 
 type Props = {
   knowledge: KnowledgeSnapshot | null
@@ -11,6 +12,7 @@ export function KnowledgeEmbeddingSettings({ knowledge, onChange }: Props) {
   const [error, setError] = useState<string | null>(null)
   const status = knowledge?.semanticSearch
   const selected = knowledge?.settings.embeddingModel ?? 'built-in'
+  const speed = knowledge?.settings.indexingSpeed ?? 'medium'
   const ready = status?.modelState === 'ready'
   const downloading = status?.modelState === 'downloading'
   const unfinished = (status?.indexedChunks ?? 0) < (status?.totalChunks ?? 0)
@@ -53,6 +55,54 @@ export function KnowledgeEmbeddingSettings({ knowledge, onChange }: Props) {
         locally and works offline after download. Smart and Deep folders use semantic search; Basic
         folders use keyword search.
       </p>
+
+      <div className="flex flex-col gap-1.5 pt-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <label className="block text-xs font-medium text-ink-2" htmlFor="knowledge-speed-selector">
+            Chunking speed
+          </label>
+          <p className="text-[11px] text-ink-4">
+            {speed === 'slow'
+              ? 'Slow & light: minimal CPU & battery use, quiet pauses'
+              : speed === 'fast'
+                ? 'Fast & heavy: maximum throughput, higher CPU usage'
+                : 'Medium: balanced throughput and system load'}
+          </p>
+        </div>
+        <div
+          id="knowledge-speed-selector"
+          role="radiogroup"
+          aria-label="Chunking speed"
+          className="inline-flex shrink-0 self-start rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs sm:self-auto"
+        >
+          {([
+            { id: 'slow', label: 'Slow (light)' },
+            { id: 'medium', label: 'Medium' },
+            { id: 'fast', label: 'Fast (heavy)' },
+          ] as const).map(({ id, label }) => {
+            const isCurrent = speed === id
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={isCurrent}
+                disabled={busy || !knowledge}
+                onClick={() => run(() => window.tezbar.setKnowledgeIndexingSpeed(id))}
+                className={cx(
+                  'rounded-md px-2.5 py-1 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
+                  isCurrent
+                    ? 'bg-cyan-400/20 text-cyan-200 shadow-sm'
+                    : 'text-ink-3 hover:text-ink-1'
+                )}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"

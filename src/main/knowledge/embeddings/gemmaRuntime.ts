@@ -9,7 +9,7 @@ import { createServer } from 'node:net'
 import { promisify } from 'node:util'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import type { SemanticSearchStatus } from '../../../shared/knowledge'
+import type { KnowledgeIndexingSpeed, SemanticSearchStatus } from '../../../shared/knowledge'
 import {
   GEMMA_MODEL,
   GEMMA_MODEL_URL,
@@ -76,6 +76,24 @@ export class GemmaRuntime {
   private closed = false
   private removing = false
   private stopping: Promise<void> = Promise.resolve()
+  private speed: KnowledgeIndexingSpeed = 'medium'
+
+  setSpeed(speed: KnowledgeIndexingSpeed): void {
+    if (this.speed === speed) return
+    const prevThreads = this.threadsForSpeed(this.speed)
+    this.speed = speed
+    const newThreads = this.threadsForSpeed(speed)
+    if (this.child && prevThreads !== newThreads) {
+      void this.stop()
+    }
+  }
+
+  private threadsForSpeed(speed: KnowledgeIndexingSpeed): number {
+    const maxAvailable = availableParallelism()
+    if (speed === 'slow') return Math.min(2, Math.max(1, maxAvailable))
+    if (speed === 'fast') return Math.min(8, Math.max(1, maxAvailable))
+    return Math.min(4, Math.max(1, maxAvailable))
+  }
 
   snapshot(): Pick<
     SemanticSearchStatus,
@@ -315,7 +333,7 @@ export class GemmaRuntime {
         '--parallel',
         '1',
         '--threads',
-        String(Math.min(4, availableParallelism())),
+        String(this.threadsForSpeed(this.speed)),
       ],
       { windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] }
     )

@@ -10,6 +10,7 @@ import type {
   KnowledgeMetadataHit,
   KnowledgeReadResult,
   KnowledgeSearchHit,
+  KnowledgeIndexingSpeed,
   KnowledgeSettings,
   KnowledgeSourcesPage,
   KnowledgeStatus,
@@ -1268,7 +1269,11 @@ export class KnowledgeStore {
       : DEFAULT_KNOWLEDGE_SETTINGS.depth
     const embeddingModel =
       persisted.embeddingModel === 'embeddinggemma-2' ? 'embeddinggemma-2' : 'built-in'
-    return { ...DEFAULT_KNOWLEDGE_SETTINGS, ...persisted, depth, embeddingModel }
+    const indexingSpeed: KnowledgeIndexingSpeed =
+      persisted.indexingSpeed === 'slow' || persisted.indexingSpeed === 'fast'
+        ? persisted.indexingSpeed
+        : 'medium'
+    return { ...DEFAULT_KNOWLEDGE_SETTINGS, ...persisted, depth, embeddingModel, indexingSpeed }
   }
 
   saveSettings(settings: KnowledgeSettings): void {

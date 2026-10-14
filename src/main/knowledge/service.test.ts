@@ -166,4 +166,26 @@ describe('knowledge service', () => {
       getKnowledgeStore().close()
     }
   })
+
+  it('updates and persists chunking/indexing speed settings', async () => {
+    const data = await mkdtemp(join(tmpdir(), 'tezbar-knowledge-data-'))
+    cleanup.push(data)
+    process.env.APPDATA = data
+    process.env.HOME = data
+
+    const service = new KnowledgeService()
+    try {
+      expect(service.snapshot().settings.indexingSpeed).toBe('medium')
+      await service.setIndexingSpeed('slow')
+      expect(service.snapshot().settings.indexingSpeed).toBe('slow')
+      expect(getKnowledgeStore().getSettings().indexingSpeed).toBe('slow')
+
+      await service.setIndexingSpeed('fast')
+      expect(service.snapshot().settings.indexingSpeed).toBe('fast')
+      expect(getKnowledgeStore().getSettings().indexingSpeed).toBe('fast')
+    } finally {
+      service.shutdown()
+      getKnowledgeStore().close()
+    }
+  })
 })

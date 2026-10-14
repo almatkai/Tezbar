@@ -1,6 +1,7 @@
 import type {
   IndexingCapability,
   KnowledgeDepth,
+  KnowledgeIndexingSpeed,
   KnowledgeRoot,
   KnowledgeSettings,
 } from '../../shared/knowledge'
@@ -8,10 +9,47 @@ import type {
 export const DEFAULT_KNOWLEDGE_SETTINGS: KnowledgeSettings = {
   depth: 'smart',
   embeddingModel: 'built-in',
+  indexingSpeed: 'medium',
   maxConcurrentExtractors: 1,
   maxConcurrentOcrJobs: 1,
   runOnBattery: false,
   onlyRunHeavyJobsWhenIdle: true,
+}
+
+export type KnowledgeSpeedProfile = {
+  gemmaBatchSize: number
+  gemmaDelayMs: number
+  gemmaMaxThreads: number
+  workerFileDelayMs: number
+  vectorBackfillBatchSize: number
+  vectorBackfillDelayMs: number
+}
+
+export const SPEED_PROFILES: Record<KnowledgeIndexingSpeed, KnowledgeSpeedProfile> = {
+  slow: {
+    gemmaBatchSize: 4,
+    gemmaDelayMs: 350,
+    gemmaMaxThreads: 2,
+    workerFileDelayMs: 120,
+    vectorBackfillBatchSize: 128,
+    vectorBackfillDelayMs: 500,
+  },
+  medium: {
+    gemmaBatchSize: 8,
+    gemmaDelayMs: 75,
+    gemmaMaxThreads: 4,
+    workerFileDelayMs: 40,
+    vectorBackfillBatchSize: 256,
+    vectorBackfillDelayMs: 250,
+  },
+  fast: {
+    gemmaBatchSize: 16,
+    gemmaDelayMs: 0,
+    gemmaMaxThreads: 8,
+    workerFileDelayMs: 0,
+    vectorBackfillBatchSize: 512,
+    vectorBackfillDelayMs: 50,
+  },
 }
 
 export type KnowledgeDepthProfile = {
@@ -66,4 +104,3 @@ export function indexingProfileKey(profile: KnowledgeDepthProfile): string {
     ocrEveryPage: profile.ocrEveryPage,
   })
 }
-

@@ -454,6 +454,7 @@ export function initTauriBridge(): void {
     setKnowledgeRootEnabled: (rootId: string, enabled: boolean) =>
       callBackend('knowledge:root:set-enabled', { rootId, enabled }),
     setKnowledgeDepth: (depth) => callBackend('knowledge:depth:set', depth),
+    setKnowledgeIndexingSpeed: (speed) => callBackend('knowledge:speed:set', speed),
     setKnowledgeRootDepth: (rootId, depth) =>
       callBackend('knowledge:root:set-depth', { rootId, depth }),
     startKnowledgeIndexing: () => callBackend('knowledge:index:start'),

@@ -10,10 +10,12 @@ export type IndexingCapability =
 
 export type KnowledgeDepth = 'off' | 'basic' | 'smart' | 'deep'
 export type KnowledgeRootDepth = 'inherit' | KnowledgeDepth
+export type KnowledgeIndexingSpeed = 'slow' | 'medium' | 'fast'
 
 export type KnowledgeSettings = {
   depth: KnowledgeDepth
   embeddingModel: 'built-in' | 'embeddinggemma-2'
+  indexingSpeed: KnowledgeIndexingSpeed
   runOnBattery: boolean
   onlyRunHeavyJobsWhenIdle: boolean
   maxConcurrentExtractors: number

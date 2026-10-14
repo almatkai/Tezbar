@@ -22,6 +22,7 @@ import type {
 import type { LlmConfigRecord, ProviderId } from './llmConfig'
 import type {
   KnowledgeDepth,
+  KnowledgeIndexingSpeed,
   KnowledgeRootDepth,
   KnowledgeSnapshot,
   KnowledgeSourcesPage,
@@ -371,6 +372,7 @@ export type RaymesApi = {
   setKnowledgeRootEnabled: (rootId: string, enabled: boolean) => Promise<KnowledgeSnapshot>
   setKnowledgeDepth: (depth: KnowledgeDepth) => Promise<KnowledgeSnapshot>
   setKnowledgeRootDepth: (rootId: string, depth: KnowledgeRootDepth) => Promise<KnowledgeSnapshot>
+  setKnowledgeIndexingSpeed: (speed: KnowledgeIndexingSpeed) => Promise<KnowledgeSnapshot>
   startKnowledgeIndexing: () => Promise<KnowledgeSnapshot>
   pauseKnowledgeIndexing: () => Promise<KnowledgeSnapshot>
   resumeKnowledgeIndexing: () => Promise<KnowledgeSnapshot>

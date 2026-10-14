@@ -113,7 +113,7 @@ import { fetchFrankfurterLatest } from './currency/frankfurter'
 import { addNamedPort, listNamedPorts, removeNamedPort } from './portManager/namedPortsStore'
 import { runAiActionMode } from './llm/actionMode'
 import type { VoiceModelId } from '../shared/voice'
-import type { KnowledgeDepth, KnowledgeRootDepth } from '../shared/knowledge'
+import type { KnowledgeDepth, KnowledgeIndexingSpeed, KnowledgeRootDepth } from '../shared/knowledge'
 import { listBackgroundTasks } from './backgroundTasks'
 import { requestPermission, snapshotPermissions } from './permissions/manager'
 import { checkPiAgent, installPiAgent } from './agent/piInstall'
@@ -1822,6 +1822,13 @@ export function registerIpcHandlers(
       throw new Error('Invalid Knowledge Depth')
     }
     return getKnowledgeService().setDepth(depth as KnowledgeDepth)
+  })
+
+  ipcMain.handle('knowledge:speed:set', async (_event, speed: unknown) => {
+    if (typeof speed !== 'string' || !['slow', 'medium', 'fast'].includes(speed)) {
+      throw new Error('Invalid indexing speed')
+    }
+    return getKnowledgeService().setIndexingSpeed(speed as KnowledgeIndexingSpeed)
   })
 
   ipcMain.handle('knowledge:root:set-depth', async (_event, payload: unknown) => {

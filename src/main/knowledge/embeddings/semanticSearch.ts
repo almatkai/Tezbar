@@ -1,4 +1,5 @@
-import type { KnowledgeSearchHit, SemanticSearchStatus } from '../../../shared/knowledge'
+import type { KnowledgeIndexingSpeed, KnowledgeSearchHit, SemanticSearchStatus } from '../../../shared/knowledge'
+import { SPEED_PROFILES } from '../depth'
 import type { KnowledgeStore } from '../database/store'
 import { GemmaRuntime } from './gemmaRuntime'
 import { fuseKnowledgeHits } from './gemmaIndex'
@@ -9,6 +10,7 @@ export type SemanticSearchOptions = {
   allRoots: () => string[]
   canIndex: () => boolean
   waitForIdle: (signal: AbortSignal) => Promise<void>
+  speed?: () => KnowledgeIndexingSpeed
 }
 
 /** Coordinates query inference and resumable embedding of already extracted text. */
@@ -61,6 +63,10 @@ export class SemanticSearch {
       this.countsCache = { roots, ...counts, at: Date.now() }
     }
     return this.countsCache
+  }
+
+  setSpeed(speed: KnowledgeIndexingSpeed): void {
+    this.runtime.setSpeed(speed)
   }
 
   download(): void {
@@ -120,7 +126,9 @@ export class SemanticSearch {
       await this.options.waitForIdle(signal)
       signal.throwIfAborted()
       const rootIds = this.options.roots()
-      const chunks = this.store.getGemmaIndex().pending(rootIds, 4, afterRowId)
+      const speed = this.options.speed?.() ?? 'medium'
+      const profile = SPEED_PROFILES[speed]
+      const chunks = this.store.getGemmaIndex().pending(rootIds, profile.gemmaBatchSize, afterRowId)
       if (!chunks.length) return
       const vectors = await this.runtime.embedDocuments(chunks, signal)
       signal.throwIfAborted()
@@ -132,7 +140,11 @@ export class SemanticSearch {
           this.countsCache.indexedChunks + saved
         )
       }
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      if (profile.gemmaDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, profile.gemmaDelayMs))
+      } else {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      }
     }
   }
 

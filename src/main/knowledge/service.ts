@@ -9,6 +9,7 @@ import type {
   IndexingBackend,
   IndexingRequest,
   KnowledgeDepth,
+  KnowledgeIndexingSpeed,
   KnowledgeRoot,
   KnowledgeRootDepth,
   KnowledgeMetadataHit,
@@ -29,6 +30,7 @@ import {
   effectiveKnowledgeDepth,
   indexingProfileKey,
   profileForDepth,
+  SPEED_PROFILES,
 } from './depth'
 import { KnowledgeWorkerHost } from './workerHost'
 import { SemanticSearch } from './embeddings/semanticSearch'
@@ -196,6 +198,7 @@ export class KnowledgeService {
         .map((root) => root.id),
     canIndex: () => this.mode !== 'worker' && !this.manuallyPaused,
     waitForIdle: (signal) => this.waitForInteractiveIdle(signal),
+    speed: () => this.settings.indexingSpeed ?? 'medium',
   })
   private readonly backends = new Map<string, IndexingBackend>([
     ['local', new LocalIndexingBackend()],
@@ -236,6 +239,7 @@ export class KnowledgeService {
     this.store.ensureInitialized()
     this.settings = this.store.getSettings()
     this.store.saveSettings(this.settings)
+    this.semanticSearch.setSpeed(this.settings.indexingSpeed ?? 'medium')
     this.status = this.store.getPersistedStatus()
     this.manuallyPaused = this.status.state === 'paused'
     const checkpoint = this.store.getIndexingCheckpoint()
@@ -398,6 +402,19 @@ export class KnowledgeService {
     this.store.upsertRoot({ ...root, depth, updatedAt: Date.now() })
     this.syncWatchers()
     return this.restartForConfigurationChange('Folder Knowledge Depth changed')
+  }
+
+  async setIndexingSpeed(speed: KnowledgeIndexingSpeed): Promise<KnowledgeSnapshot> {
+    this.initialize()
+    if (!['slow', 'medium', 'fast'].includes(speed)) {
+      throw new Error('Invalid indexing speed')
+    }
+    if (this.settings.indexingSpeed === speed) return this.snapshot()
+    this.settings = { ...this.settings, indexingSpeed: speed }
+    this.store.saveSettings(this.settings)
+    this.semanticSearch.setSpeed(speed)
+    this.semanticSearch.schedule(100)
+    return this.snapshot()
   }
 
   async setEmbeddingModel(model: KnowledgeSettings['embeddingModel']): Promise<KnowledgeSnapshot> {
@@ -693,7 +710,10 @@ export class KnowledgeService {
           this.updateStatus({ ...this.status, processedSources: completed, failedSources: failed })
           this.updateProgress(completed, total, `Processed ${basename(candidate.path)}`)
           if (this.mode === 'worker') {
-            await new Promise<void>((resolve) => setTimeout(resolve, BACKGROUND_FILE_DELAY_MS))
+            const delay = SPEED_PROFILES[this.settings.indexingSpeed ?? 'medium'].workerFileDelayMs
+            if (delay > 0) {
+              await new Promise<void>((resolve) => setTimeout(resolve, delay))
+            }
           }
         }
       }
@@ -945,8 +965,10 @@ export class KnowledgeService {
     if (this.initialized) this.persistStatus()
   }
 
-  private scheduleVectorBackfill(delayMs = VECTOR_BACKFILL_DELAY_MS): void {
+  private scheduleVectorBackfill(delayMs?: number): void {
     if (this.mode === 'worker' || this.vectorBackfillTimer) return
+    const profile = SPEED_PROFILES[this.settings.indexingSpeed ?? 'medium']
+    const effectiveDelay = delayMs ?? profile.vectorBackfillDelayMs
     this.vectorBackfillTimer = setTimeout(() => {
       this.vectorBackfillTimer = null
       if (Date.now() < this.interactiveUntil) {
@@ -954,13 +976,13 @@ export class KnowledgeService {
         return
       }
       try {
-        const batch = this.store.backfillVectorIndexBatch(VECTOR_BACKFILL_BATCH_SIZE)
+        const batch = this.store.backfillVectorIndexBatch(profile.vectorBackfillBatchSize)
         if (batch.hasMore) this.scheduleVectorBackfill()
       } catch (error) {
         console.warn('[Knowledge] Vector backfill paused after an error:', error)
         this.scheduleVectorBackfill(2_000)
       }
-    }, delayMs)
+    }, effectiveDelay)
     this.vectorBackfillTimer.unref()
   }
 

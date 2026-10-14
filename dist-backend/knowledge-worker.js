@@ -1,14 +1,95 @@
 "use strict";
 
 // src/main/knowledge/worker.ts
-var import_node_os4 = require("node:os");
+var import_node_os5 = require("node:os");
 
 // src/main/knowledge/service.ts
-var import_node_child_process5 = require("node:child_process");
+var import_node_child_process6 = require("node:child_process");
 var import_node_crypto5 = require("node:crypto");
 var import_node_fs8 = require("node:fs");
-var import_node_os3 = require("node:os");
-var import_node_path9 = require("node:path");
+
+// src/main/fs/isolatedFileWatcher.ts
+var import_node_child_process = require("node:child_process");
+var import_node_os = require("node:os");
+var import_node_path = require("node:path");
+var listeners = /* @__PURE__ */ new Map();
+var child = null;
+var children = /* @__PURE__ */ new Set();
+process.once("exit", () => {
+  for (const owned of children) owned.kill("SIGKILL");
+});
+function send(type, root) {
+  child?.stdin?.write(`${JSON.stringify({ type, root })}
+`);
+}
+function start() {
+  if (child) return;
+  const processChild = (0, import_node_child_process.spawn)(process.execPath, [(0, import_node_path.join)(__dirname, "watch-supervisor.cjs")], {
+    cwd: (0, import_node_os.homedir)(),
+    stdio: ["pipe", "pipe", "ignore"],
+    windowsHide: true
+  });
+  child = processChild;
+  children.add(processChild);
+  processChild.unref();
+  processChild.stdin?.on("error", () => {
+  });
+  let buffer = "";
+  processChild.stdout?.setEncoding("utf8");
+  processChild.stdout?.on("data", (chunk) => {
+    buffer += chunk;
+    let newline = buffer.indexOf("\n");
+    while (newline >= 0) {
+      const line = buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+      try {
+        const event = JSON.parse(line);
+        if (event.filename === null || typeof event.filename === "string") {
+          for (const listener of listeners.get(event.root) ?? []) listener(event.filename);
+        }
+      } catch {
+      }
+      newline = buffer.indexOf("\n");
+    }
+  });
+  processChild.once("error", () => {
+    if (child === processChild) child = null;
+  });
+  processChild.once("close", () => {
+    children.delete(processChild);
+    if (child === processChild) child = null;
+  });
+  for (const root of listeners.keys()) send("add", root);
+}
+function watchFolder(root, listener) {
+  const existing = listeners.get(root);
+  const subscriptions = existing ?? /* @__PURE__ */ new Set();
+  subscriptions.add(listener);
+  listeners.set(root, subscriptions);
+  if (!child) start();
+  else if (!existing) send("add", root);
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    subscriptions.delete(listener);
+    if (subscriptions.size) return;
+    listeners.delete(root);
+    send("remove", root);
+    if (!listeners.size && child) {
+      const stopped2 = child;
+      child = null;
+      stopped2.stdin?.end();
+      const timer = setTimeout(() => stopped2.kill("SIGKILL"), 3e3);
+      timer.unref();
+      stopped2.once("close", () => clearTimeout(timer));
+    }
+  };
+}
+
+// src/main/knowledge/service.ts
+var import_node_os4 = require("node:os");
+var import_node_path10 = require("node:path");
 var import_node_util4 = require("node:util");
 
 // src/main/knowledge/backends/local/backend.ts
@@ -26,22 +107,22 @@ async function chunkText(sourceId, text, pageNumber, limit, yieldToInteractiveWo
   const normalized = normalizeText(text);
   if (!normalized) return [];
   const chunks = [];
-  let start = 0;
-  while (start < normalized.length && chunks.length < limit) {
-    let end = Math.min(normalized.length, start + TARGET_CHARS);
+  let start2 = 0;
+  while (start2 < normalized.length && chunks.length < limit) {
+    let end = Math.min(normalized.length, start2 + TARGET_CHARS);
     if (end < normalized.length) {
       const paragraph = normalized.lastIndexOf("\n\n", end);
       const sentence = normalized.lastIndexOf(". ", end);
       const boundary = Math.max(paragraph, sentence);
-      if (boundary > start + TARGET_CHARS * 0.55) end = boundary + (boundary === sentence ? 1 : 0);
+      if (boundary > start2 + TARGET_CHARS * 0.55) end = boundary + (boundary === sentence ? 1 : 0);
     }
-    const value = normalized.slice(start, end).trim();
+    const value = normalized.slice(start2, end).trim();
     if (value) {
-      const id = (0, import_node_crypto.createHash)("sha256").update(`${sourceId}:${pageNumber ?? 0}:${start}:${value}`).digest("hex");
-      chunks.push({ id, pageNumber, text: value, startOffset: start, endOffset: end });
+      const id = (0, import_node_crypto.createHash)("sha256").update(`${sourceId}:${pageNumber ?? 0}:${start2}:${value}`).digest("hex");
+      chunks.push({ id, pageNumber, text: value, startOffset: start2, endOffset: end });
     }
     if (end >= normalized.length) break;
-    start = Math.max(start + 1, end - OVERLAP_CHARS);
+    start2 = Math.max(start2 + 1, end - OVERLAP_CHARS);
     if (chunks.length % 32 === 0) {
       await new Promise((resolve2) => setImmediate(resolve2));
       await yieldToInteractiveWork?.();
@@ -124,12 +205,12 @@ function cosineSimilarity(left, right) {
 }
 
 // src/main/knowledge/extractors/localExtractor.ts
-var import_node_child_process = require("node:child_process");
+var import_node_child_process2 = require("node:child_process");
 var import_node_fs = require("node:fs");
 var import_promises = require("node:fs/promises");
-var import_node_path = require("node:path");
+var import_node_path2 = require("node:path");
 var import_node_util = require("node:util");
-var execFileAsync = (0, import_node_util.promisify)(import_node_child_process.execFile);
+var execFileAsync = (0, import_node_util.promisify)(import_node_child_process2.execFile);
 var MAX_EXTRACTED_BYTES = 64 * 1024 * 1024;
 var MAX_PLAIN_TEXT_EXTRACTED_BYTES = 8 * 1024 * 1024;
 var MAX_PLAIN_TEXT_SOURCE_BYTES = 64 * 1024 * 1024;
@@ -238,7 +319,7 @@ var INDEXABLE_EXTENSIONS = /* @__PURE__ */ new Set([
 function screenOcrHelperPath() {
   const candidates = [
     process.env.SCREENOCR_HELPER_PATH,
-    (0, import_node_path.join)(process.cwd(), "native", "screenocr", "screenocr-helper")
+    (0, import_node_path2.join)(process.cwd(), "native", "screenocr", "screenocr-helper")
   ];
   return candidates.find((candidate) => Boolean(candidate && (0, import_node_fs.existsSync)(candidate))) ?? "";
 }
@@ -294,7 +375,7 @@ async function extractRichDocument(path, signal) {
     }
   }
   if ((0, import_node_fs.existsSync)("/usr/bin/unzip")) {
-    const extension = (0, import_node_path.extname)(path).toLowerCase();
+    const extension = (0, import_node_path2.extname)(path).toLowerCase();
     const members = extension === ".epub" ? ["*.xhtml", "*.html"] : extension === ".xlsx" || extension === ".ods" || extension === ".numbers" ? ["*.xml"] : ["*.xml", "*.xhtml"];
     const parts = [];
     for (const member of members) {
@@ -327,13 +408,13 @@ async function extractMetadataText(path, signal) {
   }
 }
 function isIndexablePath(path) {
-  const extension = (0, import_node_path.extname)(path).toLowerCase();
+  const extension = (0, import_node_path2.extname)(path).toLowerCase();
   if (INDEXABLE_EXTENSIONS.has(extension)) return true;
   const filename = path.split("/").pop()?.toLowerCase() ?? "";
   return ["dockerfile", "makefile", "license", "readme", "changelog"].includes(filename);
 }
 function maximumIndexableSourceBytes(path) {
-  const extension = (0, import_node_path.extname)(path).toLowerCase();
+  const extension = (0, import_node_path2.extname)(path).toLowerCase();
   if (extension === ".pdf" || RICH_DOCUMENT_EXTENSIONS.has(extension)) {
     return MAX_DOCUMENT_SOURCE_BYTES;
   }
@@ -341,7 +422,7 @@ function maximumIndexableSourceBytes(path) {
   return MAX_PLAIN_TEXT_SOURCE_BYTES;
 }
 async function extractLocally(path, signal, options) {
-  const extension = (0, import_node_path.extname)(path).toLowerCase();
+  const extension = (0, import_node_path2.extname)(path).toLowerCase();
   const warnings = [];
   if (extension === ".pdf") {
     if (process.platform !== "darwin") {
@@ -583,11 +664,11 @@ function artifactSettingsHash(value) {
 }
 
 // src/main/desktop-runtime.ts
-var import_node_path2 = require("node:path");
-var import_node_os = require("node:os");
-var import_node_child_process2 = require("node:child_process");
+var import_node_path3 = require("node:path");
+var import_node_os2 = require("node:os");
+var import_node_child_process3 = require("node:child_process");
 var import_node_util2 = require("node:util");
-var execFileAsync2 = (0, import_node_util2.promisify)(import_node_child_process2.execFile);
+var execFileAsync2 = (0, import_node_util2.promisify)(import_node_child_process3.execFile);
 var backendWebContents = {
   id: 1,
   send(channel, ...args) {
@@ -624,15 +705,15 @@ var app = {
   name: "Tezbar",
   getPath(name) {
     if (name === "userData") {
-      return process.env.APPDATA_DIR || (0, import_node_path2.join)((0, import_node_os.homedir)(), ".tezbar");
+      return process.env.APPDATA_DIR || (0, import_node_path3.join)((0, import_node_os2.homedir)(), ".tezbar");
     }
     if (name === "temp") {
-      return process.env.TEMP_DIR || (0, import_node_os.tmpdir)();
+      return process.env.TEMP_DIR || (0, import_node_os2.tmpdir)();
     }
     if (name === "home") {
-      return (0, import_node_os.homedir)();
+      return (0, import_node_os2.homedir)();
     }
-    return (0, import_node_path2.join)((0, import_node_os.homedir)(), `.${name}`);
+    return (0, import_node_path3.join)((0, import_node_os2.homedir)(), `.${name}`);
   },
   getVersion() {
     return process.env.APP_VERSION || "0.0.3";
@@ -672,11 +753,11 @@ var app = {
 // src/main/better-sqlite3-shim.ts
 var import_bun_sqlite = require("bun:sqlite");
 var import_node_fs4 = require("node:fs");
-var import_node_path3 = require("node:path");
+var import_node_path4 = require("node:path");
 if (process.platform === "darwin") {
   const sqliteCandidates = [
     process.env.TEZBAR_SQLITE_LIBRARY_PATH,
-    (0, import_node_path3.join)(__dirname, "libsqlite3.dylib"),
+    (0, import_node_path4.join)(__dirname, "libsqlite3.dylib"),
     "/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib",
     "/usr/local/opt/sqlite/lib/libsqlite3.dylib",
     "/usr/local/opt/sqlite3/lib/libsqlite3.dylib"
@@ -741,16 +822,16 @@ var better_sqlite3_shim_default = DatabaseShim;
 
 // src/main/knowledge/database/store.ts
 var import_node_fs6 = require("node:fs");
-var import_node_path6 = require("node:path");
+var import_node_path7 = require("node:path");
 var import_node_crypto3 = require("node:crypto");
 
 // src/main/sqlite-vec-bundled.ts
 var import_node_fs5 = require("node:fs");
-var import_node_path4 = require("node:path");
+var import_node_path5 = require("node:path");
 function load(database) {
   const suffix = process.platform === "win32" ? "dll" : process.platform === "darwin" ? "dylib" : "so";
-  const platformPath = (0, import_node_path4.join)(__dirname, `vec0.${suffix}`);
-  database.loadExtension((0, import_node_fs5.existsSync)(platformPath) ? platformPath : (0, import_node_path4.join)(__dirname, "vec0"));
+  const platformPath = (0, import_node_path5.join)(__dirname, `vec0.${suffix}`);
+  database.loadExtension((0, import_node_fs5.existsSync)(platformPath) ? platformPath : (0, import_node_path5.join)(__dirname, "vec0"));
 }
 
 // src/main/search/textMatch.ts
@@ -766,10 +847,37 @@ function buildContentFtsQuery(query) {
 var DEFAULT_KNOWLEDGE_SETTINGS = {
   depth: "smart",
   embeddingModel: "built-in",
+  indexingSpeed: "medium",
   maxConcurrentExtractors: 1,
   maxConcurrentOcrJobs: 1,
   runOnBattery: false,
   onlyRunHeavyJobsWhenIdle: true
+};
+var SPEED_PROFILES = {
+  slow: {
+    gemmaBatchSize: 4,
+    gemmaDelayMs: 350,
+    gemmaMaxThreads: 2,
+    workerFileDelayMs: 120,
+    vectorBackfillBatchSize: 128,
+    vectorBackfillDelayMs: 500
+  },
+  medium: {
+    gemmaBatchSize: 8,
+    gemmaDelayMs: 75,
+    gemmaMaxThreads: 4,
+    workerFileDelayMs: 40,
+    vectorBackfillBatchSize: 256,
+    vectorBackfillDelayMs: 250
+  },
+  fast: {
+    gemmaBatchSize: 16,
+    gemmaDelayMs: 0,
+    gemmaMaxThreads: 8,
+    workerFileDelayMs: 0,
+    vectorBackfillBatchSize: 512,
+    vectorBackfillDelayMs: 50
+  }
 };
 var PROFILES = {
   basic: {
@@ -811,7 +919,7 @@ function indexingProfileKey(profile) {
 }
 
 // src/main/knowledge/embeddings/gemmaIndex.ts
-var import_node_path5 = require("node:path");
+var import_node_path6 = require("node:path");
 
 // src/main/knowledge/embeddings/gemmaManifest.ts
 var GEMMA_MODEL = {
@@ -967,7 +1075,7 @@ var GemmaIndex = class {
       rowId: row.rowId,
       id: row.id,
       text: row.text,
-      title: (0, import_node_path5.basename)(row.path)
+      title: (0, import_node_path6.basename)(row.path)
     }));
   }
   save(chunks, vectors) {
@@ -1030,7 +1138,7 @@ var GemmaIndex = class {
         chunkId: row.id,
         sourceId: row.sourceId,
         path: row.path,
-        title: (0, import_node_path5.basename)(row.path),
+        title: (0, import_node_path6.basename)(row.path),
         pageNumber: row.pageNumber ?? void 0,
         text: row.text,
         score: similarity,
@@ -1081,9 +1189,9 @@ var DEFAULT_STATUS = {
   sourceBytes: 0
 };
 function databasePath() {
-  const directory = (0, import_node_path6.join)(app.getPath("userData"), "knowledge");
+  const directory = (0, import_node_path7.join)(app.getPath("userData"), "knowledge");
   (0, import_node_fs6.mkdirSync)(directory, { recursive: true });
-  return (0, import_node_path6.join)(directory, "knowledge.sqlite3");
+  return (0, import_node_path7.join)(directory, "knowledge.sqlite3");
 }
 function parseJson(value, fallback) {
   if (!value) return fallback;
@@ -1910,7 +2018,7 @@ ${page.ocr?.text ?? ""}`.trim();
     return {
       sources: rows.map((row) => ({
         ...row,
-        title: (0, import_node_path6.basename)(row.path),
+        title: (0, import_node_path7.basename)(row.path),
         indexedAt: row.indexedAt ?? void 0,
         error: row.error ?? void 0
       })),
@@ -1939,7 +2047,7 @@ ${page.ocr?.text ?? ""}`.trim();
     return rows.map((row, index) => ({
       sourceId: row.sourceId,
       path: row.path,
-      title: (0, import_node_path6.basename)(row.path),
+      title: (0, import_node_path7.basename)(row.path),
       score: Math.max(0.2, 1 - index / Math.max(rows.length, 1))
     }));
   }
@@ -2041,7 +2149,8 @@ ${page.ocr?.text ?? ""}`.trim();
     const persisted = parseJson(row?.valueJson, {});
     const depth = ["off", "basic", "smart", "deep"].includes(persisted.depth ?? "") ? persisted.depth : DEFAULT_KNOWLEDGE_SETTINGS.depth;
     const embeddingModel = persisted.embeddingModel === "embeddinggemma-2" ? "embeddinggemma-2" : "built-in";
-    return { ...DEFAULT_KNOWLEDGE_SETTINGS, ...persisted, depth, embeddingModel };
+    const indexingSpeed = persisted.indexingSpeed === "slow" || persisted.indexingSpeed === "fast" ? persisted.indexingSpeed : "medium";
+    return { ...DEFAULT_KNOWLEDGE_SETTINGS, ...persisted, depth, embeddingModel, indexingSpeed };
   }
   saveSettings(settings) {
     this.ensureInitialized();
@@ -2121,7 +2230,7 @@ ${page.ocr?.text ?? ""}`.trim();
         chunkId: row.id,
         sourceId: row.sourceId,
         path: row.path,
-        title: (0, import_node_path6.basename)(row.path),
+        title: (0, import_node_path7.basename)(row.path),
         pageNumber: row.pageNumber ?? void 0,
         text: row.text,
         score,
@@ -2165,7 +2274,7 @@ ${page.ocr?.text ?? ""}`.trim();
       resultId: chunkId,
       sourceId: selected.sourceId,
       path: selected.path,
-      title: (0, import_node_path6.basename)(selected.path),
+      title: (0, import_node_path7.basename)(selected.path),
       pageNumber: selected.pageNumber ?? void 0,
       text
     };
@@ -2173,8 +2282,8 @@ ${page.ocr?.text ?? ""}`.trim();
 };
 
 // src/main/knowledge/workerHost.ts
-var import_node_child_process3 = require("node:child_process");
-var import_node_path7 = require("node:path");
+var import_node_child_process4 = require("node:child_process");
+var import_node_path8 = require("node:path");
 var KnowledgeWorkerHost = class {
   constructor(onStatus, onExit) {
     this.onStatus = onStatus;
@@ -2189,14 +2298,14 @@ var KnowledgeWorkerHost = class {
   }
   start() {
     if (this.child) return;
-    const workerPath = (0, import_node_path7.join)(__dirname, "knowledge-worker.js");
-    const child = (0, import_node_child_process3.spawn)(process.execPath, [workerPath], {
+    const workerPath = (0, import_node_path8.join)(__dirname, "knowledge-worker.js");
+    const child2 = (0, import_node_child_process4.spawn)(process.execPath, [workerPath], {
       env: { ...process.env, TEZBAR_KNOWLEDGE_WORKER: "1" },
       // EOF on this pipe tells the worker its backend owner has exited.
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true
     });
-    this.child = child;
+    this.child = child2;
     let stdoutBuffer = "";
     const consumeLine = (line) => {
       if (!line.trim()) return;
@@ -2209,8 +2318,8 @@ var KnowledgeWorkerHost = class {
         console.warn("[knowledge-worker] ignored malformed worker output");
       }
     };
-    child.stdout?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk) => {
+    child2.stdout?.setEncoding("utf8");
+    child2.stdout?.on("data", (chunk) => {
       stdoutBuffer += chunk;
       let newline = stdoutBuffer.indexOf("\n");
       while (newline >= 0) {
@@ -2220,8 +2329,8 @@ var KnowledgeWorkerHost = class {
       }
     });
     let stderrBuffer = "";
-    child.stderr?.setEncoding("utf8");
-    child.stderr?.on("data", (chunk) => {
+    child2.stderr?.setEncoding("utf8");
+    child2.stderr?.on("data", (chunk) => {
       stderrBuffer += chunk;
       let newline = stderrBuffer.indexOf("\n");
       while (newline >= 0) {
@@ -2231,21 +2340,21 @@ var KnowledgeWorkerHost = class {
         newline = stderrBuffer.indexOf("\n");
       }
     });
-    child.once("error", (error) => {
+    child2.once("error", (error) => {
       console.error("[knowledge-worker] failed to launch:", error);
     });
-    child.once("close", (code, signal) => {
+    child2.once("close", (code, signal) => {
       if (stdoutBuffer.trim()) consumeLine(stdoutBuffer);
       if (stderrBuffer.trim()) console.error(`[knowledge-worker] ${stderrBuffer.trim()}`);
-      const expected = this.expectedStops.has(child);
-      if (this.child === child) this.child = null;
+      const expected = this.expectedStops.has(child2);
+      if (this.child === child2) this.child = null;
       this.onExit({ code, signal, expected });
     });
   }
   async stop() {
-    const child = this.child;
-    if (!child) return;
-    this.expectedStops.add(child);
+    const child2 = this.child;
+    if (!child2) return;
+    this.expectedStops.add(child2);
     await new Promise((resolve2) => {
       let settled = false;
       const finish = () => {
@@ -2255,41 +2364,41 @@ var KnowledgeWorkerHost = class {
         resolve2();
       };
       const forceTimer = setTimeout(() => {
-        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+        if (child2.exitCode === null && child2.signalCode === null) child2.kill("SIGKILL");
       }, 3e3);
       forceTimer.unref();
-      child.once("close", finish);
-      if (!child.kill("SIGTERM")) {
-        if (this.child === child) this.child = null;
+      child2.once("close", finish);
+      if (!child2.kill("SIGTERM")) {
+        if (this.child === child2) this.child = null;
         finish();
       }
     });
   }
   shutdown() {
-    const child = this.child;
-    if (!child) return;
-    this.expectedStops.add(child);
-    child.kill("SIGTERM");
+    const child2 = this.child;
+    if (!child2) return;
+    this.expectedStops.add(child2);
+    child2.kill("SIGTERM");
   }
 };
 
 // src/main/knowledge/embeddings/gemmaRuntime.ts
-var import_node_child_process4 = require("node:child_process");
+var import_node_child_process5 = require("node:child_process");
 var import_node_crypto4 = require("node:crypto");
 var import_node_fs7 = require("node:fs");
 var import_promises2 = require("node:fs/promises");
-var import_node_os2 = require("node:os");
-var import_node_path8 = require("node:path");
+var import_node_os3 = require("node:os");
+var import_node_path9 = require("node:path");
 var import_node_net = require("node:net");
 var import_node_util3 = require("node:util");
 var import_node_stream = require("node:stream");
 var import_promises3 = require("node:stream/promises");
-var execFileAsync3 = (0, import_node_util3.promisify)(import_node_child_process4.execFile);
+var execFileAsync3 = (0, import_node_util3.promisify)(import_node_child_process5.execFile);
 var IDLE_MS = 12e4;
 function findServer(directory) {
   if (!(0, import_node_fs7.existsSync)(directory)) return void 0;
   for (const entry of (0, import_node_fs7.readdirSync)(directory, { withFileTypes: true })) {
-    const path = (0, import_node_path8.join)(directory, entry.name);
+    const path = (0, import_node_path9.join)(directory, entry.name);
     if (entry.isFile() && entry.name === (process.platform === "win32" ? "llama-server.exe" : "llama-server"))
       return path;
     if (entry.isDirectory()) {
@@ -2314,7 +2423,7 @@ async function freePort() {
   });
 }
 var GemmaRuntime = class {
-  directory = (0, import_node_path8.join)(
+  directory = (0, import_node_path9.join)(
     app.getPath("userData"),
     "knowledge",
     "models",
@@ -2334,12 +2443,28 @@ var GemmaRuntime = class {
   closed = false;
   removing = false;
   stopping = Promise.resolve();
+  speed = "medium";
+  setSpeed(speed) {
+    if (this.speed === speed) return;
+    const prevThreads = this.threadsForSpeed(this.speed);
+    this.speed = speed;
+    const newThreads = this.threadsForSpeed(speed);
+    if (this.child && prevThreads !== newThreads) {
+      void this.stop();
+    }
+  }
+  threadsForSpeed(speed) {
+    const maxAvailable = (0, import_node_os3.availableParallelism)();
+    if (speed === "slow") return Math.min(2, Math.max(1, maxAvailable));
+    if (speed === "fast") return Math.min(8, Math.max(1, maxAvailable));
+    return Math.min(4, Math.max(1, maxAvailable));
+  }
   snapshot() {
     const runtime = gemmaRuntime();
     let installed = false;
     try {
-      const manifest = JSON.parse((0, import_node_fs7.readFileSync)((0, import_node_path8.join)(this.directory, "installed.json"), "utf8"));
-      installed = manifest.revision === GEMMA_MODEL.revision && manifest.runtime === runtime?.file && (0, import_node_fs7.existsSync)((0, import_node_path8.join)(this.directory, GEMMA_MODEL.file)) && Boolean(findServer((0, import_node_path8.join)(this.directory, "runtime")));
+      const manifest = JSON.parse((0, import_node_fs7.readFileSync)((0, import_node_path9.join)(this.directory, "installed.json"), "utf8"));
+      installed = manifest.revision === GEMMA_MODEL.revision && manifest.runtime === runtime?.file && (0, import_node_fs7.existsSync)((0, import_node_path9.join)(this.directory, GEMMA_MODEL.file)) && Boolean(findServer((0, import_node_path9.join)(this.directory, "runtime")));
     } catch {
     }
     const total = GEMMA_MODEL.bytes + (runtime?.bytes ?? 0);
@@ -2365,8 +2490,8 @@ var GemmaRuntime = class {
     const signal = this.download.signal;
     this.downloadPromise = (async () => {
       await (0, import_promises2.mkdir)(this.directory, { recursive: true });
-      const runtimeDirectory = (0, import_node_path8.join)(this.directory, "runtime");
-      const archive = (0, import_node_path8.join)(this.directory, runtime.file);
+      const runtimeDirectory = (0, import_node_path9.join)(this.directory, "runtime");
+      const archive = (0, import_node_path9.join)(this.directory, runtime.file);
       await this.downloadFile(runtime.url, archive, runtime.sha256, runtime.bytes, signal);
       await (0, import_promises2.mkdir)(runtimeDirectory, { recursive: true });
       if (runtime.file.endsWith(".zip")) {
@@ -2398,14 +2523,14 @@ var GemmaRuntime = class {
       await (0, import_promises2.rm)(archive, { force: true });
       await this.downloadFile(
         GEMMA_MODEL_URL,
-        (0, import_node_path8.join)(this.directory, GEMMA_MODEL.file),
+        (0, import_node_path9.join)(this.directory, GEMMA_MODEL.file),
         GEMMA_MODEL.sha256,
         GEMMA_MODEL.bytes,
         signal
       );
       signal.throwIfAborted();
       await (0, import_promises2.writeFile)(
-        (0, import_node_path8.join)(this.directory, "installed.json"),
+        (0, import_node_path9.join)(this.directory, "installed.json"),
         JSON.stringify({ revision: GEMMA_MODEL.revision, runtime: runtime.file })
       );
       this.modelState = "ready";
@@ -2503,19 +2628,19 @@ var GemmaRuntime = class {
     if (this.removing) throw new Error("Embedding model is being removed");
     if (this.snapshot().modelState !== "ready")
       throw new Error("Download EmbeddingGemma before enabling it");
-    const server = findServer((0, import_node_path8.join)(this.directory, "runtime"));
+    const server = findServer((0, import_node_path9.join)(this.directory, "runtime"));
     const port = await freePort();
     signal?.throwIfAborted();
     if (this.removing || this.closed) throw new Error("Embedding runtime is stopping");
     this.token = (0, import_node_crypto4.randomBytes)(32).toString("hex");
     this.endpoint = `http://127.0.0.1:${port}`;
-    const child = (0, import_node_child_process4.spawn)(
+    const child2 = (0, import_node_child_process5.spawn)(
       process.execPath,
       [
-        (0, import_node_path8.join)(__dirname, "gemma-supervisor.cjs"),
+        (0, import_node_path9.join)(__dirname, "gemma-supervisor.cjs"),
         server,
         "--model",
-        (0, import_node_path8.join)(this.directory, GEMMA_MODEL.file),
+        (0, import_node_path9.join)(this.directory, GEMMA_MODEL.file),
         "--embedding",
         "--pooling",
         "mean",
@@ -2534,30 +2659,30 @@ var GemmaRuntime = class {
         "--parallel",
         "1",
         "--threads",
-        String(Math.min(4, (0, import_node_os2.availableParallelism)()))
+        String(this.threadsForSpeed(this.speed))
       ],
       { windowsHide: true, stdio: ["pipe", "ignore", "pipe"] }
     );
-    this.child = child;
-    child.stdin?.on("error", () => {
+    this.child = child2;
+    child2.stdin?.on("error", () => {
     });
     let failure;
     let stderr = "";
-    child.stderr?.on("data", (data) => {
+    child2.stderr?.on("data", (data) => {
       stderr = (stderr + data.toString()).slice(-4e3);
     });
-    child.once("error", (error) => {
+    child2.once("error", (error) => {
       failure = error.message;
     });
-    child.once("exit", (code) => {
+    child2.once("exit", (code) => {
       failure = `Local embedding runtime exited (${code}): ${stderr.slice(-700)}`;
-      if (this.child === child) this.child = null;
+      if (this.child === child2) this.child = null;
     });
     try {
       const deadline = Date.now() + 6e4;
       while (Date.now() < deadline) {
         signal?.throwIfAborted();
-        if (failure || this.child !== child)
+        if (failure || this.child !== child2)
           throw new Error(failure ?? "Local embedding runtime stopped");
         try {
           const response = await fetch(`${this.endpoint}/health`, {
@@ -2578,20 +2703,20 @@ var GemmaRuntime = class {
   stop() {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
-    const child = this.child;
+    const child2 = this.child;
     this.child = null;
-    if (child) {
+    if (child2) {
       this.stopping = new Promise((resolve2) => {
         const force = setTimeout(() => {
-          child.kill();
+          child2.kill();
           resolve2();
         }, 3e3);
         force.unref();
-        child.once("close", () => {
+        child2.once("close", () => {
           clearTimeout(force);
           resolve2();
         });
-        child.stdin?.end();
+        child2.stdin?.end();
       });
     }
   }
@@ -2666,6 +2791,9 @@ var SemanticSearch = class {
     }
     return this.countsCache;
   }
+  setSpeed(speed) {
+    this.runtime.setSpeed(speed);
+  }
   download() {
     this.runtime.startDownload();
   }
@@ -2714,7 +2842,9 @@ var SemanticSearch = class {
       await this.options.waitForIdle(signal);
       signal.throwIfAborted();
       const rootIds = this.options.roots();
-      const chunks = this.store.getGemmaIndex().pending(rootIds, 4, afterRowId);
+      const speed = this.options.speed?.() ?? "medium";
+      const profile = SPEED_PROFILES[speed];
+      const chunks = this.store.getGemmaIndex().pending(rootIds, profile.gemmaBatchSize, afterRowId);
       if (!chunks.length) return;
       const vectors = await this.runtime.embedDocuments(chunks, signal);
       signal.throwIfAborted();
@@ -2726,7 +2856,11 @@ var SemanticSearch = class {
           this.countsCache.indexedChunks + saved
         );
       }
-      await new Promise((resolve2) => setTimeout(resolve2, 100));
+      if (profile.gemmaDelayMs > 0) {
+        await new Promise((resolve2) => setTimeout(resolve2, profile.gemmaDelayMs));
+      } else {
+        await new Promise((resolve2) => setImmediate(resolve2));
+      }
     }
   }
   async search(query, limit, allRootIds) {
@@ -2778,13 +2912,10 @@ var SemanticSearch = class {
 };
 
 // src/main/knowledge/service.ts
-var execFileAsync4 = (0, import_node_util4.promisify)(import_node_child_process5.execFile);
+var execFileAsync4 = (0, import_node_util4.promisify)(import_node_child_process6.execFile);
 var MAX_SCANNED_FILES = 75e3;
 var STATUS_EVENT_INTERVAL_MS = 100;
 var STATUS_PERSIST_INTERVAL_MS = 1e3;
-var BACKGROUND_FILE_DELAY_MS = 40;
-var VECTOR_BACKFILL_BATCH_SIZE = 256;
-var VECTOR_BACKFILL_DELAY_MS = 250;
 var RESCAN_DEBOUNCE_MS = 5e3;
 var STARTUP_INDEXING_DELAY_MS = 8e3;
 var STARTUP_VECTOR_BACKFILL_DELAY_MS = 5e3;
@@ -2860,8 +2991,8 @@ function shouldSkipKnowledgeEntry(name, isDirectory) {
   if (SENSITIVE_FILE_PATTERNS.some((pattern) => pattern.test(name))) return true;
   return lower.endsWith(".min.js") || lower.endsWith(".min.css");
 }
-function discoverMajorKnowledgeFolders(home = (0, import_node_os3.homedir)()) {
-  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path9.join)(home, name)).filter((path) => {
+function discoverMajorKnowledgeFolders(home = (0, import_node_os4.homedir)()) {
+  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path10.join)(home, name)).filter((path) => {
     try {
       return (0, import_node_fs8.statSync)(path).isDirectory();
     } catch {
@@ -2870,9 +3001,9 @@ function discoverMajorKnowledgeFolders(home = (0, import_node_os3.homedir)()) {
   });
 }
 function isKnowledgeCandidatePath(rootPath, path) {
-  const relativePath = (0, import_node_path9.relative)(rootPath, path);
-  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path9.sep}`)) return false;
-  const segments = relativePath.split(import_node_path9.sep).filter(Boolean);
+  const relativePath = (0, import_node_path10.relative)(rootPath, path);
+  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path10.sep}`)) return false;
+  const segments = relativePath.split(import_node_path10.sep).filter(Boolean);
   const fileName = segments.pop();
   if (!fileName || shouldSkipKnowledgeEntry(fileName, false) || !isIndexablePath(path)) return false;
   return segments.every((name) => !shouldSkipKnowledgeEntry(name, true));
@@ -2909,7 +3040,8 @@ var KnowledgeService = class {
       return depth === "smart" || depth === "deep";
     }).map((root) => root.id),
     canIndex: () => this.mode !== "worker" && !this.manuallyPaused,
-    waitForIdle: (signal) => this.waitForInteractiveIdle(signal)
+    waitForIdle: (signal) => this.waitForInteractiveIdle(signal),
+    speed: () => this.settings.indexingSpeed ?? "medium"
   });
   backends = /* @__PURE__ */ new Map([
     ["local", new LocalIndexingBackend()],
@@ -2945,6 +3077,7 @@ var KnowledgeService = class {
     this.store.ensureInitialized();
     this.settings = this.store.getSettings();
     this.store.saveSettings(this.settings);
+    this.semanticSearch.setSpeed(this.settings.indexingSpeed ?? "medium");
     this.status = this.store.getPersistedStatus();
     this.manuallyPaused = this.status.state === "paused";
     const checkpoint = this.store.getIndexingCheckpoint();
@@ -3006,7 +3139,7 @@ var KnowledgeService = class {
   }
   addRoot(path) {
     this.initialize();
-    const normalized = (0, import_node_path9.resolve)(path.trim());
+    const normalized = (0, import_node_path10.resolve)(path.trim());
     if (!normalized || !(0, import_node_fs8.existsSync)(normalized) || !(0, import_node_fs8.statSync)(normalized).isDirectory()) {
       throw new Error("Choose an existing folder");
     }
@@ -3097,9 +3230,22 @@ var KnowledgeService = class {
     this.syncWatchers();
     return this.restartForConfigurationChange("Folder Knowledge Depth changed");
   }
+  async setIndexingSpeed(speed) {
+    this.initialize();
+    if (!["slow", "medium", "fast"].includes(speed)) {
+      throw new Error("Invalid indexing speed");
+    }
+    if (this.settings.indexingSpeed === speed) return this.snapshot();
+    this.settings = { ...this.settings, indexingSpeed: speed };
+    this.store.saveSettings(this.settings);
+    this.semanticSearch.setSpeed(speed);
+    this.semanticSearch.schedule(100);
+    return this.snapshot();
+  }
   async setEmbeddingModel(model) {
     this.initialize();
-    if (model !== "built-in" && model !== "embeddinggemma-2") throw new Error("Invalid embedding model");
+    if (model !== "built-in" && model !== "embeddinggemma-2")
+      throw new Error("Invalid embedding model");
     if (model === "embeddinggemma-2" && this.semanticSearch.snapshot().modelState !== "ready") {
       throw new Error("Download EmbeddingGemma before enabling it");
     }
@@ -3126,7 +3272,11 @@ var KnowledgeService = class {
   async search(query, limit = 12) {
     this.initialize();
     if (this.settings.embeddingModel === "embeddinggemma-2") {
-      return this.semanticSearch.search(query, limit, this.activeRoots().map((root) => root.id));
+      return this.semanticSearch.search(
+        query,
+        limit,
+        this.activeRoots().map((root) => root.id)
+      );
     }
     return this.store.search(
       query,
@@ -3342,9 +3492,12 @@ var KnowledgeService = class {
           completed += 1;
           if (!succeeded) failed += 1;
           this.updateStatus({ ...this.status, processedSources: completed, failedSources: failed });
-          this.updateProgress(completed, total, `Processed ${(0, import_node_path9.basename)(candidate.path)}`);
+          this.updateProgress(completed, total, `Processed ${(0, import_node_path10.basename)(candidate.path)}`);
           if (this.mode === "worker") {
-            await new Promise((resolve2) => setTimeout(resolve2, BACKGROUND_FILE_DELAY_MS));
+            const delay = SPEED_PROFILES[this.settings.indexingSpeed ?? "medium"].workerFileDelayMs;
+            if (delay > 0) {
+              await new Promise((resolve2) => setTimeout(resolve2, delay));
+            }
           }
         }
       }
@@ -3383,14 +3536,14 @@ var KnowledgeService = class {
         if (signal.aborted) break;
         visited += 1;
         if (shouldSkipKnowledgeEntry(entry.name, entry.isDirectory())) continue;
-        const path = (0, import_node_path9.join)(directory, entry.name);
+        const path = (0, import_node_path10.join)(directory, entry.name);
         if (entry.isSymbolicLink()) continue;
         if (entry.isDirectory()) {
           queue.push(path);
         } else if (entry.isFile() && isIndexablePath(path)) {
           try {
             const fileStat = (0, import_node_fs8.statSync)(path);
-            const isExtensionlessExecutable = !(0, import_node_path9.extname)(path) && (fileStat.mode & 73) !== 0;
+            const isExtensionlessExecutable = !(0, import_node_path10.extname)(path) && (fileStat.mode & 73) !== 0;
             if (!isExtensionlessExecutable && fileStat.size <= maximumIndexableSourceBytes(path)) {
               paths.push(path);
             }
@@ -3422,7 +3575,7 @@ var KnowledgeService = class {
         rootId: candidate.root.id,
         path: candidate.path,
         fingerprint,
-        mediaType: (0, import_node_path9.extname)(candidate.path).slice(1).toLowerCase(),
+        mediaType: (0, import_node_path10.extname)(candidate.path).slice(1).toLowerCase(),
         indexingProfile: profileKey
       });
       const reusable = this.store.findReusableResult(fingerprint.contentHash, sourceId, profileKey);
@@ -3454,7 +3607,7 @@ var KnowledgeService = class {
           this.updateStatus({
             ...this.status,
             progress: Math.max(this.status.progress, overall),
-            detail: detail ? `${detail} \xB7 ${(0, import_node_path9.basename)(candidate.path)}` : (0, import_node_path9.basename)(candidate.path)
+            detail: detail ? `${detail} \xB7 ${(0, import_node_path10.basename)(candidate.path)}` : (0, import_node_path10.basename)(candidate.path)
           });
         }
       });
@@ -3558,12 +3711,14 @@ var KnowledgeService = class {
     this.rescanTimer = null;
     if (this.vectorBackfillTimer) clearTimeout(this.vectorBackfillTimer);
     this.vectorBackfillTimer = null;
-    for (const watcher of this.watchers.values()) watcher.close();
+    for (const stop of this.watchers.values()) stop();
     this.watchers.clear();
     if (this.initialized) this.persistStatus();
   }
-  scheduleVectorBackfill(delayMs = VECTOR_BACKFILL_DELAY_MS) {
+  scheduleVectorBackfill(delayMs) {
     if (this.mode === "worker" || this.vectorBackfillTimer) return;
+    const profile = SPEED_PROFILES[this.settings.indexingSpeed ?? "medium"];
+    const effectiveDelay = delayMs ?? profile.vectorBackfillDelayMs;
     this.vectorBackfillTimer = setTimeout(() => {
       this.vectorBackfillTimer = null;
       if (Date.now() < this.interactiveUntil) {
@@ -3571,13 +3726,13 @@ var KnowledgeService = class {
         return;
       }
       try {
-        const batch = this.store.backfillVectorIndexBatch(VECTOR_BACKFILL_BATCH_SIZE);
+        const batch = this.store.backfillVectorIndexBatch(profile.vectorBackfillBatchSize);
         if (batch.hasMore) this.scheduleVectorBackfill();
       } catch (error) {
         console.warn("[Knowledge] Vector backfill paused after an error:", error);
         this.scheduleVectorBackfill(2e3);
       }
-    }, delayMs);
+    }, effectiveDelay);
     this.vectorBackfillTimer.unref();
   }
   scheduleRescan() {
@@ -3601,17 +3756,13 @@ var KnowledgeService = class {
     const enabledRoots = new Map(this.activeRoots().map((root) => [root.id, root]));
     for (const [rootId, watcher] of this.watchers) {
       if (enabledRoots.has(rootId)) continue;
-      watcher.close();
+      watcher();
       this.watchers.delete(rootId);
     }
     for (const root of enabledRoots.values()) {
       if (this.watchers.has(root.id)) continue;
       try {
-        const watcher = (0, import_node_fs8.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
-        watcher.on("error", () => {
-          watcher.close();
-          this.watchers.delete(root.id);
-        });
+        const watcher = watchFolder(root.path, () => this.scheduleRescan());
         this.watchers.set(root.id, watcher);
       } catch {
       }
@@ -3652,7 +3803,7 @@ var KnowledgeService = class {
 
 // src/main/knowledge/worker.ts
 try {
-  (0, import_node_os4.setPriority)(0, 10);
+  (0, import_node_os5.setPriority)(0, 10);
 } catch {
 }
 function emitStatus2(status) {
