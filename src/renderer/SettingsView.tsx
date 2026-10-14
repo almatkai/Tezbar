@@ -31,6 +31,7 @@ import {
 } from '../shared/llmConfig'
 import type { VoiceModel, VoiceModelId } from '../shared/voice'
 import type { KnowledgeDepth, KnowledgeRootDepth, KnowledgeSnapshot } from '../shared/knowledge'
+import { KnowledgeEmbeddingSettings } from './KnowledgeEmbeddingSettings'
 import type { PiExtensionItem } from '../shared/desktop-api'
 import {
   Button,
@@ -937,6 +938,10 @@ export default function SettingsView({
   useEffect(() => {
     if (activeTab !== 'knowledge') return
     void loadKnowledge()
+    const timer = window.setInterval(() => {
+      void window.tezbar.getKnowledgeSnapshot().then(setKnowledge).catch(() => {})
+    }, 1500)
+    return () => window.clearInterval(timer)
   }, [activeTab, loadKnowledge])
 
   useEffect(() => {
@@ -2736,6 +2741,14 @@ export default function SettingsView({
                     )
                   })}
                 </div>
+              </SettingsRow>
+              <Divider />
+
+              <SettingsRow
+                label="Semantic search"
+                detail="Optional on-device search by meaning. Download the model once, then choose it as your search engine."
+              >
+                <KnowledgeEmbeddingSettings knowledge={knowledge} onChange={setKnowledge} />
               </SettingsRow>
               <Divider />
 

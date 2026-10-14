@@ -1044,6 +1044,34 @@ var init_llmConfig = __esm({
   }
 });
 
+// src/main/profile.ts
+var profile_exports = {};
+__export(profile_exports, {
+  configurationDirectory: () => configurationDirectory,
+  defaultLauncherShortcut: () => defaultLauncherShortcut,
+  piAgentDirectory: () => piAgentDirectory
+});
+function configurationDirectory(env = process.env, home = (0, import_node_os2.homedir)()) {
+  if (env.TEZBAR_CONFIG_DIR) return env.TEZBAR_CONFIG_DIR;
+  return (0, import_node_path7.join)(home, ".openray");
+}
+function piAgentDirectory(env = process.env, home = (0, import_node_os2.homedir)()) {
+  if (env.PI_CODING_AGENT_DIR) return env.PI_CODING_AGENT_DIR;
+  return (0, import_node_path7.join)(home, ".pi", "agent");
+}
+function defaultLauncherShortcut(platform = process.platform) {
+  const modifier = platform === "win32" ? "Control" : "Alt";
+  return `${modifier}+Space`;
+}
+var import_node_os2, import_node_path7;
+var init_profile = __esm({
+  "src/main/profile.ts"() {
+    "use strict";
+    import_node_os2 = require("node:os");
+    import_node_path7 = require("node:path");
+  }
+});
+
 // src/main/llm/configStore.ts
 function readRawConfig() {
   if (configCache) return configCache;
@@ -1063,7 +1091,7 @@ function readRawConfig() {
 function flushConfig() {
   if (!configCache || !configDirty) return;
   try {
-    (0, import_node_fs6.mkdirSync)((0, import_node_path7.dirname)(OPENRAY_CONFIG_PATH), { recursive: true });
+    (0, import_node_fs6.mkdirSync)((0, import_node_path8.dirname)(OPENRAY_CONFIG_PATH), { recursive: true });
     (0, import_node_fs6.writeFileSync)(OPENRAY_CONFIG_PATH, `${JSON.stringify(configCache, null, 2)}
 `, "utf-8");
     configDirty = false;
@@ -1179,17 +1207,17 @@ function getDisabledCommands() {
 function setDisabledCommands(disabled) {
   writeConfigPatch({ disabledCommands: disabled });
 }
-var import_node_fs6, import_node_os2, import_node_path7, OPENRAY_CONFIG_DIR, OPENRAY_CONFIG_PATH, DEFAULT_RAYMES_HOTKEY, configCache, writeTimeout, configDirty;
+var import_node_fs6, import_node_path8, OPENRAY_CONFIG_DIR, OPENRAY_CONFIG_PATH, DEFAULT_RAYMES_HOTKEY, configCache, writeTimeout, configDirty;
 var init_configStore = __esm({
   "src/main/llm/configStore.ts"() {
     "use strict";
     import_node_fs6 = require("node:fs");
-    import_node_os2 = require("node:os");
-    import_node_path7 = require("node:path");
+    import_node_path8 = require("node:path");
     init_llmConfig();
-    OPENRAY_CONFIG_DIR = (0, import_node_path7.join)((0, import_node_os2.homedir)(), ".openray");
-    OPENRAY_CONFIG_PATH = (0, import_node_path7.join)(OPENRAY_CONFIG_DIR, "config.json");
-    DEFAULT_RAYMES_HOTKEY = process.platform === "win32" ? "Control+Space" : "Alt+Space";
+    init_profile();
+    OPENRAY_CONFIG_DIR = configurationDirectory();
+    OPENRAY_CONFIG_PATH = (0, import_node_path8.join)(OPENRAY_CONFIG_DIR, "config.json");
+    DEFAULT_RAYMES_HOTKEY = defaultLauncherShortcut();
     configCache = null;
     writeTimeout = null;
     configDirty = false;
@@ -8543,9 +8571,9 @@ var init_opencode = __esm({
       }
       async isAvailable() {
         try {
-          const { execFile: execFile21 } = await import("node:child_process");
-          const execFileAsync21 = (0, import_node_util5.promisify)(execFile21);
-          const { stdout } = await execFileAsync21("which", ["opencode"], { timeout: 4e3 });
+          const { execFile: execFile22 } = await import("node:child_process");
+          const execFileAsync22 = (0, import_node_util5.promisify)(execFile22);
+          const { stdout } = await execFileAsync22("which", ["opencode"], { timeout: 4e3 });
           return stdout.trim().length > 0;
         } catch {
           return false;
@@ -9634,14 +9662,14 @@ async function executeWindowsCommand(id) {
       await execFileAsync5("rundll32.exe", ["user32.dll,LockWorkStation"]);
       return { ok: true, message: "Screen locked" };
     case "open-downloads":
-      await execFileAsync5("explorer.exe", [(0, import_node_path8.join)((0, import_node_os3.homedir)(), "Downloads")]);
+      await execFileAsync5("explorer.exe", [(0, import_node_path9.join)((0, import_node_os3.homedir)(), "Downloads")]);
       return { ok: true, message: "Opened Downloads" };
     case "open-applications":
       await execFileAsync5("explorer.exe", ["shell:AppsFolder"]);
       return { ok: true, message: "Opened All Apps" };
     case "reveal-library":
       await execFileAsync5("explorer.exe", [
-        process.env.APPDATA ?? (0, import_node_path8.join)((0, import_node_os3.homedir)(), "AppData", "Roaming")
+        process.env.APPDATA ?? (0, import_node_path9.join)((0, import_node_os3.homedir)(), "AppData", "Roaming")
       ]);
       return { ok: true, message: "Opened AppData" };
     case "copy-current-path": {
@@ -10088,7 +10116,7 @@ async function executeNativeCommand(id) {
   const kind = result.ok ? getNativeCommandResultKind(id) : "error";
   return kind ? { ...result, kind } : result;
 }
-var import_node_child_process6, import_node_crypto3, import_node_os3, import_node_path8, import_node_util6, execFileAsync5, backgroundProcesses;
+var import_node_child_process6, import_node_crypto3, import_node_os3, import_node_path9, import_node_util6, execFileAsync5, backgroundProcesses;
 var init_executor = __esm({
   "src/main/nativeCommands/executor.ts"() {
     "use strict";
@@ -10096,7 +10124,7 @@ var init_executor = __esm({
     import_node_crypto3 = require("node:crypto");
     init_desktop_runtime();
     import_node_os3 = require("node:os");
-    import_node_path8 = require("node:path");
+    import_node_path9 = require("node:path");
     import_node_util6 = require("node:util");
     init_registry();
     execFileAsync5 = (0, import_node_util6.promisify)(import_node_child_process6.execFile);
@@ -10254,9 +10282,9 @@ var init_confirm = __esm({
 
 // src/main/safety/log.ts
 function logPath() {
-  const dir = (0, import_node_path9.join)(app.getPath("userData"), "safety");
+  const dir = (0, import_node_path10.join)(app.getPath("userData"), "safety");
   (0, import_node_fs7.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path9.join)(dir, "action-log.json");
+  return (0, import_node_path10.join)(dir, "action-log.json");
 }
 function load() {
   if (cache) return cache;
@@ -10315,13 +10343,13 @@ function clearSafetyLog() {
   cache = [];
   persist();
 }
-var import_node_fs7, import_node_path9, MAX_ENTRIES, cache;
+var import_node_fs7, import_node_path10, MAX_ENTRIES, cache;
 var init_log2 = __esm({
   "src/main/safety/log.ts"() {
     "use strict";
     init_desktop_runtime();
     import_node_fs7 = require("node:fs");
-    import_node_path9 = require("node:path");
+    import_node_path10 = require("node:path");
     MAX_ENTRIES = 200;
     cache = null;
   }
@@ -10452,7 +10480,7 @@ var init_featureEmbedding = __esm({
 function screenOcrHelperPath() {
   const candidates = [
     process.env.SCREENOCR_HELPER_PATH,
-    (0, import_node_path10.join)(process.cwd(), "native", "screenocr", "screenocr-helper")
+    (0, import_node_path11.join)(process.cwd(), "native", "screenocr", "screenocr-helper")
   ];
   return candidates.find((candidate) => Boolean(candidate && (0, import_node_fs8.existsSync)(candidate))) ?? "";
 }
@@ -10508,7 +10536,7 @@ async function extractRichDocument(path8, signal) {
     }
   }
   if ((0, import_node_fs8.existsSync)("/usr/bin/unzip")) {
-    const extension = (0, import_node_path10.extname)(path8).toLowerCase();
+    const extension = (0, import_node_path11.extname)(path8).toLowerCase();
     const members = extension === ".epub" ? ["*.xhtml", "*.html"] : extension === ".xlsx" || extension === ".ods" || extension === ".numbers" ? ["*.xml"] : ["*.xml", "*.xhtml"];
     const parts = [];
     for (const member of members) {
@@ -10541,13 +10569,13 @@ async function extractMetadataText(path8, signal) {
   }
 }
 function isIndexablePath(path8) {
-  const extension = (0, import_node_path10.extname)(path8).toLowerCase();
+  const extension = (0, import_node_path11.extname)(path8).toLowerCase();
   if (INDEXABLE_EXTENSIONS.has(extension)) return true;
   const filename = path8.split("/").pop()?.toLowerCase() ?? "";
   return ["dockerfile", "makefile", "license", "readme", "changelog"].includes(filename);
 }
 function maximumIndexableSourceBytes(path8) {
-  const extension = (0, import_node_path10.extname)(path8).toLowerCase();
+  const extension = (0, import_node_path11.extname)(path8).toLowerCase();
   if (extension === ".pdf" || RICH_DOCUMENT_EXTENSIONS.has(extension)) {
     return MAX_DOCUMENT_SOURCE_BYTES;
   }
@@ -10555,7 +10583,7 @@ function maximumIndexableSourceBytes(path8) {
   return MAX_PLAIN_TEXT_SOURCE_BYTES;
 }
 async function extractLocally(path8, signal, options) {
-  const extension = (0, import_node_path10.extname)(path8).toLowerCase();
+  const extension = (0, import_node_path11.extname)(path8).toLowerCase();
   const warnings = [];
   if (extension === ".pdf") {
     if (process.platform !== "darwin") {
@@ -10655,14 +10683,14 @@ async function extractLocally(path8, signal, options) {
     totalPageCount: 1
   };
 }
-var import_node_child_process7, import_node_fs8, import_promises2, import_node_path10, import_node_util7, execFileAsync6, MAX_EXTRACTED_BYTES, MAX_PLAIN_TEXT_EXTRACTED_BYTES, MAX_PLAIN_TEXT_SOURCE_BYTES, MAX_IMAGE_SOURCE_BYTES, MAX_DOCUMENT_SOURCE_BYTES, PLAIN_TEXT_EXTENSIONS, IMAGE_EXTENSIONS2, RICH_DOCUMENT_EXTENSIONS, INDEXABLE_EXTENSIONS;
+var import_node_child_process7, import_node_fs8, import_promises2, import_node_path11, import_node_util7, execFileAsync6, MAX_EXTRACTED_BYTES, MAX_PLAIN_TEXT_EXTRACTED_BYTES, MAX_PLAIN_TEXT_SOURCE_BYTES, MAX_IMAGE_SOURCE_BYTES, MAX_DOCUMENT_SOURCE_BYTES, PLAIN_TEXT_EXTENSIONS, IMAGE_EXTENSIONS2, RICH_DOCUMENT_EXTENSIONS, INDEXABLE_EXTENSIONS;
 var init_localExtractor = __esm({
   "src/main/knowledge/extractors/localExtractor.ts"() {
     "use strict";
     import_node_child_process7 = require("node:child_process");
     import_node_fs8 = require("node:fs");
     import_promises2 = require("node:fs/promises");
-    import_node_path10 = require("node:path");
+    import_node_path11 = require("node:path");
     import_node_util7 = require("node:util");
     execFileAsync6 = (0, import_node_util7.promisify)(import_node_child_process7.execFile);
     MAX_EXTRACTED_BYTES = 64 * 1024 * 1024;
@@ -10944,15 +10972,15 @@ var init_fingerprint = __esm({
 // src/main/sqlite-vec-bundled.ts
 function load2(database) {
   const suffix = process.platform === "win32" ? "dll" : process.platform === "darwin" ? "dylib" : "so";
-  const platformPath = (0, import_node_path11.join)(__dirname, `vec0.${suffix}`);
-  database.loadExtension((0, import_node_fs11.existsSync)(platformPath) ? platformPath : (0, import_node_path11.join)(__dirname, "vec0"));
+  const platformPath = (0, import_node_path12.join)(__dirname, `vec0.${suffix}`);
+  database.loadExtension((0, import_node_fs11.existsSync)(platformPath) ? platformPath : (0, import_node_path12.join)(__dirname, "vec0"));
 }
-var import_node_fs11, import_node_path11;
+var import_node_fs11, import_node_path12;
 var init_sqlite_vec_bundled = __esm({
   "src/main/sqlite-vec-bundled.ts"() {
     "use strict";
     import_node_fs11 = require("node:fs");
-    import_node_path11 = require("node:path");
+    import_node_path12 = require("node:path");
   }
 });
 
@@ -11068,6 +11096,7 @@ var init_depth = __esm({
     "use strict";
     DEFAULT_KNOWLEDGE_SETTINGS = {
       depth: "smart",
+      embeddingModel: "built-in",
       maxConcurrentExtractors: 1,
       maxConcurrentOcrJobs: 1,
       runOnBattery: false,
@@ -11099,11 +11128,265 @@ var init_depth = __esm({
   }
 });
 
+// src/main/knowledge/embeddings/gemmaManifest.ts
+function gemmaRuntime(platform = process.platform, arch = process.arch) {
+  const runtime = RUNTIMES[`${platform}-${arch}`];
+  return runtime ? {
+    ...runtime,
+    url: `https://github.com/ggml-org/llama.cpp/releases/download/b11474/${runtime.file}`
+  } : void 0;
+}
+function normalizeGemmaVector(value) {
+  if (!Array.isArray(value) || value.length !== 768 || value.some((component) => typeof component !== "number" || !Number.isFinite(component))) {
+    throw new Error("EmbeddingGemma returned an invalid vector");
+  }
+  const truncated = value.slice(0, GEMMA_MODEL.dimensions);
+  const magnitude = Math.sqrt(truncated.reduce((sum, component) => sum + component * component, 0));
+  if (magnitude === 0) throw new Error("EmbeddingGemma returned an empty vector");
+  return truncated.map((component) => component / magnitude);
+}
+function gemmaDocument(text3, title) {
+  return `title: ${title?.trim() || "none"} | text: ${text3}`;
+}
+function gemmaQuery(text3) {
+  return `task: search result | query: ${text3}`;
+}
+var GEMMA_MODEL, GEMMA_INDEX_KEY, GEMMA_MODEL_URL, RUNTIMES;
+var init_gemmaManifest = __esm({
+  "src/main/knowledge/embeddings/gemmaManifest.ts"() {
+    "use strict";
+    GEMMA_MODEL = {
+      id: "google/embeddinggemma-2",
+      revision: "bfcd298762cc34d0357ece5ebdd31791a3a374d8",
+      dimensions: 256,
+      file: "embeddinggemma-2-Q8_0.gguf",
+      bytes: 309855456,
+      sha256: "2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135"
+    };
+    GEMMA_INDEX_KEY = `${GEMMA_MODEL.id}:${GEMMA_MODEL.revision}:q8:256:search-v1`;
+    GEMMA_MODEL_URL = `https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/${GEMMA_MODEL.revision}/${GEMMA_MODEL.file}`;
+    RUNTIMES = {
+      "win32-x64": {
+        file: "llama-b11474-bin-win-cpu-x64.zip",
+        bytes: 19440991,
+        sha256: "5a39102a1b27d75ab8a9d777c6cf2ce373c468265dc1797a2566dec085501a95"
+      },
+      "win32-arm64": {
+        file: "llama-b11474-bin-win-cpu-arm64.zip",
+        bytes: 12269479,
+        sha256: "2874f37ef48f12edfab2346f3857d7c866f4d423b2e9da045baf14312201db71"
+      },
+      "darwin-arm64": {
+        file: "llama-b11474-bin-macos-arm64.tar.gz",
+        bytes: 12011955,
+        sha256: "ae7f002f2b477d14fea8ac4d93438684344cd18ec10d2b0ee9d5518b2a74def5"
+      },
+      "darwin-x64": {
+        file: "llama-b11474-bin-macos-x64.tar.gz",
+        bytes: 11530937,
+        sha256: "46381da99834f84ead41c78d091c9137755bac27d9423e56ea1fd0bc51104d60"
+      },
+      "linux-x64": {
+        file: "llama-b11474-bin-ubuntu-x64.tar.gz",
+        bytes: 17737147,
+        sha256: "98abe0fac169db55712ce96b0e30adf99fa47fa5386fddef8fef84fe21f4a690"
+      }
+    };
+  }
+});
+
+// src/main/knowledge/embeddings/gemmaIndex.ts
+function encode(vector) {
+  if (vector.length !== GEMMA_MODEL.dimensions || vector.some((v) => !Number.isFinite(v))) {
+    throw new Error("Invalid vector for the Gemma index");
+  }
+  const buffer = Buffer.alloc(vector.length * 4);
+  vector.forEach((v, index) => buffer.writeFloatLE(v, index * 4));
+  return buffer;
+}
+function decode(buffer) {
+  const bytes = Buffer.from(buffer);
+  return Array.from({ length: bytes.length / 4 }, (_, index) => bytes.readFloatLE(index * 4));
+}
+function fuseKnowledgeHits(lexical, semantic, limit) {
+  const scores = /* @__PURE__ */ new Map();
+  for (const [kind, hits] of [
+    ["lexical", lexical],
+    ["semantic", semantic]
+  ]) {
+    hits.forEach((hit, rank) => {
+      const previous = scores.get(hit.chunkId);
+      scores.set(hit.chunkId, {
+        ...hit,
+        lexicalScore: kind === "lexical" ? hit.lexicalScore : previous?.lexicalScore ?? 0,
+        semanticScore: kind === "semantic" ? hit.semanticScore : previous?.semanticScore ?? 0,
+        score: (previous?.score ?? 0) + 30 / (60 + rank + 1)
+      });
+    });
+  }
+  return [...scores.values()].sort((left, right) => right.score - left.score).slice(0, limit);
+}
+var import_node_path13, GemmaIndex;
+var init_gemmaIndex = __esm({
+  "src/main/knowledge/embeddings/gemmaIndex.ts"() {
+    "use strict";
+    import_node_path13 = require("node:path");
+    init_gemmaManifest();
+    init_featureEmbedding();
+    GemmaIndex = class {
+      constructor(db, vectorAvailable) {
+        this.db = db;
+        this.vectorAvailable = vectorAvailable;
+        db.exec(`
+      CREATE TABLE IF NOT EXISTS knowledge_gemma_embeddings (
+        chunk_id TEXT PRIMARY KEY,
+        model_key TEXT NOT NULL,
+        vector BLOB NOT NULL
+      );
+      CREATE TRIGGER IF NOT EXISTS knowledge_gemma_chunk_delete
+      BEFORE DELETE ON knowledge_chunks BEGIN
+        DELETE FROM knowledge_gemma_embeddings WHERE chunk_id = OLD.id;
+      END;
+    `);
+        if (vectorAvailable) {
+          db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_gemma_vectors USING vec0(
+          embedding float[256] distance_metric=cosine,
+          root_id text
+        );
+        CREATE TRIGGER IF NOT EXISTS knowledge_gemma_vector_delete
+        BEFORE DELETE ON knowledge_chunks BEGIN
+          DELETE FROM knowledge_gemma_vectors WHERE rowid = OLD.rowid;
+        END;
+      `);
+        }
+      }
+      db;
+      vectorAvailable;
+      counts(rootIds) {
+        if (!rootIds.length) return { indexedChunks: 0, totalChunks: 0 };
+        return this.db.prepare(
+          `
+      SELECT COUNT(*) AS totalChunks,
+             COALESCE(SUM(CASE WHEN g.model_key = ? THEN 1 ELSE 0 END), 0) AS indexedChunks
+      FROM knowledge_chunks c
+      JOIN knowledge_sources s ON s.id = c.source_id
+      LEFT JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id
+      WHERE s.status = 'indexed' AND c.embedding_json IS NOT NULL
+        AND s.root_id IN (${rootIds.map(() => "?").join(",")})
+    `
+        ).get(GEMMA_INDEX_KEY, ...rootIds);
+      }
+      hasEmbeddings(rootIds) {
+        if (!rootIds.length) return false;
+        return Boolean(
+          this.db.prepare(
+            `
+      SELECT 1 FROM knowledge_gemma_embeddings g
+      JOIN knowledge_chunks c ON c.id = g.chunk_id
+      JOIN knowledge_sources s ON s.id = c.source_id
+      WHERE g.model_key = ? AND s.status = 'indexed'
+        AND s.root_id IN (${rootIds.map(() => "?").join(",")}) LIMIT 1
+    `
+          ).get(GEMMA_INDEX_KEY, ...rootIds)
+        );
+      }
+      pending(rootIds, limit = 4) {
+        if (!rootIds.length) return [];
+        const rows = this.db.prepare(
+          `
+      SELECT c.id, c.text, s.path
+      FROM knowledge_chunks c JOIN knowledge_sources s ON s.id = c.source_id
+      LEFT JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id
+      WHERE s.status = 'indexed' AND c.embedding_json IS NOT NULL
+        AND s.root_id IN (${rootIds.map(() => "?").join(",")})
+        AND (g.chunk_id IS NULL OR g.model_key != ?)
+      ORDER BY c.rowid LIMIT ?
+    `
+        ).all(...rootIds, GEMMA_INDEX_KEY, limit);
+        return rows.map((row) => ({ id: row.id, text: row.text, title: (0, import_node_path13.basename)(row.path) }));
+      }
+      save(chunks, vectors) {
+        if (chunks.length !== vectors.length) throw new Error("Embedding batch size does not match");
+        const encoded = vectors.map(encode);
+        const find = this.db.prepare(`
+      SELECT c.rowid AS rowId, s.root_id AS rootId FROM knowledge_chunks c
+      JOIN knowledge_sources s ON s.id = c.source_id
+      WHERE c.id = ? AND c.text = ? AND s.status = 'indexed' AND c.embedding_json IS NOT NULL
+    `);
+        const insert = this.db.prepare(
+          "INSERT OR REPLACE INTO knowledge_gemma_embeddings(chunk_id, model_key, vector) VALUES (?, ?, ?)"
+        );
+        const deleteVector = this.vectorAvailable ? this.db.prepare("DELETE FROM knowledge_gemma_vectors WHERE rowid = ?") : null;
+        const insertVector = this.vectorAvailable ? this.db.prepare(
+          "INSERT INTO knowledge_gemma_vectors(rowid, embedding, root_id) VALUES (?, ?, ?)"
+        ) : null;
+        this.db.transaction(() => {
+          chunks.forEach((chunk, index) => {
+            const current = find.get(chunk.id, chunk.text);
+            if (!current) return;
+            insert.run(chunk.id, GEMMA_INDEX_KEY, encoded[index]);
+            deleteVector?.run(BigInt(current.rowId));
+            insertVector?.run(BigInt(current.rowId), encoded[index], current.rootId);
+          });
+        })();
+      }
+      search(vector, rootIds, limit) {
+        if (!rootIds.length || limit <= 0) return [];
+        const encoded = encode(vector);
+        const rootFilter = rootIds.map(() => "?").join(",");
+        const rows = this.vectorAvailable ? this.db.prepare(
+          `
+      WITH nearest AS (
+        SELECT rowid, distance FROM knowledge_gemma_vectors
+        WHERE embedding MATCH ? AND k = ? AND root_id IN (${rootFilter})
+      )
+      SELECT c.id, c.source_id AS sourceId, c.text, c.page_number AS pageNumber,
+             s.path, g.vector, nearest.distance
+      FROM nearest JOIN knowledge_chunks c ON c.rowid = nearest.rowid
+      JOIN knowledge_sources s ON s.id = c.source_id
+      JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id
+      WHERE s.status = 'indexed' AND g.model_key = ? ORDER BY nearest.distance
+    `
+        ).all(encoded, Math.max(40, limit * 4), ...rootIds, GEMMA_INDEX_KEY) : this.db.prepare(
+          `
+      SELECT c.id, c.source_id AS sourceId, c.text, c.page_number AS pageNumber,
+             s.path, g.vector
+      FROM knowledge_gemma_embeddings g JOIN knowledge_chunks c ON c.id = g.chunk_id
+      JOIN knowledge_sources s ON s.id = c.source_id
+      WHERE g.model_key = ? AND s.status = 'indexed' AND s.root_id IN (${rootFilter})
+    `
+        ).all(GEMMA_INDEX_KEY, ...rootIds);
+        return rows.map((row) => {
+          const similarity = Math.max(0, cosineSimilarity(vector, decode(row.vector)));
+          return {
+            chunkId: row.id,
+            sourceId: row.sourceId,
+            path: row.path,
+            title: (0, import_node_path13.basename)(row.path),
+            pageNumber: row.pageNumber ?? void 0,
+            text: row.text,
+            score: similarity,
+            semanticScore: similarity,
+            lexicalScore: 0
+          };
+        }).sort((left, right) => right.score - left.score).slice(0, limit);
+      }
+      clear() {
+        this.db.transaction(() => {
+          this.db.prepare("DELETE FROM knowledge_gemma_embeddings").run();
+          if (this.vectorAvailable) this.db.prepare("DELETE FROM knowledge_gemma_vectors").run();
+        })();
+      }
+    };
+  }
+});
+
 // src/main/knowledge/database/store.ts
 function databasePath() {
-  const directory = (0, import_node_path12.join)(app.getPath("userData"), "knowledge");
+  const directory = (0, import_node_path14.join)(app.getPath("userData"), "knowledge");
   (0, import_node_fs12.mkdirSync)(directory, { recursive: true });
-  return (0, import_node_path12.join)(directory, "knowledge.sqlite3");
+  return (0, import_node_path14.join)(directory, "knowledge.sqlite3");
 }
 function parseJson(value, fallback) {
   if (!value) return fallback;
@@ -11145,20 +11428,21 @@ function getKnowledgeStore() {
   singleton ??= new KnowledgeStore();
   return singleton;
 }
-var import_node_fs12, import_node_path12, import_node_crypto6, DEFAULT_STATUS, singleton, KnowledgeStore;
+var import_node_fs12, import_node_path14, import_node_crypto6, DEFAULT_STATUS, singleton, KnowledgeStore;
 var init_store = __esm({
   "src/main/knowledge/database/store.ts"() {
     "use strict";
     init_desktop_runtime();
     init_better_sqlite3_shim();
     import_node_fs12 = require("node:fs");
-    import_node_path12 = require("node:path");
+    import_node_path14 = require("node:path");
     import_node_crypto6 = require("node:crypto");
     init_sqlite_vec_bundled();
     init_textMatch();
     init_featureEmbedding();
     init_fingerprint();
     init_depth();
+    init_gemmaIndex();
     DEFAULT_STATUS = {
       state: "idle",
       backend: "local",
@@ -11175,8 +11459,19 @@ var init_store = __esm({
     };
     singleton = null;
     KnowledgeStore = class {
+      gemmaIndex = null;
+      getGemmaIndex() {
+        this.ensureInitialized();
+        return this.gemmaIndex;
+      }
       database = null;
       vectorIndexAvailable = false;
+      close() {
+        this.database?.close();
+        this.database = null;
+        this.vectorIndexAvailable = false;
+        this.gemmaIndex = null;
+      }
       get db() {
         if (!this.database) throw new Error("Knowledge database is not initialized");
         return this.database;
@@ -11374,6 +11669,7 @@ var init_store = __esm({
         ).run();
         this.ensureMaterializedStats();
         this.ensureVectorIndex();
+        this.gemmaIndex = new GemmaIndex(this.db, this.vectorIndexAvailable);
       }
       ensureVectorIndex() {
         if (!this.vectorIndexAvailable) return;
@@ -11946,7 +12242,7 @@ ${page.ocr?.text ?? ""}`.trim();
         return {
           sources: rows.map((row) => ({
             ...row,
-            title: (0, import_node_path12.basename)(row.path),
+            title: (0, import_node_path14.basename)(row.path),
             indexedAt: row.indexedAt ?? void 0,
             error: row.error ?? void 0
           })),
@@ -11975,7 +12271,7 @@ ${page.ocr?.text ?? ""}`.trim();
         return rows.map((row, index) => ({
           sourceId: row.sourceId,
           path: row.path,
-          title: (0, import_node_path12.basename)(row.path),
+          title: (0, import_node_path14.basename)(row.path),
           score: Math.max(0.2, 1 - index / Math.max(rows.length, 1))
         }));
       }
@@ -12076,7 +12372,8 @@ ${page.ocr?.text ?? ""}`.trim();
         const row = this.db.prepare("SELECT value_json AS valueJson FROM knowledge_metadata WHERE key = 'settings'").get();
         const persisted = parseJson(row?.valueJson, {});
         const depth = ["off", "basic", "smart", "deep"].includes(persisted.depth ?? "") ? persisted.depth : DEFAULT_KNOWLEDGE_SETTINGS.depth;
-        return { ...DEFAULT_KNOWLEDGE_SETTINGS, ...persisted, depth };
+        const embeddingModel = persisted.embeddingModel === "embeddinggemma-2" ? "embeddinggemma-2" : "built-in";
+        return { ...DEFAULT_KNOWLEDGE_SETTINGS, ...persisted, depth, embeddingModel };
       }
       saveSettings(settings) {
         this.ensureInitialized();
@@ -12087,7 +12384,7 @@ ${page.ocr?.text ?? ""}`.trim();
     `
         ).run(JSON.stringify(settings));
       }
-      search(query, limit = 12, rootIds) {
+      search(query, limit = 12, rootIds, lexicalOnly = false) {
         this.ensureInitialized();
         const trimmed = query.trim();
         if (!trimmed || limit <= 0 || rootIds?.length === 0) return [];
@@ -12103,12 +12400,13 @@ ${page.ocr?.text ?? ""}`.trim();
           JOIN knowledge_sources s ON s.id = c.source_id
           JOIN knowledge_roots r ON r.id = s.root_id
           WHERE knowledge_chunks_fts MATCH ? AND r.enabled = 1 ${rootFilter}
+          ORDER BY rank
           LIMIT ?
         `
         ).all(ftsQuery, ...rootIds ?? [], Math.max(40, limit * 5)) : [];
         lexicalRows.sort((left, right) => (left.rank ?? 0) - (right.rank ?? 0));
         const queryEmbedding = embedText(trimmed);
-        const semanticRows = this.vectorIndexAvailable ? this.db.prepare(
+        const semanticRows = lexicalOnly ? [] : this.vectorIndexAvailable ? this.db.prepare(
           `
           WITH nearest AS (
             SELECT rowid, distance
@@ -12146,10 +12444,7 @@ ${page.ocr?.text ?? ""}`.trim();
         const candidates = /* @__PURE__ */ new Map();
         for (const row of [...lexicalRows, ...semanticRows]) candidates.set(row.id, row);
         for (const row of candidates.values()) {
-          const semanticScore = Math.max(
-            0,
-            cosineSimilarity(queryEmbedding, decodeEmbedding(row.embeddingJson) ?? [])
-          );
+          const semanticScore = lexicalOnly ? 0 : Math.max(0, cosineSimilarity(queryEmbedding, decodeEmbedding(row.embeddingJson) ?? []));
           const lexicalIndex = lexicalRows.findIndex((candidate) => candidate.id === row.id);
           const lexicalScore2 = lexicalIds.has(row.id) ? Math.max(0.15, 1 - lexicalIndex / Math.max(lexicalRows.length, 1)) : 0;
           const score = lexicalScore2 * 0.72 + semanticScore * 0.28;
@@ -12158,7 +12453,7 @@ ${page.ocr?.text ?? ""}`.trim();
             chunkId: row.id,
             sourceId: row.sourceId,
             path: row.path,
-            title: (0, import_node_path12.basename)(row.path),
+            title: (0, import_node_path14.basename)(row.path),
             pageNumber: row.pageNumber ?? void 0,
             text: row.text,
             score,
@@ -12202,7 +12497,7 @@ ${page.ocr?.text ?? ""}`.trim();
           resultId: chunkId,
           sourceId: selected.sourceId,
           path: selected.path,
-          title: (0, import_node_path12.basename)(selected.path),
+          title: (0, import_node_path14.basename)(selected.path),
           pageNumber: selected.pageNumber ?? void 0,
           text: text3
         };
@@ -12212,12 +12507,12 @@ ${page.ocr?.text ?? ""}`.trim();
 });
 
 // src/main/knowledge/workerHost.ts
-var import_node_child_process8, import_node_path13, KnowledgeWorkerHost;
+var import_node_child_process8, import_node_path15, KnowledgeWorkerHost;
 var init_workerHost = __esm({
   "src/main/knowledge/workerHost.ts"() {
     "use strict";
     import_node_child_process8 = require("node:child_process");
-    import_node_path13 = require("node:path");
+    import_node_path15 = require("node:path");
     KnowledgeWorkerHost = class {
       constructor(onStatus, onExit) {
         this.onStatus = onStatus;
@@ -12232,7 +12527,7 @@ var init_workerHost = __esm({
       }
       start() {
         if (this.child) return;
-        const workerPath = (0, import_node_path13.join)(__dirname, "knowledge-worker.js");
+        const workerPath = (0, import_node_path15.join)(__dirname, "knowledge-worker.js");
         const child = (0, import_node_child_process8.spawn)(process.execPath, [workerPath], {
           env: { ...process.env, TEZBAR_KNOWLEDGE_WORKER: "1" },
           // EOF on this pipe tells the worker its backend owner has exited.
@@ -12318,6 +12613,516 @@ var init_workerHost = __esm({
   }
 });
 
+// src/main/knowledge/embeddings/gemmaRuntime.ts
+function findServer(directory) {
+  if (!(0, import_node_fs13.existsSync)(directory)) return void 0;
+  for (const entry of (0, import_node_fs13.readdirSync)(directory, { withFileTypes: true })) {
+    const path8 = (0, import_node_path16.join)(directory, entry.name);
+    if (entry.isFile() && entry.name === (process.platform === "win32" ? "llama-server.exe" : "llama-server"))
+      return path8;
+    if (entry.isDirectory()) {
+      const found = findServer(path8);
+      if (found) return found;
+    }
+  }
+  return void 0;
+}
+async function freePort() {
+  const server = (0, import_node_net.createServer)();
+  return new Promise((resolve6, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close((error) => {
+        if (error || !address || typeof address === "string")
+          reject(error ?? new Error("Cannot allocate embedding port"));
+        else resolve6(address.port);
+      });
+    });
+  });
+}
+var import_node_child_process9, import_node_crypto7, import_node_fs13, import_promises3, import_node_os4, import_node_path16, import_node_net, import_node_util8, import_node_stream, import_promises4, execFileAsync7, IDLE_MS, GemmaRuntime;
+var init_gemmaRuntime = __esm({
+  "src/main/knowledge/embeddings/gemmaRuntime.ts"() {
+    "use strict";
+    init_desktop_runtime();
+    import_node_child_process9 = require("node:child_process");
+    import_node_crypto7 = require("node:crypto");
+    import_node_fs13 = require("node:fs");
+    import_promises3 = require("node:fs/promises");
+    import_node_os4 = require("node:os");
+    import_node_path16 = require("node:path");
+    import_node_net = require("node:net");
+    import_node_util8 = require("node:util");
+    import_node_stream = require("node:stream");
+    import_promises4 = require("node:stream/promises");
+    init_gemmaManifest();
+    execFileAsync7 = (0, import_node_util8.promisify)(import_node_child_process9.execFile);
+    IDLE_MS = 12e4;
+    GemmaRuntime = class {
+      directory = (0, import_node_path16.join)(
+        app.getPath("userData"),
+        "knowledge",
+        "models",
+        "embeddinggemma-2"
+      );
+      download = null;
+      downloadPromise = null;
+      child = null;
+      startup = null;
+      idleTimer = null;
+      endpoint = "";
+      token = "";
+      queue = Promise.resolve();
+      error;
+      downloadedBytes = 0;
+      modelState = "not-downloaded";
+      closed = false;
+      removing = false;
+      stopping = Promise.resolve();
+      snapshot() {
+        const runtime = gemmaRuntime();
+        let installed = false;
+        try {
+          const manifest = JSON.parse((0, import_node_fs13.readFileSync)((0, import_node_path16.join)(this.directory, "installed.json"), "utf8"));
+          installed = manifest.revision === GEMMA_MODEL.revision && manifest.runtime === runtime?.file && (0, import_node_fs13.existsSync)((0, import_node_path16.join)(this.directory, GEMMA_MODEL.file)) && Boolean(findServer((0, import_node_path16.join)(this.directory, "runtime")));
+        } catch {
+        }
+        const total = GEMMA_MODEL.bytes + (runtime?.bytes ?? 0);
+        return {
+          supported: Boolean(runtime),
+          modelState: this.download ? "downloading" : installed ? "ready" : this.modelState,
+          downloadProgress: installed ? 1 : Math.min(1, this.downloadedBytes / total),
+          downloadBytes: installed ? total : this.downloadedBytes,
+          downloadTotalBytes: total,
+          error: this.error
+        };
+      }
+      startDownload() {
+        if (this.closed) throw new Error("Embedding runtime is shutting down");
+        if (this.removing) throw new Error("Embedding model is being removed");
+        if (this.download || this.snapshot().modelState === "ready") return;
+        const runtime = gemmaRuntime();
+        if (!runtime) throw new Error("EmbeddingGemma is not available for this platform yet");
+        this.download = new AbortController();
+        this.downloadedBytes = 0;
+        this.error = void 0;
+        this.modelState = "downloading";
+        const signal = this.download.signal;
+        this.downloadPromise = (async () => {
+          await (0, import_promises3.mkdir)(this.directory, { recursive: true });
+          const runtimeDirectory = (0, import_node_path16.join)(this.directory, "runtime");
+          const archive = (0, import_node_path16.join)(this.directory, runtime.file);
+          await this.downloadFile(runtime.url, archive, runtime.sha256, runtime.bytes, signal);
+          await (0, import_promises3.mkdir)(runtimeDirectory, { recursive: true });
+          if (runtime.file.endsWith(".zip")) {
+            await execFileAsync7(
+              "powershell.exe",
+              [
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Expand-Archive -LiteralPath $env:TEZBAR_GEMMA_ARCHIVE -DestinationPath $env:TEZBAR_GEMMA_DESTINATION -Force"
+              ],
+              {
+                windowsHide: true,
+                signal,
+                env: {
+                  ...process.env,
+                  TEZBAR_GEMMA_ARCHIVE: archive,
+                  TEZBAR_GEMMA_DESTINATION: runtimeDirectory
+                }
+              }
+            );
+          } else {
+            await execFileAsync7("tar", ["-xzf", archive, "-C", runtimeDirectory], { signal });
+          }
+          const server = findServer(runtimeDirectory);
+          if (!server) throw new Error("Downloaded runtime does not contain llama-server");
+          if (process.platform !== "win32") await (0, import_promises3.chmod)(server, 493);
+          await (0, import_promises3.rm)(archive, { force: true });
+          await this.downloadFile(
+            GEMMA_MODEL_URL,
+            (0, import_node_path16.join)(this.directory, GEMMA_MODEL.file),
+            GEMMA_MODEL.sha256,
+            GEMMA_MODEL.bytes,
+            signal
+          );
+          signal.throwIfAborted();
+          await (0, import_promises3.writeFile)(
+            (0, import_node_path16.join)(this.directory, "installed.json"),
+            JSON.stringify({ revision: GEMMA_MODEL.revision, runtime: runtime.file })
+          );
+          this.modelState = "ready";
+        })().catch((error) => {
+          this.modelState = signal.aborted ? "not-downloaded" : "error";
+          if (!signal.aborted) this.error = error instanceof Error ? error.message : String(error);
+        }).finally(() => {
+          this.download = null;
+          this.downloadPromise = null;
+        });
+      }
+      async cancelDownload() {
+        const wasDownloading = Boolean(this.download);
+        this.download?.abort();
+        await this.downloadPromise;
+        if (wasDownloading && this.modelState !== "ready") {
+          await (0, import_promises3.rm)(this.directory, { recursive: true, force: true });
+          this.downloadedBytes = 0;
+        }
+      }
+      async remove() {
+        this.removing = true;
+        try {
+          await this.cancelDownload();
+          this.stop();
+          await this.queue.catch(() => {
+          });
+          await this.stopping;
+          await (0, import_promises3.rm)(this.directory, { recursive: true, force: true });
+          this.modelState = "not-downloaded";
+          this.downloadedBytes = 0;
+          this.error = void 0;
+        } finally {
+          this.removing = false;
+        }
+      }
+      embedQuery(text3, signal) {
+        return this.embed([gemmaQuery(text3)], signal).then((vectors) => vectors[0]);
+      }
+      embedDocuments(documents, signal) {
+        return this.embed(
+          documents.map(({ text: text3, title }) => gemmaDocument(text3, title)),
+          signal
+        );
+      }
+      embed(inputs, signal) {
+        const run = this.queue.catch(() => {
+        }).then(async () => {
+          if (this.closed) throw new Error("Embedding runtime is shutting down");
+          if (this.removing) throw new Error("Embedding model is being removed");
+          signal?.throwIfAborted();
+          if (this.idleTimer) clearTimeout(this.idleTimer);
+          const abort = () => this.stop();
+          signal?.addEventListener("abort", abort, { once: true });
+          try {
+            await this.ensureStarted(signal);
+            signal?.throwIfAborted();
+            const response = await fetch(`${this.endpoint}/v1/embeddings`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
+              body: JSON.stringify({ input: inputs, encoding_format: "float" }),
+              signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(6e4)]) : AbortSignal.timeout(6e4)
+            });
+            if (!response.ok) throw new Error(`Local embedding request failed (${response.status})`);
+            const result = await response.json();
+            const rows = result.data?.sort((left, right) => left.index - right.index);
+            if (!rows || rows.length !== inputs.length || rows.some((row, index) => row.index !== index)) {
+              throw new Error("Local embedding response is incomplete");
+            }
+            this.error = void 0;
+            return rows.map((row) => normalizeGemmaVector(row.embedding));
+          } catch (error) {
+            if (!signal?.aborted) this.error = error instanceof Error ? error.message : String(error);
+            throw error;
+          } finally {
+            signal?.removeEventListener("abort", abort);
+            this.idleTimer = setTimeout(() => this.stop(), IDLE_MS);
+            this.idleTimer.unref();
+          }
+        });
+        this.queue = run;
+        return run;
+      }
+      async ensureStarted(signal) {
+        if (this.startup) return this.startup;
+        if (this.child) return;
+        this.startup = this.launch(signal).finally(() => {
+          this.startup = null;
+        });
+        return this.startup;
+      }
+      async launch(signal) {
+        await this.stopping;
+        if (this.closed) throw new Error("Embedding runtime is shutting down");
+        if (this.removing) throw new Error("Embedding model is being removed");
+        if (this.snapshot().modelState !== "ready")
+          throw new Error("Download EmbeddingGemma before enabling it");
+        const server = findServer((0, import_node_path16.join)(this.directory, "runtime"));
+        const port = await freePort();
+        signal?.throwIfAborted();
+        if (this.removing || this.closed) throw new Error("Embedding runtime is stopping");
+        this.token = (0, import_node_crypto7.randomBytes)(32).toString("hex");
+        this.endpoint = `http://127.0.0.1:${port}`;
+        const child = (0, import_node_child_process9.spawn)(
+          process.execPath,
+          [
+            (0, import_node_path16.join)(__dirname, "gemma-supervisor.cjs"),
+            server,
+            "--model",
+            (0, import_node_path16.join)(this.directory, GEMMA_MODEL.file),
+            "--embedding",
+            "--pooling",
+            "mean",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+            "--api-key",
+            this.token,
+            "--ctx-size",
+            "8192",
+            "--batch-size",
+            "8192",
+            "--ubatch-size",
+            "8192",
+            "--parallel",
+            "1",
+            "--threads",
+            String(Math.min(4, (0, import_node_os4.availableParallelism)()))
+          ],
+          { windowsHide: true, stdio: ["pipe", "ignore", "pipe"] }
+        );
+        this.child = child;
+        child.stdin?.on("error", () => {
+        });
+        let failure;
+        let stderr = "";
+        child.stderr?.on("data", (data) => {
+          stderr = (stderr + data.toString()).slice(-4e3);
+        });
+        child.once("error", (error) => {
+          failure = error.message;
+        });
+        child.once("exit", (code) => {
+          failure = `Local embedding runtime exited (${code}): ${stderr.slice(-700)}`;
+          if (this.child === child) this.child = null;
+        });
+        try {
+          const deadline = Date.now() + 6e4;
+          while (Date.now() < deadline) {
+            signal?.throwIfAborted();
+            if (failure || this.child !== child)
+              throw new Error(failure ?? "Local embedding runtime stopped");
+            try {
+              const response = await fetch(`${this.endpoint}/health`, {
+                headers: { Authorization: `Bearer ${this.token}` },
+                signal: AbortSignal.timeout(1e3)
+              });
+              if (response.ok) return;
+            } catch {
+            }
+            await new Promise((resolve6) => setTimeout(resolve6, 200));
+          }
+          throw new Error("Local embedding runtime took too long to start");
+        } catch (error) {
+          this.stop();
+          throw error;
+        }
+      }
+      stop() {
+        if (this.idleTimer) clearTimeout(this.idleTimer);
+        this.idleTimer = null;
+        const child = this.child;
+        this.child = null;
+        if (child) {
+          this.stopping = new Promise((resolve6) => {
+            const force = setTimeout(() => {
+              child.kill();
+              resolve6();
+            }, 3e3);
+            force.unref();
+            child.once("close", () => {
+              clearTimeout(force);
+              resolve6();
+            });
+            child.stdin?.end();
+          });
+        }
+      }
+      shutdown() {
+        this.closed = true;
+        this.download?.abort();
+        this.stop();
+      }
+      async downloadFile(url, path8, expectedHash, expectedBytes, signal) {
+        const temporary = `${path8}.part`;
+        try {
+          const response = await fetch(url, {
+            signal: AbortSignal.any([signal, AbortSignal.timeout(30 * 6e4)])
+          });
+          if (!response.ok || !response.body)
+            throw new Error(`Model download failed (${response.status})`);
+          const hash2 = (0, import_node_crypto7.createHash)("sha256");
+          let size = 0;
+          const source = import_node_stream.Readable.fromWeb(response.body);
+          source.on("data", (chunk) => {
+            size += chunk.length;
+            this.downloadedBytes += chunk.length;
+            hash2.update(chunk);
+            if (size > expectedBytes)
+              source.destroy(new Error("Downloaded file exceeds its expected size"));
+          });
+          await (0, import_promises4.pipeline)(source, (0, import_node_fs13.createWriteStream)(temporary), { signal });
+          if (size !== expectedBytes || hash2.digest("hex") !== expectedHash)
+            throw new Error("Downloaded file failed checksum verification");
+          signal.throwIfAborted();
+          await (0, import_promises3.rename)(temporary, path8);
+        } finally {
+          await (0, import_promises3.rm)(temporary, { force: true });
+        }
+      }
+    };
+  }
+});
+
+// src/main/knowledge/embeddings/semanticSearch.ts
+var SemanticSearch;
+var init_semanticSearch = __esm({
+  "src/main/knowledge/embeddings/semanticSearch.ts"() {
+    "use strict";
+    init_gemmaRuntime();
+    init_gemmaIndex();
+    SemanticSearch = class {
+      constructor(store2, options, runtime = new GemmaRuntime()) {
+        this.store = store2;
+        this.options = options;
+        this.runtime = runtime;
+      }
+      store;
+      options;
+      runtime;
+      timer = null;
+      controller = null;
+      run = null;
+      error;
+      closed = false;
+      rescheduleRequested = false;
+      queryCache = /* @__PURE__ */ new Map();
+      countsCache = null;
+      snapshot() {
+        const runtime = this.runtime.snapshot();
+        const counts = runtime.modelState === "ready" && this.options.enabled() ? this.counts() : { indexedChunks: 0, totalChunks: 0 };
+        return {
+          ...runtime,
+          ...counts,
+          indexing: this.controller !== null,
+          error: this.error ?? runtime.error
+        };
+      }
+      counts() {
+        const rootIds = this.options.roots();
+        const roots = rootIds.join("\n");
+        if (!this.countsCache || this.countsCache.roots !== roots || Date.now() - this.countsCache.at > 1e4) {
+          this.countsCache = { roots, at: Date.now(), ...this.store.getGemmaIndex().counts(rootIds) };
+        }
+        return this.countsCache;
+      }
+      download() {
+        this.runtime.startDownload();
+      }
+      cancelDownload() {
+        return this.runtime.cancelDownload();
+      }
+      async remove() {
+        await this.pause();
+        await this.runtime.remove();
+        this.store.getGemmaIndex().clear();
+        this.queryCache.clear();
+        this.countsCache = null;
+        this.error = void 0;
+      }
+      schedule(delay2 = 1e3) {
+        if (this.closed || !this.options.enabled() || !this.options.canIndex()) return;
+        if (this.run) {
+          this.rescheduleRequested = true;
+          return;
+        }
+        if (this.timer) return;
+        this.timer = setTimeout(() => {
+          this.timer = null;
+          if (!this.options.enabled() || !this.options.canIndex() || this.runtime.snapshot().modelState !== "ready")
+            return;
+          this.controller = new AbortController();
+          const signal = this.controller.signal;
+          this.run = this.backfill(signal).catch((error) => {
+            if (!signal.aborted) this.error = error instanceof Error ? error.message : String(error);
+          }).finally(() => {
+            this.run = null;
+            this.controller = null;
+            this.countsCache = null;
+            if (this.rescheduleRequested) {
+              this.rescheduleRequested = false;
+              this.schedule();
+            }
+          });
+        }, delay2);
+        this.timer.unref();
+      }
+      async backfill(signal) {
+        this.error = void 0;
+        while (!signal.aborted && this.options.enabled() && this.options.canIndex()) {
+          await this.options.waitForIdle(signal);
+          signal.throwIfAborted();
+          const chunks = this.store.getGemmaIndex().pending(this.options.roots());
+          if (!chunks.length) return;
+          const vectors = await this.runtime.embedDocuments(chunks, signal);
+          signal.throwIfAborted();
+          this.store.getGemmaIndex().save(chunks, vectors);
+          await new Promise((resolve6) => setTimeout(resolve6, 100));
+        }
+      }
+      async search(query, limit, allRootIds) {
+        if (!query.trim() || limit <= 0) return [];
+        const lexical = this.store.search(query, Math.max(40, limit * 4), allRootIds, true);
+        if (!this.options.enabled()) return lexical.slice(0, limit);
+        const rootIds = this.options.roots();
+        if (!rootIds.length || !this.store.getGemmaIndex().hasEmbeddings(rootIds))
+          return lexical.slice(0, limit);
+        try {
+          const trimmed = query.trim();
+          let vector = this.queryCache.get(trimmed);
+          if (!vector) {
+            vector = await this.runtime.embedQuery(trimmed);
+            if (this.queryCache.size >= 100)
+              this.queryCache.delete(this.queryCache.keys().next().value);
+            this.queryCache.set(trimmed, vector);
+          }
+          const currentLexical = this.store.search(
+            query,
+            Math.max(40, limit * 4),
+            this.options.allRoots(),
+            true
+          );
+          if (!this.options.enabled()) return currentLexical.slice(0, limit);
+          const currentRoots = this.options.roots().filter((id) => allRootIds.includes(id));
+          const semantic = this.store.getGemmaIndex().search(vector, currentRoots, Math.max(40, limit * 4));
+          this.error = void 0;
+          return fuseKnowledgeHits(currentLexical, semantic, limit);
+        } catch (error) {
+          this.error = error instanceof Error ? error.message : String(error);
+          return this.store.search(query, limit, this.options.allRoots(), true);
+        }
+      }
+      async pause() {
+        if (this.timer) clearTimeout(this.timer);
+        this.timer = null;
+        this.rescheduleRequested = false;
+        this.controller?.abort();
+        await this.run;
+      }
+      shutdown() {
+        this.closed = true;
+        if (this.timer) clearTimeout(this.timer);
+        this.timer = null;
+        this.controller?.abort();
+        this.runtime.shutdown();
+      }
+    };
+  }
+});
+
 // src/main/knowledge/service.ts
 function shouldSkipKnowledgeEntry(name, isDirectory) {
   if (name.startsWith(".") || SKIP_NAMES.has(name)) return true;
@@ -12327,19 +13132,19 @@ function shouldSkipKnowledgeEntry(name, isDirectory) {
   if (SENSITIVE_FILE_PATTERNS.some((pattern) => pattern.test(name))) return true;
   return lower.endsWith(".min.js") || lower.endsWith(".min.css");
 }
-function discoverMajorKnowledgeFolders(home = (0, import_node_os4.homedir)()) {
-  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path14.join)(home, name)).filter((path8) => {
+function discoverMajorKnowledgeFolders(home = (0, import_node_os5.homedir)()) {
+  return MAJOR_KNOWLEDGE_FOLDER_NAMES.map((name) => (0, import_node_path17.join)(home, name)).filter((path8) => {
     try {
-      return (0, import_node_fs13.statSync)(path8).isDirectory();
+      return (0, import_node_fs14.statSync)(path8).isDirectory();
     } catch {
       return false;
     }
   });
 }
 function isKnowledgeCandidatePath(rootPath, path8) {
-  const relativePath = (0, import_node_path14.relative)(rootPath, path8);
-  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path14.sep}`)) return false;
-  const segments = relativePath.split(import_node_path14.sep).filter(Boolean);
+  const relativePath = (0, import_node_path17.relative)(rootPath, path8);
+  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${import_node_path17.sep}`)) return false;
+  const segments = relativePath.split(import_node_path17.sep).filter(Boolean);
   const fileName = segments.pop();
   if (!fileName || shouldSkipKnowledgeEntry(fileName, false) || !isIndexablePath(path8)) return false;
   return segments.every((name) => !shouldSkipKnowledgeEntry(name, true));
@@ -12386,7 +13191,7 @@ async function chooseKnowledgeFolder() {
 `);
   try {
     if (process.platform === "win32") {
-      const { stdout: stdout2 } = await execFileAsync7(
+      const { stdout: stdout2 } = await execFileAsync8(
         "powershell.exe",
         [
           "-NoLogo",
@@ -12400,10 +13205,10 @@ async function chooseKnowledgeFolder() {
       return stdout2.trim() || null;
     }
     const script = 'POSIX path of (choose folder with prompt "Choose a folder for Tezbar Knowledge")';
-    const { stdout } = await execFileAsync7("/usr/bin/osascript", ["-e", script], {
+    const { stdout } = await execFileAsync8("/usr/bin/osascript", ["-e", script], {
       encoding: "utf8"
     });
-    const path8 = stdout.trim().replace(new RegExp(`${import_node_path14.sep}$`), "");
+    const path8 = stdout.trim().replace(new RegExp(`${import_node_path17.sep}$`), "");
     return path8 || null;
   } catch {
     return null;
@@ -12412,16 +13217,16 @@ async function chooseKnowledgeFolder() {
 `);
   }
 }
-var import_node_child_process9, import_node_crypto7, import_node_fs13, import_node_os4, import_node_path14, import_node_util8, execFileAsync7, MAX_SCANNED_FILES, STATUS_EVENT_INTERVAL_MS, STATUS_PERSIST_INTERVAL_MS, BACKGROUND_FILE_DELAY_MS, VECTOR_BACKFILL_BATCH_SIZE, VECTOR_BACKFILL_DELAY_MS, RESCAN_DEBOUNCE_MS, STARTUP_INDEXING_DELAY_MS, STARTUP_VECTOR_BACKFILL_DELAY_MS, SKIP_NAMES, SKIP_FILE_NAMES, SENSITIVE_FILE_PATTERNS, SKIP_DIRECTORY_SUFFIXES, MAJOR_KNOWLEDGE_FOLDER_NAMES, KnowledgeService, service;
+var import_node_child_process10, import_node_crypto8, import_node_fs14, import_node_os5, import_node_path17, import_node_util9, execFileAsync8, MAX_SCANNED_FILES, STATUS_EVENT_INTERVAL_MS, STATUS_PERSIST_INTERVAL_MS, BACKGROUND_FILE_DELAY_MS, VECTOR_BACKFILL_BATCH_SIZE, VECTOR_BACKFILL_DELAY_MS, RESCAN_DEBOUNCE_MS, STARTUP_INDEXING_DELAY_MS, STARTUP_VECTOR_BACKFILL_DELAY_MS, SKIP_NAMES, SKIP_FILE_NAMES, SENSITIVE_FILE_PATTERNS, SKIP_DIRECTORY_SUFFIXES, MAJOR_KNOWLEDGE_FOLDER_NAMES, KnowledgeService, service;
 var init_service = __esm({
   "src/main/knowledge/service.ts"() {
     "use strict";
-    import_node_child_process9 = require("node:child_process");
-    import_node_crypto7 = require("node:crypto");
-    import_node_fs13 = require("node:fs");
-    import_node_os4 = require("node:os");
-    import_node_path14 = require("node:path");
-    import_node_util8 = require("node:util");
+    import_node_child_process10 = require("node:child_process");
+    import_node_crypto8 = require("node:crypto");
+    import_node_fs14 = require("node:fs");
+    import_node_os5 = require("node:os");
+    import_node_path17 = require("node:path");
+    import_node_util9 = require("node:util");
     init_backend();
     init_backend2();
     init_fingerprint();
@@ -12429,7 +13234,8 @@ var init_service = __esm({
     init_localExtractor();
     init_depth();
     init_workerHost();
-    execFileAsync7 = (0, import_node_util8.promisify)(import_node_child_process9.execFile);
+    init_semanticSearch();
+    execFileAsync8 = (0, import_node_util9.promisify)(import_node_child_process10.execFile);
     MAX_SCANNED_FILES = 75e3;
     STATUS_EVENT_INTERVAL_MS = 100;
     STATUS_PERSIST_INTERVAL_MS = 1e3;
@@ -12505,6 +13311,16 @@ var init_service = __esm({
     MAJOR_KNOWLEDGE_FOLDER_NAMES = ["Desktop", "Documents", "Downloads", "Pictures"];
     KnowledgeService = class {
       store = getKnowledgeStore();
+      semanticSearch = new SemanticSearch(this.store, {
+        enabled: () => this.settings.embeddingModel === "embeddinggemma-2",
+        allRoots: () => this.activeRoots().map((root) => root.id),
+        roots: () => this.activeRoots().filter((root) => {
+          const depth = effectiveKnowledgeDepth(root, this.settings);
+          return depth === "smart" || depth === "deep";
+        }).map((root) => root.id),
+        canIndex: () => this.mode !== "worker" && !this.manuallyPaused,
+        waitForIdle: (signal) => this.waitForInteractiveIdle(signal)
+      });
       backends = /* @__PURE__ */ new Map([
         ["local", new LocalIndexingBackend()],
         ["tezbar-cloud", new TezbarCloudIndexingBackend()]
@@ -12574,6 +13390,7 @@ var init_service = __esm({
         }
         this.refreshCounts();
         this.initialized = true;
+        if (this.mode !== "worker") this.semanticSearch.schedule(STARTUP_INDEXING_DELAY_MS);
         if (this.mode !== "worker") this.syncWatchers();
         if (this.mode !== "worker") this.scheduleVectorBackfill(STARTUP_VECTOR_BACKFILL_DELAY_MS);
         if (this.mode !== "worker" && !this.manuallyPaused && this.activeRoots().length > 0) {
@@ -12593,13 +13410,14 @@ var init_service = __esm({
           localBackendAvailable: true,
           cloudBackendAvailable: false,
           settings: { ...this.settings },
-          storageBytes: this.store.storageBytes()
+          storageBytes: this.store.storageBytes(),
+          semanticSearch: this.mode !== "worker" ? this.semanticSearch.snapshot() : void 0
         };
       }
       addRoot(path8) {
         this.initialize();
-        const normalized = (0, import_node_path14.resolve)(path8.trim());
-        if (!normalized || !(0, import_node_fs13.existsSync)(normalized) || !(0, import_node_fs13.statSync)(normalized).isDirectory()) {
+        const normalized = (0, import_node_path17.resolve)(path8.trim());
+        if (!normalized || !(0, import_node_fs14.existsSync)(normalized) || !(0, import_node_fs14.statSync)(normalized).isDirectory()) {
           throw new Error("Choose an existing folder");
         }
         const current = this.store.listRoots();
@@ -12607,7 +13425,7 @@ var init_service = __esm({
         if (duplicate) return this.snapshot();
         const now = Date.now();
         this.store.upsertRoot({
-          id: (0, import_node_crypto7.randomUUID)(),
+          id: (0, import_node_crypto8.randomUUID)(),
           path: normalized,
           depth: "inherit",
           processingBackend: "local",
@@ -12631,7 +13449,7 @@ var init_service = __esm({
             continue;
           }
           this.store.upsertRoot({
-            id: (0, import_node_crypto7.randomUUID)(),
+            id: (0, import_node_crypto8.randomUUID)(),
             path: path8,
             depth: "inherit",
             processingBackend: "local",
@@ -12689,8 +13507,37 @@ var init_service = __esm({
         this.syncWatchers();
         return this.restartForConfigurationChange("Folder Knowledge Depth changed");
       }
-      search(query, limit = 12) {
+      async setEmbeddingModel(model) {
         this.initialize();
+        if (model !== "built-in" && model !== "embeddinggemma-2") throw new Error("Invalid embedding model");
+        if (model === "embeddinggemma-2" && this.semanticSearch.snapshot().modelState !== "ready") {
+          throw new Error("Download EmbeddingGemma before enabling it");
+        }
+        await this.semanticSearch.pause();
+        this.settings = { ...this.settings, embeddingModel: model };
+        this.store.saveSettings(this.settings);
+        this.semanticSearch.schedule();
+        return this.snapshot();
+      }
+      downloadEmbeddingModel() {
+        this.initialize();
+        this.semanticSearch.download();
+        return this.snapshot();
+      }
+      async cancelEmbeddingDownload() {
+        await this.semanticSearch.cancelDownload();
+        return this.snapshot();
+      }
+      async removeEmbeddingModel() {
+        await this.setEmbeddingModel("built-in");
+        await this.semanticSearch.remove();
+        return this.snapshot();
+      }
+      async search(query, limit = 12) {
+        this.initialize();
+        if (this.settings.embeddingModel === "embeddinggemma-2") {
+          return this.semanticSearch.search(query, limit, this.activeRoots().map((root) => root.id));
+        }
         return this.store.search(
           query,
           limit,
@@ -12729,7 +13576,7 @@ var init_service = __esm({
         const roots = this.activeRoots();
         if (roots.length === 0) return this.snapshot();
         const checkpoint = this.store.getIndexingCheckpoint();
-        const jobId = checkpoint?.jobId ?? (0, import_node_crypto7.randomUUID)();
+        const jobId = checkpoint?.jobId ?? (0, import_node_crypto8.randomUUID)();
         if (checkpoint) {
           const processed = Math.min(checkpoint.processedSources, checkpoint.totalSources);
           this.updateStatus({
@@ -12772,6 +13619,7 @@ var init_service = __esm({
       }
       async pause() {
         this.manuallyPaused = true;
+        await this.semanticSearch.pause();
         this.rescanRequested = false;
         if (this.rescanTimer) clearTimeout(this.rescanTimer);
         this.rescanTimer = null;
@@ -12788,6 +13636,7 @@ var init_service = __esm({
       }
       async resume() {
         this.manuallyPaused = false;
+        this.semanticSearch.schedule();
         this.rescanRequested = false;
         if (this.mode === "coordinator") await this.workerHost?.stop();
         else if (this.activePromise) await this.activePromise.catch(() => {
@@ -12903,7 +13752,7 @@ var init_service = __esm({
               completed += 1;
               if (!succeeded) failed += 1;
               this.updateStatus({ ...this.status, processedSources: completed, failedSources: failed });
-              this.updateProgress(completed, total, `Processed ${(0, import_node_path14.basename)(candidate.path)}`);
+              this.updateProgress(completed, total, `Processed ${(0, import_node_path17.basename)(candidate.path)}`);
               if (this.mode === "worker") {
                 await new Promise((resolve6) => setTimeout(resolve6, BACKGROUND_FILE_DELAY_MS));
               }
@@ -12923,6 +13772,7 @@ var init_service = __esm({
           lastCompletedAt: Date.now()
         });
         this.store.clearIndexingCheckpoint(checkpoint.jobId);
+        this.semanticSearch.schedule();
       }
       async scanRoot(root, signal) {
         const queue = [root.path];
@@ -12934,7 +13784,7 @@ var init_service = __esm({
           if (!directory) break;
           let entries;
           try {
-            entries = (0, import_node_fs13.readdirSync)(directory, { withFileTypes: true });
+            entries = (0, import_node_fs14.readdirSync)(directory, { withFileTypes: true });
           } catch {
             complete = false;
             continue;
@@ -12943,14 +13793,14 @@ var init_service = __esm({
             if (signal.aborted) break;
             visited += 1;
             if (shouldSkipKnowledgeEntry(entry.name, entry.isDirectory())) continue;
-            const path8 = (0, import_node_path14.join)(directory, entry.name);
+            const path8 = (0, import_node_path17.join)(directory, entry.name);
             if (entry.isSymbolicLink()) continue;
             if (entry.isDirectory()) {
               queue.push(path8);
             } else if (entry.isFile() && isIndexablePath(path8)) {
               try {
-                const fileStat = (0, import_node_fs13.statSync)(path8);
-                const isExtensionlessExecutable = !(0, import_node_path14.extname)(path8) && (fileStat.mode & 73) !== 0;
+                const fileStat = (0, import_node_fs14.statSync)(path8);
+                const isExtensionlessExecutable = !(0, import_node_path17.extname)(path8) && (fileStat.mode & 73) !== 0;
                 if (!isExtensionlessExecutable && fileStat.size <= maximumIndexableSourceBytes(path8)) {
                   paths.push(path8);
                 }
@@ -12971,7 +13821,7 @@ var init_service = __esm({
         const sourceId = sourceIdForPath(candidate.path);
         try {
           const existing = this.store.getSourceByPath(candidate.path);
-          const stat2 = (0, import_node_fs13.statSync)(candidate.path);
+          const stat2 = (0, import_node_fs14.statSync)(candidate.path);
           if (existing?.status === "indexed" && existing.byteSize === stat2.size && Math.round(existing.modifiedAt) === Math.round(stat2.mtimeMs) && existing.indexingProfile === profileKey) {
             return true;
           }
@@ -12982,7 +13832,7 @@ var init_service = __esm({
             rootId: candidate.root.id,
             path: candidate.path,
             fingerprint,
-            mediaType: (0, import_node_path14.extname)(candidate.path).slice(1).toLowerCase(),
+            mediaType: (0, import_node_path17.extname)(candidate.path).slice(1).toLowerCase(),
             indexingProfile: profileKey
           });
           const reusable = this.store.findReusableResult(fingerprint.contentHash, sourceId, profileKey);
@@ -13014,7 +13864,7 @@ var init_service = __esm({
               this.updateStatus({
                 ...this.status,
                 progress: Math.max(this.status.progress, overall),
-                detail: detail ? `${detail} \xB7 ${(0, import_node_path14.basename)(candidate.path)}` : (0, import_node_path14.basename)(candidate.path)
+                detail: detail ? `${detail} \xB7 ${(0, import_node_path17.basename)(candidate.path)}` : (0, import_node_path17.basename)(candidate.path)
               });
             }
           });
@@ -13033,7 +13883,7 @@ var init_service = __esm({
         if (!profile) return false;
         try {
           const existing = this.store.getSourceByPath(path8);
-          const fileStat = (0, import_node_fs13.statSync)(path8);
+          const fileStat = (0, import_node_fs14.statSync)(path8);
           return !(existing?.status === "indexed" && existing.byteSize === fileStat.size && Math.round(existing.modifiedAt) === Math.round(fileStat.mtimeMs) && existing.indexingProfile === indexingProfileKey(profile));
         } catch {
           return false;
@@ -13109,6 +13959,7 @@ var init_service = __esm({
         }
       }
       shutdown() {
+        this.semanticSearch.shutdown();
         this.workerHost?.shutdown();
         this.controller?.abort();
         if (this.startupTimer) clearTimeout(this.startupTimer);
@@ -13166,7 +14017,7 @@ var init_service = __esm({
         for (const root of enabledRoots.values()) {
           if (this.watchers.has(root.id)) continue;
           try {
-            const watcher = (0, import_node_fs13.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
+            const watcher = (0, import_node_fs14.watch)(root.path, { recursive: true }, () => this.scheduleRescan());
             watcher.on("error", () => {
               watcher.close();
               this.watchers.delete(root.id);
@@ -13184,6 +14035,7 @@ var init_service = __esm({
       }
       acceptWorkerStatus(status) {
         this.status = { ...status };
+        if (status.state === "completed") this.semanticSearch.schedule();
         this.statusSink(this.status);
       }
       handleWorkerExit(exit) {
@@ -13214,7 +14066,7 @@ var init_service = __esm({
 // src/main/search/commandBus.ts
 function osascriptCommandHandler(script, successMessage) {
   return async () => {
-    await execFileAsync8("/usr/bin/osascript", ["-e", script]);
+    await execFileAsync9("/usr/bin/osascript", ["-e", script]);
     return { ok: true, message: successMessage };
   };
 }
@@ -13227,7 +14079,7 @@ function darkModeCommandHandler(enabled) {
   }
   return async () => {
     const lightTheme = enabled ? "0" : "1";
-    await execFileAsync8("powershell.exe", [
+    await execFileAsync9("powershell.exe", [
       "-NoLogo",
       "-NoProfile",
       "-NonInteractive",
@@ -13237,13 +14089,13 @@ function darkModeCommandHandler(enabled) {
     return { ok: true, message: `Dark mode ${enabled ? "enabled" : "disabled"}` };
   };
 }
-var import_node_child_process10, import_node_util9, execFileAsync8, CommandBus, commandBus;
+var import_node_child_process11, import_node_util10, execFileAsync9, CommandBus, commandBus;
 var init_commandBus = __esm({
   "src/main/search/commandBus.ts"() {
     "use strict";
-    import_node_child_process10 = require("node:child_process");
-    import_node_util9 = require("node:util");
-    execFileAsync8 = (0, import_node_util9.promisify)(import_node_child_process10.execFile);
+    import_node_child_process11 = require("node:child_process");
+    import_node_util10 = require("node:util");
+    execFileAsync9 = (0, import_node_util10.promisify)(import_node_child_process11.execFile);
     CommandBus = class {
       commands = /* @__PURE__ */ new Map();
       constructor() {
@@ -13281,7 +14133,7 @@ var init_commandBus = __esm({
               return { ok: false, message: "No text provided for read-aloud" };
             }
             if (process.platform === "win32") {
-              await execFileAsync8(
+              await execFileAsync9(
                 "powershell.exe",
                 [
                   "-NoLogo",
@@ -13293,7 +14145,7 @@ var init_commandBus = __esm({
                 { windowsHide: true, env: { ...process.env, TEZBAR_SPEECH_TEXT: text3 } }
               );
             } else {
-              await execFileAsync8("say", [text3]);
+              await execFileAsync9("say", [text3]);
             }
             return { ok: true, message: "Reading aloud" };
           }
@@ -13316,9 +14168,9 @@ function normalizeStoredQuery(query) {
   return query.trim().toLowerCase().replace(/\s+/g, " ");
 }
 function dbPath2() {
-  const dir = (0, import_node_path15.join)(app.getPath("userData"), "search");
-  (0, import_node_fs14.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path15.join)(dir, "index.sqlite3");
+  const dir = (0, import_node_path18.join)(app.getPath("userData"), "search");
+  (0, import_node_fs15.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path18.join)(dir, "index.sqlite3");
 }
 function safeJsonParse(value, fallback) {
   try {
@@ -13338,14 +14190,14 @@ function getInstance() {
   }
   return _instance;
 }
-var import_node_fs14, import_node_path15, CLICK_EVENTS_RETAIN, ACTION_USAGE_EVENTS_RETAIN, BENCHMARK_SNAPSHOTS_RETAIN, HOT_USAGE_WINDOW_MS, _instance, SearchIndexDatabase;
+var import_node_fs15, import_node_path18, CLICK_EVENTS_RETAIN, ACTION_USAGE_EVENTS_RETAIN, BENCHMARK_SNAPSHOTS_RETAIN, HOT_USAGE_WINDOW_MS, _instance, SearchIndexDatabase;
 var init_indexDb = __esm({
   "src/main/search/indexDb.ts"() {
     "use strict";
     init_desktop_runtime();
     init_better_sqlite3_shim();
-    import_node_fs14 = require("node:fs");
-    import_node_path15 = require("node:path");
+    import_node_fs15 = require("node:fs");
+    import_node_path18 = require("node:path");
     init_textMatch();
     CLICK_EVENTS_RETAIN = 1e3;
     ACTION_USAGE_EVENTS_RETAIN = 5e3;
@@ -13355,6 +14207,11 @@ var init_indexDb = __esm({
     SearchIndexDatabase = class {
       _db = null;
       _initPromise = null;
+      close() {
+        this._db?.close();
+        this._db = null;
+        this._initPromise = null;
+      }
       get db() {
         if (!this._db) {
           throw new Error("Database not initialized - call ensureInitialized() first");
@@ -13935,14 +14792,14 @@ var init_indexDb = __esm({
 function readAppBundleIdentifier(appPath) {
   if (process.platform !== "darwin") return void 0;
   try {
-    const infoPlistPath = (0, import_node_path16.join)(appPath, "Contents", "Info.plist");
-    const stat2 = (0, import_node_fs15.statSync)(infoPlistPath);
+    const infoPlistPath = (0, import_node_path19.join)(appPath, "Contents", "Info.plist");
+    const stat2 = (0, import_node_fs16.statSync)(infoPlistPath);
     const cached = bundleIdCache.get(infoPlistPath);
     if (cached && cached.mtimeMs === stat2.mtimeMs) {
       return cached.bundleId;
     }
     let bundleId;
-    const buf = (0, import_node_fs15.readFileSync)(infoPlistPath);
+    const buf = (0, import_node_fs16.readFileSync)(infoPlistPath);
     if (!buf.subarray(0, 8).includes(Buffer.from("bplist"))) {
       const text3 = buf.toString("utf8");
       const match = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/.exec(text3);
@@ -13952,7 +14809,7 @@ function readAppBundleIdentifier(appPath) {
     }
     if (!bundleId) {
       try {
-        const res = (0, import_node_child_process11.execFileSync)(
+        const res = (0, import_node_child_process12.execFileSync)(
           "/usr/bin/plutil",
           ["-extract", "CFBundleIdentifier", "raw", "-o", "-", infoPlistPath],
           {
@@ -13976,15 +14833,15 @@ function listApplications() {
       return windowsApplicationCache.applications;
     }
     const roots2 = [
-      (0, import_node_path16.join)(
+      (0, import_node_path19.join)(
         process.env.ProgramData ?? "C:\\ProgramData",
         "Microsoft",
         "Windows",
         "Start Menu",
         "Programs"
       ),
-      (0, import_node_path16.join)(
-        process.env.APPDATA ?? (0, import_node_path16.join)((0, import_node_os5.homedir)(), "AppData", "Roaming"),
+      (0, import_node_path19.join)(
+        process.env.APPDATA ?? (0, import_node_path19.join)((0, import_node_os6.homedir)(), "AppData", "Roaming"),
         "Microsoft",
         "Windows",
         "Start Menu",
@@ -13995,18 +14852,18 @@ function listApplications() {
     const seen2 = /* @__PURE__ */ new Set();
     for (const root of roots2) {
       try {
-        for (const entry of (0, import_node_fs15.readdirSync)(root, { recursive: true, withFileTypes: true })) {
+        for (const entry of (0, import_node_fs16.readdirSync)(root, { recursive: true, withFileTypes: true })) {
           if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".lnk")) continue;
           const name = entry.name.replace(/\.lnk$/i, "");
           if (seen2.has(name.toLowerCase())) continue;
           seen2.add(name.toLowerCase());
-          out2.push({ name, path: (0, import_node_path16.join)(entry.parentPath, entry.name) });
+          out2.push({ name, path: (0, import_node_path19.join)(entry.parentPath, entry.name) });
         }
       } catch {
       }
     }
     try {
-      const raw = (0, import_node_child_process11.execFileSync)(
+      const raw = (0, import_node_child_process12.execFileSync)(
         "powershell.exe",
         [
           "-NoLogo",
@@ -14041,18 +14898,18 @@ function listApplications() {
     "/System/Applications/Utilities",
     "/System/Library/CoreServices/Applications",
     "/System/Library/CoreServices",
-    (0, import_node_path16.join)((0, import_node_os5.homedir)(), "Applications")
+    (0, import_node_path19.join)((0, import_node_os6.homedir)(), "Applications")
   ];
   const out = [];
   const seen = /* @__PURE__ */ new Set();
   for (const root of roots) {
     try {
-      for (const entry of (0, import_node_fs15.readdirSync)(root)) {
+      for (const entry of (0, import_node_fs16.readdirSync)(root)) {
         if (!entry.endsWith(".app")) continue;
         const name = entry.replace(/\.app$/, "");
         if (seen.has(name)) continue;
         seen.add(name);
-        const appPath = (0, import_node_path16.join)(root, entry);
+        const appPath = (0, import_node_path19.join)(root, entry);
         out.push({
           name,
           path: appPath,
@@ -14064,14 +14921,14 @@ function listApplications() {
   }
   return out;
 }
-var import_node_fs15, import_node_child_process11, import_node_os5, import_node_path16, bundleIdCache, windowsApplicationCache, appsProvider;
+var import_node_fs16, import_node_child_process12, import_node_os6, import_node_path19, bundleIdCache, windowsApplicationCache, appsProvider;
 var init_appsProvider = __esm({
   "src/main/search/providers/appsProvider.ts"() {
     "use strict";
-    import_node_fs15 = require("node:fs");
-    import_node_child_process11 = require("node:child_process");
-    import_node_os5 = require("node:os");
-    import_node_path16 = require("node:path");
+    import_node_fs16 = require("node:fs");
+    import_node_child_process12 = require("node:child_process");
+    import_node_os6 = require("node:os");
+    import_node_path19 = require("node:path");
     bundleIdCache = /* @__PURE__ */ new Map();
     appsProvider = {
       providerId: "apps",
@@ -14114,24 +14971,24 @@ function setClipboardConfig(patch) {
   writeConfigPatch(next);
 }
 function storeDir() {
-  const dir = (0, import_node_path17.join)(app.getPath("userData"), "search");
-  (0, import_node_fs16.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_node_path20.join)(app.getPath("userData"), "search");
+  (0, import_node_fs17.mkdirSync)(dir, { recursive: true });
   return dir;
 }
 function imagesDir() {
-  const dir = (0, import_node_path17.join)(storeDir(), "clipboard-images");
-  (0, import_node_fs16.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_node_path20.join)(storeDir(), "clipboard-images");
+  (0, import_node_fs17.mkdirSync)(dir, { recursive: true });
   return dir;
 }
 function clipboardPath() {
-  return (0, import_node_path17.join)(storeDir(), "clipboard.json");
+  return (0, import_node_path20.join)(storeDir(), "clipboard.json");
 }
 async function ensureDbLoaded() {
   if (_readClipboardDb && Date.now() - _cacheTimestamp < CACHE_TTL) {
     return;
   }
   try {
-    const raw = (0, import_node_fs16.readFileSync)(clipboardPath(), "utf8");
+    const raw = (0, import_node_fs17.readFileSync)(clipboardPath(), "utf8");
     const parsed = JSON.parse(raw);
     _readClipboardDb = {
       items: Array.isArray(parsed.items) ? parsed.items : []
@@ -14142,7 +14999,7 @@ async function ensureDbLoaded() {
   _cacheTimestamp = Date.now();
 }
 function writeDb(db) {
-  (0, import_node_fs16.writeFileSync)(clipboardPath(), `${JSON.stringify(db, null, 2)}
+  (0, import_node_fs17.writeFileSync)(clipboardPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
   _readClipboardDb = db;
   _cacheTimestamp = Date.now();
@@ -14180,7 +15037,7 @@ function sanitizeEntry(entry) {
     }
     case "image": {
       const imagePath = String(entry.imagePath ?? "");
-      if (!imagePath || !(0, import_node_fs16.existsSync)(imagePath)) return null;
+      if (!imagePath || !(0, import_node_fs17.existsSync)(imagePath)) return null;
       return {
         ...base,
         kind: "image",
@@ -14197,7 +15054,7 @@ function sanitizeEntry(entry) {
         ...base,
         kind: "file",
         paths,
-        preview: paths.length === 1 ? (0, import_node_path17.basename)(paths[0]) : `${(0, import_node_path17.basename)(paths[0])} + ${paths.length - 1} more`
+        preview: paths.length === 1 ? (0, import_node_path20.basename)(paths[0]) : `${(0, import_node_path20.basename)(paths[0])} + ${paths.length - 1} more`
       };
     }
     default:
@@ -14219,7 +15076,7 @@ function insertEntry(db, entry) {
   return { items: [...pinned, entry, ...rest].slice(0, CLIPBOARD_LIMIT) };
 }
 function hashKey(kind, payload) {
-  return (0, import_node_crypto8.createHash)("sha1").update(`${kind}|${payload}`).digest("hex").slice(0, 16);
+  return (0, import_node_crypto9.createHash)("sha1").update(`${kind}|${payload}`).digest("hex").slice(0, 16);
 }
 function readClipboardSnapshot2() {
   try {
@@ -14247,7 +15104,7 @@ function captureFileEntry(paths, now) {
     pinned: false,
     isSecret: false,
     paths: uniquePaths,
-    preview: uniquePaths.length === 1 ? (0, import_node_path17.basename)(uniquePaths[0]) : `${(0, import_node_path17.basename)(uniquePaths[0])} + ${uniquePaths.length - 1} more`
+    preview: uniquePaths.length === 1 ? (0, import_node_path20.basename)(uniquePaths[0]) : `${(0, import_node_path20.basename)(uniquePaths[0])} + ${uniquePaths.length - 1} more`
   };
 }
 function resizeToMegapixels(image, maxMegapixels) {
@@ -14268,11 +15125,11 @@ function captureImageEntry(now) {
   const resized = resizeToMegapixels(image, config.maxImageMegapixels);
   const buffer = resized.toPNG();
   if (buffer.length === 0) return null;
-  const hash2 = (0, import_node_crypto8.createHash)("sha1").update(buffer).digest("hex");
+  const hash2 = (0, import_node_crypto9.createHash)("sha1").update(buffer).digest("hex");
   const id = idForImage(hash2);
-  const file = (0, import_node_path17.join)(imagesDir(), `${hash2}.png`);
-  if (!(0, import_node_fs16.existsSync)(file)) {
-    (0, import_node_fs16.writeFileSync)(file, buffer);
+  const file = (0, import_node_path20.join)(imagesDir(), `${hash2}.png`);
+  if (!(0, import_node_fs17.existsSync)(file)) {
+    (0, import_node_fs17.writeFileSync)(file, buffer);
   }
   return {
     id,
@@ -14336,9 +15193,9 @@ function deleteClipboardEntry(id) {
     const stillReferenced = next.some(
       (item) => item.kind === "image" && item.imagePath === entry.imagePath
     );
-    if (!stillReferenced && (0, import_node_fs16.existsSync)(entry.imagePath)) {
+    if (!stillReferenced && (0, import_node_fs17.existsSync)(entry.imagePath)) {
       try {
-        (0, import_node_fs16.rmSync)(entry.imagePath, { force: true });
+        (0, import_node_fs17.rmSync)(entry.imagePath, { force: true });
       } catch {
       }
     }
@@ -14358,9 +15215,9 @@ function togglePinClipboardEntry(id) {
 function clearClipboardHistory() {
   const db = normalizeDb(_readClipboardDb || { items: [] });
   for (const item of db.items) {
-    if (item.kind === "image" && (0, import_node_fs16.existsSync)(item.imagePath)) {
+    if (item.kind === "image" && (0, import_node_fs17.existsSync)(item.imagePath)) {
       try {
-        (0, import_node_fs16.rmSync)(item.imagePath, { force: true });
+        (0, import_node_fs17.rmSync)(item.imagePath, { force: true });
       } catch {
       }
     }
@@ -14376,15 +15233,15 @@ async function cleanupOrphanClipboardImages() {
   );
   let removed = 0;
   let freedBytes = 0;
-  for (const entry of (0, import_node_fs16.readdirSync)(dir, { withFileTypes: true })) {
+  for (const entry of (0, import_node_fs17.readdirSync)(dir, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
-    const ext = (0, import_node_path17.extname)(entry.name).toLowerCase();
+    const ext = (0, import_node_path20.extname)(entry.name).toLowerCase();
     if (ext !== ".png") continue;
-    const fullPath = (0, import_node_path17.join)(dir, entry.name);
+    const fullPath = (0, import_node_path20.join)(dir, entry.name);
     if (referenced.has(fullPath)) continue;
     try {
-      const stats = (0, import_node_fs16.statSync)(fullPath);
-      (0, import_node_fs16.rmSync)(fullPath, { force: true });
+      const stats = (0, import_node_fs17.statSync)(fullPath);
+      (0, import_node_fs17.rmSync)(fullPath, { force: true });
       removed += 1;
       freedBytes += stats.size;
     } catch {
@@ -14418,7 +15275,7 @@ function restoreClipboardEntry(id) {
       clipboard.writeText(entry.text);
       return true;
     case "image": {
-      if (!(0, import_node_fs16.existsSync)(entry.imagePath)) return false;
+      if (!(0, import_node_fs17.existsSync)(entry.imagePath)) return false;
       const img = nativeImage.createFromPath(entry.imagePath);
       if (img.isEmpty()) return false;
       clipboard.writeImage(img);
@@ -14454,8 +15311,8 @@ function readClipboardImagePayload(id) {
   const entry = getClipboardEntry(id);
   if (!entry || entry.kind !== "image" && entry.kind !== "file") return null;
   if (entry.kind === "image") {
-    if (!(0, import_node_fs16.existsSync)(entry.imagePath)) return null;
-    const bytes = (0, import_node_fs16.readFileSync)(entry.imagePath);
+    if (!(0, import_node_fs17.existsSync)(entry.imagePath)) return null;
+    const bytes = (0, import_node_fs17.readFileSync)(entry.imagePath);
     return {
       dataUrl: `data:image/png;base64,${bytes.toString("base64")}`,
       width: entry.width,
@@ -14464,7 +15321,7 @@ function readClipboardImagePayload(id) {
     };
   }
   const path8 = entry.paths[0];
-  if (!path8 || !(0, import_node_fs16.existsSync)(path8)) return null;
+  if (!path8 || !(0, import_node_fs17.existsSync)(path8)) return null;
   try {
     const image = nativeImage.createFromPath(path8);
     if (image.isEmpty()) return null;
@@ -14505,7 +15362,7 @@ function notifyClipboardChanged() {
 }
 function clipboardSnapshotFingerprint(snapshot) {
   if (!snapshot.text && snapshot.filePaths.length === 0 && !snapshot.hasImage) return "";
-  return (0, import_node_crypto8.createHash)("sha1").update(JSON.stringify([snapshot.text, snapshot.filePaths, snapshot.hasImage, snapshot.changeCount])).digest("hex");
+  return (0, import_node_crypto9.createHash)("sha1").update(JSON.stringify([snapshot.text, snapshot.filePaths, snapshot.hasImage, snapshot.changeCount])).digest("hex");
 }
 function startClipboardWatcher() {
   if (watcherRunning) return;
@@ -14560,14 +15417,14 @@ function restartClipboardWatcher() {
   stopClipboardWatcher();
   startClipboardWatcher();
 }
-var import_node_crypto8, import_node_fs16, import_node_path17, CLIPBOARD_LIMIT, CLIPBOARD_WATCH_ENABLED_KEY, CLIPBOARD_CAPTURE_IMAGES_KEY, CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY, DEFAULT_CLIPBOARD_WATCH_ENABLED, DEFAULT_CLIPBOARD_CAPTURE_IMAGES, DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS, _readClipboardDb, _cacheTimestamp, CACHE_TTL, WATCHER_INTERVAL_MS, RICH_CLIPBOARD_PROBE_INTERVAL_MS, watcherTimer, watcherRunning, nativeReadPending, nativeReadRequested, watcherGeneration, clipboardProvider;
+var import_node_crypto9, import_node_fs17, import_node_path20, CLIPBOARD_LIMIT, CLIPBOARD_WATCH_ENABLED_KEY, CLIPBOARD_CAPTURE_IMAGES_KEY, CLIPBOARD_MAX_IMAGE_MEGAPIXELS_KEY, DEFAULT_CLIPBOARD_WATCH_ENABLED, DEFAULT_CLIPBOARD_CAPTURE_IMAGES, DEFAULT_CLIPBOARD_MAX_IMAGE_MEGAPIXELS, _readClipboardDb, _cacheTimestamp, CACHE_TTL, WATCHER_INTERVAL_MS, RICH_CLIPBOARD_PROBE_INTERVAL_MS, watcherTimer, watcherRunning, nativeReadPending, nativeReadRequested, watcherGeneration, clipboardProvider;
 var init_clipboardProvider = __esm({
   "src/main/search/providers/clipboardProvider.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_crypto8 = require("node:crypto");
-    import_node_fs16 = require("node:fs");
-    import_node_path17 = require("node:path");
+    import_node_crypto9 = require("node:crypto");
+    import_node_fs17 = require("node:fs");
+    import_node_path20 = require("node:path");
     init_configStore();
     CLIPBOARD_LIMIT = 200;
     CLIPBOARD_WATCH_ENABLED_KEY = "clipboardWatchEnabled";
@@ -14704,15 +15561,15 @@ var init_commandsProvider = __esm({
 
 // src/main/search/providers/filesProvider.ts
 function isAllowedFile(path8) {
-  const ext = (0, import_node_path18.extname)(path8).toLowerCase();
+  const ext = (0, import_node_path21.extname)(path8).toLowerCase();
   return ALLOWED_EXTENSIONS.has(ext);
 }
 function containsSkippedDirectory(path8) {
-  return path8.split(import_node_path18.sep).some((part) => SKIP_NAMES2.has(part));
+  return path8.split(import_node_path21.sep).some((part) => SKIP_NAMES2.has(part));
 }
 function makeFileDocument(path8) {
   try {
-    const stat2 = (0, import_node_fs17.statSync)(path8);
+    const stat2 = (0, import_node_fs18.statSync)(path8);
     if (!stat2.isFile()) return null;
     if (!isAllowedFile(path8)) return null;
     const title = path8.split("/").pop() ?? path8;
@@ -14732,13 +15589,13 @@ function makeFileDocument(path8) {
   }
 }
 function initialRoots() {
-  const home = (0, import_node_os6.homedir)();
+  const home = (0, import_node_os7.homedir)();
   return [
-    (0, import_node_path18.join)(home, "Desktop"),
-    (0, import_node_path18.join)(home, "Documents"),
-    (0, import_node_path18.join)(home, "Downloads"),
-    (0, import_node_path18.join)(home, "Pictures")
-  ].filter((root) => (0, import_node_fs17.existsSync)(root));
+    (0, import_node_path21.join)(home, "Desktop"),
+    (0, import_node_path21.join)(home, "Documents"),
+    (0, import_node_path21.join)(home, "Downloads"),
+    (0, import_node_path21.join)(home, "Pictures")
+  ].filter((root) => (0, import_node_fs18.existsSync)(root));
 }
 async function* scanInitialFileDocumentBatches(limit = 75e3, batchSize = 400) {
   const roots = initialRoots();
@@ -14751,14 +15608,14 @@ async function* scanInitialFileDocumentBatches(limit = 75e3, batchSize = 400) {
     const current = queue.shift();
     if (!current) continue;
     try {
-      const entries = (0, import_node_fs17.readdirSync)(current, { withFileTypes: true });
+      const entries = (0, import_node_fs18.readdirSync)(current, { withFileTypes: true });
       for (const entry of entries) {
         if (emittedDocuments >= limit) break;
         visitedEntries += 1;
         if (visitedEntries % 250 === 0) {
           await new Promise((resolve6) => setImmediate(resolve6));
         }
-        const absolute = (0, import_node_path18.join)(current, entry.name);
+        const absolute = (0, import_node_path21.join)(current, entry.name);
         if (entry.isDirectory()) {
           if (!SKIP_NAMES2.has(entry.name)) queue.push(absolute);
           continue;
@@ -14800,11 +15657,11 @@ function startFileWatcher(listener) {
   };
   for (const root of roots) {
     try {
-      const watcher = (0, import_node_fs17.watch)(root, { recursive: true }, (_event, filename) => {
+      const watcher = (0, import_node_fs18.watch)(root, { recursive: true }, (_event, filename) => {
         if (!filename) return;
         const relative2 = filename.toString();
         if (containsSkippedDirectory(relative2)) return;
-        const absolute = (0, import_node_path18.join)(root, relative2);
+        const absolute = (0, import_node_path21.join)(root, relative2);
         const doc = makeFileDocument(absolute);
         if (doc) {
           pendingRemovals.delete(doc.id);
@@ -14812,7 +15669,7 @@ function startFileWatcher(listener) {
           scheduleFlush();
           return;
         }
-        if (!(0, import_node_fs17.existsSync)(absolute)) {
+        if (!(0, import_node_fs18.existsSync)(absolute)) {
           const id = `file:${absolute}`;
           pendingUpserts.delete(id);
           pendingRemovals.add(id);
@@ -14829,16 +15686,16 @@ function startFileWatcher(listener) {
     for (const stop of unsubs) stop();
   };
 }
-var import_node_child_process12, import_node_fs17, import_node_os6, import_node_path18, import_node_util10, execFileAsync9, ALLOWED_EXTENSIONS, SKIP_NAMES2;
+var import_node_child_process13, import_node_fs18, import_node_os7, import_node_path21, import_node_util11, execFileAsync10, ALLOWED_EXTENSIONS, SKIP_NAMES2;
 var init_filesProvider = __esm({
   "src/main/search/providers/filesProvider.ts"() {
     "use strict";
-    import_node_child_process12 = require("node:child_process");
-    import_node_fs17 = require("node:fs");
-    import_node_os6 = require("node:os");
-    import_node_path18 = require("node:path");
-    import_node_util10 = require("node:util");
-    execFileAsync9 = (0, import_node_util10.promisify)(import_node_child_process12.execFile);
+    import_node_child_process13 = require("node:child_process");
+    import_node_fs18 = require("node:fs");
+    import_node_os7 = require("node:os");
+    import_node_path21 = require("node:path");
+    import_node_util11 = require("node:util");
+    execFileAsync10 = (0, import_node_util11.promisify)(import_node_child_process13.execFile);
     ALLOWED_EXTENSIONS = /* @__PURE__ */ new Set([
       "",
       ".md",
@@ -14885,9 +15742,9 @@ function notePlainText(text3) {
   return stripMarkdownSyntax(decodeBasicEntities(withoutHtml)).replace(/\r/g, "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function notesPath() {
-  const dir = (0, import_node_path19.join)(app.getPath("userData"), "search");
-  (0, import_node_fs18.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path19.join)(dir, "notes.json");
+  const dir = (0, import_node_path22.join)(app.getPath("userData"), "search");
+  (0, import_node_fs19.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path22.join)(dir, "notes.json");
 }
 function migrateNote(raw) {
   if (!raw || typeof raw !== "object") return null;
@@ -14902,7 +15759,7 @@ function migrateNote(raw) {
 }
 function readNotesDb() {
   try {
-    const raw = (0, import_node_fs18.readFileSync)(notesPath(), "utf8");
+    const raw = (0, import_node_fs19.readFileSync)(notesPath(), "utf8");
     const parsed = JSON.parse(raw);
     const notes = [];
     if (Array.isArray(parsed.notes)) {
@@ -14917,7 +15774,7 @@ function readNotesDb() {
   }
 }
 function writeNotesDb(db) {
-  (0, import_node_fs18.writeFileSync)(notesPath(), `${JSON.stringify(db, null, 2)}
+  (0, import_node_fs19.writeFileSync)(notesPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
 }
 function listQuickNotes() {
@@ -14953,13 +15810,13 @@ function deleteQuickNote(createdAt) {
   writeNotesDb(db);
   return true;
 }
-var import_node_fs18, import_node_path19, NOTES_LIMIT, notesProvider;
+var import_node_fs19, import_node_path22, NOTES_LIMIT, notesProvider;
 var init_notesProvider = __esm({
   "src/main/search/providers/notesProvider.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_fs18 = require("node:fs");
-    import_node_path19 = require("node:path");
+    import_node_fs19 = require("node:fs");
+    import_node_path22 = require("node:path");
     NOTES_LIMIT = 250;
     notesProvider = {
       providerId: "notes",
@@ -14983,13 +15840,13 @@ var init_notesProvider = __esm({
 
 // src/main/search/providers/quickLinksProvider.ts
 function quickLinksPath() {
-  const dir = (0, import_node_path20.join)(app.getPath("userData"), "search");
-  (0, import_node_fs19.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path20.join)(dir, "quick-links.json");
+  const dir = (0, import_node_path23.join)(app.getPath("userData"), "search");
+  (0, import_node_fs20.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path23.join)(dir, "quick-links.json");
 }
 function readQuickLinksDb() {
   try {
-    const raw = (0, import_node_fs19.readFileSync)(quickLinksPath(), "utf8");
+    const raw = (0, import_node_fs20.readFileSync)(quickLinksPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.links)) return { links: [] };
     return { links: parsed.links };
@@ -15004,7 +15861,7 @@ function readQuickLinksDb() {
         }
       ]
     };
-    (0, import_node_fs19.writeFileSync)(quickLinksPath(), `${JSON.stringify(db, null, 2)}
+    (0, import_node_fs20.writeFileSync)(quickLinksPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
     return db;
   }
@@ -15013,13 +15870,13 @@ function fillTemplate(template, query) {
   const q = encodeURIComponent(query.trim());
   return template.split("{query}").join(q);
 }
-var import_node_fs19, import_node_path20, quickLinksProvider;
+var import_node_fs20, import_node_path23, quickLinksProvider;
 var init_quickLinksProvider = __esm({
   "src/main/search/providers/quickLinksProvider.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_fs19 = require("node:fs");
-    import_node_path20 = require("node:path");
+    import_node_fs20 = require("node:fs");
+    import_node_path23 = require("node:path");
     quickLinksProvider = {
       providerId: "quick-links",
       async buildDocuments() {
@@ -15039,9 +15896,9 @@ var init_quickLinksProvider = __esm({
 
 // src/main/search/providers/snippetsProvider.ts
 function snippetsPath() {
-  const dir = (0, import_node_path21.join)(app.getPath("userData"), "search");
-  (0, import_node_fs20.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path21.join)(dir, "snippets.json");
+  const dir = (0, import_node_path24.join)(app.getPath("userData"), "search");
+  (0, import_node_fs21.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path24.join)(dir, "snippets.json");
 }
 function defaultSnippets() {
   const t = Date.now();
@@ -15271,13 +16128,13 @@ function mergeMissingBuiltins(existing, builtins) {
 function readSnippetsDb() {
   const builtins = defaultSnippets();
   try {
-    const raw = (0, import_node_fs20.readFileSync)(snippetsPath(), "utf8");
+    const raw = (0, import_node_fs21.readFileSync)(snippetsPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.snippets)) return { snippets: builtins };
     return { snippets: mergeMissingBuiltins(parsed.snippets, builtins) };
   } catch {
     const db = { snippets: builtins };
-    (0, import_node_fs20.writeFileSync)(snippetsPath(), `${JSON.stringify(db, null, 2)}
+    (0, import_node_fs21.writeFileSync)(snippetsPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
     return db;
   }
@@ -15289,9 +16146,9 @@ function isBuiltinSnippetId(id) {
   return getBuiltinSnippetIds().has(id);
 }
 function persistSnippetsDb(snippets) {
-  const dir = (0, import_node_path21.join)(app.getPath("userData"), "search");
-  (0, import_node_fs20.mkdirSync)(dir, { recursive: true });
-  (0, import_node_fs20.writeFileSync)(snippetsPath(), `${JSON.stringify({ snippets }, null, 2)}
+  const dir = (0, import_node_path24.join)(app.getPath("userData"), "search");
+  (0, import_node_fs21.mkdirSync)(dir, { recursive: true });
+  (0, import_node_fs21.writeFileSync)(snippetsPath(), `${JSON.stringify({ snippets }, null, 2)}
 `, "utf8");
 }
 function normalizeSnippetBody(body) {
@@ -15326,7 +16183,7 @@ function addUserSnippet(payload) {
   if (triggerTaken(db.snippets, trigger, null)) {
     return { ok: false, message: "Another snippet already uses this trigger" };
   }
-  const id = `snippet:user:${(0, import_node_crypto9.randomUUID)()}`;
+  const id = `snippet:user:${(0, import_node_crypto10.randomUUID)()}`;
   const createdAt = Date.now();
   const next = [...db.snippets, { id, label, trigger, body, createdAt }];
   persistSnippetsDb(next);
@@ -15370,7 +16227,7 @@ function formatTime(date) {
   return date.toTimeString().slice(0, 8);
 }
 function interpolateSnippet(input, now = /* @__PURE__ */ new Date()) {
-  return input.split("${date}").join(formatDate(now)).split("${time}").join(formatTime(now)).split("${datetime}").join(`${formatDate(now)} ${formatTime(now)}`).split("${iso}").join(now.toISOString()).split("${year}").join(String(now.getFullYear())).split("${timestamp}").join(String(Math.floor(now.getTime() / 1e3))).split("${hostname}").join((0, import_node_os7.hostname)()).replace(/\$\{uuid\}/g, () => (0, import_node_crypto9.randomUUID)());
+  return input.split("${date}").join(formatDate(now)).split("${time}").join(formatTime(now)).split("${datetime}").join(`${formatDate(now)} ${formatTime(now)}`).split("${iso}").join(now.toISOString()).split("${year}").join(String(now.getFullYear())).split("${timestamp}").join(String(Math.floor(now.getTime() / 1e3))).split("${hostname}").join((0, import_node_os8.hostname)()).replace(/\$\{uuid\}/g, () => (0, import_node_crypto10.randomUUID)());
 }
 function friendlyTriggerDisplay(trigger) {
   const stripped = trigger.replace(/^;/, "").trim();
@@ -15430,15 +16287,15 @@ function copySnippetById(id) {
   captureClipboardSnapshot();
   return { ok: true, message: "Copied to clipboard" };
 }
-var import_node_crypto9, import_node_fs20, import_node_os7, import_node_path21, SNIPPET_LABEL_MAX, SNIPPET_TRIGGER_MAX, SNIPPET_BODY_MAX, snippetsProvider;
+var import_node_crypto10, import_node_fs21, import_node_os8, import_node_path24, SNIPPET_LABEL_MAX, SNIPPET_TRIGGER_MAX, SNIPPET_BODY_MAX, snippetsProvider;
 var init_snippetsProvider = __esm({
   "src/main/search/providers/snippetsProvider.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_crypto9 = require("node:crypto");
-    import_node_fs20 = require("node:fs");
-    import_node_os7 = require("node:os");
-    import_node_path21 = require("node:path");
+    import_node_crypto10 = require("node:crypto");
+    import_node_fs21 = require("node:fs");
+    import_node_os8 = require("node:os");
+    import_node_path24 = require("node:path");
     init_clipboardProvider();
     SNIPPET_LABEL_MAX = 200;
     SNIPPET_TRIGGER_MAX = 48;
@@ -15578,7 +16435,7 @@ function rankDirectoryRecommendations(visits, options = {}) {
   );
   const childrenByParent = /* @__PURE__ */ new Map();
   for (const entry of validVisits) {
-    const parent = import_node_path22.posix.dirname(entry[0]);
+    const parent = import_node_path25.posix.dirname(entry[0]);
     const siblings = childrenByParent.get(parent) ?? [];
     siblings.push(entry);
     childrenByParent.set(parent, siblings);
@@ -15588,7 +16445,7 @@ function rankDirectoryRecommendations(visits, options = {}) {
   );
   const recommendations = /* @__PURE__ */ new Map();
   for (const [path8, visit] of validVisits) {
-    const parent = import_node_path22.posix.dirname(path8);
+    const parent = import_node_path25.posix.dirname(path8);
     const recommendationPath = collapsedParents.has(parent) ? parent : path8;
     if (excluded.has(recommendationPath)) continue;
     const existing = recommendations.get(recommendationPath);
@@ -15609,11 +16466,11 @@ function rankDirectoryRecommendations(visits, options = {}) {
     });
   }).slice(0, Math.max(0, limit));
 }
-var import_node_path22;
+var import_node_path25;
 var init_directoryRecommendations = __esm({
   "src/main/search/directoryRecommendations.ts"() {
     "use strict";
-    import_node_path22 = require("node:path");
+    import_node_path25 = require("node:path");
   }
 });
 
@@ -16817,7 +17674,7 @@ async function ensureBun() {
     const tmpExtractDir = path3.join(app.getPath("temp"), `bun-extract-${Date.now()}`);
     fs2.mkdirSync(tmpExtractDir, { recursive: true });
     if (process.platform === "win32") {
-      await execFileAsync10(
+      await execFileAsync11(
         "powershell.exe",
         [
           "-NoLogo",
@@ -16836,7 +17693,7 @@ async function ensureBun() {
         }
       );
     } else {
-      await execFileAsync10("unzip", ["-o", tmpZipPath, "-d", tmpExtractDir], { timeout: 3e4 });
+      await execFileAsync11("unzip", ["-o", tmpZipPath, "-d", tmpExtractDir], { timeout: 3e4 });
     }
     const bunBinary = findFile(tmpExtractDir, process.platform === "win32" ? "bun.exe" : "bun");
     if (!bunBinary) {
@@ -16853,7 +17710,7 @@ async function ensureBun() {
       fs2.rmSync(tmpExtractDir, { recursive: true, force: true });
     } catch {
     }
-    const { stdout } = await execFileAsync10(destPath, ["--version"], { timeout: 5e3 });
+    const { stdout } = await execFileAsync11(destPath, ["--version"], { timeout: 5e3 });
     console.log(`Bun installed successfully: ${stdout.trim()}`);
     return destPath;
   } catch (error) {
@@ -16909,7 +17766,7 @@ async function installDepsWithBun(extPath) {
       } catch {
       }
     }
-    await execFileAsync10(bunPath, ["install", "--production", "--no-save"], {
+    await execFileAsync11(bunPath, ["install", "--production", "--no-save"], {
       cwd: extPath,
       timeout: 12e4,
       env: createBunInstallEnvironment(bunPath)
@@ -16950,7 +17807,7 @@ async function installSpecificPackagesWithBun(extPath, packageNames) {
     `Installing specific packages via Bun for ${path3.basename(extPath)}: ${unique.join(", ")}`
   );
   try {
-    await execFileAsync10(bunPath, ["add", "--no-save", ...unique], {
+    await execFileAsync11(bunPath, ["add", "--no-save", ...unique], {
       cwd: extPath,
       timeout: 3e5,
       env: createBunInstallEnvironment(bunPath)
@@ -17003,7 +17860,7 @@ function findFile(dir, name) {
   }
   return null;
 }
-var import_child_process, import_util, fs2, path3, https2, http2, execFileAsync10, BUN_VERSION;
+var import_child_process, import_util, fs2, path3, https2, http2, execFileAsync11, BUN_VERSION;
 var init_bun_manager = __esm({
   "src/main/bun-manager.ts"() {
     "use strict";
@@ -17014,7 +17871,7 @@ var init_bun_manager = __esm({
     path3 = __toESM(require("path"));
     https2 = __toESM(require("https"));
     http2 = __toESM(require("http"));
-    execFileAsync10 = (0, import_util.promisify)(import_child_process.execFile);
+    execFileAsync11 = (0, import_util.promisify)(import_child_process.execFile);
     BUN_VERSION = "1.2.5";
   }
 });
@@ -22365,7 +23222,7 @@ ${source}`;
 async function runPowerShellScript(source, options = {}) {
   if (process.platform !== "win32") throw new Error("PowerShell is only available on Windows");
   if (typeof source !== "string" || !source.trim()) return "";
-  const { stdout } = await execFileAsync11("powershell.exe", powerShellScriptArguments(source), {
+  const { stdout } = await execFileAsync12("powershell.exe", powerShellScriptArguments(source), {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024,
     timeout: options.timeout ?? 1e4,
@@ -22374,13 +23231,13 @@ async function runPowerShellScript(source, options = {}) {
   });
   return stdout.replace(/\r?\n$/, "");
 }
-var import_node_child_process13, import_node_util11, execFileAsync11;
+var import_node_child_process14, import_node_util12, execFileAsync12;
 var init_powershell_script = __esm({
   "src/main/powershell-script.ts"() {
     "use strict";
-    import_node_child_process13 = require("node:child_process");
-    import_node_util11 = require("node:util");
-    execFileAsync11 = (0, import_node_util11.promisify)(import_node_child_process13.execFile);
+    import_node_child_process14 = require("node:child_process");
+    import_node_util12 = require("node:util");
+    execFileAsync12 = (0, import_node_util12.promisify)(import_node_child_process14.execFile);
   }
 });
 
@@ -22391,7 +23248,7 @@ async function readSelectedText() {
     const encoded = await runPowerShellScript(windowsSelectedTextScript, { timeout: 3e3 });
     selected = Buffer.from(encoded, "base64").toString("utf8");
   } else if (process.platform === "darwin") {
-    const { stdout } = await execFileAsync12("/usr/bin/osascript", ["-e", macSelectedTextScript], {
+    const { stdout } = await execFileAsync13("/usr/bin/osascript", ["-e", macSelectedTextScript], {
       encoding: "utf8",
       timeout: 3e3,
       maxBuffer: 1024 * 1024
@@ -22403,14 +23260,14 @@ async function readSelectedText() {
   if (!selected) throw new Error("No text is selected in the focused application");
   return selected;
 }
-var import_node_child_process14, import_node_util12, execFileAsync12, macSelectedTextScript, windowsSelectedTextScript;
+var import_node_child_process15, import_node_util13, execFileAsync13, macSelectedTextScript, windowsSelectedTextScript;
 var init_selected_text = __esm({
   "src/main/selected-text.ts"() {
     "use strict";
-    import_node_child_process14 = require("node:child_process");
-    import_node_util12 = require("node:util");
+    import_node_child_process15 = require("node:child_process");
+    import_node_util13 = require("node:util");
     init_powershell_script();
-    execFileAsync12 = (0, import_node_util12.promisify)(import_node_child_process14.execFile);
+    execFileAsync13 = (0, import_node_util13.promisify)(import_node_child_process15.execFile);
     macSelectedTextScript = `tell application "System Events"
   set frontmostProcess to first application process whose frontmost is true
   tell frontmostProcess
@@ -22460,7 +23317,7 @@ async function runAppleScript2(source) {
   if (typeof source !== "string" || source.trim().length === 0) {
     return "";
   }
-  const { stdout } = await execFileAsync13("/usr/bin/osascript", ["-e", source], {
+  const { stdout } = await execFileAsync14("/usr/bin/osascript", ["-e", source], {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024
   });
@@ -22489,10 +23346,10 @@ function createRenderProxy(name) {
   });
 }
 function createLocalStorage(packageRoot) {
-  const file = (0, import_node_path23.join)(packageRoot, "localStorage.json");
+  const file = (0, import_node_path26.join)(packageRoot, "localStorage.json");
   const readAll2 = () => {
     try {
-      const raw = (0, import_node_fs21.readFileSync)(file, "utf8");
+      const raw = (0, import_node_fs22.readFileSync)(file, "utf8");
       const parsed = JSON.parse(raw);
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch {
@@ -22500,8 +23357,8 @@ function createLocalStorage(packageRoot) {
     }
   };
   const writeAll2 = (value) => {
-    (0, import_node_fs21.mkdirSync)(packageRoot, { recursive: true });
-    (0, import_node_fs21.writeFileSync)(file, JSON.stringify(value, null, 2), "utf8");
+    (0, import_node_fs22.mkdirSync)(packageRoot, { recursive: true });
+    (0, import_node_fs22.writeFileSync)(file, JSON.stringify(value, null, 2), "utf8");
   };
   return {
     getItem: async (key) => readAll2()[key],
@@ -22522,9 +23379,9 @@ function createLocalStorage(packageRoot) {
   };
 }
 function readPreferences(packageRoot) {
-  const file = (0, import_node_path23.join)(packageRoot, "preferences.json");
+  const file = (0, import_node_path26.join)(packageRoot, "preferences.json");
   try {
-    const raw = (0, import_node_fs21.readFileSync)(file, "utf8");
+    const raw = (0, import_node_fs22.readFileSync)(file, "utf8");
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
@@ -22559,9 +23416,9 @@ function createClipboardShim() {
   };
 }
 function createEnvironment(ctx) {
-  const supportPath = (0, import_node_path23.join)(ctx.packageRoot, "support");
+  const supportPath = (0, import_node_path26.join)(ctx.packageRoot, "support");
   try {
-    (0, import_node_fs21.mkdirSync)(supportPath, { recursive: true });
+    (0, import_node_fs22.mkdirSync)(supportPath, { recursive: true });
   } catch {
   }
   return {
@@ -22572,7 +23429,7 @@ function createEnvironment(ctx) {
     raycastVersion: "1.77.0",
     isDevelopment: !app.isPackaged,
     supportPath,
-    assetsPath: (0, import_node_path23.join)(ctx.packageRoot, "assets"),
+    assetsPath: (0, import_node_path26.join)(ctx.packageRoot, "assets"),
     launchType: "userInitiated",
     textSize: "medium"
   };
@@ -22643,7 +23500,7 @@ function createRaycastApi(ctx) {
       if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target) || target.startsWith("mailto:")) {
         await shell.openExternal(target);
       } else {
-        const resolved = target.startsWith("~") ? target.replace(/^~/, (0, import_node_os8.homedir)()) : target;
+        const resolved = target.startsWith("~") ? target.replace(/^~/, (0, import_node_os9.homedir)()) : target;
         await shell.openPath(resolved);
       }
     },
@@ -22811,16 +23668,16 @@ function formatRuntimeFeedback(feedback) {
   if (title && message) return `${title}: ${message}`;
   return title || message || "Extension command completed.";
 }
-var import_node_child_process15, import_node_fs21, import_node_os8, import_node_path23, import_node_util13, TOAST_STYLE, IMAGE_MASK, execFileAsync13;
+var import_node_child_process16, import_node_fs22, import_node_os9, import_node_path26, import_node_util14, TOAST_STYLE, IMAGE_MASK, execFileAsync14;
 var init_raycastShim = __esm({
   "src/main/extensions/raycastShim.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_child_process15 = require("node:child_process");
-    import_node_fs21 = require("node:fs");
-    import_node_os8 = require("node:os");
-    import_node_path23 = require("node:path");
-    import_node_util13 = require("node:util");
+    import_node_child_process16 = require("node:child_process");
+    import_node_fs22 = require("node:fs");
+    import_node_os9 = require("node:os");
+    import_node_path26 = require("node:path");
+    import_node_util14 = require("node:util");
     init_appsProvider();
     init_extension_confirm_alert();
     init_selected_text();
@@ -22835,7 +23692,7 @@ var init_raycastShim = __esm({
       Circle: "circle",
       RoundedRectangle: "roundedRectangle"
     };
-    execFileAsync13 = (0, import_node_util13.promisify)(import_node_child_process15.execFile);
+    execFileAsync14 = (0, import_node_util14.promisify)(import_node_child_process16.execFile);
   }
 });
 
@@ -22855,46 +23712,46 @@ __export(service_exports, {
   uninstallExtension: () => uninstallExtension2
 });
 function getDbPath() {
-  const dir = (0, import_node_path24.join)(app.getPath("userData"), "extensions");
-  (0, import_node_fs22.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path24.join)(dir, "installed.json");
+  const dir = (0, import_node_path27.join)(app.getPath("userData"), "extensions");
+  (0, import_node_fs23.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path27.join)(dir, "installed.json");
 }
 function extensionsRootDir() {
-  const dir = (0, import_node_path24.join)(app.getPath("userData"), "extensions");
-  (0, import_node_fs22.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_node_path27.join)(app.getPath("userData"), "extensions");
+  (0, import_node_fs23.mkdirSync)(dir, { recursive: true });
   return dir;
 }
 function installedPackageRoot(extensionId) {
-  return (0, import_node_path24.join)(extensionsRootDir(), "packages", extensionId);
+  return (0, import_node_path27.join)(extensionsRootDir(), "packages", extensionId);
 }
 function packageJsonPathForInstalledExtension(extensionId) {
-  return (0, import_node_path24.join)(installedPackageRoot(extensionId), "package.json");
+  return (0, import_node_path27.join)(installedPackageRoot(extensionId), "package.json");
 }
 function scriptPathForInstalledExtensionCommand(extensionId, commandName2) {
-  return (0, import_node_path24.join)(installedPackageRoot(extensionId), ".sc-build", `${commandName2}.js`);
+  return (0, import_node_path27.join)(installedPackageRoot(extensionId), ".sc-build", `${commandName2}.js`);
 }
 function metaPathForInstalledExtension(extensionId) {
-  return (0, import_node_path24.join)(installedPackageRoot(extensionId), "meta.json");
+  return (0, import_node_path27.join)(installedPackageRoot(extensionId), "meta.json");
 }
 function backupPackageRoot(extensionId) {
-  return (0, import_node_path24.join)(extensionsRootDir(), "packages", `${extensionId}.backup`);
+  return (0, import_node_path27.join)(extensionsRootDir(), "packages", `${extensionId}.backup`);
 }
 function readInstallMeta(extensionId) {
   const p = metaPathForInstalledExtension(extensionId);
-  if (!(0, import_node_fs22.existsSync)(p)) return null;
+  if (!(0, import_node_fs23.existsSync)(p)) return null;
   try {
-    return JSON.parse((0, import_node_fs22.readFileSync)(p, "utf8"));
+    return JSON.parse((0, import_node_fs23.readFileSync)(p, "utf8"));
   } catch {
     return null;
   }
 }
 function writeInstallMeta(meta) {
   const p = metaPathForInstalledExtension(meta.extensionId);
-  (0, import_node_fs22.mkdirSync)((0, import_node_path24.dirname)(p), { recursive: true });
-  (0, import_node_fs22.writeFileSync)(p, JSON.stringify(meta, null, 2), "utf8");
+  (0, import_node_fs23.mkdirSync)((0, import_node_path27.dirname)(p), { recursive: true });
+  (0, import_node_fs23.writeFileSync)(p, JSON.stringify(meta, null, 2), "utf8");
 }
 function hashText(text3) {
-  return (0, import_node_crypto10.createHash)("sha256").update(text3).digest("hex");
+  return (0, import_node_crypto11.createHash)("sha256").update(text3).digest("hex");
 }
 function inspectIntegrity(extensionId) {
   const meta = readInstallMeta(extensionId);
@@ -22912,14 +23769,14 @@ function inspectIntegrity(extensionId) {
   for (const name of meta.commandNames) {
     if (meta.missingScripts.includes(name)) continue;
     const scriptPath = scriptPathForInstalledExtensionCommand(extensionId, name);
-    if (!(0, import_node_fs22.existsSync)(scriptPath)) {
+    if (!(0, import_node_fs23.existsSync)(scriptPath)) {
       missing.push(name);
       continue;
     }
     const expected = meta.scriptHashes[name];
     if (!expected) continue;
     try {
-      const actual = hashText((0, import_node_fs22.readFileSync)(scriptPath, "utf8"));
+      const actual = hashText((0, import_node_fs23.readFileSync)(scriptPath, "utf8"));
       if (actual !== expected) tampered.push(name);
     } catch {
       missing.push(name);
@@ -22944,9 +23801,9 @@ function parseJsonSafe(raw) {
 }
 function readInstalledPackageJson(extensionId) {
   const p = packageJsonPathForInstalledExtension(extensionId);
-  if (!(0, import_node_fs22.existsSync)(p)) return null;
+  if (!(0, import_node_fs23.existsSync)(p)) return null;
   try {
-    const raw = (0, import_node_fs22.readFileSync)(p, "utf8");
+    const raw = (0, import_node_fs23.readFileSync)(p, "utf8");
     return parseJsonSafe(raw);
   } catch {
     return null;
@@ -22980,7 +23837,7 @@ function normalizeExtensionCommandsFromPackage(pkg) {
 function readDb() {
   const p = getDbPath();
   try {
-    const raw = (0, import_node_fs22.readFileSync)(p, "utf8");
+    const raw = (0, import_node_fs23.readFileSync)(p, "utf8");
     const parsed = JSON.parse(raw);
     return {
       installed: Array.isArray(parsed.installed) ? parsed.installed : []
@@ -22991,7 +23848,7 @@ function readDb() {
 }
 function writeDb2(db) {
   const p = getDbPath();
-  (0, import_node_fs22.writeFileSync)(p, JSON.stringify(db, null, 2), "utf8");
+  (0, import_node_fs23.writeFileSync)(p, JSON.stringify(db, null, 2), "utf8");
 }
 function byName(a, b) {
   return a.name.localeCompare(b.name);
@@ -23079,10 +23936,10 @@ async function fetchRaycastCatalogFromGithub() {
 }
 async function stageAndInstallExtension(extensionId, slug) {
   const pkg = await fetchRaycastPackage(slug);
-  const staging = (0, import_node_fs22.mkdtempSync)((0, import_node_path24.join)((0, import_node_os9.tmpdir)(), `tezbar-ext-${extensionId}-`));
-  const stagingBuild = (0, import_node_path24.join)(staging, ".sc-build");
-  (0, import_node_fs22.mkdirSync)(stagingBuild, { recursive: true });
-  (0, import_node_fs22.writeFileSync)((0, import_node_path24.join)(staging, "package.json"), JSON.stringify(pkg, null, 2), "utf8");
+  const staging = (0, import_node_fs23.mkdtempSync)((0, import_node_path27.join)((0, import_node_os10.tmpdir)(), `tezbar-ext-${extensionId}-`));
+  const stagingBuild = (0, import_node_path27.join)(staging, ".sc-build");
+  (0, import_node_fs23.mkdirSync)(stagingBuild, { recursive: true });
+  (0, import_node_fs23.writeFileSync)((0, import_node_path27.join)(staging, "package.json"), JSON.stringify(pkg, null, 2), "utf8");
   const commandEntries = (pkg.commands ?? []).map((cmd) => ({
     name: typeof cmd.name === "string" ? cmd.name.trim() : "",
     mode: typeof cmd.mode === "string" ? cmd.mode.trim() : ""
@@ -23094,7 +23951,7 @@ async function stageAndInstallExtension(extensionId, slug) {
       const url = `https://raw.githubusercontent.com/raycast/extensions/${RAYCAST_EXTENSIONS_REF}/${RAYCAST_EXTENSIONS_PATH}/${slug}/.sc-build/${entry.name}.js`;
       try {
         const js = await fetchText(url);
-        (0, import_node_fs22.writeFileSync)((0, import_node_path24.join)(stagingBuild, `${entry.name}.js`), js, "utf8");
+        (0, import_node_fs23.writeFileSync)((0, import_node_path27.join)(stagingBuild, `${entry.name}.js`), js, "utf8");
         scriptHashes[entry.name] = hashText(js);
       } catch {
         missingScripts.push(entry.name);
@@ -23103,22 +23960,22 @@ async function stageAndInstallExtension(extensionId, slug) {
   );
   const root = installedPackageRoot(extensionId);
   const backup = backupPackageRoot(extensionId);
-  if ((0, import_node_fs22.existsSync)(backup)) (0, import_node_fs22.rmSync)(backup, { recursive: true, force: true });
+  if ((0, import_node_fs23.existsSync)(backup)) (0, import_node_fs23.rmSync)(backup, { recursive: true, force: true });
   try {
-    if ((0, import_node_fs22.existsSync)(root)) (0, import_node_fs22.renameSync)(root, backup);
-    (0, import_node_fs22.mkdirSync)((0, import_node_path24.dirname)(root), { recursive: true });
-    (0, import_node_fs22.renameSync)(staging, root);
+    if ((0, import_node_fs23.existsSync)(root)) (0, import_node_fs23.renameSync)(root, backup);
+    (0, import_node_fs23.mkdirSync)((0, import_node_path27.dirname)(root), { recursive: true });
+    (0, import_node_fs23.renameSync)(staging, root);
   } catch (error) {
-    if ((0, import_node_fs22.existsSync)(backup) && !(0, import_node_fs22.existsSync)(root)) {
+    if ((0, import_node_fs23.existsSync)(backup) && !(0, import_node_fs23.existsSync)(root)) {
       try {
-        (0, import_node_fs22.renameSync)(backup, root);
+        (0, import_node_fs23.renameSync)(backup, root);
       } catch {
       }
     }
-    (0, import_node_fs22.rmSync)(staging, { recursive: true, force: true });
+    (0, import_node_fs23.rmSync)(staging, { recursive: true, force: true });
     throw error;
   } finally {
-    if ((0, import_node_fs22.existsSync)(backup)) (0, import_node_fs22.rmSync)(backup, { recursive: true, force: true });
+    if ((0, import_node_fs23.existsSync)(backup)) (0, import_node_fs23.rmSync)(backup, { recursive: true, force: true });
   }
   writeInstallMeta({
     extensionId,
@@ -23196,7 +24053,7 @@ async function executeNoViewScript(extensionId, commandName2, scriptPath, argume
     throw new Error(`Unsupported runtime dependency: ${specifier}`);
   };
   const mod = { exports: {} };
-  let scriptSource = (0, import_node_fs22.readFileSync)(scriptPath, "utf8");
+  let scriptSource = (0, import_node_fs23.readFileSync)(scriptPath, "utf8");
   if (scriptPath.toLowerCase().includes("amphetamine")) {
     scriptSource = scriptSource.replace(
       /if\s*\(\s*isSessionActive\s*===\s*["']true["']\s*\)\s*\{[\s\S]*?toast\.title\s*=\s*["']A session is already running["'][\s\S]*?return\s+false;?\s*\}/g,
@@ -23217,7 +24074,7 @@ async function executeNoViewScript(extensionId, commandName2, scriptPath, argume
     "__dirname",
     scriptSource
   );
-  wrapper(mod.exports, customRequire, mod, scriptPath, (0, import_node_path24.dirname)(scriptPath));
+  wrapper(mod.exports, customRequire, mod, scriptPath, (0, import_node_path27.dirname)(scriptPath));
   const exported = mod.exports;
   const command3 = typeof exported.default === "function" ? exported.default : typeof mod.exports === "function" ? mod.exports : null;
   if (!command3) {
@@ -23264,7 +24121,7 @@ async function executeExtensionCommandRuntime(extensionId, commandName2, argumen
     );
   }
   const scriptPath = scriptPathForInstalledExtensionCommand(extensionId, commandName2);
-  if (!(0, import_node_fs22.existsSync)(scriptPath)) {
+  if (!(0, import_node_fs23.existsSync)(scriptPath)) {
     throw new Error(`Missing command script: ${commandName2}.js`);
   }
   return await executeNoViewScript(extensionId, commandName2, scriptPath, argumentValues);
@@ -23394,20 +24251,20 @@ function uninstallExtension2(extensionId) {
   writeDb2(db);
   commandCache.delete(extensionId);
   installErrors.delete(extensionId);
-  (0, import_node_fs22.rmSync)(installedPackageRoot(extensionId), { recursive: true, force: true });
-  (0, import_node_fs22.rmSync)(backupPackageRoot(extensionId), { recursive: true, force: true });
+  (0, import_node_fs23.rmSync)(installedPackageRoot(extensionId), { recursive: true, force: true });
+  (0, import_node_fs23.rmSync)(backupPackageRoot(extensionId), { recursive: true, force: true });
   return true;
 }
-var import_node_crypto10, import_node_module, import_node_path24, import_node_fs22, import_node_os9, RAYCAST_EXTENSIONS_REPO, RAYCAST_EXTENSIONS_REF, RAYCAST_EXTENSIONS_PATH, CATALOG_CACHE_TTL_MS, RUNTIME_UNSUPPORTED_MODE, DEFAULT_DB, catalogCache2, commandCache, AWESOME_RAYCAST_DATA, installErrors;
+var import_node_crypto11, import_node_module, import_node_path27, import_node_fs23, import_node_os10, RAYCAST_EXTENSIONS_REPO, RAYCAST_EXTENSIONS_REF, RAYCAST_EXTENSIONS_PATH, CATALOG_CACHE_TTL_MS, RUNTIME_UNSUPPORTED_MODE, DEFAULT_DB, catalogCache2, commandCache, AWESOME_RAYCAST_DATA, installErrors;
 var init_service2 = __esm({
   "src/main/extensions/service.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_crypto10 = require("node:crypto");
+    import_node_crypto11 = require("node:crypto");
     import_node_module = require("node:module");
-    import_node_path24 = require("node:path");
-    import_node_fs22 = require("node:fs");
-    import_node_os9 = require("node:os");
+    import_node_path27 = require("node:path");
+    import_node_fs23 = require("node:fs");
+    import_node_os10 = require("node:os");
     init_fuse();
     init_raycastShim();
     RAYCAST_EXTENSIONS_REPO = "https://github.com/raycast/extensions";
@@ -23985,7 +24842,7 @@ function parseProcessNameMap(stdout) {
 }
 async function readProcessNameMap() {
   try {
-    const { stdout } = await execFileAsync14("/bin/ps", ["-axo", "pid=,comm="]);
+    const { stdout } = await execFileAsync15("/bin/ps", ["-axo", "pid=,comm="]);
     return parseProcessNameMap(stdout);
   } catch {
     return /* @__PURE__ */ new Map();
@@ -24131,7 +24988,7 @@ async function searchEverything(query) {
   );
   const allFileResults = uniqById([...fileResults, ...indexedSourceResults]);
   const openPortResults = isDeepSearch ? [] : await searchPortManagerOpenPorts(trimmed);
-  const knowledgeHits = knowledgeService?.search(trimmed, 16) ?? [];
+  const knowledgeHits = knowledgeService ? await knowledgeService.search(trimmed, 16) : [];
   const seenKnowledgeSources = /* @__PURE__ */ new Set();
   const knowledgeResults = knowledgeHits.flatMap((hit) => {
     if (seenKnowledgeSources.has(hit.sourceId)) return [];
@@ -24201,8 +25058,8 @@ function stripPathEllipsis(input) {
 }
 function expandUserPath(input) {
   const normalized = stripPathEllipsis(input);
-  if (normalized === "~") return (0, import_node_os10.homedir)();
-  if (normalized.startsWith("~/")) return (0, import_node_path25.join)((0, import_node_os10.homedir)(), normalized.slice(2));
+  if (normalized === "~") return (0, import_node_os11.homedir)();
+  if (normalized.startsWith("~/")) return (0, import_node_path28.join)((0, import_node_os11.homedir)(), normalized.slice(2));
   return normalized;
 }
 function resolveSlashPathInput(input) {
@@ -24223,18 +25080,18 @@ function resolveSlashPathInput(input) {
   if (input === "/Users" || input === "/Volumes") {
     return input;
   }
-  return (0, import_node_path25.join)((0, import_node_os10.homedir)(), input.slice(1));
+  return (0, import_node_path28.join)((0, import_node_os11.homedir)(), input.slice(1));
 }
 function resolveLauncherDirectory(input) {
-  const candidate = (0, import_node_path25.resolve)(resolveSlashPathInput(input.trim()));
+  const candidate = (0, import_node_path28.resolve)(resolveSlashPathInput(input.trim()));
   try {
-    return (0, import_node_fs23.existsSync)(candidate) && (0, import_node_fs23.statSync)(candidate).isDirectory() ? candidate : null;
+    return (0, import_node_fs24.existsSync)(candidate) && (0, import_node_fs24.statSync)(candidate).isDirectory() ? candidate : null;
   } catch {
     return null;
   }
 }
 function displayUserPath(path8) {
-  const home = (0, import_node_os10.homedir)();
+  const home = (0, import_node_os11.homedir)();
   const normalizedPath = path8.replace(/\\/g, "/");
   const normalizedHome = home.replace(/\\/g, "/");
   if (normalizedPath === normalizedHome) return "~";
@@ -24245,7 +25102,7 @@ function displayUserPath(path8) {
 }
 function slashPathValue(path8, trailingSlash = false) {
   const normalizedPath = path8.replace(/\\/g, "/");
-  const normalizedHome = (0, import_node_os10.homedir)().replace(/\\/g, "/").replace(/\/$/, "");
+  const normalizedHome = (0, import_node_os11.homedir)().replace(/\\/g, "/").replace(/\/$/, "");
   let value = normalizedPath;
   if (normalizedPath === normalizedHome) {
     value = "/";
@@ -24263,16 +25120,16 @@ function splitPathCompletionQuery(raw) {
   let targetPart = expandedBody;
   let appTerm = "";
   const trimmedBody = expandedBody.trimEnd();
-  if (expandedBody.endsWith(" ") && trimmedBody && (0, import_node_fs23.existsSync)(trimmedBody)) {
+  if (expandedBody.endsWith(" ") && trimmedBody && (0, import_node_fs24.existsSync)(trimmedBody)) {
     appMode = true;
     targetPart = trimmedBody;
     appTerm = "";
-  } else if (!(0, import_node_fs23.existsSync)(expandedBody)) {
+  } else if (!(0, import_node_fs24.existsSync)(expandedBody)) {
     let splitAt = -1;
     for (let index = expandedBody.length - 1; index >= 0; index--) {
       if (expandedBody[index] !== " ") continue;
       const beforeSpace = expandedBody.slice(0, index).trimEnd();
-      if (beforeSpace && (0, import_node_fs23.existsSync)(beforeSpace)) {
+      if (beforeSpace && (0, import_node_fs24.existsSync)(beforeSpace)) {
         splitAt = index;
         break;
       }
@@ -24284,7 +25141,7 @@ function splitPathCompletionQuery(raw) {
     }
   }
   if (!targetPart) {
-    return { targetPath: (0, import_node_os10.homedir)(), appTerm, appMode };
+    return { targetPath: (0, import_node_os11.homedir)(), appTerm, appMode };
   }
   if (targetPart.startsWith("/")) {
     return { targetPath: targetPart, appTerm, appMode };
@@ -24292,24 +25149,24 @@ function splitPathCompletionQuery(raw) {
   if (targetPart.startsWith("~")) {
     return { targetPath: expandUserPath(targetPart), appTerm, appMode };
   }
-  return { targetPath: (0, import_node_path25.resolve)((0, import_node_os10.homedir)(), targetPart), appTerm, appMode };
+  return { targetPath: (0, import_node_path28.resolve)((0, import_node_os11.homedir)(), targetPart), appTerm, appMode };
 }
 function pathCompletionBase(targetPath) {
   if (targetPath.endsWith("/")) return { directory: targetPath, prefix: "" };
   try {
-    if ((0, import_node_fs23.existsSync)(targetPath) && (0, import_node_fs23.statSync)(targetPath).isDirectory()) {
+    if ((0, import_node_fs24.existsSync)(targetPath) && (0, import_node_fs24.statSync)(targetPath).isDirectory()) {
       return { directory: targetPath, prefix: "" };
     }
   } catch {
   }
-  return { directory: (0, import_node_path25.dirname)(targetPath), prefix: (0, import_node_path25.basename)(targetPath) };
+  return { directory: (0, import_node_path28.dirname)(targetPath), prefix: (0, import_node_path28.basename)(targetPath) };
 }
 function directoryVisitStorePath() {
-  return (0, import_node_path25.join)(app.getPath("userData"), "directory-visits.json");
+  return (0, import_node_path28.join)(app.getPath("userData"), "directory-visits.json");
 }
 function readDirectoryVisitStore() {
   try {
-    const parsed = JSON.parse((0, import_node_fs23.readFileSync)(directoryVisitStorePath(), "utf8"));
+    const parsed = JSON.parse((0, import_node_fs24.readFileSync)(directoryVisitStorePath(), "utf8"));
     if (!parsed || parsed.version !== 1 || typeof parsed.visits !== "object") {
       return { version: 1, visits: {} };
     }
@@ -24320,8 +25177,8 @@ function readDirectoryVisitStore() {
 }
 function recordDirectoryVisit(path8) {
   try {
-    const normalized = (0, import_node_path25.resolve)(path8);
-    if (!(0, import_node_fs23.statSync)(normalized).isDirectory()) return;
+    const normalized = (0, import_node_path28.resolve)(path8);
+    if (!(0, import_node_fs24.statSync)(normalized).isDirectory()) return;
     const store2 = readDirectoryVisitStore();
     const existing = store2.visits[normalized];
     store2.visits[normalized] = {
@@ -24329,8 +25186,8 @@ function recordDirectoryVisit(path8) {
       lastVisitedAt: Date.now()
     };
     const storePath2 = directoryVisitStorePath();
-    (0, import_node_fs23.mkdirSync)((0, import_node_path25.dirname)(storePath2), { recursive: true });
-    (0, import_node_fs23.writeFileSync)(storePath2, JSON.stringify(store2), "utf8");
+    (0, import_node_fs24.mkdirSync)((0, import_node_path28.dirname)(storePath2), { recursive: true });
+    (0, import_node_fs24.writeFileSync)(storePath2, JSON.stringify(store2), "utf8");
   } catch (error) {
     console.warn("[Search] Failed to record directory visit:", error);
   }
@@ -24338,16 +25195,16 @@ function recordDirectoryVisit(path8) {
 function recommendedDirectories() {
   return rankDirectoryRecommendations(readDirectoryVisitStore().visits, {
     limit: 50,
-    excludedPaths: [(0, import_node_os10.homedir)()]
+    excludedPaths: [(0, import_node_os11.homedir)()]
   }).filter((item) => {
     try {
-      return (0, import_node_fs23.statSync)(item.path).isDirectory();
+      return (0, import_node_fs24.statSync)(item.path).isDirectory();
     } catch {
       return false;
     }
   }).slice(0, 5).map((item, index) => ({
     id: `path-recommended:${item.path}`,
-    title: (0, import_node_path25.basename)(item.path),
+    title: (0, import_node_path28.basename)(item.path),
     subtitle: displayUserPath(item.path),
     kind: "directory",
     section: "recommended",
@@ -24359,11 +25216,11 @@ function recommendedDirectories() {
   }));
 }
 function openWithUsageStorePath() {
-  return (0, import_node_path25.join)(app.getPath("userData"), "open-with-usage.json");
+  return (0, import_node_path28.join)(app.getPath("userData"), "open-with-usage.json");
 }
 function readOpenWithUsageStore() {
   try {
-    const parsed = JSON.parse((0, import_node_fs23.readFileSync)(openWithUsageStorePath(), "utf8"));
+    const parsed = JSON.parse((0, import_node_fs24.readFileSync)(openWithUsageStorePath(), "utf8"));
     if (!parsed || typeof parsed !== "object" || parsed.version !== 1 || typeof parsed.keys !== "object") {
       return { version: 1, keys: {} };
     }
@@ -24377,19 +25234,19 @@ function readOpenWithUsageStore() {
 }
 function writeOpenWithUsageStore(store2) {
   const path8 = openWithUsageStorePath();
-  (0, import_node_fs23.mkdirSync)((0, import_node_path25.dirname)(path8), { recursive: true });
-  (0, import_node_fs23.writeFileSync)(path8, JSON.stringify(store2), "utf8");
+  (0, import_node_fs24.mkdirSync)((0, import_node_path28.dirname)(path8), { recursive: true });
+  (0, import_node_fs24.writeFileSync)(path8, JSON.stringify(store2), "utf8");
 }
 function openWithUsageKeysForPath(targetPath) {
   try {
-    const stat2 = (0, import_node_fs23.statSync)(targetPath);
+    const stat2 = (0, import_node_fs24.statSync)(targetPath);
     if (stat2.isDirectory()) {
-      return [`folder:${targetPath}`, `sibling-folder:${(0, import_node_path25.dirname)(targetPath)}`];
+      return [`folder:${targetPath}`, `sibling-folder:${(0, import_node_path28.dirname)(targetPath)}`];
     }
   } catch {
   }
-  const ext = (0, import_node_path25.extname)(targetPath).toLowerCase();
-  const parent = (0, import_node_path25.dirname)(targetPath);
+  const ext = (0, import_node_path28.extname)(targetPath).toLowerCase();
+  const parent = (0, import_node_path28.dirname)(targetPath);
   const keys = [`parent:${parent}`];
   if (ext) {
     keys.push(`parent-ext:${parent}:${ext}`, `ext:${ext}`);
@@ -24485,16 +25342,16 @@ function recommendedOpenWithApps(targetPath) {
 }
 function isApplicationsDirectory(path8) {
   const normalized = path8.replace(/\/+$/, "");
-  return normalized === "/Applications" || normalized === "/System/Applications" || normalized === "/System/Applications/Utilities" || normalized === (0, import_node_path25.join)((0, import_node_os10.homedir)(), "Applications");
+  return normalized === "/Applications" || normalized === "/System/Applications" || normalized === "/System/Applications/Utilities" || normalized === (0, import_node_path28.join)((0, import_node_os11.homedir)(), "Applications");
 }
 function inferredDefaultAppName(targetPath) {
   try {
-    if ((0, import_node_fs23.statSync)(targetPath).isDirectory())
+    if ((0, import_node_fs24.statSync)(targetPath).isDirectory())
       return process.platform === "win32" ? "File Explorer" : "Finder";
   } catch {
   }
-  const ext = (0, import_node_path25.extname)(targetPath).toLowerCase();
-  const parent = (0, import_node_path25.dirname)(targetPath).toLowerCase();
+  const ext = (0, import_node_path28.extname)(targetPath).toLowerCase();
+  const parent = (0, import_node_path28.dirname)(targetPath).toLowerCase();
   if (/\b(movie|movies|video|videos)\b/.test(parent) && [".ts", ".m2ts", ".mts"].includes(ext)) {
     return "QuickTime Player";
   }
@@ -24586,11 +25443,11 @@ async function completePath(query, limit = 50) {
   const { directory, prefix } = pathCompletionBase(targetPath);
   const normalizedPrefix = prefix.toLowerCase();
   try {
-    const entries = (0, import_node_fs23.readdirSync)(directory, { withFileTypes: true });
+    const entries = (0, import_node_fs24.readdirSync)(directory, { withFileTypes: true });
     const recommended = query.trim() === "/" ? recommendedDirectories() : [];
     const recommendedPaths = new Set(recommended.map((item) => item.path));
     const regular = entries.filter((entry) => !entry.name.startsWith(".")).filter((entry) => !normalizedPrefix || entry.name.toLowerCase().includes(normalizedPrefix)).map((entry) => {
-      const absolute = (0, import_node_path25.join)(directory, entry.name);
+      const absolute = (0, import_node_path28.join)(directory, entry.name);
       const isDirectory = entry.isDirectory();
       const isFile = entry.isFile();
       if (!isDirectory && !isFile) return null;
@@ -24658,7 +25515,7 @@ async function searchPortManagerOpenPorts(query) {
 async function listOpenPorts() {
   if (process.platform === "win32") {
     try {
-      const { stdout } = await execFileAsync14("netstat.exe", ["-ano", "-p", "tcp"]);
+      const { stdout } = await execFileAsync15("netstat.exe", ["-ano", "-p", "tcp"]);
       const pids = Array.from(
         new Set(
           stdout.split(/\r?\n/).map((line) => line.trim().split(/\s+/).at(-1) ?? "").filter((pid) => /^\d+$/.test(pid))
@@ -24668,7 +25525,7 @@ async function listOpenPorts() {
       await Promise.all(
         pids.map(async (pid) => {
           try {
-            const { stdout: task } = await execFileAsync14("tasklist.exe", [
+            const { stdout: task } = await execFileAsync15("tasklist.exe", [
               "/fi",
               `PID eq ${pid}`,
               "/fo",
@@ -24710,13 +25567,13 @@ async function listOpenPorts() {
     }
   }
   try {
-    const { stdout } = await execFileAsync14("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
+    const { stdout } = await execFileAsync15("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
     const processNames = await readProcessNameMap();
     return attachOpenPortProcessIcons(parseOpenPortProcesses(stdout, processNames));
   } catch (error) {
     console.error("[OpenPorts] Failed to list listening ports:", error);
     try {
-      const { stdout } = await execFileAsync14("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
+      const { stdout } = await execFileAsync15("/usr/sbin/lsof", ["-nP", "-iTCP", "-sTCP:LISTEN"]);
       return attachOpenPortProcessIcons(parseOpenPortProcesses(stdout));
     } catch (fallbackError) {
       console.error("[OpenPorts] Fallback listing failed:", fallbackError);
@@ -24729,13 +25586,13 @@ async function executeActionInner(action) {
     case "open-app": {
       if (process.platform === "win32" && action.appPath) {
         if (action.appPath.startsWith("shell:AppsFolder\\")) {
-          await execFileAsync14("explorer.exe", [action.appPath]);
+          await execFileAsync15("explorer.exe", [action.appPath]);
           return { ok: true, message: `Opened ${action.appName}` };
         }
         const opened = await shell.openPath(action.appPath);
         return opened ? { ok: false, message: opened } : { ok: true, message: `Opened ${action.appName}` };
       }
-      await execFileAsync14("open", ["-a", action.appName]);
+      await execFileAsync15("open", ["-a", action.appName]);
       return { ok: true, message: `Opened ${action.appName}` };
     }
     case "open-file": {
@@ -24756,7 +25613,7 @@ async function executeActionInner(action) {
             const opened2 = await shell.openPath(targetPath);
             return opened2 ? { ok: false, message: opened2 } : { ok: true, message: "Opened with the default application" };
           }
-          await execFileAsync14(
+          await execFileAsync15(
             "powershell.exe",
             [
               "-NoLogo",
@@ -24777,7 +25634,7 @@ async function executeActionInner(action) {
           recordOpenWithUsage(targetPath, action.appName);
           return { ok: true, message: `Opened with ${action.appName}` };
         }
-        await execFileAsync14("open", ["-a", action.appName, targetPath]);
+        await execFileAsync15("open", ["-a", action.appName, targetPath]);
         recordOpenWithUsage(targetPath, action.appName);
         return { ok: true, message: `Opened with ${action.appName}` };
       }
@@ -24797,14 +25654,14 @@ async function executeActionInner(action) {
       app.hide();
       await new Promise((resolve6) => setTimeout(resolve6, 50));
       if (process.platform === "win32") {
-        await execFileAsync14("powershell.exe", [
+        await execFileAsync15("powershell.exe", [
           "-NoProfile",
           "-NonInteractive",
           "-Command",
           '(New-Object -ComObject WScript.Shell).SendKeys("^v")'
         ]);
       } else {
-        await execFileAsync14("osascript", [
+        await execFileAsync15("osascript", [
           "-e",
           'tell application "System Events" to keystroke "v" using {command down}'
         ]);
@@ -24862,7 +25719,7 @@ async function executeActionInner(action) {
       if (!validation.ok) {
         return { ok: false, message: validation.message };
       }
-      const { stdout } = await execFileAsync14("bash", ["-lc", command3]);
+      const { stdout } = await execFileAsync15("bash", ["-lc", command3]);
       const message = stdout.trim();
       return { ok: true, message: message || "Command completed" };
     }
@@ -24925,16 +25782,16 @@ async function recordSearchActionUsage(action, context) {
     indexDb.recordClick(context.query, actionId, context.rank, true);
   }
 }
-var import_node_child_process16, import_node_fs23, import_node_os10, import_node_path25, import_node_util14, execFileAsync14, MAX_RESULTS, PROVIDER_REFRESH_MIN_AGE_MS, FILE_INDEX_LIMIT, FILE_INDEX_WRITE_BATCH_SIZE, BACKGROUND_FILE_INDEX_START_DELAY_MS, SHELL_METACHAR_RE, indexDb, searchReadyPromise, fileBootstrapPromise, volatileRefreshPromise, stopFileWatcher, lastVolatileRefreshAt, initialProviderRefreshStarted, volatileRefreshScheduled, searchLifecycleRegistered, fileIndexStartTimer, _benchmarkPromise;
+var import_node_child_process17, import_node_fs24, import_node_os11, import_node_path28, import_node_util15, execFileAsync15, MAX_RESULTS, PROVIDER_REFRESH_MIN_AGE_MS, FILE_INDEX_LIMIT, FILE_INDEX_WRITE_BATCH_SIZE, BACKGROUND_FILE_INDEX_START_DELAY_MS, SHELL_METACHAR_RE, indexDb, searchReadyPromise, fileBootstrapPromise, volatileRefreshPromise, stopFileWatcher, lastVolatileRefreshAt, initialProviderRefreshStarted, volatileRefreshScheduled, searchLifecycleRegistered, fileIndexStartTimer, _benchmarkPromise;
 var init_service3 = __esm({
   "src/main/search/service.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_child_process16 = require("node:child_process");
-    import_node_fs23 = require("node:fs");
-    import_node_os10 = require("node:os");
-    import_node_path25 = require("node:path");
-    import_node_util14 = require("node:util");
+    import_node_child_process17 = require("node:child_process");
+    import_node_fs24 = require("node:fs");
+    import_node_os11 = require("node:os");
+    import_node_path28 = require("node:path");
+    import_node_util15 = require("node:util");
     init_searchMode();
     init_executor();
     init_configStore();
@@ -24956,7 +25813,7 @@ var init_service3 = __esm({
     init_ranker();
     init_directoryRecommendations();
     init_providerRefreshPolicy();
-    execFileAsync14 = (0, import_node_util14.promisify)(import_node_child_process16.execFile);
+    execFileAsync15 = (0, import_node_util15.promisify)(import_node_child_process17.execFile);
     MAX_RESULTS = 80;
     PROVIDER_REFRESH_MIN_AGE_MS = 1e4;
     FILE_INDEX_LIMIT = 75e3;
@@ -25013,7 +25870,7 @@ function readBody(request) {
 function ensureKnowledgeAgentGateway() {
   if (!gatewayPromise) {
     gatewayPromise = new Promise((resolve6, reject) => {
-      const token = (0, import_node_crypto11.randomBytes)(32).toString("hex");
+      const token = (0, import_node_crypto12.randomBytes)(32).toString("hex");
       const server = (0, import_node_http.createServer)(async (request, response) => {
         response.setHeader("Content-Type", "application/json; charset=utf-8");
         if (request.method !== "POST" || request.headers.authorization !== `Bearer ${token}`) {
@@ -25027,7 +25884,7 @@ function ensureKnowledgeAgentGateway() {
             const query = typeof parsed.query === "string" ? parsed.query.trim() : "";
             const limit = typeof parsed.limit === "number" ? Math.max(1, Math.min(20, Math.round(parsed.limit))) : 8;
             if (!query) throw new Error("query is required");
-            const hits = getKnowledgeService().search(query, limit);
+            const hits = await getKnowledgeService().search(query, limit);
             response.end(JSON.stringify({ hits }));
             return;
           }
@@ -25090,11 +25947,11 @@ async function stopKnowledgeAgentGateway() {
   if (!gateway) return;
   await new Promise((resolve6) => gateway.server.close(() => resolve6()));
 }
-var import_node_crypto11, import_node_http, gatewayPromise;
+var import_node_crypto12, import_node_http, gatewayPromise;
 var init_gateway = __esm({
   "src/main/knowledge/agent/gateway.ts"() {
     "use strict";
-    import_node_crypto11 = require("node:crypto");
+    import_node_crypto12 = require("node:crypto");
     import_node_http = require("node:http");
     init_searchMode();
     init_service3();
@@ -25115,11 +25972,11 @@ function resolveRaymesPiExtension() {
   const resourcesPath = process.resourcesPath;
   const candidates = [
     process.env["RAYMES_PI_EXTENSION"],
-    import_node_path26.default.join(process.cwd(), "src", "main", "agent", "raymes-pi-policy.ts"),
-    ...app.isPackaged && resourcesPath ? [import_node_path26.default.join(resourcesPath, "agent", "raymes-pi-policy.ts")] : []
+    import_node_path29.default.join(process.cwd(), "src", "main", "agent", "raymes-pi-policy.ts"),
+    ...app.isPackaged && resourcesPath ? [import_node_path29.default.join(resourcesPath, "agent", "raymes-pi-policy.ts")] : []
   ];
   return candidates.find(
-    (candidate) => Boolean(candidate && (0, import_node_fs24.existsSync)(candidate))
+    (candidate) => Boolean(candidate && (0, import_node_fs25.existsSync)(candidate))
   );
 }
 function resolvePiBinary(override) {
@@ -25127,12 +25984,12 @@ function resolvePiBinary(override) {
   const envOverride = process.env["RAYMES_PI_BIN"];
   if (envOverride && envOverride.trim()) return envOverride.trim();
   for (const candidate of PI_BIN_CANDIDATES) {
-    if ((0, import_node_fs24.existsSync)(candidate)) return candidate;
+    if ((0, import_node_fs25.existsSync)(candidate)) return candidate;
   }
   return "pi";
 }
 function makeId() {
-  return (0, import_node_crypto12.randomUUID)();
+  return (0, import_node_crypto13.randomUUID)();
 }
 function writeCommand(child, command3) {
   const line = `${JSON.stringify(command3)}
@@ -25145,11 +26002,11 @@ function spawnRpc(options) {
   if (options.model) args.push("--model", options.model);
   const raymesPiExtension = resolveRaymesPiExtension();
   if (raymesPiExtension) args.push("--extension", raymesPiExtension);
-  if (options.model?.startsWith("opencode/") && (0, import_node_fs24.existsSync)(OPENCODE_PI_EXTENSION)) {
+  if (options.model?.startsWith("opencode/") && (0, import_node_fs25.existsSync)(OPENCODE_PI_EXTENSION)) {
     args.push("--extension", OPENCODE_PI_EXTENSION);
   }
   args.push(...options.extraArgs);
-  const child = (0, import_node_child_process17.spawn)(options.piBin, args, {
+  const child = (0, import_node_child_process18.spawn)(options.piBin, args, {
     cwd: options.cwd,
     detached: process.platform !== "win32",
     env: {
@@ -25531,33 +26388,32 @@ function disposeSharedBridge() {
   sharedBridge?.dispose();
   sharedBridge = void 0;
 }
-var import_node_child_process17, import_node_crypto12, import_node_events, import_node_fs24, import_node_os11, import_node_path26, import_node_string_decoder, PI_BIN_CANDIDATES, OPENCODE_PI_EXTENSION, sharedBridge;
+var import_node_child_process18, import_node_crypto13, import_node_events, import_node_fs25, import_node_os12, import_node_path29, import_node_string_decoder, PI_BIN_CANDIDATES, OPENCODE_PI_EXTENSION, sharedBridge;
 var init_bridge = __esm({
   "src/main/agent/bridge.ts"() {
     "use strict";
-    import_node_child_process17 = require("node:child_process");
-    import_node_crypto12 = require("node:crypto");
+    import_node_child_process18 = require("node:child_process");
+    import_node_crypto13 = require("node:crypto");
     import_node_events = require("node:events");
-    import_node_fs24 = require("node:fs");
-    import_node_os11 = require("node:os");
-    import_node_path26 = __toESM(require("node:path"));
+    import_node_fs25 = require("node:fs");
+    import_node_os12 = require("node:os");
+    import_node_path29 = __toESM(require("node:path"));
     import_node_string_decoder = require("node:string_decoder");
     init_desktop_runtime();
     init_loop();
     init_observer();
     init_prompt();
     init_gateway();
+    init_profile();
     PI_BIN_CANDIDATES = [
       // Where pnpm installs global bins for this user (matches `which pi`
       // at the time this bridge was written). We resolve at runtime so a
       // reinstall or version bump does not require a rebuild.
-      import_node_path26.default.join((0, import_node_os11.homedir)(), "Library", "pnpm", "pi"),
-      import_node_path26.default.join((0, import_node_os11.homedir)(), ".local", "share", "pnpm", "pi")
+      import_node_path29.default.join((0, import_node_os12.homedir)(), "Library", "pnpm", "pi"),
+      import_node_path29.default.join((0, import_node_os12.homedir)(), ".local", "share", "pnpm", "pi")
     ];
-    OPENCODE_PI_EXTENSION = import_node_path26.default.join(
-      (0, import_node_os11.homedir)(),
-      ".pi",
-      "agent",
+    OPENCODE_PI_EXTENSION = import_node_path29.default.join(
+      piAgentDirectory(),
       "extensions",
       "opencode",
       "index.ts"
@@ -26188,8 +27044,8 @@ function promiseHookLabel(hookIdx, fn, args) {
   return `hook=${hookIdx} fn="${source}" args=${serializedArgs.slice(0, 160)}`;
 }
 function promiseResultCachePath(session2, key) {
-  const digest = (0, import_node_crypto14.createHash)("sha256").update(session2.bundledCode).update("\0").update(session2.extensionId).update("\0").update(session2.commandName).update("\0").update(key).digest("hex");
-  return (0, import_node_path30.join)(session2.packageRoot, ".tezbar-runtime-cache", `${digest}.bin.gz`);
+  const digest = (0, import_node_crypto15.createHash)("sha256").update(session2.bundledCode).update("\0").update(session2.extensionId).update("\0").update(session2.commandName).update("\0").update(key).digest("hex");
+  return (0, import_node_path33.join)(session2.packageRoot, ".tezbar-runtime-cache", `${digest}.bin.gz`);
 }
 function readPromiseResultCache(session2, key) {
   const memoryKey = `${session2.extensionId}/${session2.commandName}:${key}`;
@@ -26199,9 +27055,9 @@ function readPromiseResultCache(session2, key) {
   }
   const cachePath = promiseResultCachePath(session2, key);
   try {
-    const stats = (0, import_node_fs27.statSync)(cachePath);
+    const stats = (0, import_node_fs28.statSync)(cachePath);
     if (Date.now() - stats.mtimeMs > PROMISE_RESULT_CACHE_TTL_MS) return null;
-    const compressed = (0, import_node_fs27.readFileSync)(cachePath);
+    const compressed = (0, import_node_fs28.readFileSync)(cachePath);
     const payload = (0, import_node_v8.deserialize)((0, import_node_zlib.gunzipSync)(compressed));
     setPromiseResultMemoryCache(memoryKey, payload);
     console.log(
@@ -26223,8 +27079,8 @@ function writePromiseResultCache(session2, key, data) {
     try {
       const encoded = (0, import_node_v8.serialize)({ data, cachedAt });
       const compressed = await gzipAsync(encoded);
-      (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(cachePath), { recursive: true });
-      await (0, import_promises5.writeFile)(cachePath, compressed);
+      (0, import_node_fs28.mkdirSync)((0, import_node_path33.dirname)(cachePath), { recursive: true });
+      await (0, import_promises7.writeFile)(cachePath, compressed);
       console.log(
         `[usePromise] Persistent cache write complete after ${elapsedMs(startedAt)}; raw=${encoded.byteLength}, compressed=${compressed.byteLength}`
       );
@@ -26299,15 +27155,15 @@ async function recoverIncompleteChunkedCache(session2, error, promiseKey) {
   const indexPath = missingIndex[1];
   const cacheName = missingIndex[2];
   if (!indexPath || !cacheName) return false;
-  const supportRoot = (0, import_node_path30.join)(session2.packageRoot, ".tezbar-support");
-  const chunkDirectory = (0, import_node_path30.join)(indexPath, cacheName);
-  const sourcePath = (0, import_node_path30.join)(indexPath, `${cacheName}.json`);
-  if ((0, import_node_path30.dirname)(sourcePath) !== supportRoot || (0, import_node_path30.dirname)(chunkDirectory) !== supportRoot) {
+  const supportRoot = (0, import_node_path33.join)(session2.packageRoot, ".tezbar-support");
+  const chunkDirectory = (0, import_node_path33.join)(indexPath, cacheName);
+  const sourcePath = (0, import_node_path33.join)(indexPath, `${cacheName}.json`);
+  if ((0, import_node_path33.dirname)(sourcePath) !== supportRoot || (0, import_node_path33.dirname)(chunkDirectory) !== supportRoot) {
     return false;
   }
   let handle = null;
   try {
-    handle = await (0, import_promises5.open)(sourcePath, "r");
+    handle = await (0, import_promises7.open)(sourcePath, "r");
     const stats = await handle.stat();
     if (stats.size <= 0) return false;
     const tailSize = Math.min(stats.size, 4096);
@@ -26323,8 +27179,8 @@ async function recoverIncompleteChunkedCache(session2, error, promiseKey) {
   }
   session2.cacheRecoveryKeys.add(promiseKey);
   await Promise.all([
-    (0, import_promises5.rm)(sourcePath, { force: true }),
-    (0, import_promises5.rm)(chunkDirectory, { recursive: true, force: true })
+    (0, import_promises7.rm)(sourcePath, { force: true }),
+    (0, import_promises7.rm)(chunkDirectory, { recursive: true, force: true })
   ]);
   console.warn(
     `[Runner] Removed incomplete extension cache "${cacheName}" and scheduled one rebuild.`
@@ -26348,7 +27204,7 @@ async function runAppleScript3(source) {
   if (typeof source !== "string" || source.trim().length === 0) {
     return "";
   }
-  const { stdout } = await execFileAsync18("/usr/bin/osascript", ["-e", source], {
+  const { stdout } = await execFileAsync19("/usr/bin/osascript", ["-e", source], {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024
   });
@@ -26366,34 +27222,34 @@ async function runPowerShellScriptForSession(session2, source, options) {
 }
 function nativeColorPickerBundledHelperPath() {
   const envPath = process.env.COLOR_PICKER_HELPER_PATH;
-  if (envPath && (0, import_node_fs27.existsSync)(envPath)) return envPath;
+  if (envPath && (0, import_node_fs28.existsSync)(envPath)) return envPath;
   const helperName = process.platform === "win32" ? "windows.ps1" : "color-picker-helper";
   const candidates = [
-    (0, import_node_path30.join)(process.cwd(), "native", "color-picker", helperName),
-    (0, import_node_path30.join)(app.getAppPath(), "native", "color-picker", helperName)
+    (0, import_node_path33.join)(process.cwd(), "native", "color-picker", helperName),
+    (0, import_node_path33.join)(app.getAppPath(), "native", "color-picker", helperName)
   ];
   if (app?.isPackaged) {
     const resourcesPath = process.resourcesPath;
     if (resourcesPath) {
       candidates.unshift(
-        (0, import_node_path30.join)(resourcesPath, "app.asar.unpacked", "native", "color-picker", helperName),
-        (0, import_node_path30.join)(resourcesPath, "native", "color-picker", helperName)
+        (0, import_node_path33.join)(resourcesPath, "app.asar.unpacked", "native", "color-picker", helperName),
+        (0, import_node_path33.join)(resourcesPath, "native", "color-picker", helperName)
       );
     }
   }
-  return candidates.find((candidate) => (0, import_node_fs27.existsSync)(candidate)) ?? null;
+  return candidates.find((candidate) => (0, import_node_fs28.existsSync)(candidate)) ?? null;
 }
 function nativeColorPickerCachedBinaryPath() {
-  return (0, import_node_path30.join)(app.getPath("userData"), "native", "color-picker");
+  return (0, import_node_path33.join)(app.getPath("userData"), "native", "color-picker");
 }
 function nativeColorPickerSourcePath() {
   const candidates = [
-    (0, import_node_path30.join)(process.cwd(), "native", "color-picker", "main.swift"),
-    (0, import_node_path30.join)(process.cwd(), "src", "native", "color-picker.swift"),
-    (0, import_node_path30.join)(app.getAppPath(), "native", "color-picker", "main.swift"),
-    (0, import_node_path30.join)(app.getAppPath(), "src", "native", "color-picker.swift")
+    (0, import_node_path33.join)(process.cwd(), "native", "color-picker", "main.swift"),
+    (0, import_node_path33.join)(process.cwd(), "src", "native", "color-picker.swift"),
+    (0, import_node_path33.join)(app.getAppPath(), "native", "color-picker", "main.swift"),
+    (0, import_node_path33.join)(app.getAppPath(), "src", "native", "color-picker.swift")
   ];
-  return candidates.find((candidate) => (0, import_node_fs27.existsSync)(candidate)) ?? null;
+  return candidates.find((candidate) => (0, import_node_fs28.existsSync)(candidate)) ?? null;
 }
 async function ensureNativeColorPickerHelper() {
   const bundledPath = nativeColorPickerBundledHelperPath();
@@ -26402,18 +27258,18 @@ async function ensureNativeColorPickerHelper() {
   const sourcePath = nativeColorPickerSourcePath();
   if (!sourcePath) return null;
   const binaryPath = nativeColorPickerCachedBinaryPath();
-  if ((0, import_node_fs27.existsSync)(binaryPath)) {
+  if ((0, import_node_fs28.existsSync)(binaryPath)) {
     try {
-      if ((0, import_node_fs27.statSync)(binaryPath).mtimeMs >= (0, import_node_fs27.statSync)(sourcePath).mtimeMs) return binaryPath;
+      if ((0, import_node_fs28.statSync)(binaryPath).mtimeMs >= (0, import_node_fs28.statSync)(sourcePath).mtimeMs) return binaryPath;
     } catch {
       return binaryPath;
     }
   }
-  const moduleCachePath = (0, import_node_path30.join)((0, import_node_path30.dirname)(binaryPath), "swift-module-cache");
-  (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(binaryPath), { recursive: true });
-  (0, import_node_fs27.mkdirSync)(moduleCachePath, { recursive: true });
+  const moduleCachePath = (0, import_node_path33.join)((0, import_node_path33.dirname)(binaryPath), "swift-module-cache");
+  (0, import_node_fs28.mkdirSync)((0, import_node_path33.dirname)(binaryPath), { recursive: true });
+  (0, import_node_fs28.mkdirSync)(moduleCachePath, { recursive: true });
   try {
-    await execFileAsync18("/usr/bin/swiftc", [
+    await execFileAsync19("/usr/bin/swiftc", [
       "-module-cache-path",
       moduleCachePath,
       "-O",
@@ -26423,7 +27279,7 @@ async function ensureNativeColorPickerHelper() {
       "-framework",
       "AppKit"
     ]);
-    return (0, import_node_fs27.existsSync)(binaryPath) ? binaryPath : null;
+    return (0, import_node_fs28.existsSync)(binaryPath) ? binaryPath : null;
   } catch (error) {
     console.error("[ColorPicker] Failed to compile native helper:", error);
     return null;
@@ -26431,7 +27287,7 @@ async function ensureNativeColorPickerHelper() {
 }
 async function runNativeColorPickerHelper(helperPath) {
   if (process.platform === "win32") {
-    const { stdout: stdout2 } = await execFileAsync18(
+    const { stdout: stdout2 } = await execFileAsync19(
       "powershell.exe",
       [
         "-NoLogo",
@@ -26451,7 +27307,7 @@ async function runNativeColorPickerHelper(helperPath) {
     );
     return stdout2;
   }
-  const { stdout } = await execFileAsync18(helperPath, [], {
+  const { stdout } = await execFileAsync19(helperPath, [], {
     encoding: "utf8",
     maxBuffer: 1024 * 1024
   });
@@ -26509,33 +27365,33 @@ async function pickColorWithNativeSampler() {
 }
 function imageColorsHelperPath() {
   const envPath = process.env.IMAGE_COLORS_HELPER_PATH;
-  if (envPath && (0, import_node_fs27.existsSync)(envPath)) return envPath;
+  if (envPath && (0, import_node_fs28.existsSync)(envPath)) return envPath;
   const helperName = process.platform === "win32" ? "windows.ps1" : "image-colors-helper";
   const candidates = [
-    (0, import_node_path30.join)(process.cwd(), "native", "image-colors", helperName),
-    (0, import_node_path30.join)(app.getAppPath(), "native", "image-colors", helperName)
+    (0, import_node_path33.join)(process.cwd(), "native", "image-colors", helperName),
+    (0, import_node_path33.join)(app.getAppPath(), "native", "image-colors", helperName)
   ];
   if (app?.isPackaged) {
     const resourcesPath = process.resourcesPath;
     if (resourcesPath) {
       candidates.unshift(
-        (0, import_node_path30.join)(resourcesPath, "app.asar.unpacked", "native", "image-colors", helperName),
-        (0, import_node_path30.join)(resourcesPath, "native", "image-colors", helperName)
+        (0, import_node_path33.join)(resourcesPath, "app.asar.unpacked", "native", "image-colors", helperName),
+        (0, import_node_path33.join)(resourcesPath, "native", "image-colors", helperName)
       );
     }
   }
-  return candidates.find((candidate) => (0, import_node_fs27.existsSync)(candidate)) ?? null;
+  return candidates.find((candidate) => (0, import_node_fs28.existsSync)(candidate)) ?? null;
 }
 async function extractColorsFromImage(path8, colorCount = 40, dominantOnly = false) {
   const isWindows = process.platform === "win32";
   if (process.platform !== "darwin" && !isWindows) {
     throw new Error("Native image color extraction is not available on this platform");
   }
-  if (!path8 || !(0, import_node_fs27.existsSync)(path8)) throw new Error("The selected image no longer exists");
+  if (!path8 || !(0, import_node_fs28.existsSync)(path8)) throw new Error("The selected image no longer exists");
   const helperPath = imageColorsHelperPath();
   if (!helperPath) throw new Error("The native image color helper is missing");
   const count = Math.max(1, Math.min(80, Math.round(Number(colorCount) || 40)));
-  const usePowerShell = isWindows && (0, import_node_path30.extname)(helperPath).toLowerCase() === ".ps1";
+  const usePowerShell = isWindows && (0, import_node_path33.extname)(helperPath).toLowerCase() === ".ps1";
   const command3 = usePowerShell ? "powershell.exe" : helperPath;
   const args = usePowerShell ? [
     "-NoLogo",
@@ -26549,7 +27405,7 @@ async function extractColorsFromImage(path8, colorCount = 40, dominantOnly = fal
     String(count),
     dominantOnly ? "true" : "false"
   ] : [path8, String(count), dominantOnly ? "true" : "false"];
-  const { stdout } = await execFileAsync18(command3, args, {
+  const { stdout } = await execFileAsync19(command3, args, {
     timeout: 6e4,
     maxBuffer: 10 * 1024 * 1024,
     ...isWindows ? { windowsHide: true } : {}
@@ -26563,14 +27419,14 @@ function screenOcrHelperPath2() {
   if (app?.isPackaged) {
     const resourcesPath = process.resourcesPath;
     if (resourcesPath) {
-      return (0, import_node_path30.join)(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper");
+      return (0, import_node_path33.join)(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper");
     }
   }
-  return (0, import_node_path30.join)(process.cwd(), "native", "screenocr", "screenocr-helper");
+  return (0, import_node_path33.join)(process.cwd(), "native", "screenocr", "screenocr-helper");
 }
 async function runScreenOcrHelper(command3, values) {
   const helperPath = screenOcrHelperPath2();
-  if (!(0, import_node_fs27.existsSync)(helperPath)) {
+  if (!(0, import_node_fs28.existsSync)(helperPath)) {
     throw new Error(`ScreenOCR native helper is missing at ${helperPath}`);
   }
   const visibleWindows = BrowserWindow?.getAllWindows ? BrowserWindow.getAllWindows().filter((window2) => window2.isVisible()) : [];
@@ -26582,7 +27438,7 @@ async function runScreenOcrHelper(command3, values) {
       app?.hide?.();
       await delay(120);
     }
-    const { stdout } = await execFileAsync18(helperPath, [command3, JSON.stringify(values)], {
+    const { stdout } = await execFileAsync19(helperPath, [command3, JSON.stringify(values)], {
       timeout: 18e4,
       maxBuffer: 10 * 1024 * 1024
     });
@@ -26605,7 +27461,7 @@ function colorWheelMarkdown() {
 function attachRuntimeRootMetadata(root, session2) {
   root.props = {
     ...root.props ?? {},
-    assetsPath: (0, import_node_path30.join)(session2.packageRoot, "assets")
+    assetsPath: (0, import_node_path33.join)(session2.packageRoot, "assets")
   };
   if (typeof root.props.markdown === "string") {
     root.props.markdown = resolveExtensionMarkdownAssets(root.props.markdown, session2.packageRoot);
@@ -26628,10 +27484,10 @@ function buildPreferenceSetupRoot(extensionId, commandName2) {
   };
 }
 function parsePackageJson(path8) {
-  if (!(0, import_node_fs27.existsSync)(path8)) {
+  if (!(0, import_node_fs28.existsSync)(path8)) {
     throw new Error(`Missing package.json at ${path8}`);
   }
-  const raw = (0, import_node_fs27.readFileSync)(path8, "utf8");
+  const raw = (0, import_node_fs28.readFileSync)(path8, "utf8");
   const parsed = JSON.parse(raw);
   return parsed && typeof parsed === "object" ? parsed : {};
 }
@@ -26643,25 +27499,25 @@ function findCommandInManifest(pkg, commandName2) {
   return command3;
 }
 function resolveCommandEntry(packageRoot, commandName2, command3) {
-  const prebuilt = (0, import_node_path30.join)(packageRoot, ".sc-build", `${commandName2}.js`);
-  if ((0, import_node_fs27.existsSync)(prebuilt)) return prebuilt;
-  const explicit = [command3.path, command3.entrypoint, command3.entry, command3.file, command3.source].filter((entry) => typeof entry === "string" && entry.trim().length > 0).map((entry) => (0, import_node_path30.join)(packageRoot, entry));
-  const src = (0, import_node_path30.join)(packageRoot, "src");
+  const prebuilt = (0, import_node_path33.join)(packageRoot, ".sc-build", `${commandName2}.js`);
+  if ((0, import_node_fs28.existsSync)(prebuilt)) return prebuilt;
+  const explicit = [command3.path, command3.entrypoint, command3.entry, command3.file, command3.source].filter((entry) => typeof entry === "string" && entry.trim().length > 0).map((entry) => (0, import_node_path33.join)(packageRoot, entry));
+  const src = (0, import_node_path33.join)(packageRoot, "src");
   const defaults = [
-    (0, import_node_path30.join)(src, `${commandName2}.tsx`),
-    (0, import_node_path30.join)(src, `${commandName2}.ts`),
-    (0, import_node_path30.join)(src, `${commandName2}.jsx`),
-    (0, import_node_path30.join)(src, `${commandName2}.js`),
-    (0, import_node_path30.join)(src, commandName2, "index.tsx"),
-    (0, import_node_path30.join)(src, commandName2, "index.ts"),
-    (0, import_node_path30.join)(src, commandName2, "index.jsx"),
-    (0, import_node_path30.join)(src, commandName2, "index.js"),
-    (0, import_node_path30.join)(src, "commands", `${commandName2}.tsx`),
-    (0, import_node_path30.join)(src, "commands", `${commandName2}.ts`),
-    (0, import_node_path30.join)(src, "commands", `${commandName2}.jsx`),
-    (0, import_node_path30.join)(src, "commands", `${commandName2}.js`)
+    (0, import_node_path33.join)(src, `${commandName2}.tsx`),
+    (0, import_node_path33.join)(src, `${commandName2}.ts`),
+    (0, import_node_path33.join)(src, `${commandName2}.jsx`),
+    (0, import_node_path33.join)(src, `${commandName2}.js`),
+    (0, import_node_path33.join)(src, commandName2, "index.tsx"),
+    (0, import_node_path33.join)(src, commandName2, "index.ts"),
+    (0, import_node_path33.join)(src, commandName2, "index.jsx"),
+    (0, import_node_path33.join)(src, commandName2, "index.js"),
+    (0, import_node_path33.join)(src, "commands", `${commandName2}.tsx`),
+    (0, import_node_path33.join)(src, "commands", `${commandName2}.ts`),
+    (0, import_node_path33.join)(src, "commands", `${commandName2}.jsx`),
+    (0, import_node_path33.join)(src, "commands", `${commandName2}.js`)
   ];
-  const candidate = [...explicit, ...defaults].find((entry) => (0, import_node_fs27.existsSync)(entry));
+  const candidate = [...explicit, ...defaults].find((entry) => (0, import_node_fs28.existsSync)(entry));
   if (!candidate) {
     throw new Error(`Could not resolve entry file for command ${commandName2}`);
   }
@@ -26683,8 +27539,8 @@ function patchExtensionScript(entryPath, code) {
   return code;
 }
 async function bundleCommand(entryPath, packageRoot) {
-  if (entryPath.includes(`${(0, import_node_path30.join)(".sc-build", "")}`) || entryPath.includes("/.sc-build/")) {
-    const prebuilt = (0, import_node_fs27.readFileSync)(entryPath, "utf8");
+  if (entryPath.includes(`${(0, import_node_path33.join)(".sc-build", "")}`) || entryPath.includes("/.sc-build/")) {
+    const prebuilt = (0, import_node_fs28.readFileSync)(entryPath, "utf8");
     if (!prebuilt.trim()) throw new Error(`Prebuilt extension bundle is empty: ${entryPath}`);
     return patchExtensionScript(entryPath, prebuilt);
   }
@@ -26694,9 +27550,9 @@ async function bundleCommand(entryPath, packageRoot) {
     name: "legacy-cheerio-default-interop",
     setup(build) {
       build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, (args) => {
-        const source = (0, import_node_fs27.readFileSync)(args.path, "utf8");
+        const source = (0, import_node_fs28.readFileSync)(args.path, "utf8");
         if (!/import\s+[A-Za-z_$][\w$]*\s+from\s+['"]cheerio['"]/.test(source)) return null;
-        const extension = (0, import_node_path30.extname)(args.path).toLowerCase();
+        const extension = (0, import_node_path33.extname)(args.path).toLowerCase();
         const loader = extension.endsWith("x") ? extension.slice(1) : extension.slice(1) || "js";
         return {
           contents: source.replace(
@@ -26725,7 +27581,7 @@ async function bundleCommand(entryPath, packageRoot) {
       "react/jsx-runtime",
       "react/jsx-dev-runtime"
     ],
-    nodePaths: [(0, import_node_path30.join)(packageRoot, "node_modules")],
+    nodePaths: [(0, import_node_path33.join)(packageRoot, "node_modules")],
     logLevel: "silent"
   });
   const output = result.outputFiles?.[0]?.text;
@@ -26944,7 +27800,7 @@ function normalizeActionTitle(typeName, props) {
   }
 }
 function stableActionId(index, typeName, title) {
-  const hash2 = (0, import_node_crypto14.createHash)("sha1").update(`${index}:${typeName}:${title}`).digest("hex").slice(0, 12);
+  const hash2 = (0, import_node_crypto15.createHash)("sha1").update(`${index}:${typeName}:${title}`).digest("hex").slice(0, 12);
   return `ext-action-${index}-${hash2}`;
 }
 function parseShortcut(shortcut) {
@@ -26968,19 +27824,19 @@ function pushEffect(session2, effect) {
   }
 }
 function createLocalStorageShim(packageRoot) {
-  const storagePath = (0, import_node_path30.join)(packageRoot, ".tezbar-local-storage.json");
+  const storagePath = (0, import_node_path33.join)(packageRoot, ".tezbar-local-storage.json");
   const readAll2 = () => {
-    if (!(0, import_node_fs27.existsSync)(storagePath)) return {};
+    if (!(0, import_node_fs28.existsSync)(storagePath)) return {};
     try {
-      const parsed = JSON.parse((0, import_node_fs27.readFileSync)(storagePath, "utf8"));
+      const parsed = JSON.parse((0, import_node_fs28.readFileSync)(storagePath, "utf8"));
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch {
       return {};
     }
   };
   const writeAll2 = (value) => {
-    (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(storagePath), { recursive: true });
-    (0, import_node_fs27.writeFileSync)(storagePath, JSON.stringify(value, null, 2), "utf8");
+    (0, import_node_fs28.mkdirSync)((0, import_node_path33.dirname)(storagePath), { recursive: true });
+    (0, import_node_fs28.writeFileSync)(storagePath, JSON.stringify(value, null, 2), "utf8");
   };
   return {
     getItem: async (key) => readAll2()[String(key)],
@@ -27005,20 +27861,20 @@ function createCacheShim(packageRoot) {
     constructor(options) {
       const rawNamespace = typeof options?.namespace === "string" && options.namespace.trim().length > 0 ? options.namespace.trim() : "shared";
       const safeNamespace = rawNamespace.replace(/[^a-z0-9._-]+/gi, "_");
-      this.storagePath = (0, import_node_path30.join)(packageRoot, ".tezbar-support", "cache", `${safeNamespace}.json`);
+      this.storagePath = (0, import_node_path33.join)(packageRoot, ".tezbar-support", "cache", `${safeNamespace}.json`);
     }
     readAll() {
-      if (!(0, import_node_fs27.existsSync)(this.storagePath)) return {};
+      if (!(0, import_node_fs28.existsSync)(this.storagePath)) return {};
       try {
-        const parsed = JSON.parse((0, import_node_fs27.readFileSync)(this.storagePath, "utf8"));
+        const parsed = JSON.parse((0, import_node_fs28.readFileSync)(this.storagePath, "utf8"));
         return parsed && typeof parsed === "object" ? parsed : {};
       } catch {
         return {};
       }
     }
     writeAll(value) {
-      (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(this.storagePath), { recursive: true });
-      (0, import_node_fs27.writeFileSync)(this.storagePath, JSON.stringify(value, null, 2), "utf8");
+      (0, import_node_fs28.mkdirSync)((0, import_node_path33.dirname)(this.storagePath), { recursive: true });
+      (0, import_node_fs28.writeFileSync)(this.storagePath, JSON.stringify(value, null, 2), "utf8");
     }
     notify(key, value) {
       for (const subscriber of this.subscribers) {
@@ -27114,12 +27970,12 @@ function createRaycastApiShim(session2) {
     tokenPath;
     constructor(options = {}) {
       const providerId = String(options.providerId ?? options.providerName ?? "oauth").replace(/[^a-z0-9._-]+/gi, "_").toLowerCase();
-      this.tokenPath = (0, import_node_path30.join)(session2.packageRoot, ".tezbar-support", "oauth", `${providerId}.json`);
+      this.tokenPath = (0, import_node_path33.join)(session2.packageRoot, ".tezbar-support", "oauth", `${providerId}.json`);
     }
     async getTokens() {
-      if (!(0, import_node_fs27.existsSync)(this.tokenPath)) return void 0;
+      if (!(0, import_node_fs28.existsSync)(this.tokenPath)) return void 0;
       try {
-        const stored = JSON.parse((0, import_node_fs27.readFileSync)(this.tokenPath, "utf8"));
+        const stored = JSON.parse((0, import_node_fs28.readFileSync)(this.tokenPath, "utf8"));
         return {
           ...stored,
           isExpired: () => typeof stored.expiresIn === "number" && stored.expiresIn <= Date.now()
@@ -27137,11 +27993,11 @@ function createRaycastApiShim(session2) {
         scope: String(response.scope ?? ""),
         expiresIn: Number.isFinite(expiresInSeconds) ? Date.now() + expiresInSeconds * 1e3 : Number(response.expiresIn) || void 0
       };
-      (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(this.tokenPath), { recursive: true });
-      (0, import_node_fs27.writeFileSync)(this.tokenPath, JSON.stringify(tokens2), "utf8");
+      (0, import_node_fs28.mkdirSync)((0, import_node_path33.dirname)(this.tokenPath), { recursive: true });
+      (0, import_node_fs28.writeFileSync)(this.tokenPath, JSON.stringify(tokens2), "utf8");
     }
     async removeTokens() {
-      await (0, import_promises5.rm)(this.tokenPath, { force: true });
+      await (0, import_promises7.rm)(this.tokenPath, { force: true });
     }
     async authorizationRequest(options) {
       return {
@@ -27364,8 +28220,8 @@ function createRaycastApiShim(session2) {
       commandName: session2.commandName,
       isDevelopment: false,
       commandMode: session2.commandMode,
-      assetsPath: (0, import_node_path30.join)(session2.packageRoot, "assets"),
-      supportPath: (0, import_node_path30.join)(session2.packageRoot, ".tezbar-support"),
+      assetsPath: (0, import_node_path33.join)(session2.packageRoot, "assets"),
+      supportPath: (0, import_node_path33.join)(session2.packageRoot, ".tezbar-support"),
       canAccess: () => false,
       get searchText() {
         return session2.searchText;
@@ -27392,7 +28248,7 @@ function createRaycastApiShim(session2) {
       if (session2.effectMode === "record") return [];
       if (process.platform === "win32") {
         try {
-          const { stdout } = await execFileAsync18(
+          const { stdout } = await execFileAsync19(
             "powershell.exe",
             [
               "-NoLogo",
@@ -27440,7 +28296,7 @@ function createRaycastApiShim(session2) {
         ])
       ) : {};
       const result = await runCommandFromPackagePath(
-        (0, import_node_path30.join)(session2.packageRoot, "package.json"),
+        (0, import_node_path33.join)(session2.packageRoot, "package.json"),
         session2.extensionId,
         targetName,
         argumentValues,
@@ -27509,7 +28365,7 @@ function createRaycastApiShim(session2) {
           return listApplications().sort((a, b) => a.name.localeCompare(b.name));
         }
         try {
-          const { stdout } = await execFileAsync18(
+          const { stdout } = await execFileAsync19(
             "/usr/bin/mdfind",
             ["kMDItemKind == 'Application'"],
             {
@@ -27518,7 +28374,7 @@ function createRaycastApiShim(session2) {
             }
           );
           const apps = stdout.trim().split("\n").filter((p) => p.endsWith(".app")).map((appPath) => ({
-            name: (0, import_node_path30.basename)(appPath, ".app"),
+            name: (0, import_node_path33.basename)(appPath, ".app"),
             path: appPath,
             bundleId: readAppBundleIdentifier(appPath)
           })).sort((a, b) => a.name.localeCompare(b.name));
@@ -27527,14 +28383,14 @@ function createRaycastApiShim(session2) {
         } catch (err) {
           console.warn("[getApplications] mdfind failed, falling back to directory scan:", err);
           const apps = [];
-          const dirs = ["/Applications", "/System/Applications", (0, import_node_path30.join)((0, import_node_os14.homedir)(), "Applications")];
+          const dirs = ["/Applications", "/System/Applications", (0, import_node_path33.join)((0, import_node_os15.homedir)(), "Applications")];
           for (const dir of dirs) {
             try {
-              for (const entry of (0, import_node_fs27.readdirSync)(dir)) {
+              for (const entry of (0, import_node_fs28.readdirSync)(dir)) {
                 if (entry.endsWith(".app")) {
-                  const appPath = (0, import_node_path30.join)(dir, entry);
+                  const appPath = (0, import_node_path33.join)(dir, entry);
                   apps.push({
-                    name: (0, import_node_path30.basename)(entry, ".app"),
+                    name: (0, import_node_path33.basename)(entry, ".app"),
                     path: appPath,
                     bundleId: readAppBundleIdentifier(appPath)
                   });
@@ -27561,7 +28417,7 @@ function createRaycastApiShim(session2) {
     getFrontmostApplication: async () => {
       if (process.platform === "win32") {
         try {
-          const { stdout } = await execFileAsync18(
+          const { stdout } = await execFileAsync19(
             "powershell.exe",
             [
               "-NoLogo",
@@ -27592,7 +28448,7 @@ function createRaycastApiShim(session2) {
           end try
           return (name of p) & linefeed & (bundle identifier of p) & linefeed & appPath
         end tell`;
-        const { stdout } = await execFileAsync18("/usr/bin/osascript", ["-e", script], {
+        const { stdout } = await execFileAsync19("/usr/bin/osascript", ["-e", script], {
           timeout: 3e3
         });
         const lines = stdout.trim().split("\n");
@@ -27882,7 +28738,7 @@ function createRaycastUtilsShim(session2) {
   const useStoragePromise = makePromiseHook();
   const useExec = (command3, args = [], options) => {
     const exec = async () => {
-      const { stdout, stderr } = await execFileAsync18(command3, args, {
+      const { stdout, stderr } = await execFileAsync19(command3, args, {
         encoding: "utf8",
         maxBuffer: 10 * 1024 * 1024
       });
@@ -28026,7 +28882,7 @@ function createRaycastUtilsShim(session2) {
     client = {
       removeTokens: async () => {
         activeAccessToken = void 0;
-        await (0, import_promises5.rm)(this.tokenPath, { force: true });
+        await (0, import_promises7.rm)(this.tokenPath, { force: true });
       }
     };
     provider;
@@ -28039,7 +28895,7 @@ function createRaycastUtilsShim(session2) {
       this.options = options;
       this.token = typeof options.personalAccessToken === "string" && options.personalAccessToken.trim() ? options.personalAccessToken.trim() : void 0;
       this.onAuthorize = options.onAuthorize;
-      this.tokenPath = (0, import_node_path30.join)(
+      this.tokenPath = (0, import_node_path33.join)(
         session2.packageRoot,
         ".tezbar-support",
         "oauth-service",
@@ -28054,9 +28910,9 @@ function createRaycastUtilsShim(session2) {
       return true;
     }
     readStoredTokens() {
-      if (!(0, import_node_fs27.existsSync)(this.tokenPath)) return void 0;
+      if (!(0, import_node_fs28.existsSync)(this.tokenPath)) return void 0;
       try {
-        const value = JSON.parse((0, import_node_fs27.readFileSync)(this.tokenPath, "utf8"));
+        const value = JSON.parse((0, import_node_fs28.readFileSync)(this.tokenPath, "utf8"));
         return typeof value.accessToken === "string" && value.accessToken ? value : void 0;
       } catch {
         return void 0;
@@ -28080,8 +28936,8 @@ function createRaycastUtilsShim(session2) {
         expiresAt: Number.isFinite(expiresIn) ? Date.now() + expiresIn * 1e3 : void 0,
         scope: String(response.scope ?? "") || void 0
       };
-      (0, import_node_fs27.mkdirSync)((0, import_node_path30.dirname)(this.tokenPath), { recursive: true });
-      (0, import_node_fs27.writeFileSync)(this.tokenPath, JSON.stringify(stored), "utf8");
+      (0, import_node_fs28.mkdirSync)((0, import_node_path33.dirname)(this.tokenPath), { recursive: true });
+      (0, import_node_fs28.writeFileSync)(this.tokenPath, JSON.stringify(stored), "utf8");
       activeAccessToken = accessToken;
       await Promise.resolve(this.onAuthorize?.({ token: accessToken, type: "oauth" }));
     }
@@ -28127,9 +28983,9 @@ function createRaycastUtilsShim(session2) {
       if (!clientId || !scope) throw new Error("Google OAuth requires clientId and scope");
       const stored = this.readStoredTokens();
       if (stored?.refreshToken && await this.refreshGoogleToken(stored)) return;
-      const state = (0, import_node_crypto14.randomBytes)(24).toString("base64url");
-      const codeVerifier = (0, import_node_crypto14.randomBytes)(48).toString("base64url");
-      const codeChallenge = (0, import_node_crypto14.createHash)("sha256").update(codeVerifier).digest("base64url");
+      const state = (0, import_node_crypto15.randomBytes)(24).toString("base64url");
+      const codeVerifier = (0, import_node_crypto15.randomBytes)(48).toString("base64url");
+      const codeChallenge = (0, import_node_crypto15.createHash)("sha256").update(codeVerifier).digest("base64url");
       let settleCallback = null;
       let rejectCallback = null;
       const callbackPromise = new Promise(
@@ -28361,7 +29217,7 @@ function sanitizeValue(value) {
   return void 0;
 }
 function mimeTypeForAsset(path8) {
-  switch ((0, import_node_path30.extname)(path8).toLowerCase()) {
+  switch ((0, import_node_path33.extname)(path8).toLowerCase()) {
     case ".svg":
       return "image/svg+xml";
     case ".png":
@@ -28387,13 +29243,13 @@ function resolveExtensionMarkdownAssets(markdown, packageRoot) {
       if (!src || /^(?:https?:|data:|file:)/i.test(src)) return match;
       const cleanSrc = src.split(/[?#]/)[0]?.replace(/^\.?\//, "") ?? "";
       if (!cleanSrc || cleanSrc.startsWith("/") || cleanSrc.includes("..")) return match;
-      const assetPath = (0, import_node_path30.join)(packageRoot, "assets", cleanSrc);
-      if (!(0, import_node_fs27.existsSync)(assetPath)) {
+      const assetPath = (0, import_node_path33.join)(packageRoot, "assets", cleanSrc);
+      if (!(0, import_node_fs28.existsSync)(assetPath)) {
         console.warn(`[ExtensionAssets] Missing markdown asset: ${assetPath}`);
         return match;
       }
       try {
-        const encoded = (0, import_node_fs27.readFileSync)(assetPath).toString("base64");
+        const encoded = (0, import_node_fs28.readFileSync)(assetPath).toString("base64");
         console.log(`[ExtensionAssets] Inlined markdown asset: ${assetPath}`);
         return `![${alt}](data:${mimeTypeForAsset(assetPath)};base64,${encoded})`;
       } catch {
@@ -28855,7 +29711,7 @@ function pruneSessions() {
   }
 }
 function runBundle(code, packageRoot, session2) {
-  const fileRequire = (0, import_node_module2.createRequire)((0, import_node_path30.join)(packageRoot, "package.json"));
+  const fileRequire = (0, import_node_module2.createRequire)((0, import_node_path33.join)(packageRoot, "package.json"));
   const jsxRuntimeShim = createJsxRuntimeShim();
   const reactShim = createReactShim(session2);
   const raycastApiShim = createRaycastApiShim(session2);
@@ -28930,7 +29786,7 @@ function runBundle(code, packageRoot, session2) {
     if (specifier === "sha256-file") {
       return (filename, callback) => {
         try {
-          const sum = (0, import_node_crypto14.createHash)("sha256").update((0, import_node_fs27.readFileSync)(filename)).digest("hex");
+          const sum = (0, import_node_crypto15.createHash)("sha256").update((0, import_node_fs28.readFileSync)(filename)).digest("hex");
           callback(null, sum);
         } catch (error) {
           callback(error instanceof Error ? error : new Error(String(error)));
@@ -28980,7 +29836,7 @@ function runBundle(code, packageRoot, session2) {
           });
           let data;
           if (merged.responseType === "stream") {
-            data = response.body ? import_node_stream.Readable.fromWeb(response.body) : import_node_stream.Readable.from([]);
+            data = response.body ? import_node_stream2.Readable.fromWeb(response.body) : import_node_stream2.Readable.from([]);
           } else {
             const text3 = await response.text();
             data = text3;
@@ -29067,7 +29923,7 @@ function runBundle(code, packageRoot, session2) {
     if (specifier === "tar") {
       const extract = async (options) => {
         if (!options?.file || !options.cwd) throw new Error("tar.extract requires file and cwd");
-        (0, import_node_fs27.mkdirSync)(options.cwd, { recursive: true });
+        (0, import_node_fs28.mkdirSync)(options.cwd, { recursive: true });
         const args = ["-xzf", options.file, "-C", options.cwd];
         try {
           if (typeof options.filter === "function") {
@@ -29077,7 +29933,7 @@ function runBundle(code, packageRoot, session2) {
           }
         } catch {
         }
-        await execFileAsync18(process.platform === "win32" ? "tar.exe" : "/usr/bin/tar", args);
+        await execFileAsync19(process.platform === "win32" ? "tar.exe" : "/usr/bin/tar", args);
       };
       return {
         extract,
@@ -29090,9 +29946,9 @@ function runBundle(code, packageRoot, session2) {
       const extractZip = async (file, options) => {
         const dir = options?.dir;
         if (!dir) throw new Error("extract-zip requires dir");
-        (0, import_node_fs27.mkdirSync)(dir, { recursive: true });
+        (0, import_node_fs28.mkdirSync)(dir, { recursive: true });
         if (process.platform === "win32") {
-          await execFileAsync18(
+          await execFileAsync19(
             "powershell.exe",
             [
               "-NoLogo",
@@ -29107,7 +29963,7 @@ function runBundle(code, packageRoot, session2) {
             }
           );
         } else {
-          await execFileAsync18("/usr/bin/unzip", ["-o", file, "-d", dir]);
+          await execFileAsync19("/usr/bin/unzip", ["-o", file, "-d", dir]);
         }
       };
       return {
@@ -29203,11 +30059,11 @@ function runBundle(code, packageRoot, session2) {
 ${runtimeCode}
 })`;
   const script = new import_node_vm.default.Script(wrapped, {
-    filename: (0, import_node_path30.join)(packageRoot, ".tezbar-runtime-bundle.cjs")
+    filename: (0, import_node_path33.join)(packageRoot, ".tezbar-runtime-bundle.cjs")
   });
   const fn = script.runInContext(context);
   const mod = { exports: {} };
-  fn(mod.exports, customRequire, mod, (0, import_node_path30.join)(packageRoot, ".tezbar-runtime-bundle.cjs"), packageRoot);
+  fn(mod.exports, customRequire, mod, (0, import_node_path33.join)(packageRoot, ".tezbar-runtime-bundle.cjs"), packageRoot);
   return mod.exports;
 }
 function getCommandExport(moduleExports) {
@@ -29242,8 +30098,8 @@ function manifestPreferenceDefaults(pkg, command3) {
   return values;
 }
 async function runCommandFromPackagePath(packageJsonPath, extensionId, commandName2, argumentValues, preferenceValues, options) {
-  const packageRoot = (0, import_node_path30.dirname)(packageJsonPath);
-  (0, import_node_fs27.mkdirSync)((0, import_node_path30.join)(packageRoot, ".tezbar-support"), { recursive: true });
+  const packageRoot = (0, import_node_path33.dirname)(packageJsonPath);
+  (0, import_node_fs28.mkdirSync)((0, import_node_path33.join)(packageRoot, ".tezbar-support"), { recursive: true });
   const pkg = parsePackageJson(packageJsonPath);
   const command3 = findCommandInManifest(pkg, commandName2);
   const mode = String(command3.mode || "").toLowerCase();
@@ -29403,7 +30259,7 @@ async function runExtensionCommandFromPackageJson(packageJsonPath, commandName2,
   if (!normalizedPath || !normalizedCommandName) {
     return { ok: false, message: "packageJsonPath and commandName are required." };
   }
-  const extensionId = `raycast.${(0, import_node_path30.basename)((0, import_node_path30.dirname)(normalizedPath)) || "external"}`;
+  const extensionId = `raycast.${(0, import_node_path33.basename)((0, import_node_path33.dirname)(normalizedPath)) || "external"}`;
   try {
     return await runCommandFromPackagePath(
       normalizedPath,
@@ -29474,26 +30330,26 @@ function clearAllExtensionSessions() {
   }
   sessions.clear();
 }
-var import_node_fs27, import_promises5, import_node_child_process21, import_node_crypto14, import_node_http2, import_node_os14, import_node_module2, import_node_path30, import_node_stream, import_web, import_node_util18, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync18, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
+var import_node_fs28, import_promises7, import_node_child_process22, import_node_crypto15, import_node_http2, import_node_os15, import_node_module2, import_node_path33, import_node_stream2, import_web, import_node_util19, import_node_v8, import_node_zlib, import_node_vm, TIMER_NOTIFICATION_MARKER, RUNTIME_COMPONENT_LIMIT, RUNTIME_RECURSION_LIMIT, SESSIONS_SOFT_LIMIT, INITIAL_RENDER_PASSES, SEARCH_TEXT_RENDER_PASSES, LIST_ITEM_PAGE_SIZE, APPLICATIONS_CACHE_TTL_MS, PROMISE_RESULT_CACHE_TTL_MS, PROMISE_RESULT_MEMORY_CACHE_LIMIT, BUILTIN_SET, JSX_FRAGMENT, REACT_CONTEXT, execFileAsync19, gzipAsync, IMAGE_MASK2, sessions, promiseResultMemoryCache, applicationsCache, iconProxy;
 var init_extension_runner = __esm({
   "src/main/extension-runner.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_fs27 = require("node:fs");
-    import_promises5 = require("node:fs/promises");
-    import_node_child_process21 = require("node:child_process");
+    import_node_fs28 = require("node:fs");
+    import_promises7 = require("node:fs/promises");
+    import_node_child_process22 = require("node:child_process");
     init_extension_sql();
     init_extension_confirm_alert();
     init_powershell_script();
     init_selected_text();
-    import_node_crypto14 = require("node:crypto");
+    import_node_crypto15 = require("node:crypto");
     import_node_http2 = require("node:http");
-    import_node_os14 = require("node:os");
+    import_node_os15 = require("node:os");
     import_node_module2 = require("node:module");
-    import_node_path30 = require("node:path");
-    import_node_stream = require("node:stream");
+    import_node_path33 = require("node:path");
+    import_node_stream2 = require("node:stream");
     import_web = require("node:stream/web");
-    import_node_util18 = require("node:util");
+    import_node_util19 = require("node:util");
     import_node_v8 = require("node:v8");
     import_node_zlib = require("node:zlib");
     import_node_vm = __toESM(require("node:vm"));
@@ -29515,8 +30371,8 @@ var init_extension_runner = __esm({
     BUILTIN_SET = new Set(import_node_module2.builtinModules);
     JSX_FRAGMENT = /* @__PURE__ */ Symbol.for("tezbar.jsx.fragment");
     REACT_CONTEXT = /* @__PURE__ */ Symbol.for("react.context");
-    execFileAsync18 = (0, import_node_util18.promisify)(import_node_child_process21.execFile);
-    gzipAsync = (0, import_node_util18.promisify)(import_node_zlib.gzip);
+    execFileAsync19 = (0, import_node_util19.promisify)(import_node_child_process22.execFile);
+    gzipAsync = (0, import_node_util19.promisify)(import_node_zlib.gzip);
     IMAGE_MASK2 = {
       Circle: "circle",
       RoundedRectangle: "roundedRectangle"
@@ -29612,7 +30468,7 @@ function spawnBunPipeTerminal(shell2, args, cwd, env, cols, rows) {
   };
 }
 function spawnPipeTerminal(shell2, args, cwd, env, cols, rows) {
-  const child = (0, import_node_child_process22.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+  const child = (0, import_node_child_process23.spawn)(shell2, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
   return {
     pid: child.pid ?? -1,
     process: shell2,
@@ -29654,8 +30510,8 @@ function clampDimension(value, min, max) {
 function normalizeTerminalPath(raw) {
   const requested = raw.trim().replace(/[\\/]\.\.\.$/, "");
   if (!requested) return "";
-  if (requested === "~") return (0, import_node_os15.homedir)();
-  if (requested.startsWith("~/")) return (0, import_node_path31.join)((0, import_node_os15.homedir)(), requested.slice(2));
+  if (requested === "~") return (0, import_node_os16.homedir)();
+  if (requested.startsWith("~/")) return (0, import_node_path34.join)((0, import_node_os16.homedir)(), requested.slice(2));
   const absolutePrefixes = [
     "/Users/",
     "/Volumes/",
@@ -29667,26 +30523,26 @@ function normalizeTerminalPath(raw) {
   ];
   const isFilesystemAbsolute = absolutePrefixes.some((prefix) => requested.startsWith(prefix)) || requested === "/Users" || requested === "/Volumes";
   if (requested.startsWith("/") && !isFilesystemAbsolute) {
-    return (0, import_node_path31.join)((0, import_node_os15.homedir)(), requested.slice(1));
+    return (0, import_node_path34.join)((0, import_node_os16.homedir)(), requested.slice(1));
   }
   return requested;
 }
 function resolveWorkingDirectory(raw) {
   const requested = raw?.trim();
   const expanded = requested ? normalizeTerminalPath(requested) : void 0;
-  const candidate = expanded ? (0, import_node_path31.resolve)(expanded) : (0, import_node_os15.homedir)();
+  const candidate = expanded ? (0, import_node_path34.resolve)(expanded) : (0, import_node_os16.homedir)();
   try {
-    return (0, import_node_fs28.existsSync)(candidate) && (0, import_node_fs28.statSync)(candidate).isDirectory() ? candidate : (0, import_node_os15.homedir)();
+    return (0, import_node_fs29.existsSync)(candidate) && (0, import_node_fs29.statSync)(candidate).isDirectory() ? candidate : (0, import_node_os16.homedir)();
   } catch {
-    return (0, import_node_os15.homedir)();
+    return (0, import_node_os16.homedir)();
   }
 }
 function resolveExistingWorkingDirectory(raw) {
   const requested = normalizeTerminalPath(raw);
   if (!requested) return null;
-  const candidate = (0, import_node_path31.resolve)(requested);
+  const candidate = (0, import_node_path34.resolve)(requested);
   try {
-    return (0, import_node_fs28.existsSync)(candidate) && (0, import_node_fs28.statSync)(candidate).isDirectory() ? candidate : null;
+    return (0, import_node_fs29.existsSync)(candidate) && (0, import_node_fs29.statSync)(candidate).isDirectory() ? candidate : null;
   } catch {
     return null;
   }
@@ -29694,7 +30550,7 @@ function resolveExistingWorkingDirectory(raw) {
 function processWorkingDirectory(pid) {
   try {
     if (process.platform === "darwin") {
-      const output = (0, import_node_child_process22.execFileSync)(
+      const output = (0, import_node_child_process23.execFileSync)(
         "/usr/sbin/lsof",
         ["-a", "-p", String(pid), "-d", "cwd", "-Fn"],
         { encoding: "utf8", timeout: 1e3 }
@@ -29703,7 +30559,7 @@ function processWorkingDirectory(pid) {
       return path8 ? resolveExistingWorkingDirectory(path8) : null;
     }
     if (process.platform === "linux") {
-      return resolveExistingWorkingDirectory((0, import_node_fs28.readlinkSync)(`/proc/${pid}/cwd`));
+      return resolveExistingWorkingDirectory((0, import_node_fs29.readlinkSync)(`/proc/${pid}/cwd`));
     }
   } catch {
   }
@@ -29718,12 +30574,12 @@ function validHistorySessionId(sessionId) {
 }
 function terminalHistoryPath(sessionId) {
   if (!validHistorySessionId(sessionId)) throw new Error("Invalid terminal session id");
-  (0, import_node_fs28.mkdirSync)(TERMINAL_HISTORY_DIR, { recursive: true, mode: 448 });
-  return (0, import_node_path31.join)(TERMINAL_HISTORY_DIR, `${sessionId}.log`);
+  (0, import_node_fs29.mkdirSync)(TERMINAL_HISTORY_DIR, { recursive: true, mode: 448 });
+  return (0, import_node_path34.join)(TERMINAL_HISTORY_DIR, `${sessionId}.log`);
 }
 function readTerminalHistory(session2) {
   try {
-    return (0, import_node_fs28.readFileSync)(session2.historyPath, "utf8");
+    return (0, import_node_fs29.readFileSync)(session2.historyPath, "utf8");
   } catch {
     return session2.outputChunks.join("");
   }
@@ -29731,7 +30587,7 @@ function readTerminalHistory(session2) {
 function removeTerminalHistory(sessionId) {
   if (!validHistorySessionId(sessionId)) return;
   try {
-    (0, import_node_fs28.rmSync)(terminalHistoryPath(sessionId), { force: true });
+    (0, import_node_fs29.rmSync)(terminalHistoryPath(sessionId), { force: true });
   } catch {
   }
 }
@@ -29809,7 +30665,7 @@ function persistSessionSummary(summary) {
 }
 function appendOutput(session2, data) {
   try {
-    (0, import_node_fs28.appendFileSync)(session2.historyPath, data, "utf8");
+    (0, import_node_fs29.appendFileSync)(session2.historyPath, data, "utf8");
   } catch {
   }
   session2.outputChunks.push(data);
@@ -29885,7 +30741,7 @@ function registerOwnerCleanup(sender) {
 }
 function resolveShell() {
   const configured = process.env.SHELL?.trim();
-  if (configured && configured.startsWith("/") && (0, import_node_fs28.existsSync)(configured)) return configured;
+  if (configured && configured.startsWith("/") && (0, import_node_fs29.existsSync)(configured)) return configured;
   return process.platform === "win32" ? "powershell.exe" : "/bin/zsh";
 }
 function terminalEnvironment() {
@@ -29920,12 +30776,12 @@ function createTerminalSession(sender, request) {
     throw new Error("Invalid terminal session id");
   }
   const restoredSummary = request.restoreSessionId ? persistedSummaries.get(request.restoreSessionId) : void 0;
-  const sessionId = restoredSummary ? restoredSummary.sessionId : (0, import_node_crypto15.randomUUID)();
+  const sessionId = restoredSummary ? restoredSummary.sessionId : (0, import_node_crypto16.randomUUID)();
   if (sessions2.has(sessionId)) throw new Error("Terminal session is already running");
   const historyPath = terminalHistoryPath(sessionId);
-  if (!restoredSummary) (0, import_node_fs28.writeFileSync)(historyPath, "", { encoding: "utf8", mode: 384 });
-  else if (!(0, import_node_fs28.existsSync)(historyPath) || (0, import_node_fs28.statSync)(historyPath).size === 0) {
-    (0, import_node_fs28.writeFileSync)(historyPath, legacyTerminalHistory(request.restoreCommand), {
+  if (!restoredSummary) (0, import_node_fs29.writeFileSync)(historyPath, "", { encoding: "utf8", mode: 384 });
+  else if (!(0, import_node_fs29.existsSync)(historyPath) || (0, import_node_fs29.statSync)(historyPath).size === 0) {
+    (0, import_node_fs29.writeFileSync)(historyPath, legacyTerminalHistory(request.restoreCommand), {
       encoding: "utf8",
       mode: 384
     });
@@ -30215,8 +31071,8 @@ function deleteTerminalSession(ownerId, sessionId) {
   return deleted;
 }
 function getTerminalPromptInfo() {
-  const user = (0, import_node_os15.userInfo)().username;
-  const host = (0, import_node_os15.hostname)().split(".")[0];
+  const user = (0, import_node_os16.userInfo)().username;
+  const host = (0, import_node_os16.hostname)().split(".")[0];
   const dir = "~";
   return { user, host, dir };
 }
@@ -30236,15 +31092,16 @@ function shutdownTerminalSessions() {
   }
   sessions2.clear();
 }
-var import_node_fs28, import_node_os15, import_node_path31, import_node_crypto15, import_node_child_process22, sessions2, ownerCleanupRegistered, persistedSummaries, persistedLoaded, OUTPUT_REPLAY_LIMIT_BYTES, TERMINAL_CONFIG_KEY, TERMINAL_HISTORY_DIR, SAVE_FOR_MS, KEEP_ALIVE_MS;
+var import_node_fs29, import_node_os16, import_node_path34, import_node_crypto16, import_node_child_process23, sessions2, ownerCleanupRegistered, persistedSummaries, persistedLoaded, OUTPUT_REPLAY_LIMIT_BYTES, TERMINAL_CONFIG_KEY, TERMINAL_HISTORY_DIR, SAVE_FOR_MS, KEEP_ALIVE_MS;
 var init_service4 = __esm({
   "src/main/terminal/service.ts"() {
     "use strict";
-    import_node_fs28 = require("node:fs");
-    import_node_os15 = require("node:os");
-    import_node_path31 = require("node:path");
-    import_node_crypto15 = require("node:crypto");
-    import_node_child_process22 = require("node:child_process");
+    init_profile();
+    import_node_fs29 = require("node:fs");
+    import_node_os16 = require("node:os");
+    import_node_path34 = require("node:path");
+    import_node_crypto16 = require("node:crypto");
+    import_node_child_process23 = require("node:child_process");
     init_terminal();
     init_configStore();
     sessions2 = /* @__PURE__ */ new Map();
@@ -30253,7 +31110,7 @@ var init_service4 = __esm({
     persistedLoaded = false;
     OUTPUT_REPLAY_LIMIT_BYTES = 512 * 1024;
     TERMINAL_CONFIG_KEY = "terminalSessions";
-    TERMINAL_HISTORY_DIR = (0, import_node_path31.join)((0, import_node_os15.homedir)(), ".openray", "terminal-history");
+    TERMINAL_HISTORY_DIR = (0, import_node_path34.join)(configurationDirectory(), "terminal-history");
     SAVE_FOR_MS = {
       day: 24 * 60 * 60 * 1e3,
       week: 7 * 24 * 60 * 60 * 1e3,
@@ -30276,10 +31133,10 @@ function screenOcrHelperPath3() {
   const resourcesPath = process.resourcesPath;
   const candidates = [
     process.env["SCREENOCR_HELPER_PATH"],
-    app.isPackaged && resourcesPath ? import_node_path32.default.join(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper") : void 0,
-    import_node_path32.default.join(process.cwd(), "native", "screenocr", "screenocr-helper")
+    app.isPackaged && resourcesPath ? import_node_path35.default.join(resourcesPath, "app.asar.unpacked", "native", "screenocr", "screenocr-helper") : void 0,
+    import_node_path35.default.join(process.cwd(), "native", "screenocr", "screenocr-helper")
   ];
-  return candidates.find((candidate) => Boolean(candidate && (0, import_node_fs29.existsSync)(candidate)));
+  return candidates.find((candidate) => Boolean(candidate && (0, import_node_fs30.existsSync)(candidate)));
 }
 function imageExtension(mimeType) {
   if (mimeType === "image/jpeg") return "jpg";
@@ -30290,15 +31147,15 @@ async function extractTextFromAgentImages(images) {
   if (process.platform !== "darwin" || images.length === 0) return "";
   const helperPath = screenOcrHelperPath3();
   if (!helperPath) return "";
-  const workDir = await (0, import_promises6.mkdtemp)(import_node_path32.default.join((0, import_node_os16.tmpdir)(), "raymes-agent-image-"));
+  const workDir = await (0, import_promises8.mkdtemp)(import_node_path35.default.join((0, import_node_os17.tmpdir)(), "raymes-agent-image-"));
   try {
     const textBlocks = [];
     for (let index = 0; index < images.length; index += 1) {
       const image = images[index];
       if (!image) continue;
-      const imagePath = import_node_path32.default.join(workDir, `attachment-${index}.${imageExtension(image.mimeType)}`);
-      await (0, import_promises6.writeFile)(imagePath, Buffer.from(image.data, "base64"));
-      const { stdout } = await execFileAsync19(
+      const imagePath = import_node_path35.default.join(workDir, `attachment-${index}.${imageExtension(image.mimeType)}`);
+      await (0, import_promises8.writeFile)(imagePath, Buffer.from(image.data, "base64"));
+      const { stdout } = await execFileAsync20(
         helperPath,
         [
           "recognize-text",
@@ -30317,21 +31174,21 @@ async function extractTextFromAgentImages(images) {
     }
     return textBlocks.join("\n\n").slice(0, MAX_OCR_CHARS);
   } finally {
-    await (0, import_promises6.rm)(workDir, { recursive: true, force: true });
+    await (0, import_promises8.rm)(workDir, { recursive: true, force: true });
   }
 }
-var import_node_child_process23, import_node_fs29, import_promises6, import_node_os16, import_node_path32, import_node_util19, execFileAsync19, MAX_OCR_CHARS;
+var import_node_child_process24, import_node_fs30, import_promises8, import_node_os17, import_node_path35, import_node_util20, execFileAsync20, MAX_OCR_CHARS;
 var init_imageContext = __esm({
   "src/main/agent/imageContext.ts"() {
     "use strict";
-    import_node_child_process23 = require("node:child_process");
-    import_node_fs29 = require("node:fs");
-    import_promises6 = require("node:fs/promises");
-    import_node_os16 = require("node:os");
-    import_node_path32 = __toESM(require("node:path"));
-    import_node_util19 = require("node:util");
+    import_node_child_process24 = require("node:child_process");
+    import_node_fs30 = require("node:fs");
+    import_promises8 = require("node:fs/promises");
+    import_node_os17 = require("node:os");
+    import_node_path35 = __toESM(require("node:path"));
+    import_node_util20 = require("node:util");
     init_desktop_runtime();
-    execFileAsync19 = (0, import_node_util19.promisify)(import_node_child_process23.execFile);
+    execFileAsync20 = (0, import_node_util20.promisify)(import_node_child_process24.execFile);
     MAX_OCR_CHARS = 4e4;
   }
 });
@@ -30341,32 +31198,31 @@ var piExtensions_exports = {};
 __export(piExtensions_exports, {
   getInstalledPiExtensions: () => getInstalledPiExtensions
 });
-function getInstalledPiExtensions() {
-  const agentDir = import_node_path33.default.join((0, import_node_os17.homedir)(), ".pi", "agent");
-  const settingsPath = import_node_path33.default.join(agentDir, "settings.json");
-  const nodeModulesDir = import_node_path33.default.join(agentDir, "npm", "node_modules");
-  const extensionsDir = import_node_path33.default.join(agentDir, "extensions");
+function getInstalledPiExtensions(agentDir = piAgentDirectory()) {
+  const settingsPath = import_node_path36.default.join(agentDir, "settings.json");
+  const nodeModulesDir = import_node_path36.default.join(agentDir, "npm", "node_modules");
+  const extensionsDir = import_node_path36.default.join(agentDir, "extensions");
   const results = [];
   const seenIds = /* @__PURE__ */ new Set();
-  if ((0, import_node_fs30.existsSync)(settingsPath)) {
+  if ((0, import_node_fs31.existsSync)(settingsPath)) {
     try {
-      const settings = JSON.parse((0, import_node_fs30.readFileSync)(settingsPath, "utf8"));
+      const settings = JSON.parse((0, import_node_fs31.readFileSync)(settingsPath, "utf8"));
       const packages = Array.isArray(settings.packages) ? settings.packages : [];
       for (const pkg of packages) {
         const pkgName = pkg.replace(/^npm:/, "");
         if (seenIds.has(pkgName)) continue;
         seenIds.add(pkgName);
-        const pkgJsonPath = import_node_path33.default.join(nodeModulesDir, pkgName, "package.json");
-        if ((0, import_node_fs30.existsSync)(pkgJsonPath)) {
+        const pkgJsonPath = import_node_path36.default.join(nodeModulesDir, pkgName, "package.json");
+        if ((0, import_node_fs31.existsSync)(pkgJsonPath)) {
           try {
-            const pkgJson = JSON.parse((0, import_node_fs30.readFileSync)(pkgJsonPath, "utf8"));
+            const pkgJson = JSON.parse((0, import_node_fs31.readFileSync)(pkgJsonPath, "utf8"));
             results.push({
               id: pkgName,
               name: pkgJson.name || pkgName,
               version: pkgJson.version ? `v${pkgJson.version}` : "installed",
               description: pkgJson.description || "Pi agent package",
               type: "package",
-              location: import_node_path33.default.join(nodeModulesDir, pkgName),
+              location: import_node_path36.default.join(nodeModulesDir, pkgName),
               enabled: true,
               features: getPackageFeatures(pkgName, pkgJson.description)
             });
@@ -30388,15 +31244,15 @@ function getInstalledPiExtensions() {
     } catch {
     }
   }
-  if ((0, import_node_fs30.existsSync)(extensionsDir)) {
+  if ((0, import_node_fs31.existsSync)(extensionsDir)) {
     try {
-      const files = (0, import_node_fs30.readdirSync)(extensionsDir);
+      const files = (0, import_node_fs31.readdirSync)(extensionsDir);
       for (const file of files) {
         if (file.endsWith(".ts") || file.endsWith(".js")) {
-          const id = import_node_path33.default.basename(file, import_node_path33.default.extname(file));
+          const id = import_node_path36.default.basename(file, import_node_path36.default.extname(file));
           if (seenIds.has(id)) continue;
           seenIds.add(id);
-          const scriptPath = import_node_path33.default.join(extensionsDir, file);
+          const scriptPath = import_node_path36.default.join(extensionsDir, file);
           results.push({
             id,
             name: id.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
@@ -30435,25 +31291,25 @@ function getScriptFeatures(id) {
   if (id.includes("modal")) return ["Modal GLM-5.3-Flash provider", "Serverless inference endpoint"];
   return ["Custom extension hooks and tools"];
 }
-var import_node_fs30, import_node_os17, import_node_path33;
+var import_node_fs31, import_node_path36;
 var init_piExtensions = __esm({
   "src/main/agent/piExtensions.ts"() {
     "use strict";
-    import_node_fs30 = require("node:fs");
-    import_node_os17 = require("node:os");
-    import_node_path33 = __toESM(require("node:path"));
+    import_node_fs31 = require("node:fs");
+    import_node_path36 = __toESM(require("node:path"));
+    init_profile();
   }
 });
 
 // src/main/llm/memoryStore.ts
 function memoryPath() {
-  const dir = (0, import_node_path34.join)(app.getPath("userData"), "llm");
-  (0, import_node_fs31.mkdirSync)(dir, { recursive: true });
-  return (0, import_node_path34.join)(dir, "memory.json");
+  const dir = (0, import_node_path37.join)(app.getPath("userData"), "llm");
+  (0, import_node_fs32.mkdirSync)(dir, { recursive: true });
+  return (0, import_node_path37.join)(dir, "memory.json");
 }
 function readDb2() {
   try {
-    const raw = (0, import_node_fs31.readFileSync)(memoryPath(), "utf8");
+    const raw = (0, import_node_fs32.readFileSync)(memoryPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.entries)) return { entries: [] };
     return { entries: parsed.entries };
@@ -30462,7 +31318,7 @@ function readDb2() {
   }
 }
 function writeDb3(db) {
-  (0, import_node_fs31.writeFileSync)(memoryPath(), `${JSON.stringify(db, null, 2)}
+  (0, import_node_fs32.writeFileSync)(memoryPath(), `${JSON.stringify(db, null, 2)}
 `, "utf8");
 }
 function tokenize3(input) {
@@ -30507,13 +31363,13 @@ function retrieveMemories(query, policy) {
     return b.createdAt - a.createdAt;
   }).slice(0, policy.maxItems).map((entry) => entry.text);
 }
-var import_node_fs31, import_node_path34;
+var import_node_fs32, import_node_path37;
 var init_memoryStore = __esm({
   "src/main/llm/memoryStore.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_fs31 = require("node:fs");
-    import_node_path34 = require("node:path");
+    import_node_fs32 = require("node:fs");
+    import_node_path37 = require("node:path");
     init_redaction();
   }
 });
@@ -30631,7 +31487,7 @@ async function getLoginPath() {
     return cachedLoginPath;
   }
   try {
-    const { stdout } = await execFileAsync20("bash", ["-lc", 'echo -n "$PATH"']);
+    const { stdout } = await execFileAsync21("bash", ["-lc", 'echo -n "$PATH"']);
     const fromShell = stdout.trim();
     cachedLoginPath = fromShell || process.env["PATH"] || "";
   } catch {
@@ -30646,21 +31502,21 @@ async function getLoginPath() {
 }
 async function execWithUserPath(file, args, options = {}) {
   const path8 = await getLoginPath();
-  return execFileAsync20(file, args, {
+  return execFileAsync21(file, args, {
     maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
     env: { ...process.env, PATH: path8 }
   });
 }
 function voiceModelsRootDir() {
-  const dir = (0, import_node_path35.join)(app.getPath("userData"), "voice-models");
-  (0, import_node_fs32.mkdirSync)(dir, { recursive: true });
+  const dir = (0, import_node_path38.join)(app.getPath("userData"), "voice-models");
+  (0, import_node_fs33.mkdirSync)(dir, { recursive: true });
   return dir;
 }
 function modelDir(modelId) {
-  return (0, import_node_path35.join)(voiceModelsRootDir(), modelId);
+  return (0, import_node_path38.join)(voiceModelsRootDir(), modelId);
 }
 function modelAssetPath(modelId, fileName) {
-  return (0, import_node_path35.join)(modelDir(modelId), fileName);
+  return (0, import_node_path38.join)(modelDir(modelId), fileName);
 }
 function findModel(modelId) {
   const model = MODEL_CATALOG.find((entry) => entry.id === modelId);
@@ -30682,7 +31538,7 @@ function readSelectedModelId() {
 }
 function fileSizeOrZero(path8) {
   try {
-    return (0, import_node_fs32.statSync)(path8).size;
+    return (0, import_node_fs33.statSync)(path8).size;
   } catch {
     return 0;
   }
@@ -30696,7 +31552,7 @@ function modelDownloadedBytes(model) {
 function isModelFullyDownloaded(model) {
   return model.assets.every((asset) => {
     const path8 = modelAssetPath(model.id, asset.fileName);
-    return (0, import_node_fs32.existsSync)(path8) && fileSizeOrZero(path8) > 0;
+    return (0, import_node_fs33.existsSync)(path8) && fileSizeOrZero(path8) > 0;
   });
 }
 async function probeRuntime(kind) {
@@ -30726,7 +31582,7 @@ async function probeRuntime(kind) {
 }
 async function runLoginShell(command3) {
   const path8 = await getLoginPath();
-  const { stdout, stderr } = await execFileAsync20("bash", ["-lc", command3], {
+  const { stdout, stderr } = await execFileAsync21("bash", ["-lc", command3], {
     maxBuffer: 32 * 1024 * 1024,
     env: {
       ...process.env,
@@ -30870,11 +31726,11 @@ async function downloadAssetWithProgress(url, destinationPath, onProgress) {
   if (!response.ok || !response.body) {
     throw new Error(`Download failed (${response.status}): ${url}`);
   }
-  await import_node_fs33.promises.mkdir((0, import_node_path35.dirname)(destinationPath), { recursive: true });
+  await import_node_fs34.promises.mkdir((0, import_node_path38.dirname)(destinationPath), { recursive: true });
   const tempPath = `${destinationPath}.part`;
   const total = Number(response.headers.get("content-length") ?? "");
   const totalBytes = Number.isFinite(total) && total > 0 ? total : null;
-  const writer = (0, import_node_fs32.createWriteStream)(tempPath);
+  const writer = (0, import_node_fs33.createWriteStream)(tempPath);
   const reader = response.body.getReader();
   let downloaded = 0;
   try {
@@ -30890,21 +31746,21 @@ async function downloadAssetWithProgress(url, destinationPath, onProgress) {
     }
     writer.end();
     await (0, import_node_events2.once)(writer, "finish");
-    await import_node_fs33.promises.rename(tempPath, destinationPath);
+    await import_node_fs34.promises.rename(tempPath, destinationPath);
   } catch (error) {
     writer.destroy();
-    await import_node_fs33.promises.rm(tempPath, { force: true });
+    await import_node_fs34.promises.rm(tempPath, { force: true });
     throw error;
   }
 }
 async function runModelDownload(modelId) {
   const model = findModel(modelId);
   const destinationRoot = modelDir(modelId);
-  await import_node_fs33.promises.mkdir(destinationRoot, { recursive: true });
+  await import_node_fs34.promises.mkdir(destinationRoot, { recursive: true });
   let baselineBytes = modelDownloadedBytes(model);
   const runtimeNeeded = !(await probeRuntime(model.runtime)).ready;
   const missingAssets = model.assets.filter(
-    (asset) => !(0, import_node_fs32.existsSync)(modelAssetPath(modelId, asset.fileName))
+    (asset) => !(0, import_node_fs33.existsSync)(modelAssetPath(modelId, asset.fileName))
   );
   if (!runtimeNeeded && missingAssets.length === 0) {
     activeDownloads.delete(modelId);
@@ -31022,8 +31878,8 @@ async function cleanupStaleVoiceModelAssets() {
         if (currentAssets.has(fileName)) continue;
         const fullPath = modelAssetPath(model.id, fileName);
         try {
-          await import_node_fs33.promises.stat(fullPath);
-          await import_node_fs33.promises.rm(fullPath, { force: true });
+          await import_node_fs34.promises.stat(fullPath);
+          await import_node_fs34.promises.rm(fullPath, { force: true });
           console.log("[stt][main] removed stale voice model asset:", fullPath);
         } catch {
         }
@@ -31053,7 +31909,7 @@ async function deleteVoiceModel(modelId) {
   if (activeDownloads.get(modelId)?.status === "downloading") {
     throw new Error("Wait for this model download to finish before deleting it.");
   }
-  await import_node_fs33.promises.rm(modelDir(modelId), { recursive: true, force: true });
+  await import_node_fs34.promises.rm(modelDir(modelId), { recursive: true, force: true });
   activeDownloads.delete(modelId);
   const selectedId = readSelectedModelId();
   if (selectedId !== modelId) return selectedId;
@@ -31065,7 +31921,7 @@ async function speakText(text3) {
   const trimmed = text3.trim();
   if (!trimmed) return;
   stopSpeaking();
-  activeSpeech = process.platform === "win32" ? (0, import_node_child_process24.spawn)(
+  activeSpeech = process.platform === "win32" ? (0, import_node_child_process25.spawn)(
     "powershell.exe",
     [
       "-NoLogo",
@@ -31079,7 +31935,7 @@ async function speakText(text3) {
       windowsHide: true,
       env: { ...process.env, TEZBAR_SPEECH_TEXT: trimmed }
     }
-  ) : (0, import_node_child_process24.spawn)("say", [trimmed], {
+  ) : (0, import_node_child_process25.spawn)("say", [trimmed], {
     stdio: "ignore"
   });
   activeSpeech.on("exit", () => {
@@ -31095,11 +31951,11 @@ async function hasBinary(binary) {
   try {
     const path8 = await getLoginPath();
     if (process.platform === "win32") {
-      await execFileAsync20("where.exe", [binary], {
+      await execFileAsync21("where.exe", [binary], {
         env: { ...process.env, Path: path8, PATH: path8 }
       });
     } else {
-      await execFileAsync20("bash", ["-lc", `command -v ${binary}`], {
+      await execFileAsync21("bash", ["-lc", `command -v ${binary}`], {
         env: { ...process.env, PATH: path8 }
       });
     }
@@ -31147,7 +32003,7 @@ function preferredMoonshineModelPath() {
   throw new Error("Moonshine model files are not downloaded yet. Download a Moonshine model first.");
 }
 async function convertToWav(inputPath, outputPath) {
-  await execFileAsync20("ffmpeg", [
+  await execFileAsync21("ffmpeg", [
     "-y",
     "-i",
     inputPath,
@@ -31248,7 +32104,7 @@ function extensionFromMime(mime) {
 }
 async function findWhisperCliModel() {
   const envPath = process.env["RAYMES_WHISPER_MODEL"];
-  if (envPath && (0, import_node_fs32.existsSync)(envPath)) return envPath;
+  if (envPath && (0, import_node_fs33.existsSync)(envPath)) return envPath;
   const selected = readSelectedModelId();
   const selectedModel = findModel(selected);
   const whisperModels = MODEL_CATALOG.filter((model) => model.family === "whisper");
@@ -31256,7 +32112,7 @@ async function findWhisperCliModel() {
   for (const model of preferredModels) {
     for (const asset of model.assets) {
       const assetPath = modelAssetPath(model.id, asset.fileName);
-      if ((0, import_node_fs32.existsSync)(assetPath)) {
+      if ((0, import_node_fs33.existsSync)(assetPath)) {
         return assetPath;
       }
     }
@@ -31268,7 +32124,7 @@ async function findWhisperCliModel() {
     "/usr/local/share/whisper-cpp/ggml-base.bin"
   ];
   for (const c of candidates) {
-    if ((0, import_node_fs32.existsSync)(c)) return c;
+    if ((0, import_node_fs33.existsSync)(c)) return c;
   }
   return null;
 }
@@ -31314,8 +32170,8 @@ async function runWhisperCli(wavPath, language) {
     const { stderr } = await execWithUserPath(binary, args);
     if (stderr.trim()) console.info("[stt][main] whisper-cli stderr:\n" + stderr.trim());
     const txtPath = wavPath.replace(/\.wav$/, ".txt");
-    const text3 = await import_node_fs33.promises.readFile(txtPath, "utf-8").catch(() => "");
-    await import_node_fs33.promises.rm(txtPath, { force: true }).catch(() => void 0);
+    const text3 = await import_node_fs34.promises.readFile(txtPath, "utf-8").catch(() => "");
+    await import_node_fs34.promises.rm(txtPath, { force: true }).catch(() => void 0);
     return text3.trim();
   } catch (err) {
     const e = err;
@@ -31345,14 +32201,14 @@ async function probeEngineBinaries() {
   return cachedEngineProbe;
 }
 async function transcribeAudio(req) {
-  const tempRoot = (0, import_node_path35.join)(app.getPath("temp"), "tezbar-voice");
-  await import_node_fs33.promises.mkdir(tempRoot, { recursive: true });
+  const tempRoot = (0, import_node_path38.join)(app.getPath("temp"), "tezbar-voice");
+  await import_node_fs34.promises.mkdir(tempRoot, { recursive: true });
   const token = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const ext = extensionFromMime(req.mimeType);
-  const sourcePath = (0, import_node_path35.join)(tempRoot, `input-${token}.${ext}`);
-  const wavPath = ext === "wav" ? sourcePath : (0, import_node_path35.join)(tempRoot, `input-${token}.wav`);
+  const sourcePath = (0, import_node_path38.join)(tempRoot, `input-${token}.${ext}`);
+  const wavPath = ext === "wav" ? sourcePath : (0, import_node_path38.join)(tempRoot, `input-${token}.wav`);
   try {
-    await import_node_fs33.promises.writeFile(sourcePath, Buffer.from(req.audioBytes));
+    await import_node_fs34.promises.writeFile(sourcePath, Buffer.from(req.audioBytes));
     console.info(
       "[stt][main] received audio",
       JSON.stringify({
@@ -31429,9 +32285,9 @@ async function transcribeAudio(req) {
     console.error("[stt][main] transcription pipeline error:", message);
     return { ok: false, error: message };
   } finally {
-    await import_node_fs33.promises.rm(sourcePath, { force: true }).catch(() => void 0);
+    await import_node_fs34.promises.rm(sourcePath, { force: true }).catch(() => void 0);
     if (wavPath !== sourcePath) {
-      await import_node_fs33.promises.rm(wavPath, { force: true }).catch(() => void 0);
+      await import_node_fs34.promises.rm(wavPath, { force: true }).catch(() => void 0);
     }
   }
 }
@@ -31443,21 +32299,21 @@ ${result.hint}` : result.error);
   }
   return { text: result.text, engine: result.engine };
 }
-var import_node_child_process24, import_node_fs32, import_node_fs33, import_node_os18, import_node_path35, import_node_events2, import_node_util20, execFileAsync20, activeSpeech, cachedLoginPath, MODEL_CATALOG, activeDownloads, VOICE_MODEL_CONFIG_KEY, runtimeCache, LEGACY_WHISPER_ASSET_NAMES, staleVoiceCleanupPromise, cachedEngineProbe, ENGINE_PROBE_TTL_MS;
+var import_node_child_process25, import_node_fs33, import_node_fs34, import_node_os18, import_node_path38, import_node_events2, import_node_util21, execFileAsync21, activeSpeech, cachedLoginPath, MODEL_CATALOG, activeDownloads, VOICE_MODEL_CONFIG_KEY, runtimeCache, LEGACY_WHISPER_ASSET_NAMES, staleVoiceCleanupPromise, cachedEngineProbe, ENGINE_PROBE_TTL_MS;
 var init_service5 = __esm({
   "src/main/voice/service.ts"() {
     "use strict";
     init_desktop_runtime();
-    import_node_child_process24 = require("node:child_process");
-    import_node_fs32 = require("node:fs");
+    import_node_child_process25 = require("node:child_process");
     import_node_fs33 = require("node:fs");
+    import_node_fs34 = require("node:fs");
     import_node_os18 = require("node:os");
-    import_node_path35 = require("node:path");
+    import_node_path38 = require("node:path");
     import_node_events2 = require("node:events");
-    import_node_util20 = require("node:util");
+    import_node_util21 = require("node:util");
     init_configStore();
     init_voice();
-    execFileAsync20 = (0, import_node_util20.promisify)(import_node_child_process24.execFile);
+    execFileAsync21 = (0, import_node_util21.promisify)(import_node_child_process25.execFile);
     activeSpeech = null;
     cachedLoginPath = null;
     MODEL_CATALOG = [
@@ -31643,8 +32499,8 @@ var init_service5 = __esm({
 
 // src/main/ipc.ts
 init_desktop_runtime();
-var import_node_fs34 = require("node:fs");
-var import_node_path36 = require("node:path");
+var import_node_fs35 = require("node:fs");
+var import_node_path39 = require("node:path");
 
 // src/main/clipboardPng.ts
 var PNG_MAGIC = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -31760,6 +32616,11 @@ function dbPath() {
 var ChatSessionDatabase = class {
   _db = null;
   _initPromise = null;
+  close() {
+    this._db?.close();
+    this._db = null;
+    this._initPromise = null;
+  }
   get db() {
     if (!this._db) {
       throw new Error("Database not initialized - call ensureInitialized() first");
@@ -32315,12 +33176,12 @@ async function listModelsForProvider(id, signal, baseURLOverride, apiKeyOverride
   switch (id) {
     case "antigravity": {
       try {
-        const { existsSync: existsSync24, readFileSync: readFileSync23 } = await import("node:fs");
-        const { homedir: homedir14 } = await import("node:os");
+        const { existsSync: existsSync25, readFileSync: readFileSync24 } = await import("node:fs");
         const path8 = await import("node:path");
-        const storePath2 = path8.join(homedir14(), ".pi", "agent", "models-store.json");
-        if (existsSync24(storePath2)) {
-          const raw = JSON.parse(readFileSync23(storePath2, "utf8"));
+        const { piAgentDirectory: piAgentDirectory2 } = await Promise.resolve().then(() => (init_profile(), profile_exports));
+        const storePath2 = path8.join(piAgentDirectory2(), "models-store.json");
+        if (existsSync25(storePath2)) {
+          const raw = JSON.parse(readFileSync24(storePath2, "utf8"));
           const models = raw?.antigravity?.models;
           if (Array.isArray(models)) {
             const ids = models.map((m) => typeof m?.id === "string" ? m.id : "").filter(Boolean);
@@ -32415,10 +33276,10 @@ async function listModelsForProvider(id, signal, baseURLOverride, apiKeyOverride
     }
     case "opencode": {
       try {
-        const { execFile: execFile21 } = await import("node:child_process");
-        const { promisify: promisify22 } = await import("node:util");
-        const execFileAsync21 = promisify22(execFile21);
-        const { stdout } = await execFileAsync21("opencode", ["models"], { timeout: 12e3, signal });
+        const { execFile: execFile22 } = await import("node:child_process");
+        const { promisify: promisify23 } = await import("node:util");
+        const execFileAsync22 = promisify23(execFile22);
+        const { stdout } = await execFileAsync22("opencode", ["models"], { timeout: 12e3, signal });
         const models = stdout.replace(/\x1b\[[0-9;]*m/g, "").split("\n").map((line) => line.trim()).filter((line) => line.startsWith("opencode/") || line.startsWith("opencode-go/"));
         return models.length > 0 ? models : ["opencode/big-pickle"];
       } catch {
@@ -32644,18 +33505,18 @@ async function fetchFrankfurterLatest(from) {
 }
 
 // src/main/portManager/namedPortsStore.ts
-var import_node_crypto13 = require("node:crypto");
-var import_node_fs25 = require("node:fs");
-var import_node_path27 = require("node:path");
+var import_node_crypto14 = require("node:crypto");
+var import_node_fs26 = require("node:fs");
+var import_node_path30 = require("node:path");
 init_desktop_runtime();
 function storePath() {
   return `${app.getPath("userData")}/named-ports.json`;
 }
 function readAll() {
   const path8 = storePath();
-  if (!(0, import_node_fs25.existsSync)(path8)) return [];
+  if (!(0, import_node_fs26.existsSync)(path8)) return [];
   try {
-    const raw = (0, import_node_fs25.readFileSync)(path8, "utf8");
+    const raw = (0, import_node_fs26.readFileSync)(path8, "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.map((row) => {
@@ -32673,8 +33534,8 @@ function readAll() {
 }
 function writeAll(entries) {
   const path8 = storePath();
-  (0, import_node_fs25.mkdirSync)((0, import_node_path27.dirname)(path8), { recursive: true });
-  (0, import_node_fs25.writeFileSync)(path8, `${JSON.stringify(entries, null, 2)}
+  (0, import_node_fs26.mkdirSync)((0, import_node_path30.dirname)(path8), { recursive: true });
+  (0, import_node_fs26.writeFileSync)(path8, `${JSON.stringify(entries, null, 2)}
 `, "utf8");
 }
 function listNamedPorts() {
@@ -32684,7 +33545,7 @@ function addNamedPort(name, port) {
   const trimmed = name.trim();
   if (!trimmed || port < 1 || port > 65535) return null;
   const entries = readAll();
-  const next = { id: (0, import_node_crypto13.randomUUID)(), name: trimmed, port };
+  const next = { id: (0, import_node_crypto14.randomUUID)(), name: trimmed, port };
   entries.push(next);
   writeAll(entries);
   return next;
@@ -32733,8 +33594,8 @@ ${appContext}` : "App context: (none)"
 }
 
 // src/main/backgroundTasks.ts
-var import_node_fs26 = require("node:fs");
-var import_node_path28 = require("node:path");
+var import_node_fs27 = require("node:fs");
+var import_node_path31 = require("node:path");
 init_desktop_runtime();
 init_service();
 function clampProgress(value) {
@@ -32783,21 +33644,21 @@ function timerBackgroundTask(fileName, rawContents, now = Date.now()) {
 function listRunningTimers(now = Date.now()) {
   const userData2 = app.getPath("userData");
   const packageJsonPath = [
-    (0, import_node_path28.join)(userData2, "extensions", "timers", "package.json"),
-    (0, import_node_path28.join)(userData2, "extensions", "raycast.timers", "package.json"),
-    (0, import_node_path28.join)(userData2, "extensions", "packages", "raycast.timers", "package.json"),
-    (0, import_node_path28.join)(userData2, "extension-registry", "packages", "raycast.timers", "package.json")
-  ].find((candidate) => (0, import_node_fs26.existsSync)(candidate));
+    (0, import_node_path31.join)(userData2, "extensions", "timers", "package.json"),
+    (0, import_node_path31.join)(userData2, "extensions", "raycast.timers", "package.json"),
+    (0, import_node_path31.join)(userData2, "extensions", "packages", "raycast.timers", "package.json"),
+    (0, import_node_path31.join)(userData2, "extension-registry", "packages", "raycast.timers", "package.json")
+  ].find((candidate) => (0, import_node_fs27.existsSync)(candidate));
   if (!packageJsonPath) return [];
-  const supportPath = (0, import_node_path28.join)((0, import_node_path28.dirname)(packageJsonPath), ".tezbar-support");
-  if (!(0, import_node_fs26.existsSync)(supportPath)) return [];
+  const supportPath = (0, import_node_path31.join)((0, import_node_path31.dirname)(packageJsonPath), ".tezbar-support");
+  if (!(0, import_node_fs27.existsSync)(supportPath)) return [];
   const tasks = [];
-  for (const fileName of (0, import_node_fs26.readdirSync)(supportPath)) {
-    if ((0, import_node_path28.extname)(fileName) !== ".timer") continue;
+  for (const fileName of (0, import_node_fs27.readdirSync)(supportPath)) {
+    if ((0, import_node_path31.extname)(fileName) !== ".timer") continue;
     try {
       const task = timerBackgroundTask(
         fileName,
-        (0, import_node_fs26.readFileSync)((0, import_node_path28.join)(supportPath, fileName), "utf8"),
+        (0, import_node_fs27.readFileSync)((0, import_node_path31.join)(supportPath, fileName), "utf8"),
         now
       );
       if (task) tasks.push(task);
@@ -32970,15 +33831,15 @@ async function requestPermission(id) {
 }
 
 // src/main/agent/piInstall.ts
-var import_node_child_process18 = require("node:child_process");
-var import_node_util15 = require("node:util");
+var import_node_child_process19 = require("node:child_process");
+var import_node_util16 = require("node:util");
 init_bridge();
-var execFileAsync15 = (0, import_node_util15.promisify)(import_node_child_process18.execFile);
+var execFileAsync16 = (0, import_node_util16.promisify)(import_node_child_process19.execFile);
 var PI_NPM_PACKAGE = "@mariozechner/pi-coding-agent";
 var PI_NPM_PAGE_URL = `https://www.npmjs.com/package/${PI_NPM_PACKAGE}`;
 async function commandWorks(bin, args) {
   try {
-    await execFileAsync15(bin, args, { timeout: 8e3 });
+    await execFileAsync16(bin, args, { timeout: 8e3 });
     return true;
   } catch {
     return false;
@@ -32986,7 +33847,7 @@ async function commandWorks(bin, args) {
 }
 async function checkPiAgent() {
   try {
-    const { stdout } = await execFileAsync15(resolvePiBinary(), ["--version"], { timeout: 8e3 });
+    const { stdout } = await execFileAsync16(resolvePiBinary(), ["--version"], { timeout: 8e3 });
     return { installed: true, version: stdout.trim() || void 0 };
   } catch {
     return { installed: false };
@@ -32994,7 +33855,7 @@ async function checkPiAgent() {
 }
 async function installWith(method, args) {
   try {
-    await execFileAsync15(method, args, { timeout: 18e4 });
+    await execFileAsync16(method, args, { timeout: 18e4 });
   } catch (error) {
     return {
       ok: false,
@@ -33030,16 +33891,16 @@ init_registry2();
 init_registry();
 
 // src/main/systemStats/service.ts
-var import_node_child_process20 = require("node:child_process");
-var import_node_os13 = require("node:os");
-var import_node_util17 = require("node:util");
+var import_node_child_process21 = require("node:child_process");
+var import_node_os14 = require("node:os");
+var import_node_util18 = require("node:util");
 
 // src/main/systemStats/windows.ts
-var import_node_child_process19 = require("node:child_process");
-var import_promises3 = require("node:fs/promises");
-var import_node_os12 = require("node:os");
-var import_node_util16 = require("node:util");
-var execFileAsync16 = (0, import_node_util16.promisify)(import_node_child_process19.execFile);
+var import_node_child_process20 = require("node:child_process");
+var import_promises5 = require("node:fs/promises");
+var import_node_os13 = require("node:os");
+var import_node_util17 = require("node:util");
+var execFileAsync17 = (0, import_node_util17.promisify)(import_node_child_process20.execFile);
 var MEBIBYTE = 1024 ** 2;
 var staticStatsPromise = null;
 var previousCpuTimes = null;
@@ -33101,7 +33962,7 @@ $processes = @(Get-Process)
 } | ConvertTo-Json -Compress -Depth 4
 `;
 async function command(file, args) {
-  const { stdout } = await execFileAsync16(file, args, {
+  const { stdout } = await execFileAsync17(file, args, {
     timeout: 8e3,
     maxBuffer: 8 * 1024 * 1024,
     windowsHide: true
@@ -33153,7 +34014,7 @@ function systemDrive() {
 }
 async function loadStaticStats() {
   const payload = await powershell(STATIC_POWERSHELL);
-  const cpuRows = (0, import_node_os12.cpus)();
+  const cpuRows = (0, import_node_os13.cpus)();
   const storageTotalBytes = finiteNumber(payload.storageTotalBytes);
   const storageFreeBytes = finiteNumber(payload.storageFreeBytes);
   const manufacturer = text(payload.manufacturer);
@@ -33165,14 +34026,14 @@ async function loadStaticStats() {
   const designedCapacity = positiveNumber(payload.batteryDesignCapacity);
   const fullCapacity = positiveNumber(payload.batteryFullCapacity);
   const osVersion = [
-    text(payload.osCaption, (0, import_node_os12.version)()),
-    text(payload.osVersion, (0, import_node_os12.release)()),
+    text(payload.osCaption, (0, import_node_os13.version)()),
+    text(payload.osVersion, (0, import_node_os13.release)()),
     text(payload.osBuild) ? `build ${text(payload.osBuild)}` : ""
   ].filter(Boolean).join(" \xB7 ");
   return {
     device: {
       platform: "Windows",
-      name: (0, import_node_os12.hostname)(),
+      name: (0, import_node_os13.hostname)(),
       model: [manufacturer, model].filter(Boolean).join(" ") || "Windows PC",
       chip: text(payload.cpuModel, cpuRows[0]?.model || "Processor"),
       osVersion,
@@ -33216,7 +34077,7 @@ function staticStats() {
   return staticStatsPromise;
 }
 function aggregateCpuTimes() {
-  return (0, import_node_os12.cpus)().reduce(
+  return (0, import_node_os13.cpus)().reduce(
     (total, cpu) => ({
       user: total.user + cpu.times.user,
       nice: total.nice + cpu.times.nice,
@@ -33288,7 +34149,7 @@ function networkRates(sample) {
   };
 }
 function activeNetwork(interfaceHint) {
-  const interfaces = (0, import_node_os12.networkInterfaces)();
+  const interfaces = (0, import_node_os13.networkInterfaces)();
   const interfaceName = (interfaceHint && interfaces[interfaceHint] ? interfaceHint : void 0) ?? Object.entries(interfaces).find(
     ([, addresses]) => addresses?.some((address2) => {
       const family = String(address2.family);
@@ -33307,7 +34168,7 @@ function activeNetwork(interfaceHint) {
 }
 async function storageSnapshot(fixed) {
   try {
-    const stats = await (0, import_promises3.statfs)(systemDrive());
+    const stats = await (0, import_promises5.statfs)(systemDrive());
     const totalBytes = Number(stats.blocks) * Number(stats.bsize);
     const freeBytes = Number(stats.bavail) * Number(stats.bsize);
     return {
@@ -33344,8 +34205,8 @@ async function getWindowsSystemStats() {
     optionalCommand("netstat.exe", ["-e"]),
     liveCpuUsage()
   ]);
-  const totalBytes = (0, import_node_os12.totalmem)();
-  const freeBytes = (0, import_node_os12.freemem)();
+  const totalBytes = (0, import_node_os13.totalmem)();
+  const freeBytes = (0, import_node_os13.freemem)();
   const interfaceHint = text(live.interfaceAlias);
   const active2 = activeNetwork(interfaceHint);
   const networkCounters = parseNetstatEthernetStatistics(networkOutput);
@@ -33357,7 +34218,7 @@ async function getWindowsSystemStats() {
     collectedAt: (/* @__PURE__ */ new Date()).toISOString(),
     device: {
       ...fixed.device,
-      uptimeSeconds: (0, import_node_os12.uptime)()
+      uptimeSeconds: (0, import_node_os13.uptime)()
     },
     cpu: {
       ...fixed.cpu,
@@ -33390,11 +34251,11 @@ async function getWindowsSystemStats() {
 }
 
 // src/main/systemStats/service.ts
-var execFileAsync17 = (0, import_node_util17.promisify)(import_node_child_process20.execFile);
+var execFileAsync18 = (0, import_node_util18.promisify)(import_node_child_process21.execFile);
 var staticStatsPromise2 = null;
 var previousNetworkSample2 = null;
 async function command2(file, args) {
-  const { stdout } = await execFileAsync17(file, args, {
+  const { stdout } = await execFileAsync18(file, args, {
     timeout: 8e3,
     maxBuffer: 8 * 1024 * 1024
   });
@@ -33471,7 +34332,7 @@ async function loadStaticStats2() {
   return {
     device: {
       platform: "macOS",
-      name: text2(hardware.machine_name, (0, import_node_os13.hostname)()),
+      name: text2(hardware.machine_name, (0, import_node_os14.hostname)()),
       model: text2(hardware.machine_model, "Mac"),
       chip: text2(hardware.chip_type, "Apple Silicon"),
       osVersion: "",
@@ -33688,7 +34549,7 @@ async function getSystemStats() {
     device: {
       ...fixed.device,
       osVersion,
-      uptimeSeconds: (0, import_node_os13.uptime)()
+      uptimeSeconds: (0, import_node_os14.uptime)()
     },
     cpu: { ...fixed.cpu, ...live.cpu },
     gpu: fixed.gpu,
@@ -33722,8 +34583,8 @@ init_terminal();
 
 // src/main/storage/service.ts
 init_desktop_runtime();
-var import_promises4 = require("node:fs/promises");
-var import_node_path29 = require("node:path");
+var import_promises6 = require("node:fs/promises");
+var import_node_path32 = require("node:path");
 init_indexDb();
 init_clipboardProvider();
 async function dirSize(root) {
@@ -33733,16 +34594,16 @@ async function dirSize(root) {
     const path8 = pending.pop();
     if (!path8) continue;
     try {
-      const stats = await (0, import_promises4.lstat)(path8);
+      const stats = await (0, import_promises6.lstat)(path8);
       if (stats.isSymbolicLink()) continue;
       if (stats.isFile()) {
         total += stats.size;
         continue;
       }
       if (stats.isDirectory()) {
-        const entries = await (0, import_promises4.readdir)(path8, { withFileTypes: true });
+        const entries = await (0, import_promises6.readdir)(path8, { withFileTypes: true });
         for (const entry of entries) {
-          pending.push((0, import_node_path29.join)(path8, entry.name));
+          pending.push((0, import_node_path32.join)(path8, entry.name));
         }
       }
     } catch {
@@ -33752,13 +34613,13 @@ async function dirSize(root) {
 }
 async function fileSize(path8) {
   try {
-    return (await (0, import_promises4.stat)(path8)).size;
+    return (await (0, import_promises6.stat)(path8)).size;
   } catch {
     return 0;
   }
 }
 function userData(...segments) {
-  return (0, import_node_path29.join)(app.getPath("userData"), ...segments);
+  return (0, import_node_path32.join)(app.getPath("userData"), ...segments);
 }
 async function getStorageBreakdown() {
   const searchDir = getClipboardStoreDir();
@@ -33782,10 +34643,10 @@ async function getStorageBreakdown() {
     codeCacheBytes,
     knowledgeBytes
   ] = await Promise.all([
-    fileSize((0, import_node_path29.join)(searchDir, "index.sqlite3")),
-    fileSize((0, import_node_path29.join)(searchDir, "index.sqlite3-wal")),
-    fileSize((0, import_node_path29.join)(searchDir, "index.sqlite3-shm")),
-    fileSize((0, import_node_path29.join)(searchDir, "clipboard.json")),
+    fileSize((0, import_node_path32.join)(searchDir, "index.sqlite3")),
+    fileSize((0, import_node_path32.join)(searchDir, "index.sqlite3-wal")),
+    fileSize((0, import_node_path32.join)(searchDir, "index.sqlite3-shm")),
+    fileSize((0, import_node_path32.join)(searchDir, "clipboard.json")),
     dirSize(clipboardImagesDir),
     dirSize(voiceModelsDir),
     dirSize(bunDir),
@@ -33847,13 +34708,13 @@ async function clearChromiumCache() {
   await defaultSession.clearStorageData({ storages: ["shadercache"] });
   await Promise.all(
     ["Code Cache", "GPUCache", "DawnCache", "GrShaderCache", "ShaderCache"].map(
-      (name) => (0, import_promises4.rm)(userData(name), { recursive: true, force: true })
+      (name) => (0, import_promises6.rm)(userData(name), { recursive: true, force: true })
     )
   );
 }
 async function vacuumSearchDatabase() {
   const searchDir = getClipboardStoreDir();
-  const walPath = (0, import_node_path29.join)(searchDir, "index.sqlite3-wal");
+  const walPath = (0, import_node_path32.join)(searchDir, "index.sqlite3-wal");
   const beforeBytes = await fileSize(walPath);
   try {
     const db = getInstance();
@@ -35018,9 +35879,9 @@ function registerIpcHandlers(getWindow, controls) {
   ipcMain.handle("clipboard:write-png", async (_event, raw) => {
     const bytes = typeof raw === "string" ? decodePngDataUrl(raw) : null;
     if (!bytes) return { ok: false, error: "Invalid PNG data URL" };
-    const path8 = (0, import_node_path36.join)(app.getPath("temp"), "tezbar-qr-clipboard.png");
+    const path8 = (0, import_node_path39.join)(app.getPath("temp"), "tezbar-qr-clipboard.png");
     try {
-      (0, import_node_fs34.writeFileSync)(path8, bytes);
+      (0, import_node_fs35.writeFileSync)(path8, bytes);
       const image = nativeImage.createFromPath(path8);
       if (image.isEmpty()) return { ok: false, error: "Could not read QR image" };
       clipboard.writeImage(image);
@@ -35109,6 +35970,13 @@ function registerIpcHandlers(getWindow, controls) {
   });
   ipcMain.handle(IPC_CHANNELS.SEARCH_CANDIDATES, async () => listSearchCandidates());
   ipcMain.handle("knowledge:snapshot", async () => getKnowledgeService().snapshot());
+  ipcMain.handle("knowledge:embedding:set", async (_event, model) => {
+    if (model !== "built-in" && model !== "embeddinggemma-2") throw new Error("Invalid embedding model");
+    return getKnowledgeService().setEmbeddingModel(model);
+  });
+  ipcMain.handle("knowledge:embedding:download", async () => getKnowledgeService().downloadEmbeddingModel());
+  ipcMain.handle("knowledge:embedding:cancel-download", async () => getKnowledgeService().cancelEmbeddingDownload());
+  ipcMain.handle("knowledge:embedding:remove", async () => getKnowledgeService().removeEmbeddingModel());
   ipcMain.handle("background-tasks:list", async () => listBackgroundTasks());
   ipcMain.handle("knowledge:sources:list", async (_event, payload) => {
     const body = payload && typeof payload === "object" ? payload : {};
@@ -35333,10 +36201,10 @@ function registerIpcHandlers(getWindow, controls) {
 init_clipboardProvider();
 init_configStore();
 init_desktop_runtime();
-var import_node_fs35 = require("node:fs");
-var import_node_path37 = require("node:path");
-var import_node_child_process25 = require("node:child_process");
-var import_node_net = require("node:net");
+var import_node_fs36 = require("node:fs");
+var import_node_path40 = require("node:path");
+var import_node_child_process26 = require("node:child_process");
+var import_node_net2 = require("node:net");
 init_service();
 init_gateway();
 init_service3();
@@ -35348,10 +36216,10 @@ function materializePiPolicy() {
   const root = process.env.APPDATA_DIR;
   if (!root || false) return;
   try {
-    const runtimeDir = (0, import_node_path37.join)(root, "runtime");
-    const extensionPath = (0, import_node_path37.join)(runtimeDir, "raymes-pi-policy.ts");
-    (0, import_node_fs35.mkdirSync)(runtimeDir, { recursive: true });
-    (0, import_node_fs35.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\r\n\r\ntype ToolCallEvent = {\r\n  toolName: string\r\n  input?: Record<string, unknown> & { command?: unknown }\r\n}\r\n\r\ntype ToolCallResult = {\r\n  block?: boolean\r\n  reason?: string\r\n}\r\n\r\ntype ExtensionContext = {\r\n  ui: {\r\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\r\n  }\r\n}\r\n\r\ntype ExtensionAPI = {\r\n  on(\r\n    event: 'tool_call',\r\n    handler: (\r\n      event: ToolCallEvent,\r\n      ctx: ExtensionContext\r\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\r\n  ): void\r\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\r\n  registerTool(definition: {\r\n    name: string\r\n    label: string\r\n    description: string\r\n    promptSnippet?: string\r\n    promptGuidelines?: string[]\r\n    parameters: unknown\r\n    execute: (\r\n      toolCallId: string,\r\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\r\n      signal?: AbortSignal\r\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\r\n  }): void\r\n}\r\n\r\ntype RaymesPiProviderConfig = {\r\n  baseUrl: string\r\n  apiKey: string\r\n  api: 'openai-completions' | 'anthropic-messages'\r\n  authHeader?: boolean\r\n  models: Array<{\r\n    id: string\r\n    name: string\r\n    reasoning: boolean\r\n    input: Array<'text' | 'image'>\r\n    cost: {\r\n      input: number\r\n      output: number\r\n      cacheRead: number\r\n      cacheWrite: number\r\n    }\r\n    contextWindow: number\r\n    maxTokens: number\r\n    compat?: Record<string, unknown>\r\n  }>\r\n}\r\n\r\nconst TOKENROUTER_BASE_URL = 'https://api.tokenrouter.com/v1'\r\nconst TOKENROUTER_MODEL_ID = 'moonshotai/kimi-k3-free'\r\n\r\nfunction registerTokenRouterProvider(pi: ExtensionAPI): void {\r\n  pi.registerProvider('tokenrouter', {\r\n    baseUrl: TOKENROUTER_BASE_URL,\r\n    apiKey: '$TOKENROUTER_API_KEY',\r\n    authHeader: true,\r\n    api: 'openai-completions',\r\n    models: [\r\n      {\r\n        id: TOKENROUTER_MODEL_ID,\r\n        name: 'Kimi K3 Free (TokenRouter)',\r\n        reasoning: false,\r\n        input: ['text'],\r\n        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },\r\n        contextWindow: 128000,\r\n        maxTokens: 8192,\r\n        compat: {\r\n          supportsStore: false,\r\n          supportsDeveloperRole: false,\r\n          supportsReasoningEffort: false,\r\n          maxTokensField: 'max_tokens',\r\n        },\r\n      },\r\n    ],\r\n  })\r\n}\r\n\r\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\r\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\r\n  if (!raw) return\r\n  try {\r\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\r\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\r\n    pi.registerProvider('tezbar', parsed)\r\n  } catch {\r\n    /* Ignore malformed bridge env so pi can still start with its own config. */\r\n  }\r\n}\r\n\r\nfunction hasUnsafeShellSyntax(command: string): boolean {\r\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\r\n}\r\n\r\nfunction persistedAllowedCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter(\r\n          (entry): entry is string =>\r\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\r\n        )\r\n        .map((entry) => entry.toLowerCase())\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction persistedAllowedExactCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter((entry): entry is string => typeof entry === 'string')\r\n        .map((entry) => entry.trim())\r\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction executableName(command: string): string {\r\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\r\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\r\n}\r\n\r\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\r\n\r\nexport function isPersistentlyAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string>\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\r\n    return false\r\n  }\r\n\r\n  const commands = trimmed\r\n    .split(/\\s*(?:&&|\\|)\\s*/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (commands.length === 0) return false\r\n\r\n  return commands.every((part) => {\r\n    if (isSimpleCd(part)) return true\r\n    const executable = executableName(part)\r\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\r\n  })\r\n}\r\n\r\nfunction isSimpleCd(command: string): boolean {\r\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitStatus(command: string): boolean {\r\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitClone(command: string): boolean {\r\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeDirectoryRead(command: string): boolean {\r\n  const trimmed = command.trim()\r\n  return (\r\n    trimmed === 'pwd' ||\r\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\r\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\r\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\r\n  )\r\n}\r\n\r\nexport type IndexedSearchKind = 'launcher' | 'deep'\r\n\r\nconst MAJOR_HOME_FOLDER_PATTERN =\r\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\r\n\r\nfunction hasBroadHomeScope(command: string): boolean {\r\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\r\n    return true\r\n  }\r\n\r\n  const roots = new Set<string>()\r\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\r\n    const root = match[1]?.toLowerCase()\r\n    if (root) roots.add(root)\r\n  }\r\n  return roots.size >= 2\r\n}\r\n\r\n/**\r\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\r\n * inside the active project remain valid shell work.\r\n */\r\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return null\r\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\r\n  if (!hasBroadHomeScope(trimmed)) return null\r\n\r\n  if (\r\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\r\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\r\n  ) {\r\n    return 'deep'\r\n  }\r\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\r\n  return null\r\n}\r\n\r\nexport function isAutoAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\r\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return false\r\n  if (allowedExactCommands.has(trimmed)) return true\r\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\r\n  if (hasUnsafeShellSyntax(trimmed)) return false\r\n\r\n  const parts = trimmed\r\n    .split(/\\s+&&\\s+/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (parts.length === 0) return false\r\n\r\n  const commandToRun = parts[parts.length - 1]\r\n  if (\r\n    !commandToRun ||\r\n    !(\r\n      isSafeGitStatus(commandToRun) ||\r\n      isSafeGitClone(commandToRun) ||\r\n      isSafeDirectoryRead(commandToRun)\r\n    )\r\n  ) {\r\n    return false\r\n  }\r\n\r\n  return parts.slice(0, -1).every(isSimpleCd)\r\n}\r\n\r\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\r\n  registerTokenRouterProvider(pi)\r\n  registerRaymesProvider(pi)\r\n\r\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\r\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\r\n  const hasIndexedSearchTools = Boolean(\r\n    knowledgeEndpoint &&\r\n    knowledgeToken &&\r\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\r\n  )\r\n  let launcherSearchAttempted = false\r\n  let deepSearchAttempted = false\r\n\r\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\r\n    pi.registerTool({\r\n      name: 'launcher_search',\r\n      label: 'Search Tezbar',\r\n      description:\r\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\r\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\r\n      promptGuidelines: [\r\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\r\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\r\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({\r\n          description: 'The file, app, command, note, or other local item to find',\r\n        }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          results?: Array<{\r\n            id: string\r\n            title: string\r\n            subtitle: string\r\n            category: string\r\n            score: number\r\n            target?: string\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\r\n        const results = payload.results ?? []\r\n        const text =\r\n          results.length === 0\r\n            ? 'No Tezbar launcher results matched this query.'\r\n            : results\r\n                .map((result, index) => {\r\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\r\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { results } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_search',\r\n      label: 'Deep Search PC Knowledge',\r\n      description:\r\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\r\n      promptSnippet:\r\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\r\n      promptGuidelines: [\r\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\r\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\r\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\r\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint, {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\r\n          signal,\r\n        })\r\n        const result = (await response.json()) as {\r\n          hits?: Array<{\r\n            chunkId: string\r\n            path: string\r\n            pageNumber?: number\r\n            text: string\r\n            score: number\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\r\n        const hits = result.hits ?? []\r\n        const text =\r\n          hits.length === 0\r\n            ? 'No indexed knowledge matched this query.'\r\n            : hits\r\n                .map((hit, index) => {\r\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\r\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { hits } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_read',\r\n      label: 'Read PC Knowledge Result',\r\n      description:\r\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\r\n      parameters: Type.Object({\r\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\r\n        maxChars: Type.Optional(\r\n          Type.Number({\r\n            minimum: 500,\r\n            maximum: 50_000,\r\n            description: 'Maximum text characters to return',\r\n          })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({\r\n            resultId: params.resultId ?? '',\r\n            maxChars: params.maxChars ?? 12_000,\r\n          }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          result?: { path: string; pageNumber?: number; text: string }\r\n          error?: string\r\n        }\r\n        if (!response.ok || !payload.result) {\r\n          throw new Error(payload.error || 'Knowledge result could not be read')\r\n        }\r\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\r\n        return {\r\n          content: [\r\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\r\n          ],\r\n          details: payload.result,\r\n        }\r\n      },\r\n    })\r\n  }\r\n\r\n  pi.on('tool_call', async (event, ctx) => {\r\n    if (event.toolName === 'launcher_search') {\r\n      launcherSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName === 'pc_search') {\r\n      deepSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName !== 'bash') return undefined\r\n\r\n    const command = event.input?.command\r\n    if (typeof command !== 'string') {\r\n      return { block: true, reason: 'Missing bash command.' }\r\n    }\r\n\r\n    if (hasIndexedSearchTools) {\r\n      const preferredSearch = preferredIndexedSearchForBash(command)\r\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\r\n        }\r\n      }\r\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\r\n        }\r\n      }\r\n    }\r\n\r\n    if (isAutoAllowedBash(command)) return undefined\r\n\r\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\r\n    if (confirmed) return undefined\r\n\r\n    return { block: true, reason: 'Bash command was not approved.' }\r\n  })\r\n}\r\n", "utf8");
+    const runtimeDir = (0, import_node_path40.join)(root, "runtime");
+    const extensionPath = (0, import_node_path40.join)(runtimeDir, "raymes-pi-policy.ts");
+    (0, import_node_fs36.mkdirSync)(runtimeDir, { recursive: true });
+    (0, import_node_fs36.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\r\n\r\ntype ToolCallEvent = {\r\n  toolName: string\r\n  input?: Record<string, unknown> & { command?: unknown }\r\n}\r\n\r\ntype ToolCallResult = {\r\n  block?: boolean\r\n  reason?: string\r\n}\r\n\r\ntype ExtensionContext = {\r\n  ui: {\r\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\r\n  }\r\n}\r\n\r\ntype ExtensionAPI = {\r\n  on(\r\n    event: 'tool_call',\r\n    handler: (\r\n      event: ToolCallEvent,\r\n      ctx: ExtensionContext\r\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\r\n  ): void\r\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\r\n  registerTool(definition: {\r\n    name: string\r\n    label: string\r\n    description: string\r\n    promptSnippet?: string\r\n    promptGuidelines?: string[]\r\n    parameters: unknown\r\n    execute: (\r\n      toolCallId: string,\r\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\r\n      signal?: AbortSignal\r\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\r\n  }): void\r\n}\r\n\r\ntype RaymesPiProviderConfig = {\r\n  baseUrl: string\r\n  apiKey: string\r\n  api: 'openai-completions' | 'anthropic-messages'\r\n  authHeader?: boolean\r\n  models: Array<{\r\n    id: string\r\n    name: string\r\n    reasoning: boolean\r\n    input: Array<'text' | 'image'>\r\n    cost: {\r\n      input: number\r\n      output: number\r\n      cacheRead: number\r\n      cacheWrite: number\r\n    }\r\n    contextWindow: number\r\n    maxTokens: number\r\n    compat?: Record<string, unknown>\r\n  }>\r\n}\r\n\r\nconst TOKENROUTER_BASE_URL = 'https://api.tokenrouter.com/v1'\r\nconst TOKENROUTER_MODEL_ID = 'moonshotai/kimi-k3-free'\r\n\r\nfunction registerTokenRouterProvider(pi: ExtensionAPI): void {\r\n  pi.registerProvider('tokenrouter', {\r\n    baseUrl: TOKENROUTER_BASE_URL,\r\n    apiKey: '$TOKENROUTER_API_KEY',\r\n    authHeader: true,\r\n    api: 'openai-completions',\r\n    models: [\r\n      {\r\n        id: TOKENROUTER_MODEL_ID,\r\n        name: 'Kimi K3 Free (TokenRouter)',\r\n        reasoning: false,\r\n        input: ['text'],\r\n        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },\r\n        contextWindow: 128000,\r\n        maxTokens: 8192,\r\n        compat: {\r\n          supportsStore: false,\r\n          supportsDeveloperRole: false,\r\n          supportsReasoningEffort: false,\r\n          maxTokensField: 'max_tokens',\r\n        },\r\n      },\r\n    ],\r\n  })\r\n}\r\n\r\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\r\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\r\n  if (!raw) return\r\n  try {\r\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\r\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\r\n    pi.registerProvider('tezbar', parsed)\r\n  } catch {\r\n    /* Ignore malformed bridge env so pi can still start with its own config. */\r\n  }\r\n}\r\n\r\nfunction hasUnsafeShellSyntax(command: string): boolean {\r\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\r\n}\r\n\r\nfunction persistedAllowedCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter(\r\n          (entry): entry is string =>\r\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\r\n        )\r\n        .map((entry) => entry.toLowerCase())\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction persistedAllowedExactCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter((entry): entry is string => typeof entry === 'string')\r\n        .map((entry) => entry.trim())\r\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction executableName(command: string): string {\r\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\r\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\r\n}\r\n\r\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\r\n\r\nexport function isPersistentlyAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string>\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\r\n    return false\r\n  }\r\n\r\n  const commands = trimmed\r\n    .split(/\\s*(?:&&|\\|)\\s*/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (commands.length === 0) return false\r\n\r\n  return commands.every((part) => {\r\n    if (isSimpleCd(part)) return true\r\n    const executable = executableName(part)\r\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\r\n  })\r\n}\r\n\r\nfunction isSimpleCd(command: string): boolean {\r\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitStatus(command: string): boolean {\r\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitClone(command: string): boolean {\r\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeDirectoryRead(command: string): boolean {\r\n  const trimmed = command.trim()\r\n  return (\r\n    trimmed === 'pwd' ||\r\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\r\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\r\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\r\n  )\r\n}\r\n\r\nexport type IndexedSearchKind = 'launcher' | 'deep'\r\n\r\nconst MAJOR_HOME_FOLDER_PATTERN =\r\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\r\n\r\nfunction hasBroadHomeScope(command: string): boolean {\r\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\r\n    return true\r\n  }\r\n\r\n  const roots = new Set<string>()\r\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\r\n    const root = match[1]?.toLowerCase()\r\n    if (root) roots.add(root)\r\n  }\r\n  return roots.size >= 2\r\n}\r\n\r\n/**\r\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\r\n * inside the active project remain valid shell work.\r\n */\r\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return null\r\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\r\n  if (!hasBroadHomeScope(trimmed)) return null\r\n\r\n  if (\r\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\r\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\r\n  ) {\r\n    return 'deep'\r\n  }\r\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\r\n  return null\r\n}\r\n\r\nexport function isAutoAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\r\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return false\r\n  if (allowedExactCommands.has(trimmed)) return true\r\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\r\n  if (hasUnsafeShellSyntax(trimmed)) return false\r\n\r\n  const parts = trimmed\r\n    .split(/\\s+&&\\s+/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (parts.length === 0) return false\r\n\r\n  const commandToRun = parts[parts.length - 1]\r\n  if (\r\n    !commandToRun ||\r\n    !(\r\n      isSafeGitStatus(commandToRun) ||\r\n      isSafeGitClone(commandToRun) ||\r\n      isSafeDirectoryRead(commandToRun)\r\n    )\r\n  ) {\r\n    return false\r\n  }\r\n\r\n  return parts.slice(0, -1).every(isSimpleCd)\r\n}\r\n\r\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\r\n  registerTokenRouterProvider(pi)\r\n  registerRaymesProvider(pi)\r\n\r\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\r\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\r\n  const hasIndexedSearchTools = Boolean(\r\n    knowledgeEndpoint &&\r\n    knowledgeToken &&\r\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\r\n  )\r\n  let launcherSearchAttempted = false\r\n  let deepSearchAttempted = false\r\n\r\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\r\n    pi.registerTool({\r\n      name: 'launcher_search',\r\n      label: 'Search Tezbar',\r\n      description:\r\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\r\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\r\n      promptGuidelines: [\r\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\r\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\r\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({\r\n          description: 'The file, app, command, note, or other local item to find',\r\n        }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          results?: Array<{\r\n            id: string\r\n            title: string\r\n            subtitle: string\r\n            category: string\r\n            score: number\r\n            target?: string\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\r\n        const results = payload.results ?? []\r\n        const text =\r\n          results.length === 0\r\n            ? 'No Tezbar launcher results matched this query.'\r\n            : results\r\n                .map((result, index) => {\r\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\r\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { results } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_search',\r\n      label: 'Deep Search PC Knowledge',\r\n      description:\r\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\r\n      promptSnippet:\r\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\r\n      promptGuidelines: [\r\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\r\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\r\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\r\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint, {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\r\n          signal,\r\n        })\r\n        const result = (await response.json()) as {\r\n          hits?: Array<{\r\n            chunkId: string\r\n            path: string\r\n            pageNumber?: number\r\n            text: string\r\n            score: number\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\r\n        const hits = result.hits ?? []\r\n        const text =\r\n          hits.length === 0\r\n            ? 'No indexed knowledge matched this query.'\r\n            : hits\r\n                .map((hit, index) => {\r\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\r\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { hits } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_read',\r\n      label: 'Read PC Knowledge Result',\r\n      description:\r\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\r\n      parameters: Type.Object({\r\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\r\n        maxChars: Type.Optional(\r\n          Type.Number({\r\n            minimum: 500,\r\n            maximum: 50_000,\r\n            description: 'Maximum text characters to return',\r\n          })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({\r\n            resultId: params.resultId ?? '',\r\n            maxChars: params.maxChars ?? 12_000,\r\n          }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          result?: { path: string; pageNumber?: number; text: string }\r\n          error?: string\r\n        }\r\n        if (!response.ok || !payload.result) {\r\n          throw new Error(payload.error || 'Knowledge result could not be read')\r\n        }\r\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\r\n        return {\r\n          content: [\r\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\r\n          ],\r\n          details: payload.result,\r\n        }\r\n      },\r\n    })\r\n  }\r\n\r\n  pi.on('tool_call', async (event, ctx) => {\r\n    if (event.toolName === 'launcher_search') {\r\n      launcherSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName === 'pc_search') {\r\n      deepSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName !== 'bash') return undefined\r\n\r\n    const command = event.input?.command\r\n    if (typeof command !== 'string') {\r\n      return { block: true, reason: 'Missing bash command.' }\r\n    }\r\n\r\n    if (hasIndexedSearchTools) {\r\n      const preferredSearch = preferredIndexedSearchForBash(command)\r\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\r\n        }\r\n      }\r\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\r\n        }\r\n      }\r\n    }\r\n\r\n    if (isAutoAllowedBash(command)) return undefined\r\n\r\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\r\n    if (confirmed) return undefined\r\n\r\n    return { block: true, reason: 'Bash command was not approved.' }\r\n  })\r\n}\r\n", "utf8");
     process.env.RAYMES_PI_EXTENSION = extensionPath;
   } catch (error) {
     console.error("[server] failed to materialize Pi policy:", error);
@@ -35360,7 +36228,7 @@ function materializePiPolicy() {
 function fixPathSync() {
   if (process.platform === "win32") return;
   try {
-    const stdout = (0, import_node_child_process25.execFileSync)("bash", ["-lc", "echo -n $PATH"], {
+    const stdout = (0, import_node_child_process26.execFileSync)("bash", ["-lc", "echo -n $PATH"], {
       encoding: "utf8",
       timeout: 2e3
     });
@@ -35454,7 +36322,7 @@ function processInputChunk(chunk) {
 var bunRuntime = globalThis.Bun;
 var backendIpcPort = Number(process.env.BACKEND_IPC_PORT);
 if (Number.isInteger(backendIpcPort) && backendIpcPort > 0 && backendIpcPort <= 65535) {
-  const socket = (0, import_node_net.createConnection)({ host: "127.0.0.1", port: backendIpcPort }, () => {
+  const socket = (0, import_node_net2.createConnection)({ host: "127.0.0.1", port: backendIpcPort }, () => {
     console.error(`[server] Connected to Tauri IPC on localhost:${backendIpcPort}`);
   });
   socket.setEncoding("utf8");

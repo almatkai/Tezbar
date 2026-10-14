@@ -355,6 +355,10 @@ export type RaymesApi = {
   clearChromiumCache: () => Promise<{ ok: boolean }>
   listBackgroundTasks: () => Promise<BackgroundTask[]>
   getKnowledgeSnapshot: () => Promise<KnowledgeSnapshot>
+  setKnowledgeEmbeddingModel: (model: 'built-in' | 'embeddinggemma-2') => Promise<KnowledgeSnapshot>
+  downloadKnowledgeEmbeddingModel: () => Promise<KnowledgeSnapshot>
+  cancelKnowledgeEmbeddingDownload: () => Promise<KnowledgeSnapshot>
+  removeKnowledgeEmbeddingModel: () => Promise<KnowledgeSnapshot>
   listKnowledgeSources: (input?: {
     query?: string
     offset?: number

@@ -1772,6 +1772,13 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.SEARCH_CANDIDATES, async () => listSearchCandidates())
 
   ipcMain.handle('knowledge:snapshot', async () => getKnowledgeService().snapshot())
+  ipcMain.handle('knowledge:embedding:set', async (_event, model: unknown) => {
+    if (model !== 'built-in' && model !== 'embeddinggemma-2') throw new Error('Invalid embedding model')
+    return getKnowledgeService().setEmbeddingModel(model)
+  })
+  ipcMain.handle('knowledge:embedding:download', async () => getKnowledgeService().downloadEmbeddingModel())
+  ipcMain.handle('knowledge:embedding:cancel-download', async () => getKnowledgeService().cancelEmbeddingDownload())
+  ipcMain.handle('knowledge:embedding:remove', async () => getKnowledgeService().removeEmbeddingModel())
 
   ipcMain.handle('background-tasks:list', async () => listBackgroundTasks())
 

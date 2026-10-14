@@ -73,6 +73,10 @@ async function runBuild(): Promise<void> {
     format: 'cjs',
   })
   const loadablePath = getLoadablePath()
+  copyFileIfChanged(
+    join(root, 'src/main/knowledge/embeddings/gemma-supervisor.cjs'),
+    join(outputDirectory, 'gemma-supervisor.cjs')
+  )
   const extensionSuffix =
     process.platform === 'win32' ? 'dll' : process.platform === 'darwin' ? 'dylib' : 'so'
   // Keep the historical extensionless copy for compatibility with existing

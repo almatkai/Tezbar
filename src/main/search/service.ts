@@ -1023,7 +1023,7 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
   const allFileResults = uniqById([...fileResults, ...indexedSourceResults])
 
   const openPortResults = isDeepSearch ? [] : await searchPortManagerOpenPorts(trimmed)
-  const knowledgeHits = knowledgeService?.search(trimmed, 16) ?? []
+  const knowledgeHits = knowledgeService ? await knowledgeService.search(trimmed, 16) : []
   const seenKnowledgeSources = new Set<string>()
   const knowledgeResults = knowledgeHits.flatMap((hit): SearchResult[] => {
     if (seenKnowledgeSources.has(hit.sourceId)) return []

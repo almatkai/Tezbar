@@ -68,7 +68,7 @@ export function ensureKnowledgeAgentGateway(): Promise<{ endpoint: string; token
                 ? Math.max(1, Math.min(20, Math.round(parsed.limit)))
                 : 8
             if (!query) throw new Error('query is required')
-            const hits = getKnowledgeService().search(query, limit)
+            const hits = await getKnowledgeService().search(query, limit)
             response.end(JSON.stringify({ hits }))
             return
           }

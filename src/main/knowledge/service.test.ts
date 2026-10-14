@@ -98,7 +98,7 @@ describe('knowledge service', () => {
       await service.setDepth('basic')
       service.addRoot(root)
       await waitUntilComplete(service)
-      const hits = service.search('Almaty certificate renewal', 5)
+      const hits = await service.search('Almaty certificate renewal', 5)
       expect(hits[0]?.path).toBe(join(root, 'renewal.txt'))
       expect(hits[0]?.text).toContain('September 18')
       expect(hits[0]?.semanticScore).toBe(0)
@@ -119,17 +119,17 @@ describe('knowledge service', () => {
       await new Promise((resolve) => setTimeout(resolve, 1_750))
       expect(service.snapshot().status.state).toBe('paused')
       expect(service.snapshot().status.detail).toBe('Indexing paused')
-      expect(service.search('explicitly resumed', 5)).toHaveLength(0)
+      expect(await service.search('explicitly resumed', 5)).toHaveLength(0)
 
       await service.resume()
       await waitUntilComplete(service)
-      expect(service.search('explicitly resumed', 5)[0]?.path).toBe(join(root, 'paused-change.txt'))
+      expect((await service.search('explicitly resumed', 5))[0]?.path).toBe(join(root, 'paused-change.txt'))
 
       const rootId = service.snapshot().roots[0]?.id
       expect(rootId).toBeTruthy()
       await service.setRootDepth(rootId!, 'smart')
       await waitUntilComplete(service)
-      expect(service.search('Almaty certificate renewal', 5)[0]?.semanticScore).toBeGreaterThan(0)
+      expect((await service.search('Almaty certificate renewal', 5))[0]?.semanticScore).toBeGreaterThan(0)
       expect(service.snapshot().roots[0]?.depth).toBe('smart')
 
       const interruptedPath = join(root, 'resume-after-restart.txt')
@@ -158,11 +158,12 @@ describe('knowledge service', () => {
         processedSources: 1,
         queuedSources: 0,
       })
-      expect(restartedService.search('durable indexing queue', 5)[0]?.path).toBe(interruptedPath)
+      expect((await restartedService.search('durable indexing queue', 5))[0]?.path).toBe(interruptedPath)
       expect(getKnowledgeStore().getIndexingCheckpoint()).toBeNull()
     } finally {
       service.shutdown()
       restartedService?.shutdown()
+      getKnowledgeStore().close()
     }
   })
 })
