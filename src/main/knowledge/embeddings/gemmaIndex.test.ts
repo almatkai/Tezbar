@@ -48,6 +48,22 @@ function fixture() {
 }
 
 describe('Gemma vector index', () => {
+  it('continues a bounded batch after its last row while preserving folder scope', () => {
+    const store = fixture()
+    try {
+      const index = store.getGemmaIndex()
+      const first = index.pending(['root-a', 'root-b'], 1)
+      const second = index.pending(['root-a', 'root-b'], 1, first[0].rowId)
+      expect(first).toHaveLength(1)
+      expect(second).toHaveLength(1)
+      expect(second[0].rowId).toBeGreaterThan(first[0].rowId)
+      expect(second[0].id).not.toBe(first[0].id)
+      expect(index.pending(['root-a'], 1, first[0].rowId)).toHaveLength(0)
+      expect(index.pending(['root-a', 'root-b'], 1, second[0].rowId)).toHaveLength(0)
+    } finally {
+      store.close()
+    }
+  })
   it('isolates the learned vector space, respects folders, and removes obsolete vectors', () => {
     const store = fixture()
     const index = store.getGemmaIndex()

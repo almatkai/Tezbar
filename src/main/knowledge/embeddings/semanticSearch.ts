@@ -56,7 +56,9 @@ export class SemanticSearch {
       this.countsCache.roots !== roots ||
       Date.now() - this.countsCache.at > 10_000
     ) {
-      this.countsCache = { roots, at: Date.now(), ...this.store.getGemmaIndex().counts(rootIds) }
+      const counts = this.store.getGemmaIndex().counts(rootIds)
+      // Stamp completion: a slow first count must not arrive already expired.
+      this.countsCache = { roots, ...counts, at: Date.now() }
     }
     return this.countsCache
   }
@@ -113,14 +115,23 @@ export class SemanticSearch {
 
   private async backfill(signal: AbortSignal): Promise<void> {
     this.error = undefined
+    let afterRowId = 0
     while (!signal.aborted && this.options.enabled() && this.options.canIndex()) {
       await this.options.waitForIdle(signal)
       signal.throwIfAborted()
-      const chunks = this.store.getGemmaIndex().pending(this.options.roots())
+      const rootIds = this.options.roots()
+      const chunks = this.store.getGemmaIndex().pending(rootIds, 4, afterRowId)
       if (!chunks.length) return
       const vectors = await this.runtime.embedDocuments(chunks, signal)
       signal.throwIfAborted()
-      this.store.getGemmaIndex().save(chunks, vectors)
+      const saved = this.store.getGemmaIndex().save(chunks, vectors)
+      afterRowId = chunks[chunks.length - 1].rowId
+      if (this.countsCache?.roots === rootIds.join('\n')) {
+        this.countsCache.indexedChunks = Math.min(
+          this.countsCache.totalChunks,
+          this.countsCache.indexedChunks + saved
+        )
+      }
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
   }

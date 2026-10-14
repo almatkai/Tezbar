@@ -13,6 +13,7 @@ export function KnowledgeEmbeddingSettings({ knowledge, onChange }: Props) {
   const selected = knowledge?.settings.embeddingModel ?? 'built-in'
   const ready = status?.modelState === 'ready'
   const downloading = status?.modelState === 'downloading'
+  const unfinished = (status?.indexedChunks ?? 0) < (status?.totalChunks ?? 0)
   const buttonClass =
     'rounded-tezbar-row border border-white/10 bg-white/5 px-3 py-2 text-xs text-ink-1 transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50 disabled:cursor-not-allowed disabled:opacity-50'
 
@@ -53,6 +54,14 @@ export function KnowledgeEmbeddingSettings({ knowledge, onChange }: Props) {
         folders use keyword search.
       </p>
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={busy || !knowledge}
+          onClick={() => run(() => window.tezbar.getKnowledgeSnapshot())}
+        >
+          Refresh status
+        </button>
         {!ready && !downloading ? (
           <button
             type="button"
@@ -97,6 +106,21 @@ export function KnowledgeEmbeddingSettings({ knowledge, onChange }: Props) {
             Retry semantic indexing
           </button>
         ) : null}
+        {ready &&
+        selected === 'embeddinggemma-2' &&
+        unfinished &&
+        !status?.indexing &&
+        !status?.error &&
+        knowledge?.status.state !== 'paused' ? (
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={busy}
+            onClick={() => run(() => window.tezbar.setKnowledgeEmbeddingModel('embeddinggemma-2'))}
+          >
+            Start semantic indexing
+          </button>
+        ) : null}
         {ready || status?.modelState === 'error' ? (
           <button
             type="button"
@@ -126,8 +150,14 @@ export function KnowledgeEmbeddingSettings({ knowledge, onChange }: Props) {
       ) : null}
       {ready && selected === 'embeddinggemma-2' ? (
         <div role="status" className="text-xs text-ink-3">
-          {status?.indexing ? 'Building semantic index' : 'Semantic index'} ·{' '}
-          {status?.indexedChunks ?? 0} / {status?.totalChunks ?? 0} chunks
+          {knowledge?.status.state === 'paused'
+            ? 'Semantic indexing paused'
+            : status?.indexing
+              ? 'Building semantic index'
+              : unfinished
+                ? 'Preparing semantic index'
+                : 'Semantic index'}{' '}
+          · {status?.indexedChunks ?? 0} / {status?.totalChunks ?? 0} chunks
           <p className="mt-1 text-ink-4">
             Keyword search stays available while indexing. Pause indexing to pause semantic indexing
             too.

@@ -79,6 +79,40 @@ function fixture() {
 }
 
 describe('optional semantic search lifecycle', () => {
+  it('keeps a slow initial count fresh after the query finishes', () => {
+    const { store, semantic } = fixture()
+    let now = 0
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const index = store.getGemmaIndex()
+    const count = index.counts.bind(index)
+    const counts = vi.spyOn(index, 'counts').mockImplementation((roots) => {
+      now += 16_000
+      return count(roots)
+    })
+    try {
+      expect(semantic.snapshot().totalChunks).toBe(1)
+      expect(semantic.snapshot().totalChunks).toBe(1)
+      expect(counts).toHaveBeenCalledTimes(1)
+    } finally {
+      clock.mockRestore()
+      semantic.shutdown()
+      store.close()
+    }
+  })
+
+  it('reports a saved embedding batch without waiting for the next corpus count', async () => {
+    const { store, semantic } = fixture()
+    try {
+      expect(semantic.snapshot().indexedChunks).toBe(0)
+      semantic.schedule(0)
+      await vi.waitFor(() => expect(store.getGemmaIndex().counts(['root']).indexedChunks).toBe(1))
+      expect(semantic.snapshot().indexedChunks).toBe(1)
+      await semantic.pause()
+    } finally {
+      semantic.shutdown()
+      store.close()
+    }
+  })
   it('discards a paused in-flight batch and resumes from the persisted index', async () => {
     const { store, semantic, runtime, vector } = fixture()
     let finish: (vectors: number[][]) => void = () => {}

@@ -32,6 +32,10 @@ export class GemmaIndex {
         model_key TEXT NOT NULL,
         vector BLOB NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS knowledge_gemma_ready_chunks_idx
+        ON knowledge_chunks(source_id, id) WHERE embedding_json IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS knowledge_gemma_model_chunks_idx
+        ON knowledge_gemma_embeddings(model_key, chunk_id);
       CREATE TRIGGER IF NOT EXISTS knowledge_gemma_chunk_delete
       BEFORE DELETE ON knowledge_chunks BEGIN
         DELETE FROM knowledge_gemma_embeddings WHERE chunk_id = OLD.id;
@@ -57,10 +61,10 @@ export class GemmaIndex {
       .prepare(
         `
       SELECT COUNT(*) AS totalChunks,
-             COALESCE(SUM(CASE WHEN g.model_key = ? THEN 1 ELSE 0 END), 0) AS indexedChunks
-      FROM knowledge_chunks c
+             COUNT(g.chunk_id) AS indexedChunks
+      FROM knowledge_chunks c INDEXED BY knowledge_gemma_ready_chunks_idx
       JOIN knowledge_sources s ON s.id = c.source_id
-      LEFT JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id
+      LEFT JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id AND g.model_key = ?
       WHERE s.status = 'indexed' AND c.embedding_json IS NOT NULL
         AND s.root_id IN (${rootIds.map(() => '?').join(',')})
     `
@@ -85,25 +89,37 @@ export class GemmaIndex {
     )
   }
 
-  pending(rootIds: string[], limit = 4): GemmaChunk[] {
+  pending(rootIds: string[], limit = 4, afterRowId = 0): Array<GemmaChunk & { rowId: number }> {
     if (!rootIds.length) return []
+    // Keep chunks first in rowid order, without sorting the corpus and its text for a small LIMIT.
     const rows = this.db
       .prepare(
         `
-      SELECT c.id, c.text, s.path
-      FROM knowledge_chunks c JOIN knowledge_sources s ON s.id = c.source_id
+      SELECT c.rowid AS rowId, c.id, c.text, s.path
+      FROM knowledge_chunks c CROSS JOIN knowledge_sources s
       LEFT JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id
-      WHERE s.status = 'indexed' AND c.embedding_json IS NOT NULL
+      WHERE s.id = c.source_id AND c.rowid > ?
+        AND s.status = 'indexed' AND c.embedding_json IS NOT NULL
         AND s.root_id IN (${rootIds.map(() => '?').join(',')})
         AND (g.chunk_id IS NULL OR g.model_key != ?)
       ORDER BY c.rowid LIMIT ?
     `
       )
-      .all(...rootIds, GEMMA_INDEX_KEY, limit) as Array<{ id: string; text: string; path: string }>
-    return rows.map((row) => ({ id: row.id, text: row.text, title: basename(row.path) }))
+      .all(afterRowId, ...rootIds, GEMMA_INDEX_KEY, limit) as Array<{
+      rowId: number
+      id: string
+      text: string
+      path: string
+    }>
+    return rows.map((row) => ({
+      rowId: row.rowId,
+      id: row.id,
+      text: row.text,
+      title: basename(row.path),
+    }))
   }
 
-  save(chunks: GemmaChunk[], vectors: number[][]): void {
+  save(chunks: GemmaChunk[], vectors: number[][]): number {
     if (chunks.length !== vectors.length) throw new Error('Embedding batch size does not match')
     const encoded = vectors.map(encode)
     const find = this.db.prepare(`
@@ -122,6 +138,7 @@ export class GemmaIndex {
           'INSERT INTO knowledge_gemma_vectors(rowid, embedding, root_id) VALUES (?, ?, ?)'
         )
       : null
+    let saved = 0
     this.db.transaction(() => {
       chunks.forEach((chunk, index) => {
         // Extraction/removal may have changed the chunk while inference ran.
@@ -132,8 +149,10 @@ export class GemmaIndex {
         insert.run(chunk.id, GEMMA_INDEX_KEY, encoded[index])
         deleteVector?.run(BigInt(current.rowId))
         insertVector?.run(BigInt(current.rowId), encoded[index], current.rootId)
+        saved++
       })
     })()
+    return saved
   }
 
   search(vector: number[], rootIds: string[], limit: number): KnowledgeSearchHit[] {

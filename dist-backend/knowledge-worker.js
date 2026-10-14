@@ -897,6 +897,10 @@ var GemmaIndex = class {
         model_key TEXT NOT NULL,
         vector BLOB NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS knowledge_gemma_ready_chunks_idx
+        ON knowledge_chunks(source_id, id) WHERE embedding_json IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS knowledge_gemma_model_chunks_idx
+        ON knowledge_gemma_embeddings(model_key, chunk_id);
       CREATE TRIGGER IF NOT EXISTS knowledge_gemma_chunk_delete
       BEFORE DELETE ON knowledge_chunks BEGIN
         DELETE FROM knowledge_gemma_embeddings WHERE chunk_id = OLD.id;
@@ -922,10 +926,10 @@ var GemmaIndex = class {
     return this.db.prepare(
       `
       SELECT COUNT(*) AS totalChunks,
-             COALESCE(SUM(CASE WHEN g.model_key = ? THEN 1 ELSE 0 END), 0) AS indexedChunks
-      FROM knowledge_chunks c
+             COUNT(g.chunk_id) AS indexedChunks
+      FROM knowledge_chunks c INDEXED BY knowledge_gemma_ready_chunks_idx
       JOIN knowledge_sources s ON s.id = c.source_id
-      LEFT JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id
+      LEFT JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id AND g.model_key = ?
       WHERE s.status = 'indexed' AND c.embedding_json IS NOT NULL
         AND s.root_id IN (${rootIds.map(() => "?").join(",")})
     `
@@ -945,20 +949,26 @@ var GemmaIndex = class {
       ).get(GEMMA_INDEX_KEY, ...rootIds)
     );
   }
-  pending(rootIds, limit = 4) {
+  pending(rootIds, limit = 4, afterRowId = 0) {
     if (!rootIds.length) return [];
     const rows = this.db.prepare(
       `
-      SELECT c.id, c.text, s.path
-      FROM knowledge_chunks c JOIN knowledge_sources s ON s.id = c.source_id
+      SELECT c.rowid AS rowId, c.id, c.text, s.path
+      FROM knowledge_chunks c CROSS JOIN knowledge_sources s
       LEFT JOIN knowledge_gemma_embeddings g ON g.chunk_id = c.id
-      WHERE s.status = 'indexed' AND c.embedding_json IS NOT NULL
+      WHERE s.id = c.source_id AND c.rowid > ?
+        AND s.status = 'indexed' AND c.embedding_json IS NOT NULL
         AND s.root_id IN (${rootIds.map(() => "?").join(",")})
         AND (g.chunk_id IS NULL OR g.model_key != ?)
       ORDER BY c.rowid LIMIT ?
     `
-    ).all(...rootIds, GEMMA_INDEX_KEY, limit);
-    return rows.map((row) => ({ id: row.id, text: row.text, title: (0, import_node_path5.basename)(row.path) }));
+    ).all(afterRowId, ...rootIds, GEMMA_INDEX_KEY, limit);
+    return rows.map((row) => ({
+      rowId: row.rowId,
+      id: row.id,
+      text: row.text,
+      title: (0, import_node_path5.basename)(row.path)
+    }));
   }
   save(chunks, vectors) {
     if (chunks.length !== vectors.length) throw new Error("Embedding batch size does not match");
@@ -975,6 +985,7 @@ var GemmaIndex = class {
     const insertVector = this.vectorAvailable ? this.db.prepare(
       "INSERT INTO knowledge_gemma_vectors(rowid, embedding, root_id) VALUES (?, ?, ?)"
     ) : null;
+    let saved = 0;
     this.db.transaction(() => {
       chunks.forEach((chunk, index) => {
         const current = find.get(chunk.id, chunk.text);
@@ -982,8 +993,10 @@ var GemmaIndex = class {
         insert.run(chunk.id, GEMMA_INDEX_KEY, encoded[index]);
         deleteVector?.run(BigInt(current.rowId));
         insertVector?.run(BigInt(current.rowId), encoded[index], current.rootId);
+        saved++;
       });
     })();
+    return saved;
   }
   search(vector, rootIds, limit) {
     if (!rootIds.length || limit <= 0) return [];
@@ -2648,7 +2661,8 @@ var SemanticSearch = class {
     const rootIds = this.options.roots();
     const roots = rootIds.join("\n");
     if (!this.countsCache || this.countsCache.roots !== roots || Date.now() - this.countsCache.at > 1e4) {
-      this.countsCache = { roots, at: Date.now(), ...this.store.getGemmaIndex().counts(rootIds) };
+      const counts = this.store.getGemmaIndex().counts(rootIds);
+      this.countsCache = { roots, ...counts, at: Date.now() };
     }
     return this.countsCache;
   }
@@ -2695,14 +2709,23 @@ var SemanticSearch = class {
   }
   async backfill(signal) {
     this.error = void 0;
+    let afterRowId = 0;
     while (!signal.aborted && this.options.enabled() && this.options.canIndex()) {
       await this.options.waitForIdle(signal);
       signal.throwIfAborted();
-      const chunks = this.store.getGemmaIndex().pending(this.options.roots());
+      const rootIds = this.options.roots();
+      const chunks = this.store.getGemmaIndex().pending(rootIds, 4, afterRowId);
       if (!chunks.length) return;
       const vectors = await this.runtime.embedDocuments(chunks, signal);
       signal.throwIfAborted();
-      this.store.getGemmaIndex().save(chunks, vectors);
+      const saved = this.store.getGemmaIndex().save(chunks, vectors);
+      afterRowId = chunks[chunks.length - 1].rowId;
+      if (this.countsCache?.roots === rootIds.join("\n")) {
+        this.countsCache.indexedChunks = Math.min(
+          this.countsCache.totalChunks,
+          this.countsCache.indexedChunks + saved
+        );
+      }
       await new Promise((resolve2) => setTimeout(resolve2, 100));
     }
   }

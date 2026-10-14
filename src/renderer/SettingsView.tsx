@@ -937,11 +937,33 @@ export default function SettingsView({
 
   useEffect(() => {
     if (activeTab !== 'knowledge') return
-    void loadKnowledge()
+    let cancelled = false
+    let inFlight = true
+    void loadKnowledge().finally(() => {
+      inFlight = false
+    })
     const timer = window.setInterval(() => {
-      void window.tezbar.getKnowledgeSnapshot().then(setKnowledge).catch(() => {})
+      if (inFlight) return
+      inFlight = true
+      void window.tezbar
+        .getKnowledgeSnapshot()
+        .then((snapshot) => {
+          if (!cancelled) setKnowledge(snapshot)
+        })
+        .catch((error: unknown) => {
+          if (!cancelled)
+            setKnowledgeMessage(
+              error instanceof Error ? error.message : 'Could not refresh Knowledge status.'
+            )
+        })
+        .finally(() => {
+          inFlight = false
+        })
     }, 1500)
-    return () => window.clearInterval(timer)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
   }, [activeTab, loadKnowledge])
 
   useEffect(() => {
