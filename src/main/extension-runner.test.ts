@@ -1,4 +1,5 @@
-import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { chmodSync, readFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import Database from 'better-sqlite3'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -34,6 +35,10 @@ vi.mock('@tezbar/desktop-runtime', () => ({
   },
 }))
 
+vi.mock('./google-oauth-protocol', () => ({
+  registerWindowsOAuthProtocol: vi.fn(async () => async () => {}),
+}))
+
 vi.mock('./llm/extensionAI', () => ({
   askExtensionAI: async (prompt: string) => `AI:${prompt}`,
 }))
@@ -52,6 +57,7 @@ import {
   saveExtensionPreferences,
   shouldShowExtensionPreferenceSetup,
 } from './extension-registry'
+import { registerWindowsOAuthProtocol } from './google-oauth-protocol'
 
 afterAll(() => {
   clearAllExtensionSessions()
@@ -59,6 +65,31 @@ afterAll(() => {
 })
 
 describe('extension preference onboarding', () => {
+  it('offers optional Desktop credentials for Google Calendar without requiring onboarding', () => {
+    const extensionId = 'raycast.google-calendar'
+    const root = join(userData, 'extensions', 'google-calendar')
+    mkdirSync(root, { recursive: true })
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'google-calendar', commands: [{ name: 'index', mode: 'view' }] })
+    )
+    const setup = getExtensionPreferenceSetup(extensionId, 'index')
+    expect(setup.preferences).toEqual([
+      expect.objectContaining({ name: 'tezbarGoogleDesktopClientId', required: false }),
+      expect.objectContaining({
+        name: 'tezbarGoogleDesktopClientSecret',
+        type: 'password',
+        required: false,
+      }),
+    ])
+    expect(shouldShowExtensionPreferenceSetup(extensionId, 'index')).toBe(false)
+    saveExtensionPreferences(extensionId, { tezbarGoogleDesktopClientId: 'desktop-fixture' })
+    expect(
+      getExtensionPreferenceSetup(extensionId, 'index').values.tezbarGoogleDesktopClientId
+    ).toBe('desktop-fixture')
+    expect(shouldShowExtensionPreferenceSetup(extensionId, 'index')).toBe(false)
+  })
+
   it('requires first-run credentials before entering the extension', async () => {
     const extensionId = 'raycast.credential-gate-fixture'
     const extensionRoot = join(userData, 'extensions', 'credential-gate-fixture')
@@ -1210,6 +1241,149 @@ describe('extension runtime list pagination', () => {
     }
   })
 
+  it('does not register a protocol when interactive OAuth is prohibited in record mode', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'tezbar-google-record-'))
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({ name: 'google-record-fixture', commands: [{ name: 'index', mode: 'view' }] })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'index.js'),
+      `
+      const { OAuthService, withAccessToken } = require('@raycast/utils')
+      const service = OAuthService.google({ clientId: '690234628480-bhl8vft6dp81bkv4bq0lf9l6vv7nerq4.apps.googleusercontent.com', scope: 'openid' })
+      module.exports.default = withAccessToken(service)(() => null)
+    `
+    )
+    const before = vi.mocked(registerWindowsOAuthProtocol).mock.calls.length
+    try {
+      const result = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index',
+        undefined,
+        {},
+        { effectMode: 'record' }
+      )
+      expect(result.ok).toBe(false)
+      expect(JSON.stringify(result)).toContain('Interactive OAuth requires system effect mode')
+      expect(vi.mocked(registerWindowsOAuthProtocol).mock.calls).toHaveLength(before)
+    } finally {
+      clearAllExtensionSessions()
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('switches Google clients without reusing their access or refresh tokens', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'tezbar-google-desktop-'))
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    const storedPath = join(extensionRoot, '.tezbar-support', 'oauth-service')
+    mkdirSync(storedPath, { recursive: true })
+    writeFileSync(
+      join(storedPath, 'google.json'),
+      JSON.stringify({
+        accessToken: 'raycast-access',
+        refreshToken: 'raycast-refresh',
+        expiresAt: Date.now() + 60_000,
+      })
+    )
+    const requests: URLSearchParams[] = []
+    const oauthServer = createServer((request, response) => {
+      let body = ''
+      request.on('data', (chunk) => {
+        body += String(chunk)
+      })
+      request.on('end', () => {
+        const params = new URLSearchParams(body)
+        requests.push(params)
+        response.writeHead(200, { 'content-type': 'application/json' })
+        response.end(
+          JSON.stringify({
+            access_token: `${params.get('client_id')}-access`,
+            refresh_token: `${params.get('client_id')}-refresh`,
+            expires_in: 3600,
+          })
+        )
+      })
+    })
+    await new Promise<void>((resolve) => oauthServer.listen(0, '127.0.0.1', resolve))
+    const address = oauthServer.address()
+    if (!address || typeof address === 'string') throw new Error('Fixture server failed')
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({
+        name: 'google-desktop-fixture',
+        commands: [{ name: 'index', mode: 'view' }],
+      })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'index.js'),
+      `
+      const React = require('react').default
+      const { Detail } = require('@raycast/api')
+      const { getAccessToken, OAuthService, withAccessToken } = require('@raycast/utils')
+      const service = OAuthService.google({
+        clientId: '690234628480-bhl8vft6dp81bkv4bq0lf9l6vv7nerq4.apps.googleusercontent.com',
+        redirectUri: 'com.raycast:/oauth', scope: 'openid calendar',
+        tokenEndpoint: 'http://127.0.0.1:${address.port}/token',
+        openAuthorizationUrl: async url => {
+          const parsed = new URL(url)
+          if (!parsed.searchParams.get('redirect_uri').startsWith('http://127.0.0.1:')) throw new Error('Desktop client must use loopback')
+          if (parsed.searchParams.has('client_secret')) throw new Error('Secret leaked to authorization URL')
+          await fetch(parsed.searchParams.get('redirect_uri') + '?code=desktop-code&state=' + parsed.searchParams.get('state'))
+        },
+      })
+      module.exports.default = withAccessToken(service)(() => React.createElement(Detail, { markdown: getAccessToken().token }))
+    `
+    )
+    const run = async (preferences: Record<string, unknown>) => {
+      const result = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index',
+        undefined,
+        preferences
+      )
+      expect(result.ok, JSON.stringify(result)).toBe(true)
+      if (!result.ok || result.mode !== 'view') throw new Error('Fixture did not render')
+      return result.root.props.markdown
+    }
+    try {
+      expect(await run({})).toBe('raycast-access')
+      const preferences = {
+        tezbarGoogleDesktopClientId: 'desktop-one',
+        tezbarGoogleDesktopClientSecret: 'fixture-secret',
+      }
+      expect(await run(preferences)).toBe('desktop-one-access')
+      expect(await run(preferences)).toBe('desktop-one-access')
+      expect(requests).toHaveLength(1)
+      const desktopPath = join(
+        storedPath,
+        'google-' + createHash('sha256').update('desktop-one').digest('hex').slice(0, 16) + '.json'
+      )
+      const stored = JSON.parse(readFileSync(desktopPath, 'utf8'))
+      stored.expiresAt = Date.now() - 1000
+      writeFileSync(desktopPath, JSON.stringify(stored))
+      expect(await run(preferences)).toBe('desktop-one-access')
+      expect(requests[1].get('grant_type')).toBe('refresh_token')
+      expect(requests[1].get('refresh_token')).toBe('desktop-one-refresh')
+      expect(await run({ tezbarGoogleDesktopClientId: 'desktop-two' })).toBe('desktop-two-access')
+      expect(await run({})).toBe('raycast-access')
+      expect(requests).toHaveLength(3)
+      expect(requests[0].get('client_id')).toBe('desktop-one')
+      expect(requests[0].get('client_secret')).toBe('fixture-secret')
+      expect(requests[1].get('client_secret')).toBe('fixture-secret')
+      expect(requests[2].get('client_id')).toBe('desktop-two')
+      expect(requests[2].has('client_secret')).toBe(false)
+      expect(requests.every((params) => params.get('refresh_token') !== 'raycast-refresh')).toBe(
+        true
+      )
+    } finally {
+      clearAllExtensionSessions()
+      await new Promise<void>((resolve) => oauthServer.close(() => resolve()))
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
   it('supports com.raycast:/oauth custom protocol redirect and bridge for Google OAuth services', async () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-google-custom-oauth-'))
     mkdirSync(join(extensionRoot, '.sc-build'))
@@ -1259,17 +1433,21 @@ describe('extension runtime list pagination', () => {
        const service = OAuthService.google({
          clientId: '690234628480-bhl8vft6dp81bkv4bq0lf9l6vv7nerq4.apps.googleusercontent.com',
          scope: 'openid calendar',
-         redirectUri: 'com.raycast:/oauth',
+         manualFallbackDelayMs: 0,
          tokenEndpoint: 'http://127.0.0.1:${address.port}/token',
          timeoutMs: 5000,
          openAuthorizationUrl: async (url) => {
            const parsed = new URL(url)
-           const state = parsed.searchParams.get('state')
-           if (parsed.searchParams.get('redirect_uri') !== 'com.raycast:/oauth') throw new Error('redirect_uri mismatch')
-           const portFile = require('node:path').join(require('node:os').tmpdir(), 'tezbar-oauth.port')
-           const port = require('node:fs').readFileSync(portFile, 'utf8').trim()
-           const callbackUrl = \`http://127.0.0.1:\${port}/oauth/callback?url=\` + encodeURIComponent(\`com.raycast:/oauth?code=custom-scheme-code&state=\${state}\`)
-           await fetch(callbackUrl)
+           if (parsed.hostname === 'accounts.google.com') {
+             if (parsed.searchParams.get('redirect_uri') !== 'com.raycast:/oauth') throw new Error('redirect_uri mismatch')
+             return
+           }
+           const state = parsed.searchParams.get('session')
+           const response = await fetch(url, {
+             method: 'POST',
+             body: new URLSearchParams({ url: \`com.raycast:/oauth?code=custom-scheme-code&state=\${state}\` }),
+           })
+           if (!response.ok) throw new Error('manual callback failed')
          },
        })
        function Command() {
@@ -1288,7 +1466,7 @@ describe('extension runtime list pagination', () => {
       expect(first.ok, JSON.stringify(first)).toBe(true)
       if (!first.ok || first.mode !== 'view') return
       expect(first.root.props.markdown).toBe('google-custom-access')
-      expect(first.effects).toHaveLength(1)
+      expect(first.effects).toHaveLength(2)
       expect(first.effects[0]?.kind).toBe('open')
       expect(tokenRequests).toBe(1)
     } finally {

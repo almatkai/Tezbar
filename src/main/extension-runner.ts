@@ -1,14 +1,18 @@
 import { app, BrowserWindow, clipboard, nativeImage, shell } from '@tezbar/desktop-runtime'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { open as openFile, rm as removePath, writeFile } from 'node:fs/promises'
-import { execFile, execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
+import {
+  authorizeGoogleOAuth,
+  GOOGLE_DESKTOP_CLIENT_ID_PREFERENCE,
+  GOOGLE_DESKTOP_CLIENT_SECRET_PREFERENCE,
+} from './google-oauth'
 import { executeExtensionSQL } from './extension-sql'
 import { confirmExtensionAlert, type ExtensionAlertOptions } from './extension-confirm-alert'
 import { runPowerShellScript, type PowerShellScriptOptions } from './powershell-script'
 import { readSelectedText } from './selected-text'
-import { createHash, randomBytes } from 'node:crypto'
-import { createServer } from 'node:http'
-import { homedir, tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
+import { homedir } from 'node:os'
 import { createRequire, builtinModules } from 'node:module'
 import { basename, dirname, extname, join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -2117,50 +2121,6 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
   }
 }
 
-
-function registerWindowsOAuthProtocols(port: number): () => void {
-  if (process.platform !== 'win32') return () => {}
-  try {
-    const portFile = join(tmpdir(), 'tezbar-oauth.port')
-    writeFileSync(portFile, String(port), 'utf8')
-
-    const bridgeScriptPath = join(tmpdir(), 'tezbar-oauth-bridge.ps1')
-    const bridgeScript = `param([string]$url)
-if (-not $url) { exit }
-$portFile = Join-Path $env:TEMP 'tezbar-oauth.port'
-if (-not (Test-Path $portFile)) { exit }
-$port = (Get-Content -Raw $portFile).Trim()
-if (-not $port) { exit }
-try {
-  $encoded = [System.Uri]::EscapeDataString($url)
-  Invoke-RestMethod -Uri ("http://127.0.0.1:$port/oauth/callback?url=" + $encoded) -TimeoutSec 5 -UseBasicParsing | Out-Null
-} catch {}
-`
-    writeFileSync(bridgeScriptPath, bridgeScript, 'utf8')
-
-    const commandValue = `powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File "${bridgeScriptPath}" "%1"`
-
-    for (const scheme of ['com.raycast', 'raycast']) {
-      try {
-        execFileSync('reg.exe', ['add', `HKCU\\Software\\Classes\\${scheme}`, '/ve', '/d', `URL:${scheme} Protocol`, '/f'], { stdio: 'ignore' })
-        execFileSync('reg.exe', ['add', `HKCU\\Software\\Classes\\${scheme}`, '/v', 'URL Protocol', '/d', '', '/f'], { stdio: 'ignore' })
-        execFileSync('reg.exe', ['add', `HKCU\\Software\\Classes\\${scheme}\\shell\\open\\command`, '/ve', '/d', commandValue, '/f'], { stdio: 'ignore' })
-      } catch (err) {
-        console.warn(`[OAuth] failed to register protocol ${scheme}:`, err)
-      }
-    }
-
-    return () => {
-      try {
-        if (existsSync(portFile)) unlinkSync(portFile)
-      } catch {}
-    }
-  } catch (error) {
-    console.warn('[OAuth] failed to setup Windows protocol handler:', error)
-    return () => {}
-  }
-}
-
 function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown> {
   const CacheShim = createCacheShim(session.packageRoot)
   const cache = new CacheShim()
@@ -2694,6 +2654,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
     redirectUri?: unknown
     openAuthorizationUrl?: (url: string) => Promise<void> | void
     timeoutMs?: unknown
+    manualFallbackDelayMs?: unknown
   }
 
   type StoredOAuthServiceTokens = {
@@ -2701,6 +2662,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
     refreshToken?: string
     expiresAt?: number
     scope?: string
+    clientId?: string
   }
 
   class OAuthServiceShim {
@@ -2728,6 +2690,8 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
     private readonly token: string | undefined
     private readonly onAuthorize: OAuthServiceOptions['onAuthorize']
     private readonly tokenPath: string
+    private readonly googleClientId: string
+    private readonly googleDesktopClientId: string
 
     constructor(provider: 'github' | 'slack' | 'google', options: OAuthServiceOptions = {}) {
       this.provider = provider
@@ -2737,11 +2701,19 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
           ? options.personalAccessToken.trim()
           : undefined
       this.onAuthorize = options.onAuthorize
+      this.googleDesktopClientId = String(
+        session.preferences[GOOGLE_DESKTOP_CLIENT_ID_PREFERENCE] ?? ''
+      ).trim()
+      this.googleClientId = this.googleDesktopClientId || String(options.clientId ?? '')
+      const tokenName =
+        provider === 'google' && this.googleDesktopClientId
+          ? `google-${createHash('sha256').update(this.googleClientId).digest('hex').slice(0, 16)}`
+          : provider
       this.tokenPath = join(
         session.packageRoot,
         '.tezbar-support',
         'oauth-service',
-        `${provider}.json`
+        `${tokenName}.json`
       )
       if (!this.applyPersonalToken()) this.applyStoredToken()
     }
@@ -2757,6 +2729,8 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       if (!existsSync(this.tokenPath)) return undefined
       try {
         const value = JSON.parse(readFileSync(this.tokenPath, 'utf8')) as StoredOAuthServiceTokens
+        if (this.provider === 'google' && value.clientId && value.clientId !== this.googleClientId)
+          return undefined
         return typeof value.accessToken === 'string' && value.accessToken ? value : undefined
       } catch {
         return undefined
@@ -2784,6 +2758,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
         refreshToken: String(response.refresh_token ?? existingRefreshToken ?? '') || undefined,
         expiresAt: Number.isFinite(expiresIn) ? Date.now() + expiresIn * 1_000 : undefined,
         scope: String(response.scope ?? '') || undefined,
+        clientId: this.provider === 'google' ? this.googleClientId : undefined,
       }
       mkdirSync(dirname(this.tokenPath), { recursive: true })
       writeFileSync(this.tokenPath, JSON.stringify(stored), 'utf8')
@@ -2794,6 +2769,11 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
     private async exchangeGoogleToken(
       parameters: URLSearchParams
     ): Promise<Record<string, unknown>> {
+      const desktopSecret = String(
+        session.preferences[GOOGLE_DESKTOP_CLIENT_SECRET_PREFERENCE] ?? ''
+      ).trim()
+      if (this.googleDesktopClientId && desktopSecret)
+        parameters.set('client_secret', desktopSecret)
       const endpoint =
         typeof this.options.tokenEndpoint === 'string' && this.options.tokenEndpoint
           ? this.options.tokenEndpoint
@@ -2823,7 +2803,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
     }
 
     private async refreshGoogleToken(stored: StoredOAuthServiceTokens): Promise<boolean> {
-      const clientId = String(this.options.clientId ?? '')
+      const clientId = this.googleClientId
       if (!clientId || !stored.refreshToken) return false
       const response = await this.exchangeGoogleToken(
         new URLSearchParams({
@@ -2837,181 +2817,54 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
     }
 
     private async authorizeGoogle(): Promise<void> {
-      const clientId = String(this.options.clientId ?? '')
+      const clientId = this.googleClientId
       const scope = String(this.options.scope ?? '')
       if (!clientId || !scope) throw new Error('Google OAuth requires clientId and scope')
 
       const stored = this.readStoredTokens()
       if (stored?.refreshToken && (await this.refreshGoogleToken(stored))) return
 
-      const state = randomBytes(24).toString('base64url')
-      const codeVerifier = randomBytes(48).toString('base64url')
-      const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url')
-      let settleCallback: ((value: { code: string; redirectUri: string }) => void) | null = null
-      let rejectCallback: ((error: Error) => void) | null = null
-      const callbackPromise = new Promise<{ code: string; redirectUri: string }>(
-        (resolve, reject) => {
-          settleCallback = resolve
-          rejectCallback = reject
-        }
-      )
+      if (session.effectMode === 'record' && !this.options.openAuthorizationUrl) {
+        throw new Error('Interactive OAuth requires system effect mode')
+      }
 
-      let cleanupProtocols: (() => void) | null = null
-      let chosenRedirectUri = ''
-
-      const server = createServer((request, response) => {
-        const address = server.address()
-        const currentPort = address && typeof address === 'object' ? address.port : 0
-        const reqUrl = new URL(request.url ?? '/', `http://127.0.0.1:${currentPort}`)
-
-        if (reqUrl.pathname === '/' || reqUrl.pathname === '/oauth/manual') {
-          response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-          response.end(`<!doctype html>
-<html>
-<head><meta charset="utf-8"><title>Tezbar Google Authorization</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0f172a; color: #f8fafc; }
-  .card { background: #1e293b; padding: 32px; border-radius: 12px; width: 450px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-  h2 { font-size: 18px; margin-bottom: 12px; color: #38bdf8; }
-  p { font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 20px; }
-  input { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 13px; margin-bottom: 12px; }
-  button { background: #0284c7; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; }
-  button:hover { background: #0369a1; }
-</style>
-</head>
-<body>
-  <div class="card">
-    <h2>Tezbar Authorization</h2>
-    <p>If your browser did not redirect automatically, paste the redirect URL or code from the address bar below:</p>
-    <form method="GET" action="/oauth/callback">
-      <input type="text" name="url" placeholder="com.raycast:/oauth?code=... or authorization code" required autofocus />
-      <button type="submit">Complete Authorization</button>
-    </form>
-  </div>
-</body>
-</html>`)
-          return
-        }
-
-        if (reqUrl.pathname !== '/oauth/callback') {
-          response.writeHead(404).end('Not found')
-          return
-        }
-
-        let targetParams = reqUrl.searchParams
-        const forwardedUrl = reqUrl.searchParams.get('url')
-        if (forwardedUrl) {
-          const trimmed = forwardedUrl.trim()
-          if (trimmed.startsWith('com.raycast:') || trimmed.startsWith('raycast:') || trimmed.startsWith('http')) {
-            try {
-              const normalized = trimmed
-                .replace(/^com\.raycast:\/?\/?oauth\??/i, 'http://localhost/oauth?')
-                .replace(/^raycast:\/?\/?oauth\??/i, 'http://localhost/oauth?')
-              targetParams = new URL(normalized).searchParams
-            } catch {
-              const qIndex = trimmed.indexOf('?')
-              if (qIndex !== -1) {
-                targetParams = new URLSearchParams(trimmed.slice(qIndex + 1))
-              }
-            }
-          } else if (trimmed.length > 10 && !trimmed.includes('=')) {
-            targetParams = new URLSearchParams({ code: trimmed, state })
-          }
-        }
-
-        const receivedState = targetParams.get('state')
-        if (receivedState && receivedState !== state) {
-          response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
-          response.end('Invalid OAuth state')
-          rejectCallback?.(new Error('OAuth callback state did not match'))
-          return
-        }
-
-        const providerError = targetParams.get('error')
-        const code = targetParams.get('code')
-        if (providerError || !code) {
-          response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
-          response.end('Authorization failed')
-          rejectCallback?.(new Error(providerError || 'OAuth callback did not include a code'))
-          return
-        }
-
-        response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-        response.end(
-          '<!doctype html><title>Tezbar authorized</title><p style="font-family:sans-serif;text-align:center;padding:40px;">Successfully authorized! You can close this window and return to Tezbar.</p>'
-        )
-        settleCallback?.({ code, redirectUri: chosenRedirectUri })
-      })
-
-      await new Promise<void>((resolve, reject) => {
-        server.once('error', reject)
-        server.listen(0, '127.0.0.1', resolve)
-      })
-
-      const address = server.address()
-      const port = address && typeof address === 'object' ? address.port : 0
-      cleanupProtocols = registerWindowsOAuthProtocols(port)
-
-      const authorizationEndpoint =
-        typeof this.options.authorizationEndpoint === 'string' && this.options.authorizationEndpoint
-          ? this.options.authorizationEndpoint
-          : 'https://accounts.google.com/o/oauth2/v2/auth'
-
-      const isCustomGoogleScheme =
-        !authorizationEndpoint.includes('127.0.0.1') &&
-        (clientId.startsWith('690234628480-') ||
-          Boolean(this.options.redirectUri) ||
-          authorizationEndpoint.includes('accounts.google.com'))
-
-      chosenRedirectUri =
-        typeof this.options.redirectUri === 'string' && this.options.redirectUri
-          ? this.options.redirectUri
-          : isCustomGoogleScheme
-          ? 'com.raycast:/oauth'
-          : `http://127.0.0.1:${port}/oauth/callback`
-
-      const authorizationUrl = new URL(authorizationEndpoint)
-      authorizationUrl.search = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: chosenRedirectUri,
-        response_type: 'code',
-        scope,
-        state,
-        code_challenge: codeChallenge,
-        code_challenge_method: 'S256',
-        access_type: 'offline',
-        prompt: 'consent',
-      }).toString()
-      pushEffect(session, { kind: 'open', value: authorizationUrl.toString() })
-
-      const timeoutMs = Math.max(1_000, Number(this.options.timeoutMs) || 120_000)
-      const timeout = setTimeout(
-        () => rejectCallback?.(new Error('OAuth authorization timed out')),
-        timeoutMs
-      )
+      const controller = new AbortController()
+      session.abortControllers.add(controller)
       try {
-        if (this.options.openAuthorizationUrl) {
-          await Promise.resolve(this.options.openAuthorizationUrl(authorizationUrl.toString()))
-        } else if (session.effectMode === 'record') {
-          throw new Error('Interactive OAuth requires system effect mode')
-        } else {
-          await shell.openExternal(authorizationUrl.toString())
-        }
-        const callback = await callbackPromise
+        const callback = await authorizeGoogleOAuth({
+          clientId,
+          scope,
+          useLoopbackRedirect: Boolean(this.googleDesktopClientId),
+          redirectUri: this.googleDesktopClientId
+            ? undefined
+            : String(this.options.redirectUri ?? '') || undefined,
+          authorizationEndpoint: String(this.options.authorizationEndpoint ?? '') || undefined,
+          timeoutMs: Number(this.options.timeoutMs) || undefined,
+          manualFallbackDelayMs:
+            typeof this.options.manualFallbackDelayMs === 'number'
+              ? this.options.manualFallbackDelayMs
+              : undefined,
+          signal: controller.signal,
+          openUrl: async (url) => {
+            pushEffect(session, { kind: 'open', value: url })
+            if (this.options.openAuthorizationUrl) await this.options.openAuthorizationUrl(url)
+            else if (session.effectMode === 'record')
+              throw new Error('Interactive OAuth requires system effect mode')
+            else await shell.openExternal(url)
+          },
+        })
         const tokenResponse = await this.exchangeGoogleToken(
           new URLSearchParams({
             client_id: clientId,
             code: callback.code,
-            code_verifier: codeVerifier,
+            code_verifier: callback.codeVerifier,
             redirect_uri: callback.redirectUri,
             grant_type: 'authorization_code',
           })
         )
         await this.persistTokenResponse(tokenResponse)
       } finally {
-        clearTimeout(timeout)
-        cleanupProtocols?.()
-        await new Promise<void>((resolve) => server.close(() => resolve()))
+        session.abortControllers.delete(controller)
       }
     }
 
