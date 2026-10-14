@@ -1,6 +1,30 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { scoreCatalogEntrySearch, searchExtensionCatalog, type CatalogEntry } from './extension-registry'
+// Pagination should exercise the registry, independent of the live store's latency.
+vi.mock('./extension-api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./extension-api')>()),
+  fetchCatalogFromAPI: vi.fn(async () =>
+    Array.from({ length: 60 }, (_, index) => ({
+      name: `pagination-fixture-${String(index).padStart(3, '0')}`,
+      title: `Pagination fixture ${index}`,
+      description: '',
+      author: '',
+      contributors: [],
+      icon: '',
+      iconUrl: '',
+      screenshotUrls: [],
+      categories: [],
+      platforms: ['macOS', 'Windows'],
+      commands: [],
+    }))
+  ),
+}))
+
+import {
+  scoreCatalogEntrySearch,
+  searchExtensionCatalog,
+  type CatalogEntry,
+} from './extension-registry'
 
 function catalogEntry(overrides: Partial<CatalogEntry>): CatalogEntry {
   return {
