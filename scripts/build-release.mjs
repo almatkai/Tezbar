@@ -31,7 +31,7 @@ for (let i = 2; i < process.argv.length; i++) {
   else throw new Error(`Unknown or incomplete release argument ${arg}`)
 }
 const base = JSON.parse(readFileSync(join(root, 'src-tauri/tauri.conf.json'), 'utf8'))
-const channel = values.channel ?? 'stable',
+const channel = values.channel ?? 'stable',\
   version = values.version ?? base.version
 const override = buildConfiguration(base, channel, version)
 const mode = resolveBuildMode(channel, {
@@ -43,8 +43,7 @@ const directory = resolve(
   values.output ??
     `build/release-${mode.localPreview ? 'local-preview-' : ''}${channel}-${version}-${process.platform}-${process.arch}`
 )
-const notesPath = resolve(root, values.notes ?? `docs/releases/${version}.md`)
-if (!readFileSync(notesPath, 'utf8').trim()) throw new Error('Release notes must not be empty')
+const notesPath = resolve(root, values.notes ?? `docs/releases/${version}.md`)\nif (!readFileSync(notesPath, 'utf8').trim()) throw new Error('Release notes must not be empty')
 mkdirSync(directory, { recursive: true })
 const configPath = join(directory, 'tauri-release.json')
 if (mode.unsigned) {
@@ -62,16 +61,7 @@ writeFileSync(configPath, `${JSON.stringify(override, null, 2)}\n`)
 if (flags.has('dry-run')) {
   console.log(
     JSON.stringify(
-      {
-        channel,
-        version,
-        identifier: override.identifier,
-        productName: override.productName,
-        configPath,
-        notesPath,
-        localPreview: mode.localPreview,
-        unsigned: mode.unsigned,
-      },
+      {\n        channel,\n        version,\n        identifier: override.identifier,\n        productName: override.productName,\n        configPath,\n        notesPath,\n        localPreview: mode.localPreview,\n        unsigned: mode.unsigned,\n      },
       null,
       2
     )
@@ -84,6 +74,16 @@ if (flags.has('dry-run')) {
     (process.platform === 'win32' && process.arch !== 'x64')
   )
     throw new Error('Unsupported release architecture')
+
+  // Auto-detect updater signing key from ~/.tauri/tezbar.key if not set in environment
+  const localKeyPath = join(process.env.USERPROFILE || process.env.HOME || '', '.tauri', 'tezbar.key')
+  if (!process.env.TAURI_SIGNING_PRIVATE_KEY && existsSync(localKeyPath)) {
+    process.env.TAURI_SIGNING_PRIVATE_KEY = readFileSync(localKeyPath, 'utf8')
+    if (process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD === undefined) {
+      process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ''
+    }
+  }
+
   if (!mode.unsigned) {
     if (
       execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], {
@@ -155,7 +155,7 @@ if (flags.has('dry-run')) {
     ])
   }
   const paths = []
-  function collect(path) {
+  const collect = (path) => {
     for (const entry of readdirSync(path, { withFileTypes: true })) {
       const file = join(path, entry.name)
       if (entry.isDirectory()) {
@@ -204,14 +204,32 @@ if (flags.has('dry-run')) {
       : basename(path)
     const bytes = readFileSync(path)
     copyFileSync(path, join(directory, filename))
-    if (isUpdater && !mode.unsigned) {
-      if (!existsSync(`${path}.sig`)) throw new Error('Updater signature is missing')
-      verifyUpdaterSignature(
-        bytes,
-        readFileSync(`${path}.sig`, 'utf8'),
-        base.plugins.updater.pubkey
-      )
-      copyFileSync(`${path}.sig`, join(directory, `${filename}.sig`))
+    if (isUpdater) {
+      const sigPath = `${path}.sig`
+      if (!existsSync(sigPath) && process.env.TAURI_SIGNING_PRIVATE_KEY) {
+        spawnSync(
+          process.execPath,
+          [join(root, 'node_modules/@tauri-apps/cli/tauri.js'), 'signer', 'sign', path],
+          {
+            env: {
+              ...process.env,
+              TAURI_SIGNING_PRIVATE_KEY: process.env.TAURI_SIGNING_PRIVATE_KEY,
+              TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '',
+            },
+            stdio: 'inherit',
+          }
+        )
+      }
+      if (existsSync(sigPath)) {
+        verifyUpdaterSignature(
+          bytes,
+          readFileSync(sigPath, 'utf8'),
+          base.plugins.updater.pubkey
+        )
+        copyFileSync(sigPath, join(directory, `${filename}.sig`))
+      } else if (!mode.unsigned) {
+        throw new Error('Updater signature is missing')
+      }
     }
     return {
       filename,
