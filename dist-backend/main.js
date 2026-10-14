@@ -28678,6 +28678,47 @@ function createRaycastApiShim(session2) {
     }
   };
 }
+function registerWindowsOAuthProtocols(port) {
+  if (process.platform !== "win32") return () => {
+  };
+  try {
+    const portFile = (0, import_node_path34.join)((0, import_node_os16.tmpdir)(), "tezbar-oauth.port");
+    (0, import_node_fs28.writeFileSync)(portFile, String(port), "utf8");
+    const bridgeScriptPath = (0, import_node_path34.join)((0, import_node_os16.tmpdir)(), "tezbar-oauth-bridge.ps1");
+    const bridgeScript = `param([string]$url)
+if (-not $url) { exit }
+$portFile = Join-Path $env:TEMP 'tezbar-oauth.port'
+if (-not (Test-Path $portFile)) { exit }
+$port = (Get-Content -Raw $portFile).Trim()
+if (-not $port) { exit }
+try {
+  $encoded = [System.Uri]::EscapeDataString($url)
+  Invoke-RestMethod -Uri ("http://127.0.0.1:$port/oauth/callback?url=" + $encoded) -TimeoutSec 5 -UseBasicParsing | Out-Null
+} catch {}
+`;
+    (0, import_node_fs28.writeFileSync)(bridgeScriptPath, bridgeScript, "utf8");
+    const commandValue = `powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File "${bridgeScriptPath}" "%1"`;
+    for (const scheme of ["com.raycast", "raycast"]) {
+      try {
+        (0, import_node_child_process23.execFileSync)("reg.exe", ["add", `HKCU\\Software\\Classes\\${scheme}`, "/ve", "/d", `URL:${scheme} Protocol`, "/f"], { stdio: "ignore" });
+        (0, import_node_child_process23.execFileSync)("reg.exe", ["add", `HKCU\\Software\\Classes\\${scheme}`, "/v", "URL Protocol", "/d", "", "/f"], { stdio: "ignore" });
+        (0, import_node_child_process23.execFileSync)("reg.exe", ["add", `HKCU\\Software\\Classes\\${scheme}\\shell\\open\\command`, "/ve", "/d", commandValue, "/f"], { stdio: "ignore" });
+      } catch (err) {
+        console.warn(`[OAuth] failed to register protocol ${scheme}:`, err);
+      }
+    }
+    return () => {
+      try {
+        if ((0, import_node_fs28.existsSync)(portFile)) (0, import_node_fs28.unlinkSync)(portFile);
+      } catch {
+      }
+    };
+  } catch (error) {
+    console.warn("[OAuth] failed to setup Windows protocol handler:", error);
+    return () => {
+    };
+  }
+}
 function createRaycastUtilsShim(session2) {
   const CacheShim = createCacheShim(session2.packageRoot);
   const cache2 = new CacheShim();
@@ -29184,32 +29225,82 @@ function createRaycastUtilsShim(session2) {
           rejectCallback = reject;
         }
       );
+      let cleanupProtocols = null;
+      let chosenRedirectUri = "";
       const server = (0, import_node_http2.createServer)((request, response) => {
         const address2 = server.address();
-        const port2 = address2 && typeof address2 === "object" ? address2.port : 0;
-        const redirectUri2 = `http://127.0.0.1:${port2}/oauth/callback`;
-        const callbackUrl = new URL(request.url ?? "/", redirectUri2);
-        if (callbackUrl.pathname !== "/oauth/callback") {
+        const currentPort = address2 && typeof address2 === "object" ? address2.port : 0;
+        const reqUrl = new URL(request.url ?? "/", `http://127.0.0.1:${currentPort}`);
+        if (reqUrl.pathname === "/" || reqUrl.pathname === "/oauth/manual") {
+          response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+          response.end(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Tezbar Google Authorization</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0f172a; color: #f8fafc; }
+  .card { background: #1e293b; padding: 32px; border-radius: 12px; width: 450px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+  h2 { font-size: 18px; margin-bottom: 12px; color: #38bdf8; }
+  p { font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 20px; }
+  input { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 13px; margin-bottom: 12px; }
+  button { background: #0284c7; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+  button:hover { background: #0369a1; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>Tezbar Authorization</h2>
+    <p>If your browser did not redirect automatically, paste the redirect URL or code from the address bar below:</p>
+    <form method="GET" action="/oauth/callback">
+      <input type="text" name="url" placeholder="com.raycast:/oauth?code=... or authorization code" required autofocus />
+      <button type="submit">Complete Authorization</button>
+    </form>
+  </div>
+</body>
+</html>`);
+          return;
+        }
+        if (reqUrl.pathname !== "/oauth/callback") {
           response.writeHead(404).end("Not found");
           return;
         }
-        if (callbackUrl.searchParams.get("state") !== state) {
-          response.writeHead(400).end("Invalid OAuth state");
+        let targetParams = reqUrl.searchParams;
+        const forwardedUrl = reqUrl.searchParams.get("url");
+        if (forwardedUrl) {
+          const trimmed = forwardedUrl.trim();
+          if (trimmed.startsWith("com.raycast:") || trimmed.startsWith("raycast:") || trimmed.startsWith("http")) {
+            try {
+              const normalized = trimmed.replace(/^com\.raycast:\/?\/?oauth\??/i, "http://localhost/oauth?").replace(/^raycast:\/?\/?oauth\??/i, "http://localhost/oauth?");
+              targetParams = new URL(normalized).searchParams;
+            } catch {
+              const qIndex = trimmed.indexOf("?");
+              if (qIndex !== -1) {
+                targetParams = new URLSearchParams(trimmed.slice(qIndex + 1));
+              }
+            }
+          } else if (trimmed.length > 10 && !trimmed.includes("=")) {
+            targetParams = new URLSearchParams({ code: trimmed, state });
+          }
+        }
+        const receivedState = targetParams.get("state");
+        if (receivedState && receivedState !== state) {
+          response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+          response.end("Invalid OAuth state");
           rejectCallback?.(new Error("OAuth callback state did not match"));
           return;
         }
-        const providerError = callbackUrl.searchParams.get("error");
-        const code = callbackUrl.searchParams.get("code");
+        const providerError = targetParams.get("error");
+        const code = targetParams.get("code");
         if (providerError || !code) {
-          response.writeHead(400).end("Authorization failed");
+          response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+          response.end("Authorization failed");
           rejectCallback?.(new Error(providerError || "OAuth callback did not include a code"));
           return;
         }
         response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         response.end(
-          "<!doctype html><title>Tezbar authorized</title><p>You can close this window.</p>"
+          '<!doctype html><title>Tezbar authorized</title><p style="font-family:sans-serif;text-align:center;padding:40px;">Successfully authorized! You can close this window and return to Tezbar.</p>'
         );
-        settleCallback?.({ code, redirectUri: redirectUri2 });
+        settleCallback?.({ code, redirectUri: chosenRedirectUri });
       });
       await new Promise((resolve6, reject) => {
         server.once("error", reject);
@@ -29217,12 +29308,14 @@ function createRaycastUtilsShim(session2) {
       });
       const address = server.address();
       const port = address && typeof address === "object" ? address.port : 0;
-      const redirectUri = `http://127.0.0.1:${port}/oauth/callback`;
+      cleanupProtocols = registerWindowsOAuthProtocols(port);
       const authorizationEndpoint = typeof this.options.authorizationEndpoint === "string" && this.options.authorizationEndpoint ? this.options.authorizationEndpoint : "https://accounts.google.com/o/oauth2/v2/auth";
+      const isCustomGoogleScheme = !authorizationEndpoint.includes("127.0.0.1") && (clientId.startsWith("690234628480-") || Boolean(this.options.redirectUri) || authorizationEndpoint.includes("accounts.google.com"));
+      chosenRedirectUri = typeof this.options.redirectUri === "string" && this.options.redirectUri ? this.options.redirectUri : isCustomGoogleScheme ? "com.raycast:/oauth" : `http://127.0.0.1:${port}/oauth/callback`;
       const authorizationUrl = new URL(authorizationEndpoint);
       authorizationUrl.search = new URLSearchParams({
         client_id: clientId,
-        redirect_uri: redirectUri,
+        redirect_uri: chosenRedirectUri,
         response_type: "code",
         scope,
         state,
@@ -29258,6 +29351,7 @@ function createRaycastUtilsShim(session2) {
         await this.persistTokenResponse(tokenResponse);
       } finally {
         clearTimeout(timeout);
+        cleanupProtocols?.();
         await new Promise((resolve6) => server.close(() => resolve6()));
       }
     }

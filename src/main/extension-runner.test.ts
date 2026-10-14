@@ -1210,6 +1210,93 @@ describe('extension runtime list pagination', () => {
     }
   })
 
+  it('supports com.raycast:/oauth custom protocol redirect and bridge for Google OAuth services', async () => {
+    const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-google-custom-oauth-'))
+    mkdirSync(join(extensionRoot, '.sc-build'))
+    let tokenRequests = 0
+    const oauthServer = createServer((request, response) => {
+      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1')
+      if (requestUrl.pathname === '/token') {
+        tokenRequests += 1
+        let body = ''
+        request.on('data', (chunk) => {
+          body += String(chunk)
+        })
+        request.on('end', () => {
+          const parameters = new URLSearchParams(body)
+          expect(parameters.get('grant_type')).toBe('authorization_code')
+          expect(parameters.get('code')).toBe('custom-scheme-code')
+          expect(parameters.get('redirect_uri')).toBe('com.raycast:/oauth')
+          response.writeHead(200, { 'content-type': 'application/json' })
+          response.end(
+            JSON.stringify({
+              access_token: 'google-custom-access',
+              refresh_token: 'google-custom-refresh',
+              expires_in: 3600,
+            })
+          )
+        })
+        return
+      }
+      response.writeHead(404).end()
+    })
+    await new Promise<void>((resolve) => oauthServer.listen(0, '127.0.0.1', resolve))
+    const address = oauthServer.address()
+    if (!address || typeof address === 'string') throw new Error('OAuth fixture server failed')
+    writeFileSync(
+      join(extensionRoot, 'package.json'),
+      JSON.stringify({
+        name: 'google-custom-oauth-fixture',
+        title: 'Google Custom OAuth Fixture',
+        commands: [{ name: 'index', title: 'Index', mode: 'view' }],
+      })
+    )
+    writeFileSync(
+      join(extensionRoot, '.sc-build', 'index.js'),
+      `const React = require('react').default
+       const { Detail } = require('@raycast/api')
+       const { getAccessToken, OAuthService, withAccessToken } = require('@raycast/utils')
+       const service = OAuthService.google({
+         clientId: '690234628480-bhl8vft6dp81bkv4bq0lf9l6vv7nerq4.apps.googleusercontent.com',
+         scope: 'openid calendar',
+         redirectUri: 'com.raycast:/oauth',
+         tokenEndpoint: 'http://127.0.0.1:${address.port}/token',
+         timeoutMs: 5000,
+         openAuthorizationUrl: async (url) => {
+           const parsed = new URL(url)
+           const state = parsed.searchParams.get('state')
+           if (parsed.searchParams.get('redirect_uri') !== 'com.raycast:/oauth') throw new Error('redirect_uri mismatch')
+           const portFile = require('node:path').join(require('node:os').tmpdir(), 'tezbar-oauth.port')
+           const port = require('node:fs').readFileSync(portFile, 'utf8').trim()
+           const callbackUrl = \`http://127.0.0.1:\${port}/oauth/callback?url=\` + encodeURIComponent(\`com.raycast:/oauth?code=custom-scheme-code&state=\${state}\`)
+           await fetch(callbackUrl)
+         },
+       })
+       function Command() {
+         return React.createElement(Detail, { markdown: getAccessToken().token })
+       }
+       module.exports.default = withAccessToken(service)(Command)`
+    )
+
+    try {
+      const first = await runExtensionCommandFromPackageJson(
+        join(extensionRoot, 'package.json'),
+        'index',
+        undefined,
+        {}
+      )
+      expect(first.ok, JSON.stringify(first)).toBe(true)
+      if (!first.ok || first.mode !== 'view') return
+      expect(first.root.props.markdown).toBe('google-custom-access')
+      expect(first.effects).toHaveLength(1)
+      expect(first.effects[0]?.kind).toBe('open')
+      expect(tokenRequests).toBe(1)
+    } finally {
+      await new Promise<void>((resolve) => oauthServer.close(() => resolve()))
+      rmSync(extensionRoot, { recursive: true, force: true })
+    }
+  })
+
   it('runs AI.ask and useAI through the configured extension AI bridge', async () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-ai-extension-'))
     mkdirSync(join(extensionRoot, 'src'))
