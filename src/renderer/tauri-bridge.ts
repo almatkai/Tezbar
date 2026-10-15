@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { emitTo, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { RaymesApi } from '../shared/desktop-api'
+import type { LauncherLayout, LauncherLayoutPatch, LauncherViewport, ResizeEdge } from '../shared/windowLayout'
 import type { AppUpdateStatus, UpdateChannelInfo } from '../shared/updater'
 import { formatTerminalSessionName, type TerminalSessionsAction } from '../shared/terminal'
 
@@ -17,6 +18,8 @@ type TauriRaymesApi = RaymesApi & {
   screenshot: () => Promise<string>
   isPhysicalKeyDown: (key: string) => Promise<unknown>
 }
+
+let launcherZoom = 1
 
 export function initTauriBridge(): void {
   // Check if we are running inside Tauri
@@ -253,7 +256,25 @@ export function initTauriBridge(): void {
     listLlmModels: (providerId: any, baseURLOverride?: string, apiKeyOverride?: string) =>
       callBackend('llm-list-models', providerId, baseURLOverride, apiKeyOverride),
 
-    getWindowZoomFactor: () => 1,
+    getWindowZoomFactor: () => launcherZoom,
+    getLauncherLayout: async () => {
+      const layout = await invoke<LauncherLayout>('get_launcher_layout')
+      launcherZoom = layout.zoom
+      return layout
+    },
+    setLauncherLayout: async (patch: LauncherLayoutPatch) => {
+      const layout = await invoke<LauncherLayout>('set_launcher_layout', patch)
+      launcherZoom = layout.zoom
+      return layout
+    },
+    onLauncherLayoutChanged: (listener: (layout: LauncherLayout) => void) =>
+      setupEventListener('launcher-layout-changed', (layout: LauncherLayout) => {
+        launcherZoom = layout.zoom
+        listener(layout)
+      }),
+    onLauncherViewportChanged: (listener: (viewport: LauncherViewport) => void) =>
+      setupEventListener('launcher-viewport-changed', listener),
+    startLauncherResize: (edge: ResizeEdge) => invoke('start_launcher_resize', { edge }),
     setWindowContentHeight: (height: number, zoomFactor: number) =>
       invoke('window_set_content_height', { height, zoomFactor }),
     openExternalUrl: (url: string) => callBackend('open-external-url', url),

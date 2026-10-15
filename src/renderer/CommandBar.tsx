@@ -59,6 +59,7 @@ import {
   shouldPromoteUpdateCommand,
 } from '../shared/updater'
 import BackgroundTaskStatus from './BackgroundTaskStatus'
+import { LauncherAppearanceButton } from './LauncherAppearance'
 import {
   addLauncherQueryHistoryEntry,
   launcherQueryHistoryEntry,
@@ -5860,6 +5861,7 @@ export default function CommandBar({
               </>
             )}
           </HintBar>
+          <LauncherAppearanceButton />
           <BackgroundTaskStatus
             onOpenIndexing={onOpenIndexingPage}
             onOpenExtensionRuntime={onOpenExtensionRuntime}

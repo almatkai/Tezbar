@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Launcher live resize regression</title></head>
+<body style="margin:0"><div id="root"></div>
+<script type="module">
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+import { LauncherFrame } from '../LauncherFrame.tsx'
+import '../styles.css'
+const zoom = Number(new URLSearchParams(location.search).get('zoom') || 1)
+const child = new URLSearchParams(location.search).has('child')
+if (child) {
+  let receive = () => {}
+  let layoutReceive = () => {}
+  window.tezbar = {
+    getLauncherLayout: async () => ({ width: 760, height: 640, zoom, displayId: 'test', displayName: 'test' }),
+    onLauncherViewportChanged: (listener) => { receive = listener; return () => {} },
+    onLauncherLayoutChanged: (listener) => { layoutReceive = listener; return () => {} },
+  }
+  window.sendNativeFrame = (height) => {
+    receive({ width: 760, height, zoom })
+    // Persistence/layout notifications deliberately do NOT arrive until release.
+  }
+  createRoot(document.getElementById('root')).render(React.createElement(LauncherFrame, {},
+    React.createElement('div', { className: 'flex h-full min-h-0 w-full flex-col gap-2' },
+      React.createElement('header', { className: 'shrink-0 h-12' }, 'Search'),
+      React.createElement('main', { className: 'min-h-0 flex-1 overflow-auto' },
+        Array.from({ length: 50 }, (_, i) => React.createElement('p', { key: i }, 'Result ' + i))),
+      React.createElement('footer', { 'data-testid': 'footer', className: 'shrink-0 h-10' }, 'Bottom controls'))))
+} else {
+  window.runLiveResizeRegression = async () => {
+    const failures = []
+    const records = []
+    for (const zoom of [1, 1.5, 0.75]) {
+      const host = document.createElement('div')
+      Object.assign(host.style, { width: '760px', height: '640px', overflow: 'hidden', position: 'relative' })
+      const frame = document.createElement('iframe')
+      frame.src = location.pathname + '?child=1&zoom=' + zoom
+      Object.assign(frame.style, { width: 760 / zoom + 'px', height: 640 / zoom + 'px', border: '0', transform: 'scale(' + zoom + ')', transformOrigin: 'top left' })
+      host.append(frame)
+      document.body.append(host)
+      await new Promise((resolve) => frame.onload = resolve)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      // Reproduce WKWebView's delayed viewport: the host changes size while
+      // iframe innerHeight stays at its original value until mouse release.
+      for (const height of [600, 560, 500, 460, 520, 580]) {
+        host.style.height = height + 'px'
+        frame.contentWindow.sendNativeFrame(height)
+        await new Promise((resolve) => frame.contentWindow.requestAnimationFrame(() => frame.contentWindow.requestAnimationFrame(resolve)))
+        const footer = frame.contentDocument.querySelector('[data-testid="footer"]')
+        const shell = frame.contentDocument.querySelector('.glass-shell')
+        const bottom = footer.getBoundingClientRect().bottom * zoom
+        const padding = parseFloat(frame.contentWindow.getComputedStyle(shell).paddingBottom) * zoom
+        const delta = Math.abs(bottom - (height - padding - parseFloat(frame.contentWindow.getComputedStyle(shell).borderBottomWidth) * zoom))
+        records.push({ zoom, height, bottom, delta, browserHeight: frame.contentWindow.innerHeight })
+        if (delta > 2) failures.push({ zoom, height, bottom, delta })
+      }
+      host.remove()
+    }
+    return { pass: failures.length === 0, failures, records }
+  }
+  document.body.append('Run window.runLiveResizeRegression() in the browser. This holds browser viewport size stale during native resize.')
+}
+</script></body></html>

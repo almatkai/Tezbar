@@ -1,6 +1,9 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { tryConsumeCommandSurfaceEscape } from './escapeGate'
 import CommandBar from './CommandBar'
+import { LauncherResizeHandles } from './LauncherAppearance'
+import { LauncherFrame } from './LauncherFrame'
+import { useLauncherScaleShortcuts } from './useLauncherScaleShortcuts'
 import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_AI_NEW_CHAT_EVENT, RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
@@ -297,6 +300,7 @@ function SettingsWindowApp(): JSX.Element {
 
 function LauncherApp(): JSX.Element {
   const [surface, setSurface] = useState<Surface>('command')
+  useLauncherScaleShortcuts(surface)
   const [bootReady, setBootReady] = useState(false)
   const [hasUnreadReleaseNotes, setHasUnreadReleaseNotes] = useState(false)
   const markReleaseNotesRead = useCallback(() => setHasUnreadReleaseNotes(false), [])
@@ -664,14 +668,8 @@ function LauncherApp(): JSX.Element {
   }, [surface])
 
   return (
-    <div
-      className={[
-        'glass-shell drag-region flex h-screen w-full p-2',
-        surface === 'terminal' ? 'glass-shell--terminal' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-    >
+    <LauncherFrame terminal={surface === 'terminal'}>
+      <LauncherResizeHandles />
       <div
         key={surface}
         className="relative z-0 flex h-full min-h-0 w-full animate-tezbar-fade-in flex-col"
@@ -835,7 +833,7 @@ function LauncherApp(): JSX.Element {
           )}
         </Suspense>
       </div>
-    </div>
+    </LauncherFrame>
   )
 }
 
