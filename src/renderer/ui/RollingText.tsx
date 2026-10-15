@@ -22,10 +22,10 @@ export function RollingText({ items }: { items: readonly RollingTextItem[] }): J
   if (!item) return null
 
   return (
-    <span className="rolling-command-hint" aria-hidden>
-      <span key={`${index}:${item.shortcut}`} className="rolling-command-hint__item">
-        <span className="rolling-command-hint__shortcut">{item.shortcut}</span>
-        <span className="rolling-command-hint__label">{item.label}</span>
+    <span className="rolling-command-hint select-none" aria-hidden>
+      <span key={`${index}:${item.shortcut}`} className="rolling-command-hint__item select-none">
+        <span className="rolling-command-hint__shortcut select-none">{item.shortcut}</span>
+        <span className="rolling-command-hint__label select-none">{item.label}</span>
       </span>
     </span>
   )

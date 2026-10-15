@@ -164,7 +164,7 @@ export function ViewHeader({
    ========================================================================= */
 export function HintBar({ children, className }: { children: ReactNode; className?: string }): JSX.Element {
   return (
-    <div className={cx('flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-ink-4', className)}>
+    <div className={cx('flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-ink-4 select-none', className)}>
       {children}
     </div>
   )
@@ -180,7 +180,7 @@ export function Hint({
   className?: string
 }): JSX.Element {
   return (
-    <span className={cx('inline-flex items-center gap-1.5', className)}>
+    <span className={cx('inline-flex items-center gap-1.5 select-none', className)}>
       <span className="inline-flex items-center gap-0.5">{keys}</span>
       <span className={className ? undefined : 'text-ink-3'}>{label}</span>
     </span>
