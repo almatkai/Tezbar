@@ -1740,8 +1740,7 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* Rich text sits in the same surface as ordinary copy in light mode. Code
-   blocks remain dark to keep the existing Atom One Dark syntax palette. */
+/* Rich text and code blocks adapt cleanly to light mode */
 :root[data-theme='white'] .tezbar-md,
 :root[data-theme='white'] .tezbar-md th {
   color: rgb(var(--c-text-1));
@@ -1778,6 +1777,114 @@
 
 :root[data-theme='white'] .tezbar-md li::marker {
   color: rgb(var(--c-text-3));
+}
+
+/* Code block shell in light mode */
+:root[data-theme='white'] .tezbar-md pre {
+  background: #f4f6fb;
+  border-color: rgba(76, 94, 125, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 3px rgba(34, 48, 76, 0.04);
+}
+
+:root[data-theme='white'] .tezbar-md pre code,
+:root[data-theme='white'] .tezbar-md pre code.hljs {
+  color: #24292f;
+}
+
+:root[data-theme='white'] .tezbar-md-code-header {
+  background: rgba(78, 98, 136, 0.05);
+  border-bottom-color: rgba(76, 94, 125, 0.14);
+}
+
+:root[data-theme='white'] .tezbar-md-code-lang {
+  color: rgb(var(--c-text-3));
+}
+
+:root[data-theme='white'] .tezbar-md-code-copy {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(76, 94, 125, 0.22);
+  color: rgb(var(--c-text-2));
+}
+
+:root[data-theme='white'] .tezbar-md-code-copy:hover {
+  background: #ffffff;
+  border-color: rgba(76, 94, 125, 0.35);
+  color: rgb(var(--c-text-1));
+}
+
+:root[data-theme='white'] .tezbar-md-code-copy.is-copied {
+  border-color: rgba(5, 150, 105, 0.4);
+  color: #059669;
+  background: rgba(5, 150, 105, 0.08);
+}
+
+/* Atom One Light syntax highlighting tokens for light mode */
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-comment,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-quote {
+  color: #8c95a5;
+  font-style: italic;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-doctag,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-keyword,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-formula {
+  color: #a626a4;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-section,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-name,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-selector-tag,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-deletion,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-subst {
+  color: #e45649;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-literal {
+  color: #0184bb;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-string,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-regexp,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-addition,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-attribute,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-meta .hljs-string {
+  color: #50a14f;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-attr,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-variable,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-template-variable,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-type,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-selector-class,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-selector-attr,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-selector-pseudo,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-number {
+  color: #986801;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-symbol,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-bullet,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-link,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-meta,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-selector-id,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-title {
+  color: #4078f2;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-built_in,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-title.class_,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-class .hljs-title {
+  color: #c18401;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-emphasis {
+  font-style: italic;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-strong {
+  font-weight: bold;
 }
 
 :root[data-theme='white'] .terminal-session-command {
