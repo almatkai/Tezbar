@@ -17,7 +17,7 @@ export function LauncherFrame({
       ref={root}
       style={{ width: 'var(--launcher-width, 100vw)', height: 'var(--launcher-height, 100vh)' }}
       className={[
-        'glass-shell drag-region relative flex min-h-0 p-2',
+        'glass-shell drag-region relative flex min-h-0 p-2 select-none',
         terminal ? 'glass-shell--terminal' : '',
       ]
         .filter(Boolean)

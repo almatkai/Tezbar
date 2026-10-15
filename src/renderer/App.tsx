@@ -273,7 +273,7 @@ function SettingsWindowApp(): JSX.Element {
   }, [])
 
   return (
-    <div className="flex h-screen w-full bg-glass-shell">
+    <div className="flex h-screen w-full bg-glass-shell select-none">
       <Suspense fallback={<SurfaceFallback />}>
         {surface === 'permissions' ? (
           <PermissionsView nativeWindow onBack={() => setSurface('settings')} />

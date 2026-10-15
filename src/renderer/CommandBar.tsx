@@ -4365,7 +4365,7 @@ export default function CommandBar({
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2">
       {/* Primary glass card: icon + input */}
-      <div className="command-search glass-card relative z-30 shrink-0 px-4 py-3 animate-tezbar-scale-in">
+      <div className="command-search glass-card relative z-30 shrink-0 px-4 py-3 animate-tezbar-scale-in select-none">
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
           <div className="flex h-7 items-center gap-3">
             <span
@@ -4393,7 +4393,7 @@ export default function CommandBar({
             {isAiMode ? (
               <span
                 aria-label="AI mode"
-                className="command-ai-badge inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-violet-400/40 bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200"
+                className="command-ai-badge inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-violet-400/40 bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200 select-none"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
                 AI
@@ -4401,7 +4401,7 @@ export default function CommandBar({
             ) : isDeepSearchMode ? (
               <span
                 aria-label="Deep Search mode"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-cyan-300/30 bg-cyan-300/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-cyan-300/30 bg-cyan-300/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200 select-none"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_rgba(103,232,249,0.7)]" />
                 Deep
@@ -4409,7 +4409,7 @@ export default function CommandBar({
             ) : null}
             {killPortMode ? (
               <>
-                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1">
+                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1 select-none">
                   {killPortQuery}
                 </span>
                 <PortArgumentChip />
@@ -4417,7 +4417,7 @@ export default function CommandBar({
             ) : null}
             {pendingInlineArgument ? (
               <>
-                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1">
+                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1 select-none">
                   {value.trim() || pendingAction?.title}
                 </span>
                 <InlineArgumentChip
@@ -4425,7 +4425,7 @@ export default function CommandBar({
                 />
               </>
             ) : null}
-            <div className="relative min-w-0 flex-1 flex items-center">
+            <div className="relative min-w-0 flex-1 flex items-center select-none">
               {terminalMode ? (
                 <span className="command-terminal-prompt shrink-0 font-mono text-[13px] text-emerald-300/80 mr-1 select-none pointer-events-none">
                   {terminalPrompt}
@@ -4435,10 +4435,10 @@ export default function CommandBar({
                 <RollingText items={COMMAND_HINTS} />
               ) : null}
               {isSlashInput && !isAiMode ? (
-                <span className="path-command-hint" aria-hidden>
-                  <span className="path-command-hint__value">{value}</span>
-                  <span className="rolling-command-hint__shortcut">{COMMAND_HINT.shortcut}</span>
-                  <span className="rolling-command-hint__label">{COMMAND_HINT.label}</span>
+                <span className="path-command-hint select-none" aria-hidden>
+                  <span className="path-command-hint__value select-none">{value}</span>
+                  <span className="rolling-command-hint__shortcut select-none">{COMMAND_HINT.shortcut}</span>
+                  <span className="rolling-command-hint__label select-none">{COMMAND_HINT.label}</span>
                 </span>
               ) : null}
               <input
@@ -4583,7 +4583,7 @@ export default function CommandBar({
                 }
                 autoComplete="off"
                 spellCheck={false}
-                className="w-full min-w-0 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0"
+                className="w-full min-w-0 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0 select-text"
               />
             </div>
             {canEnterKillPortMode ? (
@@ -5094,7 +5094,7 @@ export default function CommandBar({
                 setFollowSearchSelection(false)
               }}
             >
-              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2 select-none">
                 <div className="command-ai-heading mb-2 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-300">
                   Recent Chats
                 </div>
@@ -5161,7 +5161,7 @@ export default function CommandBar({
                 setSelectedSearch(-1)
               }}
             >
-              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2 select-none">
                 <div className="mb-2 flex items-center justify-between px-3 pt-1">
                   <div>
                     <div className="command-terminal-heading text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">
@@ -5286,7 +5286,7 @@ export default function CommandBar({
                 setFollowSearchSelection(false)
               }}
             >
-              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2 select-none">
                 <GlideList
                   selectedIndex={selectedSearch}
                   itemCount={visibleSearchCount}

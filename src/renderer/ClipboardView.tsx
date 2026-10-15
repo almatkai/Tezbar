@@ -656,7 +656,7 @@ function TextPreview({ entry }: { entry: Extract<ClipboardEntry, { kind: 'text' 
   const isUrl = URL_RE.test(entry.text.trim())
   return (
     <pre
-      className={`whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.55] text-ink-1 ${isUrl ? 'text-sky-200' : ''
+      className={`select-text whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.55] text-ink-1 ${isUrl ? 'text-sky-200' : ''
         }`}
     >
       {entry.text}
