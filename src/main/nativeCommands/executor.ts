@@ -630,7 +630,7 @@ export async function executeNativeCommandRaw(
         }
         try {
           const root = await runShell(`cd ${JSON.stringify(path)} && git rev-parse --show-toplevel`)
-          await runShell(`printf %s ${JSON.stringify(root)} | pbcopy`)
+          await clipboard.writeTextAsync(root)
           return { ok: true, message: root }
         } catch {
           return { ok: false, message: `${path} is not inside a git repo.` }
