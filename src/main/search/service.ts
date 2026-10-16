@@ -14,6 +14,7 @@ import type {
   SearchExecuteResult,
   SearchResult,
 } from '../../shared/search'
+import { searchQueryVariants } from '../../shared/searchQueryVariants'
 import type { NativeCommandId } from '../../shared/nativeCommands'
 import type { SafetyActionId } from '../../shared/safety'
 import {
@@ -608,6 +609,7 @@ function rankRows(
   docs: Array<{ doc: IndexedDocument; lexical: number; fuzzyDistance?: number }>
 ): Array<SearchResult & { updatedAt: number }> {
   const now = Date.now()
+  const queryVariants = searchQueryVariants(query)
   const queryStats =
     indexDb?.getQueryActionStats(
       query,
@@ -620,6 +622,22 @@ function rankRows(
     const querySuccessRate =
       queryTotalCount > 0 ? (queryStat?.successCount ?? 0) / queryTotalCount : 0
     const activityAt = entry.doc.updatedAt
+    const queryMatchBoost = Math.max(
+      0,
+      ...queryVariants.map((variant, index) => {
+        const boost =
+          internalSurfaceBoost(entry.doc.category, entry.doc.title, variant, entry.doc.subtitle) +
+          exactRecentQuickNoteBoost(
+            entry.doc.category,
+            entry.doc.title,
+            variant,
+            entry.doc.updatedAt,
+            now
+          ) +
+          fullTokenMatchBoost(variant, entry.doc.title, entry.doc.subtitle)
+        return boost * (index === 0 ? 1 : 0.9)
+      })
+    )
 
     const score =
       computeWeightedScore({
@@ -640,23 +658,15 @@ function rankRows(
         lastUsedAt: queryStat?.lastUsedAt ?? 0,
         now,
       }) +
-      internalSurfaceBoost(entry.doc.category, entry.doc.title, query, entry.doc.subtitle) +
+      queryMatchBoost +
       recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) +
-      exactRecentQuickNoteBoost(
-        entry.doc.category,
-        entry.doc.title,
-        query,
-        entry.doc.updatedAt,
-        now
-      ) +
       (() => {
         // Quick note add row should stay competitive with strong file hits
         const q = query.trim().toLowerCase()
         if (!q) return 120
         if (/\bnotes?\b/.test(q) || q.includes('quick note')) return 780
         return 120
-      })() +
-      fullTokenMatchBoost(query, entry.doc.title, entry.doc.subtitle)
+      })()
 
     return {
       id: entry.doc.id,

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SearchIndexDatabase } from './indexDb'
+import type { IndexedDocument } from './providers/types'
 
 describe('search index hot usage window', () => {
   let appDataDir = ''
@@ -51,6 +52,84 @@ describe('search index hot usage window', () => {
       id: 'native:hot-command',
       recentUseCount: 3,
     })
+  })
+
+  it('finds VS Code when its name is typed with the Russian keyboard layout', async () => {
+    await index.ensureInitialized()
+    index.upsertDocuments([
+      {
+        id: 'app:vscode',
+        category: 'applications',
+        title: 'Visual Studio Code',
+        subtitle: 'Application',
+        tokens: 'visual studio code application',
+        action: { type: 'open-app', appName: 'Visual Studio Code' },
+        updatedAt: Date.now(),
+      },
+    ])
+
+    expect(index.getSearch('vs code', 10).map((row) => row.id)).toContain('app:vscode')
+    expect(index.getSearch('МЫ СЩВУ', 10).map((row) => row.id)).toContain('app:vscode')
+    expect(index.getSearch('vs сщву', 10).map((row) => row.id)).toContain('app:vscode')
+    expect(index.getSearch('мы code', 10).map((row) => row.id)).toContain('app:vscode')
+  })
+
+  it('retrieves corrected layouts through FTS beyond the fuzzy fallback window', async () => {
+    await index.ensureInitialized()
+    index.upsertDocuments([
+      {
+        id: 'app:chrome',
+        category: 'applications',
+        title: 'Google Chrome',
+        subtitle: 'Application',
+        tokens: 'google chrome',
+        action: { type: 'open-app', appName: 'Google Chrome' },
+        updatedAt: 1,
+      },
+      ...Array.from({ length: 1001 }, (_, i): IndexedDocument => ({
+        id: `command:${i}`,
+        category: 'commands',
+        title: `Unrelated fixture ${i}`,
+        subtitle: 'Fixture',
+        tokens: 'unrelated fixture',
+        action: { type: 'copy-text', text: 'fixture' },
+        updatedAt: i + 2,
+      })),
+    ])
+
+    expect(index.getSearch('СРКЩЬУ', 10).map((row) => row.id)).toContain('app:chrome')
+  })
+
+  it('keeps literal Russian matches and also searches the reverse layout', async () => {
+    await index.ensureInitialized()
+    index.upsertDocuments([
+      {
+        id: 'note:russian',
+        category: 'quick-notes',
+        title: 'Привет',
+        subtitle: 'Заметка',
+        tokens: 'привет заметка',
+        action: { type: 'copy-text', text: 'Привет' },
+        updatedAt: 1,
+      },
+      {
+        id: 'note:english',
+        category: 'quick-notes',
+        title: 'Ghbdtn',
+        subtitle: 'Note',
+        tokens: 'ghbdtn note',
+        action: { type: 'copy-text', text: 'Ghbdtn' },
+        updatedAt: 1,
+      },
+    ])
+
+    const literal = index.getSearch('Привет', 10)
+    expect(literal[0].id).toBe('note:russian')
+    expect(literal.map((row) => row.id)).toContain('note:english')
+    expect(index.getSearch('ghbdtn', 10)[0].id).toBe('note:english')
+    expect(index.getSearch('Привет', 10).map((row) => row.id)).toEqual(
+      literal.map((row) => row.id)
+    )
   })
 
   it('migrates the legacy unindexed-id FTS table and keeps updates synchronized by rowid', async () => {
