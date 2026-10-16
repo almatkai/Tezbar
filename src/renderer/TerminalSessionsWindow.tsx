@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { compactTerminalPath, type TerminalSessionSummary } from '../shared/terminal'
 import { terminalSessionShortcutIndex } from './terminalSessionSelection'
-import { cx } from './ui/primitives'
 
 function sessionSubtitle(session: TerminalSessionSummary): string {
   const command = session.lastCommand ?? session.initialCommand
@@ -115,15 +114,6 @@ export default function TerminalSessionsWindow(): ReactNode {
                     })
                   }}
                 >
-                  <span
-                    className={cx(
-                      'mt-1 h-2 w-2 shrink-0 rounded-full',
-                      running
-                        ? 'bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.8)]'
-                        : 'bg-white/20',
-                    )}
-                    aria-label={running ? 'Running' : 'Exited'}
-                  />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[12px] font-semibold">
                       {session.name}

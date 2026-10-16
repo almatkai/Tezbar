@@ -639,11 +639,6 @@
     background: #e9f8f0;
   }
 
-  :root[data-theme='white'] .command-terminal-session-dot.command-terminal-running {
-    background: #0b7651;
-    box-shadow: none;
-  }
-
   :root[data-theme='white'] .command-result-icon svg {
     stroke-width: 1.5px;
   }

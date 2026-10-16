@@ -721,12 +721,6 @@ export default function TerminalView({
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center gap-2 rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-ink-3 transition hover:bg-white/[0.08] hover:text-ink-1"
           >
-            <span className={cx(
-              "h-1.5 w-1.5 rounded-full",
-              activeSession?.status === 'running'
-                ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]"
-                : "bg-white/20"
-            )} />
             <span>Sessions ({sessions.filter(s => s.status === 'running').length})</span>
             <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 opacity-60">
               <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
@@ -749,7 +743,6 @@ export default function TerminalView({
                   <div className="p-3 text-[11px] text-ink-4">No sessions active.</div>
                 ) : (
                   sessions.map((session, index) => {
-                    const running = session.status === 'running'
                     const active = session.sessionId === activeSessionId
                     return (
                       <button
@@ -769,14 +762,6 @@ export default function TerminalView({
                         {active && (
                           <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-400 to-teal-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
                         )}
-                        <span
-                          className={cx(
-                            'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
-                            running
-                              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]'
-                              : 'bg-white/20'
-                          )}
-                        />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[11.5px] font-semibold">
                             {session.name}
