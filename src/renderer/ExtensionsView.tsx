@@ -3,7 +3,7 @@ import type { ExtensionManifest } from '../shared/extensions'
 import type { ExtensionStorePage } from '../shared/desktop-api'
 import { parseGitHubRepositoryUrl } from '../shared/extensionRepository'
 import { searchLovedExtensions } from '../shared/lovedExtensions'
-import { Button, Hint, HintBar, Kbd, Message, TextField, ViewHeader, cx } from './ui/primitives'
+import { Button, Hint, HintBar, Kbd, Message, ViewHeader, cx } from './ui/primitives'
 import { GlideList } from './ui/GlideList'
 import { ExtensionPreferencesEditor } from './ExtensionPreferencesEditor'
 import { extensionCatalogReducer, INITIAL_EXTENSION_CATALOG_STATE } from './extensionCatalogState'
@@ -177,13 +177,15 @@ function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 's
   const iconUrl = typeof ext.iconUrl === 'string' && ext.iconUrl.trim() ? ext.iconUrl : ''
   const [failedIconUrl, setFailedIconUrl] = useState<string | null>(null)
   const hasIcon = Boolean(iconUrl) && failedIconUrl !== iconUrl
-  const className = size === 'large' ? 'h-20 w-20 text-[24px]' : 'h-7 w-7 text-[10px]'
+  const className = size === 'large'
+    ? 'h-12 w-12 rounded-[12px] text-[20px]'
+    : 'h-7 w-7 rounded-[7px] text-[10px]'
   return (
     <span
       role="img"
       aria-label={`${ext.name} icon`}
       className={cx(
-        'grid shrink-0 place-items-center overflow-hidden rounded-[18px]',
+        'grid shrink-0 place-items-center overflow-hidden',
         hasIcon
           ? 'bg-transparent'
           : 'border border-white/10 bg-white/[0.055] text-ink-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
@@ -548,8 +550,8 @@ export default function ExtensionsView({
       role="application"
       aria-label="Extensions"
       className={cx(
-        'flex h-full min-h-0 w-full flex-col outline-none animate-tezbar-scale-in',
-        embedded ? 'gap-0' : 'gap-2',
+        'extensions-store flex h-full min-h-0 w-full flex-col outline-none animate-tezbar-scale-in',
+        !embedded && 'view-sheet'
       )}
     >
       {!embedded ? (
@@ -564,27 +566,24 @@ export default function ExtensionsView({
             }
           />
           <div className="mt-2">
-            <TextField
+            <input
               ref={searchRef}
               value={query}
               onChange={(event) => dispatchCatalog({ type: 'query', query: event.target.value })}
-              placeholder={`${isWindows ? 'Search loved extensions' : 'Search store'} or paste a GitHub repository URL`}
+              aria-label="Search extensions or paste a GitHub repository URL"
+              placeholder={`${isWindows ? 'Search loved extensions' : 'Search extensions'} or paste a GitHub URL…`}
+              className="extensions-store-search h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
               autoFocus
             />
           </div>
         </div>
       ) : null}
 
-      <section className="grid min-h-0 flex-1 grid-cols-[224px_minmax(0,1fr)] gap-2 animate-tezbar-scale-in">
-        <aside className="glass-card flex min-h-0 flex-col overflow-hidden px-1.5 py-2">
-          <div className="flex items-center justify-between px-1.5 pb-2">
-            <span className="text-[11px] font-semibold text-ink-4">
-              {isWindows ? 'Loved by Tezbar' : 'Store'}
-            </span>
-            <span className="text-[10px] text-ink-4">
-              {loading ? 'Loading…' : isUrlQuery ? 'URL' : total.toLocaleString()}
-            </span>
-          </div>
+      <section className="extensions-store-body glass-card grid min-h-0 flex-1 gap-3 overflow-hidden px-2 py-2">
+        <aside
+          aria-label={isWindows ? 'Loved by Tezbar' : 'Extension catalog'}
+          className="flex min-h-0 min-w-0 flex-col overflow-hidden"
+        >
           {store.length === 0 ? (
             <div className="flex min-h-0 flex-1 items-center justify-center text-center">
               <p className="px-3 text-[12px] text-ink-3">
@@ -606,7 +605,6 @@ export default function ExtensionsView({
               followSelected={followSelection}
               className="min-h-0 flex-1 overflow-y-auto pr-0.5"
               listClassName="space-y-0.5"
-              highlightClassName="bg-white/[0.075] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.20)]"
               onScroll={handleListScroll}
             >
               {store.map((ext) => {
@@ -624,15 +622,19 @@ export default function ExtensionsView({
                         dispatchCatalog({ type: 'selected', id: ext.id, follow: true })
                       }}
                       className={cx(
-                        'relative flex w-full items-center gap-2 rounded-tezbar-row px-1.5 py-1.5 text-left transition',
-                        isSelected ? 'text-ink-1' : 'text-ink-2 hover:text-ink-1',
+                        'relative flex w-full items-center gap-2.5 rounded-tezbar-row px-2 py-1.5 text-left transition',
+                        isSelected ? 'text-ink-1' : 'text-ink-2 hover:text-ink-1'
                       )}
                     >
                       <ExtensionIcon ext={ext} size="small" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[11.5px] font-medium">{ext.name}</span>
-                        <span className="mt-0.5 block truncate text-[9.5px] text-ink-4">
-                          {isInstalled ? 'Installed' : isWindows ? 'GitHub repository' : formatCount(ext.downloadCount)}
+                        <span className="block truncate text-[12px] font-medium">{ext.name}</span>
+                        <span className="mt-0.5 block truncate text-[10.5px] text-ink-4">
+                          {isInstalled
+                            ? 'Installed'
+                            : isWindows
+                              ? 'GitHub repository'
+                              : formatCount(ext.downloadCount)}
                         </span>
                       </span>
                     </button>
@@ -648,231 +650,242 @@ export default function ExtensionsView({
           )}
         </aside>
 
-        <main className="glass-card relative min-h-0 overflow-hidden">
-          {repository ? (
-            <div className="flex h-full items-center justify-center px-8">
-              <div className="w-full max-w-[540px] rounded-[14px] border border-white/10 bg-white/[0.035] p-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                <p className="text-[11px] font-semibold text-ink-4">
-                  {isWindows ? 'Loved extension from GitHub' : 'Install from GitHub'}
-                </p>
-                <h2 className="mt-3 break-words text-[24px] font-semibold text-ink-1">{repository.repository}</h2>
-                <p className="mt-1 text-[13px] text-ink-3">
-                  {repository.owner}/{repository.repository}
-                </p>
-                <p className="mt-5 text-[13px] leading-relaxed text-ink-2">
-                  Tezbar will download this public repository, validate its package manifest and platform support, then
-                  install its checked-in command bundles or build them locally.
-                </p>
-                <div className="mt-6 flex items-center gap-3">
-                  <Button variant="primary" disabled={repositoryInstalling} onClick={installRepository}>
-                    {repositoryInstalling ? 'Installing repository…' : 'Install Repository'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={repositoryInstalling}
-                    onClick={() => void window.tezbar.openExternalUrl(repository.url)}
-                  >
-                    Open on GitHub
-                  </Button>
+        <main
+          aria-label="Extension details"
+          className="extensions-store-detail sheet-above-bar relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]"
+        >
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {repository ? (
+              <div className="flex h-full items-center justify-center px-8">
+                <div className="w-full max-w-[540px] py-6">
+                  <p className="text-[11px] font-semibold text-ink-4">
+                    {isWindows ? 'Loved extension from GitHub' : 'Install from GitHub'}
+                  </p>
+                  <h2 className="mt-3 break-words text-[20px] font-semibold text-ink-1">
+                    {repository.repository}
+                  </h2>
+                  <p className="mt-1 text-[13px] text-ink-3">
+                    {repository.owner}/{repository.repository}
+                  </p>
+                  <p className="mt-5 text-[13px] leading-relaxed text-ink-2">
+                    Tezbar will download this public repository, validate its package manifest and
+                    platform support, then install its checked-in command bundles or build them
+                    locally.
+                  </p>
+                  <div className="mt-6 flex items-center gap-3">
+                    <Button
+                      variant="primary"
+                      disabled={repositoryInstalling}
+                      onClick={installRepository}
+                    >
+                      {repositoryInstalling ? 'Installing repository…' : 'Install Repository'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={repositoryInstalling}
+                      onClick={() => void window.tezbar.openExternalUrl(repository.url)}
+                    >
+                      Open on GitHub
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : isUrlQuery ? (
-            <div className="flex h-full items-center justify-center px-8 text-center">
-              <div>
-                <p className="text-[15px] font-medium text-ink-1">That is not an installable URL.</p>
-                <p className="mt-2 text-[12px] text-ink-3">
-                  Use a public repository root such as https://github.com/owner/repository.
-                </p>
+            ) : isUrlQuery ? (
+              <div className="flex h-full items-center justify-center px-8 text-center">
+                <div>
+                  <p className="text-[15px] font-medium text-ink-1">
+                    That is not an installable URL.
+                  </p>
+                  <p className="mt-2 text-[12px] text-ink-3">
+                    Use a public repository root such as https://github.com/owner/repository.
+                  </p>
+                </div>
               </div>
-            </div>
-          ) : selected ? (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <section className="border-b border-white/10 bg-[radial-gradient(circle_at_10%_0%,rgba(114,95,255,0.20),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0))] px-8 py-7">
-                  <div className="flex items-center gap-6">
-                    <ExtensionIcon ext={selected} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="truncate text-[28px] font-semibold leading-tight text-ink-1">{selected.name}</h2>
-                        {selectedInstalled ? (
-                          <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
-                            Installed
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-2">
-                        <span>{extensionAuthor(selected)}</span>
-                        <span className="text-ink-4">|</span>
-                        <span>{isWindows ? 'GitHub repository' : formatCount(selected.downloadCount)}</span>
-                        <span className="text-ink-4">|</span>
-                        <span className="font-mono text-[12px] text-ink-3">v{selected.version}</span>
-                      </div>
-                      {categories.length > 0 ? (
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {categories.map((category) => (
-                            <span
-                              key={category}
-                              className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-ink-3"
-                            >
-                              {category}
+            ) : selected ? (
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <section className="px-5 pb-4 pt-5">
+                    <div className="flex items-center gap-3">
+                      <ExtensionIcon ext={selected} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="break-words text-[20px] font-semibold leading-tight tracking-[-0.02em] text-ink-1">
+                            {selected.name}
+                          </h2>
+                          {selectedInstalled ? (
+                            <span className="rounded-tezbar-chip bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-medium text-ink-3">
+                              Installed
                             </span>
-                          ))}
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </section>
-
-                <section className="px-8 py-6">
-                  {screenshots.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      {screenshots.map((url, index) => (
-                        <div
-                          key={`${url}-${index}`}
-                          className="aspect-[16/10] overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.03]"
-                        >
-                          <CachedImage src={url} alt="" variant="screenshot" className="h-full w-full object-cover" />
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-4">
+                          <span>{extensionAuthor(selected)}</span>
+                          <span>
+                            {isWindows ? 'GitHub repository' : formatCount(selected.downloadCount)}
+                          </span>
+                          <span>v{selected.version}</span>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="rounded-[8px] border border-white/10 bg-white/[0.03] px-5 py-5">
-                      <p className="text-[12px] font-semibold text-ink-4">Preview</p>
-                      <p className="mt-2 text-[13px] leading-relaxed text-ink-3">
-                        No screenshots are available for this extension yet. The command list and metadata below can
-                        still help you decide whether it belongs in your workflow.
-                      </p>
-                    </div>
-                  )}
-                </section>
-
-                <section className="grid grid-cols-[minmax(0,1fr)_300px] border-t border-white/10">
-                  <div className="px-8 py-6">
-                    <p className="text-[13px] font-semibold text-ink-3">Description</p>
-                    <p className="mt-3 max-w-[72ch] text-[16px] leading-relaxed text-ink-1">
+                    <p className="mt-4 text-[12px] leading-relaxed text-ink-2">
                       {selected.description || 'No description provided.'}
                     </p>
-                    <div className="mt-5 divide-y divide-white/10 rounded-[8px] border border-white/10 bg-white/[0.025]">
-                      <div className="flex items-center gap-3 px-4 py-3">
-                        <ExtensionIcon ext={selected} size="small" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-semibold text-ink-4">
-                            Extension ID
-                          </p>
-                          <p className="mt-0.5 break-all font-mono text-[12px] leading-snug text-ink-2">
-                            {selected.id}
-                          </p>
-                        </div>
+                    {categories.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {categories.map((category) => (
+                          <span
+                            key={category}
+                            className="rounded-tezbar-chip bg-white/[0.04] px-2 py-1 text-[10px] text-ink-4"
+                          >
+                            {category}
+                          </span>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-3 px-4 py-3">
-                        <AuthorAvatar ext={selected} />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-semibold text-ink-4">Author</p>
-                          <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                            <span className="text-[13px] font-medium text-ink-1">{extensionAuthor(selected)}</span>
-                            {authorHandle(selected) ? (
-                              <span className="font-mono text-[11px] text-ink-4">@{authorHandle(selected)}</span>
-                            ) : null}
+                    ) : null}
+                  </section>
+
+                  <section className="px-5 pb-5">
+                    {screenshots.length > 0 ? (
+                      <div className="extension-screenshots grid grid-cols-2 gap-3">
+                        {screenshots.map((url, index) => (
+                          <div
+                            key={`${url}-${index}`}
+                            className="aspect-[16/10] overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.03]"
+                          >
+                            <CachedImage
+                              src={url}
+                              alt={`${selected.name} screenshot ${index + 1}`}
+                              variant="screenshot"
+                              className="h-full w-full object-contain"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-ink-4">No screenshots available.</p>
+                    )}
+                  </section>
+
+                  <section className="border-t border-white/[0.06]">
+                    <div className="px-5 py-4">
+                      <div className="divide-y divide-white/[0.06]">
+                        <div className="flex items-center gap-3 py-3">
+                          <ExtensionIcon ext={selected} size="small" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-semibold text-ink-4">Extension ID</p>
+                            <p className="mt-0.5 break-all font-mono text-[12px] leading-snug text-ink-2">
+                              {selected.id}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 py-3">
+                          <AuthorAvatar ext={selected} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-semibold text-ink-4">Author</p>
+                            <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                              <span className="text-[13px] font-medium text-ink-1">
+                                {extensionAuthor(selected)}
+                              </span>
+                              {authorHandle(selected) ? (
+                                <span className="font-mono text-[11px] text-ink-4">
+                                  @{authorHandle(selected)}
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       </div>
+                      {selectedInstalled ? (
+                        <ExtensionPreferencesEditor
+                          extensionId={selected.id}
+                          extensionName={selected.name}
+                          commands={selected.commands ?? []}
+                          onMessage={showMessage}
+                        />
+                      ) : null}
                     </div>
-                    {selectedInstalled ? (
-                      <ExtensionPreferencesEditor
-                        extensionId={selected.id}
-                        extensionName={selected.name}
-                        commands={selected.commands ?? []}
-                        onMessage={showMessage}
-                      />
-                    ) : null}
-                  </div>
 
-                  <aside className="border-l border-white/10 px-5 py-6">
-                    <p className="text-[13px] font-semibold text-ink-3">Resources</p>
-                    <a
-                      href={repositoryUrl(selected) ?? '#'}
-                      onClick={(event) => {
-                        event.preventDefault()
-                        const url = repositoryUrl(selected)
-                        if (url) void window.tezbar.openExternalUrl(url)
-                      }}
-                      className="mt-3 flex items-center justify-between rounded-[8px] border border-white/10 bg-white/[0.03] px-4 py-3 text-[14px] font-medium text-ink-1 transition hover:bg-white/[0.07]"
-                    >
-                      <span>Open README</span>
-                      <span className="text-[20px] text-ink-4">↗</span>
-                    </a>
+                    <aside className="border-t border-white/[0.06] px-5 py-4">
+                      <p className="text-[13px] font-semibold text-ink-3">Resources</p>
+                      <a
+                        href={repositoryUrl(selected) ?? '#'}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          const url = repositoryUrl(selected)
+                          if (url) void window.tezbar.openExternalUrl(url)
+                        }}
+                        className="mt-2 flex items-center justify-between rounded-[7px] bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-ink-2 transition hover:bg-white/[0.07]"
+                      >
+                        <span>Open README</span>
+                        <span className="text-[20px] text-ink-4">↗</span>
+                      </a>
 
-                    <div className="mt-5">
-                      <p className="text-[11px] font-semibold text-ink-4">Commands</p>
-                      {commands.length > 0 ? (
-                        <ul className="mt-2 space-y-1.5">
-                          {commands.map((command) => (
-                            <li
-                              key={command.name || command.title}
-                              className="rounded-[8px] border border-white/10 bg-white/[0.03] px-3 py-2"
-                            >
-                              <p className="truncate text-[12px] font-medium text-ink-2">
-                                {command.title || command.name}
-                              </p>
-                              {command.description ? (
-                                <p className="mt-0.5 line-clamp-2 text-[10.5px] text-ink-4">{command.description}</p>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="mt-2 text-[12px] text-ink-4">Command metadata is not available.</p>
-                      )}
-                    </div>
-                  </aside>
-                </section>
+                      <div className="mt-5">
+                        <p className="text-[11px] font-semibold text-ink-4">Commands</p>
+                        {commands.length > 0 ? (
+                          <ul className="mt-2 space-y-1.5">
+                            {commands.map((command) => (
+                              <li
+                                key={command.name || command.title}
+                                className="rounded-[7px] bg-white/[0.03] px-3 py-2"
+                              >
+                                <p className="truncate text-[12px] font-medium text-ink-2">
+                                  {command.title || command.name}
+                                </p>
+                                {command.description ? (
+                                  <p className="mt-0.5 line-clamp-2 text-[10.5px] text-ink-4">
+                                    {command.description}
+                                  </p>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-2 text-[12px] text-ink-4">
+                            Command metadata is not available.
+                          </p>
+                        )}
+                      </div>
+                    </aside>
+                  </section>
+                </div>
+
+                <footer className="extension-detail-footer flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] px-4 py-3">
+                  <span className="text-[11px] text-ink-4">
+                    {selectedInstalled ? 'Installed extension' : 'Available to install'}
+                  </span>
+                  <Button
+                    variant={selectedInstalled ? 'danger' : 'primary'}
+                    disabled={loading || !!installing[selected.id]}
+                    onClick={() => runInstallAction(selected)}
+                  >
+                    {installing[selected.id] !== undefined
+                      ? installProgressLabel(installing[selected.id]!)
+                      : selectedInstalled
+                        ? 'Remove Extension'
+                        : 'Install Extension'}
+                  </Button>
+                </footer>
               </div>
-
-              <footer className="extension-detail-footer flex shrink-0 items-center gap-3 border-t border-white/10 bg-black/20 px-5 py-3">
-                <ExtensionIcon ext={selected} size="small" />
-                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink-2">{selected.name}</span>
-                <Button
-                  variant={selectedInstalled ? 'danger' : 'primary'}
-                  disabled={loading || !!installing[selected.id]}
-                  onClick={() => runInstallAction(selected)}
-                >
-                  {installing[selected.id] !== undefined
-                    ? installProgressLabel(installing[selected.id]!)
-                    : selectedInstalled
-                      ? 'Remove Extension'
-                      : 'Install Extension'}
-                </Button>
-                <span className="hidden h-5 w-px bg-white/10 sm:block" />
-                <HintBar>
-                  <Hint
-                    label="Actions"
-                    keys={
-                      <>
-                        <Kbd>⌘</Kbd>
-                        <Kbd>K</Kbd>
-                      </>
-                    }
-                  />
-                </HintBar>
-              </footer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-[12px] text-ink-3">
+                Select an extension to see details.
+              </div>
+            )}
+          </div>
+          {msg ? (
+            <div role="status" className="extensions-store-message shrink-0 border-t px-4 py-2">
+              <Message tone={msg.tone}>{msg.text}</Message>
             </div>
-          ) : (
-            <div className="flex h-full items-center justify-center text-[12px] text-ink-3">
-              Select an extension to see details.
-            </div>
-          )}
+          ) : null}
         </main>
       </section>
 
-      {msg ? (
-        <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
-          <Message tone={msg.tone}>{msg.text}</Message>
-        </div>
-      ) : null}
-
       {!embedded ? (
-        <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
+        <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2">
+          <span className="text-[11px] text-ink-4">
+            {total.toLocaleString()} extension{total === 1 ? '' : 's'}
+          </span>
           <HintBar>
             <Hint label="Search" keys={<Kbd>/</Kbd>} />
             <Hint

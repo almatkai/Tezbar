@@ -2356,3 +2356,45 @@ html.tezbar-window-hidden body {
   -webkit-backdrop-filter: blur(24px);
   box-shadow: var(--ln-shadow);
 }
+
+/* Store follows the clipboard's flat split-pane layout, not nested cards. */
+.extensions-store-body {
+  grid-template-columns: minmax(160px, 34%) minmax(0, 1fr);
+}
+
+.extensions-store-detail {
+  container-type: inline-size;
+  border-color: var(--ln-hairline);
+  background: var(--ln-panel);
+}
+
+.extensions-store .extension-detail-footer {
+  border-color: var(--ln-hairline);
+  background: var(--ln-bar);
+}
+
+.extensions-store-body > aside [class~='overflow-y-auto'] {
+  padding-bottom: calc(var(--sheet-bar-h, 0px) + 6px);
+  scroll-padding-bottom: calc(var(--sheet-bar-h, 0px) + 6px);
+}
+
+.extensions-store-message {
+  border-color: var(--ln-hairline);
+  background: var(--ln-bar);
+}
+
+:root[data-theme='white'] .extensions-store-search {
+  border-color: var(--ln-hairline);
+  background: var(--ln-field);
+}
+
+:root[data-theme='white'] .extensions-store .extension-detail-footer {
+  border-color: var(--ln-hairline);
+  background: var(--ln-bar);
+}
+
+@container (max-width: 340px) {
+  .extension-screenshots {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

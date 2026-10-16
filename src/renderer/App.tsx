@@ -68,6 +68,7 @@ type Surface =
 const SHEET_SURFACES: ReadonlySet<Surface> = new Set<Surface>([
   'command',
   'ai-chat',
+  'extensions',
   'extension-runtime',
   'open-ports',
   'system-monitor',
