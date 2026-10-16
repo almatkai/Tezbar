@@ -660,7 +660,7 @@ export default function TerminalView({
     <section
       aria-label="Terminal"
       className={cx(
-        'flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in',
+        'view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in',
         embedded ? 'flex-1' : 'h-[560px] min-h-[560px]',
       )}
     >
@@ -836,7 +836,7 @@ export default function TerminalView({
               </button>
             </div>
             <label className="mb-3 block" htmlFor="terminal-session-name">
-              <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+              <span className="mb-1.5 block text-[11px] font-semibold text-ink-3">
                 Name
               </span>
               <TextField
@@ -850,7 +850,7 @@ export default function TerminalView({
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="block" htmlFor="terminal-session-save-for">
-                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+                <span className="mb-1.5 block text-[11px] font-semibold text-ink-3">
                   Save session for
                 </span>
                 <SelectField
@@ -871,7 +871,7 @@ export default function TerminalView({
                 </SelectField>
               </label>
               <label className="block" htmlFor="terminal-session-keep-alive">
-                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+                <span className="mb-1.5 block text-[11px] font-semibold text-ink-3">
                   Keep process running
                 </span>
                 <SelectField

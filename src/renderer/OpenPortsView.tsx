@@ -221,7 +221,7 @@ export default function OpenPortsView({
       role="application"
       aria-label="Open Ports"
       onKeyDown={onKeyDown}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
@@ -332,13 +332,13 @@ export default function OpenPortsView({
           <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
             <div className="flex flex-wrap items-end gap-2">
               <div className="min-w-[120px] flex-1">
-                <label className="mb-1 block text-[10px] font-medium uppercase tracking-[0.14em] text-ink-4">
+                <label className="mb-1 block text-[11px] font-medium text-ink-4">
                   Label
                 </label>
                 <TextField value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. API server" />
               </div>
               <div className="w-24">
-                <label className="mb-1 block text-[10px] font-medium uppercase tracking-[0.14em] text-ink-4">
+                <label className="mb-1 block text-[11px] font-medium text-ink-4">
                   Port
                 </label>
                 <TextField

@@ -194,7 +194,7 @@ function PreferenceSetupView({
             <span className="min-w-0">
               {pref.description || `Enable ${label.toLowerCase()}`}
               {pref.required ? (
-                <span className="ml-2 text-[9px] uppercase tracking-[0.14em] text-accent-strong">
+                <span className="ml-2 text-[11px] text-accent-strong">
                   Required
                 </span>
               ) : null}
@@ -306,7 +306,7 @@ function PreferenceSetupView({
           <span className="h-4 w-px bg-white/[0.08]" aria-hidden />
           <p className="truncate text-[11.5px] font-medium text-ink-2">{title}</p>
         </div>
-        <span className="rounded-tezbar-chip border border-white/[0.07] bg-white/[0.035] px-2 py-1 text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-4">
+        <span className="rounded-tezbar-chip border border-white/[0.07] bg-white/[0.035] px-2 py-1 text-[11px] font-medium text-ink-4">
           Extension setup
         </span>
       </header>
@@ -332,7 +332,7 @@ function PreferenceSetupView({
               )}
             </span>
             <div className="min-w-0 flex-1 pt-0.5">
-              <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-accent-strong">
+              <p className="text-[11px] font-semibold text-accent-strong">
                 One-time setup
               </p>
               <h1 className="mt-1 font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink-1">
@@ -592,7 +592,7 @@ export default function ExtensionRuntimeView({
     <div
       role="application"
       aria-label="Extension Runtime"
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="min-h-0 flex-1">
         {state.root.type === 'Tezbar.PreferenceSetup' ? (

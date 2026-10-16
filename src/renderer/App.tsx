@@ -62,6 +62,24 @@ type Surface =
   | 'terminal'
   | 'release-notes'
 
+/** Surfaces drawn as one edge-to-edge sheet (`.view-sheet`) instead of
+ *  separate cards inset in the window. */
+const SHEET_SURFACES: ReadonlySet<Surface> = new Set<Surface>([
+  'command',
+  'ai-chat',
+  'extension-runtime',
+  'open-ports',
+  'system-monitor',
+  'indexing',
+  'permissions',
+  'clipboard',
+  'snippets',
+  'notes',
+  'emoji-picker',
+  'terminal',
+  'release-notes',
+])
+
 type SettingsTab =
   | 'general'
   | 'ai'
@@ -667,7 +685,8 @@ function LauncherApp(): JSX.Element {
     <div
       className={[
         'glass-shell drag-region flex h-screen w-full',
-        surface === 'command' ? 'glass-shell--launcher p-0' : 'p-2',
+        surface === 'command' ? 'glass-shell--launcher' : '',
+        SHEET_SURFACES.has(surface) ? 'p-0' : 'p-2',
         surface === 'terminal' ? 'glass-shell--terminal' : '',
       ]
         .filter(Boolean)

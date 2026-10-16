@@ -78,7 +78,7 @@ export default function ReleaseNotesView({
           void window.tezbar.openReleasePage(href)
         }
       }}
-      className="no-drag flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="no-drag view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="glass-card shrink-0 px-4 py-3">
         <ViewHeader

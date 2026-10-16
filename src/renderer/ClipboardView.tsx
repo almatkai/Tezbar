@@ -410,7 +410,7 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
       role="application"
       aria-label="Clipboard History"
       onKeyDown={onKeyDown}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
@@ -516,7 +516,7 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
       </div>
 
       <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
-        <span className="text-[10.5px] uppercase tracking-[0.14em] text-ink-4">
+        <span className="text-[11px] text-ink-4">
           {filtered.length} item{filtered.length === 1 ? '' : 's'}
           {filter !== 'all' ? ` · ${filters.find((f) => f.id === filter)?.label}` : ''}
         </span>

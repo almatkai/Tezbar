@@ -872,12 +872,12 @@ export default function ExtensionsSettingsTab({ onBrowseStore }: ExtensionsSetti
 
             {/* Commands table */}
             <div className="mb-5">
-              <div className="text-[12px] font-semibold text-ink-2 mb-2 uppercase tracking-wider">
+              <div className="text-[12px] font-semibold text-ink-2 mb-2">
                 Commands ({selectedSchema.commands.length})
               </div>
               <div className="rounded-lg border border-white/[0.06] overflow-hidden">
                 {/* Table header */}
-                <div className="grid grid-cols-[1fr_100px_100px_70px] gap-px bg-white/[0.04] px-3 py-1.5 text-[10px] uppercase tracking-wider text-ink-4 border-b border-white/[0.06]">
+                <div className="grid grid-cols-[1fr_100px_100px_70px] gap-px bg-white/[0.04] px-3 py-1.5 text-[11px] text-ink-4 border-b border-white/[0.06]">
                   <div>Name</div>
                   <div>Type</div>
                   <div>Hotkey</div>
@@ -926,7 +926,7 @@ export default function ExtensionsSettingsTab({ onBrowseStore }: ExtensionsSetti
             {/* Extension Preferences */}
             {selectedSchema.preferences.length > 0 && (
               <div className="mb-5">
-                <div className="text-[12px] font-semibold text-ink-2 mb-2 uppercase tracking-wider">
+                <div className="text-[12px] font-semibold text-ink-2 mb-2">
                   Extension Preferences
                 </div>
                 <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3">

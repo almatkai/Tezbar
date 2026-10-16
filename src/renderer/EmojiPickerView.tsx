@@ -203,7 +203,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
       role="application"
       aria-label="Emoji Picker"
       onKeyDown={onKeyDown}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader title="Emoji Picker" onBack={onBack} />

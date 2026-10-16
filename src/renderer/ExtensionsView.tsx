@@ -578,7 +578,7 @@ export default function ExtensionsView({
       <section className="grid min-h-0 flex-1 grid-cols-[224px_minmax(0,1fr)] gap-2 animate-tezbar-scale-in">
         <aside className="glass-card flex min-h-0 flex-col overflow-hidden px-1.5 py-2">
           <div className="flex items-center justify-between px-1.5 pb-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">
+            <span className="text-[11px] font-semibold text-ink-4">
               {isWindows ? 'Loved by Tezbar' : 'Store'}
             </span>
             <span className="text-[10px] text-ink-4">
@@ -652,7 +652,7 @@ export default function ExtensionsView({
           {repository ? (
             <div className="flex h-full items-center justify-center px-8">
               <div className="w-full max-w-[540px] rounded-[14px] border border-white/10 bg-white/[0.035] p-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-4">
+                <p className="text-[11px] font-semibold text-ink-4">
                   {isWindows ? 'Loved extension from GitHub' : 'Install from GitHub'}
                 </p>
                 <h2 className="mt-3 break-words text-[24px] font-semibold text-ink-1">{repository.repository}</h2>
@@ -696,7 +696,7 @@ export default function ExtensionsView({
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="truncate text-[28px] font-semibold leading-tight text-ink-1">{selected.name}</h2>
                         {selectedInstalled ? (
-                          <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-300">
+                          <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
                             Installed
                           </span>
                         ) : null}
@@ -713,7 +713,7 @@ export default function ExtensionsView({
                           {categories.map((category) => (
                             <span
                               key={category}
-                              className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2 py-1 text-[10.5px] uppercase tracking-[0.1em] text-ink-3"
+                              className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-ink-3"
                             >
                               {category}
                             </span>
@@ -738,7 +738,7 @@ export default function ExtensionsView({
                     </div>
                   ) : (
                     <div className="rounded-[8px] border border-white/10 bg-white/[0.03] px-5 py-5">
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-ink-4">Preview</p>
+                      <p className="text-[12px] font-semibold text-ink-4">Preview</p>
                       <p className="mt-2 text-[13px] leading-relaxed text-ink-3">
                         No screenshots are available for this extension yet. The command list and metadata below can
                         still help you decide whether it belongs in your workflow.
@@ -757,7 +757,7 @@ export default function ExtensionsView({
                       <div className="flex items-center gap-3 px-4 py-3">
                         <ExtensionIcon ext={selected} size="small" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-4">
+                          <p className="text-[11px] font-semibold text-ink-4">
                             Extension ID
                           </p>
                           <p className="mt-0.5 break-all font-mono text-[12px] leading-snug text-ink-2">
@@ -768,7 +768,7 @@ export default function ExtensionsView({
                       <div className="flex items-center gap-3 px-4 py-3">
                         <AuthorAvatar ext={selected} />
                         <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-4">Author</p>
+                          <p className="text-[11px] font-semibold text-ink-4">Author</p>
                           <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
                             <span className="text-[13px] font-medium text-ink-1">{extensionAuthor(selected)}</span>
                             {authorHandle(selected) ? (
@@ -804,7 +804,7 @@ export default function ExtensionsView({
                     </a>
 
                     <div className="mt-5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4">Commands</p>
+                      <p className="text-[11px] font-semibold text-ink-4">Commands</p>
                       {commands.length > 0 ? (
                         <ul className="mt-2 space-y-1.5">
                           {commands.map((command) => (

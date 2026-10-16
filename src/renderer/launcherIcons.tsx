@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { cx } from './ui/primitives'
 
 /* Launcher icon set: 24px line glyphs drawn white on a solid colored
  * squircle. Keys are command icon kinds first, then result categories as a
@@ -362,6 +363,7 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
     ),
   },
   update: { color: GREEN, glyph: <path d="M12 17V3M6 11l6 6 6-6M19 21H5" /> },
+  chat: { color: VIOLET, glyph: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /> },
 
   // Result categories and path completions
   directory: { color: SKY, glyph: <path d={FOLDER} /> },
@@ -404,5 +406,31 @@ export function LauncherGlyph({
     >
       {launcherIcon(kind).glyph}
     </svg>
+  )
+}
+
+/** Solid colored squircle with a white glyph — the shared list icon tile. */
+export function Squircle({
+  kind,
+  size = 22,
+  className,
+}: {
+  kind: string
+  size?: number
+  className?: string
+}): JSX.Element {
+  return (
+    <span
+      aria-hidden
+      className={cx('squircle grid shrink-0 place-items-center text-white', className)}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: Math.round(size * 0.27),
+        backgroundColor: launcherIcon(kind).color,
+      }}
+    >
+      <LauncherGlyph kind={kind} size={Math.round(size * 0.6)} />
+    </span>
   )
 }

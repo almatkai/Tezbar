@@ -203,7 +203,7 @@ export default function IndexingView({
       role="application"
       aria-label="Indexing Status"
       onKeyDown={onKeyDown}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <section className="glass-card shrink-0 overflow-hidden px-4 py-3">
         <ViewHeader
@@ -230,7 +230,7 @@ export default function IndexingView({
                     ? 'bg-rose-300' : snapshot?.status.state === 'paused' ? 'bg-amber-300' : 'bg-emerald-300',
                 )} />
                 <h2 className="font-display text-[15px] font-semibold text-ink-1">{statusLabel(snapshot)}</h2>
-                <span className="rounded-full border border-white/[0.08] bg-black/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-ink-3">
+                <span className="rounded-full border border-white/[0.08] bg-black/10 px-2 py-0.5 text-[11px] font-semibold text-ink-3">
                   {depth}
                 </span>
               </div>
@@ -255,7 +255,7 @@ export default function IndexingView({
         <div className="mt-2.5 grid grid-cols-4 gap-2">
           {metricCards.map((metric) => (
             <div key={metric.label} className="rounded-[11px] border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
-              <p className="text-[9px] font-medium uppercase tracking-[0.11em] text-ink-4">{metric.label}</p>
+              <p className="text-[11px] font-medium text-ink-4">{metric.label}</p>
               <p className="mt-1 truncate font-display text-[13px] font-semibold text-ink-1" title={metric.value}>{metric.value}</p>
               <p className="mt-0.5 truncate text-[9.5px] text-ink-4">{metric.note}</p>
             </div>
@@ -302,7 +302,7 @@ export default function IndexingView({
                   </span>
                   <span className="max-w-[240px] shrink-0 text-right">
                     <span className={cx(
-                      'block text-[9px] font-semibold uppercase tracking-[0.08em]',
+                      'block text-[11px] font-semibold',
                       source.status === 'failed' ? 'text-rose-300' : source.status === 'pending' ? 'text-cyan-200' : 'text-emerald-300/80',
                     )}>
                       {source.status}

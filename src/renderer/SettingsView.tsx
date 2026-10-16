@@ -1634,7 +1634,7 @@ export default function SettingsView({
               <div className="flex shrink-0 items-center gap-2">
                 {inProgress ? <ProgressRing progress={model.progress} /> : null}
                 {downloaded ? (
-                  <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-300">
+                  <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
                     Ready
                   </span>
                 ) : null}
@@ -1691,8 +1691,8 @@ export default function SettingsView({
                 <span
                   className={
                     model.runtime.ready
-                      ? 'rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-300'
-                      : 'rounded-tezbar-chip border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-amber-200'
+                      ? 'rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300'
+                      : 'rounded-tezbar-chip border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-200'
                   }
                 >
                   {model.runtime.ready
@@ -2036,7 +2036,7 @@ export default function SettingsView({
               <div className="flex gap-6 rounded-tezbar-row border border-white/10 bg-white/[0.015] p-4 min-h-[500px]">
                 {/* Left Sidebar */}
                 <div className="w-[220px] shrink-0 border-r border-white/10 pr-4 flex flex-col min-h-0">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-ink-3 px-2 pb-2 shrink-0">
+                  <div className="text-[11px] font-semibold text-ink-3 px-2 pb-2 shrink-0">
                     AI Providers
                   </div>
                   <div className="space-y-1 overflow-y-auto flex-1 min-h-0 pr-1">
@@ -2075,7 +2075,7 @@ export default function SettingsView({
                               <div className="flex items-center gap-1.5">
                                 <span className="font-semibold truncate">{provider.title}</span>
                                 {isActive ? (
-                                  <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-1 py-[1px] text-[8px] font-semibold uppercase tracking-[0.08em] text-emerald-300">
+                                  <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-1 py-[1px] text-[8px] font-semibold text-emerald-300">
                                     Active
                                   </span>
                                 ) : null}
@@ -2255,7 +2255,7 @@ export default function SettingsView({
                                     aria-live="polite"
                                     className="rounded-tezbar-row border border-emerald-300/35 bg-emerald-400/10 px-3 py-3 shadow-[0_0_0_1px_rgba(110,231,183,0.08)]"
                                   >
-                                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200">
+                                    <div className="text-[11px] font-semibold text-emerald-200">
                                       Enter this code on GitHub
                                     </div>
                                     <div className="mt-2 select-all rounded-tezbar-field border border-emerald-300/25 bg-black/25 px-3 py-2 text-center font-mono text-[28px] font-black tracking-[0.18em] text-emerald-100">
@@ -2411,13 +2411,13 @@ export default function SettingsView({
                                       {model.capabilities.map((capability) => (
                                         <span
                                           key={capability}
-                                          className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3"
+                                          className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[11px] font-medium text-ink-3"
                                         >
                                           {capabilityLabel(capability)}
                                         </span>
                                       ))}
                                       {model.contextWindow ? (
-                                        <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3">
+                                        <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[11px] font-medium text-ink-3">
                                           {model.contextWindow.toLocaleString()} ctx
                                         </span>
                                       ) : null}
@@ -2746,7 +2746,7 @@ export default function SettingsView({
                           </span>
                           <span
                             className={cx(
-                              'text-[9.5px] font-medium uppercase tracking-[0.08em]',
+                              'text-[11px] font-medium',
                               selected ? 'text-cyan-200' : 'text-ink-4'
                             )}
                           >
@@ -3097,7 +3097,7 @@ export default function SettingsView({
                   <div className="rounded-tezbar-row border border-white/[0.07] bg-white/[0.02] p-3 opacity-60">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[12px] font-semibold text-ink-2">Tezbar Cloud</p>
-                      <span className="text-[9.5px] uppercase tracking-wide text-ink-4">
+                      <span className="text-[11px] text-ink-4">
                         Coming later
                       </span>
                     </div>

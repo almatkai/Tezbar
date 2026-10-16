@@ -573,7 +573,7 @@ function PracticeStep({
             {barMode === 'ai' ? (
               <span
                 aria-label="AI mode"
-                className="relative inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-violet-400/40 bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200"
+                className="relative inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-violet-400/40 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-violet-200"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
                 AI

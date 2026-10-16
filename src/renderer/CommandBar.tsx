@@ -5,6 +5,7 @@ import {
   type PointerEvent,
   type ReactNode,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -22,7 +23,7 @@ import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { IconAssetKind, PathCompletionItem, SearchResult } from '../shared/search'
 import type { NativeCommandId } from '../shared/nativeCommands'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
-import { Hint, HintBar, Kbd, Message, SelectField, TextField, cx } from './ui/primitives'
+import { Hint, HintBar, Kbd, ListRow, ListRowTag, Message, SelectField, TextField, cx } from './ui/primitives'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { GlideList } from './ui/GlideList'
 import { RollingText } from './ui/RollingText'
@@ -83,7 +84,7 @@ import {
 } from '../shared/searchMode'
 import { aiChatBootForInput, commandBarInputMode } from './commandBarInputMode'
 import { RELEASE_NOTES_COMMAND_ID, withReleaseNotesResult } from './releaseNotes'
-import { LauncherGlyph, launcherIcon } from './launcherIcons'
+import { LauncherGlyph, Squircle, launcherIcon } from './launcherIcons'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
@@ -99,6 +100,7 @@ const PINNED_HOME_RESULT_SCORE_PENALTY = 850
 const MAX_PINNED_COMMANDS = 12
 const SEARCH_RESULT_PIN_DRAG_THRESHOLD = 6
 const COMMAND_HINT = { shortcut: '>', label: 'Open terminal' } as const
+let measureCanvas: HTMLCanvasElement | undefined
 const COMMAND_HINTS = [
   { shortcut: '/directory', label: 'Search files and folders' },
   { shortcut: '`', label: 'Browse applications' },
@@ -621,7 +623,7 @@ function PortArgumentChip(): ReactNode {
       className="launcher-arg-chip inline-flex h-6 shrink-0 items-center gap-1.5 rounded-[6px] pl-1 pr-2 text-[12.5px] font-medium text-ink-1"
     >
       <span
-        className="launcher-squircle grid h-4 w-4 place-items-center rounded-[4px] text-white"
+        className="squircle grid h-4 w-4 place-items-center rounded-[4px] text-white"
         style={{ backgroundColor: launcherIcon('ports').color }}
       >
         <LauncherGlyph kind="ports" size={10} />
@@ -1284,7 +1286,7 @@ function ListItemIcon({
         'command-result-icon relative grid h-[22px] w-[22px] shrink-0 place-items-center',
         resolvedIconDataUrl
           ? 'overflow-visible bg-transparent'
-          : 'launcher-squircle overflow-hidden rounded-[6px] text-white'
+          : 'squircle overflow-hidden rounded-[6px] text-white'
       )}
       style={resolvedIconDataUrl ? undefined : { backgroundColor: icon.color }}
     >
@@ -1426,6 +1428,24 @@ export default function CommandBar({
   const [isStreaming, setIsStreaming] = useState(false)
   const [cfg, setCfg] = useState<LlmConfigRecord>({})
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  // Width of the typed query, so the mode chips on the right give way to it.
+  const [inputTextWidth, setInputTextWidth] = useState(0)
+  useLayoutEffect(() => {
+    const input = document.getElementById('command-input') as HTMLInputElement | null
+    if (!input) return
+    const text = input.value
+    let next = 0
+    if (text) {
+      measureCanvas ??= document.createElement('canvas')
+      const context = measureCanvas.getContext('2d')
+      if (!context) return
+      // `font` shorthand can read back empty for inputs; build it explicitly.
+      const style = getComputedStyle(input)
+      context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+      next = Math.ceil(context.measureText(text).width) + 16
+    }
+    setInputTextWidth((current) => (current === next ? current : next))
+  })
   const [emptyAnswer, setEmptyAnswer] = useState(false)
   const [pathCompletions, setPathCompletions] = useState<PathCompletionItem[]>([])
   const [recentExtensionCommands, setRecentExtensionCommands] = useState<string[]>([])
@@ -4266,7 +4286,7 @@ export default function CommandBar({
             {isAiMode ? (
               <span
                 aria-label="AI mode"
-                className="command-ai-badge inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-violet-500/15 px-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-violet-200"
+                className="command-ai-badge inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-violet-500/15 px-1.5 text-[11px] font-semibold text-violet-200"
               >
                 <span className="h-1 w-1 rounded-full bg-violet-300" />
                 AI
@@ -4274,7 +4294,7 @@ export default function CommandBar({
             ) : isDeepSearchMode ? (
               <span
                 aria-label="Deep Search mode"
-                className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-cyan-400/15 px-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-200"
+                className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-cyan-400/15 px-1.5 text-[11px] font-semibold text-cyan-200"
               >
                 <span className="h-1 w-1 rounded-full bg-cyan-300" />
                 Deep
@@ -4298,7 +4318,10 @@ export default function CommandBar({
                 />
               </>
             ) : null}
-            <div className="relative min-w-0 flex-1 flex items-center">
+            <div
+              className="relative min-w-0 flex-1 flex items-center"
+              style={inputTextWidth ? { minWidth: inputTextWidth } : undefined}
+            >
               {terminalMode ? (
                 <span className="command-terminal-prompt shrink-0 font-mono text-[13px] text-emerald-300/80 mr-1 select-none pointer-events-none">
                   {terminalPrompt}
@@ -4491,12 +4514,23 @@ export default function CommandBar({
                 </span>
               </button>
             ) : null}
-            {!value && !isAiMode && !terminalMode && !killPortMode && !pendingInlineArgument ? (
-              <span className="flex shrink-0 items-center gap-1.5" aria-hidden>
+            {!isAiMode &&
+            !terminalMode &&
+            !isDeepSearchMode &&
+            !isCompletionInput &&
+            !killPortMode &&
+            !canEnterKillPortMode &&
+            !pendingInlineArgument ? (
+              // Reversed wrapping row: as the query grows the chips nearest
+              // the text wrap onto a hidden second line, one at a time.
+              <span className="launcher-mode-chips" aria-hidden>
+                <span className="launcher-mode-chip">Space AI</span>
+                <span className="launcher-mode-chip">
+                  <span className="font-mono">&gt;</span> Terminal
+                </span>
                 <span className="launcher-mode-chip">
                   <span className="font-mono">!</span> Deep
                 </span>
-                <span className="launcher-mode-chip">Space AI</span>
               </span>
             ) : null}
             {isAiMode || pendingActionUsesAi ? (
@@ -4698,7 +4732,7 @@ export default function CommandBar({
                     return (
                       <li key={item.id} className="relative z-[1]">
                         {sectionLabel ? (
-                          <div className="px-3 pb-1 pt-2 text-[9.5px] font-bold uppercase tracking-[0.16em] text-ink-4">
+                          <div className="px-3 pb-1 pt-2 text-[11px] font-semibold text-ink-4">
                             {sectionLabel}
                           </div>
                         ) : null}
@@ -4727,7 +4761,7 @@ export default function CommandBar({
                               </span>
                             </span>
                           </span>
-                          <span className="ml-3 shrink-0 text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-4">
+                          <span className="ml-3 shrink-0 text-[11px] font-medium text-ink-4">
                             {item.badge ??
                               (item.kind === 'directory'
                                 ? 'Folder'
@@ -4840,7 +4874,7 @@ export default function CommandBar({
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     {pendingActionUsesAi ? (
-                      <span className="inline-flex h-6 items-center gap-1.5 rounded-tezbar-chip border border-violet-300/15 bg-violet-300/[0.07] px-2 text-[9px] font-semibold uppercase tracking-[0.11em] text-violet-200/80">
+                      <span className="inline-flex h-6 items-center gap-1.5 rounded-tezbar-chip border border-violet-300/15 bg-violet-300/[0.07] px-2 text-[11px] font-semibold text-violet-200/80">
                         <span className="h-1.5 w-1.5 rounded-full bg-violet-300/80" />
                         AI powered
                       </span>
@@ -4897,7 +4931,7 @@ export default function CommandBar({
                         key={`${pendingAction.commandName}:${arg.name}`}
                         className="block min-w-0"
                       >
-                        <span className="mb-1.5 flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[0.13em] text-ink-3">
+                        <span className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-ink-3">
                           {label}
                           {arg.required ? (
                             <span className="text-emerald-300" aria-label="required">
@@ -4975,21 +5009,28 @@ export default function CommandBar({
               }}
             >
               <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1.5">
-                <div className="command-ai-heading mb-2 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-300">
-                  Recent Chats
-                </div>
                 <GlideList
                   selectedIndex={selectedSearch}
                   itemCount={filteredChatHistory.length}
                   followSelected={followSearchSelection}
                   className="min-h-0 flex-1 overflow-y-auto"
-                  highlightClassName="glide-highlight--glass"
+                  highlightClassName="glide-highlight--accent"
                 >
                   {filteredChatHistory.map((chat, i) => (
                     <li key={chat.id} className="relative z-[1]">
-                      <button
-                        type="button"
-                        className="group relative flex w-full items-center gap-3 rounded-tezbar-row px-3 py-2 text-left transition"
+                      <ListRow
+                        selected={i === selectedSearch}
+                        icon={<Squircle kind="chat" />}
+                        title={chat.title || 'Untitled Chat'}
+                        subtitle={chat.preview || 'No preview available'}
+                        accessory={
+                          <ListRowTag>
+                            {new Date(chat.updatedAt).toLocaleDateString([], {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </ListRowTag>
+                        }
                         onMouseMove={(e) => {
                           handleRowMouseMove(e, i)
                         }}
@@ -4998,33 +5039,7 @@ export default function CommandBar({
                           onOpenAiChat({ kind: 'resume', sessionId: chat.id })
                           setValue('  ')
                         }}
-                      >
-                        <div className="command-ai-chat-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-300 group-hover:bg-violet-500/20">
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path
-                              d="M7 11.5c2.485 0 4.5-2.015 4.5-4.5S9.485 2.5 7 2.5 2.5 4.515 2.5 7c0 1.05.36 2.015.964 2.783L3 11l1.217-.464c.768.604 1.733.964 2.783.964z"
-                              stroke="currentColor"
-                              strokeWidth="1.2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </div>
-                        <div className="flex min-w-0 flex-1 flex-col">
-                          <span className="truncate text-[13px] font-medium text-ink-1">
-                            {chat.title || 'Untitled Chat'}
-                          </span>
-                          <span className="truncate text-[11px] text-ink-3">
-                            {chat.preview || 'No preview available'}
-                          </span>
-                        </div>
-                        <div className="shrink-0 text-[10px] font-medium text-ink-4">
-                          {new Date(chat.updatedAt).toLocaleDateString([], {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </div>
-                      </button>
+                      />
                     </li>
                   ))}
                 </GlideList>
@@ -5043,109 +5058,48 @@ export default function CommandBar({
               }}
             >
               <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1.5">
-                <div className="mb-2 flex items-center justify-between px-3 pt-1">
-                  <div>
-                    <div className="command-terminal-heading text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">
-                      Terminal Sessions
-                    </div>
-                    <div className="mt-0.5 text-[10.5px] text-ink-4">
-                      {terminalSessions.filter((session) => session.status === 'running').length}{' '}
-                      running
-                    </div>
-                  </div>
-                  {terminalSelectedIndex < 0 ? (
-                    <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-ink-4">
-                      ↓ selects a session · Enter starts new
-                    </span>
-                  ) : null}
-                </div>
                 <GlideList
                   selectedIndex={terminalSelectedIndex}
                   itemCount={terminalSessionCount === 0 ? 1 : terminalSessionCount}
                   followSelected={followSearchSelection}
                   className="min-h-0 flex-1 overflow-y-auto"
-                  highlightClassName="glide-highlight--glass"
+                  highlightClassName="glide-highlight--accent"
                 >
                   {terminalSessionCount === 0 ? (
-                    <li className="relative z-[1]">
-                      <div className="mx-1 rounded-tezbar-row border border-white/[0.06] bg-white/[0.03] px-3 py-3 text-[12px] text-ink-4">
-                        No saved terminal sessions yet. Press Enter to start a new terminal.
-                      </div>
+                    <li className="relative z-[1] px-2 py-2 text-[12px] text-ink-4">
+                      No saved terminal sessions yet. Press Enter to start a new terminal.
                     </li>
                   ) : null}
                   {orderedTerminalSessions.map((session, i) => {
                     const running = session.status === 'running'
                     return (
                       <li key={session.sessionId} className="relative z-[1]">
-                        <button
-                          type="button"
-                          className={cx(
-                            'relative flex w-full items-center justify-between gap-3 rounded-tezbar-row px-3 py-2.5 text-left transition',
-                            i === terminalSelectedIndex
-                              ? 'bg-emerald-400/[0.08] text-ink-1'
-                              : 'text-ink-3 hover:bg-white/[0.05] hover:text-ink-1'
-                          )}
+                        <ListRow
+                          selected={i === terminalSelectedIndex}
+                          title={session.name}
+                          subtitle={terminalSessionSubtitle(session)}
+                          monoSubtitle
+                          accessory={
+                            <>
+                              {pinnedTerminalSessionIds.includes(session.sessionId) ? (
+                                <span className="text-[11px] text-amber-300" aria-label="Pinned">
+                                  ★
+                                </span>
+                              ) : null}
+                              {running ? (
+                                <ListRowTag tone="success">Running</ListRowTag>
+                              ) : null}
+                              <span className="tabular-nums">
+                                {terminalSessionAge(session.updatedAt)}
+                              </span>
+                            </>
+                          }
                           onMouseMove={(e) => {
                             handleRowMouseMove(e, i)
                           }}
                           onMouseDown={(ev) => ev.preventDefault()}
                           onClick={() => openTerminalSession(session)}
-                        >
-                          <span className="flex min-w-0 flex-1 items-center gap-3">
-                            <span
-                              className={cx(
-                                'command-terminal-session-icon grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border',
-                                running && 'command-terminal-running',
-                                running
-                                  ? 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200'
-                                  : 'border-white/10 bg-white/[0.035] text-ink-4'
-                              )}
-                            >
-                              <TerminalIcon />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="flex min-w-0 items-center gap-2">
-                                <span
-                                  className={cx(
-                                    'command-terminal-session-dot h-1.5 w-1.5 shrink-0 rounded-full',
-                                    running && 'command-terminal-running',
-                                    running
-                                      ? 'bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]'
-                                      : 'bg-white/25'
-                                  )}
-                                />
-                                <span className="truncate text-[13px] font-semibold text-ink-1">
-                                  {session.name}
-                                </span>
-                                {pinnedTerminalSessionIds.includes(session.sessionId) ? (
-                                  <span
-                                    className="shrink-0 text-[10px] text-amber-200"
-                                    aria-label="Pinned"
-                                  >
-                                    ★
-                                  </span>
-                                ) : null}
-                              </span>
-                              <span className="mt-0.5 block truncate font-mono text-[10.5px] text-ink-4">
-                                {terminalSessionSubtitle(session)}
-                              </span>
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-right">
-                            <span
-                              className={cx(
-                                'command-terminal-session-status block text-[10px] font-semibold uppercase tracking-[0.12em]',
-                                running && 'command-terminal-running',
-                                running ? 'text-emerald-300' : 'text-ink-4'
-                              )}
-                            >
-                              {running ? 'Running' : 'Saved'}
-                            </span>
-                            <span className="mt-1 block font-mono text-[10px] text-ink-4">
-                              {terminalSessionAge(session.updatedAt)}
-                            </span>
-                          </span>
-                        </button>
+                        />
                       </li>
                     )
                   })}
@@ -5169,12 +5123,6 @@ export default function CommandBar({
               }}
             >
               <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1.5">
-                <div className="launcher-section-label flex shrink-0 items-center gap-1.5 px-2 pb-1.5 pt-2">
-                  <span>
-                    {isDeepSearchMode ? 'Deep Search' : value.trim() ? 'Results' : 'Suggestions'}
-                  </span>
-                  <span className="launcher-section-count tabular-nums">{visibleSearchCount}</span>
-                </div>
                 <GlideList
                   selectedIndex={selectedSearch}
                   itemCount={visibleSearchCount}
@@ -5199,8 +5147,9 @@ export default function CommandBar({
                         <button
                           type="button"
                           data-selected={i === selectedSearch}
+                          data-tone="accent"
                           className={cx(
-                            'launcher-row relative flex w-full items-center justify-between gap-3 rounded-tezbar-row text-left',
+                            'list-row justify-between',
                             isCalc || isColorConversion ? 'px-2 py-1.5' : 'px-2 py-[7px]',
                             canPinResult ? 'cursor-grab active:cursor-grabbing' : ''
                           )}
@@ -5243,7 +5192,7 @@ export default function CommandBar({
                               <span className="flex min-w-0 flex-1 items-center gap-2.5">
                                 <span
                                   aria-hidden
-                                  className="command-result-icon launcher-squircle grid h-[22px] w-[22px] shrink-0 place-items-center rounded-[6px] bg-[#71717a] text-white"
+                                  className="command-result-icon squircle grid h-[22px] w-[22px] shrink-0 place-items-center rounded-[6px] bg-[#71717a] text-white"
                                 >
                                   {isColorConversion ? (
                                     <span
@@ -5442,11 +5391,11 @@ export default function CommandBar({
                                   commandIcon={commandIcon}
                                 />
                                 <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                                  <span className="launcher-title min-w-0 max-w-[70%] shrink-0 truncate text-[13px] font-medium text-ink-1">
+                                  <span className="list-row__title min-w-0 max-w-[70%] shrink-0 truncate text-[13px] font-medium text-ink-1">
                                     {item.title}
                                   </span>
                                   {item.subtitle ? (
-                                    <span className="launcher-subtitle min-w-0 truncate text-[12px] text-ink-4">
+                                    <span className="list-row__subtitle min-w-0 truncate text-[12px] text-ink-4">
                                       {item.subtitle}
                                     </span>
                                   ) : null}
@@ -5459,7 +5408,7 @@ export default function CommandBar({
                                     <Kbd>{pinnedSlotShortcutKey(pinnedMeta.slot)}</Kbd>
                                   </span>
                                 ) : null}
-                                <span className="launcher-kind">{searchResultKindLabel(item)}</span>
+                                <ListRowTag>{searchResultKindLabel(item)}</ListRowTag>
                               </span>
                             </>
                           )}
@@ -5479,7 +5428,7 @@ export default function CommandBar({
                 <div className="mb-2 flex justify-end">
                   <button
                     type="button"
-                    className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 transition hover:text-ink-2"
+                    className="rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium text-ink-3 transition hover:text-ink-2"
                     onClick={() => {
                       void speakAnswerText()
                     }}
@@ -5572,7 +5521,7 @@ export default function CommandBar({
                         </span>
                         {label ? (
                           <span
-                            className={`shrink-0 ${multiline ? 'mt-1.5' : ''} text-[10px] font-medium uppercase tracking-wider ${tone.label}`}
+                            className={`shrink-0 ${multiline ? 'mt-1.5' : ''} text-[11px] font-medium ${tone.label}`}
                           >
                             {label}
                           </span>
@@ -5733,7 +5682,7 @@ export default function CommandBar({
                     title="Use Deep Search (Command + Enter)"
                   >
                     <span>Deep Search</span>
-                    <span className="inline-flex items-center gap-0.5">
+                    <span className="kbd-group">
                       <Kbd>⌘</Kbd>
                       <Kbd>↵</Kbd>
                     </span>
@@ -5800,7 +5749,7 @@ export default function CommandBar({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="block" htmlFor="terminal-default-save-for">
-                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+                <span className="mb-1.5 block text-[11px] font-semibold text-ink-3">
                   Keep session history
                 </span>
                 <SelectField
@@ -5820,7 +5769,7 @@ export default function CommandBar({
                 </SelectField>
               </label>
               <label className="block" htmlFor="terminal-default-keep-alive">
-                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+                <span className="mb-1.5 block text-[11px] font-semibold text-ink-3">
                   Keep process running
                 </span>
                 <SelectField
