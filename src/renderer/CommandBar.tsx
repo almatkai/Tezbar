@@ -4246,7 +4246,7 @@ export default function CommandBar({
         className="command-search glass-card relative z-30 shrink-0 px-3.5"
       >
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
-          <div className="flex h-[52px] items-center gap-2.5">
+          <div className="flex h-11 items-center gap-2.5">
             <span
               role={isAiMode ? 'img' : undefined}
               aria-label={isAiMode ? 'AI mode' : undefined}
@@ -4681,7 +4681,7 @@ export default function CommandBar({
           {/* File and application completion suggestions */}
           {showSuggestions ? (
             <div
-              className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden p-1.5"
+              className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-1.5"
               onWheelCapture={() => setFollowSuggestionSelection(false)}
               onMouseLeave={() => {
                 setFollowSuggestionSelection(false)
@@ -4704,7 +4704,7 @@ export default function CommandBar({
                   selectedIndex={selectedSuggestion}
                   itemCount={suggestions.length}
                   followSelected={followSuggestionSelection}
-                  className="min-h-0 flex-1 overflow-y-auto"
+                  className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5"
                   highlightClassName="glide-highlight--glass"
                 >
                   {suggestions.map((item, i) => {
@@ -4992,12 +4992,12 @@ export default function CommandBar({
                 setFollowSearchSelection(false)
               }}
             >
-              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1.5">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5">
                 <GlideList
                   selectedIndex={selectedSearch}
                   itemCount={filteredChatHistory.length}
                   followSelected={followSearchSelection}
-                  className="min-h-0 flex-1 overflow-y-auto"
+                  className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5"
                   highlightClassName="glide-highlight--accent"
                 >
                   {filteredChatHistory.map((chat, i) => (
@@ -5041,12 +5041,12 @@ export default function CommandBar({
                 setSelectedSearch(-1)
               }}
             >
-              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1.5">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5">
                 <GlideList
                   selectedIndex={terminalSelectedIndex}
                   itemCount={terminalSessionCount === 0 ? 1 : terminalSessionCount}
                   followSelected={followSearchSelection}
-                  className="min-h-0 flex-1 overflow-y-auto"
+                  className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5"
                   highlightClassName="glide-highlight--accent"
                 >
                   {terminalSessionCount === 0 ? (
@@ -5106,12 +5106,12 @@ export default function CommandBar({
                 setFollowSearchSelection(false)
               }}
             >
-              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1.5">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5">
                 <GlideList
                   selectedIndex={selectedSearch}
                   itemCount={visibleSearchCount}
                   followSelected={followSearchSelection}
-                  className="min-h-0 flex-1 overflow-y-auto"
+                  className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5"
                   highlightClassName="glide-highlight--accent"
                 >
                   {visibleSearchResults.map((item, i) => {
