@@ -23,7 +23,7 @@ export function AgentStageRow({ stage }: { stage: Stage }): JSX.Element {
       </span>
       <span
         className={cx(
-          'shrink-0 font-mono text-[9.5px] uppercase tracking-[0.14em]',
+          'shrink-0 font-mono text-[11px]',
           stage.status === 'running'
             ? 'text-violet-200'
             : stage.status === 'failed'

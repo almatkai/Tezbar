@@ -307,7 +307,7 @@ function ResultFooter({
       {url ? (
         <span className="min-w-0 truncate text-[9.5px] text-ink-4">{url}</span>
       ) : (
-        <span className="text-[9.5px] uppercase tracking-[0.14em] text-ink-4">Result</span>
+        <span className="text-[11px] text-ink-4">Result</span>
       )}
       <button
         type="button"

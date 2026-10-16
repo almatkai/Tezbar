@@ -1110,7 +1110,7 @@ export default function AgentChatView({
     <div
       aria-label="AI Chat"
       tabIndex={-1}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none"
     >
       <div className="agent-chat-shell flex min-h-0 flex-1 flex-col overflow-hidden animate-tezbar-scale-in">
         <div className="relative flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/[0.065] px-4">
@@ -1239,7 +1239,7 @@ export default function AgentChatView({
 
           {historyOpen ? (
             <div className="tezbar-popover absolute right-3 top-11 z-40 w-[320px] overflow-hidden p-1.5">
-              <div className="flex items-center justify-between px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-4">
+              <div className="flex items-center justify-between px-3 pb-1.5 pt-1 text-[11px] font-semibold text-ink-4">
                 <span>Past chats</span>
                 {chatHistory.length > 0 ? (
                   <button
@@ -1459,7 +1459,7 @@ export default function AgentChatView({
               <div className="rounded-tezbar-row border border-amber-400/20 bg-amber-500/5">
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200/90"
+                  className="flex w-full items-center justify-between px-2 py-1.5 text-left text-[11px] font-semibold text-amber-200/90"
                   onClick={() => setLogsOpen((v) => !v)}
                   aria-expanded={logsOpen}
                 >
@@ -1531,7 +1531,7 @@ export default function AgentChatView({
                   </svg>
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[10px] font-medium uppercase tracking-[0.12em] text-amber-100/55">
+                  <span className="block text-[11px] font-medium text-amber-100/55">
                     {pendingApproval.title || 'Run command'}
                   </span>
                   <code className="mt-0.5 block truncate font-mono text-[12px] text-ink-1">

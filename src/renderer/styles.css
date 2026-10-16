@@ -245,6 +245,13 @@
     -webkit-app-region: no-drag;
   }
 
+  /* Search dragging is threshold-based in windowDrag.ts, including over the
+     input. Native app-region dragging would swallow clicks before that handler. */
+  .command-search[data-window-search-drag],
+  .command-search[data-window-search-drag] * {
+    -webkit-app-region: no-drag;
+  }
+
   /* ---- Surfaces ---- */
 
   /* Outermost glass shell — the rounded floating card that wraps the window */
@@ -658,14 +665,8 @@
     color: #5c37a4;
   }
 
-  :root[data-theme='white'] .command-ai-badge {
-    color: #5c37a4;
-    border-color: #c5b6ed;
+  :root[data-theme='white'] .command-ai-icon {
     background: #f0ebfc;
-  }
-
-  :root[data-theme='white'] .command-ai-badge > span {
-    background: #714dbb;
   }
 
   :root[data-theme='white'] .model-picker-active-dot {
@@ -690,11 +691,6 @@
     color: #0b7651;
     border-color: #9edabd;
     background: #e9f8f0;
-  }
-
-  :root[data-theme='white'] .command-terminal-session-dot.command-terminal-running {
-    background: #0b7651;
-    box-shadow: none;
   }
 
   :root[data-theme='white'] .command-result-icon svg {
@@ -1970,4 +1966,605 @@
    indicators and transparent compositing do not run while idle. */
 html.tezbar-window-hidden body {
   display: none;
+}
+/* =========================================================================
+   Design system v2 — flat sheets
+   -------------------------------------------------------------------------
+   Shared by every surface. Flat, frosted sheets with 1px hairlines instead
+   of gradients and glow; solid color squircle icons; a solid accent for the
+   primary selection. Tokens are theme-aware, so each rule below is written
+   once and paired with its light-theme selector only to outrank the older
+   theme rules above. Reusable pieces live in `ui/primitives.tsx`
+   (ListRow, ListRowTag, SectionLabel, Hint) and `launcherIcons.tsx`
+   (Squircle).
+   ========================================================================= */
+:root {
+  --r-panel: 10px;
+  --r-card: 10px;
+  --r-row: 8px;
+  --r-field: 7px;
+  --r-chip: 5px;
+  --r-window: 18px;
+
+  --ln-accent: #4f52d9;
+  --ln-accent-strong: #5b5ef0;
+  --ln-accent-hover: #6a6df4;
+  --ln-sheet: rgba(28, 29, 33, 0.95);
+  --ln-rim: rgba(255, 255, 255, 0.08);
+  --ln-panel: rgba(255, 255, 255, 0.025);
+  --ln-field: rgba(0, 0, 0, 0.22);
+  --ln-popover: rgba(32, 33, 38, 0.98);
+  --ln-popover-solid: rgb(32, 33, 38);
+  --ln-hairline: rgba(255, 255, 255, 0.065);
+  --ln-hover: rgba(255, 255, 255, 0.05);
+  --ln-selected: rgba(255, 255, 255, 0.07);
+  --ln-bar: rgba(0, 0, 0, 0.16);
+  --ln-pill: rgba(255, 255, 255, 0.06);
+  --ln-pill-strong: rgba(255, 255, 255, 0.09);
+  --ln-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --ln-bar-float: rgba(22, 23, 27, 0.78);
+}
+
+:root[data-theme='white'] {
+  --ln-sheet: rgba(250, 250, 251, 0.96);
+  --ln-rim: rgba(15, 23, 42, 0.12);
+  --ln-panel: rgba(255, 255, 255, 0.7);
+  --ln-field: rgba(255, 255, 255, 0.9);
+  --ln-popover: rgba(255, 255, 255, 0.98);
+  --ln-popover-solid: rgb(255, 255, 255);
+  --ln-hairline: rgba(15, 23, 42, 0.08);
+  --ln-hover: rgba(15, 23, 42, 0.045);
+  --ln-selected: rgba(15, 23, 42, 0.06);
+  --ln-bar: rgba(15, 23, 42, 0.025);
+  --ln-pill: rgba(15, 23, 42, 0.05);
+  --ln-pill-strong: rgba(15, 23, 42, 0.07);
+  --ln-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
+  --ln-bar-float: rgba(247, 247, 249, 0.82);
+}
+
+/* ---- Surfaces ---- */
+.glass-shell,
+.glass-shell.glass-shell--terminal,
+:root[data-theme='white'] .glass-shell,
+:root[data-theme='white'] .glass-shell.glass-shell--terminal {
+  border: 0;
+  border-radius: var(--r-window);
+  background: var(--ln-sheet);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: inset 0 0 0 1px var(--ln-rim);
+}
+
+.glass-card,
+.glass-panel,
+:root[data-theme='white'] .glass-card,
+:root[data-theme='white'] .glass-panel {
+  border-radius: var(--r-card);
+  background: var(--ln-panel);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: inset 0 0 0 1px var(--ln-hairline);
+}
+
+.glass-inset,
+:root[data-theme='white'] .glass-inset {
+  background: var(--ln-pill);
+  box-shadow: inset 0 0 0 1px var(--ln-hairline);
+}
+
+.agent-chat-shell,
+:root[data-theme='white'] .agent-chat-shell {
+  border-color: var(--ln-hairline);
+  background: var(--ln-panel);
+  box-shadow: none;
+}
+
+.tezbar-settings-window,
+:root[data-theme='white'] .tezbar-settings-window {
+  border-color: var(--ln-rim);
+  background: var(--ln-sheet);
+  box-shadow: var(--ln-shadow);
+}
+
+.cleanmymac-sidebar {
+  background: var(--ln-bar);
+}
+
+.tezbar-popover,
+:root[data-theme='white'] .tezbar-popover {
+  border-color: var(--ln-rim);
+  background: var(--ln-popover);
+  box-shadow: var(--ln-shadow);
+}
+
+/* Terminal glyphs must not bleed through the session picker. Keep it out of
+   the translucent glass-card surface rules and opaque in both themes. */
+.tezbar-popover.terminal-sessions-menu,
+:root[data-theme='white'] .tezbar-popover.terminal-sessions-menu {
+  background: var(--ln-popover-solid);
+}
+
+.hairline,
+:root[data-theme='white'] .hairline {
+  background: var(--ln-hairline);
+}
+
+/* ---- Fields and buttons ---- */
+.glass-field,
+:root[data-theme='white'] .glass-field {
+  background: var(--ln-field);
+  color: rgb(var(--c-text-1));
+  box-shadow: inset 0 0 0 1px var(--ln-hairline);
+}
+
+.glass-field:hover,
+:root[data-theme='white'] .glass-field:hover {
+  background: var(--ln-field);
+  box-shadow: inset 0 0 0 1px var(--ln-rim);
+}
+
+.glass-field:focus,
+.glass-field:focus-visible,
+:root[data-theme='white'] .glass-field:focus,
+:root[data-theme='white'] .glass-field:focus-visible {
+  background: var(--ln-field);
+  box-shadow: inset 0 0 0 1px var(--ln-accent-strong);
+}
+
+.btn-primary,
+:root[data-theme='white'] .btn-primary {
+  color: #fff;
+  background: var(--ln-accent-strong);
+  box-shadow: none;
+}
+
+.btn-primary:hover:not(:disabled),
+:root[data-theme='white'] .btn-primary:hover:not(:disabled) {
+  background: var(--ln-accent-hover);
+  box-shadow: none;
+}
+
+.btn-ghost,
+:root[data-theme='white'] .btn-ghost {
+  background: var(--ln-pill);
+  box-shadow: inset 0 0 0 1px var(--ln-hairline);
+}
+
+.btn-ghost:hover:not(:disabled),
+.btn-quiet:hover:not(:disabled),
+:root[data-theme='white'] .btn-ghost:hover:not(:disabled),
+:root[data-theme='white'] .btn-quiet:hover:not(:disabled) {
+  background: var(--ln-pill-strong);
+}
+
+/* ---- Keys ---- */
+.kbd,
+:root[data-theme='white'] .kbd {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 0.25rem;
+  border-radius: 4px;
+  font-size: 9.5px;
+  color: rgb(var(--c-text-3));
+  background: var(--ln-pill-strong);
+  box-shadow: none;
+}
+
+/* A key combination reads as one pill: "⌘K". */
+.kbd-group {
+  display: inline-flex;
+  height: 16px;
+  align-items: center;
+  gap: 1px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--ln-pill-strong);
+}
+
+.kbd-group .kbd,
+:root[data-theme='white'] .kbd-group .kbd {
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  font-family: inherit;
+  font-size: 10px;
+  color: rgb(var(--c-text-2));
+  background: none;
+}
+
+/* ---- Selection ---- */
+.row-interactive:hover,
+:root[data-theme='white'] .row-interactive:hover {
+  background: var(--ln-hover);
+}
+
+.row-interactive[data-selected='true'],
+.glide-highlight,
+:root[data-theme='white'] .row-interactive[data-selected='true'],
+:root[data-theme='white'] .glide-highlight {
+  background: var(--ln-selected);
+  box-shadow: none;
+}
+
+.glide-highlight.glide-highlight--accent,
+:root[data-theme='white'] .glide-highlight.glide-highlight--accent {
+  background: var(--ln-accent);
+}
+
+/* ---- Section label ---- */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgb(var(--c-text-3));
+}
+
+.section-label__count {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--c-text-4));
+}
+
+/* ---- List row ---- */
+.list-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: var(--r-row);
+  text-align: left;
+}
+
+.list-row__text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.list-row__title {
+  min-width: 0;
+  max-width: 70%;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgb(var(--c-text-1));
+}
+
+.list-row__subtitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: rgb(var(--c-text-4));
+}
+
+.list-row__accessory {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: rgb(var(--c-text-4));
+}
+
+.list-row__tag {
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: rgb(var(--c-text-3));
+  background: var(--ln-pill);
+}
+
+.list-row__tag[data-tone='success'] {
+  color: rgb(52, 211, 153);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.list-row :is(.list-row__title, .list-row__subtitle, .list-row__tag) {
+  transition:
+    color 90ms ease,
+    background 90ms ease;
+}
+
+.list-row[data-tone='accent'][data-selected='true'] :is(.text-ink-1, .text-ink-2, .list-row__title) {
+  color: #fff;
+}
+
+.list-row[data-tone='accent'][data-selected='true']
+  :is(.text-ink-3, .text-ink-4, .list-row__subtitle, .list-row__accessory) {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.list-row[data-tone='accent'][data-selected='true'] :is(.list-row__tag, .kbd) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ---- Icons ---- */
+.squircle {
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
+}
+
+/* ---- View sheet ----
+   Every full-window view stacks its cards (header, body, status bar) in a
+   `.view-sheet` root. Inside it the cards become flat sections of one sheet
+   divided by hairlines, matching the launcher. */
+.view-sheet {
+  gap: 0;
+}
+
+.view-sheet > .glass-card,
+.view-sheet > .agent-chat-shell,
+:root[data-theme='white'] .view-sheet > .glass-card,
+:root[data-theme='white'] .view-sheet > .agent-chat-shell {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+
+.view-sheet > * + * {
+  border-top: 1px solid var(--ln-hairline);
+}
+
+/* Shared compact header rhythm. Avoid stacking header padding, control
+   margins and the next section's padding into large empty bands. Scoped to
+   sheets so settings dialogs and other card layouts keep their own spacing. */
+/* Header inset matches the launcher: the same 14px from the top as from
+   the left edge, tighter below so the controls sit close to the list. */
+.view-sheet > .glass-card:has(> .view-header) {
+  padding: 14px 14px 8px;
+}
+
+.view-sheet > .glass-card > .view-header {
+  padding-bottom: 0;
+}
+
+.view-sheet > .glass-card:has(> .view-header) > * + * {
+  margin-top: 4px;
+}
+
+.view-sheet > .glass-card:has(> .view-header) + .glass-card {
+  padding-top: 6px;
+}
+
+/* ---- Floating status bar ----
+   The bottom bar with shortcut hints floats over the content as frosted
+   glass. Lists run to the window's bottom edge and scroll underneath it;
+   their scroll padding keeps the last row reachable above the bar. */
+.view-sheet,
+.tezbar-launcher {
+  position: relative;
+  --sheet-bar-h: 36px;
+}
+
+.tezbar-launcher {
+  --sheet-bar-h: 32px;
+}
+
+.view-sheet > .glass-card:last-child:not(:first-child):has(.kbd-group),
+:root[data-theme='white'] .view-sheet > .glass-card:last-child:not(:first-child):has(.kbd-group),
+.tezbar-launcher > .launcher-footer,
+:root[data-theme='white'] .tezbar-launcher > .launcher-footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  background: var(--ln-bar-float);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+}
+
+/* The body above a floating bar loses its bottom inset … */
+.view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
+  > .glass-card:nth-last-child(2):not(.sheet-above-bar) {
+  padding-bottom: 0;
+}
+
+/* … and its scroll areas pad their end so the last row clears the bar. */
+.view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
+  > .glass-card:nth-last-child(2)
+  :is([class~='overflow-y-auto'], [class~='overflow-auto']),
+.view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
+  > .glass-card:nth-last-child(2):is([class~='overflow-y-auto'], [class~='overflow-auto']):not(.sheet-above-bar),
+.tezbar-launcher .launcher-body :is([class~='overflow-y-auto'], [class~='overflow-auto']) {
+  padding-bottom: calc(var(--sheet-bar-h) + 6px);
+  scroll-padding-bottom: calc(var(--sheet-bar-h) + 6px);
+}
+
+/* Fixed (non-scrolling) panels in the body stop above the bar. */
+.view-sheet .sheet-above-bar {
+  margin-bottom: calc(var(--sheet-bar-h) + 8px);
+}
+
+/* ---- Onboarding keycaps lose their gradient too ---- */
+.onboarding-keycap,
+:root[data-theme='white'] .onboarding-keycap {
+  background: var(--ln-pill-strong);
+  box-shadow:
+    inset 0 0 0 1px var(--ln-hairline),
+    0 2px 0 var(--ln-hairline);
+}
+
+/* =========================================================================
+   Launcher — single sheet
+   -------------------------------------------------------------------------
+   The main command surface: one sheet with no inner cards. A compact search
+   row, a dense list and a status bar, separated by hairlines.
+   ========================================================================= */
+.tezbar-launcher .glass-card,
+:root[data-theme='white'] .tezbar-launcher .glass-card {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tezbar-launcher .command-search,
+:root[data-theme='white'] .tezbar-launcher .command-search {
+  border-bottom: 1px solid var(--ln-hairline);
+}
+
+.tezbar-launcher .command-search:focus-within,
+:root[data-theme='white'] .tezbar-launcher .command-search:focus-within {
+  box-shadow: none;
+}
+
+.tezbar-launcher .launcher-body > * + * {
+  border-top: 1px solid var(--ln-hairline);
+}
+
+.tezbar-launcher .tezbar-pin-rail {
+  border-right: 1px solid var(--ln-hairline);
+}
+
+.tezbar-launcher .launcher-footer {
+  border-top: 1px solid var(--ln-hairline);
+  background: var(--ln-bar);
+}
+
+/* Search row: mode badge on the left, mode shortcuts on the right. */
+.tezbar-launcher .launcher-search-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tezbar-launcher .launcher-search-badge.bg-transparent svg {
+  width: 22px;
+  height: 22px;
+}
+
+:root[data-theme='white'] .tezbar-launcher .launcher-search-badge {
+  color: #fff;
+}
+
+/* Reversed wrapping row: the chip nearest the query wraps onto the hidden
+   second line first, so chips disappear one by one as the text grows. */
+.tezbar-launcher .launcher-mode-chips {
+  display: flex;
+  min-width: 0;
+  height: 20px;
+  flex: 0 1 auto;
+  flex-direction: row-reverse;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.tezbar-launcher .launcher-mode-chip {
+  display: inline-flex;
+  height: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: rgb(var(--c-text-3));
+  background: var(--ln-pill);
+}
+
+.tezbar-launcher .rolling-command-hint__shortcut,
+:root[data-theme='white'] .tezbar-launcher .rolling-command-hint__shortcut {
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 6px;
+  font-weight: 500;
+  color: rgb(var(--c-text-2));
+  background: var(--ln-pill-strong);
+}
+
+.tezbar-launcher .launcher-arg-chip {
+  background: var(--ln-pill-strong);
+}
+
+/* Status bar actions (Deep Search, background tasks). */
+.tezbar-launcher .launcher-action {
+  border-radius: 6px;
+  font-size: 11px;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.tezbar-launcher .launcher-action:hover,
+.tezbar-launcher .launcher-action[aria-expanded='true'] {
+  background: var(--ln-hover);
+}
+
+:root[data-theme='white'] .tezbar-launcher .launcher-action {
+  color: rgb(var(--c-text-2));
+}
+
+.tezbar-launcher .launcher-pin-slot {
+  color: rgb(var(--c-text-3));
+  background: var(--ln-popover);
+  box-shadow: inset 0 0 0 1px var(--ln-rim);
+}
+
+.tezbar-launcher .launcher-popover {
+  border-radius: 12px;
+  border-color: var(--ln-rim);
+  background: var(--ln-popover);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: var(--ln-shadow);
+}
+
+/* Store follows the clipboard's flat split-pane layout, not nested cards. */
+.extensions-store-body {
+  grid-template-columns: minmax(160px, 34%) minmax(0, 1fr);
+}
+
+.extensions-store-detail {
+  container-type: inline-size;
+  border-color: var(--ln-hairline);
+  background: var(--ln-panel);
+}
+
+.extensions-store .extension-detail-footer {
+  border-color: var(--ln-hairline);
+  background: var(--ln-bar);
+}
+
+.extensions-store-body > aside [class~='overflow-y-auto'] {
+  padding-bottom: calc(var(--sheet-bar-h, 0px) + 6px);
+  scroll-padding-bottom: calc(var(--sheet-bar-h, 0px) + 6px);
+}
+
+.extensions-store-message {
+  border-color: var(--ln-hairline);
+  background: var(--ln-bar);
+}
+
+:root[data-theme='white'] .extensions-store-search {
+  border-color: var(--ln-hairline);
+  background: var(--ln-field);
+}
+
+:root[data-theme='white'] .extensions-store .extension-detail-footer {
+  border-color: var(--ln-hairline);
+  background: var(--ln-bar);
+}
+
+@container (max-width: 340px) {
+  .extension-screenshots {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

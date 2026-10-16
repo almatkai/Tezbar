@@ -324,7 +324,7 @@ export default function Sidebar({ activeSurface, onSelectSurface }: SidebarProps
       <div className="flex-1 space-y-5 overflow-y-auto pr-1 select-none">
         {categories.map((category) => (
           <div key={category.title} className="space-y-1">
-            <h3 className="px-2 text-[9.5px] font-bold uppercase tracking-[0.14em] text-ink-4">
+            <h3 className="px-2 text-[11px] font-semibold text-ink-4">
               {category.title}
             </h3>
             <ul className="space-y-0.5">

@@ -130,7 +130,7 @@ export default function PermissionsView({
                         </span>
                         <span
                           className={cx(
-                            'rounded-tezbar-chip px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em] ring-1 ring-inset',
+                            'rounded-tezbar-chip px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset',
                             stateTone(status.state)
                           )}
                         >
@@ -232,7 +232,7 @@ export default function PermissionsView({
       tabIndex={-1}
       role="application"
       aria-label="Permissions"
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader

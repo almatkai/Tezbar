@@ -212,7 +212,7 @@ export function AppUpdateSettings(): JSX.Element {
             <span className="text-[12px] font-semibold text-ink-1">
               v{status.version} available
             </span>
-            <span className="text-[10px] uppercase tracking-[0.08em] text-emerald-300">
+            <span className="text-[11px] text-emerald-300">
               Update Available
             </span>
           </div>

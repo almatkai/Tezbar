@@ -800,7 +800,7 @@ export function ListRuntime({
               {groupedSections.map((group, groupIdx) => (
                 <div key={groupIdx} className="mb-1">
                   {group.section ? (
-                    <div className="px-3 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-4 select-none">
+                    <div className="px-3 pb-1.5 pt-1 text-[11px] font-semibold text-ink-4 select-none">
                       {group.section}
                     </div>
                   ) : null}
@@ -859,7 +859,7 @@ export function ListRuntime({
       </div>
 
       <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
-        <span className="flex items-center gap-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-ink-4">
+        <span className="flex items-center gap-2 text-[11px] font-medium text-ink-4">
           {filteredRows.length} item{filteredRows.length === 1 ? '' : 's'}
           {hasMore ? (
             <button
