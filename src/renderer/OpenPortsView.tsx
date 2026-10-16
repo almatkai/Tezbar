@@ -382,7 +382,7 @@ export default function OpenPortsView({
       )}
 
       {msg ? (
-        <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
+        <div className="sheet-above-bar glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
           <Message tone={msg.tone}>{msg.text}</Message>
         </div>
       ) : null}

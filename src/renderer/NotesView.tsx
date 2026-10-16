@@ -593,7 +593,7 @@ export default function NotesView({
         </section>
 
         {msg ? (
-          <div className="mt-2 shrink-0">
+          <div className="sheet-above-bar mt-2 shrink-0">
             <Message tone={msg.tone}>{msg.text}</Message>
           </div>
         ) : null}

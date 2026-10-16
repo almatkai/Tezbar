@@ -336,7 +336,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
               )}
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
+            <div className="sheet-above-bar flex min-h-0 flex-1 flex-col overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
               {current ? (
                 <div className="flex h-full min-h-0 flex-col p-3">
                   <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
@@ -371,7 +371,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
         )}
 
         {msg ? (
-          <div className="mt-2 shrink-0 px-1">
+          <div className="sheet-above-bar mt-2 shrink-0 px-1">
             <Message tone={msg.tone}>{msg.text}</Message>
           </div>
         ) : null}

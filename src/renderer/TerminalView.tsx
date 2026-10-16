@@ -798,7 +798,7 @@ export default function TerminalView({
         </div>
       </header>
 
-      <div className="glass-card no-drag relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#10131d]/92 shadow-[0_24px_60px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.035)] p-3">
+      <div className="sheet-above-bar glass-card no-drag relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#10131d]/92 shadow-[0_24px_60px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.035)] p-3">
         <div ref={hostRef} className="terminal-host h-full w-full overflow-hidden" />
       </div>
 

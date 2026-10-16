@@ -489,7 +489,7 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
           </div>
 
           {/* Right: preview */}
-          <div className="min-h-0 flex-1 overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
+          <div className="sheet-above-bar min-h-0 flex-1 overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
             {currentEntry ? (
               <PreviewPane
                 key={currentEntry.id}
@@ -509,7 +509,7 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
         </section>
 
         {msg ? (
-          <div className="mt-2 shrink-0">
+          <div className="sheet-above-bar mt-2 shrink-0">
             <Message tone={msg.tone}>{msg.text}</Message>
           </div>
         ) : null}

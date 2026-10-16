@@ -1835,6 +1835,7 @@ html.tezbar-window-hidden body {
   --ln-pill: rgba(255, 255, 255, 0.06);
   --ln-pill-strong: rgba(255, 255, 255, 0.09);
   --ln-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --ln-bar-float: rgba(22, 23, 27, 0.78);
 }
 
 :root[data-theme='white'] {
@@ -1850,6 +1851,7 @@ html.tezbar-window-hidden body {
   --ln-pill: rgba(15, 23, 42, 0.05);
   --ln-pill-strong: rgba(15, 23, 42, 0.07);
   --ln-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
+  --ln-bar-float: rgba(247, 247, 249, 0.82);
 }
 
 /* ---- Surfaces ---- */
@@ -2144,10 +2146,75 @@ html.tezbar-window-hidden body {
   border-top: 1px solid var(--ln-hairline);
 }
 
-/* The bottom card that hosts shortcut hints reads as a status bar. */
+/* Shared compact header rhythm. Avoid stacking header padding, control
+   margins and the next section's padding into large empty bands. Scoped to
+   sheets so settings dialogs and other card layouts keep their own spacing. */
+/* Header inset matches the launcher: the same 14px from the top as from
+   the left edge, tighter below so the controls sit close to the list. */
+.view-sheet > .glass-card:has(> .view-header) {
+  padding: 14px 14px 8px;
+}
+
+.view-sheet > .glass-card > .view-header {
+  padding-bottom: 0;
+}
+
+.view-sheet > .glass-card:has(> .view-header) > * + * {
+  margin-top: 4px;
+}
+
+.view-sheet > .glass-card:has(> .view-header) + .glass-card {
+  padding-top: 6px;
+}
+
+/* ---- Floating status bar ----
+   The bottom bar with shortcut hints floats over the content as frosted
+   glass. Lists run to the window's bottom edge and scroll underneath it;
+   their scroll padding keeps the last row reachable above the bar. */
+.view-sheet,
+.tezbar-launcher {
+  position: relative;
+  --sheet-bar-h: 36px;
+}
+
+.tezbar-launcher {
+  --sheet-bar-h: 32px;
+}
+
 .view-sheet > .glass-card:last-child:not(:first-child):has(.kbd-group),
-:root[data-theme='white'] .view-sheet > .glass-card:last-child:not(:first-child):has(.kbd-group) {
-  background: var(--ln-bar);
+:root[data-theme='white'] .view-sheet > .glass-card:last-child:not(:first-child):has(.kbd-group),
+.tezbar-launcher > .launcher-footer,
+:root[data-theme='white'] .tezbar-launcher > .launcher-footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  background: var(--ln-bar-float);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+}
+
+/* The body above a floating bar loses its bottom inset … */
+.view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
+  > .glass-card:nth-last-child(2):not(.sheet-above-bar) {
+  padding-bottom: 0;
+}
+
+/* … and its scroll areas pad their end so the last row clears the bar. */
+.view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
+  > .glass-card:nth-last-child(2)
+  :is([class~='overflow-y-auto'], [class~='overflow-auto']),
+.view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
+  > .glass-card:nth-last-child(2):is([class~='overflow-y-auto'], [class~='overflow-auto']):not(.sheet-above-bar),
+.tezbar-launcher .launcher-body :is([class~='overflow-y-auto'], [class~='overflow-auto']) {
+  padding-bottom: calc(var(--sheet-bar-h) + 6px);
+  scroll-padding-bottom: calc(var(--sheet-bar-h) + 6px);
+}
+
+/* Fixed (non-scrolling) panels in the body stop above the bar. */
+.view-sheet .sheet-above-bar {
+  margin-bottom: calc(var(--sheet-bar-h) + 8px);
 }
 
 /* ---- Onboarding keycaps lose their gradient too ---- */

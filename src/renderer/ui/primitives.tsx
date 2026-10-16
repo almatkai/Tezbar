@@ -134,7 +134,7 @@ export function ViewHeader({
   backLabel?: string
 }): JSX.Element {
   return (
-    <header className="flex items-center justify-between gap-3 pb-1.5">
+    <header className="view-header flex items-center justify-between gap-3 pb-1.5">
       <div className="flex min-w-0 items-center gap-2.5">
         {onBack ? (
           <button
