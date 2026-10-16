@@ -1,6 +1,7 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { tryConsumeCommandSurfaceEscape } from './escapeGate'
 import CommandBar from './CommandBar'
+import { installWindowDrag } from './windowDrag'
 import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_AI_NEW_CHAT_EVENT, RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
@@ -551,54 +552,11 @@ function LauncherApp(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    const isWindows = navigator.platform.includes('Win')
-    let dragActive = false
-
-    const isNoDragTarget = (target: HTMLElement): boolean => {
-      return Boolean(
-        target.closest(
-          '.no-drag, input, textarea, select, button, a[href], [role="button"], [role="menuitem"], [role="option"], [contenteditable="true"], .glass-card > *, .glass-panel > *, .tezbar-popover, .agent-chat-shell > *, .tezbar-settings-window > *, .cleanmymac-sidebar'
-        )
-      )
-    }
-
-    const onMouseDown = (event: MouseEvent): void => {
-      if (event.button !== 0) return
-      const target = event.target
-      if (!(target instanceof HTMLElement)) return
-      if (!target.closest('.drag-region')) return
-      if (isNoDragTarget(target)) return
-      if (!isWindows) dragActive = true
-      void window.tezbar.startWindowSnapDrag()
-    }
-
-    const endDrag = (): void => {
-      if (!dragActive) return
-      dragActive = false
-      void window.tezbar.endWindowSnapDrag()
-    }
-
-    const onVisibilityChange = (): void => {
-      if (document.visibilityState !== 'visible') endDrag()
-    }
-
-    window.addEventListener('mousedown', onMouseDown, true)
-    // Showing the click-through guide WebView can make WebView2 synthesize
-    // blur/mouseup/visibility events. On Windows the host tracks the physical
-    // button and ends the drag itself, so renderer end signals are unnecessary.
-    if (!isWindows) {
-      window.addEventListener('mouseup', endDrag, true)
-      window.addEventListener('blur', endDrag)
-      document.addEventListener('visibilitychange', onVisibilityChange)
-    }
-    return () => {
-      window.removeEventListener('mousedown', onMouseDown, true)
-      if (!isWindows) {
-        window.removeEventListener('mouseup', endDrag, true)
-        window.removeEventListener('blur', endDrag)
-        document.removeEventListener('visibilitychange', onVisibilityChange)
-      }
-    }
+    return installWindowDrag({
+      isWindows: navigator.platform.includes('Win'),
+      start: () => window.tezbar.startWindowSnapDrag(),
+      end: () => window.tezbar.endWindowSnapDrag(),
+    })
   }, [])
 
   // Local ⌘N / Ctrl+N — route by surface when the app is focused

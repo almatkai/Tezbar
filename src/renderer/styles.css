@@ -205,6 +205,13 @@
     -webkit-app-region: no-drag;
   }
 
+  /* Search dragging is threshold-based in windowDrag.ts, including over the
+     input. Native app-region dragging would swallow clicks before that handler. */
+  .command-search[data-window-search-drag],
+  .command-search[data-window-search-drag] * {
+    -webkit-app-region: no-drag;
+  }
+
   /* ---- Surfaces ---- */
 
   /* Outermost glass shell — the rounded floating card that wraps the window */

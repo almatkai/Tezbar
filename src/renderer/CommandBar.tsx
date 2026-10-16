@@ -4256,7 +4256,10 @@ export default function CommandBar({
   return (
     <div className="tezbar-launcher flex h-full min-h-0 w-full flex-col">
       {/* Search row: icon + input, separated from the list by a hairline */}
-      <div className="command-search glass-card relative z-30 shrink-0 px-3.5">
+      <div
+        data-window-search-drag
+        className="command-search glass-card relative z-30 shrink-0 px-3.5"
+      >
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
           <div className="flex h-[52px] items-center gap-2.5">
             <span
