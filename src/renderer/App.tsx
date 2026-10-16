@@ -438,6 +438,7 @@ function LauncherApp(): JSX.Element {
   useEffect(() => {
     const off = window.tezbar.onWindowShown(({ resetUi }) => {
       if (resetUi) {
+        setCommandInitialValue('')
         setSurface('command')
         setExtensionRuntimeInitial(null)
       }
@@ -637,6 +638,13 @@ function LauncherApp(): JSX.Element {
   // from any sub-surface we pop back to `command`, and only from the
   // command surface does Escape actually hide the launcher. That
   // guarantee is the "back not close" contract users rely on.
+  /** Back to a plain launcher, dropping any AI (' ') / terminal ('>') sentinel
+   *  left over from an earlier visit to those surfaces. */
+  const returnToLauncher = (): void => {
+    setCommandInitialValue('')
+    setSurface('command')
+  }
+
   // The global shortcut Cmd+Escape also hides the window from anywhere.
   //
   // On the command surface, `CommandBar` may still need Escape first
@@ -662,6 +670,9 @@ function LauncherApp(): JSX.Element {
           return
         }
         if (surface !== 'command') {
+          // Clear any sentinel left by an earlier AI chat (' ') or terminal
+          // ('>') exit so the launcher reopens in plain search mode.
+          setCommandInitialValue('')
           setSurface('command')
           return
         }
@@ -700,41 +711,39 @@ function LauncherApp(): JSX.Element {
           {!bootReady ? (
             <SurfaceFallback />
           ) : surface === 'onboarding' ? (
-            <OnboardingView onDone={() => setSurface('command')} />
+            <OnboardingView onDone={returnToLauncher} />
           ) : surface === 'release-notes' ? (
             <ReleaseNotesView
-              onBack={() => setSurface('command')}
+              onBack={returnToLauncher}
               onRead={markReleaseNotesRead}
             />
           ) : surface === 'settings' ? (
             <SettingsView
               initialTab={settingsInitialTab}
-              onBack={() => setSurface('command')}
+              onBack={returnToLauncher}
               onOpenPermissions={() => setSurface('permissions')}
               onBrowseStore={() => setSurface('extensions')}
             />
           ) : surface === 'extensions' ? (
-            <ExtensionsView key={extensionsKey} onBack={() => setSurface('command')} />
+            <ExtensionsView key={extensionsKey} onBack={returnToLauncher} />
           ) : surface === 'extension-runtime' && extensionRuntimeInitial ? (
             <ExtensionRuntimeView
               initial={extensionRuntimeInitial}
-              onBack={() => {
-                setSurface('command')
-              }}
+              onBack={returnToLauncher}
             />
           ) : surface === 'open-ports' ? (
             <OpenPortsView
               initialTab={openPortsInitialTab}
               onBack={() => {
                 setOpenPortsInitialTab('listen')
-                setSurface('command')
+                returnToLauncher()
               }}
             />
           ) : surface === 'system-monitor' ? (
-            <SystemMonitorView onBack={() => setSurface('command')} />
+            <SystemMonitorView onBack={returnToLauncher} />
           ) : surface === 'indexing' ? (
             <IndexingView
-              onBack={() => setSurface('command')}
+              onBack={returnToLauncher}
               onOpenSettings={() => {
                 void openNativeSettings('knowledge')
               }}
@@ -742,16 +751,16 @@ function LauncherApp(): JSX.Element {
           ) : surface === 'permissions' ? (
             <PermissionsView onBack={() => setSurface('settings')} />
           ) : surface === 'clipboard' ? (
-            <ClipboardView onBack={() => setSurface('command')} />
+            <ClipboardView onBack={returnToLauncher} />
           ) : surface === 'snippets' ? (
-            <SnippetsView onBack={() => setSurface('command')} />
+            <SnippetsView onBack={returnToLauncher} />
           ) : surface === 'notes' ? (
             <NotesView
-              onBack={() => setSurface('command')}
+              onBack={returnToLauncher}
               initialSelectedNoteId={notesInitialSelectedId}
             />
           ) : surface === 'emoji-picker' ? (
-            <EmojiPickerView onBack={() => setSurface('command')} />
+            <EmojiPickerView onBack={returnToLauncher} />
           ) : surface === 'ai-chat' ? (
             <AgentChatView
               key={aiChatKey}
