@@ -275,9 +275,9 @@ export default function BackgroundTaskStatus({
         <div
           role="dialog"
           aria-label="Background tasks"
-          className="launcher-popover absolute bottom-[calc(100%+12px)] right-0 z-50 w-[320px] overflow-hidden border border-white/[0.09] animate-tezbar-scale-in"
+          className="launcher-popover absolute bottom-[calc(100%+8px)] right-0 z-50 w-[300px] overflow-hidden border border-white/[0.09] animate-tezbar-scale-in"
         >
-          <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
+          <div className="flex items-center justify-between border-b border-white/[0.07] px-3 py-2.5">
             <div>
               <p className="font-display text-[11.5px] font-semibold text-ink-1">
                 Background tasks
@@ -288,7 +288,7 @@ export default function BackgroundTaskStatus({
             </div>
             <span
               aria-hidden
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] text-ink-2"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] border border-white/[0.08] bg-white/[0.04] text-ink-3"
             >
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path
@@ -304,7 +304,7 @@ export default function BackgroundTaskStatus({
             </span>
           </div>
 
-          <div className="p-1.5">
+          <div className="p-1">
             {allTasks.map((task) => {
               const progress = Math.round((task.progress ?? 0) * 100)
               return (
@@ -312,11 +312,11 @@ export default function BackgroundTaskStatus({
                   key={task.id}
                   type="button"
                   onClick={() => void openTask(task)}
-                  className="group flex w-full items-center gap-3 rounded-[16px] px-2.5 py-2.5 text-left transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50"
+                  className="group flex w-full items-center gap-2.5 rounded-[8px] px-2 py-2 text-left transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50"
                 >
                   <span
                     className={cx(
-                      'command-result-icon grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border',
+                      'command-result-icon grid h-7 w-7 shrink-0 place-items-center rounded-[6px] border',
                       task.kind === 'update'
                         ? 'border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200'
                         : task.kind === 'indexing'
@@ -339,13 +339,13 @@ export default function BackgroundTaskStatus({
                       {task.detail}
                     </span>
                     {task.kind === 'indexing' || task.kind === 'update' ? (
-                      <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                      <span className="launcher-progress mt-1.5 block h-[3px] overflow-hidden rounded-full bg-white/[0.07]">
                         <span
                           className={cx(
                             'block h-full rounded-full transition-[width] duration-300',
                             task.kind === 'update'
-                              ? 'bg-[linear-gradient(90deg,#34d399,#10b981)]'
-                              : 'bg-[linear-gradient(90deg,#5ea7ff,#6de1c2)]'
+                              ? 'bg-emerald-400'
+                              : 'bg-cyan-400'
                           )}
                           style={{ width: `${progress}%` }}
                         />
@@ -381,24 +381,24 @@ export default function BackgroundTaskStatus({
         aria-label={`${primaryTask.title} ${taskValue(primaryTask)}. Show all background tasks`}
         onClick={() => setOpen((current) => !current)}
         className={cx(
-          'launcher-chip group inline-flex h-7 items-center gap-1.5 pl-2.5 pr-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
+          'launcher-action group inline-flex h-6 items-center gap-1.5 px-1.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
           primaryTask.kind === 'update'
-            ? 'text-emerald-100'
+            ? 'text-emerald-200'
             : primaryTask.kind === 'indexing'
-              ? 'text-cyan-100'
-              : 'text-amber-100'
+              ? 'text-cyan-200'
+              : 'text-amber-200'
         )}
       >
         <TaskIcon kind={primaryTask.kind} compact />
         <span className="max-w-[120px] truncate font-medium">{primaryTask.title}</span>
         <span className="ml-0.5 font-mono tabular-nums opacity-80">{taskValue(primaryTask)}</span>
         <svg
-          width="13"
-          height="13"
+          width="12"
+          height="12"
           viewBox="0 0 16 16"
           fill="none"
           aria-hidden
-          className="ml-1 opacity-[0.65]"
+          className="ml-0.5 opacity-60"
         >
           <path
             d="M3 4.5h10M3 8h10M3 11.5h10"

@@ -1416,20 +1416,20 @@ function ListItemIcon({
       ref={iconContainerRef}
       aria-hidden
       className={cx(
-        'command-result-icon relative grid h-8 w-8 shrink-0 place-items-center',
+        'command-result-icon relative grid h-6 w-6 shrink-0 place-items-center',
         resolvedIconDataUrl
           ? 'overflow-visible border border-transparent bg-transparent'
-          : cx('overflow-hidden rounded-[7px] border', tone)
+          : cx('overflow-hidden rounded-[6px] border', tone)
       )}
     >
       {!resolvedIconDataUrl ? (
         <svg
-          width="16"
-          height="16"
+          width="14"
+          height="14"
           viewBox="0 0 14 14"
           fill="none"
           stroke="currentColor"
-          strokeWidth="1.15"
+          strokeWidth="1.2"
           strokeLinecap="round"
           strokeLinejoin="round"
         >
@@ -4381,11 +4381,11 @@ export default function CommandBar({
   }
 
   return (
-    <div className="tezbar-launcher flex h-full min-h-0 w-full flex-col gap-2">
-      {/* Primary glass pill: icon + input */}
-      <div className="command-search glass-card relative z-30 shrink-0 py-3 pl-5 pr-3 animate-tezbar-scale-in">
+    <div className="tezbar-launcher flex h-full min-h-0 w-full flex-col">
+      {/* Search row: icon + input, separated from the list by a hairline */}
+      <div className="command-search glass-card relative z-30 shrink-0 px-4">
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
-          <div className="flex h-8 items-center gap-3">
+          <div className="flex h-12 items-center gap-2.5">
             <span
               className={cx(
                 isAiMode ? 'command-ai-icon' : terminalMode ? 'command-terminal-icon' : '',
@@ -4411,17 +4411,17 @@ export default function CommandBar({
             {isAiMode ? (
               <span
                 aria-label="AI mode"
-                className="command-ai-badge inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-violet-400/35 bg-violet-500/15 px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200"
+                className="command-ai-badge inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] border border-violet-400/30 bg-violet-500/10 px-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-violet-200"
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
+                <span className="h-1 w-1 rounded-full bg-violet-300" />
                 AI
               </span>
             ) : isDeepSearchMode ? (
               <span
                 aria-label="Deep Search mode"
-                className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200"
+                className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] border border-cyan-300/30 bg-cyan-300/10 px-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-200"
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_rgba(103,232,249,0.7)]" />
+                <span className="h-1 w-1 rounded-full bg-cyan-300" />
                 Deep
               </span>
             ) : null}
@@ -4652,7 +4652,7 @@ export default function CommandBar({
 
       {/* Middle column: the pin rail sits on the left; inner panels scroll
           (GlideList, answer, …) instead of this outer region. */}
-      <div className="flex min-h-0 flex-1 gap-[var(--s-2)] overflow-hidden pr-0.5">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {(pinnedCommands.length > 0 || draggingSearchResultId) &&
         !isCompletionInput &&
         !isAiMode &&
@@ -4661,7 +4661,7 @@ export default function CommandBar({
             ref={pinRailRef}
             className={cx(
               'tezbar-pin-rail glass-card flex shrink-0 flex-col items-center overflow-hidden',
-              densePinRail ? 'w-[50px] p-1.5' : 'w-[50px] px-1.5 py-2',
+              densePinRail ? 'w-11 px-1 py-1' : 'w-11 px-1 py-1.5',
               draggingPinId ? 'pb-1' : '',
               pinUnpinDropActive ? 'border-rose-300/35 bg-rose-400/[0.04]' : '',
               draggingSearchResultId ? 'border-accent/40 bg-accent/[0.035]' : ''
@@ -4670,13 +4670,13 @@ export default function CommandBar({
             <div
               className={cx(
                 'flex min-h-0 flex-col items-center',
-                densePinRail ? 'gap-[5px]' : 'gap-2'
+                densePinRail ? 'gap-[3px]' : 'gap-1'
               )}
             >
               {pinnedCommands.length === 0 && draggingSearchResultId ? (
                 <div
                   aria-hidden
-                  className="grid h-9 w-9 place-items-center rounded-tezbar-row border border-dashed border-accent/60 bg-accent/[0.08] font-mono text-[15px] text-accent"
+                  className="grid h-8 w-8 place-items-center rounded-tezbar-row border border-dashed border-accent/60 bg-accent/[0.08] font-mono text-[15px] text-accent"
                 >
                   +
                 </div>
@@ -4722,14 +4722,14 @@ export default function CommandBar({
                     {pinDropIndex === index ? (
                       <span
                         aria-hidden
-                        className="pointer-events-none absolute -top-[5px] left-1 right-1 h-0.5 rounded-full bg-accent shadow-[0_0_10px_rgba(139,141,247,0.65)]"
+                        className="pointer-events-none absolute -top-[3px] left-1 right-1 h-0.5 rounded-full bg-accent"
                       />
                     ) : null}
                     {index === pinnedCommands.length - 1 &&
                     pinDropIndex === pinnedCommands.length ? (
                       <span
                         aria-hidden
-                        className="pointer-events-none absolute -bottom-[5px] left-1 right-1 h-0.5 rounded-full bg-accent shadow-[0_0_10px_rgba(139,141,247,0.65)]"
+                        className="pointer-events-none absolute -bottom-[3px] left-1 right-1 h-0.5 rounded-full bg-accent"
                       />
                     ) : null}
                     <button
@@ -4739,7 +4739,7 @@ export default function CommandBar({
                       aria-describedby={
                         pinnedCommandTooltip?.id === pin.id ? 'pinned-command-tooltip' : undefined
                       }
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-tezbar-row"
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row"
                       onClick={(event) => {
                         if (suppressNextPinClickRef.current) {
                           event.preventDefault()
@@ -4762,10 +4762,8 @@ export default function CommandBar({
                     </button>
                     <span
                       className={cx(
-                        'absolute -bottom-0.5 -right-0.5 grid place-items-center rounded-full border border-white/10 bg-[#15161d] px-1 font-mono leading-none text-ink-3 shadow-[0_1px_2px_rgba(0,0,0,0.3)] transition hover:text-ink-1',
-                        densePinRail
-                          ? 'h-[15px] min-w-[17px] text-[9px]'
-                          : 'h-[15px] min-w-[15px] text-[9px]'
+                        'launcher-pin-slot absolute -bottom-0.5 -right-0.5 grid place-items-center rounded-[4px] px-[3px] font-mono leading-none text-ink-3 transition hover:text-ink-1',
+                        'h-[13px] min-w-[13px] text-[8.5px]'
                       )}
                     >
                       {pinnedSlotShortcutKey(pin.slot)}
@@ -4798,11 +4796,11 @@ export default function CommandBar({
           </div>
         ) : null}
 
-        <div className="flex min-h-0 flex-1 flex-col gap-[var(--s-2)] overflow-hidden">
+        <div className="launcher-body flex min-h-0 flex-1 flex-col overflow-hidden">
           {/* File and application completion suggestions */}
           {showSuggestions ? (
             <div
-              className="glass-card animate-tezbar-scale-in flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2"
+              className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden p-1.5"
               onWheelCapture={() => setFollowSuggestionSelection(false)}
               onMouseLeave={() => {
                 setFollowSuggestionSelection(false)
@@ -4843,7 +4841,7 @@ export default function CommandBar({
                         ) : null}
                         <button
                           type="button"
-                          className="relative flex w-full items-center justify-between gap-3 rounded-tezbar-row px-3 py-2 text-left text-[13px] text-ink-2 transition hover:text-ink-1"
+                          className="relative flex w-full items-center justify-between gap-3 rounded-tezbar-row px-2.5 py-1.5 text-left text-[13px] text-ink-2 transition hover:text-ink-1"
                           onMouseMove={(e) => {
                             handleSuggestionMouseMove(e, i)
                           }}
@@ -5113,7 +5111,7 @@ export default function CommandBar({
                 setFollowSearchSelection(false)
               }}
             >
-              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1.5">
                 <div className="command-ai-heading mb-2 px-3 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-300">
                   Recent Chats
                 </div>
@@ -5181,7 +5179,7 @@ export default function CommandBar({
                 setSelectedSearch(-1)
               }}
             >
-              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1.5">
                 <div className="mb-2 flex items-center justify-between px-3 pt-1">
                   <div>
                     <div className="command-terminal-heading text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">
@@ -5307,7 +5305,13 @@ export default function CommandBar({
                 setFollowSearchSelection(false)
               }}
             >
-              <div className="glass-card animate-tezbar-scale-in flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 py-2">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1.5">
+                <div className="launcher-section-label flex shrink-0 items-center justify-between px-2.5 pb-1 pt-1.5">
+                  <span>
+                    {isDeepSearchMode ? 'Deep Search' : value.trim() ? 'Results' : 'Suggestions'}
+                  </span>
+                  <span className="tabular-nums">{visibleSearchCount}</span>
+                </div>
                 <GlideList
                   selectedIndex={selectedSearch}
                   itemCount={visibleSearchCount}
@@ -5333,7 +5337,7 @@ export default function CommandBar({
                           type="button"
                           className={cx(
                             'relative flex w-full items-center justify-between gap-3 rounded-tezbar-row text-left transition',
-                            isCalc || isColorConversion ? 'px-3 py-2.5' : 'px-3 py-2',
+                            isCalc || isColorConversion ? 'px-2.5 py-2' : 'px-2.5 py-1.5',
                             canPinResult ? 'cursor-grab active:cursor-grabbing' : ''
                           )}
                           onPointerDown={(event) => {
@@ -5367,7 +5371,7 @@ export default function CommandBar({
                           {pinnedMeta ? (
                             <span
                               aria-hidden
-                              className="absolute bottom-2 left-0 top-2 w-[3px] rounded-full bg-amber-300/80 shadow-[0_0_12px_rgba(252,211,77,0.35)]"
+                              className="absolute left-0 top-1/2 h-3.5 w-[2px] -translate-y-1/2 rounded-full bg-amber-300/80"
                             />
                           ) : null}
                           {isCalc || isColorConversion ? (
@@ -5375,11 +5379,11 @@ export default function CommandBar({
                               <span className="flex min-w-0 flex-1 items-center gap-2.5">
                                 <span
                                   aria-hidden
-                                  className="command-result-icon grid h-8 w-8 shrink-0 place-items-center border border-white/10 bg-white/[0.04] text-ink-3"
+                                  className="command-result-icon grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-white/10 bg-white/[0.04] text-ink-3"
                                 >
                                   {isColorConversion ? (
                                     <span
-                                      className="h-[18px] w-[18px] rounded-full border border-white/30 shadow-[0_0_14px_rgba(255,255,255,0.18)]"
+                                      className="h-3.5 w-3.5 rounded-full border border-white/30"
                                       style={{ background: colorSwatch }}
                                     />
                                   ) : isCurrencyRow ? (
@@ -5433,7 +5437,7 @@ export default function CommandBar({
                                   )}
                                 </span>
                                 <span className="min-w-0 flex-1">
-                                  <span className="block truncate font-mono text-[15px] font-semibold tabular-nums text-ink-1">
+                                  <span className="block truncate font-mono text-[14px] font-semibold tabular-nums text-ink-1">
                                     {item.title}
                                   </span>
                                   <span className="mt-0.5 block truncate text-[11px] text-ink-3">
@@ -5458,7 +5462,7 @@ export default function CommandBar({
                             <>
                               <span className="flex min-w-0 flex-1 items-center gap-3">
                                 {effectiveUpdateStatus.kind === 'checking' ? (
-                                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-sky-300/25 bg-sky-300/10 text-sky-200">
+                                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-sky-300/25 bg-sky-300/10 text-sky-200">
                                     <svg
                                       className="h-4 w-4 animate-spin motion-reduce:animate-none"
                                       viewBox="0 0 16 16"
@@ -5472,19 +5476,19 @@ export default function CommandBar({
                                     </svg>
                                   </span>
                                 ) : effectiveUpdateStatus.kind === 'downloading' ? (
-                                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-emerald-300/25 bg-emerald-300/10 text-emerald-200">
+                                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-emerald-300/25 bg-emerald-300/10 text-emerald-200">
                                     <svg className="animate-bounce h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <path d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
                                   </span>
                                 ) : effectiveUpdateStatus.kind === 'ready' ? (
-                                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-emerald-300/30 bg-emerald-300/20 text-emerald-200 shadow-[0_0_12px_rgba(52,211,153,0.25)]">
+                                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-emerald-300/30 bg-emerald-300/20 text-emerald-200 shadow-[0_0_12px_rgba(52,211,153,0.25)]">
                                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
                                   </span>
                                 ) : effectiveUpdateStatus.kind === 'upToDate' ? (
-                                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tezbar-row border border-emerald-300/20 bg-emerald-300/10 text-emerald-300">
+                                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-emerald-300/20 bg-emerald-300/10 text-emerald-300">
                                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
@@ -5525,7 +5529,7 @@ export default function CommandBar({
                                       </span>
                                     </div>
                                   ) : (
-                                    <span className="mt-0.5 block truncate text-[11.5px] text-ink-3">
+                                    <span className="mt-0.5 block truncate text-[11.5px] text-ink-4">
                                       {item.subtitle || searchResultKindLabel(item)}
                                     </span>
                                   )}
@@ -5565,7 +5569,7 @@ export default function CommandBar({
                             </>
                           ) : (
                             <>
-                              <span className="flex min-w-0 flex-1 items-center gap-3">
+                              <span className="flex min-w-0 flex-1 items-center gap-2.5">
                                 <ListItemIcon
                                   kind={item.category}
                                   iconDataUrl={item.iconDataUrl}
@@ -5573,13 +5577,15 @@ export default function CommandBar({
                                   assetPath={iconAsset?.path}
                                   commandIcon={commandIcon}
                                 />
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate text-[13.5px] font-medium tracking-[-0.01em] text-ink-1">
+                                <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                                  <span className="min-w-0 max-w-[70%] shrink-0 truncate text-[13px] font-medium text-ink-1">
                                     {item.title}
                                   </span>
-                                  <span className="mt-0.5 block truncate text-[11.5px] text-ink-3">
-                                    {item.subtitle || searchResultKindLabel(item)}
-                                  </span>
+                                  {item.subtitle ? (
+                                    <span className="min-w-0 truncate text-[12px] text-ink-4">
+                                      {item.subtitle}
+                                    </span>
+                                  ) : null}
                                 </span>
                               </span>
                               <span className="shrink-0 flex items-center gap-2">
@@ -5589,7 +5595,7 @@ export default function CommandBar({
                                     <Kbd>{pinnedSlotShortcutKey(pinnedMeta.slot)}</Kbd>
                                   </span>
                                 ) : null}
-                                <span className="text-[11px] text-ink-4">
+                                <span className="text-[11.5px] text-ink-4">
                                   {searchResultKindLabel(item)}
                                 </span>
                                 {i === selectedSearch ? <Kbd>↵</Kbd> : null}
@@ -5722,17 +5728,10 @@ export default function CommandBar({
         </div>
       </div>
 
-      {/* Footer hint bar — same glass-card shell as Clipboard / other views */}
-      <div
-        className={cx(
-          'launcher-footer glass-card mt-auto shrink-0 py-1.5 pl-4 pr-1.5 animate-tezbar-scale-in',
-          showSearchResults || showSuggestions || showDeepSearchLoading || showAnswer
-            ? 'opacity-60'
-            : ''
-        )}
-      >
-        <div className="flex min-h-7 min-w-0 items-center justify-between gap-3">
-          <HintBar className="min-w-0 flex-1 gap-x-4 text-[11px]">
+      {/* Status bar: shortcut hints, Deep Search and background tasks */}
+      <div className="launcher-footer glass-card mt-auto shrink-0 pl-3.5 pr-1.5">
+        <div className="flex h-9 min-w-0 items-center justify-between gap-2">
+          <HintBar className="min-w-0 flex-1 flex-nowrap gap-x-3.5 overflow-hidden text-[11px]">
             {terminalMode ? (
               <>
                 <Hint
@@ -5859,18 +5858,18 @@ export default function CommandBar({
                     aria-label="Use Deep Search"
                     aria-pressed={isDeepSearchMode}
                     className={cx(
-                      'launcher-chip no-drag ml-auto inline-flex h-7 shrink-0 items-center gap-1.5 pl-1.5 pr-3 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
-                      isDeepSearchMode ? 'text-cyan-200' : 'text-ink-2 hover:text-cyan-200'
+                      'launcher-action no-drag ml-auto inline-flex h-6 shrink-0 items-center gap-1.5 px-1.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
+                      isDeepSearchMode ? 'text-cyan-200' : 'text-ink-3 hover:text-ink-1'
                     )}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={activateDeepSearch}
                     title="Use Deep Search (Command + Enter)"
                   >
+                    <span>Deep Search</span>
                     <span className="inline-flex items-center gap-0.5">
                       <Kbd>⌘</Kbd>
                       <Kbd>↵</Kbd>
                     </span>
-                    <span>Deep Search</span>
                   </button>
                 ) : null}
               </>
