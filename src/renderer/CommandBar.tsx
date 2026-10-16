@@ -618,18 +618,13 @@ function PortArgumentChip(): ReactNode {
   return (
     <span
       aria-hidden
-      className="command-argument-chip inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
+      className="launcher-arg-chip inline-flex h-6 shrink-0 items-center gap-1.5 rounded-[6px] pl-1 pr-2 text-[12.5px] font-medium text-ink-1"
     >
-      <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-emerald-400/25 text-emerald-100">
-        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
-          <path
-            d="M2.5 8.8 8.8 2.5M4.5 9.5H2v-2.5M7.5 2H10v2.5"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+      <span
+        className="launcher-squircle grid h-4 w-4 place-items-center rounded-[4px] text-white"
+        style={{ backgroundColor: launcherIcon('ports').color }}
+      >
+        <LauncherGlyph kind="ports" size={10} />
       </span>
       Port
     </span>
@@ -640,9 +635,9 @@ function InlineArgumentChip({ label }: { label: string }): ReactNode {
   return (
     <span
       aria-hidden
-      className="command-argument-chip inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[13px] font-semibold text-emerald-100"
+      className="launcher-arg-chip inline-flex h-6 shrink-0 items-center gap-1.5 rounded-[6px] px-2 text-[12.5px] font-medium text-ink-1"
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+      <span className="h-1.5 w-1.5 rounded-full bg-[#5b5ef0]" />
       {label}
     </span>
   )
@@ -4271,7 +4266,7 @@ export default function CommandBar({
             {isAiMode ? (
               <span
                 aria-label="AI mode"
-                className="command-ai-badge inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] border border-violet-400/30 bg-violet-500/10 px-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-violet-200"
+                className="command-ai-badge inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-violet-500/15 px-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-violet-200"
               >
                 <span className="h-1 w-1 rounded-full bg-violet-300" />
                 AI
@@ -4279,7 +4274,7 @@ export default function CommandBar({
             ) : isDeepSearchMode ? (
               <span
                 aria-label="Deep Search mode"
-                className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] border border-cyan-300/30 bg-cyan-300/10 px-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-200"
+                className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-cyan-400/15 px-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-200"
               >
                 <span className="h-1 w-1 rounded-full bg-cyan-300" />
                 Deep
@@ -5596,14 +5591,14 @@ export default function CommandBar({
 
       {/* Status bar: shortcut hints, Deep Search and background tasks */}
       <div className="launcher-footer glass-card mt-auto shrink-0 pl-2 pr-3">
-        <div className="flex h-[38px] min-w-0 items-center gap-3">
+        <div className="flex h-8 min-w-0 items-center gap-3">
           <BackgroundTaskStatus
             placement="start"
             onOpenIndexing={onOpenIndexingPage}
             onOpenExtensionRuntime={onOpenExtensionRuntime}
             onOpenUpdate={onOpenSettings}
           />
-          <HintBar className="launcher-hints min-w-0 flex-1 flex-nowrap justify-end gap-x-3 overflow-hidden text-[11.5px]">
+          <HintBar className="launcher-hints min-w-0 flex-1 flex-nowrap justify-end gap-x-3 overflow-hidden text-[11px]">
             {terminalMode ? (
               <>
                 <Hint
@@ -5730,7 +5725,7 @@ export default function CommandBar({
                     aria-label="Use Deep Search"
                     aria-pressed={isDeepSearchMode}
                     className={cx(
-                      'launcher-action no-drag -mr-1.5 inline-flex h-6 shrink-0 items-center gap-1.5 px-1.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
+                      'launcher-action no-drag -mr-1.5 inline-flex h-[22px] shrink-0 items-center gap-1.5 px-1.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
                       isDeepSearchMode ? 'text-cyan-300' : 'text-ink-3 hover:text-ink-1'
                     )}
                     onMouseDown={(event) => event.preventDefault()}

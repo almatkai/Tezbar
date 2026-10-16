@@ -1881,6 +1881,25 @@ html.tezbar-window-hidden body {
   background: var(--ln-pill);
 }
 
+.tezbar-launcher .command-search:focus-within {
+  box-shadow: none;
+}
+
+/* Rolling shortcut hint and argument chips: flat pills, no colored borders. */
+.tezbar-launcher .rolling-command-hint__shortcut {
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 6px;
+  font-weight: 500;
+  color: rgb(var(--c-text-2));
+  background: var(--ln-pill-strong);
+}
+
+.tezbar-launcher .launcher-arg-chip {
+  background: var(--ln-pill-strong);
+}
+
 .tezbar-launcher .launcher-section-label {
   font-size: 11px;
   font-weight: 600;
@@ -1957,7 +1976,7 @@ html.tezbar-window-hidden body {
 }
 
 .tezbar-launcher .launcher-hints [class~='gap-0.5'] {
-  height: 18px;
+  height: 16px;
   gap: 1px;
   padding: 0 5px;
   border-radius: 5px;
@@ -1969,7 +1988,7 @@ html.tezbar-window-hidden body {
   height: auto;
   padding: 0;
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: 10px;
   color: rgb(var(--c-text-2));
   background: none;
   box-shadow: none;
@@ -1977,7 +1996,7 @@ html.tezbar-window-hidden body {
 
 .tezbar-launcher .launcher-action {
   border-radius: 6px;
-  font-size: 11.5px;
+  font-size: 11px;
   transition:
     background 140ms ease,
     color 140ms ease;

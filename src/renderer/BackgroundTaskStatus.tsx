@@ -387,7 +387,7 @@ export default function BackgroundTaskStatus({
         aria-label={`${primaryTask.title} ${taskValue(primaryTask)}. Show all background tasks`}
         onClick={() => setOpen((current) => !current)}
         className={cx(
-          'launcher-action group inline-flex h-6 items-center gap-1.5 px-1.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
+          'launcher-action group inline-flex h-[22px] items-center gap-1.5 px-1.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
           primaryTask.kind === 'update'
             ? 'text-emerald-200'
             : primaryTask.kind === 'indexing'
