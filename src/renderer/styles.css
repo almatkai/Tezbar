@@ -611,14 +611,8 @@
     color: #5c37a4;
   }
 
-  :root[data-theme='white'] .command-ai-badge {
-    color: #5c37a4;
-    border-color: #c5b6ed;
+  :root[data-theme='white'] .command-ai-icon {
     background: #f0ebfc;
-  }
-
-  :root[data-theme='white'] .command-ai-badge > span {
-    background: #714dbb;
   }
 
   :root[data-theme='white'] .model-picker-active-dot {

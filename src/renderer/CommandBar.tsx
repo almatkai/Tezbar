@@ -645,21 +645,6 @@ function InlineArgumentChip({ label }: { label: string }): ReactNode {
   )
 }
 
-/* AI Mode Icon */
-function AiIcon(): JSX.Element {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-      <path
-        d="M7 11.5c2.485 0 4.5-2.015 4.5-4.5S9.485 2.5 7 2.5 2.5 4.515 2.5 7c0 1.05.36 2.015.964 2.783L3 11l1.217-.464c.768.604 1.733.964 2.783.964z"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 /* Terminal icon */
 function TerminalIcon(): JSX.Element {
   return (
@@ -4263,6 +4248,8 @@ export default function CommandBar({
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
           <div className="flex h-[52px] items-center gap-2.5">
             <span
+              role={isAiMode ? 'img' : undefined}
+              aria-label={isAiMode ? 'AI mode' : undefined}
               className={cx(
                 'launcher-search-badge grid h-6 w-6 shrink-0 place-items-center rounded-[7px] text-white',
                 isAiMode
@@ -4277,7 +4264,9 @@ export default function CommandBar({
               )}
             >
               {isAiMode ? (
-                <AiIcon />
+                <span aria-hidden className="text-[11px] font-semibold leading-none">
+                  AI
+                </span>
               ) : terminalMode ? (
                 <TerminalIcon />
               ) : isApplicationInput ? (
@@ -4286,15 +4275,7 @@ export default function CommandBar({
                 <SearchIcon />
               )}
             </span>
-            {isAiMode ? (
-              <span
-                aria-label="AI mode"
-                className="command-ai-badge inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-violet-500/15 px-1.5 text-[11px] font-semibold text-violet-200"
-              >
-                <span className="h-1 w-1 rounded-full bg-violet-300" />
-                AI
-              </span>
-            ) : isDeepSearchMode ? (
+            {!isAiMode && isDeepSearchMode ? (
               <span
                 aria-label="Deep Search mode"
                 className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-cyan-400/15 px-1.5 text-[11px] font-semibold text-cyan-200"
