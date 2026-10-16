@@ -99,10 +99,13 @@ export default function BackgroundTaskStatus({
   onOpenIndexing,
   onOpenExtensionRuntime,
   onOpenUpdate,
+  placement = 'end',
 }: {
   onOpenIndexing: () => void
   onOpenExtensionRuntime: (initial: ExtensionRuntimeViewPayload) => void
   onOpenUpdate?: () => void
+  /** Which footer edge the chip sits on; the popover opens toward the window. */
+  placement?: 'start' | 'end'
 }): JSX.Element | null {
   const rootRef = useRef<HTMLDivElement>(null)
   const refreshInFlightRef = useRef(false)
@@ -270,12 +273,15 @@ export default function BackgroundTaskStatus({
   }
 
   return (
-    <div ref={rootRef} className="no-drag relative ml-auto shrink-0">
+    <div ref={rootRef} className={cx('no-drag relative shrink-0', placement === 'start' ? '' : 'ml-auto')}>
       {open ? (
         <div
           role="dialog"
           aria-label="Background tasks"
-          className="launcher-popover absolute bottom-[calc(100%+8px)] right-0 z-50 w-[300px] overflow-hidden border border-white/[0.09] animate-tezbar-scale-in"
+          className={cx(
+            'launcher-popover absolute bottom-[calc(100%+8px)] z-50 w-[300px] overflow-hidden border border-white/[0.09] animate-tezbar-scale-in',
+            placement === 'start' ? 'left-0' : 'right-0'
+          )}
         >
           <div className="flex items-center justify-between border-b border-white/[0.07] px-3 py-2.5">
             <div>

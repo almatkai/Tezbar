@@ -1805,27 +1805,31 @@ html.tezbar-window-hidden body {
    Launcher — single sheet
    -------------------------------------------------------------------------
    The main command surface only. One flat, frosted sheet: a compact search
-   row, a dense list and a thin status bar, separated by hairlines instead
-   of nested cards. No gradients; depth comes from the backdrop blur and a
-   1px rim. Rules are scoped to `.tezbar-launcher` / `.glass-shell--launcher`,
-   so other surfaces keep their current look until they are redesigned.
+   row, a dense list and a status bar, separated by hairlines instead of
+   nested cards. Results use solid color squircle icons and a solid accent
+   selection (Raycast / Spotlight style). No gradients. Rules are scoped to
+   `.tezbar-launcher` / `.glass-shell--launcher`, so other surfaces keep
+   their current look until they are redesigned.
    ========================================================================= */
 .glass-shell.glass-shell--launcher {
   --r-window: 14px;
-  background: rgba(20, 21, 24, 0.94);
+  background: rgba(28, 29, 33, 0.95);
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .tezbar-launcher {
   --r-card: 0px;
   --r-row: 8px;
-  --r-chip: 4px;
-  --ln-hairline: rgba(255, 255, 255, 0.07);
-  --ln-hover: rgba(255, 255, 255, 0.045);
-  --ln-selected: rgba(255, 255, 255, 0.075);
-  --ln-bar: rgba(255, 255, 255, 0.02);
+  --r-chip: 5px;
+  --ln-accent: #4f52d9;
+  --ln-hairline: rgba(255, 255, 255, 0.065);
+  --ln-hover: rgba(255, 255, 255, 0.05);
+  --ln-selected: rgba(255, 255, 255, 0.07);
+  --ln-bar: rgba(0, 0, 0, 0.16);
+  --ln-pill: rgba(255, 255, 255, 0.06);
+  --ln-pill-strong: rgba(255, 255, 255, 0.09);
 }
 
 /* Panes inside the sheet are flat regions, not floating cards. */
@@ -1854,22 +1858,126 @@ html.tezbar-window-hidden body {
   background: var(--ln-bar);
 }
 
+/* Search row: mode badge on the left, mode shortcuts on the right. */
+.tezbar-launcher .launcher-search-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tezbar-launcher .launcher-search-badge.bg-transparent svg {
+  width: 22px;
+  height: 22px;
+}
+
+.tezbar-launcher .launcher-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: rgb(var(--c-text-3));
+  background: var(--ln-pill);
+}
+
 .tezbar-launcher .launcher-section-label {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgb(var(--c-text-3));
+}
+
+.tezbar-launcher .launcher-section-count {
+  font-weight: 400;
   color: rgb(var(--c-text-4));
 }
 
-/* Selected row: a flat tint that glides between rows. */
+/* Icons: solid squircles with a hairline inner edge. */
+.tezbar-launcher .launcher-squircle {
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
+}
+
+/* Result rows. The search list gets a solid accent selection; the other
+   lists (completions, chats, sessions) keep a quiet tint. */
 .glide-highlight.glide-highlight--glass {
   border-radius: var(--r-row);
   background: var(--ln-selected);
   box-shadow: none;
 }
 
-/* Text-only controls in the status bar. */
+.glide-highlight.glide-highlight--accent {
+  border-radius: var(--r-row);
+  background: var(--ln-accent);
+  box-shadow: none;
+}
+
+.tezbar-launcher .launcher-row :is(.launcher-title, .launcher-subtitle, .launcher-kind) {
+  transition:
+    color 90ms ease,
+    background 90ms ease;
+}
+
+.tezbar-launcher .launcher-kind {
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: rgb(var(--c-text-3));
+  background: var(--ln-pill);
+}
+
+.tezbar-launcher .launcher-row[data-selected='true'] :is(.text-ink-1, .text-ink-2, .launcher-title) {
+  color: #fff;
+}
+
+.tezbar-launcher
+  .launcher-row[data-selected='true']
+  :is(.text-ink-3, .text-ink-4, .launcher-subtitle) {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.tezbar-launcher .launcher-row[data-selected='true'] .launcher-kind {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.tezbar-launcher .launcher-row[data-selected='true'] .kbd {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Status bar. Hints read "Label ⌘K": label first, keys grouped in a pill. */
+.tezbar-launcher .launcher-hints {
+  color: rgb(var(--c-text-3));
+}
+
+.tezbar-launcher .launcher-hints > span.inline-flex {
+  flex-direction: row-reverse;
+}
+
+.tezbar-launcher .launcher-hints [class~='gap-0.5'] {
+  height: 18px;
+  gap: 1px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--ln-pill-strong);
+}
+
+.tezbar-launcher .launcher-hints .kbd {
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  font-family: inherit;
+  font-size: 10.5px;
+  color: rgb(var(--c-text-2));
+  background: none;
+  box-shadow: none;
+}
+
 .tezbar-launcher .launcher-action {
   border-radius: 6px;
+  font-size: 11.5px;
   transition:
     background 140ms ease,
     color 140ms ease;
@@ -1887,7 +1995,7 @@ html.tezbar-window-hidden body {
   border-radius: 4px;
   font-size: 9.5px;
   color: rgb(var(--c-text-3));
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--ln-pill-strong);
   box-shadow: none;
 }
 
@@ -1899,7 +2007,7 @@ html.tezbar-window-hidden body {
 
 .tezbar-launcher .launcher-popover {
   border-radius: 12px;
-  background: rgba(26, 27, 31, 0.98);
+  background: rgba(30, 31, 35, 0.98);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
@@ -1908,15 +2016,17 @@ html.tezbar-window-hidden body {
 /* ---- Light theme ---- */
 :root[data-theme='white'] .glass-shell.glass-shell--launcher {
   border: 0;
-  background: rgba(250, 250, 251, 0.95);
+  background: rgba(250, 250, 251, 0.96);
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
 }
 
 :root[data-theme='white'] .tezbar-launcher {
   --ln-hairline: rgba(15, 23, 42, 0.08);
-  --ln-hover: rgba(15, 23, 42, 0.045);
+  --ln-hover: rgba(15, 23, 42, 0.05);
   --ln-selected: rgba(15, 23, 42, 0.06);
-  --ln-bar: rgba(15, 23, 42, 0.02);
+  --ln-bar: rgba(15, 23, 42, 0.025);
+  --ln-pill: rgba(15, 23, 42, 0.05);
+  --ln-pill-strong: rgba(15, 23, 42, 0.07);
 }
 
 :root[data-theme='white'] .tezbar-launcher .glass-card {
@@ -1926,18 +2036,22 @@ html.tezbar-window-hidden body {
   box-shadow: none;
 }
 
+:root[data-theme='white'] .tezbar-launcher .launcher-search-badge {
+  color: #fff;
+}
+
 :root[data-theme='white'] .glide-highlight.glide-highlight--glass {
   background: var(--ln-selected);
   box-shadow: none;
 }
 
-:root[data-theme='white'] .tezbar-launcher .launcher-action {
-  color: rgb(var(--c-text-2));
+:root[data-theme='white'] .glide-highlight.glide-highlight--accent {
+  background: var(--ln-accent);
+  box-shadow: none;
 }
 
-:root[data-theme='white'] .tezbar-launcher .kbd {
-  background: rgba(15, 23, 42, 0.05);
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+:root[data-theme='white'] .tezbar-launcher .launcher-action {
+  color: rgb(var(--c-text-2));
 }
 
 :root[data-theme='white'] .tezbar-launcher .launcher-pin-slot {

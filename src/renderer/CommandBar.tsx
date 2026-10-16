@@ -83,6 +83,7 @@ import {
 } from '../shared/searchMode'
 import { aiChatBootForInput, commandBarInputMode } from './commandBarInputMode'
 import { RELEASE_NOTES_COMMAND_ID, withReleaseNotesResult } from './releaseNotes'
+import { LauncherGlyph, launcherIcon } from './launcherIcons'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
@@ -882,67 +883,6 @@ function commandIconForResult(item: SearchResult): CommandIconKind | undefined {
   return undefined
 }
 
-function commandIconTone(kind: CommandIconKind): string {
-  switch (kind) {
-    case 'settings':
-    case 'terminal':
-    case 'macos':
-    case 'cpu':
-    case 'memory':
-    case 'disk':
-    case 'ports':
-    case 'indexing':
-      return 'border-sky-300/25 bg-sky-300/10 text-sky-200'
-    case 'update':
-      return 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200'
-    case 'onboarding':
-      return 'border-accent/30 bg-accent/[0.12] text-accent-strong'
-    case 'deep-search':
-      return 'border-cyan-300/30 bg-cyan-300/[0.12] text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_12px_rgba(103,232,249,0.08)]'
-    case 'extensions':
-    case 'brew':
-    case 'git':
-      return 'border-amber-300/25 bg-amber-300/10 text-amber-200'
-    case 'snippets':
-    case 'notes':
-    case 'clipboard':
-    case 'emoji':
-    case 'key':
-      return 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200'
-    case 'moon':
-    case 'display':
-    case 'display-sleep':
-    case 'desktop':
-    case 'dock':
-    case 'menu-bar':
-    case 'finder':
-    case 'applications':
-    case 'library':
-    case 'folder-downloads':
-    case 'copy-path':
-      return 'border-violet-300/25 bg-violet-300/10 text-violet-200'
-    case 'volume':
-    case 'volume-muted':
-    case 'bluetooth':
-    case 'wifi':
-    case 'network':
-    case 'ip':
-    case 'dns':
-    case 'vpn':
-      return 'border-cyan-300/25 bg-cyan-300/10 text-cyan-200'
-    case 'awake':
-    case 'sleep':
-    case 'battery':
-      return 'border-lime-300/25 bg-lime-300/10 text-lime-200'
-    case 'trash':
-    case 'lock':
-    case 'quit':
-      return 'border-rose-300/25 bg-rose-300/10 text-rose-200'
-    default:
-      return 'border-white/10 bg-white/[0.04] text-ink-3'
-  }
-}
-
 function CommandIconGlyph({ kind }: { kind: CommandIconKind }): ReactNode {
   switch (kind) {
     case 'onboarding':
@@ -1339,103 +1279,21 @@ function ListItemIcon({
     }
   }, [assetKind, assetPath])
 
-  const tone = commandIcon
-    ? commandIconTone(commandIcon)
-    : kind === 'directory'
-      ? 'border-sky-400/20 bg-sky-400/10 text-sky-300'
-      : kind === 'application' || kind === 'applications'
-        ? 'border-violet-400/20 bg-violet-400/10 text-violet-300'
-        : kind === 'extensions' || kind === 'store'
-          ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
-          : kind === 'clipboard'
-            ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
-            : 'border-white/10 bg-white/[0.04] text-ink-3'
-
-  const glyph = (() => {
-    if (commandIcon) {
-      return <CommandIconGlyph kind={commandIcon} />
-    }
-    if (kind === 'directory') {
-      return <path d="M2 4.5h3l1 1h6v5.75a.75.75 0 0 1-.75.75h-8.5a.75.75 0 0 1-.75-.75V4.5Z" />
-    }
-    if (kind === 'application' || kind === 'applications') {
-      return (
-        <>
-          <rect x="2" y="2" width="4" height="4" rx="1" />
-          <rect x="8" y="2" width="4" height="4" rx="1" />
-          <rect x="2" y="8" width="4" height="4" rx="1" />
-          <rect x="8" y="8" width="4" height="4" rx="1" />
-        </>
-      )
-    }
-    if (kind === 'extensions' || kind === 'store') {
-      return <path d="M5.25 2.25h3.5v2h2.75v3.5h-2v3.5H6v-2H2.5v-3.5h2.75v-3.5Z" />
-    }
-    if (kind === 'clipboard') {
-      return (
-        <>
-          <rect x="3" y="3.5" width="8" height="8.5" rx="1.25" />
-          <path d="M5.25 4V2.75h3.5V4M5 7h4M5 9.5h3" />
-        </>
-      )
-    }
-    if (kind === 'quick-notes' || kind === 'snippets') {
-      return (
-        <>
-          <path d="M3 2h8v10H3zM5 5h4M5 7.5h4" />
-          <path d="M8 12v-2h3" />
-        </>
-      )
-    }
-    if (kind === 'quick-links') {
-      return (
-        <>
-          <path d="M5.75 8.25 8.25 5.75" />
-          <path d="M4.75 9.75H4a2.25 2.25 0 0 1 0-4.5h2M9.25 4.25H10a2.25 2.25 0 0 1 0 4.5H8" />
-        </>
-      )
-    }
-    if (kind === 'native-command' || kind === 'commands' || kind === 'mac-cli') {
-      return (
-        <>
-          <rect x="1.75" y="2.25" width="10.5" height="9.5" rx="1.5" />
-          <path d="m4 5 2 2-2 2M7.5 9h2.5" />
-        </>
-      )
-    }
-    return (
-      <>
-        <path d="M3 1.75h5l3 3V12H3z" />
-        <path d="M8 1.75v3h3" />
-      </>
-    )
-  })()
+  const icon = launcherIcon(commandIcon ?? kind)
 
   return (
     <span
       ref={iconContainerRef}
       aria-hidden
       className={cx(
-        'command-result-icon relative grid h-6 w-6 shrink-0 place-items-center',
+        'command-result-icon relative grid h-[22px] w-[22px] shrink-0 place-items-center',
         resolvedIconDataUrl
-          ? 'overflow-visible border border-transparent bg-transparent'
-          : cx('overflow-hidden rounded-[6px] border', tone)
+          ? 'overflow-visible bg-transparent'
+          : 'launcher-squircle overflow-hidden rounded-[6px] text-white'
       )}
+      style={resolvedIconDataUrl ? undefined : { backgroundColor: icon.color }}
     >
-      {!resolvedIconDataUrl ? (
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          {glyph}
-        </svg>
-      ) : null}
+      {!resolvedIconDataUrl ? <LauncherGlyph kind={commandIcon ?? kind} size={13} /> : null}
       {resolvedIconDataUrl ? (
         <img
           src={resolvedIconDataUrl}
@@ -4383,19 +4241,21 @@ export default function CommandBar({
   return (
     <div className="tezbar-launcher flex h-full min-h-0 w-full flex-col">
       {/* Search row: icon + input, separated from the list by a hairline */}
-      <div className="command-search glass-card relative z-30 shrink-0 px-4">
+      <div className="command-search glass-card relative z-30 shrink-0 px-3.5">
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
-          <div className="flex h-12 items-center gap-2.5">
+          <div className="flex h-[52px] items-center gap-2.5">
             <span
               className={cx(
-                isAiMode ? 'command-ai-icon' : terminalMode ? 'command-terminal-icon' : '',
+                'launcher-search-badge grid h-6 w-6 shrink-0 place-items-center rounded-[7px] text-white',
                 isAiMode
-                  ? 'text-violet-300'
+                  ? 'command-ai-icon bg-violet-500'
                   : terminalMode
-                    ? 'text-emerald-300'
-                    : isDeepSearchMode
-                      ? 'text-cyan-300'
-                      : 'text-ink-3'
+                    ? 'command-terminal-icon bg-emerald-600'
+                    : isApplicationInput
+                      ? 'bg-transparent'
+                      : isDeepSearchMode
+                        ? 'bg-cyan-500'
+                        : 'bg-[#5b5ef0]'
               )}
             >
               {isAiMode ? (
@@ -4635,6 +4495,14 @@ export default function CommandBar({
                   {inlineExtensionArgument.title || inlineExtensionArgument.name}
                 </span>
               </button>
+            ) : null}
+            {!value && !isAiMode && !terminalMode && !killPortMode && !pendingInlineArgument ? (
+              <span className="flex shrink-0 items-center gap-1.5" aria-hidden>
+                <span className="launcher-mode-chip">
+                  <span className="font-mono">!</span> Deep
+                </span>
+                <span className="launcher-mode-chip">Space AI</span>
+              </span>
             ) : null}
             {isAiMode || pendingActionUsesAi ? (
               <ModelPicker
@@ -5306,18 +5174,18 @@ export default function CommandBar({
               }}
             >
               <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1.5">
-                <div className="launcher-section-label flex shrink-0 items-center justify-between px-2.5 pb-1 pt-1.5">
+                <div className="launcher-section-label flex shrink-0 items-center gap-1.5 px-2 pb-1.5 pt-2">
                   <span>
                     {isDeepSearchMode ? 'Deep Search' : value.trim() ? 'Results' : 'Suggestions'}
                   </span>
-                  <span className="tabular-nums">{visibleSearchCount}</span>
+                  <span className="launcher-section-count tabular-nums">{visibleSearchCount}</span>
                 </div>
                 <GlideList
                   selectedIndex={selectedSearch}
                   itemCount={visibleSearchCount}
                   followSelected={followSearchSelection}
                   className="min-h-0 flex-1 overflow-y-auto"
-                  highlightClassName="glide-highlight--glass"
+                  highlightClassName="glide-highlight--accent"
                 >
                   {visibleSearchResults.map((item, i) => {
                     const iconAsset = searchResultIconAsset(item)
@@ -5335,9 +5203,10 @@ export default function CommandBar({
                       <li key={item.id} className="relative z-[1]">
                         <button
                           type="button"
+                          data-selected={i === selectedSearch}
                           className={cx(
-                            'relative flex w-full items-center justify-between gap-3 rounded-tezbar-row text-left transition',
-                            isCalc || isColorConversion ? 'px-2.5 py-2' : 'px-2.5 py-1.5',
+                            'launcher-row relative flex w-full items-center justify-between gap-3 rounded-tezbar-row text-left',
+                            isCalc || isColorConversion ? 'px-2 py-1.5' : 'px-2 py-[7px]',
                             canPinResult ? 'cursor-grab active:cursor-grabbing' : ''
                           )}
                           onPointerDown={(event) => {
@@ -5379,7 +5248,7 @@ export default function CommandBar({
                               <span className="flex min-w-0 flex-1 items-center gap-2.5">
                                 <span
                                   aria-hidden
-                                  className="command-result-icon grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-white/10 bg-white/[0.04] text-ink-3"
+                                  className="command-result-icon launcher-squircle grid h-[22px] w-[22px] shrink-0 place-items-center rounded-[6px] bg-[#71717a] text-white"
                                 >
                                   {isColorConversion ? (
                                     <span
@@ -5578,11 +5447,11 @@ export default function CommandBar({
                                   commandIcon={commandIcon}
                                 />
                                 <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                                  <span className="min-w-0 max-w-[70%] shrink-0 truncate text-[13px] font-medium text-ink-1">
+                                  <span className="launcher-title min-w-0 max-w-[70%] shrink-0 truncate text-[13px] font-medium text-ink-1">
                                     {item.title}
                                   </span>
                                   {item.subtitle ? (
-                                    <span className="min-w-0 truncate text-[12px] text-ink-4">
+                                    <span className="launcher-subtitle min-w-0 truncate text-[12px] text-ink-4">
                                       {item.subtitle}
                                     </span>
                                   ) : null}
@@ -5595,10 +5464,7 @@ export default function CommandBar({
                                     <Kbd>{pinnedSlotShortcutKey(pinnedMeta.slot)}</Kbd>
                                   </span>
                                 ) : null}
-                                <span className="text-[11.5px] text-ink-4">
-                                  {searchResultKindLabel(item)}
-                                </span>
-                                {i === selectedSearch ? <Kbd>↵</Kbd> : null}
+                                <span className="launcher-kind">{searchResultKindLabel(item)}</span>
                               </span>
                             </>
                           )}
@@ -5729,9 +5595,15 @@ export default function CommandBar({
       </div>
 
       {/* Status bar: shortcut hints, Deep Search and background tasks */}
-      <div className="launcher-footer glass-card mt-auto shrink-0 pl-3.5 pr-1.5">
-        <div className="flex h-9 min-w-0 items-center justify-between gap-2">
-          <HintBar className="min-w-0 flex-1 flex-nowrap gap-x-3.5 overflow-hidden text-[11px]">
+      <div className="launcher-footer glass-card mt-auto shrink-0 pl-2 pr-3">
+        <div className="flex h-[38px] min-w-0 items-center gap-3">
+          <BackgroundTaskStatus
+            placement="start"
+            onOpenIndexing={onOpenIndexingPage}
+            onOpenExtensionRuntime={onOpenExtensionRuntime}
+            onOpenUpdate={onOpenSettings}
+          />
+          <HintBar className="launcher-hints min-w-0 flex-1 flex-nowrap justify-end gap-x-3 overflow-hidden text-[11.5px]">
             {terminalMode ? (
               <>
                 <Hint
@@ -5858,8 +5730,8 @@ export default function CommandBar({
                     aria-label="Use Deep Search"
                     aria-pressed={isDeepSearchMode}
                     className={cx(
-                      'launcher-action no-drag ml-auto inline-flex h-6 shrink-0 items-center gap-1.5 px-1.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
-                      isDeepSearchMode ? 'text-cyan-200' : 'text-ink-3 hover:text-ink-1'
+                      'launcher-action no-drag -mr-1.5 inline-flex h-6 shrink-0 items-center gap-1.5 px-1.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
+                      isDeepSearchMode ? 'text-cyan-300' : 'text-ink-3 hover:text-ink-1'
                     )}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={activateDeepSearch}
@@ -5875,11 +5747,6 @@ export default function CommandBar({
               </>
             )}
           </HintBar>
-          <BackgroundTaskStatus
-            onOpenIndexing={onOpenIndexingPage}
-            onOpenExtensionRuntime={onOpenExtensionRuntime}
-            onOpenUpdate={onOpenSettings}
-          />
         </div>
       </div>
 
