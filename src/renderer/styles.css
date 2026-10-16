@@ -1824,6 +1824,7 @@ html.tezbar-window-hidden body {
   --ln-panel: rgba(255, 255, 255, 0.025);
   --ln-field: rgba(0, 0, 0, 0.22);
   --ln-popover: rgba(32, 33, 38, 0.98);
+  --ln-popover-solid: rgb(32, 33, 38);
   --ln-hairline: rgba(255, 255, 255, 0.065);
   --ln-hover: rgba(255, 255, 255, 0.05);
   --ln-selected: rgba(255, 255, 255, 0.07);
@@ -1840,6 +1841,7 @@ html.tezbar-window-hidden body {
   --ln-panel: rgba(255, 255, 255, 0.7);
   --ln-field: rgba(255, 255, 255, 0.9);
   --ln-popover: rgba(255, 255, 255, 0.98);
+  --ln-popover-solid: rgb(255, 255, 255);
   --ln-hairline: rgba(15, 23, 42, 0.08);
   --ln-hover: rgba(15, 23, 42, 0.045);
   --ln-selected: rgba(15, 23, 42, 0.06);
@@ -1903,6 +1905,13 @@ html.tezbar-window-hidden body {
   border-color: var(--ln-rim);
   background: var(--ln-popover);
   box-shadow: var(--ln-shadow);
+}
+
+/* Terminal glyphs must not bleed through the session picker. Keep it out of
+   the translucent glass-card surface rules and opaque in both themes. */
+.tezbar-popover.terminal-sessions-menu,
+:root[data-theme='white'] .tezbar-popover.terminal-sessions-menu {
+  background: var(--ln-popover-solid);
 }
 
 .hairline,

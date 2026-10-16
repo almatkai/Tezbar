@@ -719,6 +719,7 @@ export default function TerminalView({
           <button
             type="button"
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            aria-expanded={isDropdownOpen}
             className="flex items-center gap-2 rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-ink-3 transition hover:bg-white/[0.08] hover:text-ink-1"
           >
             <span>Sessions ({sessions.filter(s => s.status === 'running').length})</span>
@@ -738,7 +739,7 @@ export default function TerminalView({
           {isDropdownOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
-              <div className="glass-card absolute right-0 top-[32px] z-50 w-[280px] max-h-[300px] overflow-y-auto rounded-[18px] border border-white/[0.1] bg-[#10131d]/95 p-2 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+              <div className="tezbar-popover terminal-sessions-menu no-drag absolute right-0 top-[32px] z-50 w-[280px] max-h-[300px] overflow-y-auto rounded-[12px] border p-2">
                 {sessions.length === 0 ? (
                   <div className="p-3 text-[11px] text-ink-4">No sessions active.</div>
                 ) : (
