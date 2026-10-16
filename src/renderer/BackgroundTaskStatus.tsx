@@ -275,9 +275,9 @@ export default function BackgroundTaskStatus({
         <div
           role="dialog"
           aria-label="Background tasks"
-          className="absolute bottom-[calc(100%+10px)] right-0 z-50 w-[310px] overflow-hidden rounded-[15px] border border-white/[0.1] bg-[#11141c]/95 shadow-[0_20px_60px_rgba(0,0,0,0.48)] backdrop-blur-2xl animate-tezbar-scale-in"
+          className="launcher-popover absolute bottom-[calc(100%+12px)] right-0 z-50 w-[320px] overflow-hidden border border-white/[0.09] animate-tezbar-scale-in"
         >
-          <div className="flex items-center justify-between border-b border-white/[0.07] px-3.5 py-2.5">
+          <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
             <div>
               <p className="font-display text-[11.5px] font-semibold text-ink-1">
                 Background tasks
@@ -288,7 +288,7 @@ export default function BackgroundTaskStatus({
             </div>
             <span
               aria-hidden
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-300/[0.08] text-cyan-200"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] text-ink-2"
             >
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path
@@ -312,11 +312,11 @@ export default function BackgroundTaskStatus({
                   key={task.id}
                   type="button"
                   onClick={() => void openTask(task)}
-                  className="group flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50"
+                  className="group flex w-full items-center gap-3 rounded-[16px] px-2.5 py-2.5 text-left transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50"
                 >
                   <span
                     className={cx(
-                      'grid h-8 w-8 shrink-0 place-items-center rounded-[9px] border',
+                      'command-result-icon grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border',
                       task.kind === 'update'
                         ? 'border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200'
                         : task.kind === 'indexing'
@@ -381,12 +381,12 @@ export default function BackgroundTaskStatus({
         aria-label={`${primaryTask.title} ${taskValue(primaryTask)}. Show all background tasks`}
         onClick={() => setOpen((current) => !current)}
         className={cx(
-          'group inline-flex h-7 items-center gap-1 rounded-[9px] border px-2 text-[10.5px] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
+          'launcher-chip group inline-flex h-7 items-center gap-1.5 pl-2.5 pr-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
           primaryTask.kind === 'update'
-            ? 'border-emerald-300/[0.18] bg-emerald-300/[0.07] text-emerald-100 hover:border-emerald-300/30 hover:bg-emerald-300/[0.11]'
+            ? 'text-emerald-100'
             : primaryTask.kind === 'indexing'
-              ? 'border-cyan-300/[0.14] bg-cyan-300/[0.055] text-cyan-100 hover:border-cyan-300/25 hover:bg-cyan-300/[0.09]'
-              : 'border-amber-300/[0.14] bg-amber-300/[0.05] text-amber-100 hover:border-amber-300/25 hover:bg-amber-300/[0.08]'
+              ? 'text-cyan-100'
+              : 'text-amber-100'
         )}
       >
         <TaskIcon kind={primaryTask.kind} compact />

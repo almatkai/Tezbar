@@ -1416,7 +1416,7 @@ function ListItemIcon({
       ref={iconContainerRef}
       aria-hidden
       className={cx(
-        'command-result-icon relative grid h-7 w-7 shrink-0 place-items-center',
+        'command-result-icon relative grid h-8 w-8 shrink-0 place-items-center',
         resolvedIconDataUrl
           ? 'overflow-visible border border-transparent bg-transparent'
           : cx('overflow-hidden rounded-[7px] border', tone)
@@ -1468,6 +1468,27 @@ function completionIconAsset(item: PathCompletionItem): {
   }
   if (item.kind === 'file' && item.path) return { kind: 'file', path: item.path }
   return null
+}
+
+const SEARCH_CATEGORY_LABELS: Record<SearchResult['category'], string> = {
+  applications: 'Application',
+  files: 'File',
+  knowledge: 'Document',
+  clipboard: 'Clipboard',
+  'quick-notes': 'Note',
+  extensions: 'Extension',
+  store: 'Store',
+  'mac-cli': 'Command',
+  'native-command': 'Command',
+  commands: 'Command',
+  snippets: 'Snippet',
+  'quick-links': 'Quicklink',
+  calculator: 'Calculator',
+  'color-converter': 'Color',
+}
+
+function searchResultKindLabel(item: SearchResult): string {
+  return SEARCH_CATEGORY_LABELS[item.category] ?? item.category
 }
 
 function searchResultIconAsset(item: SearchResult): {
@@ -4360,11 +4381,11 @@ export default function CommandBar({
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-2">
-      {/* Primary glass card: icon + input */}
-      <div className="command-search glass-card relative z-30 shrink-0 px-4 py-3 animate-tezbar-scale-in">
+    <div className="tezbar-launcher flex h-full min-h-0 w-full flex-col gap-2">
+      {/* Primary glass pill: icon + input */}
+      <div className="command-search glass-card relative z-30 shrink-0 py-3 pl-5 pr-3 animate-tezbar-scale-in">
         <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
-          <div className="flex h-7 items-center gap-3">
+          <div className="flex h-8 items-center gap-3">
             <span
               className={cx(
                 isAiMode ? 'command-ai-icon' : terminalMode ? 'command-terminal-icon' : '',
@@ -4390,7 +4411,7 @@ export default function CommandBar({
             {isAiMode ? (
               <span
                 aria-label="AI mode"
-                className="command-ai-badge inline-flex shrink-0 items-center gap-1 rounded-tezbar-chip border border-violet-400/40 bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200"
+                className="command-ai-badge inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-violet-400/35 bg-violet-500/15 px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
                 AI
@@ -4398,7 +4419,7 @@ export default function CommandBar({
             ) : isDeepSearchMode ? (
               <span
                 aria-label="Deep Search mode"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip border border-cyan-300/30 bg-cyan-300/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200"
+                className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_rgba(103,232,249,0.7)]" />
                 Deep
@@ -4718,7 +4739,7 @@ export default function CommandBar({
                       aria-describedby={
                         pinnedCommandTooltip?.id === pin.id ? 'pinned-command-tooltip' : undefined
                       }
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-tezbar-row border border-white/10 bg-white/[0.035] transition hover:border-white/20 hover:bg-white/[0.08]"
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-tezbar-row"
                       onClick={(event) => {
                         if (suppressNextPinClickRef.current) {
                           event.preventDefault()
@@ -4741,7 +4762,7 @@ export default function CommandBar({
                     </button>
                     <span
                       className={cx(
-                        'absolute bottom-0 right-0 grid place-items-center rounded-[5px] border border-white/10 bg-[#14161c] px-1 font-mono leading-none text-ink-3 transition hover:text-ink-1',
+                        'absolute -bottom-0.5 -right-0.5 grid place-items-center rounded-full border border-white/10 bg-[#15161d] px-1 font-mono leading-none text-ink-3 shadow-[0_1px_2px_rgba(0,0,0,0.3)] transition hover:text-ink-1',
                         densePinRail
                           ? 'h-[15px] min-w-[17px] text-[9px]'
                           : 'h-[15px] min-w-[15px] text-[9px]'
@@ -4805,6 +4826,7 @@ export default function CommandBar({
                   itemCount={suggestions.length}
                   followSelected={followSuggestionSelection}
                   className="min-h-0 flex-1 overflow-y-auto"
+                  highlightClassName="glide-highlight--glass"
                 >
                   {suggestions.map((item, i) => {
                     const iconAsset = completionIconAsset(item)
@@ -5100,6 +5122,7 @@ export default function CommandBar({
                   itemCount={filteredChatHistory.length}
                   followSelected={followSearchSelection}
                   className="min-h-0 flex-1 overflow-y-auto"
+                  highlightClassName="glide-highlight--glass"
                 >
                   {filteredChatHistory.map((chat, i) => (
                     <li key={chat.id} className="relative z-[1]">
@@ -5180,6 +5203,7 @@ export default function CommandBar({
                   itemCount={terminalSessionCount === 0 ? 1 : terminalSessionCount}
                   followSelected={followSearchSelection}
                   className="min-h-0 flex-1 overflow-y-auto"
+                  highlightClassName="glide-highlight--glass"
                 >
                   {terminalSessionCount === 0 ? (
                     <li className="relative z-[1]">
@@ -5289,6 +5313,7 @@ export default function CommandBar({
                   itemCount={visibleSearchCount}
                   followSelected={followSearchSelection}
                   className="min-h-0 flex-1 overflow-y-auto"
+                  highlightClassName="glide-highlight--glass"
                 >
                   {visibleSearchResults.map((item, i) => {
                     const iconAsset = searchResultIconAsset(item)
@@ -5350,7 +5375,7 @@ export default function CommandBar({
                               <span className="flex min-w-0 flex-1 items-center gap-2.5">
                                 <span
                                   aria-hidden
-                                  className="grid h-7 w-7 shrink-0 place-items-center rounded-tezbar-chip border border-white/10 bg-white/[0.04] text-ink-3"
+                                  className="command-result-icon grid h-8 w-8 shrink-0 place-items-center border border-white/10 bg-white/[0.04] text-ink-3"
                                 >
                                   {isColorConversion ? (
                                     <span
@@ -5500,10 +5525,8 @@ export default function CommandBar({
                                       </span>
                                     </div>
                                   ) : (
-                                    <span className="mt-0.5 block truncate text-[11px] text-ink-3">
-                                      <span className="text-ink-4">{item.category}</span>
-                                      {item.subtitle ? <span className="mx-1.5 text-ink-4">·</span> : null}
-                                      {item.subtitle}
+                                    <span className="mt-0.5 block truncate text-[11.5px] text-ink-3">
+                                      {item.subtitle || searchResultKindLabel(item)}
                                     </span>
                                   )}
                                 </span>
@@ -5551,30 +5574,25 @@ export default function CommandBar({
                                   commandIcon={commandIcon}
                                 />
                                 <span className="min-w-0 flex-1">
-                                  <span className="block truncate text-[13px] font-medium text-ink-1">
+                                  <span className="block truncate text-[13.5px] font-medium tracking-[-0.01em] text-ink-1">
                                     {item.title}
                                   </span>
-                                  <span className="mt-0.5 block truncate text-[11px] text-ink-3">
-                                    <span className="text-ink-4">{item.category}</span>
-                                    {item.subtitle ? (
-                                      <span className="mx-1.5 text-ink-4">·</span>
-                                    ) : null}
-                                    {item.subtitle}
+                                  <span className="mt-0.5 block truncate text-[11.5px] text-ink-3">
+                                    {item.subtitle || searchResultKindLabel(item)}
                                   </span>
                                 </span>
                               </span>
-                              <span className="shrink-0 flex items-center gap-1.5">
+                              <span className="shrink-0 flex items-center gap-2">
                                 {pinnedMeta ? (
-                                  <span className="inline-flex items-center gap-1 rounded-tezbar-chip border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-ink-3">
+                                  <span className="inline-flex items-center gap-0.5">
                                     <Kbd>⌥</Kbd>
                                     <Kbd>{pinnedSlotShortcutKey(pinnedMeta.slot)}</Kbd>
                                   </span>
                                 ) : null}
-                                {i === selectedSearch ? (
-                                  <span className="text-[10px] font-mono text-ink-3">
-                                    <Kbd>↵</Kbd>
-                                  </span>
-                                ) : null}
+                                <span className="text-[11px] text-ink-4">
+                                  {searchResultKindLabel(item)}
+                                </span>
+                                {i === selectedSearch ? <Kbd>↵</Kbd> : null}
                               </span>
                             </>
                           )}
@@ -5707,14 +5725,14 @@ export default function CommandBar({
       {/* Footer hint bar — same glass-card shell as Clipboard / other views */}
       <div
         className={cx(
-          'glass-card mt-auto shrink-0 px-4 py-2 animate-tezbar-scale-in',
+          'launcher-footer glass-card mt-auto shrink-0 py-1.5 pl-4 pr-1.5 animate-tezbar-scale-in',
           showSearchResults || showSuggestions || showDeepSearchLoading || showAnswer
             ? 'opacity-60'
             : ''
         )}
       >
-        <div className="flex min-w-0 items-center justify-between gap-4">
-          <HintBar className="min-w-0 flex-1">
+        <div className="flex min-h-7 min-w-0 items-center justify-between gap-3">
+          <HintBar className="min-w-0 flex-1 gap-x-4 text-[11px]">
             {terminalMode ? (
               <>
                 <Hint
@@ -5841,8 +5859,8 @@ export default function CommandBar({
                     aria-label="Use Deep Search"
                     aria-pressed={isDeepSearchMode}
                     className={cx(
-                      'no-drag ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-tezbar-chip text-[10.5px] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
-                      isDeepSearchMode ? 'text-cyan-200' : 'text-ink-3 hover:text-cyan-200'
+                      'launcher-chip no-drag ml-auto inline-flex h-7 shrink-0 items-center gap-1.5 pl-1.5 pr-3 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
+                      isDeepSearchMode ? 'text-cyan-200' : 'text-ink-2 hover:text-cyan-200'
                     )}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={activateDeepSearch}

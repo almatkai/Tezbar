@@ -1801,3 +1801,298 @@
 html.tezbar-window-hidden body {
   display: none;
 }
+
+/* =========================================================================
+   Launcher — liquid glass
+   -------------------------------------------------------------------------
+   The main command surface only. Translucent layers sit over a softly lit
+   shell; every layer gets a thin gradient rim (lighter at the top and bottom
+   edges) and a top highlight so it reads as a pane of glass. Rules here are
+   scoped to `.tezbar-launcher` / `.glass-shell--launcher`, so other surfaces
+   keep their current look until they are redesigned.
+   ========================================================================= */
+.glass-shell.glass-shell--launcher {
+  --r-window: 30px;
+  background:
+    radial-gradient(70% 55% at 8% -6%, rgba(124, 110, 255, 0.24), transparent 70%),
+    radial-gradient(55% 45% at 102% 108%, rgba(45, 196, 230, 0.16), transparent 70%),
+    radial-gradient(40% 32% at 92% 4%, rgba(236, 120, 200, 0.09), transparent 70%),
+    linear-gradient(180deg, rgba(19, 20, 28, 0.95), rgba(9, 10, 14, 0.97));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.tezbar-launcher {
+  --r-card: 22px;
+  --r-row: 14px;
+  --r-chip: 7px;
+  --lg-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.028));
+  --lg-rim: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.06) 48%,
+    rgba(255, 255, 255, 0.12)
+  );
+  --lg-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.07),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.02),
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    0 10px 28px rgba(0, 0, 0, 0.22);
+}
+
+/* Every pane of glass on the launcher. */
+.tezbar-launcher .glass-card,
+.tezbar-launcher .glide-highlight--glass,
+.tezbar-launcher .launcher-chip {
+  isolation: isolate;
+}
+
+.tezbar-launcher .glass-card {
+  border-radius: var(--r-card);
+  background: var(--lg-fill);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: var(--lg-shadow);
+}
+
+/* Thin rim with brighter top and bottom edges (masked 1px ring). */
+.tezbar-launcher .glass-card::before,
+.tezbar-launcher .glide-highlight--glass::before,
+.tezbar-launcher .launcher-chip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: 1px;
+  border-radius: inherit;
+  background: var(--lg-rim);
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* Search field — a single glass pill. */
+.tezbar-launcher .command-search {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
+  transition: box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tezbar-launcher .command-search:focus-within {
+  box-shadow:
+    var(--lg-shadow),
+    0 0 0 4px rgba(139, 141, 247, 0.07);
+}
+
+.tezbar-launcher .command-search #command-input {
+  font-size: 16px;
+  letter-spacing: -0.012em;
+}
+
+.tezbar-launcher .command-search .rolling-command-hint,
+.tezbar-launcher .command-search .path-command-hint {
+  font-size: 16px;
+}
+
+/* Long lists dissolve into the pane edge instead of being cut off. */
+.tezbar-launcher .glass-card > [class*='overflow-y-auto'] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+}
+
+/* Pin rail — vertical glass capsule. */
+.tezbar-launcher .tezbar-pin-rail {
+  border-radius: 25px;
+}
+
+/* Footer — glass pill hosting the shortcut hints. */
+.tezbar-launcher .launcher-footer {
+  border-radius: 999px;
+}
+
+/* Selected row: a raised glass tile that glides between rows. */
+.glide-highlight.glide-highlight--glass {
+  border-radius: var(--r-row);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05));
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.16),
+    0 8px 20px rgba(0, 0, 0, 0.22);
+}
+
+.tezbar-launcher .glide-highlight--glass::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.16)
+  );
+}
+
+/* Small glass controls: chips, toggles, task status. */
+.tezbar-launcher .launcher-chip {
+  position: relative;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.07),
+    0 1px 2px rgba(0, 0, 0, 0.14);
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 140ms ease;
+}
+
+.tezbar-launcher .launcher-chip:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.045));
+}
+
+.tezbar-launcher .launcher-chip:active {
+  transform: scale(0.98);
+}
+
+/* Keycaps read as tiny glass buttons. */
+.tezbar-launcher .kbd {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 0.3rem;
+  border-radius: 6px;
+  font-size: 10px;
+  color: rgb(var(--c-text-2));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+/* Glyph tiles get the same glass sheen as the panes around them. Image icons
+   (apps, extensions) keep their own artwork. */
+.tezbar-launcher .command-result-icon:not(.bg-transparent) {
+  border-radius: 10px;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Background tasks popover floats above the footer as frosted glass. */
+.tezbar-launcher .launcher-popover {
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
+    rgba(16, 17, 24, 0.95);
+  backdrop-filter: blur(32px) saturate(170%);
+  -webkit-backdrop-filter: blur(32px) saturate(170%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.08),
+    0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- Light theme: frosted white glass (glass-selector light variant) ---- */
+:root[data-theme='white'] .glass-shell.glass-shell--launcher {
+  border: 0;
+  background:
+    radial-gradient(70% 55% at 8% -6%, rgba(124, 110, 255, 0.16), transparent 70%),
+    radial-gradient(55% 45% at 102% 108%, rgba(45, 196, 230, 0.14), transparent 70%),
+    radial-gradient(40% 32% at 92% 4%, rgba(236, 120, 200, 0.1), transparent 70%),
+    linear-gradient(180deg, rgba(246, 247, 251, 0.97), rgba(235, 238, 245, 0.97));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px rgba(76, 94, 125, 0.16);
+}
+
+:root[data-theme='white'] .tezbar-launcher {
+  --lg-fill: rgba(255, 255, 255, 0.74);
+  --lg-rim: linear-gradient(
+    180deg,
+    rgba(218, 218, 218, 0.72),
+    rgba(207, 207, 207, 0.8) 47%,
+    rgba(225, 225, 225, 0.72)
+  );
+  --lg-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.96),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.025),
+    0 1px 2px rgba(0, 0, 0, 0.03),
+    0 8px 24px rgba(34, 48, 76, 0.06);
+}
+
+:root[data-theme='white'] .tezbar-launcher .glass-card {
+  background: var(--lg-fill);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  box-shadow: var(--lg-shadow);
+}
+
+:root[data-theme='white'] .tezbar-launcher .command-search {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+:root[data-theme='white'] .tezbar-launcher .command-search:focus-within {
+  box-shadow:
+    var(--lg-shadow),
+    0 0 0 4px rgba(76, 68, 193, 0.08);
+}
+
+:root[data-theme='white'] .glide-highlight.glide-highlight--glass {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    inset 0 1px 1px #fff,
+    0 1px 2px rgba(0, 0, 0, 0.03),
+    0 8px 20px rgba(34, 48, 76, 0.08);
+}
+
+:root[data-theme='white'] .tezbar-launcher .glide-highlight--glass::before {
+  background: linear-gradient(
+    180deg,
+    rgba(210, 212, 220, 0.8),
+    rgba(196, 200, 210, 0.9) 50%,
+    rgba(214, 216, 224, 0.8)
+  );
+}
+
+:root[data-theme='white'] .tezbar-launcher .launcher-chip {
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.96),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme='white'] .tezbar-launcher .launcher-chip:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* Tinted chip text is tuned for dark glass; keep it legible on white. */
+:root[data-theme='white'] .tezbar-launcher .launcher-chip {
+  color: rgb(var(--c-text-2));
+}
+
+:root[data-theme='white'] .tezbar-launcher .kbd {
+  color: rgb(var(--c-text-2));
+  background: linear-gradient(180deg, #fff, rgba(244, 246, 250, 0.95));
+  box-shadow:
+    inset 0 0 0 1px rgba(76, 94, 125, 0.16),
+    0 1px 1px rgba(34, 48, 76, 0.08);
+}
+
+:root[data-theme='white'] .tezbar-launcher .command-result-icon:not(.bg-transparent) {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(34, 48, 76, 0.08);
+}
+
+:root[data-theme='white'] .tezbar-launcher .launcher-popover {
+  border-color: rgba(76, 94, 125, 0.16);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow:
+    inset 0 1px 1px #fff,
+    0 24px 60px rgba(34, 48, 76, 0.18);
+}

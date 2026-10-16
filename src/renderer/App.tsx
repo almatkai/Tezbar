@@ -668,6 +668,7 @@ function LauncherApp(): JSX.Element {
       className={[
         'glass-shell drag-region flex h-screen w-full p-2',
         surface === 'terminal' ? 'glass-shell--terminal' : '',
+        surface === 'command' ? 'glass-shell--launcher' : '',
       ]
         .filter(Boolean)
         .join(' ')}
