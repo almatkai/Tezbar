@@ -303,7 +303,7 @@ function readClipboardSnapshot(): ClipboardSnapshot {
   if (process.platform === 'darwin') return readMacClipboardSnapshot()
   if (process.platform === 'win32') return readWindowsClipboardSnapshot()
   try {
-    return { text: execFileSync('pbpaste', [], { encoding: 'utf8' }), filePaths: [], hasImage: false, changeCount: 0 }
+    return { text: execFileSync('pbpaste', [], { encoding: 'utf8', env: macClipboardProcessEnv() }), filePaths: [], hasImage: false, changeCount: 0 }
   } catch {
     return { text: '', filePaths: [], hasImage: false, changeCount: 0 }
   }
@@ -318,25 +318,31 @@ export function windowsClipboardReadTextScript(): string {
   return '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::Write((Get-Clipboard -Raw))'
 }
 
+export function macClipboardProcessEnv(): NodeJS.ProcessEnv {
+  // pbcopy/pbpaste use the process locale, not Node's Buffer encoding.
+  // Finder-launched sidecars may have no locale (or inherit LC_ALL=C).
+  return { ...process.env, LANG: 'en_US.UTF-8', LC_CTYPE: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' }
+}
+
 export const clipboard = {
   async writeTextAsync(text: string): Promise<void> {
-    if (process.platform !== 'win32') {
-      this.writeText(text)
-      return
-    }
+    const windows = process.platform === 'win32'
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(
-        'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-Sta', '-Command', windowsClipboardWriteTextScript()],
-        { windowsHide: true }
-      )
+      const child = windows
+        ? spawn(
+            'powershell.exe',
+            ['-NoProfile', '-NonInteractive', '-Sta', '-Command', windowsClipboardWriteTextScript()],
+            { windowsHide: true }
+          )
+        : spawn('pbcopy', [], { env: macClipboardProcessEnv() })
       child.on('error', reject)
       child.stdin.on('error', reject)
       child.on('close', (code) => {
         if (code === 0) resolve()
-        else reject(new Error(`Windows clipboard write failed (${code})`))
+        else reject(new Error(`${windows ? 'Windows' : 'macOS'} clipboard write failed (${code})`))
       })
-      child.stdin.end(Buffer.from(text, 'utf8').toString('base64'))
+      const bytes = Buffer.from(text, 'utf8')
+      child.stdin.end(windows ? bytes.toString('base64') : bytes)
     })
   },
   async readSnapshotAsync(): Promise<ClipboardSnapshot> {
@@ -363,31 +369,15 @@ export const clipboard = {
           { encoding: 'utf8', windowsHide: true, timeout: 3_000 }
         )
       }
-      return execFileSync('pbpaste', [], { encoding: 'utf8' })
+      return execFileSync('pbpaste', [], { encoding: 'utf8', env: macClipboardProcessEnv() })
     } catch {
       return ''
     }
   },
   writeText(text: string): void {
-    try {
-      if (process.platform === 'win32') {
-        void this.writeTextAsync(text).catch((error) =>
-          console.error('[desktop-runtime] clipboard text copy failed:', error)
-        )
-        return
-      }
-      const child = spawn('pbcopy')
-      child.on('error', (error) =>
-        console.error('[desktop-runtime] clipboard text copy failed:', error)
-      )
-      child.stdin.on('error', (error) =>
-        console.error('[desktop-runtime] clipboard input failed:', error)
-      )
-      child.stdin.write(text)
-      child.stdin.end()
-    } catch (error) {
+    void this.writeTextAsync(text).catch((error) =>
       console.error('[desktop-runtime] clipboard text copy failed:', error)
-    }
+    )
   },
   availableFormats(): string[] {
     return this.readText() ? ['text/plain'] : []

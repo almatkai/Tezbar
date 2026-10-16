@@ -270,7 +270,7 @@ function SettingsWindowApp(): JSX.Element {
   }, [])
 
   return (
-    <div className="flex h-screen w-full bg-glass-shell">
+    <div className="flex h-screen w-full bg-glass-shell select-none">
       <Suspense fallback={<SurfaceFallback />}>
         {surface === 'permissions' ? (
           <PermissionsView nativeWindow onBack={() => setSurface('settings')} />
@@ -666,7 +666,7 @@ function LauncherApp(): JSX.Element {
   return (
     <div
       className={[
-        'glass-shell drag-region flex h-screen w-full p-2',
+        'glass-shell drag-region flex h-screen w-full p-2 select-none',
         surface === 'terminal' ? 'glass-shell--terminal' : '',
       ]
         .filter(Boolean)
