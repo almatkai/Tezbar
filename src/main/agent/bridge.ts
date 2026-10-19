@@ -25,7 +25,6 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { once } from 'node:events'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -40,6 +39,11 @@ import { ensureKnowledgeAgentGateway } from '../knowledge/agent/gateway'
 import { piAgentDirectory } from '../profile'
 
 const PI_BIN_CANDIDATES = [
+  ...(process.env.PNPM_HOME
+    ? [path.join(process.env.PNPM_HOME, process.platform === 'win32' ? 'pi.cmd' : 'pi')]
+    : []),
+  path.join(homedir(), 'Library', 'pnpm', 'bin', 'pi'),
+  path.join(homedir(), '.local', 'bin', 'pi'),
   // Where pnpm installs global bins for this user (matches `which pi`
   // at the time this bridge was written). We resolve at runtime so a
   // reinstall or version bump does not require a rebuild.
@@ -47,12 +51,7 @@ const PI_BIN_CANDIDATES = [
   path.join(homedir(), '.local', 'share', 'pnpm', 'pi'),
 ]
 
-const OPENCODE_PI_EXTENSION = path.join(
-  piAgentDirectory(),
-  'extensions',
-  'opencode',
-  'index.ts'
-)
+const OPENCODE_PI_EXTENSION = path.join(piAgentDirectory(), 'extensions', 'opencode', 'index.ts')
 
 function resolveRaymesPiExtension(): string | undefined {
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
@@ -145,6 +144,7 @@ interface RpcSessionHandle {
   closed: boolean
   requestApproval?: BridgeRunOptions['requestApproval']
   onStderrLine?: (line: string) => void
+  onFailure?: (error: Error) => void
 }
 
 function makeId(): string {
@@ -152,6 +152,8 @@ function makeId(): string {
 }
 
 function writeCommand(child: ChildProcessWithoutNullStreams, command: object): void {
+  if (child.stdin.destroyed || child.stdin.writableEnded)
+    throw new Error('Pi input stream is closed')
   const line = `${JSON.stringify(command)}\n`
   child.stdin.write(line)
 }
@@ -249,7 +251,6 @@ async function handleExtensionUiRequest(
     if (msg.message) {
       handle.onStderrLine?.(msg.message)
     }
-    writeCommand(handle.child, { type: 'extension_ui_response', id, success: true })
     return
   }
 
@@ -258,15 +259,15 @@ async function handleExtensionUiRequest(
       const clean = msg.statusText.replace(/\x1b\[[0-9;]*m/g, '').trim()
       if (clean) handle.onStderrLine?.(clean)
     }
-    writeCommand(handle.child, { type: 'extension_ui_response', id, success: true })
     return
   }
 
+  if (msg.method === 'setWidget' || msg.method === 'setTitle' || msg.method === 'set_editor_text')
+    return
   writeCommand(handle.child, { type: 'extension_ui_response', id, cancelled: true })
 }
 
 function terminateProcessTree(child: ChildProcessWithoutNullStreams, graceMs = 1500): void {
-  if (child.killed) return
   const pid = child.pid
   const isUnix = process.platform !== 'win32'
 
@@ -289,9 +290,7 @@ function terminateProcessTree(child: ChildProcessWithoutNullStreams, graceMs = 1
   sendSignal('SIGTERM')
 
   const forceKillTimer = setTimeout(() => {
-    if (!child.killed) {
-      sendSignal('SIGKILL')
-    }
+    if (child.exitCode === null && child.signalCode === null) sendSignal('SIGKILL')
   }, graceMs)
 
   if (typeof forceKillTimer.unref === 'function') {
@@ -354,7 +353,10 @@ function attachHandlers(handle: RpcSessionHandle, onStderrLine?: (line: string) 
       return
     }
     if (msg.type === 'extension_ui_request') {
-      void handleExtensionUiRequest(handle, msg)
+      void handleExtensionUiRequest(handle, msg).catch((error: unknown) => {
+        if (!handle.closed)
+          handle.onFailure?.(error instanceof Error ? error : new Error(String(error)))
+      })
       return
     }
     if (typeof msg.type === 'string') {
@@ -368,6 +370,12 @@ function attachHandlers(handle: RpcSessionHandle, onStderrLine?: (line: string) 
     onStderrLine?.(line)
     // Keep only the last 50 lines so we do not leak memory on chatty runs.
     if (handle.stderrBuffer.length > 50) handle.stderrBuffer.shift()
+  })
+
+  handle.child.stdin.on('error', (error) => {
+    for (const pending of handle.pending.values()) pending.reject(error)
+    handle.pending.clear()
+    handle.onFailure?.(error)
   })
 
   handle.child.on('close', () => {
@@ -413,7 +421,13 @@ async function sendAndAwait<T>(
         reject(err)
       },
     })
-    writeCommand(handle.child, { ...command, id })
+    try {
+      writeCommand(handle.child, { ...command, id })
+    } catch (error) {
+      clearTimeout(timer)
+      handle.pending.delete(id)
+      reject(error)
+    }
   })
 }
 
@@ -427,6 +441,7 @@ export function createBridge(): Bridge {
 
   return {
     async run(task, options = {}) {
+      if (options.signal?.aborted) throw new Error('Agent run aborted')
       if (!task.trim()) {
         throw new Error('agent.run: task is empty')
       }
@@ -436,10 +451,21 @@ export function createBridge(): Bridge {
       const piBin = resolvePiBinary(options.piBin)
       const ephemeral = options.ephemeral !== false
       const knowledgeGateway = await ensureKnowledgeAgentGateway().catch(() => null)
+      if (options.signal?.aborted) throw new Error('Agent run aborted')
 
       const stages: Stage[] = []
       let finalAnswer = ''
       let runError: Error | undefined
+      let agentEndResolved = false
+      let runStarted = false
+      let agentEnded: () => void = () => undefined
+      const agentEndPromise = new Promise<void>((resolve) => {
+        agentEnded = () => {
+          if (agentEndResolved) return
+          agentEndResolved = true
+          resolve()
+        }
+      })
 
       const driver = createLoopDriver({
         onStage: (stage) => {
@@ -457,11 +483,10 @@ export function createBridge(): Bridge {
           finalAnswer = text
           options.onAnswer?.(text)
         },
-        onDone: () => {
-          /* handled by the promise chain below */
-        },
+        onDone: () => agentEnded(),
         onError: (message) => {
           runError = new Error(message)
+          agentEnded()
         },
       })
 
@@ -478,23 +503,11 @@ export function createBridge(): Bridge {
         extraArgs: options.extraArgs ?? [],
       })
       trackChild(child)
-      console.log('[tezbar:agent] spawn', {
-        runId,
-        piBin,
-        cwd,
-        ephemeral,
-        model: options.model ?? '(default)',
-        taskChars: task.length,
-      })
-
-      let agentEndResolved = false
-      let agentEnded: () => void = () => undefined
-      const agentEndPromise = new Promise<void>((resolve) => {
-        agentEnded = () => {
-          if (agentEndResolved) return
-          agentEndResolved = true
-          resolve()
-        }
+      // Subscribe before prompting: a fast failure can close the child before
+      // the prompt response resumes our async continuation.
+      const closedPromise = new Promise<void>((resolve) => {
+        child.once('close', () => resolve())
+        child.once('error', () => resolve())
       })
 
       const handle: RpcSessionHandle = {
@@ -504,21 +517,31 @@ export function createBridge(): Bridge {
         closed: false,
         requestApproval: options.requestApproval,
         onStderrLine: options.onStderrLine,
+        onFailure: (error) => {
+          runError ??= error
+          agentEnded()
+        },
         onEvent: (event) => {
+          if (event.type === 'agent_start') runStarted = true
           try {
             driver(event)
           } catch (err) {
             runError ??= err instanceof Error ? err : new Error(String(err))
           }
-          if (runError || event.type === 'agent_end') agentEnded()
+          if (runError) agentEnded()
         },
       }
       attachHandlers(handle, options.onStderrLine)
 
       const onAbort = (): void => {
         if (handle.closed) return
+        runError = new Error('Agent run aborted')
+        for (const pending of handle.pending.values()) pending.reject(runError)
+        handle.pending.clear()
+        agentEnded()
         // Best-effort: tell pi to abort, then escalate to SIGTERM/SIGKILL.
         try {
+          writeCommand(child, { type: 'clear_queue', id: makeId() })
           writeCommand(child, { type: 'abort', id: makeId() })
         } catch {
           /* ignore — we're about to kill anyway */
@@ -528,17 +551,38 @@ export function createBridge(): Bridge {
         }, 500)
       }
       options.signal?.addEventListener('abort', onAbort, { once: true })
+      if (options.signal?.aborted) onAbort()
 
       try {
-        const promptTimeoutMs =
-          options.images && options.images.length > 0 ? 60_000 : 30_000
-        await sendAndAwait(handle, buildPromptCommand(task, options.images), promptTimeoutMs)
+        // The CLI can warn and silently fall back when --model does not match.
+        // RPC set_model fails explicitly, so never run on an unintended model.
+        const modelSeparator = options.model?.indexOf('/') ?? -1
+        if (options.model && modelSeparator > 0 && !/[?*]/.test(options.model)) {
+          await sendAndAwait(
+            handle,
+            {
+              type: 'set_model',
+              provider: options.model.slice(0, modelSeparator),
+              modelId: options.model.slice(modelSeparator + 1),
+            },
+            15_000
+          )
+        }
+        const promptTimeoutMs = options.images && options.images.length > 0 ? 60_000 : 30_000
+        const accepted = await sendAndAwait<{ data?: { disposition?: string } }>(
+          handle,
+          buildPromptCommand(task, options.images),
+          promptTimeoutMs
+        )
+        if (accepted.data?.disposition === 'handled' && !runStarted) {
+          throw new Error('The prompt was handled by an extension without starting an agent run.')
+        }
 
         let runTimeout: NodeJS.Timeout | undefined
         try {
           await Promise.race([
             agentEndPromise,
-            once(child, 'close').then(() => undefined),
+            closedPromise,
             new Promise<never>((_resolve, reject) => {
               runTimeout = setTimeout(
                 () =>

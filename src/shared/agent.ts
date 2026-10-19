@@ -21,6 +21,11 @@ export interface Stage {
   status: StageStatus
   /** Optional one-line detail (command stderr, error message, …). */
   detail?: string
+  /** Bounded plain-text tool output, never image/base64 payloads. */
+  output?: string
+  outputTruncated?: boolean
+  toolName?: string
+  durationMs?: number
 }
 
 export type AgentTimelineItem = { type: 'text'; text: string } | { type: 'stage'; stage: Stage }
@@ -35,6 +40,8 @@ export interface AgentInputImage {
 }
 
 export interface AgentRunRequest {
+  /** Client-generated correlation id; lets the UI subscribe before submitting. */
+  runId?: string
   task: string
   images?: AgentInputImage[]
   /** Existing directory used as the Pi subprocess cwd. */

@@ -156,7 +156,9 @@ export function labelForToolCall(toolName: string, args: unknown): string {
   if (toolName === 'generate_image') {
     return `generate image: ${truncate(str(safeArgs.prompt, '<prompt>'))}`
   }
-  const descriptor = PI_TOOLS[toolName as PiToolName]
+  const descriptor = Object.hasOwn(PI_TOOLS, toolName)
+    ? PI_TOOLS[toolName as PiToolName]
+    : undefined
   if (!descriptor) return `${toolName}`
   return descriptor.label(safeArgs)
 }

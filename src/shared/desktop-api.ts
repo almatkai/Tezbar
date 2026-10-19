@@ -129,7 +129,7 @@ export type RaymesApi = {
   extensionList: () => Promise<InstalledRegistryExtension[]>
   extensionSearchStore: (
     query: string,
-    options?: ExtensionCatalogQueryOptions,
+    options?: ExtensionCatalogQueryOptions
   ) => Promise<ExtensionStorePage>
   extensionInstall: (extensionId: string) => Promise<InstalledRegistryExtension>
   extensionUninstall: (extensionId: string) => Promise<boolean>
@@ -390,7 +390,7 @@ export type RaymesApi = {
   /** Capture the display under the pointer while temporarily hiding the Raymes window. */
   captureActiveScreen: () => Promise<AgentInputImage>
   /** Abort the currently running agent task, if any. */
-  agentCancel: () => Promise<{ ok: boolean }>
+  agentCancel: (runId?: string) => Promise<{ ok: boolean }>
   /** Resolve an in-chat command approval prompt. */
   agentApprove: (response: AgentApprovalResponse) => Promise<{ ok: boolean; error?: string }>
   /** Subscribe to agent run events (stages, message deltas, answers, errors). */
@@ -406,10 +406,7 @@ export type RaymesApi = {
   chatList: (limit?: number) => Promise<ChatSessionSummary[]>
   chatGet: (id: string) => Promise<ChatSession | null>
   chatAppend: (payload: {
-    session: Pick<
-      ChatSession,
-      'id' | 'title' | 'createdAt' | 'updatedAt' | 'workingDirectory'
-    >
+    session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt' | 'workingDirectory'>
     turn: ChatTurn
   }) => Promise<{ ok: boolean; error?: string }>
   chatUpdateTitle: (id: string, title: string) => Promise<{ ok: boolean }>

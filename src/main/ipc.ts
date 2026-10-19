@@ -113,7 +113,11 @@ import { fetchFrankfurterLatest } from './currency/frankfurter'
 import { addNamedPort, listNamedPorts, removeNamedPort } from './portManager/namedPortsStore'
 import { runAiActionMode } from './llm/actionMode'
 import type { VoiceModelId } from '../shared/voice'
-import type { KnowledgeDepth, KnowledgeIndexingSpeed, KnowledgeRootDepth } from '../shared/knowledge'
+import type {
+  KnowledgeDepth,
+  KnowledgeIndexingSpeed,
+  KnowledgeRootDepth,
+} from '../shared/knowledge'
 import { listBackgroundTasks } from './backgroundTasks'
 import { requestPermission, snapshotPermissions } from './permissions/manager'
 import { checkPiAgent, installPiAgent } from './agent/piInstall'
@@ -386,14 +390,15 @@ function startAgentRun(
   sender: WebContents,
   task: string,
   images: readonly AgentInputImage[] = [],
-  cwd?: string
+  cwd?: string,
+  requestedRunId?: string
 ): string {
   cancelPendingAgentApprovals()
   agentAbort?.abort()
   agentAbort = new AbortController()
   const ac = agentAbort
-  const runId =
-    (agentRunId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
+  const runId = (agentRunId =
+    requestedRunId ?? `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
   let emittedOutput = false
 
   sendAgentEvent(sender, { type: 'start', runId, task })
@@ -414,8 +419,6 @@ function startAgentRun(
   const onStderrLine = (line: string): void => {
     sendAgentEvent(sender, { type: 'log', runId, source: 'stderr', line })
   }
-
-  console.log('[tezbar:agent] run', { runId, taskPreview: task.slice(0, 120) })
 
   void (async () => {
     const [{ getSharedBridge }, { extractTextFromAgentImages }] = await Promise.all([
@@ -687,7 +690,9 @@ export function registerIpcHandlers(
         typeof id === 'string' &&
         (isCustomProvider(id) ||
           id.startsWith('custom:') ||
-          readLLMConfig().customProviders?.some((provider) => (provider.id as string) === (id as string)))
+          readLLMConfig().customProviders?.some(
+            (provider) => (provider.id as string) === (id as string)
+          ))
       if (
         id !== 'openai' &&
         id !== 'openai-compatible' &&
@@ -1151,11 +1156,13 @@ export function registerIpcHandlers(
       answerAbort?.abort()
       answerAbort = new AbortController()
       const ac = answerAbort
-      void import('./llm/answerStream').then(({ streamAnswerToRenderer }) =>
-        streamAnswerToRenderer(event.sender, intent.input, ac.signal)
-      ).finally(() => {
-        if (answerAbort === ac) answerAbort = null
-      })
+      void import('./llm/answerStream')
+        .then(({ streamAnswerToRenderer }) =>
+          streamAnswerToRenderer(event.sender, intent.input, ac.signal)
+        )
+        .finally(() => {
+          if (answerAbort === ac) answerAbort = null
+        })
     }
     if (intent.type === 'agent') {
       console.log('[IPC_CHANNELS.QUERY] starting startAgentRun')
@@ -1183,13 +1190,19 @@ export function registerIpcHandlers(
     if (request.cwd !== undefined && typeof request.cwd !== 'string') {
       return { ok: false, error: 'Invalid agent working directory' }
     }
+    if (
+      request.runId !== undefined &&
+      (typeof request.runId !== 'string' || !/^agent-[a-zA-Z0-9-]{1,100}$/.test(request.runId))
+    ) {
+      return { ok: false, error: 'Invalid agent run id' }
+    }
     const images = Array.isArray(request.images) ? request.images : []
     const requestedCwd = request.cwd?.trim() ?? ''
     const cwd = requestedCwd ? (resolveLauncherDirectory(requestedCwd) ?? undefined) : undefined
     if (requestedCwd && !cwd) {
       return { ok: false, error: `Directory does not exist: ${requestedCwd}` }
     }
-    const runId = startAgentRun(event.sender, task, images, cwd)
+    const runId = startAgentRun(event.sender, task, images, cwd, request.runId)
     return { ok: true, runId }
   })
 
@@ -1232,7 +1245,9 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(AGENT_IPC.CANCEL, async () => {
+  ipcMain.handle(AGENT_IPC.CANCEL, async (_event, expectedRunId: unknown) => {
+    // Late cancellation from a closed view must not stop a newer conversation.
+    if (expectedRunId !== undefined && expectedRunId !== agentRunId) return { ok: true }
     cancelPendingAgentApprovals(agentRunId ?? undefined)
     agentAbort?.abort()
     return { ok: true }
@@ -1478,28 +1493,31 @@ export function registerIpcHandlers(
     return listInstalledRegistryExtensions()
   })
 
-  ipcMain.handle('extension:search-store', async (_event, payload: unknown, maybeOptions?: unknown) => {
-    let query = ''
-    let offset: number | undefined
-    let limit: number | undefined
+  ipcMain.handle(
+    'extension:search-store',
+    async (_event, payload: unknown, maybeOptions?: unknown) => {
+      let query = ''
+      let offset: number | undefined
+      let limit: number | undefined
 
-    if (typeof payload === 'string') {
-      query = payload
-      if (maybeOptions && typeof maybeOptions === 'object') {
-        const opt = maybeOptions as { offset?: unknown; limit?: unknown }
-        if (typeof opt.offset === 'number') offset = opt.offset
-        if (typeof opt.limit === 'number') limit = opt.limit
+      if (typeof payload === 'string') {
+        query = payload
+        if (maybeOptions && typeof maybeOptions === 'object') {
+          const opt = maybeOptions as { offset?: unknown; limit?: unknown }
+          if (typeof opt.offset === 'number') offset = opt.offset
+          if (typeof opt.limit === 'number') limit = opt.limit
+        }
+      } else if (payload && typeof payload === 'object') {
+        const body = payload as { query?: unknown; offset?: unknown; limit?: unknown }
+        if (typeof body.query === 'string') query = body.query
+        if (typeof body.offset === 'number') offset = body.offset
+        if (typeof body.limit === 'number') limit = body.limit
       }
-    } else if (payload && typeof payload === 'object') {
-      const body = payload as { query?: unknown; offset?: unknown; limit?: unknown }
-      if (typeof body.query === 'string') query = body.query
-      if (typeof body.offset === 'number') offset = body.offset
-      if (typeof body.limit === 'number') limit = body.limit
-    }
 
-    const { searchExtensionCatalog } = await loadExtensionRegistry()
-    return searchExtensionCatalog(query, { offset, limit })
-  })
+      const { searchExtensionCatalog } = await loadExtensionRegistry()
+      return searchExtensionCatalog(query, { offset, limit })
+    }
+  )
 
   ipcMain.handle('extension:install', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
@@ -1669,7 +1687,10 @@ export function registerIpcHandlers(
       clipboard.writeImage(image)
       return { ok: true }
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : 'Could not copy QR image' }
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Could not copy QR image',
+      }
     }
   })
 
@@ -1773,12 +1794,19 @@ export function registerIpcHandlers(
 
   ipcMain.handle('knowledge:snapshot', async () => getKnowledgeService().snapshot())
   ipcMain.handle('knowledge:embedding:set', async (_event, model: unknown) => {
-    if (model !== 'built-in' && model !== 'embeddinggemma-2') throw new Error('Invalid embedding model')
+    if (model !== 'built-in' && model !== 'embeddinggemma-2')
+      throw new Error('Invalid embedding model')
     return getKnowledgeService().setEmbeddingModel(model)
   })
-  ipcMain.handle('knowledge:embedding:download', async () => getKnowledgeService().downloadEmbeddingModel())
-  ipcMain.handle('knowledge:embedding:cancel-download', async () => getKnowledgeService().cancelEmbeddingDownload())
-  ipcMain.handle('knowledge:embedding:remove', async () => getKnowledgeService().removeEmbeddingModel())
+  ipcMain.handle('knowledge:embedding:download', async () =>
+    getKnowledgeService().downloadEmbeddingModel()
+  )
+  ipcMain.handle('knowledge:embedding:cancel-download', async () =>
+    getKnowledgeService().cancelEmbeddingDownload()
+  )
+  ipcMain.handle('knowledge:embedding:remove', async () =>
+    getKnowledgeService().removeEmbeddingModel()
+  )
 
   ipcMain.handle('background-tasks:list', async () => listBackgroundTasks())
 

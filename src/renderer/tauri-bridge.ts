@@ -476,7 +476,7 @@ export function initTauriBridge(): void {
         mimeType: 'image/png' as const,
       }
     },
-    agentCancel: () => callBackend('agent:cancel'),
+    agentCancel: (runId) => callBackend('agent:cancel', runId),
     agentApprove: (response) => callBackend('agent:approve', response),
 
     chatRun: (turns: any[]) => callBackend('chat:run', turns),
@@ -496,7 +496,8 @@ export function initTauriBridge(): void {
 
     getUpdateStatus: () => invoke('get_update_status') as Promise<AppUpdateStatus>,
     getUpdateChannel: () => invoke('get_update_channel') as Promise<UpdateChannelInfo>,
-    setUpdateChannel: (channel) => invoke('set_update_channel', { channel }) as Promise<UpdateChannelInfo>,
+    setUpdateChannel: (channel) =>
+      invoke('set_update_channel', { channel }) as Promise<UpdateChannelInfo>,
     checkForUpdates: () => invoke('check_for_updates') as Promise<AppUpdateStatus>,
     downloadAndInstallUpdate: async () => {
       try {
@@ -520,8 +521,7 @@ export function initTauriBridge(): void {
       setupEventListener('stream-error', listener),
     onWindowShown: (listener: (payload: { resetUi: boolean }) => void) =>
       setupEventListener('window-shown', listener),
-    onWindowHidden: (listener: () => void) =>
-      setupEventListener('window-hidden', listener),
+    onWindowHidden: (listener: () => void) => setupEventListener('window-hidden', listener),
     onWindowVisibility: (listener: (visible: boolean) => void) =>
       setupEventListener('window-visibility', listener),
     onWindowSnapGuides: (
@@ -532,8 +532,7 @@ export function initTauriBridge(): void {
         centered: boolean
         targetRect: { left: number; top: number; right: number; bottom: number } | null
       }) => void
-    ) =>
-      setupEventListener('window:snap-guides', listener),
+    ) => setupEventListener('window:snap-guides', listener),
     getWindowSnapGuides: () => invoke('get_window_snap_guides'),
     onTerminalData: (listener: (event: any) => void) =>
       setupEventListener('terminal:data', listener),
@@ -547,7 +546,8 @@ export function initTauriBridge(): void {
     onAgentEvent: (listener: (event: any) => void) => setupEventListener('agent:event', listener),
     onExtensionInstallProgress: (listener: (payload: any) => void) =>
       setupEventListener('extension:install-progress', listener),
-    onLlmConfigChanged: (listener: () => void) => setupEventListener('llm-config-changed', listener),
+    onLlmConfigChanged: (listener: () => void) =>
+      setupEventListener('llm-config-changed', listener),
 
     startWindowSnapDrag: () => invoke('start_window_snap_drag'),
     endWindowSnapDrag: () => invoke('end_window_snap_drag'),

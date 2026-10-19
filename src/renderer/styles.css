@@ -160,7 +160,15 @@
       background-color: rgba(78, 98, 136, 0.12);
     }
 
-    :where(button, [role='button'], [role='menuitem'], input, textarea, select, a[href]):focus-visible {
+    :where(
+      button,
+      [role='button'],
+      [role='menuitem'],
+      input,
+      textarea,
+      select,
+      a[href]
+    ):focus-visible {
       outline: 2px solid rgb(var(--c-accent) / 0.68);
       outline-offset: 2px;
     }
@@ -373,11 +381,46 @@
     position: relative;
     border: 1px solid rgba(255, 255, 255, 0.075);
     border-radius: var(--r-card);
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.026), transparent 28%), rgba(13, 14, 18, 0.9);
+    background: rgb(var(--c-panel) / 0.96);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.045),
       0 18px 55px rgba(0, 0, 0, 0.2);
+  }
+
+  .agent-result {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+
+  .agent-result table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .agent-tool-step > summary {
+    user-select: none;
+  }
+
+  :root[data-theme='white'] .agent-tool-step,
+  :root[data-theme='white'] .agent-composer {
+    border-color: rgba(0, 0, 0, 0.12);
+    background-color: rgba(0, 0, 0, 0.025);
+  }
+
+  :root[data-theme='white'] .agent-user-bubble {
+    border-color: rgba(0, 0, 0, 0.08);
+    background-color: rgba(0, 0, 0, 0.045);
+  }
+
+  :root[data-theme='white'] .agent-run-error {
+    color: #9b2442;
+    background-color: #fff0f3;
+    border-color: #e8bdc8;
+  }
+
+  :root[data-theme='white'] .agent-tool-step .text-rose-300 {
+    color: #9b2442;
   }
 
   .agent-chat-shell > * {
@@ -628,7 +671,8 @@
     background: #e7def9;
   }
 
-  :root[data-theme='white'] :is(.command-terminal-icon, .command-terminal-prompt, .command-terminal-heading),
+  :root[data-theme='white']
+    :is(.command-terminal-icon, .command-terminal-prompt, .command-terminal-heading),
   :root[data-theme='white'] .command-terminal-session-status.command-terminal-running {
     color: #0b7651;
   }
@@ -748,7 +792,9 @@
   :root[data-theme='white'] .cleanmymac-sidebar [aria-current='page'] {
     background: rgba(255, 255, 255, 0.86);
     color: rgb(var(--c-text-1));
-    box-shadow: inset 0 0 0 1px rgba(76, 94, 125, 0.14), 0 2px 6px rgba(34, 48, 76, 0.04);
+    box-shadow:
+      inset 0 0 0 1px rgba(76, 94, 125, 0.14),
+      0 2px 6px rgba(34, 48, 76, 0.04);
   }
 
   /* A transparent, click-through work-area overlay renders the fixed

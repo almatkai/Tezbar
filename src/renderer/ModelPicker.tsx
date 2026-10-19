@@ -26,6 +26,7 @@ export function ModelPicker({
   onConfigure,
   onBeforeOpen,
   triggerClassName,
+  disabled = false,
 }: {
   config: LlmConfigRecord
   open: boolean
@@ -34,6 +35,7 @@ export function ModelPicker({
   onConfigure: () => void
   onBeforeOpen?: () => void
   triggerClassName?: string
+  disabled?: boolean
 }): JSX.Element {
   const activeProvider = (config.provider ?? 'ollama') as ProviderId
   const activeModel =
@@ -107,6 +109,7 @@ export function ModelPicker({
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
+        disabled={disabled}
         className={cx(
           'group inline-flex h-7 max-w-[260px] items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.035] px-2 text-[11px] text-ink-2 transition hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-ink-1',
           triggerClassName
@@ -121,7 +124,17 @@ export function ModelPicker({
           onOpenChange(nextOpen)
         }}
       >
-        <span className="model-picker-active-dot h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/80" />
+        <span
+          title={
+            isAiProviderConfigured(config, activeProvider)
+              ? 'Provider configured; connection checked when sending'
+              : 'Provider needs configuration'
+          }
+          className={cx(
+            'model-picker-active-dot h-1.5 w-1.5 shrink-0 rounded-full',
+            isAiProviderConfigured(config, activeProvider) ? 'bg-emerald-400/80' : 'bg-ink-4/50'
+          )}
+        />
         <span className="truncate font-medium leading-normal py-0.5">{activeModel}</span>
         <svg
           viewBox="0 0 16 16"
@@ -230,7 +243,9 @@ export function ModelPicker({
                         }}
                       >
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[12px] font-medium leading-snug py-0.5">{model.id}</span>
+                          <span className="block truncate text-[12px] font-medium leading-snug py-0.5">
+                            {model.id}
+                          </span>
                           <span className="mt-0.5 block truncate text-[9.5px] leading-snug text-ink-4">
                             {[
                               ...model.capabilities,
