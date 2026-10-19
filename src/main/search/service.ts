@@ -15,6 +15,7 @@ import type {
   SearchResult,
 } from '../../shared/search'
 import { searchQueryVariants } from '../../shared/searchQueryVariants'
+import { applicationNameMatchScore, applicationSearchAliases } from '../../shared/applicationSearch'
 import type { NativeCommandId } from '../../shared/nativeCommands'
 import type { SafetyActionId } from '../../shared/safety'
 import {
@@ -292,7 +293,6 @@ async function refreshAllProviders(): Promise<void> {
     upsertProvider(appsProvider),
   ])
   indexDb.clearSearchCache()
-
 }
 
 async function refreshVolatileProviders(): Promise<void> {
@@ -496,6 +496,7 @@ function internalSurfaceBoost(
     category === 'applications' ||
     category === 'quick-notes'
   if (!hit) return 0
+  if (category === 'applications') return applicationNameMatchScore(title, query) * 600
 
   const normalizedTitle = title.toLowerCase()
   const normalizedQuery = query.trim().toLowerCase()
@@ -597,7 +598,7 @@ function fullTokenMatchBoost(query: string, title: string, subtitle: string): nu
     query
       .trim()
       .toLowerCase()
-      .match(/[a-z0-9]+/g) ?? []
+      .match(/[\p{L}\p{N}]+/gu) ?? []
   if (tokens.length < 2) return 0
   const text = `${title} ${subtitle}`.toLowerCase()
   const allMatch = tokens.every((t) => text.includes(t))
@@ -1019,17 +1020,16 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     return true
   })
   const fileResults = asResults.filter((result) => result.category === 'files')
-  const indexedSourceResults = (knowledgeService?.searchMetadata(trimmed, 24) ?? [])
-    .map(
-      (hit, index): SearchResult => ({
-        id: `file:${hit.path}`,
-        title: hit.title,
-        subtitle: hit.path,
-        category: 'files',
-        score: 760 + Math.round(hit.score * 160) - index,
-        action: { type: 'open-file', path: hit.path },
-      })
-    )
+  const indexedSourceResults = (knowledgeService?.searchMetadata(trimmed, 24) ?? []).map(
+    (hit, index): SearchResult => ({
+      id: `file:${hit.path}`,
+      title: hit.title,
+      subtitle: hit.path,
+      category: 'files',
+      score: 760 + Math.round(hit.score * 160) - index,
+      action: { type: 'open-file', path: hit.path },
+    })
+  )
   const allFileResults = uniqById([...fileResults, ...indexedSourceResults])
 
   const openPortResults = isDeepSearch ? [] : await searchPortManagerOpenPorts(trimmed)
@@ -1406,16 +1406,6 @@ function appAcronym(name: string): string {
     .join('')
 }
 
-function builtInAppAliases(appName: string): string[] {
-  const n = appName.toLowerCase()
-  if (n === 'visual studio code') return ['vscode', 'vsc', 'code', 'vs code']
-  if (n === 'quicktime player') return ['quicktime', 'qt', 'qtp']
-  if (n === 'activity monitor') return ['activity', 'taskmanager', 'task monitor']
-  if (n === 'terminal') return ['term', 'shell']
-  if (n === 'finder') return ['files', 'filemanager']
-  return []
-}
-
 function appMatchesTerm(
   appName: string,
   term: string,
@@ -1428,7 +1418,7 @@ function appMatchesTerm(
   if (normalizedName.includes(normalizedTerm)) return true
   if (appAcronym(appName).includes(normalizedTerm)) return true
   if (
-    builtInAppAliases(appName).some((alias) =>
+    applicationSearchAliases(appName).some((alias) =>
       normalizeAppSearchTerm(alias).includes(normalizedTerm)
     )
   ) {

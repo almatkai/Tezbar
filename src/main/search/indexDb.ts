@@ -3,6 +3,7 @@ import DatabaseCtor, { type Database as DatabaseType } from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SearchAction, SearchCategory } from '../../shared/search'
+import { applicationNameMatchScore } from '../../shared/applicationSearch'
 import { searchQueryVariants } from '../../shared/searchQueryVariants'
 import { buildFtsQuery, fuzzySimilarityScore, levenshteinDistance, lexicalScore } from './textMatch'
 import type { IndexedDocument } from './providers/types'
@@ -162,6 +163,8 @@ export class SearchIndexDatabase {
         source_mtime INTEGER,
         popularity REAL NOT NULL DEFAULT 0
       );
+
+      CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 
       CREATE TABLE IF NOT EXISTS action_stats (
         action_id TEXT PRIMARY KEY,
@@ -484,25 +487,44 @@ export class SearchIndexDatabase {
       }
     }
 
-    const result = Array.from(byId.values())
-      .sort((a, b) => b.lexical - a.lexical)
-      .slice(0, candidateLimit)
-
-    if (trimmed === 'process kill' || trimmed === 'timer stop' || trimmed === 'stop timer') {
-      const lines: string[] = []
-      lines.push(
-        `[Search DEBUG] query="${trimmed}" ftsQuery="${ftsQuery}" FTS rows=${rows.length} mapped=${mapped.length} fuzzyRows=${fuzzyRows.length}`
-      )
-      for (const r of result.slice(0, 10)) {
-        lines.push(`  [DEBUG] lex=${r.lexical.toFixed(3)} cat=${r.category} title="${r.title}"`)
-      }
-      try {
-        const fs = require('fs')
-        fs.appendFileSync('/tmp/search_debug.log', lines.join('\n') + '\n\n')
-      } catch {}
-    }
+    // Apps are a compact, indexed corpus. Reserve strong name/alias matches
+    // before truncating file candidates: a large set of settings.json / vs.py
+    // hits must not exclude VS Code before the service can rank it. This also
+    // works with persisted app rows written before aliases were indexed.
+    const appRows = this.searchApplicationNames(variants, Math.min(candidateLimit, 20))
+    const appIds = new Set(appRows.map((row) => row.id))
+    const result = [
+      ...appRows,
+      ...Array.from(byId.values())
+        .filter((row) => !appIds.has(row.id))
+        .sort((a, b) => b.lexical - a.lexical),
+    ].slice(0, candidateLimit)
 
     return result
+  }
+
+  private searchApplicationNames(variants: string[], limit: number): SearchIndexRow[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, category, title, subtitle, action_json AS actionJson,
+                updated_at AS updatedAt, popularity
+         FROM documents WHERE category = 'applications'`
+      )
+      .all() as Omit<SearchIndexRow, 'lexical'>[]
+
+    return rows
+      .map((row) => ({
+        ...row,
+        lexical: Math.max(
+          0,
+          ...variants.map(
+            (query, index) => applicationNameMatchScore(row.title, query) * (index === 0 ? 1 : 0.9)
+          )
+        ),
+      }))
+      .filter((row) => row.lexical > 0)
+      .sort((left, right) => right.lexical - left.lexical || left.title.localeCompare(right.title))
+      .slice(0, limit)
   }
 
   private fuzzySearch(variants: string[], limit: number): SearchIndexRow[] {

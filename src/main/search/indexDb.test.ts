@@ -86,18 +86,68 @@ describe('search index hot usage window', () => {
         action: { type: 'open-app', appName: 'Google Chrome' },
         updatedAt: 1,
       },
-      ...Array.from({ length: 1001 }, (_, i): IndexedDocument => ({
-        id: `command:${i}`,
-        category: 'commands',
-        title: `Unrelated fixture ${i}`,
-        subtitle: 'Fixture',
-        tokens: 'unrelated fixture',
-        action: { type: 'copy-text', text: 'fixture' },
-        updatedAt: i + 2,
-      })),
+      ...Array.from(
+        { length: 1001 },
+        (_, i): IndexedDocument => ({
+          id: `command:${i}`,
+          category: 'commands',
+          title: `Unrelated fixture ${i}`,
+          subtitle: 'Fixture',
+          tokens: 'unrelated fixture',
+          action: { type: 'copy-text', text: 'fixture' },
+          updatedAt: i + 2,
+        })
+      ),
     ])
 
     expect(index.getSearch('СРКЩЬУ', 10).map((row) => row.id)).toContain('app:chrome')
+  })
+
+  it('keeps app aliases above a crowded file index, including persisted apps without alias tokens', async () => {
+    await index.ensureInitialized()
+    index.upsertDocuments([
+      {
+        id: 'app:vscode',
+        category: 'applications',
+        title: 'Visual Studio Code',
+        subtitle: '/Applications/Visual Studio Code.app',
+        tokens: 'Visual Studio Code /Applications/Visual Studio Code.app',
+        action: { type: 'open-app', appName: 'Visual Studio Code' },
+        updatedAt: 1,
+      },
+      ...Array.from(
+        { length: 1100 },
+        (_, i): IndexedDocument => ({
+          id: `command:unrelated:${i}`,
+          category: 'commands',
+          title: `Unrelated command ${i}`,
+          subtitle: 'Fixture',
+          tokens: 'unrelated fixture',
+          action: { type: 'copy-text', text: 'fixture' },
+          updatedAt: i + 2,
+        })
+      ),
+      ...Array.from(
+        { length: 1800 },
+        (_, i): IndexedDocument => ({
+          id: `file:vscode:${i}`,
+          category: 'files',
+          title: 'vs code',
+          subtitle: `/projects/${i}/vs/code/settings.json`,
+          tokens: 'vs code settings',
+          action: { type: 'open-file', path: `/projects/${i}/vs/code/settings.json` },
+          updatedAt: i + 2,
+        })
+      ),
+    ])
+
+    for (const query of ['vs code', 'мы сщву', 'vs сщву', 'мы code', 'вс код']) {
+      const hits = index.getSearch(query, 80)
+      expect(
+        hits.slice(0, 10).map((row) => row.id),
+        query
+      ).toContain('app:vscode')
+    }
   })
 
   it('keeps literal Russian matches and also searches the reverse layout', async () => {
@@ -127,9 +177,7 @@ describe('search index hot usage window', () => {
     expect(literal[0].id).toBe('note:russian')
     expect(literal.map((row) => row.id)).toContain('note:english')
     expect(index.getSearch('ghbdtn', 10)[0].id).toBe('note:english')
-    expect(index.getSearch('Привет', 10).map((row) => row.id)).toEqual(
-      literal.map((row) => row.id)
-    )
+    expect(index.getSearch('Привет', 10).map((row) => row.id)).toEqual(literal.map((row) => row.id))
   })
 
   it('migrates the legacy unindexed-id FTS table and keeps updates synchronized by rowid', async () => {
