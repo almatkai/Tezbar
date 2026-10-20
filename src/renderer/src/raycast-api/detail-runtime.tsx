@@ -352,7 +352,7 @@ function ColorWheelDetail({
               className="group flex w-full items-start justify-between gap-3 rounded-tezbar-row px-3 py-2.5 text-left transition hover:bg-white/10"
             >
               <span className="min-w-0">
-                <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-4">
+                <span className="block text-[11px] font-semibold text-ink-4">
                   {format.title}
                 </span>
                 <span className="mt-1 block truncate font-mono text-[13px] text-ink-1">

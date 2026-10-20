@@ -660,7 +660,7 @@ export default function TerminalView({
     <section
       aria-label="Terminal"
       className={cx(
-        'flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in',
+        'view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in',
         embedded ? 'flex-1' : 'h-[560px] min-h-[560px]',
       )}
     >
@@ -719,14 +719,9 @@ export default function TerminalView({
           <button
             type="button"
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            aria-expanded={isDropdownOpen}
             className="flex items-center gap-2 rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-ink-3 transition hover:bg-white/[0.08] hover:text-ink-1"
           >
-            <span className={cx(
-              "h-1.5 w-1.5 rounded-full",
-              activeSession?.status === 'running'
-                ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]"
-                : "bg-white/20"
-            )} />
             <span>Sessions ({sessions.filter(s => s.status === 'running').length})</span>
             <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 opacity-60">
               <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
@@ -744,12 +739,11 @@ export default function TerminalView({
           {isDropdownOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
-              <div className="glass-card absolute right-0 top-[32px] z-50 w-[280px] max-h-[300px] overflow-y-auto rounded-[18px] border border-white/[0.1] bg-[#10131d]/95 p-2 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+              <div className="tezbar-popover terminal-sessions-menu no-drag absolute right-0 top-[32px] z-50 w-[280px] max-h-[300px] overflow-y-auto rounded-[12px] border p-2">
                 {sessions.length === 0 ? (
                   <div className="p-3 text-[11px] text-ink-4">No sessions active.</div>
                 ) : (
                   sessions.map((session, index) => {
-                    const running = session.status === 'running'
                     const active = session.sessionId === activeSessionId
                     return (
                       <button
@@ -769,14 +763,6 @@ export default function TerminalView({
                         {active && (
                           <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-400 to-teal-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
                         )}
-                        <span
-                          className={cx(
-                            'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
-                            running
-                              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]'
-                              : 'bg-white/20'
-                          )}
-                        />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[11.5px] font-semibold">
                             {session.name}
@@ -798,7 +784,7 @@ export default function TerminalView({
         </div>
       </header>
 
-      <div className="glass-card no-drag relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#10131d]/92 shadow-[0_24px_60px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.035)] p-3">
+      <div className="sheet-above-bar glass-card no-drag relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#10131d]/92 shadow-[0_24px_60px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.035)] p-3">
         <div ref={hostRef} className="terminal-host h-full w-full overflow-hidden" />
       </div>
 
@@ -836,7 +822,7 @@ export default function TerminalView({
               </button>
             </div>
             <label className="mb-3 block" htmlFor="terminal-session-name">
-              <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+              <span className="mb-1.5 block text-[11px] font-semibold text-ink-3">
                 Name
               </span>
               <TextField
@@ -850,7 +836,7 @@ export default function TerminalView({
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="block" htmlFor="terminal-session-save-for">
-                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+                <span className="mb-1.5 block text-[11px] font-semibold text-ink-3">
                   Save session for
                 </span>
                 <SelectField
@@ -871,7 +857,7 @@ export default function TerminalView({
                 </SelectField>
               </label>
               <label className="block" htmlFor="terminal-session-keep-alive">
-                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+                <span className="mb-1.5 block text-[11px] font-semibold text-ink-3">
                   Keep process running
                 </span>
                 <SelectField

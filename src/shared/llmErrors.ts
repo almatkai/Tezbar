@@ -16,6 +16,13 @@ export function formatLlmErrorMessage(raw: string, providerLabel = 'AI provider'
   const trimmed = raw.trim()
   const detail = apiErrorDetail(trimmed)
   const message = detail || trimmed
+  if (
+    /failed to write to backend runner|backend runner (?:is still recovering|stopped|restarting)/i.test(
+      message
+    )
+  ) {
+    return 'The background service disconnected. Tezbar is reconnecting. Wait a moment, then try again. Your message has been kept.'
+  }
   const unsupportedModel = message.match(
     /supported API model names are (.+?), but you passed (.+?)(?:\.$|$)/i
   )

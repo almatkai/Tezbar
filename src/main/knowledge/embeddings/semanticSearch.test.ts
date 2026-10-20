@@ -56,11 +56,12 @@ function fixture() {
     shutdown: vi.fn(),
   }
   let roots = ['root']
+  const readRoots = vi.fn(() => roots)
   const semantic = new SemanticSearch(
     store,
     {
       enabled: () => true,
-      roots: () => roots,
+      roots: readRoots,
       allRoots: () => roots,
       canIndex: () => true,
       waitForIdle: async () => {},
@@ -71,6 +72,7 @@ function fixture() {
     store,
     semantic,
     runtime,
+    readRoots,
     vector,
     disableRoot: () => {
       roots = []
@@ -79,6 +81,51 @@ function fixture() {
 }
 
 describe('optional semantic search lifecycle', () => {
+  it('polls live runtime progress with cached counts without reading the corpus', () => {
+    const { store, semantic, runtime, readRoots } = fixture()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(0)
+    const index = store.getGemmaIndex()
+    const counts = vi.spyOn(index, 'counts')
+    try {
+      // A cold poll must not populate counts by scanning the corpus.
+      expect(semantic.cachedSnapshot().totalChunks).toBe(0)
+      expect(counts).not.toHaveBeenCalled()
+      expect(readRoots).not.toHaveBeenCalled()
+      expect(semantic.snapshot().totalChunks).toBe(1)
+      counts.mockClear()
+      readRoots.mockClear()
+      clock.mockReturnValue(20_000)
+      const runtimeStatus = vi.spyOn(runtime, 'snapshot')
+      runtimeStatus.mockReturnValue({
+        supported: true,
+        modelState: 'downloading',
+        downloadProgress: 0.5,
+        downloadBytes: 50,
+        downloadTotalBytes: 100,
+      })
+      expect(semantic.cachedSnapshot()).toMatchObject({
+        modelState: 'downloading',
+        downloadProgress: 0.5,
+        downloadBytes: 50,
+      })
+      runtimeStatus.mockReturnValue({
+        supported: true,
+        modelState: 'ready',
+        downloadProgress: 1,
+        downloadBytes: 100,
+        downloadTotalBytes: 100,
+      })
+      // Even an expired cache is read as-is by the launcher.
+      expect(semantic.cachedSnapshot().totalChunks).toBe(1)
+      expect(counts).not.toHaveBeenCalled()
+      expect(readRoots).not.toHaveBeenCalled()
+    } finally {
+      clock.mockRestore()
+      semantic.shutdown()
+      store.close()
+    }
+  })
+
   it('keeps a slow initial count fresh after the query finishes', () => {
     const { store, semantic } = fixture()
     let now = 0

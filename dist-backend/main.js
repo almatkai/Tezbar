@@ -163,7 +163,7 @@ function readClipboardSnapshot() {
   if (process.platform === "darwin") return readMacClipboardSnapshot();
   if (process.platform === "win32") return readWindowsClipboardSnapshot();
   try {
-    return { text: (0, import_node_child_process.execFileSync)("pbpaste", [], { encoding: "utf8" }), filePaths: [], hasImage: false, changeCount: 0 };
+    return { text: (0, import_node_child_process.execFileSync)("pbpaste", [], { encoding: "utf8", env: macClipboardProcessEnv() }), filePaths: [], hasImage: false, changeCount: 0 };
   } catch {
     return { text: "", filePaths: [], hasImage: false, changeCount: 0 };
   }
@@ -173,6 +173,9 @@ function windowsClipboardWriteTextScript() {
 }
 function windowsClipboardReadTextScript() {
   return "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::Write((Get-Clipboard -Raw))";
+}
+function macClipboardProcessEnv() {
+  return { ...process.env, LANG: "en_US.UTF-8", LC_CTYPE: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" };
 }
 var import_node_path, import_node_os, import_node_child_process, import_node_fs, import_node_util, execFileAsync, backendWebContents, IpcMain, ipcMain, app, shell, clipboard, dialog, session, screen, desktopCapturer, nativeImage, globalShortcut, BrowserWindow, systemPreferences;
 var init_desktop_runtime = __esm({
@@ -285,24 +288,22 @@ var init_desktop_runtime = __esm({
       }
     };
     clipboard = {
-      async writeTextAsync(text3) {
-        if (process.platform !== "win32") {
-          this.writeText(text3);
-          return;
-        }
+      async writeTextAsync(text4) {
+        const windows = process.platform === "win32";
         await new Promise((resolve6, reject) => {
-          const child2 = (0, import_node_child_process.spawn)(
+          const child2 = windows ? (0, import_node_child_process.spawn)(
             "powershell.exe",
             ["-NoProfile", "-NonInteractive", "-Sta", "-Command", windowsClipboardWriteTextScript()],
             { windowsHide: true }
-          );
+          ) : (0, import_node_child_process.spawn)("pbcopy", [], { env: macClipboardProcessEnv() });
           child2.on("error", reject);
           child2.stdin.on("error", reject);
           child2.on("close", (code) => {
             if (code === 0) resolve6();
-            else reject(new Error(`Windows clipboard write failed (${code})`));
+            else reject(new Error(`${windows ? "Windows" : "macOS"} clipboard write failed (${code})`));
           });
-          child2.stdin.end(Buffer.from(text3, "utf8").toString("base64"));
+          const bytes = Buffer.from(text4, "utf8");
+          child2.stdin.end(windows ? bytes.toString("base64") : bytes);
         });
       },
       async readSnapshotAsync() {
@@ -329,33 +330,15 @@ var init_desktop_runtime = __esm({
               { encoding: "utf8", windowsHide: true, timeout: 3e3 }
             );
           }
-          return (0, import_node_child_process.execFileSync)("pbpaste", [], { encoding: "utf8" });
+          return (0, import_node_child_process.execFileSync)("pbpaste", [], { encoding: "utf8", env: macClipboardProcessEnv() });
         } catch {
           return "";
         }
       },
-      writeText(text3) {
-        try {
-          if (process.platform === "win32") {
-            void this.writeTextAsync(text3).catch(
-              (error) => console.error("[desktop-runtime] clipboard text copy failed:", error)
-            );
-            return;
-          }
-          const child2 = (0, import_node_child_process.spawn)("pbcopy");
-          child2.on(
-            "error",
-            (error) => console.error("[desktop-runtime] clipboard text copy failed:", error)
-          );
-          child2.stdin.on(
-            "error",
-            (error) => console.error("[desktop-runtime] clipboard input failed:", error)
-          );
-          child2.stdin.write(text3);
-          child2.stdin.end();
-        } catch (error) {
-          console.error("[desktop-runtime] clipboard text copy failed:", error);
-        }
+      writeText(text4) {
+        void this.writeTextAsync(text4).catch(
+          (error) => console.error("[desktop-runtime] clipboard text copy failed:", error)
+        );
       },
       availableFormats() {
         return this.readText() ? ["text/plain"] : [];
@@ -1755,6 +1738,11 @@ function formatLlmErrorMessage(raw, providerLabel = "AI provider") {
   const trimmed = raw.trim();
   const detail = apiErrorDetail(trimmed);
   const message = detail || trimmed;
+  if (/failed to write to backend runner|backend runner (?:is still recovering|stopped|restarting)/i.test(
+    message
+  )) {
+    return "The background service disconnected. Tezbar is reconnecting. Wait a moment, then try again. Your message has been kept.";
+  }
   const unsupportedModel = message.match(
     /supported API model names are (.+?), but you passed (.+?)(?:\.$|$)/i
   );
@@ -1899,7 +1887,7 @@ var init_openai = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/tslib.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/tslib.mjs
 function __classPrivateFieldSet(receiver, state, value, kind, f) {
   if (kind === "m")
     throw new TypeError("Private method is not writable");
@@ -1917,14 +1905,14 @@ function __classPrivateFieldGet(receiver, state, kind, f) {
   return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
 }
 var init_tslib = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/tslib.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/tslib.mjs"() {
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs
 var uuid4;
 var init_uuid = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/uuid.mjs"() {
     uuid4 = function() {
       const { crypto } = globalThis;
       if (crypto?.randomUUID) {
@@ -1938,7 +1926,7 @@ var init_uuid = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/errors.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/errors.mjs
 function isAbortError(err) {
   return typeof err === "object" && err !== null && // Spec-compliant fetch implementations
   ("name" in err && err.name === "AbortError" || // Expo fetch
@@ -1946,7 +1934,7 @@ function isAbortError(err) {
 }
 var castToError;
 var init_errors = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/errors.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/errors.mjs"() {
     castToError = (err) => {
       if (err instanceof Error)
         return err;
@@ -1974,10 +1962,10 @@ var init_errors = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/error.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/error.mjs
 var AnthropicError, APIError, APIUserAbortError, APIConnectionError, APIConnectionTimeoutError, BadRequestError, AuthenticationError, PermissionDeniedError, NotFoundError, ConflictError, UnprocessableEntityError, RateLimitError, InternalServerError;
 var init_error = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/error.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/error.mjs"() {
     init_errors();
     AnthropicError = class extends Error {
     };
@@ -2072,7 +2060,7 @@ var init_error = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs
 function maybeObj(x) {
   if (typeof x !== "object") {
     return {};
@@ -2091,7 +2079,7 @@ function hasOwn(obj, key) {
 }
 var startsWithSchemeRegexp, isAbsoluteURL, isArray, isReadonlyArray, validatePositiveInteger, safeJSON;
 var init_values = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/values.mjs"() {
     init_error();
     startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
     isAbsoluteURL = (url) => {
@@ -2108,9 +2096,9 @@ var init_values = __esm({
       }
       return n;
     };
-    safeJSON = (text3) => {
+    safeJSON = (text4) => {
       try {
-        return JSON.parse(text3);
+        return JSON.parse(text4);
       } catch (err) {
         return void 0;
       }
@@ -2118,23 +2106,23 @@ var init_values = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs
 var sleep;
 var init_sleep = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/sleep.mjs"() {
     sleep = (ms) => new Promise((resolve6) => setTimeout(resolve6, ms));
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/version.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/version.mjs
 var VERSION;
 var init_version = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/version.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/version.mjs"() {
     VERSION = "0.90.0";
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
 function getDetectedPlatform() {
   if (typeof Deno !== "undefined" && Deno.build != null) {
     return "deno";
@@ -2172,7 +2160,7 @@ function getBrowserInfo() {
 }
 var isRunningInBrowser, getPlatformProperties, normalizeArch, normalizePlatform, _platformHeaders, getPlatformHeaders;
 var init_detect_platform = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs"() {
     init_version();
     isRunningInBrowser = () => {
       return (
@@ -2273,7 +2261,7 @@ var init_detect_platform = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/shims.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/shims.mjs
 function getDefaultFetch() {
   if (typeof fetch !== "undefined") {
     return fetch;
@@ -2345,14 +2333,14 @@ async function CancelReadableStream(stream) {
   await cancelPromise;
 }
 var init_shims = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/shims.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/shims.mjs"() {
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/request-options.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/request-options.mjs
 var FallbackEncoder;
 var init_request_options = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/request-options.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/request-options.mjs"() {
     FallbackEncoder = ({ headers, body }) => {
       return {
         bodyHeaders: {
@@ -2364,7 +2352,7 @@ var init_request_options = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs
 function stringifyQuery(query) {
   return Object.entries(query).filter(([_, value]) => typeof value !== "undefined").map(([key, value]) => {
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -2377,12 +2365,12 @@ function stringifyQuery(query) {
   }).join("&");
 }
 var init_query = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/query.mjs"() {
     init_error();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs
 function concatBytes(buffers) {
   let length = 0;
   for (const buffer of buffers) {
@@ -2406,11 +2394,11 @@ function decodeUTF8(bytes) {
 }
 var encodeUTF8_, decodeUTF8_;
 var init_bytes = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs"() {
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs
 function findNewlineIndex(buffer, startIndex) {
   const newline = 10;
   const carriage = 13;
@@ -2442,7 +2430,7 @@ function findDoubleNewlineIndex(buffer) {
 }
 var _LineDecoder_buffer, _LineDecoder_carriageReturnIndex, LineDecoder;
 var init_line = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/decoders/line.mjs"() {
     init_tslib();
     init_bytes();
     LineDecoder = class {
@@ -2492,7 +2480,7 @@ var init_line = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs
 function noop() {
 }
 function makeLogFn(fnLevel, logger, logLevel) {
@@ -2523,7 +2511,7 @@ function loggerFor(client) {
 }
 var levelNumbers, parseLogLevel, noopLogger, cachedLoggers, formatRequestDetails;
 var init_log = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/log.mjs"() {
     init_values();
     levelNumbers = {
       off: 0,
@@ -2571,7 +2559,7 @@ var init_log = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/streaming.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/streaming.mjs
 async function* _iterSSEMessages(response, controller) {
   if (!response.body) {
     controller.abort();
@@ -2626,7 +2614,7 @@ function partition(str2, delimiter3) {
 }
 var _Stream_client, Stream, SSEDecoder;
 var init_streaming = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/streaming.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/streaming.mjs"() {
     init_tslib();
     init_error();
     init_shims();
@@ -2836,7 +2824,7 @@ var init_streaming = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/parse.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/parse.mjs
 async function defaultParseResponse(client, props) {
   const { response, requestLogID, retryOfRequestLogID, startTime } = props;
   const body = await (async () => {
@@ -2864,8 +2852,8 @@ async function defaultParseResponse(client, props) {
       const json = await response.json();
       return addRequestID(json, response);
     }
-    const text3 = await response.text();
-    return text3;
+    const text4 = await response.text();
+    return text4;
   })();
   loggerFor(client).debug(`[${requestLogID}] response parsed`, formatRequestDetails({
     retryOfRequestLogID,
@@ -2886,16 +2874,16 @@ function addRequestID(value, response) {
   });
 }
 var init_parse = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/parse.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/parse.mjs"() {
     init_streaming();
     init_log();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/api-promise.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/api-promise.mjs
 var _APIPromise_client, APIPromise;
 var init_api_promise = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/api-promise.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/api-promise.mjs"() {
     init_tslib();
     init_parse();
     APIPromise = class _APIPromise extends Promise {
@@ -2961,10 +2949,10 @@ var init_api_promise = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/pagination.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/pagination.mjs
 var _AbstractPage_client, AbstractPage, PagePromise, Page, PageCursor;
 var init_pagination = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/pagination.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/pagination.mjs"() {
     init_tslib();
     init_error();
     init_parse();
@@ -3095,7 +3083,7 @@ var init_pagination = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/uploads.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/uploads.mjs
 function makeFile(fileBits, fileName, options) {
   checkFileSupport();
   return new File(fileBits, fileName ?? "unknown_file", options);
@@ -3126,7 +3114,7 @@ function supportsFormData(fetchObject) {
 }
 var checkFileSupport, isAsyncIterable, multipartFormRequestOptions, supportsFormDataMap, createForm, isNamedBlob, addFormValue;
 var init_uploads = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/uploads.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/uploads.mjs"() {
     init_shims();
     checkFileSupport = () => {
       if (typeof File === "undefined") {
@@ -3179,7 +3167,7 @@ var init_uploads = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/to-file.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/to-file.mjs
 async function toFile(value, name, options) {
   checkFileSupport();
   value = await value;
@@ -3233,7 +3221,7 @@ function propsForError(value) {
 }
 var isBlobLike, isFileLike, isResponseLike;
 var init_to_file = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/to-file.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/to-file.mjs"() {
     init_uploads();
     init_uploads();
     isBlobLike = (value) => value != null && typeof value === "object" && typeof value.size === "number" && typeof value.type === "string" && typeof value.text === "function" && typeof value.slice === "function" && typeof value.arrayBuffer === "function";
@@ -3242,23 +3230,23 @@ var init_to_file = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/uploads.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/uploads.mjs
 var init_uploads2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/uploads.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/uploads.mjs"() {
     init_to_file();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/shared.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/shared.mjs
 var init_shared = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/shared.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/shared.mjs"() {
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/resource.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/resource.mjs
 var APIResource;
 var init_resource = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/core/resource.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/core/resource.mjs"() {
     APIResource = class {
       constructor(client) {
         this._client = client;
@@ -3267,7 +3255,7 @@ var init_resource = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/headers.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/headers.mjs
 function* iterateHeaders(headers) {
   if (!headers)
     return;
@@ -3308,7 +3296,7 @@ function* iterateHeaders(headers) {
 }
 var brand_privateNullableHeaders, buildHeaders;
 var init_headers = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/headers.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/headers.mjs"() {
     init_values();
     brand_privateNullableHeaders = /* @__PURE__ */ Symbol.for("brand.privateNullableHeaders");
     buildHeaders = (newHeaders) => {
@@ -3336,13 +3324,13 @@ var init_headers = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs
 function encodeURIPath(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 var EMPTY, createPathTagFunction, path;
 var init_path = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/path.mjs"() {
     init_error();
     EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
     createPathTagFunction = (pathEncoder = encodeURIPath) => function path8(statics, ...params) {
@@ -3397,10 +3385,10 @@ ${underline}`);
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs
 var Environments;
 var init_environments = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -3540,7 +3528,7 @@ var init_environments = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs
 function wasCreatedByStainlessHelper(value) {
   return typeof value === "object" && value !== null && SDK_HELPER_SYMBOL in value;
 }
@@ -3583,15 +3571,15 @@ function stainlessHelperHeaderFromFile(file) {
 }
 var SDK_HELPER_SYMBOL;
 var init_stainless_helper_header = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs"() {
     SDK_HELPER_SYMBOL = /* @__PURE__ */ Symbol("anthropic.sdk.stainlessHelper");
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs
 var Files;
 var init_files = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/files.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -3713,10 +3701,10 @@ var init_files = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs
 var Models;
 var init_models = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/models.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -3774,10 +3762,10 @@ var init_models = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs
 var UserProfiles;
 var init_user_profiles = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/user-profiles.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -3893,10 +3881,10 @@ var init_user_profiles = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs
 var Versions;
 var init_versions = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -3930,10 +3918,10 @@ var init_versions = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs
 var Agents;
 var init_agents = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs"() {
     init_resource();
     init_versions();
     init_versions();
@@ -4061,17 +4049,17 @@ var init_agents = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/error.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/error.mjs
 var init_error2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/error.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/error.mjs"() {
     init_error();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/constants.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/constants.mjs
 var MODEL_NONSTREAMING_TOKENS;
 var init_constants = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/constants.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/constants.mjs"() {
     MODEL_NONSTREAMING_TOKENS = {
       "claude-opus-4-20250514": 8192,
       "claude-opus-4-0": 8192,
@@ -4085,7 +4073,7 @@ var init_constants = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs
 function getOutputFormat(params) {
   return params?.output_format ?? params?.output_config?.format;
 }
@@ -4158,15 +4146,15 @@ function parseBetaOutputFormat(params, content) {
   }
 }
 var init_beta_parser = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs"() {
     init_error();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs
 var tokenize, strip, unstrip, generate, partialParse;
 var init_parser = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs"() {
     tokenize = (input) => {
       let current = 0;
       let tokens2 = [];
@@ -4388,14 +4376,14 @@ var init_parser = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/streaming.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/streaming.mjs
 var init_streaming2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/streaming.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/streaming.mjs"() {
     init_streaming();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs
 function tracksToolInput(content) {
   return content.type === "tool_use" || content.type === "server_tool_use" || content.type === "mcp_tool_use";
 }
@@ -4403,7 +4391,7 @@ function checkNever(x) {
 }
 var _BetaMessageStream_instances, _BetaMessageStream_currentMessageSnapshot, _BetaMessageStream_params, _BetaMessageStream_connectedPromise, _BetaMessageStream_resolveConnectedPromise, _BetaMessageStream_rejectConnectedPromise, _BetaMessageStream_endPromise, _BetaMessageStream_resolveEndPromise, _BetaMessageStream_rejectEndPromise, _BetaMessageStream_listeners, _BetaMessageStream_ended, _BetaMessageStream_errored, _BetaMessageStream_aborted, _BetaMessageStream_catchingPromiseCreated, _BetaMessageStream_response, _BetaMessageStream_request_id, _BetaMessageStream_logger, _BetaMessageStream_getFinalMessage, _BetaMessageStream_getFinalText, _BetaMessageStream_handleError, _BetaMessageStream_beginRequest, _BetaMessageStream_addStreamEvent, _BetaMessageStream_endRequest, _BetaMessageStream_accumulateMessage, JSON_BUF_PROPERTY, BetaMessageStream;
 var init_BetaMessageStream = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/BetaMessageStream.mjs"() {
     init_tslib();
     init_parser();
     init_error2();
@@ -4997,10 +4985,10 @@ var init_BetaMessageStream = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs
 var ToolError;
 var init_ToolError = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs"() {
     ToolError = class extends Error {
       constructor(content) {
         const message = typeof content === "string" ? content : content.map((block) => {
@@ -5016,10 +5004,10 @@ var init_ToolError = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs
 var DEFAULT_TOKEN_THRESHOLD, DEFAULT_SUMMARY_PROMPT;
 var init_CompactionControl = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs"() {
     DEFAULT_TOKEN_THRESHOLD = 1e5;
     DEFAULT_SUMMARY_PROMPT = `You have been working on the task described above but have not yet completed it. Write a continuation summary that will allow you (or another instance of yourself) to resume work efficiently in a future context window where the conversation history will be replaced with this summary. Your summary should be structured, concise, and actionable. Include:
 1. Task Overview
@@ -5047,7 +5035,7 @@ Wrap your summary in <summary></summary> tags.`;
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs
 function promiseWithResolvers() {
   let resolve6;
   let reject;
@@ -5105,7 +5093,7 @@ async function generateToolResponse(params, lastMessage = params.messages.at(-1)
 }
 var _BetaToolRunner_instances, _BetaToolRunner_consumed, _BetaToolRunner_mutated, _BetaToolRunner_state, _BetaToolRunner_options, _BetaToolRunner_message, _BetaToolRunner_toolResponse, _BetaToolRunner_completion, _BetaToolRunner_iterationCount, _BetaToolRunner_checkAndCompact, _BetaToolRunner_generateToolResponse, BetaToolRunner;
 var init_BetaToolRunner = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs"() {
     init_tslib();
     init_ToolError();
     init_error();
@@ -5399,10 +5387,10 @@ var init_BetaToolRunner = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs
 var JSONLDecoder;
 var init_jsonl = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/decoders/jsonl.mjs"() {
     init_error();
     init_shims();
     init_line();
@@ -5439,10 +5427,10 @@ var init_jsonl = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs
 var Batches;
 var init_batches = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/messages/batches.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -5642,7 +5630,7 @@ var init_batches = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs
 function transformOutputFormat(params) {
   if (!params.output_format) {
     return params;
@@ -5661,7 +5649,7 @@ function transformOutputFormat(params) {
 }
 var DEPRECATED_MODELS, MODELS_TO_WARN_WITH_THINKING_ENABLED, Messages;
 var init_messages = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.mjs"() {
     init_error2();
     init_resource();
     init_constants();
@@ -5794,10 +5782,10 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs
 var Events;
 var init_events = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -5888,10 +5876,10 @@ var init_events = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs
 var Resources;
 var init_resources = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -6021,10 +6009,10 @@ var init_resources = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs
 var Sessions;
 var init_sessions = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs"() {
     init_resource();
     init_events();
     init_events();
@@ -6175,10 +6163,10 @@ var init_sessions = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs
 var Versions2;
 var init_versions2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -6276,10 +6264,10 @@ var init_versions2 = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs
 var Skills;
 var init_skills = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/skills/skills.mjs"() {
     init_resource();
     init_versions2();
     init_versions2();
@@ -6374,10 +6362,10 @@ var init_skills = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs
 var Credentials;
 var init_credentials = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -6530,10 +6518,10 @@ var init_credentials = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs
 var Vaults;
 var init_vaults = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs"() {
     init_resource();
     init_credentials();
     init_credentials();
@@ -6679,10 +6667,10 @@ var init_vaults = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs
 var Beta;
 var init_beta = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs"() {
     init_resource();
     init_environments();
     init_environments();
@@ -6728,10 +6716,10 @@ var init_beta = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/completions.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/completions.mjs
 var Completions;
 var init_completions = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/completions.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/completions.mjs"() {
     init_resource();
     init_headers();
     Completions = class extends APIResource {
@@ -6752,7 +6740,7 @@ var init_completions = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/parser.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/parser.mjs
 function getOutputFormat2(params) {
   return params?.output_config?.format;
 }
@@ -6813,12 +6801,12 @@ function parseOutputFormat(params, content) {
   }
 }
 var init_parser2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/parser.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/parser.mjs"() {
     init_error();
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs
 function tracksToolInput2(content) {
   return content.type === "tool_use" || content.type === "server_tool_use";
 }
@@ -6826,7 +6814,7 @@ function checkNever2(x) {
 }
 var _MessageStream_instances, _MessageStream_currentMessageSnapshot, _MessageStream_params, _MessageStream_connectedPromise, _MessageStream_resolveConnectedPromise, _MessageStream_rejectConnectedPromise, _MessageStream_endPromise, _MessageStream_resolveEndPromise, _MessageStream_rejectEndPromise, _MessageStream_listeners, _MessageStream_ended, _MessageStream_errored, _MessageStream_aborted, _MessageStream_catchingPromiseCreated, _MessageStream_response, _MessageStream_request_id, _MessageStream_logger, _MessageStream_getFinalMessage, _MessageStream_getFinalText, _MessageStream_handleError, _MessageStream_beginRequest, _MessageStream_addStreamEvent, _MessageStream_endRequest, _MessageStream_accumulateMessage, JSON_BUF_PROPERTY2, MessageStream;
 var init_MessageStream = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs"() {
     init_tslib();
     init_errors();
     init_error2();
@@ -7395,10 +7383,10 @@ var init_MessageStream = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs
 var Batches2;
 var init_batches2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/messages/batches.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -7547,10 +7535,10 @@ var init_batches2 = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs
 var Messages2, DEPRECATED_MODELS2, MODELS_TO_WARN_WITH_THINKING_ENABLED2;
 var init_messages2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/messages/messages.mjs"() {
     init_resource();
     init_headers();
     init_stainless_helper_header();
@@ -7677,10 +7665,10 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/models.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/models.mjs
 var Models2;
 var init_models2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/models.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/models.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
@@ -7723,9 +7711,9 @@ var init_models2 = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/index.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/index.mjs
 var init_resources2 = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/resources/index.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/resources/index.mjs"() {
     init_shared();
     init_beta();
     init_completions();
@@ -7734,10 +7722,10 @@ var init_resources2 = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs
 var readEnv;
 var init_env = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/internal/utils/env.mjs"() {
     readEnv = (env) => {
       if (typeof globalThis.process !== "undefined") {
         return globalThis.process.env?.[env]?.trim() || void 0;
@@ -7750,10 +7738,10 @@ var init_env = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/client.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/client.mjs
 var _BaseAnthropic_instances, _a, _BaseAnthropic_encoder, _BaseAnthropic_baseURLOverridden, HUMAN_PROMPT, AI_PROMPT, BaseAnthropic, Anthropic;
 var init_client = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/client.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/client.mjs"() {
     init_tslib();
     init_uuid();
     init_values();
@@ -8246,9 +8234,9 @@ var init_client = __esm({
   }
 });
 
-// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/index.mjs
+// node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/index.mjs
 var init_sdk = __esm({
-  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0/node_modules/@anthropic-ai/sdk/index.mjs"() {
+  "node_modules/.pnpm/@anthropic-ai+sdk@0.90.0_zod@4.6.7/node_modules/@anthropic-ai/sdk/index.mjs"() {
     init_client();
     init_uploads2();
     init_api_promise();
@@ -8624,7 +8612,7 @@ function labelForToolCall(toolName, args) {
   if (toolName === "generate_image") {
     return `generate image: ${truncate(str(safeArgs.prompt, "<prompt>"))}`;
   }
-  const descriptor = PI_TOOLS[toolName];
+  const descriptor = Object.hasOwn(PI_TOOLS, toolName) ? PI_TOOLS[toolName] : void 0;
   if (!descriptor) return `${toolName}`;
   return descriptor.label(safeArgs);
 }
@@ -8690,218 +8678,204 @@ var init_tools = __esm({
 });
 
 // src/main/agent/loop.ts
-function errorDetail(result) {
-  if (!result || typeof result !== "object") return void 0;
-  const content = result.content;
-  if (!Array.isArray(content)) return void 0;
-  for (const item of content) {
-    if (item && typeof item === "object" && item.type === "text") {
-      const text3 = item.text;
-      if (typeof text3 === "string" && text3.trim()) {
-        return text3.replace(/\s+/g, " ").trim().slice(0, 160);
-      }
-    }
-  }
-  return void 0;
+function record(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function text(value) {
+  return typeof value === "string" ? value : "";
+}
+function contentText(value) {
+  if (!Array.isArray(value)) return "";
+  return value.flatMap((item) => {
+    const block = record(item);
+    return block?.type === "text" && typeof block.text === "string" ? [block.text] : [];
+  }).join("\n\n");
+}
+function toolOutput(value) {
+  const output = contentText(record(value)?.content).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+  return output ? {
+    output: output.slice(0, MAX_TOOL_OUTPUT_CHARS),
+    outputTruncated: output.length > MAX_TOOL_OUTPUT_CHARS
+  } : {};
 }
 function createLoopDriver(callbacks) {
-  const tracker = {
-    stages: /* @__PURE__ */ new Map(),
-    nextIndex: 0,
-    currentText: "",
-    previousTurnsText: [],
-    turnStarted: false,
-    ended: false
-  };
-  const emitStage = (stage) => {
-    tracker.stages.set(`stage:${stage.index}`, stage);
-    callbacks.onStage(stage);
-  };
-  const updateStageStatus = (toolCallId, status, detail) => {
-    const existing = tracker.stages.get(toolCallId);
-    if (!existing) return;
-    const next = detail ? { ...existing, status, detail } : { ...existing, status };
-    tracker.stages.set(toolCallId, next);
+  const stages = /* @__PURE__ */ new Map();
+  const blocks = /* @__PURE__ */ new Map();
+  const previousText = [];
+  let nextIndex = 0;
+  let currentText = "";
+  let currentFailed = false;
+  let needsSeparator = false;
+  let modernLifecycle = false;
+  let finished = false;
+  let needsFinalAnswer = false;
+  let lastError;
+  const update = (key, patch) => {
+    const stage = stages.get(key);
+    if (!stage) return;
+    const next = { ...stage, ...patch };
+    stages.set(key, next);
     callbacks.onStage(next);
   };
-  const asString = (v, fallback = "") => typeof v === "string" ? v : fallback;
-  const asBool = (v) => v === true;
-  const asNumber = (v, fallback = 0) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
-  const asRecord2 = (v) => v && typeof v === "object" && !Array.isArray(v) ? v : void 0;
-  return function handle(event) {
+  const startStage = (key, label, extra = {}) => {
+    const stage = { index: nextIndex++, label, status: "running", ...extra };
+    stages.set(key, stage);
+    callbacks.onStage(stage);
+  };
+  const finishThinking = () => {
+    if (stages.get("thinking")?.status === "running") update("thinking", { status: "done" });
+  };
+  const snapshot = (value) => {
+    const message = record(value);
+    if (message?.role !== "assistant") return;
+    const stopReason = text(message.stopReason);
+    if (stopReason === "toolUse") needsFinalAnswer = true;
+    else if (contentText(message.content).trim() && stopReason !== "error" && stopReason !== "aborted")
+      needsFinalAnswer = false;
+    if (stopReason === "error" || stopReason === "aborted" || message.errorMessage) {
+      lastError = text(message.errorMessage) || (stopReason === "aborted" ? "Agent run aborted" : "The model provider encountered an error.");
+      currentFailed = true;
+    } else if (stopReason && stopReason !== "pending") {
+      lastError = void 0;
+      currentFailed = false;
+    }
+    if (Array.isArray(message.content)) {
+      currentText = contentText(message.content);
+      blocks.clear();
+      message.content.forEach((value2, index) => {
+        const block = record(value2);
+        if (block?.type === "text") blocks.set(index, text(block.text));
+      });
+    }
+  };
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    finishThinking();
+    const answer = [...previousText, currentFailed ? "" : currentText.trim()].filter(Boolean).join("\n\n");
+    for (const [key, stage] of stages) {
+      if (stage.status === "running")
+        update(key, {
+          status: "failed",
+          detail: lastError || "Run ended before this step finished."
+        });
+    }
+    if (answer) callbacks.onAnswer(answer);
+    if (lastError) callbacks.onError(lastError);
+    else if (!answer || needsFinalAnswer) callbacks.onError("Agent finished without a response.");
+    else callbacks.onDone();
+  };
+  return (event) => {
+    if (finished) return;
     switch (event.type) {
-      case "agent_start": {
-        tracker.stages.clear();
-        tracker.nextIndex = 0;
-        tracker.currentText = "";
-        tracker.previousTurnsText = [];
-        tracker.thinkingStage = void 0;
-        tracker.turnStarted = false;
-        tracker.ended = false;
-        tracker.lastError = void 0;
+      case "agent_start":
         return;
-      }
-      case "turn_start": {
-        if (tracker.currentText.trim().length > 0) {
-          tracker.previousTurnsText.push(tracker.currentText.trim());
-          tracker.currentText = "";
-          tracker.turnStarted = true;
-        }
+      case "turn_start":
+        if (currentText.trim() && !currentFailed) previousText.push(currentText.trim());
+        currentText = "";
+        blocks.clear();
+        currentFailed = false;
+        needsSeparator = previousText.length > 0;
         return;
-      }
       case "message_start":
-      case "message_end":
-      case "turn_end": {
-        const msg = asRecord2(event["message"]);
-        if (msg) {
-          const stopReason = asString(msg["stopReason"]);
-          const errorMessage = asString(msg["errorMessage"]);
-          if (stopReason === "error" || errorMessage) {
-            tracker.lastError = errorMessage || "The model provider encountered an error.";
-          }
-        }
         return;
-      }
+      case "message_end":
+      case "turn_end":
+        snapshot(event.message);
+        return;
       case "message_update": {
-        const ev = asRecord2(event["assistantMessageEvent"]);
-        if (!ev) return;
-        const subType = asString(ev["type"]);
-        const delta = ev["delta"];
-        const content = ev["content"];
-        if (subType === "thinking_delta" && typeof delta === "string") {
-          if (!tracker.thinkingStage) {
-            const stage = {
-              index: tracker.nextIndex++,
-              label: "Thinking\u2026",
-              status: "running"
-            };
-            tracker.thinkingStage = stage;
-            tracker.stages.set("thinking", stage);
-            emitStage(stage);
+        const updateEvent = record(event.assistantMessageEvent);
+        if (!updateEvent) return;
+        if (updateEvent.type === "thinking_delta") {
+          if (stages.get("thinking")?.status !== "running") startStage("thinking", "Thinking\u2026");
+        } else if (updateEvent.type === "thinking_end") {
+          finishThinking();
+        } else if (updateEvent.type === "text_delta" || updateEvent.type === "text_end") {
+          finishThinking();
+          const index = typeof updateEvent.contentIndex === "number" ? updateEvent.contentIndex : 0;
+          if (updateEvent.type === "text_delta") {
+            const delta = text(updateEvent.delta);
+            if (delta.trim()) needsFinalAnswer = false;
+            if (needsSeparator && delta) {
+              callbacks.onMessageDelta("\n\n");
+              needsSeparator = false;
+            }
+            blocks.set(index, (blocks.get(index) ?? "") + delta);
+            callbacks.onMessageDelta(delta);
+          } else {
+            blocks.set(index, text(updateEvent.content));
+            if (text(updateEvent.content).trim()) needsFinalAnswer = false;
           }
-        } else if (subType === "thinking_end") {
-          if (tracker.thinkingStage) {
-            updateStageStatus("thinking", "done");
-            tracker.thinkingStage = void 0;
-          }
-        } else if (subType === "text_delta" && typeof delta === "string") {
-          if (tracker.thinkingStage) {
-            updateStageStatus("thinking", "done");
-            tracker.thinkingStage = void 0;
-          }
-          if (tracker.turnStarted && tracker.previousTurnsText.length > 0 && tracker.currentText.length === 0) {
-            callbacks.onMessageDelta("\n\n");
-            tracker.turnStarted = false;
-          }
-          tracker.currentText += delta;
-          callbacks.onMessageDelta(delta);
-        } else if (subType === "text_end" && typeof content === "string") {
-          if (tracker.thinkingStage) {
-            updateStageStatus("thinking", "done");
-            tracker.thinkingStage = void 0;
-          }
-          tracker.currentText = content;
+          currentText = [...blocks.entries()].sort(([a], [b]) => a - b).map(([, value]) => value).join("\n\n");
         }
         return;
       }
       case "tool_execution_start": {
-        if (tracker.thinkingStage) {
-          updateStageStatus("thinking", "done");
-          tracker.thinkingStage = void 0;
-        }
-        const toolCallId = asString(event["toolCallId"]);
-        if (!toolCallId) return;
-        const index = tracker.nextIndex++;
-        const stage = {
-          index,
-          label: labelForToolCall(asString(event["toolName"], "tool"), event["args"]),
-          status: "running"
-        };
-        tracker.stages.set(toolCallId, stage);
-        emitStage(stage);
+        needsFinalAnswer = true;
+        finishThinking();
+        const id = text(event.toolCallId);
+        if (id)
+          startStage(id, labelForToolCall(text(event.toolName) || "tool", event.args), {
+            toolName: text(event.toolName)
+          });
         return;
       }
+      case "tool_execution_update":
+        update(text(event.toolCallId), toolOutput(event.partialResult));
+        return;
       case "tool_execution_end": {
-        const toolCallId = asString(event["toolCallId"]);
-        if (!toolCallId) return;
-        const isError = asBool(event["isError"]);
-        updateStageStatus(
-          toolCallId,
-          isError ? "failed" : "done",
-          isError ? errorDetail(event["result"]) : void 0
-        );
+        const output = toolOutput(event.result);
+        const failed = event.isError === true;
+        update(text(event.toolCallId), {
+          ...output,
+          status: failed ? "failed" : "done",
+          detail: failed ? (output.output || "Tool failed").replace(/\s+/g, " ").slice(0, 160) : void 0,
+          durationMs: typeof event.durationMs === "number" && event.durationMs >= 0 ? event.durationMs : void 0
+        });
         return;
       }
-      case "auto_retry_start": {
-        const attempt = asNumber(event["attempt"]);
-        const maxAttempts = asNumber(event["maxAttempts"]);
-        const stage = {
-          index: tracker.nextIndex++,
-          label: `retry (${attempt}/${maxAttempts})`,
-          status: "running",
-          detail: asString(event["errorMessage"]).slice(0, 160) || void 0
-        };
-        tracker.stages.set(`retry:${attempt}`, stage);
-        emitStage(stage);
+      case "auto_retry_start":
+        finishThinking();
+        if (stages.get("retry")?.status === "running")
+          update("retry", { status: "failed", detail: "Attempt failed; trying again." });
+        startStage("retry", `Retrying (${event.attempt ?? 1}/${event.maxAttempts ?? 3})`, {
+          detail: text(event.errorMessage).slice(0, 160) || void 0
+        });
         return;
-      }
-      case "auto_retry_end": {
-        const retryKey = Array.from(tracker.stages.keys()).reverse().find((k) => k.startsWith("retry:"));
-        if (retryKey) {
-          updateStageStatus(
-            retryKey,
-            asBool(event["success"]) ? "done" : "failed",
-            asString(event["finalError"]) || void 0
-          );
-        }
+      case "auto_retry_end":
+        if (event.success === true) lastError = void 0;
+        else
+          lastError = text(event.finalError) || lastError || "The provider could not complete the request.";
+        update("retry", {
+          status: event.success === true ? "done" : "failed",
+          detail: event.success === true ? void 0 : lastError
+        });
         return;
-      }
       case "agent_end": {
-        tracker.ended = true;
-        if (tracker.thinkingStage) {
-          updateStageStatus("thinking", "done");
-          tracker.thinkingStage = void 0;
-        }
-        if (!tracker.lastError) {
-          const messages = Array.isArray(event["messages"]) ? event["messages"] : [];
-          for (const m of messages) {
-            const rec = asRecord2(m);
-            if (rec) {
-              const stopReason = asString(rec["stopReason"]);
-              const err = asString(rec["errorMessage"]);
-              if (stopReason === "error" || err) {
-                tracker.lastError = err || "The model provider encountered an error.";
-                break;
-              }
-            }
-          }
-        }
-        const allText = [...tracker.previousTurnsText, tracker.currentText.trim()].filter(Boolean).join("\n\n");
-        const hasText = allText.trim().length > 0;
-        const hasStages = tracker.stages.size > 0;
-        if (hasText) {
-          callbacks.onAnswer(allText.trim());
-        }
-        if (tracker.lastError) {
-          callbacks.onError(tracker.lastError);
-          return;
-        }
-        if (!hasText && !hasStages) {
-          callbacks.onError("Agent finished without a response.");
-          return;
-        }
-        callbacks.onDone();
+        if (typeof event.willRetry === "boolean") modernLifecycle = true;
+        const messages = Array.isArray(event.messages) ? event.messages : [];
+        const assistantMessages = messages.filter(
+          (message) => record(message)?.role === "assistant"
+        );
+        const last = assistantMessages.at(-1);
+        if (last) snapshot(last);
+        if (event.willRetry === true || modernLifecycle) return;
+        finish();
         return;
       }
-      default:
+      case "agent_settled":
+        if (event.aborted === true) lastError = "Agent run aborted";
+        finish();
         return;
     }
   };
 }
+var MAX_TOOL_OUTPUT_CHARS;
 var init_loop = __esm({
   "src/main/agent/loop.ts"() {
     "use strict";
     init_tools();
+    MAX_TOOL_OUTPUT_CHARS = 8e3;
   }
 });
 
@@ -8988,6 +8962,83 @@ var init_prompt = __esm({
   }
 });
 
+// src/shared/applicationSearch.ts
+function normalize(value) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+function applicationSearchAliases(appName) {
+  const name = normalize(appName);
+  return Object.hasOwn(APPLICATION_ALIASES, name) ? APPLICATION_ALIASES[name] ?? [] : [];
+}
+function applicationNameMatchScore(appName, query) {
+  const normalizedQuery = normalize(query);
+  const queryTokens = normalizedQuery.match(/[\p{L}\p{N}]+/gu) ?? [];
+  if (!queryTokens.length) return 0;
+  let best = 0;
+  for (const name of [normalize(appName), ...applicationSearchAliases(appName)]) {
+    if (name === normalizedQuery) return 1;
+    if (name.startsWith(normalizedQuery)) {
+      best = Math.max(best, 0.92);
+      continue;
+    }
+    const nameTokens = name.match(/[\p{L}\p{N}]+/gu) ?? [];
+    if (queryTokens.every((term) => nameTokens.some((word) => word.startsWith(term)))) {
+      best = Math.max(best, 0.9);
+    }
+  }
+  return best;
+}
+var APPLICATION_ALIASES;
+var init_applicationSearch = __esm({
+  "src/shared/applicationSearch.ts"() {
+    "use strict";
+    APPLICATION_ALIASES = {
+      "visual studio code": ["vscode", "vsc", "code", "vs code", "\u0432\u0441 \u043A\u043E\u0434", "\u0432\u0441\u043A\u043E\u0434"],
+      "google chrome": ["chrome", "\u0445\u0440\u043E\u043C", "\u0433\u0443\u0433\u043B \u0445\u0440\u043E\u043C"],
+      chrome: ["\u0445\u0440\u043E\u043C", "\u0433\u0443\u0433\u043B \u0445\u0440\u043E\u043C"],
+      telegram: ["\u0442\u0435\u043B\u0435\u0433\u0440\u0430\u043C", "\u0442\u0435\u043B\u0435\u0433\u0440\u0430\u043C\u043C"],
+      discord: ["\u0434\u0438\u0441\u043A\u043E\u0440\u0434"],
+      docker: ["\u0434\u043E\u043A\u0435\u0440", "\u0434\u043E\u043A\u043A\u0435\u0440"],
+      safari: ["\u0441\u0430\u0444\u0430\u0440\u0438"],
+      raycast: ["\u0440\u0435\u0439\u043A\u0430\u0441\u0442"],
+      claude: ["\u043A\u043B\u043E\u0434", "\u043A\u043B\u0430\u0443\u0434"],
+      xcode: ["\u0438\u043A\u0441\u043A\u043E\u0434"],
+      finder: ["files", "filemanager", "\u0444\u0430\u0439\u043D\u0434\u0435\u0440"],
+      terminal: ["term", "shell", "\u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B"],
+      "quicktime player": ["quicktime", "qt", "qtp"],
+      "activity monitor": ["activity", "taskmanager", "task monitor", "\u043C\u043E\u043D\u0438\u0442\u043E\u0440\u0438\u043D\u0433 \u0441\u0438\u0441\u0442\u0435\u043C\u044B"]
+    };
+  }
+});
+
+// src/shared/searchQueryVariants.ts
+function remapKeys(query, from, to) {
+  return Array.from(query, (char) => {
+    const index = from.indexOf(char);
+    return index < 0 ? char : to[index];
+  }).join("");
+}
+function searchQueryVariants(query) {
+  const literal = query.trim().toLowerCase();
+  if (!literal) return [];
+  const variants = /* @__PURE__ */ new Set([literal]);
+  if (/[а-яё]/u.test(literal)) {
+    variants.add(remapKeys(literal, RUSSIAN_KEYS, ENGLISH_KEYS));
+  }
+  if (/[a-z]/.test(literal)) {
+    variants.add(remapKeys(literal, ENGLISH_KEYS, RUSSIAN_KEYS));
+  }
+  return Array.from(variants);
+}
+var ENGLISH_KEYS, RUSSIAN_KEYS;
+var init_searchQueryVariants = __esm({
+  "src/shared/searchQueryVariants.ts"() {
+    "use strict";
+    ENGLISH_KEYS = "`qwertyuiop[]asdfghjkl;'zxcvbnm,.";
+    RUSSIAN_KEYS = "\u0451\u0439\u0446\u0443\u043A\u0435\u043D\u0433\u0448\u0449\u0437\u0445\u044A\u0444\u044B\u0432\u0430\u043F\u0440\u043E\u043B\u0434\u0436\u044D\u044F\u0447\u0441\u043C\u0438\u0442\u044C\u0431\u044E";
+  }
+});
+
 // src/shared/searchMode.ts
 function parseSearchQuery(input) {
   if (input.startsWith(DEEP_SEARCH_PREFIX)) {
@@ -9011,20 +9062,26 @@ function hasGoodMetadataMatch(query, results) {
   const normalizedQuery = query.trim().toLowerCase();
   const queryTokens = tokens(normalizedQuery);
   if (normalizedQuery.length < 2 || queryTokens.length === 0) return true;
+  const variants = searchQueryVariants(normalizedQuery);
   return results.slice(0, 10).some((result) => {
     if (result.category === "knowledge" || result.id.startsWith(DEEP_SEARCH_RESULT_PREFIX) || result.id.startsWith("note-add:")) {
       return false;
     }
     const title = result.title.trim().toLowerCase();
     const metadata = `${title} ${result.subtitle.trim().toLowerCase()}`.trim();
-    if (title === normalizedQuery || title.startsWith(normalizedQuery)) return true;
-    if (metadata.includes(normalizedQuery)) return true;
     const metadataTokens = tokens(metadata);
-    const coversEveryTerm = queryTokens.every(
-      (queryToken) => metadataTokens.some((metadataToken) => metadataTokenMatchesQuery(metadataToken, queryToken))
-    );
-    if (!coversEveryTerm) return false;
-    return queryTokens.length > 1 || result.score >= 650;
+    return variants.some((variant) => {
+      if (result.category === "applications" && applicationNameMatchScore(title, variant) > 0) {
+        return true;
+      }
+      if (title === variant || title.startsWith(variant) || metadata.includes(variant)) return true;
+      const variantTokens = tokens(variant);
+      if (!variantTokens.length) return false;
+      const coversEveryTerm = variantTokens.every(
+        (queryToken) => metadataTokens.some((metadataToken) => metadataTokenMatchesQuery(metadataToken, queryToken))
+      );
+      return coversEveryTerm && (variantTokens.length > 1 || result.score >= 650);
+    });
   });
 }
 function buildDeepSearchRecommendation(query, results) {
@@ -9048,6 +9105,8 @@ var DEEP_SEARCH_PREFIX, ACTIVATE_DEEP_SEARCH_COMMAND, DEEP_SEARCH_RESULT_PREFIX;
 var init_searchMode = __esm({
   "src/shared/searchMode.ts"() {
     "use strict";
+    init_applicationSearch();
+    init_searchQueryVariants();
     DEEP_SEARCH_PREFIX = "!";
     ACTIVATE_DEEP_SEARCH_COMMAND = "activate-deep-search";
     DEEP_SEARCH_RESULT_PREFIX = "deep-search:";
@@ -10039,7 +10098,7 @@ async function executeNativeCommandRaw(id) {
         }
         try {
           const root = await runShell(`cd ${JSON.stringify(path8)} && git rev-parse --show-toplevel`);
-          await runShell(`printf %s ${JSON.stringify(root)} | pbcopy`);
+          await clipboard.writeTextAsync(root);
           return { ok: true, message: root };
         } catch {
           return { ok: false, message: `${path8} is not inside a git repo.` };
@@ -10444,8 +10503,8 @@ var init_isolatedFileWatcher = __esm({
 function normalizeText(value) {
   return value.replace(/\u0000/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
-async function chunkText(sourceId, text3, pageNumber, limit, yieldToInteractiveWork) {
-  const normalized = normalizeText(text3);
+async function chunkText(sourceId, text4, pageNumber, limit, yieldToInteractiveWork) {
+  const normalized = normalizeText(text4);
   if (!normalized) return [];
   const chunks = [];
   let start2 = 0;
@@ -10599,9 +10658,9 @@ async function extractPlainText(path8) {
     const bytesToRead = Math.min(stat3.size, MAX_PLAIN_TEXT_EXTRACTED_BYTES);
     const buffer = Buffer.allocUnsafe(bytesToRead);
     const { bytesRead } = await handle.read(buffer, 0, bytesToRead, 0);
-    const text3 = decodeText(buffer.subarray(0, bytesRead));
+    const text4 = decodeText(buffer.subarray(0, bytesRead));
     return {
-      text: /\.(?:html?|xml)$/i.test(path8) ? stripMarkup(text3) : text3.trim(),
+      text: /\.(?:html?|xml)$/i.test(path8) ? stripMarkup(text4) : text4.trim(),
       truncated: stat3.size > bytesRead
     };
   } finally {
@@ -10672,12 +10731,12 @@ async function extractLocally(path8, signal, options) {
   const warnings = [];
   if (extension === ".pdf") {
     if (process.platform !== "darwin") {
-      const text4 = await extractMetadataText(path8, signal);
+      const text5 = await extractMetadataText(path8, signal);
       return {
-        pages: [{ pageNumber: 1, extractedText: text4 }],
+        pages: [{ pageNumber: 1, extractedText: text5 }],
         images: [],
         completedCapabilities: ["extracted-text"],
-        warnings: text4 ? [] : ["PDF extraction is not available on this platform yet."],
+        warnings: text5 ? [] : ["PDF extraction is not available on this platform yet."],
         extractor: { id: "metadata-pdf", version: "1.0.0" }
       };
     }
@@ -10744,20 +10803,20 @@ async function extractLocally(path8, signal, options) {
       totalPageCount: 1
     };
   }
-  let text3 = "";
+  let text4 = "";
   if (PLAIN_TEXT_EXTENSIONS.has(extension) || !extension) {
     const extraction = await extractPlainText(path8);
-    text3 = extraction.text;
+    text4 = extraction.text;
     if (extraction.truncated) {
       warnings.push("Only the first 8 MB of this large text file was indexed.");
     }
   } else if (RICH_DOCUMENT_EXTENSIONS.has(extension)) {
-    text3 = await extractRichDocument(path8, signal);
+    text4 = await extractRichDocument(path8, signal);
   }
-  if (!text3) text3 = await extractMetadataText(path8, signal);
-  if (!text3) warnings.push("No textual content could be extracted from this file.");
+  if (!text4) text4 = await extractMetadataText(path8, signal);
+  if (!text4) warnings.push("No textual content could be extracted from this file.");
   return {
-    pages: [{ pageNumber: 1, extractedText: text3 }],
+    pages: [{ pageNumber: 1, extractedText: text4 }],
     images: [],
     completedCapabilities: ["extracted-text"],
     warnings,
@@ -11076,8 +11135,8 @@ function wordTokens(value) {
 function tokenizeQuery(query) {
   return wordTokens(query);
 }
-function lexicalScore(text3, query) {
-  const t = text3.toLowerCase();
+function lexicalScore(text4, query) {
+  const t = text4.toLowerCase();
   const q = query.toLowerCase().trim();
   if (!q) return 0;
   if (t === q) return 1;
@@ -11091,8 +11150,8 @@ function lexicalScore(text3, query) {
   }
   return matched / tokens2.length / 1.5;
 }
-function searchableTokens(text3) {
-  return wordTokens(text3);
+function searchableTokens(text4) {
+  return wordTokens(text4);
 }
 function levenshteinDistance(left, right) {
   if (left === right) return 0;
@@ -11128,10 +11187,10 @@ function tokenSimilarity(candidate, query) {
   if (distance > maxDistance) return 0;
   return Math.max(0, 1 - distance / length);
 }
-function fuzzySimilarityScore(text3, query) {
+function fuzzySimilarityScore(text4, query) {
   const queryTokens = searchableTokens(query);
   if (queryTokens.length === 0) return 0;
-  const candidateTokens = searchableTokens(text3);
+  const candidateTokens = searchableTokens(text4);
   if (candidateTokens.length === 0) return 0;
   let total = 0;
   for (const queryToken of queryTokens) {
@@ -11257,11 +11316,11 @@ function normalizeGemmaVector(value) {
   if (magnitude === 0) throw new Error("EmbeddingGemma returned an empty vector");
   return truncated.map((component) => component / magnitude);
 }
-function gemmaDocument(text3, title) {
-  return `title: ${title?.trim() || "none"} | text: ${text3}`;
+function gemmaDocument(text4, title) {
+  return `title: ${title?.trim() || "none"} | text: ${text4}`;
 }
-function gemmaQuery(text3) {
-  return `task: search result | query: ${text3}`;
+function gemmaQuery(text4) {
+  return `task: search result | query: ${text4}`;
 }
 var GEMMA_MODEL, GEMMA_INDEX_KEY, GEMMA_MODEL_URL, RUNTIMES;
 var init_gemmaManifest = __esm({
@@ -12612,7 +12671,7 @@ ${page.ocr?.text ?? ""}`.trim();
       ORDER BY rowid ASC
     `
         ).all(selected.sourceId, selected.rowId - 2, selected.rowId + 2);
-        const text3 = nearby.map((row) => row.text).join("\n\n").slice(0, Math.max(500, maxChars));
+        const text4 = nearby.map((row) => row.text).join("\n\n").slice(0, Math.max(500, maxChars));
         this.db.prepare(
           `
       UPDATE knowledge_pages SET last_accessed_at = ?
@@ -12625,7 +12684,7 @@ ${page.ocr?.text ?? ""}`.trim();
           path: selected.path,
           title: (0, import_node_path15.basename)(selected.path),
           pageNumber: selected.pageNumber ?? void 0,
-          text: text3
+          text: text4
         };
       }
     };
@@ -12930,12 +12989,12 @@ var init_gemmaRuntime = __esm({
           this.removing = false;
         }
       }
-      embedQuery(text3, signal) {
-        return this.embed([gemmaQuery(text3)], signal).then((vectors) => vectors[0]);
+      embedQuery(text4, signal) {
+        return this.embed([gemmaQuery(text4)], signal).then((vectors) => vectors[0]);
       }
       embedDocuments(documents, signal) {
         return this.embed(
-          documents.map(({ text: text3, title }) => gemmaDocument(text3, title)),
+          documents.map(({ text: text4, title }) => gemmaDocument(text4, title)),
           signal
         );
       }
@@ -13145,11 +13204,19 @@ var init_semanticSearch = __esm({
       queryCache = /* @__PURE__ */ new Map();
       countsCache = null;
       snapshot() {
+        return this.status(true);
+      }
+      /** Launcher polling must never refresh corpus counts or enumerate roots. */
+      cachedSnapshot() {
+        return this.status(false);
+      }
+      status(refreshCounts) {
         const runtime = this.runtime.snapshot();
-        const counts = runtime.modelState === "ready" && this.options.enabled() ? this.counts() : { indexedChunks: 0, totalChunks: 0 };
+        const counts = runtime.modelState === "ready" && this.options.enabled() ? refreshCounts ? this.counts() : this.countsCache ?? { indexedChunks: 0, totalChunks: 0 } : { indexedChunks: 0, totalChunks: 0 };
         return {
           ...runtime,
-          ...counts,
+          indexedChunks: counts.indexedChunks,
+          totalChunks: counts.totalChunks,
           indexing: this.controller !== null,
           error: this.error ?? runtime.error
         };
@@ -13168,9 +13235,12 @@ var init_semanticSearch = __esm({
       }
       download() {
         this.runtime.startDownload();
+        this.options.onProgress?.(true);
       }
       cancelDownload() {
-        return this.runtime.cancelDownload();
+        const cancel = this.runtime.cancelDownload();
+        this.options.onProgress?.(true);
+        return cancel;
       }
       async remove() {
         await this.pause();
@@ -13179,6 +13249,7 @@ var init_semanticSearch = __esm({
         this.queryCache.clear();
         this.countsCache = null;
         this.error = void 0;
+        this.options.onProgress?.(true);
       }
       schedule(delay2 = 1e3) {
         if (this.closed || !this.options.enabled() || !this.options.canIndex()) return;
@@ -13193,12 +13264,14 @@ var init_semanticSearch = __esm({
             return;
           this.controller = new AbortController();
           const signal = this.controller.signal;
+          this.options.onProgress?.(true);
           this.run = this.backfill(signal).catch((error) => {
             if (!signal.aborted) this.error = error instanceof Error ? error.message : String(error);
           }).finally(() => {
             this.run = null;
             this.controller = null;
             this.countsCache = null;
+            this.options.onProgress?.(true);
             if (this.rescheduleRequested) {
               this.rescheduleRequested = false;
               this.schedule();
@@ -13228,6 +13301,7 @@ var init_semanticSearch = __esm({
               this.countsCache.indexedChunks + saved
             );
           }
+          this.options.onProgress?.(false);
           if (profile.gemmaDelayMs > 0) {
             await new Promise((resolve6) => setTimeout(resolve6, profile.gemmaDelayMs));
           } else {
@@ -13273,6 +13347,7 @@ var init_semanticSearch = __esm({
         this.rescheduleRequested = false;
         this.controller?.abort();
         await this.run;
+        this.options.onProgress?.(true);
       }
       shutdown() {
         this.closed = true;
@@ -13282,6 +13357,48 @@ var init_semanticSearch = __esm({
         this.runtime.shutdown();
       }
     };
+  }
+});
+
+// src/main/foreground.ts
+function countsAsForegroundActivity(channel) {
+  if (BACKGROUND_CHANNELS.has(channel)) return false;
+  return !BACKGROUND_PREFIXES.some((prefix) => channel.startsWith(prefix));
+}
+function noteForegroundActivity(durationMs = FOREGROUND_HOLD_MS, now = Date.now()) {
+  holdUntil = Math.max(holdUntil, now + Math.max(0, durationMs));
+}
+function foregroundRemainingMs(now = Date.now()) {
+  return Math.max(0, holdUntil - now);
+}
+function foregroundActive(now = Date.now()) {
+  return foregroundRemainingMs(now) > 0;
+}
+function backgroundHoldRemainingMs(localUntil = 0, now = Date.now()) {
+  return Math.max(0, localUntil - now, foregroundRemainingMs(now));
+}
+async function waitForForegroundIdle(signal) {
+  while (!signal?.aborted && foregroundActive()) {
+    const remaining = foregroundRemainingMs();
+    await new Promise(
+      (resolve6) => setTimeout(resolve6, Math.min(POLL_INTERVAL_MS, Math.max(1, remaining)))
+    );
+  }
+}
+var FOREGROUND_HOLD_MS, POLL_INTERVAL_MS, BACKGROUND_CHANNELS, BACKGROUND_PREFIXES, holdUntil;
+var init_foreground = __esm({
+  "src/main/foreground.ts"() {
+    "use strict";
+    FOREGROUND_HOLD_MS = 1200;
+    POLL_INTERVAL_MS = 25;
+    BACKGROUND_CHANNELS = /* @__PURE__ */ new Set([
+      // Polled while a view is open, not a user action on its own.
+      "background-tasks:list",
+      "terminal:list",
+      "extension:refresh-session"
+    ]);
+    BACKGROUND_PREFIXES = ["knowledge:", "update:", "updates:", "updater:"];
+    holdUntil = 0;
   }
 });
 
@@ -13341,8 +13458,8 @@ function getKnowledgeService() {
 function notifyKnowledgeInteractiveActivity(durationMs = 1e3) {
   service?.notifyInteractiveActivity(durationMs);
 }
-function getKnowledgeSnapshotIfInitialized() {
-  return service?.snapshot() ?? null;
+function getKnowledgeBackgroundStatusIfInitialized() {
+  return service?.cachedBackgroundStatus() ?? null;
 }
 function shutdownKnowledgeService() {
   service?.shutdown();
@@ -13398,6 +13515,7 @@ var init_service = __esm({
     init_depth();
     init_workerHost();
     init_semanticSearch();
+    init_foreground();
     execFileAsync8 = (0, import_node_util9.promisify)(import_node_child_process11.execFile);
     MAX_SCANNED_FILES = 75e3;
     STATUS_EVENT_INTERVAL_MS = 100;
@@ -13480,7 +13598,8 @@ var init_service = __esm({
         }).map((root) => root.id),
         canIndex: () => this.mode !== "worker" && !this.manuallyPaused,
         waitForIdle: (signal) => this.waitForInteractiveIdle(signal),
-        speed: () => this.settings.indexingSpeed ?? "medium"
+        speed: () => this.settings.indexingSpeed ?? "medium",
+        onProgress: (force) => this.emitSemanticStatusEvent(force)
       });
       backends = /* @__PURE__ */ new Map([
         ["local", new LocalIndexingBackend()],
@@ -13574,6 +13693,23 @@ var init_service = __esm({
           settings: { ...this.settings },
           storageBytes: this.store.storageBytes(),
           semanticSearch: this.mode !== "worker" ? this.semanticSearch.snapshot() : void 0
+        };
+      }
+      /** Status alone, straight from memory.
+       *
+       *  The launcher polls background tasks about once a second. Building a full
+       *  snapshot there would mean storage stats and corpus counts on every tick,
+       *  which on a large library blocks the event loop that answers chat history. */
+      cachedStatus() {
+        return this.initialized ? { ...this.status } : null;
+      }
+      /** Minimal launcher progress; no initialization, root reads, or corpus counts. */
+      cachedBackgroundStatus() {
+        if (!this.initialized) return null;
+        return {
+          status: { ...this.status },
+          settings: { embeddingModel: this.settings.embeddingModel },
+          semanticSearch: this.mode !== "worker" ? this.semanticSearch.cachedSnapshot() : void 0
         };
       }
       addRoot(path8) {
@@ -14117,6 +14253,13 @@ var init_service = __esm({
         const counts = this.store.counts();
         this.status = { ...this.status, ...counts };
       }
+      emitSemanticStatusEvent(force = false) {
+        const now = Date.now();
+        if (force || now - this.lastStatusEventAt >= STATUS_EVENT_INTERVAL_MS) {
+          this.statusSink(this.status);
+          this.lastStatusEventAt = now;
+        }
+      }
       updateStatus(status) {
         const stateChanged = status.state !== this.status.state;
         this.status = status;
@@ -14135,8 +14278,9 @@ var init_service = __esm({
         this.store.saveStatus(this.status);
       }
       async waitForInteractiveIdle(signal) {
-        while (!signal.aborted && Date.now() < this.interactiveUntil) {
-          const remaining = this.interactiveUntil - Date.now();
+        while (!signal.aborted) {
+          const remaining = backgroundHoldRemainingMs(this.interactiveUntil);
+          if (remaining <= 0) return;
           await new Promise((resolve6) => setTimeout(resolve6, Math.min(100, remaining)));
         }
       }
@@ -14160,7 +14304,7 @@ var init_service = __esm({
         const effectiveDelay = delayMs ?? profile.vectorBackfillDelayMs;
         this.vectorBackfillTimer = setTimeout(() => {
           this.vectorBackfillTimer = null;
-          if (Date.now() < this.interactiveUntil) {
+          if (backgroundHoldRemainingMs(this.interactiveUntil) > 0) {
             this.scheduleVectorBackfill(250);
             return;
           }
@@ -14308,8 +14452,8 @@ var init_commandBus = __esm({
           confirmation: "never",
           analyticsKey: "speech.read_aloud",
           handler: async (payload) => {
-            const text3 = String(payload?.text ?? "").trim();
-            if (!text3) {
+            const text4 = String(payload?.text ?? "").trim();
+            if (!text4) {
               return { ok: false, message: "No text provided for read-aloud" };
             }
             if (process.platform === "win32") {
@@ -14322,10 +14466,10 @@ var init_commandBus = __esm({
                   "-Command",
                   "Add-Type -AssemblyName System.Speech; $voice=New-Object System.Speech.Synthesis.SpeechSynthesizer; try { $voice.Speak($env:TEZBAR_SPEECH_TEXT) } finally { $voice.Dispose() }"
                 ],
-                { windowsHide: true, env: { ...process.env, TEZBAR_SPEECH_TEXT: text3 } }
+                { windowsHide: true, env: { ...process.env, TEZBAR_SPEECH_TEXT: text4 } }
               );
             } else {
-              await execFileAsync9("say", [text3]);
+              await execFileAsync9("say", [text4]);
             }
             return { ok: true, message: "Reading aloud" };
           }
@@ -14344,6 +14488,14 @@ var init_commandBus = __esm({
 });
 
 // src/main/search/indexDb.ts
+function bestQueryMatch(text4, variants) {
+  let best = { lexical: 0, query: variants[0] ?? "" };
+  for (const [index, query] of variants.entries()) {
+    const lexical = Math.max(lexicalScore(text4, query), fuzzySimilarityScore(text4, query)) * (index === 0 ? 1 : 0.9);
+    if (lexical > best.lexical) best = { lexical, query };
+  }
+  return best;
+}
 function normalizeStoredQuery(query) {
   return query.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -14378,6 +14530,8 @@ var init_indexDb = __esm({
     init_better_sqlite3_shim();
     import_node_fs15 = require("node:fs");
     import_node_path19 = require("node:path");
+    init_applicationSearch();
+    init_searchQueryVariants();
     init_textMatch();
     CLICK_EVENTS_RETAIN = 1e3;
     ACTION_USAGE_EVENTS_RETAIN = 5e3;
@@ -14425,6 +14579,8 @@ var init_indexDb = __esm({
         source_mtime INTEGER,
         popularity REAL NOT NULL DEFAULT 0
       );
+
+      CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 
       CREATE TABLE IF NOT EXISTS action_stats (
         action_id TEXT PRIMARY KEY,
@@ -14641,7 +14797,8 @@ var init_indexDb = __esm({
         this.clearSearchCache();
       }
       search(query, limit) {
-        const ftsQuery = buildFtsQuery(query);
+        const variants = searchQueryVariants(query);
+        const ftsQuery = buildFtsQuery(variants.join(" "));
         const trimmed = query.trim();
         if (!trimmed) return [];
         const candidateLimit = Math.max(limit * 2, 20);
@@ -14668,11 +14825,7 @@ var init_indexDb = __esm({
             return negBm25 / (1 + negBm25);
           })() : 0.5;
           const searchableText2 = `${row.title} ${row.subtitle}`;
-          const lexical = Math.max(
-            inverseBm25,
-            lexicalScore(searchableText2, trimmed),
-            fuzzySimilarityScore(searchableText2, trimmed)
-          );
+          const lexical = Math.max(inverseBm25, bestQueryMatch(searchableText2, variants).lexical);
           return {
             id: row.id,
             category: row.category,
@@ -14684,7 +14837,7 @@ var init_indexDb = __esm({
             popularity: row.popularity
           };
         });
-        const fuzzyRows = mapped.length >= candidateLimit ? [] : this.fuzzySearch(trimmed, candidateLimit);
+        const fuzzyRows = mapped.length >= candidateLimit ? [] : this.fuzzySearch(variants, candidateLimit);
         const byId = /* @__PURE__ */ new Map();
         for (const row of [...mapped, ...fuzzyRows]) {
           const existing = byId.get(row.id);
@@ -14692,24 +14845,31 @@ var init_indexDb = __esm({
             byId.set(row.id, row);
           }
         }
-        const result = Array.from(byId.values()).sort((a, b) => b.lexical - a.lexical).slice(0, candidateLimit);
-        if (trimmed === "process kill" || trimmed === "timer stop" || trimmed === "stop timer") {
-          const lines = [];
-          lines.push(
-            `[Search DEBUG] query="${trimmed}" ftsQuery="${ftsQuery}" FTS rows=${rows.length} mapped=${mapped.length} fuzzyRows=${fuzzyRows.length}`
-          );
-          for (const r of result.slice(0, 10)) {
-            lines.push(`  [DEBUG] lex=${r.lexical.toFixed(3)} cat=${r.category} title="${r.title}"`);
-          }
-          try {
-            const fs5 = require("fs");
-            fs5.appendFileSync("/tmp/search_debug.log", lines.join("\n") + "\n\n");
-          } catch {
-          }
-        }
+        const appRows = this.searchApplicationNames(variants, Math.min(candidateLimit, 20));
+        const appIds = new Set(appRows.map((row) => row.id));
+        const result = [
+          ...appRows,
+          ...Array.from(byId.values()).filter((row) => !appIds.has(row.id)).sort((a, b) => b.lexical - a.lexical)
+        ].slice(0, candidateLimit);
         return result;
       }
-      fuzzySearch(query, limit) {
+      searchApplicationNames(variants, limit) {
+        const rows = this.db.prepare(
+          `SELECT id, category, title, subtitle, action_json AS actionJson,
+                updated_at AS updatedAt, popularity
+         FROM documents WHERE category = 'applications'`
+        ).all();
+        return rows.map((row) => ({
+          ...row,
+          lexical: Math.max(
+            0,
+            ...variants.map(
+              (query, index) => applicationNameMatchScore(row.title, query) * (index === 0 ? 1 : 0.9)
+            )
+          )
+        })).filter((row) => row.lexical > 0).sort((left, right) => right.lexical - left.lexical || left.title.localeCompare(right.title)).slice(0, limit);
+      }
+      fuzzySearch(variants, limit) {
         if (limit <= 0) return [];
         const rows = this.db.prepare(
           `
@@ -14722,12 +14882,9 @@ var init_indexDb = __esm({
         const scored = [];
         for (const row of rows) {
           const searchableText2 = `${row.title} ${row.subtitle} ${row.tokens}`;
-          const lexical = Math.max(
-            lexicalScore(searchableText2, query),
-            fuzzySimilarityScore(searchableText2, query)
-          );
+          const { lexical, query } = bestQueryMatch(searchableText2, variants);
           if (lexical <= 0) continue;
-          const distance = levenshteinDistance(row.title.toLowerCase(), query.toLowerCase());
+          const distance = levenshteinDistance(row.title.toLowerCase(), query);
           scored.push({
             id: row.id,
             category: row.category,
@@ -14981,8 +15138,8 @@ function readAppBundleIdentifier(appPath) {
     let bundleId;
     const buf = (0, import_node_fs16.readFileSync)(infoPlistPath);
     if (!buf.subarray(0, 8).includes(Buffer.from("bplist"))) {
-      const text3 = buf.toString("utf8");
-      const match = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/.exec(text3);
+      const text4 = buf.toString("utf8");
+      const match = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/.exec(text4);
       if (match) {
         bundleId = match[1].trim();
       }
@@ -15109,6 +15266,7 @@ var init_appsProvider = __esm({
     import_node_child_process13 = require("node:child_process");
     import_node_os7 = require("node:os");
     import_node_path20 = require("node:path");
+    init_applicationSearch();
     bundleIdCache = /* @__PURE__ */ new Map();
     appsProvider = {
       providerId: "apps",
@@ -15119,7 +15277,7 @@ var init_appsProvider = __esm({
           category: "applications",
           title: app2.name,
           subtitle: app2.path,
-          tokens: `${app2.name} ${app2.path}`,
+          tokens: `${app2.name} ${app2.path} ${applicationSearchAliases(app2.name).join(" ")}`,
           action: { type: "open-app", appName: app2.name, appPath: app2.path },
           updatedAt: now,
           sourcePath: app2.path
@@ -15184,8 +15342,8 @@ function writeDb(db) {
   _readClipboardDb = db;
   _cacheTimestamp = Date.now();
 }
-function detectSensitiveValue(text3) {
-  const trimmed = text3.trim();
+function detectSensitiveValue(text4) {
+  const trimmed = text4.trim();
   if (trimmed.length < 16) return false;
   if (/^sk-[A-Za-z0-9]{16,}$/.test(trimmed)) return true;
   if (/^gh[pousr]_[A-Za-z0-9_]{20,}$/.test(trimmed)) return true;
@@ -15204,15 +15362,15 @@ function sanitizeEntry(entry) {
   if (!base.id || !Number.isFinite(base.createdAt)) return null;
   switch (entry.kind) {
     case "text": {
-      const text3 = String(entry.text ?? "");
-      if (!text3) return null;
+      const text4 = String(entry.text ?? "");
+      if (!text4) return null;
       return {
         ...base,
         kind: "text",
-        text: text3,
-        preview: String(entry.preview ?? previewFromText(text3)),
-        charCount: Number(entry.charCount ?? text3.length),
-        lineCount: Number(entry.lineCount ?? text3.split("\n").length)
+        text: text4,
+        preview: String(entry.preview ?? previewFromText(text4)),
+        charCount: Number(entry.charCount ?? text4.length),
+        lineCount: Number(entry.lineCount ?? text4.split("\n").length)
       };
     }
     case "image": {
@@ -15246,8 +15404,8 @@ function normalizeDb(db) {
     items: db.items.map((item) => sanitizeEntry(item)).filter((item) => item !== null)
   };
 }
-function previewFromText(text3) {
-  const firstLine = text3.split("\n").find((line) => line.trim().length > 0) ?? "";
+function previewFromText(text4) {
+  const firstLine = text4.split("\n").find((line) => line.trim().length > 0) ?? "";
   return firstLine.slice(0, 140);
 }
 function insertEntry(db, entry) {
@@ -15265,8 +15423,8 @@ function readClipboardSnapshot2() {
     return { text: "", filePaths: [], hasImage: false, changeCount: 0 };
   }
 }
-function idForText(text3) {
-  return `text:${hashKey("text", text3).slice(0, 12)}`;
+function idForText(text4) {
+  return `text:${hashKey("text", text4).slice(0, 12)}`;
 }
 function idForFiles(paths) {
   return `file:${hashKey("file", paths.slice().sort().join("|")).slice(0, 12)}`;
@@ -15323,18 +15481,18 @@ function captureImageEntry(now) {
     byteSize: buffer.length
   };
 }
-function captureTextEntry(now, text3) {
-  if (!text3 || !text3.trim()) return null;
+function captureTextEntry(now, text4) {
+  if (!text4 || !text4.trim()) return null;
   return {
-    id: idForText(text3),
+    id: idForText(text4),
     kind: "text",
     createdAt: now,
     pinned: false,
-    isSecret: detectSensitiveValue(text3),
-    text: text3,
-    preview: previewFromText(text3),
-    charCount: text3.length,
-    lineCount: text3.split("\n").length
+    isSecret: detectSensitiveValue(text4),
+    text: text4,
+    preview: previewFromText(text4),
+    charCount: text4.length,
+    lineCount: text4.split("\n").length
   };
 }
 function captureClipboardSnapshot(snapshot) {
@@ -15563,11 +15721,11 @@ function startClipboardWatcher() {
     if (!watcherRunning) return;
     try {
       const now = Date.now();
-      const text3 = clipboard.readText();
-      const needsRichProbe = !text3 && (lastText !== "" || now - lastRichProbeAt >= RICH_CLIPBOARD_PROBE_INTERVAL_MS);
-      const snapshot = needsRichProbe ? readClipboardSnapshot2() : { text: text3, filePaths: [], hasImage: false, changeCount: 0 };
+      const text4 = clipboard.readText();
+      const needsRichProbe = !text4 && (lastText !== "" || now - lastRichProbeAt >= RICH_CLIPBOARD_PROBE_INTERVAL_MS);
+      const snapshot = needsRichProbe ? readClipboardSnapshot2() : { text: text4, filePaths: [], hasImage: false, changeCount: 0 };
       if (needsRichProbe) lastRichProbeAt = now;
-      lastText = text3;
+      lastText = text4;
       const fp = clipboardSnapshotFingerprint(snapshot);
       const changed = fp !== lastFingerprint;
       if (changed) {
@@ -15921,14 +16079,14 @@ var init_filesProvider = __esm({
 });
 
 // src/main/search/providers/notesProvider.ts
-function stripMarkdownSyntax(text3) {
-  return text3.replace(/\*\*([^*\n]+)\*\*/g, "$1").replace(/__([^_\n]+)__/g, "$1").replace(/\*([^*\n]+)\*/g, "$1").replace(/_([^_\n]+)_/g, "$1").replace(/`([^`\n]+)`/g, "$1").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/^#{1,6}\s+/gm, "").replace(/^\s*[-*+]\s+/gm, "").replace(/^\s*\d+\.\s+/gm, "");
+function stripMarkdownSyntax(text4) {
+  return text4.replace(/\*\*([^*\n]+)\*\*/g, "$1").replace(/__([^_\n]+)__/g, "$1").replace(/\*([^*\n]+)\*/g, "$1").replace(/_([^_\n]+)_/g, "$1").replace(/`([^`\n]+)`/g, "$1").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/^#{1,6}\s+/gm, "").replace(/^\s*[-*+]\s+/gm, "").replace(/^\s*\d+\.\s+/gm, "");
 }
-function decodeBasicEntities(text3) {
-  return text3.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#039;/gi, "'");
+function decodeBasicEntities(text4) {
+  return text4.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#039;/gi, "'");
 }
-function notePlainText(text3) {
-  const withoutHtml = text3.replace(/<br\s*\/?\s*>/gi, "\n").replace(/<\/(div|p|li|h[1-6])>/gi, "\n").replace(/<li>/gi, "- ").replace(/<[^>]+>/g, "");
+function notePlainText(text4) {
+  const withoutHtml = text4.replace(/<br\s*\/?\s*>/gi, "\n").replace(/<\/(div|p|li|h[1-6])>/gi, "\n").replace(/<li>/gi, "- ").replace(/<[^>]+>/g, "");
   return stripMarkdownSyntax(decodeBasicEntities(withoutHtml)).replace(/\r/g, "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function notesPath() {
@@ -15970,8 +16128,8 @@ function writeNotesDb(db) {
 function listQuickNotes() {
   return readNotesDb().notes;
 }
-function addQuickNote(text3) {
-  const trimmed = text3.trim();
+function addQuickNote(text4) {
+  const trimmed = text4.trim();
   if (!trimmed) return null;
   const now = Date.now();
   const entry = { text: trimmed, createdAt: now, updatedAt: now };
@@ -15980,13 +16138,13 @@ function addQuickNote(text3) {
   writeNotesDb(db);
   return entry;
 }
-function updateQuickNote(createdAt, text3) {
+function updateQuickNote(createdAt, text4) {
   const db = readNotesDb();
   const idx = db.notes.findIndex((n) => n.createdAt === createdAt);
   if (idx < 0) return false;
   db.notes[idx] = {
     ...db.notes[idx],
-    text: text3,
+    text: text4,
     updatedAt: Date.now()
   };
   writeNotesDb(db);
@@ -16472,8 +16630,8 @@ function copySnippetById(id) {
   const db = readSnippetsDb();
   const snippet = db.snippets.find((s) => s.id === id);
   if (!snippet) return { ok: false, message: "Snippet not found" };
-  const text3 = interpolateSnippet(snippet.body);
-  clipboard.writeText(text3);
+  const text4 = interpolateSnippet(snippet.body);
+  clipboard.writeText(text4);
   captureClipboardSnapshot();
   return { ok: true, message: "Copied to clipboard" };
 }
@@ -17438,8 +17596,8 @@ function extractMissingBareImports(error) {
   const errors = Array.isArray(error?.errors) ? error.errors : [];
   const found = /* @__PURE__ */ new Set();
   for (const err of errors) {
-    const text3 = String(err?.text || "");
-    const match = text3.match(/Could not resolve\s+"([^"]+)"/);
+    const text4 = String(err?.text || "");
+    const match = text4.match(/Could not resolve\s+"([^"]+)"/);
     if (!match) continue;
     const specifier = match[1];
     if (!specifier || specifier.startsWith(".") || specifier.startsWith("/") || specifier.includes(":")) {
@@ -21622,7 +21780,7 @@ function convertMaskToIndices(matchmask = [], minMatchCharLength = Config.minMat
   }
   return indices;
 }
-function search(text3, pattern, patternAlphabet, {
+function search(text4, pattern, patternAlphabet, {
   location = Config.location,
   distance = Config.distance,
   threshold = Config.threshold,
@@ -21635,7 +21793,7 @@ function search(text3, pattern, patternAlphabet, {
     throw new Error(PATTERN_LENGTH_TOO_LARGE(MAX_BITS));
   }
   const patternLen = pattern.length;
-  const textLen = text3.length;
+  const textLen = text4.length;
   const expectedLocation = Math.max(0, Math.min(location, textLen));
   let currentThreshold = threshold;
   let bestLocation = expectedLocation;
@@ -21649,7 +21807,7 @@ function search(text3, pattern, patternAlphabet, {
   const computeMatches = minMatchCharLength > 1 || includeMatches;
   const matchMask = computeMatches ? Array(textLen) : [];
   let index;
-  while ((index = text3.indexOf(pattern, bestLocation)) > -1) {
+  while ((index = text4.indexOf(pattern, bestLocation)) > -1) {
     const score = calcScore(0, index);
     currentThreshold = Math.min(score, currentThreshold);
     bestLocation = index + patternLen;
@@ -21685,7 +21843,7 @@ function search(text3, pattern, patternAlphabet, {
     bitArr[finish + 1] = (1 << i) - 1;
     for (let j = finish; j >= start2; j -= 1) {
       const currentLocation = j - 1;
-      const charMatch = patternAlphabet[text3[currentLocation]];
+      const charMatch = patternAlphabet[text4[currentLocation]];
       if (computeMatches) {
         matchMask[currentLocation] = +!!charMatch;
       }
@@ -21968,14 +22126,14 @@ function createAnalyzer({
   ignoreDiacritics = false
 } = {}) {
   return {
-    tokenize(text3) {
+    tokenize(text4) {
       if (!isCaseSensitive) {
-        text3 = text3.toLowerCase();
+        text4 = text4.toLowerCase();
       }
       if (ignoreDiacritics) {
-        text3 = stripDiacritics(text3);
+        text4 = stripDiacritics(text4);
       }
-      return text3.match(WORD) || [];
+      return text4.match(WORD) || [];
     }
   };
 }
@@ -21983,8 +22141,8 @@ function buildInvertedIndex(records, keyCount, analyzer) {
   const terms = /* @__PURE__ */ new Map();
   const df = /* @__PURE__ */ new Map();
   let fieldCount = 0;
-  function addField(text3, docIdx, keyIdx, subIdx) {
-    const tokens2 = analyzer.tokenize(text3);
+  function addField(text4, docIdx, keyIdx, subIdx) {
+    const tokens2 = analyzer.tokenize(text4);
     if (!tokens2.length) return;
     fieldCount++;
     const termFreqs = /* @__PURE__ */ new Map();
@@ -22007,12 +22165,12 @@ function buildInvertedIndex(records, keyCount, analyzer) {
       df.set(term, (df.get(term) || 0) + 1);
     }
   }
-  for (const record3 of records) {
+  for (const record4 of records) {
     const {
       i: docIdx,
       v,
       $: fields
-    } = record3;
+    } = record4;
     if (v !== void 0) {
       addField(v, docIdx, -1, -1);
       continue;
@@ -22037,14 +22195,14 @@ function buildInvertedIndex(records, keyCount, analyzer) {
     df
   };
 }
-function addToInvertedIndex(index, record3, keyCount, analyzer) {
+function addToInvertedIndex(index, record4, keyCount, analyzer) {
   const {
     i: docIdx,
     v,
     $: fields
-  } = record3;
-  function addField(text3, keyIdx, subIdx) {
-    const tokens2 = analyzer.tokenize(text3);
+  } = record4;
+  function addField(text4, keyIdx, subIdx) {
+    const tokens2 = analyzer.tokenize(text4);
     if (!tokens2.length) return;
     index.fieldCount++;
     const termFreqs = /* @__PURE__ */ new Map();
@@ -22245,15 +22403,15 @@ var init_fuse = __esm({
         if (!isDefined(doc) || isBlank(doc)) {
           return;
         }
-        const record3 = {
+        const record4 = {
           v: doc,
           i: docIndex,
           n: this.norm.get(doc)
         };
-        this.records.push(record3);
+        this.records.push(record4);
       }
       _addObject(doc, docIndex) {
-        const record3 = {
+        const record4 = {
           i: docIndex,
           $: {}
         };
@@ -22279,27 +22437,27 @@ var init_fuse = __esm({
                   subRecords.push(subRecord);
                 }
               } else if (isDefined(item.v)) {
-                const text3 = isString(item.v) ? item.v : toString(item.v);
-                if (!isBlank(text3)) {
+                const text4 = isString(item.v) ? item.v : toString(item.v);
+                if (!isBlank(text4)) {
                   const subRecord = {
-                    v: text3,
+                    v: text4,
                     i: item.i,
-                    n: this.norm.get(text3)
+                    n: this.norm.get(text4)
                   };
                   subRecords.push(subRecord);
                 }
               }
             }
-            record3.$[keyIndex] = subRecords;
+            record4.$[keyIndex] = subRecords;
           } else if (isString(value) && !isBlank(value)) {
             const subRecord = {
               v: value,
               n: this.norm.get(value)
             };
-            record3.$[keyIndex] = subRecord;
+            record4.$[keyIndex] = subRecord;
           }
         });
-        this.records.push(record3);
+        this.records.push(record4);
       }
       toJSON() {
         return {
@@ -22395,21 +22553,21 @@ var init_fuse = __esm({
           addChunk(this.pattern, 0);
         }
       }
-      searchIn(text3) {
+      searchIn(text4) {
         const {
           isCaseSensitive,
           ignoreDiacritics,
           includeMatches
         } = this.options;
-        text3 = isCaseSensitive ? text3 : text3.toLowerCase();
-        text3 = ignoreDiacritics ? stripDiacritics(text3) : text3;
-        if (this.pattern === text3) {
+        text4 = isCaseSensitive ? text4 : text4.toLowerCase();
+        text4 = ignoreDiacritics ? stripDiacritics(text4) : text4;
+        if (this.pattern === text4) {
           const result2 = {
             isMatch: true,
             score: 0
           };
           if (includeMatches) {
-            result2.indices = [[0, text3.length - 1]];
+            result2.indices = [[0, text4.length - 1]];
           }
           return result2;
         }
@@ -22433,7 +22591,7 @@ var init_fuse = __esm({
             isMatch,
             score,
             indices
-          } = search(text3, pattern, alphabet, {
+          } = search(text4, pattern, alphabet, {
             location: location + startIndex,
             distance,
             threshold,
@@ -22491,8 +22649,8 @@ var init_fuse = __esm({
       static get singleRegex() {
         return /^=(.*)$/;
       }
-      search(text3) {
-        const isMatch = text3 === this.pattern;
+      search(text4) {
+        const isMatch = text4 === this.pattern;
         return {
           isMatch,
           score: isMatch ? 0 : 1,
@@ -22513,13 +22671,13 @@ var init_fuse = __esm({
       static get singleRegex() {
         return /^!(.*)$/;
       }
-      search(text3) {
-        const index = text3.indexOf(this.pattern);
+      search(text4) {
+        const index = text4.indexOf(this.pattern);
         const isMatch = index === -1;
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [0, text3.length - 1]
+          indices: [0, text4.length - 1]
         };
       }
     };
@@ -22536,8 +22694,8 @@ var init_fuse = __esm({
       static get singleRegex() {
         return /^\^(.*)$/;
       }
-      search(text3) {
-        const isMatch = text3.startsWith(this.pattern);
+      search(text4) {
+        const isMatch = text4.startsWith(this.pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
@@ -22558,12 +22716,12 @@ var init_fuse = __esm({
       static get singleRegex() {
         return /^!\^(.*)$/;
       }
-      search(text3) {
-        const isMatch = !text3.startsWith(this.pattern);
+      search(text4) {
+        const isMatch = !text4.startsWith(this.pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [0, text3.length - 1]
+          indices: [0, text4.length - 1]
         };
       }
     };
@@ -22580,12 +22738,12 @@ var init_fuse = __esm({
       static get singleRegex() {
         return /^(.*)\$$/;
       }
-      search(text3) {
-        const isMatch = text3.endsWith(this.pattern);
+      search(text4) {
+        const isMatch = text4.endsWith(this.pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [text3.length - this.pattern.length, text3.length - 1]
+          indices: [text4.length - this.pattern.length, text4.length - 1]
         };
       }
     };
@@ -22602,12 +22760,12 @@ var init_fuse = __esm({
       static get singleRegex() {
         return /^!(.*)\$$/;
       }
-      search(text3) {
-        const isMatch = !text3.endsWith(this.pattern);
+      search(text4) {
+        const isMatch = !text4.endsWith(this.pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [0, text3.length - 1]
+          indices: [0, text4.length - 1]
         };
       }
     };
@@ -22645,8 +22803,8 @@ var init_fuse = __esm({
       static get singleRegex() {
         return /^(.*)$/;
       }
-      search(text3) {
-        return this._bitapSearch.searchIn(text3);
+      search(text4) {
+        return this._bitapSearch.searchIn(text4);
       }
     };
     IncludeMatch = class extends BaseMatch {
@@ -22662,12 +22820,12 @@ var init_fuse = __esm({
       static get singleRegex() {
         return /^'(.*)$/;
       }
-      search(text3) {
+      search(text4) {
         let location = 0;
         let index;
         const indices = [];
         const patternLen = this.pattern.length;
-        while ((index = text3.indexOf(this.pattern, location)) > -1) {
+        while ((index = text4.indexOf(this.pattern, location)) > -1) {
           location = index + patternLen;
           indices.push([index, location - 1]);
         }
@@ -22719,7 +22877,7 @@ var init_fuse = __esm({
       // Note: searchIn operates on a single text value and sets hasInverse on the
       // result when inverse patterns are involved. _searchObjectList uses this to
       // switch from "ANY key" to "ALL keys" aggregation. See #712.
-      searchIn(text3) {
+      searchIn(text4) {
         const query = this.query;
         if (!query) {
           return {
@@ -22732,8 +22890,8 @@ var init_fuse = __esm({
           isCaseSensitive,
           ignoreDiacritics
         } = this.options;
-        text3 = isCaseSensitive ? text3 : text3.toLowerCase();
-        text3 = ignoreDiacritics ? stripDiacritics(text3) : text3;
+        text4 = isCaseSensitive ? text4 : text4.toLowerCase();
+        text4 = ignoreDiacritics ? stripDiacritics(text4) : text4;
         let numMatches = 0;
         const allIndices = [];
         let totalScore = 0;
@@ -22749,7 +22907,7 @@ var init_fuse = __esm({
               isMatch,
               indices,
               score
-            } = searcher.search(text3);
+            } = searcher.search(text4);
             if (isMatch) {
               numMatches += 1;
               totalScore += score;
@@ -22920,12 +23078,12 @@ var init_fuse = __esm({
         this._docs.push(doc);
         this._myIndex.add(doc);
         if (this._invertedIndex) {
-          const record3 = this._myIndex.records[this._myIndex.records.length - 1];
+          const record4 = this._myIndex.records[this._myIndex.records.length - 1];
           const analyzer = createAnalyzer({
             isCaseSensitive: this.options.isCaseSensitive,
             ignoreDiacritics: this.options.ignoreDiacritics
           });
-          addToInvertedIndex(this._invertedIndex, record3, this._myIndex.keys.length, analyzer);
+          addToInvertedIndex(this._invertedIndex, record4, this._myIndex.keys.length, analyzer);
         }
       }
       remove(predicate = () => false) {
@@ -23025,25 +23183,25 @@ var init_fuse = __esm({
         } = this._myIndex;
         const results = heap ? null : [];
         records.forEach(({
-          v: text3,
+          v: text4,
           i: idx,
           n: norm2
         }) => {
-          if (!isDefined(text3)) {
+          if (!isDefined(text4)) {
             return;
           }
           const {
             isMatch,
             score,
             indices
-          } = searcher.searchIn(text3);
+          } = searcher.searchIn(text4);
           if (isMatch) {
             const result = {
-              item: text3,
+              item: text4,
               idx,
               matches: [{
                 score,
-                value: text3,
+                value: text4,
                 norm: norm2,
                 indices
               }]
@@ -23217,11 +23375,11 @@ var init_fuse = __esm({
         const matches = [];
         if (isArray2(value)) {
           value.forEach(({
-            v: text3,
+            v: text4,
             i: idx,
             n: norm2
           }) => {
-            if (!isDefined(text3)) {
+            if (!isDefined(text4)) {
               return;
             }
             const {
@@ -23229,12 +23387,12 @@ var init_fuse = __esm({
               score,
               indices,
               hasInverse
-            } = searcher.searchIn(text3);
+            } = searcher.searchIn(text4);
             if (isMatch) {
               matches.push({
                 score,
                 key,
-                value: text3,
+                value: text4,
                 idx,
                 norm: norm2,
                 indices,
@@ -23244,7 +23402,7 @@ var init_fuse = __esm({
           });
         } else {
           const {
-            v: text3,
+            v: text4,
             n: norm2
           } = value;
           const {
@@ -23252,12 +23410,12 @@ var init_fuse = __esm({
             score,
             indices,
             hasInverse
-          } = searcher.searchIn(text3);
+          } = searcher.searchIn(text4);
           if (isMatch) {
             matches.push({
               score,
               key,
-              value: text3,
+              value: text4,
               norm: norm2,
               indices,
               hasInverse
@@ -23302,7 +23460,7 @@ var init_fuse = __esm({
           this.idfWeights.push(idf);
         }
       }
-      searchIn(text3) {
+      searchIn(text4) {
         if (!this.termSearchers.length) {
           return {
             isMatch: false,
@@ -23314,7 +23472,7 @@ var init_fuse = __esm({
         let maxPossibleScore = 0;
         let matchedCount = 0;
         for (let i = 0; i < this.termSearchers.length; i++) {
-          const result = this.termSearchers[i].searchIn(text3);
+          const result = this.termSearchers[i].searchIn(text4);
           const idf = this.idfWeights[i];
           maxPossibleScore += idf;
           if (result.isMatch) {
@@ -23346,12 +23504,12 @@ var init_fuse = __esm({
     Fuse.createIndex = createIndex;
     Fuse.parseIndex = parseIndex;
     Fuse.config = Config;
-    Fuse.match = function(pattern, text3, options) {
+    Fuse.match = function(pattern, text4, options) {
       const searcher = createSearcher(pattern, {
         ...Config,
         ...options
       });
-      return searcher.searchIn(text3);
+      return searcher.searchIn(text4);
     };
     {
       Fuse.parseQuery = parse;
@@ -23940,8 +24098,8 @@ function writeInstallMeta(meta) {
   (0, import_node_fs23.mkdirSync)((0, import_node_path28.dirname)(p), { recursive: true });
   (0, import_node_fs23.writeFileSync)(p, JSON.stringify(meta, null, 2), "utf8");
 }
-function hashText(text3) {
-  return (0, import_node_crypto11.createHash)("sha256").update(text3).digest("hex");
+function hashText(text4) {
+  return (0, import_node_crypto11.createHash)("sha256").update(text4).digest("hex");
 }
 function inspectIntegrity(extensionId) {
   const meta = readInstallMeta(extensionId);
@@ -24625,6 +24783,7 @@ async function upsertProvider(provider) {
     indexDb.removeDocumentsByCategory("extensions");
   }
   if (docs.length > 0) {
+    await waitForForegroundIdle();
     indexDb.upsertDocuments(docs);
   }
 }
@@ -24685,12 +24844,14 @@ function startBackgroundFileIndexing() {
       FILE_INDEX_LIMIT,
       FILE_INDEX_WRITE_BATCH_SIZE
     )) {
+      await waitForForegroundIdle();
       const upserts = batch.filter((document) => {
         const persistedMtime = existing.get(document.id);
         existing.delete(document.id);
         return persistedMtime === void 0 || persistedMtime !== Math.round(document.sourceMtime ?? 0);
       });
       if (upserts.length > 0) {
+        await waitForForegroundIdle();
         indexDb.upsertDocuments(upserts);
         changed = true;
       }
@@ -24698,6 +24859,7 @@ function startBackgroundFileIndexing() {
     }
     const removals = Array.from(existing.keys());
     for (let offset = 0; offset < removals.length; offset += FILE_INDEX_WRITE_BATCH_SIZE) {
+      await waitForForegroundIdle();
       indexDb.removeDocumentsByIds(removals.slice(offset, offset + FILE_INDEX_WRITE_BATCH_SIZE));
       changed = true;
       await new Promise((resolve6) => setImmediate(resolve6));
@@ -24784,6 +24946,7 @@ async function reindexExtensions() {
 function internalSurfaceBoost(category, title, query, subtitle) {
   const hit = category === "native-command" || category === "commands" || category === "extensions" || category === "applications" || category === "quick-notes";
   if (!hit) return 0;
+  if (category === "applications") return applicationNameMatchScore(title, query) * 600;
   const normalizedTitle = title.toLowerCase();
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return 0;
@@ -24841,14 +25004,15 @@ function exactRecentQuickNoteBoost(category, title, query, updatedAt, now) {
   return 0;
 }
 function fullTokenMatchBoost(query, title, subtitle) {
-  const tokens2 = query.trim().toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const tokens2 = query.trim().toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
   if (tokens2.length < 2) return 0;
-  const text3 = `${title} ${subtitle}`.toLowerCase();
-  const allMatch = tokens2.every((t) => text3.includes(t));
+  const text4 = `${title} ${subtitle}`.toLowerCase();
+  const allMatch = tokens2.every((t) => text4.includes(t));
   return allMatch ? 200 : 0;
 }
 function rankRows(query, docs) {
   const now = Date.now();
+  const queryVariants = searchQueryVariants(query);
   const queryStats = indexDb?.getQueryActionStats(
     query,
     docs.map((entry) => entry.doc.id)
@@ -24858,6 +25022,19 @@ function rankRows(query, docs) {
     const queryTotalCount = queryStat?.totalCount ?? 0;
     const querySuccessRate = queryTotalCount > 0 ? (queryStat?.successCount ?? 0) / queryTotalCount : 0;
     const activityAt = entry.doc.updatedAt;
+    const queryMatchBoost = Math.max(
+      0,
+      ...queryVariants.map((variant, index) => {
+        const boost = internalSurfaceBoost(entry.doc.category, entry.doc.title, variant, entry.doc.subtitle) + exactRecentQuickNoteBoost(
+          entry.doc.category,
+          entry.doc.title,
+          variant,
+          entry.doc.updatedAt,
+          now
+        ) + fullTokenMatchBoost(variant, entry.doc.title, entry.doc.subtitle);
+        return boost * (index === 0 ? 1 : 0.9);
+      })
+    );
     const score = computeWeightedScore({
       lexical: entry.lexical,
       recencyMs: now - activityAt,
@@ -24874,18 +25051,12 @@ function rankRows(query, docs) {
       successRate: querySuccessRate,
       lastUsedAt: queryStat?.lastUsedAt ?? 0,
       now
-    }) + internalSurfaceBoost(entry.doc.category, entry.doc.title, query, entry.doc.subtitle) + recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) + exactRecentQuickNoteBoost(
-      entry.doc.category,
-      entry.doc.title,
-      query,
-      entry.doc.updatedAt,
-      now
-    ) + (() => {
+    }) + queryMatchBoost + recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) + (() => {
       const q = query.trim().toLowerCase();
       if (!q) return 120;
       if (/\bnotes?\b/.test(q) || q.includes("quick note")) return 780;
       return 120;
-    })() + fullTokenMatchBoost(query, entry.doc.title, entry.doc.subtitle);
+    })();
     return {
       id: entry.doc.id,
       title: entry.doc.title,
@@ -25468,22 +25639,13 @@ function normalizeAppSearchTerm(value) {
 function appAcronym(name) {
   return name.split(/[^a-zA-Z0-9]+/).filter(Boolean).map((part) => part[0]?.toLowerCase() ?? "").join("");
 }
-function builtInAppAliases(appName) {
-  const n = appName.toLowerCase();
-  if (n === "visual studio code") return ["vscode", "vsc", "code", "vs code"];
-  if (n === "quicktime player") return ["quicktime", "qt", "qtp"];
-  if (n === "activity monitor") return ["activity", "taskmanager", "task monitor"];
-  if (n === "terminal") return ["term", "shell"];
-  if (n === "finder") return ["files", "filemanager"];
-  return [];
-}
 function appMatchesTerm(appName, term, learnedAliases) {
   const normalizedTerm = normalizeAppSearchTerm(term);
   if (!normalizedTerm) return true;
   const normalizedName = normalizeAppSearchTerm(appName);
   if (normalizedName.includes(normalizedTerm)) return true;
   if (appAcronym(appName).includes(normalizedTerm)) return true;
-  if (builtInAppAliases(appName).some(
+  if (applicationSearchAliases(appName).some(
     (alias) => normalizeAppSearchTerm(alias).includes(normalizedTerm)
   )) {
     return true;
@@ -25982,6 +26144,8 @@ var init_service3 = __esm({
     import_node_os12 = require("node:os");
     import_node_path29 = require("node:path");
     import_node_util15 = require("node:util");
+    init_searchQueryVariants();
+    init_applicationSearch();
     init_searchMode();
     init_executor();
     init_configStore();
@@ -25997,6 +26161,7 @@ var init_service3 = __esm({
     init_clipboardProvider();
     init_commandsProvider();
     init_filesProvider();
+    init_foreground();
     init_notesProvider();
     init_quickLinksProvider();
     init_snippetsProvider();
@@ -26182,6 +26347,8 @@ function makeId() {
   return (0, import_node_crypto13.randomUUID)();
 }
 function writeCommand(child2, command3) {
+  if (child2.stdin.destroyed || child2.stdin.writableEnded)
+    throw new Error("Pi input stream is closed");
   const line = `${JSON.stringify(command3)}
 `;
   child2.stdin.write(line);
@@ -26239,7 +26406,6 @@ async function handleExtensionUiRequest(handle, msg) {
     if (msg.message) {
       handle.onStderrLine?.(msg.message);
     }
-    writeCommand(handle.child, { type: "extension_ui_response", id, success: true });
     return;
   }
   if (msg.method === "setStatus") {
@@ -26247,13 +26413,13 @@ async function handleExtensionUiRequest(handle, msg) {
       const clean = msg.statusText.replace(/\x1b\[[0-9;]*m/g, "").trim();
       if (clean) handle.onStderrLine?.(clean);
     }
-    writeCommand(handle.child, { type: "extension_ui_response", id, success: true });
     return;
   }
+  if (msg.method === "setWidget" || msg.method === "setTitle" || msg.method === "set_editor_text")
+    return;
   writeCommand(handle.child, { type: "extension_ui_response", id, cancelled: true });
 }
 function terminateProcessTree(child2, graceMs = 1500) {
-  if (child2.killed) return;
   const pid = child2.pid;
   const isUnix = process.platform !== "win32";
   const sendSignal = (sig) => {
@@ -26272,9 +26438,7 @@ function terminateProcessTree(child2, graceMs = 1500) {
   };
   sendSignal("SIGTERM");
   const forceKillTimer = setTimeout(() => {
-    if (!child2.killed) {
-      sendSignal("SIGKILL");
-    }
+    if (child2.exitCode === null && child2.signalCode === null) sendSignal("SIGKILL");
   }, graceMs);
   if (typeof forceKillTimer.unref === "function") {
     forceKillTimer.unref();
@@ -26323,7 +26487,10 @@ function attachHandlers(handle, onStderrLine) {
       return;
     }
     if (msg.type === "extension_ui_request") {
-      void handleExtensionUiRequest(handle, msg);
+      void handleExtensionUiRequest(handle, msg).catch((error) => {
+        if (!handle.closed)
+          handle.onFailure?.(error instanceof Error ? error : new Error(String(error)));
+      });
       return;
     }
     if (typeof msg.type === "string") {
@@ -26335,6 +26502,11 @@ function attachHandlers(handle, onStderrLine) {
     handle.stderrBuffer.push(line);
     onStderrLine?.(line);
     if (handle.stderrBuffer.length > 50) handle.stderrBuffer.shift();
+  });
+  handle.child.stdin.on("error", (error) => {
+    for (const pending of handle.pending.values()) pending.reject(error);
+    handle.pending.clear();
+    handle.onFailure?.(error);
   });
   handle.child.on("close", () => {
     handle.closed = true;
@@ -26373,7 +26545,13 @@ async function sendAndAwait(handle, command3, timeoutMs) {
         reject(err);
       }
     });
-    writeCommand(handle.child, { ...command3, id });
+    try {
+      writeCommand(handle.child, { ...command3, id });
+    } catch (error) {
+      clearTimeout(timer);
+      handle.pending.delete(id);
+      reject(error);
+    }
   });
 }
 function createBridge() {
@@ -26384,6 +26562,7 @@ function createBridge() {
   }
   return {
     async run(task, options = {}) {
+      if (options.signal?.aborted) throw new Error("Agent run aborted");
       if (!task.trim()) {
         throw new Error("agent.run: task is empty");
       }
@@ -26392,9 +26571,20 @@ function createBridge() {
       const piBin = resolvePiBinary(options.piBin);
       const ephemeral = options.ephemeral !== false;
       const knowledgeGateway = await ensureKnowledgeAgentGateway().catch(() => null);
+      if (options.signal?.aborted) throw new Error("Agent run aborted");
       const stages = [];
       let finalAnswer = "";
       let runError;
+      let agentEndResolved = false;
+      let runStarted = false;
+      let agentEnded = () => void 0;
+      const agentEndPromise = new Promise((resolve6) => {
+        agentEnded = () => {
+          if (agentEndResolved) return;
+          agentEndResolved = true;
+          resolve6();
+        };
+      });
       const driver = createLoopDriver({
         onStage: (stage) => {
           const existing = stages.findIndex((s) => s.index === stage.index);
@@ -26405,14 +26595,14 @@ function createBridge() {
         onMessageDelta: (delta) => {
           options.onMessageDelta?.(delta);
         },
-        onAnswer: (text3) => {
-          finalAnswer = text3;
-          options.onAnswer?.(text3);
+        onAnswer: (text4) => {
+          finalAnswer = text4;
+          options.onAnswer?.(text4);
         },
-        onDone: () => {
-        },
+        onDone: () => agentEnded(),
         onError: (message) => {
           runError = new Error(message);
+          agentEnded();
         }
       });
       const child2 = spawnRpc({
@@ -26428,22 +26618,9 @@ function createBridge() {
         extraArgs: options.extraArgs ?? []
       });
       trackChild(child2);
-      console.log("[tezbar:agent] spawn", {
-        runId,
-        piBin,
-        cwd,
-        ephemeral,
-        model: options.model ?? "(default)",
-        taskChars: task.length
-      });
-      let agentEndResolved = false;
-      let agentEnded = () => void 0;
-      const agentEndPromise = new Promise((resolve6) => {
-        agentEnded = () => {
-          if (agentEndResolved) return;
-          agentEndResolved = true;
-          resolve6();
-        };
+      const closedPromise = new Promise((resolve6) => {
+        child2.once("close", () => resolve6());
+        child2.once("error", () => resolve6());
       });
       const handle = {
         child: child2,
@@ -26452,19 +26629,29 @@ function createBridge() {
         closed: false,
         requestApproval: options.requestApproval,
         onStderrLine: options.onStderrLine,
+        onFailure: (error) => {
+          runError ??= error;
+          agentEnded();
+        },
         onEvent: (event) => {
+          if (event.type === "agent_start") runStarted = true;
           try {
             driver(event);
           } catch (err) {
             runError ??= err instanceof Error ? err : new Error(String(err));
           }
-          if (runError || event.type === "agent_end") agentEnded();
+          if (runError) agentEnded();
         }
       };
       attachHandlers(handle, options.onStderrLine);
       const onAbort = () => {
         if (handle.closed) return;
+        runError = new Error("Agent run aborted");
+        for (const pending of handle.pending.values()) pending.reject(runError);
+        handle.pending.clear();
+        agentEnded();
         try {
+          writeCommand(child2, { type: "clear_queue", id: makeId() });
           writeCommand(child2, { type: "abort", id: makeId() });
         } catch {
         }
@@ -26473,14 +26660,34 @@ function createBridge() {
         }, 500);
       };
       options.signal?.addEventListener("abort", onAbort, { once: true });
+      if (options.signal?.aborted) onAbort();
       try {
+        const modelSeparator = options.model?.indexOf("/") ?? -1;
+        if (options.model && modelSeparator > 0 && !/[?*]/.test(options.model)) {
+          await sendAndAwait(
+            handle,
+            {
+              type: "set_model",
+              provider: options.model.slice(0, modelSeparator),
+              modelId: options.model.slice(modelSeparator + 1)
+            },
+            15e3
+          );
+        }
         const promptTimeoutMs = options.images && options.images.length > 0 ? 6e4 : 3e4;
-        await sendAndAwait(handle, buildPromptCommand(task, options.images), promptTimeoutMs);
+        const accepted = await sendAndAwait(
+          handle,
+          buildPromptCommand(task, options.images),
+          promptTimeoutMs
+        );
+        if (accepted.data?.disposition === "handled" && !runStarted) {
+          throw new Error("The prompt was handled by an extension without starting an agent run.");
+        }
         let runTimeout;
         try {
           await Promise.race([
             agentEndPromise,
-            (0, import_node_events.once)(child2, "close").then(() => void 0),
+            closedPromise,
             new Promise((_resolve, reject) => {
               runTimeout = setTimeout(
                 () => reject(
@@ -26578,13 +26785,12 @@ function disposeSharedBridge() {
   sharedBridge?.dispose();
   sharedBridge = void 0;
 }
-var import_node_child_process19, import_node_crypto13, import_node_events, import_node_fs25, import_node_os13, import_node_path30, import_node_string_decoder, PI_BIN_CANDIDATES, OPENCODE_PI_EXTENSION, sharedBridge;
+var import_node_child_process19, import_node_crypto13, import_node_fs25, import_node_os13, import_node_path30, import_node_string_decoder, PI_BIN_CANDIDATES, OPENCODE_PI_EXTENSION, sharedBridge;
 var init_bridge = __esm({
   "src/main/agent/bridge.ts"() {
     "use strict";
     import_node_child_process19 = require("node:child_process");
     import_node_crypto13 = require("node:crypto");
-    import_node_events = require("node:events");
     import_node_fs25 = require("node:fs");
     import_node_os13 = require("node:os");
     import_node_path30 = __toESM(require("node:path"));
@@ -26596,18 +26802,16 @@ var init_bridge = __esm({
     init_gateway();
     init_profile();
     PI_BIN_CANDIDATES = [
+      ...process.env.PNPM_HOME ? [import_node_path30.default.join(process.env.PNPM_HOME, process.platform === "win32" ? "pi.cmd" : "pi")] : [],
+      import_node_path30.default.join((0, import_node_os13.homedir)(), "Library", "pnpm", "bin", "pi"),
+      import_node_path30.default.join((0, import_node_os13.homedir)(), ".local", "bin", "pi"),
       // Where pnpm installs global bins for this user (matches `which pi`
       // at the time this bridge was written). We resolve at runtime so a
       // reinstall or version bump does not require a rebuild.
       import_node_path30.default.join((0, import_node_os13.homedir)(), "Library", "pnpm", "pi"),
       import_node_path30.default.join((0, import_node_os13.homedir)(), ".local", "share", "pnpm", "pi")
     ];
-    OPENCODE_PI_EXTENSION = import_node_path30.default.join(
-      piAgentDirectory(),
-      "extensions",
-      "opencode",
-      "index.ts"
-    );
+    OPENCODE_PI_EXTENSION = import_node_path30.default.join(piAgentDirectory(), "extensions", "opencode", "index.ts");
   }
 });
 
@@ -28147,10 +28351,10 @@ function copyToSystemClipboard(session2, value) {
   clipboard.writeText(String(value ?? ""));
 }
 function avatarIcon(value) {
-  const text3 = String(value ?? "?").trim() || "?";
-  const initials = text3.split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("").replace(/[<>&"']/g, "") || "?";
+  const text4 = String(value ?? "?").trim() || "?";
+  const initials = text4.split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("").replace(/[<>&"']/g, "") || "?";
   let hash2 = 0;
-  for (const char of text3) hash2 = hash2 * 31 + char.charCodeAt(0) >>> 0;
+  for (const char of text4) hash2 = hash2 * 31 + char.charCodeAt(0) >>> 0;
   const hue = hash2 % 360;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="hsl(${hue} 58% 42%)"/><text x="32" y="39" text-anchor="middle" fill="white" font-family="-apple-system, sans-serif" font-size="22" font-weight="600">${initials}</text></svg>`;
   return { source: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` };
@@ -28428,8 +28632,8 @@ function createRaycastApiShim(session2) {
         copyToSystemClipboard(session2, value);
       },
       read: async () => {
-        const text3 = clipboard.readText();
-        return text3 ? { text: text3 } : {};
+        const text4 = clipboard.readText();
+        return text4 ? { text: text4 } : {};
       },
       readText: async () => clipboard.readText()
     },
@@ -29179,12 +29383,12 @@ function createRaycastUtilsShim(session2) {
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: parameters
       });
-      const text3 = await response.text();
+      const text4 = await response.text();
       let payload = {};
       try {
-        payload = text3 ? JSON.parse(text3) : {};
+        payload = text4 ? JSON.parse(text4) : {};
       } catch {
-        payload = { error_description: text3 };
+        payload = { error_description: text4 };
       }
       if (!response.ok) {
         throw new Error(
@@ -30122,10 +30326,10 @@ function runBundle(code, packageRoot, session2) {
           if (merged.responseType === "stream") {
             data = response.body ? import_node_stream2.Readable.fromWeb(response.body) : import_node_stream2.Readable.from([]);
           } else {
-            const text3 = await response.text();
-            data = text3;
+            const text4 = await response.text();
+            data = text4;
             try {
-              data = text3 ? JSON.parse(text3) : null;
+              data = text4 ? JSON.parse(text4) : null;
             } catch {
             }
           }
@@ -30711,8 +30915,8 @@ function spawnBunPipeTerminal(shell2, args, cwd, env, cols, rows) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const text3 = decoder.decode(value, { stream: true });
-        if (text3) dataListeners.forEach((listener) => listener(text3));
+        const text4 = decoder.decode(value, { stream: true });
+        if (text4) dataListeners.forEach((listener) => listener(text4));
       }
     } catch {
     } finally {
@@ -31610,16 +31814,16 @@ function tokenize3(input) {
     input.toLowerCase().split(/\s+/).map((token) => token.replace(/[^a-z0-9_-]/g, "")).filter((token) => token.length > 2)
   );
 }
-function overlapScore(query, text3) {
-  if (query.size === 0 || text3.size === 0) return 0;
+function overlapScore(query, text4) {
+  if (query.size === 0 || text4.size === 0) return 0;
   let overlap = 0;
   query.forEach((token) => {
-    if (text3.has(token)) overlap += 1;
+    if (text4.has(token)) overlap += 1;
   });
   return overlap / query.size;
 }
-function rememberMemory(text3, source, isPrivate = false) {
-  const cleaned = text3.trim();
+function rememberMemory(text4, source, isPrivate = false) {
+  const cleaned = text4.trim();
   if (!cleaned) return;
   const db = readDb2();
   db.entries = [
@@ -31664,8 +31868,8 @@ __export(answerStream_exports, {
   streamAnswerToRenderer: () => streamAnswerToRenderer
 });
 async function streamAnswerToRenderer(sender, userText, signal) {
-  const token = (text3) => {
-    if (!sender.isDestroyed()) sender.send("stream-token", text3);
+  const token = (text4) => {
+    if (!sender.isDestroyed()) sender.send("stream-token", text4);
   };
   const done = () => {
     if (!sender.isDestroyed()) sender.send("stream-done");
@@ -32024,12 +32228,12 @@ async function downloadAssetWithProgress(url, destinationPath, onProgress) {
       if (!value) continue;
       downloaded += value.byteLength;
       if (!writer.write(Buffer.from(value))) {
-        await (0, import_node_events2.once)(writer, "drain");
+        await (0, import_node_events.once)(writer, "drain");
       }
       onProgress(downloaded, totalBytes);
     }
     writer.end();
-    await (0, import_node_events2.once)(writer, "finish");
+    await (0, import_node_events.once)(writer, "finish");
     await import_node_fs34.promises.rename(tempPath, destinationPath);
   } catch (error) {
     writer.destroy();
@@ -32201,8 +32405,8 @@ async function deleteVoiceModel(modelId) {
   writeConfigPatch({ [VOICE_MODEL_CONFIG_KEY]: nextSelected });
   return nextSelected;
 }
-async function speakText(text3) {
-  const trimmed = text3.trim();
+async function speakText(text4) {
+  const trimmed = text4.trim();
   if (!trimmed) return;
   stopSpeaking();
   activeSpeech = process.platform === "win32" ? (0, import_node_child_process26.spawn)(
@@ -32454,9 +32658,9 @@ async function runWhisperCli(wavPath, language) {
     const { stderr } = await execWithUserPath(binary, args);
     if (stderr.trim()) console.info("[stt][main] whisper-cli stderr:\n" + stderr.trim());
     const txtPath = wavPath.replace(/\.wav$/, ".txt");
-    const text3 = await import_node_fs34.promises.readFile(txtPath, "utf-8").catch(() => "");
+    const text4 = await import_node_fs34.promises.readFile(txtPath, "utf-8").catch(() => "");
     await import_node_fs34.promises.rm(txtPath, { force: true }).catch(() => void 0);
-    return text3.trim();
+    return text4.trim();
   } catch (err) {
     const e = err;
     const detail = (e.stderr ?? "").trim() || e.message || String(err);
@@ -32538,10 +32742,10 @@ async function transcribeAudio(req) {
     const moonshineAvailable = await hasBinary("python3") && await hasMoonshinePython();
     if (moonshineAvailable) {
       try {
-        const text3 = await runMoonshineTranscription(wavPath, req.language);
-        if (text3.length > 0) {
-          console.info("[stt][main] moonshine produced", text3.length, "chars");
-          return { ok: true, text: text3, engine: "moonshine-python" };
+        const text4 = await runMoonshineTranscription(wavPath, req.language);
+        if (text4.length > 0) {
+          console.info("[stt][main] moonshine produced", text4.length, "chars");
+          return { ok: true, text: text4, engine: "moonshine-python" };
         }
         if (!firstFailure) {
           firstFailure = { engine: "Moonshine", message: "Moonshine returned no text." };
@@ -32583,7 +32787,7 @@ ${result.hint}` : result.error);
   }
   return { text: result.text, engine: result.engine };
 }
-var import_node_child_process26, import_node_fs33, import_node_fs34, import_node_os19, import_node_path39, import_node_events2, import_node_util21, execFileAsync21, activeSpeech, cachedLoginPath, MODEL_CATALOG, activeDownloads, VOICE_MODEL_CONFIG_KEY, runtimeCache, LEGACY_WHISPER_ASSET_NAMES, staleVoiceCleanupPromise, cachedEngineProbe, ENGINE_PROBE_TTL_MS;
+var import_node_child_process26, import_node_fs33, import_node_fs34, import_node_os19, import_node_path39, import_node_events, import_node_util21, execFileAsync21, activeSpeech, cachedLoginPath, MODEL_CATALOG, activeDownloads, VOICE_MODEL_CONFIG_KEY, runtimeCache, LEGACY_WHISPER_ASSET_NAMES, staleVoiceCleanupPromise, cachedEngineProbe, ENGINE_PROBE_TTL_MS;
 var init_service5 = __esm({
   "src/main/voice/service.ts"() {
     "use strict";
@@ -32593,7 +32797,7 @@ var init_service5 = __esm({
     import_node_fs34 = require("node:fs");
     import_node_os19 = require("node:os");
     import_node_path39 = require("node:path");
-    import_node_events2 = require("node:events");
+    import_node_events = require("node:events");
     import_node_util21 = require("node:util");
     init_configStore();
     init_voice();
@@ -33895,6 +34099,38 @@ function indexingBackgroundTask(status) {
     progress: clampProgress(status.progress)
   };
 }
+function semanticDownloadingBackgroundTask(knowledge) {
+  const semantic = knowledge.semanticSearch;
+  if (!semantic || semantic.modelState !== "downloading") return null;
+  const downloadedMb = (semantic.downloadBytes / 1e6).toFixed(1);
+  const totalMb = semantic.downloadTotalBytes > 0 ? (semantic.downloadTotalBytes / 1e6).toFixed(1) : null;
+  return {
+    id: "semantic-downloading:active",
+    kind: "indexing",
+    title: "Downloading model\u2026",
+    detail: totalMb ? `EmbeddingGemma 2 \xB7 ${downloadedMb} / ${totalMb} MB` : `EmbeddingGemma 2 \xB7 ${downloadedMb} MB`,
+    progress: clampProgress(semantic.downloadProgress)
+  };
+}
+function semanticIndexingBackgroundTask(knowledge) {
+  const semantic = knowledge.semanticSearch;
+  if (!semantic) return null;
+  if (knowledge.settings.embeddingModel !== "embeddinggemma-2") return null;
+  if (semantic.modelState !== "ready") return null;
+  if (knowledge.status.state === "paused" || semantic.error) return null;
+  const isIndexing = semantic.indexing || semantic.totalChunks > 0 && semantic.indexedChunks < semantic.totalChunks;
+  if (!isIndexing) return null;
+  if (semantic.totalChunks > 0 && semantic.indexedChunks >= semantic.totalChunks) return null;
+  const progress = semantic.totalChunks > 0 ? clampProgress(semantic.indexedChunks / semantic.totalChunks) : void 0;
+  const detail = semantic.totalChunks > 0 ? `${semantic.indexedChunks.toLocaleString()} / ${semantic.totalChunks.toLocaleString()} chunks` : "Preparing semantic index\u2026";
+  return {
+    id: "semantic-indexing:active",
+    kind: "indexing",
+    title: "Semantic indexing\u2026",
+    detail,
+    progress
+  };
+}
 function timerBackgroundTask(fileName, rawContents, now = Date.now()) {
   const match = /^(.*?)---(\d+(?:\.\d+)?)\.timer$/.exec(fileName);
   if (!match) return null;
@@ -33953,12 +34189,21 @@ function listRunningTimers(now = Date.now()) {
 }
 function listBackgroundTasks(now = Date.now()) {
   const tasks = [];
-  const knowledge = getKnowledgeSnapshotIfInitialized();
-  const indexing = knowledge ? indexingBackgroundTask(knowledge.status) : null;
-  if (indexing) tasks.push(indexing);
+  const knowledge = getKnowledgeBackgroundStatusIfInitialized();
+  if (knowledge) {
+    const indexing = indexingBackgroundTask(knowledge.status);
+    if (indexing) tasks.push(indexing);
+    const semanticDownloading = semanticDownloadingBackgroundTask(knowledge);
+    if (semanticDownloading) tasks.push(semanticDownloading);
+    const semanticIndexing = semanticIndexingBackgroundTask(knowledge);
+    if (semanticIndexing) tasks.push(semanticIndexing);
+  }
   tasks.push(...listRunningTimers(now));
   return tasks;
 }
+
+// src/main/ipc.ts
+init_foreground();
 
 // src/main/permissions/manager.ts
 init_desktop_runtime();
@@ -34273,15 +34518,15 @@ async function powershell(script) {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
-    return record(parsed);
+    return record2(parsed);
   } catch {
     return {};
   }
 }
-function record(value) {
+function record2(value) {
   return value && typeof value === "object" ? value : {};
 }
-function text(value, fallback = "") {
+function text2(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 function finiteNumber(value, fallback = 0) {
@@ -34301,8 +34546,8 @@ async function loadStaticStats() {
   const cpuRows = (0, import_node_os14.cpus)();
   const storageTotalBytes = finiteNumber(payload.storageTotalBytes);
   const storageFreeBytes = finiteNumber(payload.storageFreeBytes);
-  const manufacturer = text(payload.manufacturer);
-  const model = text(payload.model, "Windows PC");
+  const manufacturer = text2(payload.manufacturer);
+  const model = text2(payload.model, "Windows PC");
   const displayWidth = positiveNumber(payload.displayWidth);
   const displayHeight = positiveNumber(payload.displayHeight);
   const displayRefreshRate = positiveNumber(payload.displayRefreshRate);
@@ -34310,34 +34555,34 @@ async function loadStaticStats() {
   const designedCapacity = positiveNumber(payload.batteryDesignCapacity);
   const fullCapacity = positiveNumber(payload.batteryFullCapacity);
   const osVersion = [
-    text(payload.osCaption, (0, import_node_os14.version)()),
-    text(payload.osVersion, (0, import_node_os14.release)()),
-    text(payload.osBuild) ? `build ${text(payload.osBuild)}` : ""
+    text2(payload.osCaption, (0, import_node_os14.version)()),
+    text2(payload.osVersion, (0, import_node_os14.release)()),
+    text2(payload.osBuild) ? `build ${text2(payload.osBuild)}` : ""
   ].filter(Boolean).join(" \xB7 ");
   return {
     device: {
       platform: "Windows",
       name: (0, import_node_os14.hostname)(),
       model: [manufacturer, model].filter(Boolean).join(" ") || "Windows PC",
-      chip: text(payload.cpuModel, cpuRows[0]?.model || "Processor"),
+      chip: text2(payload.cpuModel, cpuRows[0]?.model || "Processor"),
       osVersion,
       uptimeSeconds: 0
     },
     cpu: {
-      model: text(payload.cpuModel, cpuRows[0]?.model || "Processor"),
+      model: text2(payload.cpuModel, cpuRows[0]?.model || "Processor"),
       totalCores: finiteNumber(payload.logicalProcessors, cpuRows.length)
     },
     gpu: {
-      model: text(payload.gpuModel, "Graphics adapter"),
+      model: text2(payload.gpuModel, "Graphics adapter"),
       display: displayWidth && displayHeight ? `${displayWidth} \xD7 ${displayHeight}${displayRefreshRate ? ` @ ${displayRefreshRate} Hz` : ""}` : void 0
     },
     storage: {
-      name: text(payload.storageName, "System drive"),
-      device: text(payload.storageDevice, systemDrive().slice(0, 2)),
+      name: text2(payload.storageName, "System drive"),
+      device: text2(payload.storageDevice, systemDrive().slice(0, 2)),
       totalBytes: storageTotalBytes,
       usedBytes: Math.max(0, storageTotalBytes - storageFreeBytes),
       freeBytes: storageFreeBytes,
-      smartStatus: text(payload.storageHealth) || void 0
+      smartStatus: text2(payload.storageHealth) || void 0
     },
     fans: fanSpeeds.length > 0 ? { available: true, status: "Active", rpms: fanSpeeds } : {
       available: false,
@@ -34491,7 +34736,7 @@ async function getWindowsSystemStats() {
   ]);
   const totalBytes = (0, import_node_os14.totalmem)();
   const freeBytes = (0, import_node_os14.freemem)();
-  const interfaceHint = text(live.interfaceAlias);
+  const interfaceHint = text2(live.interfaceAlias);
   const active2 = activeNetwork(interfaceHint);
   const networkCounters = parseNetstatEthernetStatistics(networkOutput);
   const sample = networkCounters ? { ...networkCounters, sampledAt: Date.now() } : null;
@@ -34523,7 +34768,7 @@ async function getWindowsSystemStats() {
       interface: active2.interfaceName ?? (interfaceHint || void 0),
       connectionType: active2.connectionType,
       localIp: active2.localIp,
-      ssid: text(live.networkProfileName) || void 0,
+      ssid: text2(live.networkProfileName) || void 0,
       ...networkRates(sample)
     },
     fans: fixed.fans,
@@ -34552,13 +34797,13 @@ async function optionalCommand2(file, args) {
     return "";
   }
 }
-function record2(value) {
+function record3(value) {
   return value && typeof value === "object" ? value : {};
 }
 function firstRecord(value) {
-  return Array.isArray(value) ? record2(value[0]) : {};
+  return Array.isArray(value) ? record3(value[0]) : {};
 }
-function text2(value, fallback = "") {
+function text3(value, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
 function finiteNumber2(value, fallback = 0) {
@@ -34572,7 +34817,7 @@ function percent(value) {
   return Number.isFinite(parsed) ? parsed : void 0;
 }
 function normalizeProfilerLabel(value) {
-  const raw = text2(value);
+  const raw = text3(value);
   if (!raw) return void 0;
   const aliases = {
     Good: "Normal",
@@ -34589,25 +34834,25 @@ async function loadStaticStats2() {
     "SPStorageDataType",
     "-json"
   ]);
-  const payload = record2(JSON.parse(raw));
+  const payload = record3(JSON.parse(raw));
   const hardware = firstRecord(payload.SPHardwareDataType);
   const display = firstRecord(payload.SPDisplaysDataType);
   const builtInDisplay = firstRecord(display.spdisplays_ndrvs);
   const powerRows = Array.isArray(payload.SPPowerDataType) ? payload.SPPowerDataType : [];
-  const batteryRow = record2(
-    powerRows.find((item) => record2(item)._name === "spbattery_information")
+  const batteryRow = record3(
+    powerRows.find((item) => record3(item)._name === "spbattery_information")
   );
-  const batteryHealth = record2(batteryRow.sppower_battery_health_info);
-  const powerSettings = record2(
-    powerRows.find((item) => record2(item)._name === "sppower_information")
+  const batteryHealth = record3(batteryRow.sppower_battery_health_info);
+  const powerSettings = record3(
+    powerRows.find((item) => record3(item)._name === "sppower_information")
   );
-  const batteryPower = record2(powerSettings["Battery Power"]);
+  const batteryPower = record3(powerSettings["Battery Power"]);
   const storageRows = Array.isArray(payload.SPStorageDataType) ? payload.SPStorageDataType : [];
-  const rootStorage = record2(
-    storageRows.find((item) => record2(item).mount_point === "/") ?? storageRows[0]
+  const rootStorage = record3(
+    storageRows.find((item) => record3(item).mount_point === "/") ?? storageRows[0]
   );
-  const physicalDrive = record2(rootStorage.physical_drive);
-  const processorMatch = text2(hardware.number_processors).match(/proc\s+(\d+):(\d+):(\d+)/);
+  const physicalDrive = record3(rootStorage.physical_drive);
+  const processorMatch = text3(hardware.number_processors).match(/proc\s+(\d+):(\d+):(\d+)/);
   const totalCores = processorMatch ? Number(processorMatch[1]) : 0;
   const performanceCores = processorMatch ? Number(processorMatch[2]) : void 0;
   const efficiencyCores = processorMatch ? Number(processorMatch[3]) : void 0;
@@ -34616,26 +34861,26 @@ async function loadStaticStats2() {
   return {
     device: {
       platform: "macOS",
-      name: text2(hardware.machine_name, (0, import_node_os15.hostname)()),
-      model: text2(hardware.machine_model, "Mac"),
-      chip: text2(hardware.chip_type, "Apple Silicon"),
+      name: text3(hardware.machine_name, (0, import_node_os15.hostname)()),
+      model: text3(hardware.machine_model, "Mac"),
+      chip: text3(hardware.chip_type, "Apple Silicon"),
       osVersion: "",
       uptimeSeconds: 0
     },
     cpu: {
-      model: text2(hardware.chip_type, "Apple Silicon"),
+      model: text3(hardware.chip_type, "Apple Silicon"),
       totalCores,
       performanceCores,
       efficiencyCores
     },
     gpu: {
-      model: text2(display.sppci_model, text2(display._name, "Apple GPU")),
+      model: text3(display.sppci_model, text3(display._name, "Apple GPU")),
       cores: finiteNumber2(display.sppci_cores) || void 0,
-      display: text2(builtInDisplay._spdisplays_pixels) || void 0
+      display: text3(builtInDisplay._spdisplays_pixels) || void 0
     },
     storage: {
-      name: text2(rootStorage._name, "Macintosh HD"),
-      device: text2(physicalDrive.device_name) || void 0,
+      name: text3(rootStorage._name, "Macintosh HD"),
+      device: text3(physicalDrive.device_name) || void 0,
       totalBytes,
       usedBytes: Math.max(0, totalBytes - freeBytes),
       freeBytes,
@@ -35013,6 +35258,12 @@ async function vacuumSearchDatabase() {
 
 // src/main/ipc.ts
 init_service();
+function handleIpc(channel, listener) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (countsAsForegroundActivity(channel)) noteForegroundActivity();
+    return listener(event, ...args);
+  });
+}
 var LLM_DEFAULTS = {
   uiStateRetentionMs: 6e4
 };
@@ -35179,12 +35430,12 @@ function canRetryRun(error, signal) {
   const message = error instanceof Error ? error.message : String(error);
   return !/aborted|cancelled|task is empty|invalid base64|unsupported agent image/i.test(message);
 }
-function startAgentRun(sender, task, images = [], cwd) {
+function startAgentRun(sender, task, images = [], cwd, requestedRunId) {
   cancelPendingAgentApprovals();
   agentAbort?.abort();
   agentAbort = new AbortController();
   const ac = agentAbort;
-  const runId = agentRunId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const runId = agentRunId = requestedRunId ?? `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   let emittedOutput = false;
   sendAgentEvent(sender, { type: "start", runId, task });
   const onStage = (stage) => {
@@ -35195,14 +35446,13 @@ function startAgentRun(sender, task, images = [], cwd) {
     emittedOutput = true;
     sendAgentEvent(sender, { type: "message", runId, delta });
   };
-  const onAnswer = (text3) => {
+  const onAnswer = (text4) => {
     emittedOutput = true;
-    sendAgentEvent(sender, { type: "answer", runId, text: text3 });
+    sendAgentEvent(sender, { type: "answer", runId, text: text4 });
   };
   const onStderrLine = (line) => {
     sendAgentEvent(sender, { type: "log", runId, source: "stderr", line });
   };
-  console.log("[tezbar:agent] run", { runId, taskPreview: task.slice(0, 120) });
   void (async () => {
     const [{ getSharedBridge: getSharedBridge2 }, { extractTextFromAgentImages: extractTextFromAgentImages2 }] = await Promise.all([
       loadAgentBridge(),
@@ -35365,7 +35615,7 @@ function shutdownIpcHandlers() {
 }
 function registerIpcHandlers(getWindow, controls) {
   extensionProgressWindow = getWindow;
-  ipcMain.handle("llm-config-get", async () => ({
+  handleIpc("llm-config-get", async () => ({
     ...LLM_DEFAULTS,
     ...readLLMConfig(),
     ...readRawConfig(),
@@ -35375,7 +35625,7 @@ function registerIpcHandlers(getWindow, controls) {
     aiModeTimeoutMs: getCommandSurfaceTimeoutMs("aiModeTimeoutMs"),
     terminalModeTimeoutMs: getCommandSurfaceTimeoutMs("terminalModeTimeoutMs")
   }));
-  ipcMain.handle("llm-config-set", async (_event, patch) => {
+  handleIpc("llm-config-set", async (_event, patch) => {
     if (!patch || typeof patch !== "object") return;
     const configPatch = { ...patch };
     const requestedHotkey = configPatch.raymesHotkey;
@@ -35401,7 +35651,7 @@ function registerIpcHandlers(getWindow, controls) {
     invalidateProviderCache();
     broadcast();
   });
-  ipcMain.handle("llm-provider-statuses", async () => {
+  handleIpc("llm-provider-statuses", async () => {
     const cfg = readLLMConfig();
     const ids = [
       "openai",
@@ -35428,11 +35678,13 @@ function registerIpcHandlers(getWindow, controls) {
     );
     return Object.fromEntries(entries);
   });
-  ipcMain.handle(
+  handleIpc(
     "llm-list-models",
     async (_event, providerId, baseURLOverride, apiKeyOverride) => {
       const id = providerId;
-      const isCustom = typeof id === "string" && (isCustomProvider(id) || id.startsWith("custom:") || readLLMConfig().customProviders?.some((provider) => provider.id === id));
+      const isCustom = typeof id === "string" && (isCustomProvider(id) || id.startsWith("custom:") || readLLMConfig().customProviders?.some(
+        (provider) => provider.id === id
+      ));
       if (id !== "openai" && id !== "openai-compatible" && id !== "tokenrouter" && id !== "anthropic" && id !== "ollama" && id !== "copilot" && id !== "gemini" && id !== "opencode" && id !== "deepseek" && id !== "antigravity" && !isCustom)
         return [];
       try {
@@ -35447,11 +35699,11 @@ function registerIpcHandlers(getWindow, controls) {
       }
     }
   );
-  ipcMain.handle("pi-extensions:list", async () => {
+  handleIpc("pi-extensions:list", async () => {
     const { getInstalledPiExtensions: getInstalledPiExtensions2 } = await Promise.resolve().then(() => (init_piExtensions(), piExtensions_exports));
     return getInstalledPiExtensions2();
   });
-  ipcMain.handle("window-set-content-height", async (_event, raw) => {
+  handleIpc("window-set-content-height", async (_event, raw) => {
     const win = getWindow();
     if (!win || win.isDestroyed()) return;
     const payload = raw && typeof raw === "object" ? raw : { height: raw, zoomFactor: 1 };
@@ -35460,58 +35712,58 @@ function registerIpcHandlers(getWindow, controls) {
     if (!Number.isFinite(height)) return;
     setLauncherContentHeight(win, height, zoomFactor);
   });
-  ipcMain.handle("pi:check", async () => checkPiAgent());
-  ipcMain.handle("pi:install", async () => installPiAgent());
-  ipcMain.handle("permissions:snapshot", async () => snapshotPermissions());
-  ipcMain.handle("permissions:request", async (_event, raw) => {
+  handleIpc("pi:check", async () => checkPiAgent());
+  handleIpc("pi:install", async () => installPiAgent());
+  handleIpc("permissions:snapshot", async () => snapshotPermissions());
+  handleIpc("permissions:request", async (_event, raw) => {
     if (typeof raw !== "string") {
       throw new Error("Permission id must be a string");
     }
     return requestPermission(raw);
   });
-  ipcMain.handle("safety:descriptors", async () => listSafetyDescriptors());
-  ipcMain.handle("safety:log", async () => listSafetyLog());
-  ipcMain.handle("safety:log-clear", async () => {
+  handleIpc("safety:descriptors", async () => listSafetyDescriptors());
+  handleIpc("safety:log", async () => listSafetyLog());
+  handleIpc("safety:log-clear", async () => {
     clearSafetyLog();
   });
-  ipcMain.handle("safety:dry-run:get", async () => getSafetyDryRun());
-  ipcMain.handle("safety:dry-run:set", async (_event, raw) => {
+  handleIpc("safety:dry-run:get", async () => getSafetyDryRun());
+  handleIpc("safety:dry-run:set", async (_event, raw) => {
     setSafetyDryRun(raw === true);
     return getSafetyDryRun();
   });
-  ipcMain.handle("native-commands:list", async () => listNativeCommands());
-  ipcMain.handle("system-stats:get", async () => getSystemStats());
-  ipcMain.handle("clipboard:list", async () => listClipboardEntries());
-  ipcMain.handle("clipboard:restore", async (_event, id) => {
+  handleIpc("native-commands:list", async () => listNativeCommands());
+  handleIpc("system-stats:get", async () => getSystemStats());
+  handleIpc("clipboard:list", async () => listClipboardEntries());
+  handleIpc("clipboard:restore", async (_event, id) => {
     if (typeof id !== "string" || !id) return false;
     return restoreClipboardEntry(id);
   });
-  ipcMain.handle("clipboard:delete", async (_event, id) => {
+  handleIpc("clipboard:delete", async (_event, id) => {
     if (typeof id !== "string" || !id) return false;
     return deleteClipboardEntry(id);
   });
-  ipcMain.handle("clipboard:toggle-pin", async (_event, id) => {
+  handleIpc("clipboard:toggle-pin", async (_event, id) => {
     if (typeof id !== "string" || !id) return false;
     return togglePinClipboardEntry(id);
   });
-  ipcMain.handle("clipboard:reveal", async (_event, id) => {
+  handleIpc("clipboard:reveal", async (_event, id) => {
     if (typeof id !== "string" || !id) return false;
     return revealClipboardEntryInFinder(id);
   });
-  ipcMain.handle("clipboard:image", async (_event, id) => {
+  handleIpc("clipboard:image", async (_event, id) => {
     if (typeof id !== "string" || !id) return null;
     return readClipboardImagePayload(id);
   });
-  ipcMain.handle("clipboard:clear", async () => {
+  handleIpc("clipboard:clear", async () => {
     clearClipboardHistory();
   });
-  ipcMain.handle("app-icon:data-url", async (_event, raw) => {
+  handleIpc("app-icon:data-url", async (_event, raw) => {
     const appPath = typeof raw === "string" ? raw.trim() : "";
     if (!appPath || process.platform === "darwin" && !appPath.endsWith(".app") || process.platform === "win32" && !appPath.startsWith("shell:AppsFolder\\") && !/\.(?:exe|lnk|url)$/i.test(appPath))
       return null;
     return await appIconDataUrl(appPath) ?? null;
   });
-  ipcMain.handle("asset-icon:data-url", async (_event, raw) => {
+  handleIpc("asset-icon:data-url", async (_event, raw) => {
     if (!raw || typeof raw !== "object") return null;
     const payload = raw;
     const kind = payload.kind;
@@ -35531,12 +35783,12 @@ function registerIpcHandlers(getWindow, controls) {
     }
     return null;
   });
-  ipcMain.handle("snippets:list", async () => listSnippetsForUi());
-  ipcMain.handle("snippets:copy", async (_event, id) => {
+  handleIpc("snippets:list", async () => listSnippetsForUi());
+  handleIpc("snippets:copy", async (_event, id) => {
     if (typeof id !== "string" || !id) return { ok: false, message: "Invalid snippet" };
     return copySnippetById(id);
   });
-  ipcMain.handle("snippets:add", async (_event, payload) => {
+  handleIpc("snippets:add", async (_event, payload) => {
     if (!payload || typeof payload !== "object") return { ok: false, message: "Invalid payload" };
     const o = payload;
     const r = addUserSnippet({
@@ -35547,7 +35799,7 @@ function registerIpcHandlers(getWindow, controls) {
     if (r.ok) await reindexSnippets();
     return r;
   });
-  ipcMain.handle("snippets:update", async (_event, id, payload) => {
+  handleIpc("snippets:update", async (_event, id, payload) => {
     if (typeof id !== "string" || !id) return { ok: false, message: "Invalid snippet id" };
     if (!payload || typeof payload !== "object") return { ok: false, message: "Invalid payload" };
     const o = payload;
@@ -35559,20 +35811,20 @@ function registerIpcHandlers(getWindow, controls) {
     if (r.ok) await reindexSnippets();
     return r;
   });
-  ipcMain.handle("snippets:delete", async (_event, id) => {
+  handleIpc("snippets:delete", async (_event, id) => {
     if (typeof id !== "string" || !id) return { ok: false, message: "Invalid snippet id" };
     const r = deleteUserSnippet(id);
     if (r.ok) await reindexSnippets();
     return r;
   });
-  ipcMain.handle("notes:list", async () => listQuickNotes());
-  ipcMain.handle("notes:append", async (_event, text3) => {
-    if (typeof text3 !== "string" || !text3.trim()) return null;
-    const entry = addQuickNote(text3);
+  handleIpc("notes:list", async () => listQuickNotes());
+  handleIpc("notes:append", async (_event, text4) => {
+    if (typeof text4 !== "string" || !text4.trim()) return null;
+    const entry = addQuickNote(text4);
     await reindexQuickNotes();
     return entry;
   });
-  ipcMain.handle("notes:update", async (_event, payload) => {
+  handleIpc("notes:update", async (_event, payload) => {
     if (!payload || typeof payload !== "object") return false;
     const o = payload;
     if (typeof o.createdAt !== "number" || typeof o.text !== "string") return false;
@@ -35580,13 +35832,13 @@ function registerIpcHandlers(getWindow, controls) {
     if (ok) await reindexQuickNotes();
     return ok;
   });
-  ipcMain.handle("notes:delete", async (_event, createdAt) => {
+  handleIpc("notes:delete", async (_event, createdAt) => {
     if (typeof createdAt !== "number") return false;
     const ok = deleteQuickNote(createdAt);
     if (ok) await reindexQuickNotes();
     return ok;
   });
-  ipcMain.handle(TERMINAL_IPC.CREATE, async (event, raw) => {
+  handleIpc(TERMINAL_IPC.CREATE, async (event, raw) => {
     if (!raw || typeof raw !== "object") throw new Error("Invalid terminal request");
     const body = raw;
     if (typeof body.cols !== "number" || typeof body.rows !== "number") {
@@ -35613,7 +35865,7 @@ function registerIpcHandlers(getWindow, controls) {
     const { createTerminalSession: createTerminalSession2 } = await loadTerminal();
     return createTerminalSession2(event.sender, body);
   });
-  ipcMain.handle(TERMINAL_IPC.ATTACH, async (event, raw) => {
+  handleIpc(TERMINAL_IPC.ATTACH, async (event, raw) => {
     if (!raw || typeof raw !== "object") return null;
     const body = raw;
     if (typeof body.sessionId !== "string" || typeof body.cols !== "number" || typeof body.rows !== "number") {
@@ -35622,18 +35874,18 @@ function registerIpcHandlers(getWindow, controls) {
     const { attachTerminalSession: attachTerminalSession2 } = await loadTerminal();
     return attachTerminalSession2(event.sender, body);
   });
-  ipcMain.handle(TERMINAL_IPC.DETACH, async (event, raw) => {
+  handleIpc(TERMINAL_IPC.DETACH, async (event, raw) => {
     if (!raw || typeof raw !== "object") return false;
     const body = raw;
     if (typeof body.sessionId !== "string") return false;
     const { detachTerminalSession: detachTerminalSession2 } = await loadTerminal();
     return detachTerminalSession2(event.sender.id, body.sessionId);
   });
-  ipcMain.handle(TERMINAL_IPC.LIST, async (event) => {
+  handleIpc(TERMINAL_IPC.LIST, async (event) => {
     const { listTerminalSessions: listTerminalSessions2 } = await loadTerminal();
     return listTerminalSessions2(event.sender.id);
   });
-  ipcMain.handle(TERMINAL_IPC.UPDATE, async (event, raw) => {
+  handleIpc(TERMINAL_IPC.UPDATE, async (event, raw) => {
     if (!raw || typeof raw !== "object") return null;
     const body = raw;
     if (typeof body.sessionId !== "string") return null;
@@ -35644,7 +35896,7 @@ function registerIpcHandlers(getWindow, controls) {
     const { updateTerminalSession: updateTerminalSession2 } = await loadTerminal();
     return updateTerminalSession2(event.sender.id, body);
   });
-  ipcMain.handle("terminal:native-create", async (_event, raw) => {
+  handleIpc("terminal:native-create", async (_event, raw) => {
     if (!raw || typeof raw !== "object") return null;
     const body = raw;
     if (typeof body.sessionId !== "string" || typeof body.shell !== "string" || typeof body.cwd !== "string") {
@@ -35668,14 +35920,14 @@ function registerIpcHandlers(getWindow, controls) {
       keepAliveFor
     });
   });
-  ipcMain.handle("terminal:native-attach", async (_event, raw) => {
+  handleIpc("terminal:native-attach", async (_event, raw) => {
     if (!raw || typeof raw !== "object") return null;
     const body = raw;
     if (typeof body.sessionId !== "string") return null;
     const { markNativeTerminalSessionAttached: markNativeTerminalSessionAttached2 } = await loadTerminal();
     return markNativeTerminalSessionAttached2(body.sessionId);
   });
-  ipcMain.handle("terminal:native-restore", async (_event, raw) => {
+  handleIpc("terminal:native-restore", async (_event, raw) => {
     if (!raw || typeof raw !== "object") return null;
     const body = raw;
     if (typeof body.sessionId !== "string" || typeof body.shell !== "string" || typeof body.cwd !== "string") {
@@ -35688,7 +35940,7 @@ function registerIpcHandlers(getWindow, controls) {
       cwd: body.cwd
     });
   });
-  ipcMain.handle("terminal:native-exit", async (_event, raw) => {
+  handleIpc("terminal:native-exit", async (_event, raw) => {
     if (!raw || typeof raw !== "object") return null;
     const body = raw;
     if (typeof body.sessionId !== "string") return null;
@@ -35697,14 +35949,14 @@ function registerIpcHandlers(getWindow, controls) {
     const { markNativeTerminalSessionExited: markNativeTerminalSessionExited2 } = await loadTerminal();
     return markNativeTerminalSessionExited2(body.sessionId, exitCode, signal);
   });
-  ipcMain.handle(TERMINAL_IPC.WRITE, async (event, raw) => {
+  handleIpc(TERMINAL_IPC.WRITE, async (event, raw) => {
     if (!raw || typeof raw !== "object") return false;
     const body = raw;
     if (typeof body.sessionId !== "string" || typeof body.data !== "string") return false;
     const { writeTerminalSession: writeTerminalSession2 } = await loadTerminal();
     return writeTerminalSession2(event.sender.id, body.sessionId, body.data);
   });
-  ipcMain.handle(TERMINAL_IPC.RESIZE, async (event, raw) => {
+  handleIpc(TERMINAL_IPC.RESIZE, async (event, raw) => {
     if (!raw || typeof raw !== "object") return false;
     const body = raw;
     if (typeof body.sessionId !== "string" || typeof body.cols !== "number" || typeof body.rows !== "number") {
@@ -35713,32 +35965,32 @@ function registerIpcHandlers(getWindow, controls) {
     const { resizeTerminalSession: resizeTerminalSession2 } = await loadTerminal();
     return resizeTerminalSession2(event.sender.id, body.sessionId, body.cols, body.rows);
   });
-  ipcMain.handle(TERMINAL_IPC.GET_CWD, async (event, raw) => {
+  handleIpc(TERMINAL_IPC.GET_CWD, async (event, raw) => {
     if (!raw || typeof raw !== "object") return null;
     const body = raw;
     if (typeof body.sessionId !== "string") return null;
     const { getTerminalSessionCwd: getTerminalSessionCwd2 } = await loadTerminal();
     return getTerminalSessionCwd2(event.sender.id, body.sessionId);
   });
-  ipcMain.handle(TERMINAL_IPC.KILL, async (event, raw) => {
+  handleIpc(TERMINAL_IPC.KILL, async (event, raw) => {
     if (!raw || typeof raw !== "object") return false;
     const body = raw;
     if (typeof body.sessionId !== "string") return false;
     const { killTerminalSession: killTerminalSession2 } = await loadTerminal();
     return killTerminalSession2(event.sender.id, body.sessionId);
   });
-  ipcMain.handle(TERMINAL_IPC.DELETE, async (event, raw) => {
+  handleIpc(TERMINAL_IPC.DELETE, async (event, raw) => {
     if (!raw || typeof raw !== "object") return false;
     const body = raw;
     if (typeof body.sessionId !== "string") return false;
     const { deleteTerminalSession: deleteTerminalSession2 } = await loadTerminal();
     return deleteTerminalSession2(event.sender.id, body.sessionId);
   });
-  ipcMain.handle(TERMINAL_IPC.GET_PROMPT_INFO, async () => {
+  handleIpc(TERMINAL_IPC.GET_PROMPT_INFO, async () => {
     const { getTerminalPromptInfo: getTerminalPromptInfo2 } = await loadTerminal();
     return getTerminalPromptInfo2();
   });
-  ipcMain.handle("open-external-url", async (_event, url) => {
+  handleIpc("open-external-url", async (_event, url) => {
     if (typeof url !== "string") return;
     let parsed;
     try {
@@ -35750,10 +36002,10 @@ function registerIpcHandlers(getWindow, controls) {
     if (parsed.hostname !== "github.com" && !parsed.hostname.endsWith(".github.com")) return;
     await shell.openExternal(url);
   });
-  ipcMain.handle("github-device-start", async (_event, clientId) => {
+  handleIpc("github-device-start", async (_event, clientId) => {
     return startGithubDeviceFlow(typeof clientId === "string" ? clientId : void 0);
   });
-  ipcMain.handle("github-device-poll", async () => {
+  handleIpc("github-device-poll", async () => {
     const r = await pollGithubDeviceFlow();
     if (r.status === "success") {
       persistCopilotTokens(r.access_token, r.refresh_token, r.expires_in, r.client_id);
@@ -35761,13 +36013,13 @@ function registerIpcHandlers(getWindow, controls) {
     }
     return r;
   });
-  ipcMain.handle("github-device-cancel", async () => {
+  handleIpc("github-device-cancel", async () => {
     clearDeviceSession();
   });
-  ipcMain.handle(IPC_CHANNELS.QUERY, async (event, input) => {
-    const text3 = typeof input === "string" ? input : String(input ?? "");
-    console.log("[IPC_CHANNELS.QUERY] received input:", text3);
-    const intent = await classifyIntent(text3);
+  handleIpc(IPC_CHANNELS.QUERY, async (event, input) => {
+    const text4 = typeof input === "string" ? input : String(input ?? "");
+    console.log("[IPC_CHANNELS.QUERY] received input:", text4);
+    const intent = await classifyIntent(text4);
     console.log("[IPC_CHANNELS.QUERY] classified intent:", intent);
     if (intent.type === "answer" || intent.type === "ai") {
       console.log("[IPC_CHANNELS.QUERY] starting streamAnswerToRenderer");
@@ -35786,11 +36038,11 @@ function registerIpcHandlers(getWindow, controls) {
     }
     return intent;
   });
-  ipcMain.handle("cancel", async () => {
+  handleIpc("cancel", async () => {
     answerAbort?.abort();
     agentAbort?.abort();
   });
-  ipcMain.handle(AGENT_IPC.RUN, async (event, raw) => {
+  handleIpc(AGENT_IPC.RUN, async (event, raw) => {
     const request = typeof raw === "string" ? { task: raw } : raw && typeof raw === "object" ? raw : { task: "" };
     const task = typeof request.task === "string" ? request.task : "";
     if (!task.trim()) {
@@ -35799,16 +36051,19 @@ function registerIpcHandlers(getWindow, controls) {
     if (request.cwd !== void 0 && typeof request.cwd !== "string") {
       return { ok: false, error: "Invalid agent working directory" };
     }
+    if (request.runId !== void 0 && (typeof request.runId !== "string" || !/^agent-[a-zA-Z0-9-]{1,100}$/.test(request.runId))) {
+      return { ok: false, error: "Invalid agent run id" };
+    }
     const images = Array.isArray(request.images) ? request.images : [];
     const requestedCwd = request.cwd?.trim() ?? "";
     const cwd = requestedCwd ? resolveLauncherDirectory(requestedCwd) ?? void 0 : void 0;
     if (requestedCwd && !cwd) {
       return { ok: false, error: `Directory does not exist: ${requestedCwd}` };
     }
-    const runId = startAgentRun(event.sender, task, images, cwd);
+    const runId = startAgentRun(event.sender, task, images, cwd, request.runId);
     return { ok: true, runId };
   });
-  ipcMain.handle(AGENT_IPC.CAPTURE_ACTIVE_SCREEN, async (event) => {
+  handleIpc(AGENT_IPC.CAPTURE_ACTIVE_SCREEN, async (event) => {
     const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const maxWidth = 1600;
     const scale = Math.min(1, maxWidth / Math.max(1, display.size.width));
@@ -35844,12 +36099,13 @@ function registerIpcHandlers(getWindow, controls) {
       }
     }
   });
-  ipcMain.handle(AGENT_IPC.CANCEL, async () => {
+  handleIpc(AGENT_IPC.CANCEL, async (_event, expectedRunId) => {
+    if (expectedRunId !== void 0 && expectedRunId !== agentRunId) return { ok: true };
     cancelPendingAgentApprovals(agentRunId ?? void 0);
     agentAbort?.abort();
     return { ok: true };
   });
-  ipcMain.handle(AGENT_IPC.APPROVE, async (_event, raw) => {
+  handleIpc(AGENT_IPC.APPROVE, async (_event, raw) => {
     if (!raw || typeof raw !== "object") return { ok: false, error: "Invalid approval" };
     const response = raw;
     const decision = response.decision;
@@ -35866,7 +36122,7 @@ function registerIpcHandlers(getWindow, controls) {
     pending.settle(decision !== "deny");
     return { ok: true };
   });
-  ipcMain.handle(CHAT_IPC.RUN, async (event, rawTurns) => {
+  handleIpc(CHAT_IPC.RUN, async (event, rawTurns) => {
     const turns = normalizeChatTurns(rawTurns);
     if (!turns || turns.length === 0) {
       return { ok: false, error: "Invalid chat run payload" };
@@ -35874,15 +36130,15 @@ function registerIpcHandlers(getWindow, controls) {
     const runId = startChatRun(event.sender, turns);
     return { ok: true, runId };
   });
-  ipcMain.handle(CHAT_IPC.LIST, async (_event, rawLimit) => {
+  handleIpc(CHAT_IPC.LIST, async (_event, rawLimit) => {
     const limit = typeof rawLimit === "number" && Number.isFinite(rawLimit) && rawLimit > 0 ? Math.floor(rawLimit) : void 0;
     return listChatSessions(limit);
   });
-  ipcMain.handle(CHAT_IPC.GET, async (_event, id) => {
+  handleIpc(CHAT_IPC.GET, async (_event, id) => {
     if (typeof id !== "string" || !id) return null;
     return getChatSession(id);
   });
-  ipcMain.handle(CHAT_IPC.APPEND, async (_event, payload) => {
+  handleIpc(CHAT_IPC.APPEND, async (_event, payload) => {
     if (!payload || typeof payload !== "object") {
       return { ok: false, error: "Invalid chat append payload" };
     }
@@ -35924,7 +36180,7 @@ function registerIpcHandlers(getWindow, controls) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });
-  ipcMain.handle(CHAT_IPC.DELETE_TURN, async (_event, payload) => {
+  handleIpc(CHAT_IPC.DELETE_TURN, async (_event, payload) => {
     if (!payload || typeof payload !== "object") {
       return { ok: false, error: "Invalid chat turn delete payload" };
     }
@@ -35938,7 +36194,7 @@ function registerIpcHandlers(getWindow, controls) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });
-  ipcMain.handle(CHAT_IPC.UPDATE_TITLE, async (_event, payload) => {
+  handleIpc(CHAT_IPC.UPDATE_TITLE, async (_event, payload) => {
     if (!payload || typeof payload !== "object") return { ok: false };
     const body = payload;
     if (typeof body.id !== "string" || typeof body.title !== "string") {
@@ -35951,11 +36207,11 @@ function registerIpcHandlers(getWindow, controls) {
       return { ok: false };
     }
   });
-  ipcMain.handle(CHAT_IPC.DELETE, async (_event, id) => {
+  handleIpc(CHAT_IPC.DELETE, async (_event, id) => {
     if (typeof id !== "string" || !id) return { ok: false };
     return { ok: await deleteChatSession(id) };
   });
-  ipcMain.handle(CHAT_IPC.CLEAR, async () => {
+  handleIpc(CHAT_IPC.CLEAR, async () => {
     try {
       await clearAllChatSessions();
       return { ok: true };
@@ -35963,7 +36219,7 @@ function registerIpcHandlers(getWindow, controls) {
       return { ok: false };
     }
   });
-  ipcMain.handle("app:confirm-quit", async () => confirmQuitRaymes(getWindow));
+  handleIpc("app:confirm-quit", async () => confirmQuitRaymes(getWindow));
   ipcMain.on("app:quit-confirmed", () => {
     if (!quitConfirmed) return;
     quitRaymesNow();
@@ -35975,20 +36231,20 @@ function registerIpcHandlers(getWindow, controls) {
       setSuppressBlurHide(false);
     });
   });
-  ipcMain.handle("get-extensions", async () => {
+  handleIpc("get-extensions", async () => {
     const { listInstalledExtensions: listInstalledExtensions2 } = await Promise.resolve().then(() => (init_service2(), service_exports));
     return listInstalledExtensions2();
   });
-  ipcMain.handle("extensions:listInstalled", async () => {
+  handleIpc("extensions:listInstalled", async () => {
     const { listInstalledExtensions: listInstalledExtensions2 } = await Promise.resolve().then(() => (init_service2(), service_exports));
     return listInstalledExtensions2();
   });
-  ipcMain.handle("extensions:searchStore", async (_event, query) => {
+  handleIpc("extensions:searchStore", async (_event, query) => {
     const q = typeof query === "string" ? query : "";
     const { searchStoreExtensions: searchStoreExtensions2 } = await Promise.resolve().then(() => (init_service2(), service_exports));
     return searchStoreExtensions2(q);
   });
-  ipcMain.handle("extensions:install", async (_event, extensionId) => {
+  handleIpc("extensions:install", async (_event, extensionId) => {
     if (typeof extensionId !== "string" || !extensionId.trim()) {
       throw new Error("A valid extension id is required");
     }
@@ -35997,7 +36253,7 @@ function registerIpcHandlers(getWindow, controls) {
     await reindexExtensions();
     return result;
   });
-  ipcMain.handle("extensions:uninstall", async (_event, extensionId) => {
+  handleIpc("extensions:uninstall", async (_event, extensionId) => {
     if (typeof extensionId !== "string" || !extensionId.trim()) {
       throw new Error("A valid extension id is required");
     }
@@ -36006,30 +36262,30 @@ function registerIpcHandlers(getWindow, controls) {
     await reindexExtensions();
     return result;
   });
-  ipcMain.handle("extensions:integrity", async (_event, extensionId) => {
+  handleIpc("extensions:integrity", async (_event, extensionId) => {
     if (typeof extensionId !== "string" || !extensionId.trim()) {
       throw new Error("A valid extension id is required");
     }
     const { inspectExtensionIntegrity: inspectExtensionIntegrity2 } = await Promise.resolve().then(() => (init_service2(), service_exports));
     return inspectExtensionIntegrity2(extensionId);
   });
-  ipcMain.handle("extensions:reinstall", async (_event, extensionId) => {
+  handleIpc("extensions:reinstall", async (_event, extensionId) => {
     if (typeof extensionId !== "string" || !extensionId.trim()) {
       throw new Error("A valid extension id is required");
     }
     const { reinstallExtension: reinstallExtension2 } = await Promise.resolve().then(() => (init_service2(), service_exports));
     return reinstallExtension2(extensionId);
   });
-  ipcMain.handle("extensions:install-error", async (_event, extensionId) => {
+  handleIpc("extensions:install-error", async (_event, extensionId) => {
     if (typeof extensionId !== "string" || !extensionId.trim()) return null;
     const { getExtensionInstallError: getExtensionInstallError2 } = await Promise.resolve().then(() => (init_service2(), service_exports));
     return getExtensionInstallError2(extensionId);
   });
-  ipcMain.handle("extension:list", async () => {
+  handleIpc("extension:list", async () => {
     const { listInstalledRegistryExtensions: listInstalledRegistryExtensions2 } = await loadExtensionRegistry();
     return listInstalledRegistryExtensions2();
   });
-  ipcMain.handle("extension:search-store", async (_event, payload, maybeOptions) => {
+  handleIpc("extension:search-store", async (_event, payload, maybeOptions) => {
     let query = "";
     let offset;
     let limit;
@@ -36049,7 +36305,7 @@ function registerIpcHandlers(getWindow, controls) {
     const { searchExtensionCatalog: searchExtensionCatalog2 } = await loadExtensionRegistry();
     return searchExtensionCatalog2(query, { offset, limit });
   });
-  ipcMain.handle("extension:install", async (_event, extensionId) => {
+  handleIpc("extension:install", async (_event, extensionId) => {
     if (typeof extensionId !== "string" || !extensionId.trim()) {
       throw new Error("A valid extension id is required");
     }
@@ -36058,7 +36314,7 @@ function registerIpcHandlers(getWindow, controls) {
     await reindexExtensions();
     return result;
   });
-  ipcMain.handle("extension:uninstall", async (_event, extensionId) => {
+  handleIpc("extension:uninstall", async (_event, extensionId) => {
     if (typeof extensionId !== "string" || !extensionId.trim()) {
       throw new Error("A valid extension id is required");
     }
@@ -36067,7 +36323,7 @@ function registerIpcHandlers(getWindow, controls) {
     await reindexExtensions();
     return result;
   });
-  ipcMain.handle("extension:run-command", async (_event, payload) => {
+  handleIpc("extension:run-command", async (_event, payload) => {
     if (!payload || typeof payload !== "object") {
       throw new Error("Invalid extension run payload");
     }
@@ -36088,7 +36344,7 @@ function registerIpcHandlers(getWindow, controls) {
       argumentValues
     });
   });
-  ipcMain.handle("extension:invoke-action", async (_event, payload) => {
+  handleIpc("extension:invoke-action", async (_event, payload) => {
     if (!payload || typeof payload !== "object") {
       throw new Error("Invalid extension action payload");
     }
@@ -36109,7 +36365,7 @@ function registerIpcHandlers(getWindow, controls) {
       formValues
     });
   });
-  ipcMain.handle("extension:search-text-changed", async (_event, payload) => {
+  handleIpc("extension:search-text-changed", async (_event, payload) => {
     if (!payload || typeof payload !== "object") {
       throw new Error("Invalid extension search payload");
     }
@@ -36123,7 +36379,7 @@ function registerIpcHandlers(getWindow, controls) {
       searchText: body.searchText
     });
   });
-  ipcMain.handle("extension:refresh-session", async (_event, payload) => {
+  handleIpc("extension:refresh-session", async (_event, payload) => {
     if (!payload || typeof payload !== "object") {
       throw new Error("Invalid extension refresh payload");
     }
@@ -36134,14 +36390,14 @@ function registerIpcHandlers(getWindow, controls) {
     const { refreshExtensionSession: refreshExtensionSession2 } = await loadExtensionRunner();
     return refreshExtensionSession2({ sessionId: body.sessionId });
   });
-  ipcMain.handle("extension:dispose-session", async (_event, payload) => {
+  handleIpc("extension:dispose-session", async (_event, payload) => {
     if (!payload || typeof payload !== "object") return false;
     const body = payload;
     if (typeof body.sessionId !== "string") return false;
     const { disposeExtensionSession: disposeExtensionSession2 } = await loadExtensionRunner();
     return disposeExtensionSession2(body.sessionId);
   });
-  ipcMain.handle("extension:load-more", async (_event, payload) => {
+  handleIpc("extension:load-more", async (_event, payload) => {
     if (!payload || typeof payload !== "object") {
       throw new Error("Invalid extension pagination payload");
     }
@@ -36152,15 +36408,15 @@ function registerIpcHandlers(getWindow, controls) {
     const { loadMoreExtensionSession: loadMoreExtensionSession2 } = await loadExtensionRunner();
     return loadMoreExtensionSession2({ sessionId: body.sessionId });
   });
-  ipcMain.handle("clipboard:read", async () => {
+  handleIpc("clipboard:read", async () => {
     return clipboard.readText();
   });
-  ipcMain.handle("clipboard:write", async (_event, raw) => {
-    const text3 = typeof raw === "string" ? raw : String(raw ?? "");
-    await clipboard.writeTextAsync(text3);
+  handleIpc("clipboard:write", async (_event, raw) => {
+    const text4 = typeof raw === "string" ? raw : String(raw ?? "");
+    await clipboard.writeTextAsync(text4);
     return { ok: true };
   });
-  ipcMain.handle("clipboard:write-png", async (_event, raw) => {
+  handleIpc("clipboard:write-png", async (_event, raw) => {
     const bytes = typeof raw === "string" ? decodePngDataUrl(raw) : null;
     if (!bytes) return { ok: false, error: "Invalid PNG data URL" };
     const path8 = (0, import_node_path40.join)(app.getPath("temp"), "tezbar-qr-clipboard.png");
@@ -36171,16 +36427,19 @@ function registerIpcHandlers(getWindow, controls) {
       clipboard.writeImage(image);
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "Could not copy QR image" };
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not copy QR image"
+      };
     }
   });
-  ipcMain.handle("shell:open", async (_event, raw) => {
+  handleIpc("shell:open", async (_event, raw) => {
     const target = typeof raw === "string" ? raw.trim() : "";
     if (!target) return { ok: false };
     await shell.openExternal(target);
     return { ok: true };
   });
-  ipcMain.handle("preferences:get", async (_event, payload) => {
+  handleIpc("preferences:get", async (_event, payload) => {
     if (!payload || typeof payload !== "object") return {};
     const body = payload;
     if (typeof body.extensionId !== "string" || !body.extensionId.trim()) return {};
@@ -36188,7 +36447,7 @@ function registerIpcHandlers(getWindow, controls) {
     const { getExtensionPreferences: getExtensionPreferences2 } = await loadExtensionRegistry();
     return getExtensionPreferences2(body.extensionId, commandName2);
   });
-  ipcMain.handle("preferences:setup", async (_event, payload) => {
+  handleIpc("preferences:setup", async (_event, payload) => {
     if (!payload || typeof payload !== "object") return null;
     const body = payload;
     if (typeof body.extensionId !== "string" || !body.extensionId.trim()) return null;
@@ -36196,7 +36455,7 @@ function registerIpcHandlers(getWindow, controls) {
     const { getExtensionPreferenceSetup: getExtensionPreferenceSetup2 } = await loadExtensionRegistry();
     return getExtensionPreferenceSetup2(body.extensionId, commandName2);
   });
-  ipcMain.handle("preferences:set", async (_event, payload) => {
+  handleIpc("preferences:set", async (_event, payload) => {
     if (!payload || typeof payload !== "object") return {};
     const body = payload;
     if (typeof body.extensionId !== "string" || !body.extensionId.trim()) return {};
@@ -36205,11 +36464,11 @@ function registerIpcHandlers(getWindow, controls) {
     const { saveExtensionPreferences: saveExtensionPreferences2 } = await loadExtensionRegistry();
     return saveExtensionPreferences2(body.extensionId, values, commandName2);
   });
-  ipcMain.handle("get-installed-extensions-settings-schema", async () => {
+  handleIpc("get-installed-extensions-settings-schema", async () => {
     const { getInstalledExtensionsSettingsSchema: getInstalledExtensionsSettingsSchema2 } = await Promise.resolve().then(() => (init_extension_builder(), extension_builder_exports));
     return getInstalledExtensionsSettingsSchema2();
   });
-  ipcMain.handle("toggle-command-enabled", async (_event, commandId, enabled) => {
+  handleIpc("toggle-command-enabled", async (_event, commandId, enabled) => {
     const disabled = { ...getDisabledCommands() };
     if (enabled) {
       delete disabled[commandId];
@@ -36220,20 +36479,20 @@ function registerIpcHandlers(getWindow, controls) {
     await reindexExtensions();
     return true;
   });
-  ipcMain.handle("update-command-hotkey", async (_event, commandId, hotkey) => {
+  handleIpc("update-command-hotkey", async (_event, commandId, hotkey) => {
     if (controls?.updateCommandHotkey) {
       return controls.updateCommandHotkey(commandId, hotkey);
     }
     return { ok: false, error: "Controls not initialized" };
   });
-  ipcMain.handle("get-settings", async () => {
+  handleIpc("get-settings", async () => {
     return {
       commandHotkeys: getCommandHotkeys(),
       commandAliases: getCommandAliases(),
       disabledCommands: getDisabledCommands()
     };
   });
-  ipcMain.handle("save-settings", async (_event, patch) => {
+  handleIpc("save-settings", async (_event, patch) => {
     if (!patch || typeof patch !== "object") return {};
     const body = patch;
     if (body.commandAliases) {
@@ -36242,27 +36501,34 @@ function registerIpcHandlers(getWindow, controls) {
     await reindexExtensions();
     return { ok: true };
   });
-  ipcMain.handle("app:open-extensions", async () => {
+  handleIpc("app:open-extensions", async () => {
     if (controls?.openAppSurface) {
       controls.openAppSurface("extensions");
     }
     return true;
   });
-  ipcMain.handle(IPC_CHANNELS.SEARCH_ALL, async (_event, query) => {
+  handleIpc(IPC_CHANNELS.SEARCH_ALL, async (_event, query) => {
     const q = typeof query === "string" ? query : "";
     return searchEverything(q);
   });
-  ipcMain.handle(IPC_CHANNELS.SEARCH_CANDIDATES, async () => listSearchCandidates());
-  ipcMain.handle("knowledge:snapshot", async () => getKnowledgeService().snapshot());
-  ipcMain.handle("knowledge:embedding:set", async (_event, model) => {
-    if (model !== "built-in" && model !== "embeddinggemma-2") throw new Error("Invalid embedding model");
+  handleIpc(IPC_CHANNELS.SEARCH_CANDIDATES, async () => listSearchCandidates());
+  handleIpc("knowledge:snapshot", async () => getKnowledgeService().snapshot());
+  handleIpc("knowledge:embedding:set", async (_event, model) => {
+    if (model !== "built-in" && model !== "embeddinggemma-2")
+      throw new Error("Invalid embedding model");
     return getKnowledgeService().setEmbeddingModel(model);
   });
-  ipcMain.handle("knowledge:embedding:download", async () => getKnowledgeService().downloadEmbeddingModel());
-  ipcMain.handle("knowledge:embedding:cancel-download", async () => getKnowledgeService().cancelEmbeddingDownload());
-  ipcMain.handle("knowledge:embedding:remove", async () => getKnowledgeService().removeEmbeddingModel());
-  ipcMain.handle("background-tasks:list", async () => listBackgroundTasks());
-  ipcMain.handle("knowledge:sources:list", async (_event, payload) => {
+  handleIpc(
+    "knowledge:embedding:download",
+    async () => getKnowledgeService().downloadEmbeddingModel()
+  );
+  handleIpc(
+    "knowledge:embedding:cancel-download",
+    async () => getKnowledgeService().cancelEmbeddingDownload()
+  );
+  handleIpc("knowledge:embedding:remove", async () => getKnowledgeService().removeEmbeddingModel());
+  handleIpc("background-tasks:list", async () => listBackgroundTasks());
+  handleIpc("knowledge:sources:list", async (_event, payload) => {
     const body = payload && typeof payload === "object" ? payload : {};
     return getKnowledgeService().listSources({
       query: typeof body.query === "string" ? body.query : "",
@@ -36270,17 +36536,17 @@ function registerIpcHandlers(getWindow, controls) {
       limit: typeof body.limit === "number" ? body.limit : 200
     });
   });
-  ipcMain.handle("knowledge:choose-folder", async () => chooseKnowledgeFolder());
-  ipcMain.handle("knowledge:root:add", async (_event, path8) => {
+  handleIpc("knowledge:choose-folder", async () => chooseKnowledgeFolder());
+  handleIpc("knowledge:root:add", async (_event, path8) => {
     if (typeof path8 !== "string") throw new Error("A folder path is required");
     return getKnowledgeService().addRoot(path8);
   });
-  ipcMain.handle("knowledge:roots:add-major", async () => getKnowledgeService().addMajorRoots());
-  ipcMain.handle("knowledge:root:remove", async (_event, rootId) => {
+  handleIpc("knowledge:roots:add-major", async () => getKnowledgeService().addMajorRoots());
+  handleIpc("knowledge:root:remove", async (_event, rootId) => {
     if (typeof rootId !== "string") throw new Error("A knowledge folder id is required");
     return getKnowledgeService().removeRoot(rootId);
   });
-  ipcMain.handle("knowledge:root:set-enabled", async (_event, payload) => {
+  handleIpc("knowledge:root:set-enabled", async (_event, payload) => {
     if (!payload || typeof payload !== "object") throw new Error("Invalid knowledge folder update");
     const body = payload;
     if (typeof body.rootId !== "string" || typeof body.enabled !== "boolean") {
@@ -36288,19 +36554,19 @@ function registerIpcHandlers(getWindow, controls) {
     }
     return getKnowledgeService().setRootEnabled(body.rootId, body.enabled);
   });
-  ipcMain.handle("knowledge:depth:set", async (_event, depth) => {
+  handleIpc("knowledge:depth:set", async (_event, depth) => {
     if (typeof depth !== "string" || !["off", "basic", "smart", "deep"].includes(depth)) {
       throw new Error("Invalid Knowledge Depth");
     }
     return getKnowledgeService().setDepth(depth);
   });
-  ipcMain.handle("knowledge:speed:set", async (_event, speed) => {
+  handleIpc("knowledge:speed:set", async (_event, speed) => {
     if (typeof speed !== "string" || !["slow", "medium", "fast"].includes(speed)) {
       throw new Error("Invalid indexing speed");
     }
     return getKnowledgeService().setIndexingSpeed(speed);
   });
-  ipcMain.handle("knowledge:root:set-depth", async (_event, payload) => {
+  handleIpc("knowledge:root:set-depth", async (_event, payload) => {
     if (!payload || typeof payload !== "object") throw new Error("Invalid folder Knowledge Depth");
     const body = payload;
     if (typeof body.rootId !== "string" || typeof body.depth !== "string" || !["inherit", "off", "basic", "smart", "deep"].includes(body.depth)) {
@@ -36308,51 +36574,51 @@ function registerIpcHandlers(getWindow, controls) {
     }
     return getKnowledgeService().setRootDepth(body.rootId, body.depth);
   });
-  ipcMain.handle("knowledge:index:start", async () => getKnowledgeService().startIndexing());
-  ipcMain.handle("knowledge:index:pause", async () => getKnowledgeService().pause());
-  ipcMain.handle("knowledge:index:resume", async () => getKnowledgeService().resume());
-  ipcMain.handle(IPC_CHANNELS.PATH_COMPLETE, async (_event, query) => {
+  handleIpc("knowledge:index:start", async () => getKnowledgeService().startIndexing());
+  handleIpc("knowledge:index:pause", async () => getKnowledgeService().pause());
+  handleIpc("knowledge:index:resume", async () => getKnowledgeService().resume());
+  handleIpc(IPC_CHANNELS.PATH_COMPLETE, async (_event, query) => {
     const q = typeof query === "string" ? query : "";
     return completePath(q);
   });
-  ipcMain.handle(IPC_CHANNELS.PATH_RESOLVE_DIRECTORY, async (_event, input) => {
+  handleIpc(IPC_CHANNELS.PATH_RESOLVE_DIRECTORY, async (_event, input) => {
     return typeof input === "string" ? resolveLauncherDirectory(input) : null;
   });
-  ipcMain.handle(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path8) => {
+  handleIpc(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path8) => {
     if (typeof path8 === "string") recordDirectoryVisit(path8);
   });
-  ipcMain.handle(IPC_CHANNELS.QUICK_LOOK_FILE, async (_event, input) => {
+  handleIpc(IPC_CHANNELS.QUICK_LOOK_FILE, async (_event, input) => {
     const paths = Array.isArray(input) ? input.filter((path8) => typeof path8 === "string") : typeof input === "string" ? [input] : [];
     return quickLookFiles(paths);
   });
-  ipcMain.handle(IPC_CHANNELS.SEARCH_BENCHMARK_RUN, async () => {
+  handleIpc(IPC_CHANNELS.SEARCH_BENCHMARK_RUN, async () => {
     return runSearchBenchmarks();
   });
-  ipcMain.handle(IPC_CHANNELS.SEARCH_BENCHMARK_HISTORY, async () => {
+  handleIpc(IPC_CHANNELS.SEARCH_BENCHMARK_HISTORY, async () => {
     return getSearchBenchmarkHistory();
   });
-  ipcMain.handle("currency:frankfurter-latest", async (_event, from) => {
+  handleIpc("currency:frankfurter-latest", async (_event, from) => {
     if (typeof from !== "string" || !from.trim()) {
       throw new Error("Frankfurter: currency code required");
     }
     return fetchFrankfurterLatest(from.trim());
   });
-  ipcMain.handle("open-ports:list", async () => {
+  handleIpc("open-ports:list", async () => {
     return listOpenPorts();
   });
-  ipcMain.handle("port-manager:named:list", async () => listNamedPorts());
-  ipcMain.handle("port-manager:named:add", async (_event, raw) => {
+  handleIpc("port-manager:named:list", async () => listNamedPorts());
+  handleIpc("port-manager:named:add", async (_event, raw) => {
     if (!raw || typeof raw !== "object") return null;
     const o = raw;
     const name = typeof o.name === "string" ? o.name : "";
     const port = typeof o.port === "number" ? o.port : Number(o.port);
     return addNamedPort(name, port);
   });
-  ipcMain.handle("port-manager:named:remove", async (_event, id) => {
+  handleIpc("port-manager:named:remove", async (_event, id) => {
     if (typeof id !== "string" || !id.trim()) return false;
     return removeNamedPort(id.trim());
   });
-  ipcMain.handle(IPC_CHANNELS.SEARCH_EXECUTE, async (_event, payload) => {
+  handleIpc(IPC_CHANNELS.SEARCH_EXECUTE, async (_event, payload) => {
     try {
       const request = parseSearchExecuteRequest(payload);
       return executeSearchAction(request.action, request.context);
@@ -36363,11 +36629,11 @@ function registerIpcHandlers(getWindow, controls) {
       return executeSearchAction(payload);
     }
   });
-  ipcMain.handle(IPC_CHANNELS.SEARCH_RECORD_USAGE, async (_event, payload) => {
+  handleIpc(IPC_CHANNELS.SEARCH_RECORD_USAGE, async (_event, payload) => {
     const request = parseSearchExecuteRequest(payload);
     await recordSearchActionUsage(request.action, request.context);
   });
-  ipcMain.handle(IPC_CHANNELS.AI_ACTION, async (_event, payload) => {
+  handleIpc(IPC_CHANNELS.AI_ACTION, async (_event, payload) => {
     const req = parseAiActionRequest(payload);
     const cfg = readLLMConfig();
     if (cfg.aiActionRequirePermission !== false && req.allowAutomation !== true) {
@@ -36381,54 +36647,54 @@ function registerIpcHandlers(getWindow, controls) {
       redactSensitive: req.redactSensitive ?? cfg.aiActionRedactionEnabled !== false
     });
   });
-  ipcMain.handle(IPC_CHANNELS.VOICE_TTS_SPEAK, async (_event, payload) => {
+  handleIpc(IPC_CHANNELS.VOICE_TTS_SPEAK, async (_event, payload) => {
     const req = parseVoiceSpeakRequest(payload);
     const { speakText: speakText2 } = await Promise.resolve().then(() => (init_service5(), service_exports3));
     await speakText2(req.text);
     return { ok: true };
   });
-  ipcMain.handle(IPC_CHANNELS.VOICE_TTS_STOP, async () => {
+  handleIpc(IPC_CHANNELS.VOICE_TTS_STOP, async () => {
     const { stopSpeaking: stopSpeaking2 } = await Promise.resolve().then(() => (init_service5(), service_exports3));
     stopSpeaking2();
     return { ok: true };
   });
-  ipcMain.handle(IPC_CHANNELS.VOICE_STT_MODES, async () => {
+  handleIpc(IPC_CHANNELS.VOICE_STT_MODES, async () => {
     const { listSttModes: listSttModes2 } = await Promise.resolve().then(() => (init_service5(), service_exports3));
     return listSttModes2();
   });
-  ipcMain.handle(IPC_CHANNELS.VOICE_STT_TRANSCRIBE, async (_event, payload) => {
+  handleIpc(IPC_CHANNELS.VOICE_STT_TRANSCRIBE, async (_event, payload) => {
     const req = parseVoiceTranscribeRequest(payload);
     const { transcribeAudio: transcribeAudio2 } = await Promise.resolve().then(() => (init_service5(), service_exports3));
     return transcribeAudio2(req);
   });
-  ipcMain.handle("window:suppress-blur-hide", async (_event, payload) => {
+  handleIpc("window:suppress-blur-hide", async (_event, payload) => {
     setSuppressBlurHide(payload === true);
     return { ok: true };
   });
-  ipcMain.handle(IPC_CHANNELS.VOICE_MODELS_LIST, async () => {
+  handleIpc(IPC_CHANNELS.VOICE_MODELS_LIST, async () => {
     const { listVoiceModels: listVoiceModels2 } = await Promise.resolve().then(() => (init_service5(), service_exports3));
     return listVoiceModels2();
   });
-  ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_DOWNLOAD, async (_event, payload) => {
+  handleIpc(IPC_CHANNELS.VOICE_MODEL_DOWNLOAD, async (_event, payload) => {
     const req = parseVoiceModelRequest(payload);
     const { downloadVoiceModel: downloadVoiceModel2 } = await Promise.resolve().then(() => (init_service5(), service_exports3));
     return downloadVoiceModel2(req.modelId);
   });
-  ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_DELETE, async (_event, payload) => {
+  handleIpc(IPC_CHANNELS.VOICE_MODEL_DELETE, async (_event, payload) => {
     const req = parseVoiceModelRequest(payload);
     const { deleteVoiceModel: deleteVoiceModel2 } = await Promise.resolve().then(() => (init_service5(), service_exports3));
     return { modelId: await deleteVoiceModel2(req.modelId) };
   });
-  ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_GET_SELECTED, async () => {
+  handleIpc(IPC_CHANNELS.VOICE_MODEL_GET_SELECTED, async () => {
     const { getSelectedVoiceModelId: getSelectedVoiceModelId2 } = await Promise.resolve().then(() => (init_service5(), service_exports3));
     return { modelId: getSelectedVoiceModelId2() };
   });
-  ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_SET_SELECTED, async (_event, payload) => {
+  handleIpc(IPC_CHANNELS.VOICE_MODEL_SET_SELECTED, async (_event, payload) => {
     const req = parseVoiceModelRequest(payload);
     const { setSelectedVoiceModelId: setSelectedVoiceModelId2 } = await Promise.resolve().then(() => (init_service5(), service_exports3));
     return { modelId: setSelectedVoiceModelId2(req.modelId) };
   });
-  ipcMain.handle("window:show", async () => {
+  handleIpc("window:show", async () => {
     if (controls?.showCommandBar) {
       controls.showCommandBar();
       return;
@@ -36439,7 +36705,7 @@ function registerIpcHandlers(getWindow, controls) {
       win.focus();
     }
   });
-  ipcMain.handle("window:hide", async () => {
+  handleIpc("window:hide", async () => {
     if (controls?.hideCommandBar) {
       controls.hideCommandBar();
       return;
@@ -36450,38 +36716,38 @@ function registerIpcHandlers(getWindow, controls) {
       win.hide();
     }
   });
-  ipcMain.handle("window:close-current", async (event) => {
+  handleIpc("window:close-current", async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isDestroyed()) win.close();
   });
-  ipcMain.handle("window:snap-drag-start", async () => {
+  handleIpc("window:snap-drag-start", async () => {
     const win = getWindow();
     if (!win || win.isDestroyed()) return;
     controls?.startWindowDragMonitoring(win);
   });
-  ipcMain.handle("window:snap-drag-end", async () => {
+  handleIpc("window:snap-drag-end", async () => {
     const win = getWindow();
     if (!win || win.isDestroyed()) return;
     controls?.stopWindowDragMonitoring(win);
   });
-  ipcMain.handle("storage:breakdown", async () => {
+  handleIpc("storage:breakdown", async () => {
     return getStorageBreakdown();
   });
-  ipcMain.handle("storage:clipboard-config:get", async () => {
+  handleIpc("storage:clipboard-config:get", async () => {
     return getClipboardStorageConfig();
   });
-  ipcMain.handle("storage:clipboard-config:set", async (_event, payload) => {
+  handleIpc("storage:clipboard-config:set", async (_event, payload) => {
     const patch = typeof payload === "object" && payload !== null ? payload : {};
     setClipboardStorageConfig(patch);
     return getClipboardStorageConfig();
   });
-  ipcMain.handle("storage:clear-clipboard-images", async () => {
+  handleIpc("storage:clear-clipboard-images", async () => {
     return clearClipboardImages();
   });
-  ipcMain.handle("storage:vacuum-search-db", async () => {
+  handleIpc("storage:vacuum-search-db", async () => {
     return vacuumSearchDatabase();
   });
-  ipcMain.handle("storage:clear-chromium-cache", async () => {
+  handleIpc("storage:clear-chromium-cache", async () => {
     await clearChromiumCache();
     return { ok: true };
   });
@@ -36498,6 +36764,58 @@ var import_node_net2 = require("node:net");
 init_service();
 init_gateway();
 init_service3();
+
+// src/main/lagMonitor.ts
+var import_node_perf_hooks = require("node:perf_hooks");
+var STALL_THRESHOLD_MS = 750;
+function lagStallMs(maxNs, thresholdMs = STALL_THRESHOLD_MS) {
+  if (!Number.isFinite(maxNs) || maxNs <= 0) return null;
+  const ms = maxNs / 1e6;
+  if (ms < thresholdMs) return null;
+  return Math.round(ms);
+}
+function startLagMonitor(onStall, options = {}) {
+  const thresholdMs = options.thresholdMs ?? STALL_THRESHOLD_MS;
+  const intervalMs = options.intervalMs ?? 5e3;
+  let histogram = null;
+  try {
+    if (typeof import_node_perf_hooks.monitorEventLoopDelay === "function") {
+      const candidate = (0, import_node_perf_hooks.monitorEventLoopDelay)({ resolution: 100 });
+      candidate.enable();
+      histogram = candidate;
+    }
+  } catch {
+    histogram = null;
+  }
+  if (histogram) {
+    const timer2 = setInterval(() => {
+      const stall = lagStallMs(histogram.max, thresholdMs);
+      histogram.reset();
+      if (stall !== null) onStall(stall);
+    }, intervalMs);
+    timer2.unref?.();
+    return () => {
+      clearInterval(timer2);
+      histogram?.disable();
+    };
+  }
+  const pollMs = Math.min(250, Math.max(50, Math.floor(intervalMs / 10)));
+  let lastTick = Date.now();
+  const timer = setInterval(() => {
+    const now = Date.now();
+    const delay2 = now - lastTick - pollMs;
+    lastTick = now;
+    if (delay2 >= thresholdMs) {
+      onStall(Math.round(delay2));
+    }
+  }, pollMs);
+  timer.unref?.();
+  return () => {
+    clearInterval(timer);
+  };
+}
+
+// src/main/server.ts
 var writeBackendLog = console.error.bind(console);
 console.log = writeBackendLog;
 console.info = writeBackendLog;
@@ -36509,7 +36827,7 @@ function materializePiPolicy() {
     const runtimeDir = (0, import_node_path41.join)(root, "runtime");
     const extensionPath = (0, import_node_path41.join)(runtimeDir, "raymes-pi-policy.ts");
     (0, import_node_fs36.mkdirSync)(runtimeDir, { recursive: true });
-    (0, import_node_fs36.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\r\n\r\ntype ToolCallEvent = {\r\n  toolName: string\r\n  input?: Record<string, unknown> & { command?: unknown }\r\n}\r\n\r\ntype ToolCallResult = {\r\n  block?: boolean\r\n  reason?: string\r\n}\r\n\r\ntype ExtensionContext = {\r\n  ui: {\r\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\r\n  }\r\n}\r\n\r\ntype ExtensionAPI = {\r\n  on(\r\n    event: 'tool_call',\r\n    handler: (\r\n      event: ToolCallEvent,\r\n      ctx: ExtensionContext\r\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\r\n  ): void\r\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\r\n  registerTool(definition: {\r\n    name: string\r\n    label: string\r\n    description: string\r\n    promptSnippet?: string\r\n    promptGuidelines?: string[]\r\n    parameters: unknown\r\n    execute: (\r\n      toolCallId: string,\r\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\r\n      signal?: AbortSignal\r\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\r\n  }): void\r\n}\r\n\r\ntype RaymesPiProviderConfig = {\r\n  baseUrl: string\r\n  apiKey: string\r\n  api: 'openai-completions' | 'anthropic-messages'\r\n  authHeader?: boolean\r\n  models: Array<{\r\n    id: string\r\n    name: string\r\n    reasoning: boolean\r\n    input: Array<'text' | 'image'>\r\n    cost: {\r\n      input: number\r\n      output: number\r\n      cacheRead: number\r\n      cacheWrite: number\r\n    }\r\n    contextWindow: number\r\n    maxTokens: number\r\n    compat?: Record<string, unknown>\r\n  }>\r\n}\r\n\r\nconst TOKENROUTER_BASE_URL = 'https://api.tokenrouter.com/v1'\r\nconst TOKENROUTER_MODEL_ID = 'moonshotai/kimi-k3-free'\r\n\r\nfunction registerTokenRouterProvider(pi: ExtensionAPI): void {\r\n  pi.registerProvider('tokenrouter', {\r\n    baseUrl: TOKENROUTER_BASE_URL,\r\n    apiKey: '$TOKENROUTER_API_KEY',\r\n    authHeader: true,\r\n    api: 'openai-completions',\r\n    models: [\r\n      {\r\n        id: TOKENROUTER_MODEL_ID,\r\n        name: 'Kimi K3 Free (TokenRouter)',\r\n        reasoning: false,\r\n        input: ['text'],\r\n        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },\r\n        contextWindow: 128000,\r\n        maxTokens: 8192,\r\n        compat: {\r\n          supportsStore: false,\r\n          supportsDeveloperRole: false,\r\n          supportsReasoningEffort: false,\r\n          maxTokensField: 'max_tokens',\r\n        },\r\n      },\r\n    ],\r\n  })\r\n}\r\n\r\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\r\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\r\n  if (!raw) return\r\n  try {\r\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\r\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\r\n    pi.registerProvider('tezbar', parsed)\r\n  } catch {\r\n    /* Ignore malformed bridge env so pi can still start with its own config. */\r\n  }\r\n}\r\n\r\nfunction hasUnsafeShellSyntax(command: string): boolean {\r\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\r\n}\r\n\r\nfunction persistedAllowedCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter(\r\n          (entry): entry is string =>\r\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\r\n        )\r\n        .map((entry) => entry.toLowerCase())\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction persistedAllowedExactCommands(): Set<string> {\r\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\r\n  if (!raw) return new Set()\r\n  try {\r\n    const parsed = JSON.parse(raw) as unknown\r\n    if (!Array.isArray(parsed)) return new Set()\r\n    return new Set(\r\n      parsed\r\n        .filter((entry): entry is string => typeof entry === 'string')\r\n        .map((entry) => entry.trim())\r\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\r\n    )\r\n  } catch {\r\n    return new Set()\r\n  }\r\n}\r\n\r\nfunction executableName(command: string): string {\r\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\r\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\r\n}\r\n\r\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\r\n\r\nexport function isPersistentlyAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string>\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\r\n    return false\r\n  }\r\n\r\n  const commands = trimmed\r\n    .split(/\\s*(?:&&|\\|)\\s*/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (commands.length === 0) return false\r\n\r\n  return commands.every((part) => {\r\n    if (isSimpleCd(part)) return true\r\n    const executable = executableName(part)\r\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\r\n  })\r\n}\r\n\r\nfunction isSimpleCd(command: string): boolean {\r\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitStatus(command: string): boolean {\r\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeGitClone(command: string): boolean {\r\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\r\n}\r\n\r\nfunction isSafeDirectoryRead(command: string): boolean {\r\n  const trimmed = command.trim()\r\n  return (\r\n    trimmed === 'pwd' ||\r\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\r\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\r\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\r\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\r\n  )\r\n}\r\n\r\nexport type IndexedSearchKind = 'launcher' | 'deep'\r\n\r\nconst MAJOR_HOME_FOLDER_PATTERN =\r\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\r\n\r\nfunction hasBroadHomeScope(command: string): boolean {\r\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\r\n    return true\r\n  }\r\n\r\n  const roots = new Set<string>()\r\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\r\n    const root = match[1]?.toLowerCase()\r\n    if (root) roots.add(root)\r\n  }\r\n  return roots.size >= 2\r\n}\r\n\r\n/**\r\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\r\n * inside the active project remain valid shell work.\r\n */\r\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return null\r\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\r\n  if (!hasBroadHomeScope(trimmed)) return null\r\n\r\n  if (\r\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\r\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\r\n  ) {\r\n    return 'deep'\r\n  }\r\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\r\n  return null\r\n}\r\n\r\nexport function isAutoAllowedBash(\r\n  command: string,\r\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\r\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\r\n): boolean {\r\n  const trimmed = command.trim()\r\n  if (!trimmed) return false\r\n  if (allowedExactCommands.has(trimmed)) return true\r\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\r\n  if (hasUnsafeShellSyntax(trimmed)) return false\r\n\r\n  const parts = trimmed\r\n    .split(/\\s+&&\\s+/)\r\n    .map((part) => part.trim())\r\n    .filter(Boolean)\r\n  if (parts.length === 0) return false\r\n\r\n  const commandToRun = parts[parts.length - 1]\r\n  if (\r\n    !commandToRun ||\r\n    !(\r\n      isSafeGitStatus(commandToRun) ||\r\n      isSafeGitClone(commandToRun) ||\r\n      isSafeDirectoryRead(commandToRun)\r\n    )\r\n  ) {\r\n    return false\r\n  }\r\n\r\n  return parts.slice(0, -1).every(isSimpleCd)\r\n}\r\n\r\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\r\n  registerTokenRouterProvider(pi)\r\n  registerRaymesProvider(pi)\r\n\r\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\r\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\r\n  const hasIndexedSearchTools = Boolean(\r\n    knowledgeEndpoint &&\r\n    knowledgeToken &&\r\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\r\n  )\r\n  let launcherSearchAttempted = false\r\n  let deepSearchAttempted = false\r\n\r\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\r\n    pi.registerTool({\r\n      name: 'launcher_search',\r\n      label: 'Search Tezbar',\r\n      description:\r\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\r\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\r\n      promptGuidelines: [\r\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\r\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\r\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({\r\n          description: 'The file, app, command, note, or other local item to find',\r\n        }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          results?: Array<{\r\n            id: string\r\n            title: string\r\n            subtitle: string\r\n            category: string\r\n            score: number\r\n            target?: string\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\r\n        const results = payload.results ?? []\r\n        const text =\r\n          results.length === 0\r\n            ? 'No Tezbar launcher results matched this query.'\r\n            : results\r\n                .map((result, index) => {\r\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\r\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { results } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_search',\r\n      label: 'Deep Search PC Knowledge',\r\n      description:\r\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\r\n      promptSnippet:\r\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\r\n      promptGuidelines: [\r\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\r\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\r\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\r\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\r\n      ],\r\n      parameters: Type.Object({\r\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\r\n        limit: Type.Optional(\r\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint, {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\r\n          signal,\r\n        })\r\n        const result = (await response.json()) as {\r\n          hits?: Array<{\r\n            chunkId: string\r\n            path: string\r\n            pageNumber?: number\r\n            text: string\r\n            score: number\r\n          }>\r\n          error?: string\r\n        }\r\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\r\n        const hits = result.hits ?? []\r\n        const text =\r\n          hits.length === 0\r\n            ? 'No indexed knowledge matched this query.'\r\n            : hits\r\n                .map((hit, index) => {\r\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\r\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\r\n                })\r\n                .join('\\n\\n')\r\n        return { content: [{ type: 'text', text }], details: { hits } }\r\n      },\r\n    })\r\n\r\n    pi.registerTool({\r\n      name: 'pc_read',\r\n      label: 'Read PC Knowledge Result',\r\n      description:\r\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\r\n      parameters: Type.Object({\r\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\r\n        maxChars: Type.Optional(\r\n          Type.Number({\r\n            minimum: 500,\r\n            maximum: 50_000,\r\n            description: 'Maximum text characters to return',\r\n          })\r\n        ),\r\n      }),\r\n      async execute(_toolCallId, params, signal) {\r\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\r\n          method: 'POST',\r\n          headers: {\r\n            Authorization: `Bearer ${knowledgeToken}`,\r\n            'Content-Type': 'application/json',\r\n          },\r\n          body: JSON.stringify({\r\n            resultId: params.resultId ?? '',\r\n            maxChars: params.maxChars ?? 12_000,\r\n          }),\r\n          signal,\r\n        })\r\n        const payload = (await response.json()) as {\r\n          result?: { path: string; pageNumber?: number; text: string }\r\n          error?: string\r\n        }\r\n        if (!response.ok || !payload.result) {\r\n          throw new Error(payload.error || 'Knowledge result could not be read')\r\n        }\r\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\r\n        return {\r\n          content: [\r\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\r\n          ],\r\n          details: payload.result,\r\n        }\r\n      },\r\n    })\r\n  }\r\n\r\n  pi.on('tool_call', async (event, ctx) => {\r\n    if (event.toolName === 'launcher_search') {\r\n      launcherSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName === 'pc_search') {\r\n      deepSearchAttempted = true\r\n      return undefined\r\n    }\r\n    if (event.toolName !== 'bash') return undefined\r\n\r\n    const command = event.input?.command\r\n    if (typeof command !== 'string') {\r\n      return { block: true, reason: 'Missing bash command.' }\r\n    }\r\n\r\n    if (hasIndexedSearchTools) {\r\n      const preferredSearch = preferredIndexedSearchForBash(command)\r\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\r\n        }\r\n      }\r\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\r\n        return {\r\n          block: true,\r\n          reason:\r\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\r\n        }\r\n      }\r\n    }\r\n\r\n    if (isAutoAllowedBash(command)) return undefined\r\n\r\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\r\n    if (confirmed) return undefined\r\n\r\n    return { block: true, reason: 'Bash command was not approved.' }\r\n  })\r\n}\r\n", "utf8");
+    (0, import_node_fs36.writeFileSync)(extensionPath, "import { Type } from '@earendil-works/pi-ai'\n\ntype ToolCallEvent = {\n  toolName: string\n  input?: Record<string, unknown> & { command?: unknown }\n}\n\ntype ToolCallResult = {\n  block?: boolean\n  reason?: string\n}\n\ntype ExtensionContext = {\n  ui: {\n    confirm(title: string, message: string, opts?: { timeoutMs?: number }): Promise<boolean>\n  }\n}\n\ntype ExtensionAPI = {\n  on(\n    event: 'tool_call',\n    handler: (\n      event: ToolCallEvent,\n      ctx: ExtensionContext\n    ) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>\n  ): void\n  registerProvider(name: string, config: RaymesPiProviderConfig): void\n  registerTool(definition: {\n    name: string\n    label: string\n    description: string\n    promptSnippet?: string\n    promptGuidelines?: string[]\n    parameters: unknown\n    execute: (\n      toolCallId: string,\n      params: { query?: string; limit?: number; resultId?: string; maxChars?: number },\n      signal?: AbortSignal\n    ) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>\n  }): void\n}\n\ntype RaymesPiProviderConfig = {\n  baseUrl: string\n  apiKey: string\n  api: 'openai-completions' | 'anthropic-messages'\n  authHeader?: boolean\n  models: Array<{\n    id: string\n    name: string\n    reasoning: boolean\n    input: Array<'text' | 'image'>\n    cost: {\n      input: number\n      output: number\n      cacheRead: number\n      cacheWrite: number\n    }\n    contextWindow: number\n    maxTokens: number\n    compat?: Record<string, unknown>\n  }>\n}\n\nconst TOKENROUTER_BASE_URL = 'https://api.tokenrouter.com/v1'\nconst TOKENROUTER_MODEL_ID = 'moonshotai/kimi-k3-free'\n\nfunction registerTokenRouterProvider(pi: ExtensionAPI): void {\n  pi.registerProvider('tokenrouter', {\n    baseUrl: TOKENROUTER_BASE_URL,\n    apiKey: '$TOKENROUTER_API_KEY',\n    authHeader: true,\n    api: 'openai-completions',\n    models: [\n      {\n        id: TOKENROUTER_MODEL_ID,\n        name: 'Kimi K3 Free (TokenRouter)',\n        reasoning: false,\n        input: ['text'],\n        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },\n        contextWindow: 128000,\n        maxTokens: 8192,\n        compat: {\n          supportsStore: false,\n          supportsDeveloperRole: false,\n          supportsReasoningEffort: false,\n          maxTokensField: 'max_tokens',\n        },\n      },\n    ],\n  })\n}\n\nfunction registerRaymesProvider(pi: ExtensionAPI): void {\n  const raw = process.env['RAYMES_PI_PROVIDER_JSON']\n  if (!raw) return\n  try {\n    const parsed = JSON.parse(raw) as RaymesPiProviderConfig\n    if (!parsed.baseUrl || !parsed.apiKey || !parsed.api || !Array.isArray(parsed.models)) return\n    pi.registerProvider('tezbar', parsed)\n  } catch {\n    /* Ignore malformed bridge env so pi can still start with its own config. */\n  }\n}\n\nfunction hasUnsafeShellSyntax(command: string): boolean {\n  return /[;|<>`\\n]/.test(command) || command.includes('$(') || command.includes('||')\n}\n\nfunction persistedAllowedCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter(\n          (entry): entry is string =>\n            typeof entry === 'string' && /^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(entry)\n        )\n        .map((entry) => entry.toLowerCase())\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction persistedAllowedExactCommands(): Set<string> {\n  const raw = process.env['RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON']\n  if (!raw) return new Set()\n  try {\n    const parsed = JSON.parse(raw) as unknown\n    if (!Array.isArray(parsed)) return new Set()\n    return new Set(\n      parsed\n        .filter((entry): entry is string => typeof entry === 'string')\n        .map((entry) => entry.trim())\n        .filter((entry) => entry && entry.length <= 16_384 && !entry.includes('\\0'))\n    )\n  } catch {\n    return new Set()\n  }\n}\n\nfunction executableName(command: string): string {\n  const token = command.trim().split(/\\s+/, 1)[0] ?? ''\n  return token.slice(token.lastIndexOf('/') + 1).toLowerCase()\n}\n\nconst SAFE_PIPELINE_COMMANDS = new Set(['ps', 'head', 'tail', 'wc'])\n\nexport function isPersistentlyAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string>\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed || /[;<>`\\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {\n    return false\n  }\n\n  const commands = trimmed\n    .split(/\\s*(?:&&|\\|)\\s*/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (commands.length === 0) return false\n\n  return commands.every((part) => {\n    if (isSimpleCd(part)) return true\n    const executable = executableName(part)\n    return SAFE_PIPELINE_COMMANDS.has(executable) || allowedCommands.has(executable)\n  })\n}\n\nfunction isSimpleCd(command: string): boolean {\n  return /^cd\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+)$/.test(command.trim())\n}\n\nfunction isSafeGitStatus(command: string): boolean {\n  return /^git\\s+status(?:\\s+[^;&|<>`$()\\n]+)*$/.test(command.trim())\n}\n\nfunction isSafeGitClone(command: string): boolean {\n  return /^git\\s+clone(?:\\s+[^;&|<>`$()\\n]+)+$/.test(command.trim())\n}\n\nfunction isSafeDirectoryRead(command: string): boolean {\n  const trimmed = command.trim()\n  return (\n    trimmed === 'pwd' ||\n    /^ls(?:\\s+-[A-Za-z0-9@]+)*(?:\\s+(?:\"[^\"]+\"|'[^']+'|[~./A-Za-z0-9_ -]+))*$/.test(trimmed) ||\n    /^which\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^command\\s+-v\\s+[-A-Za-z0-9_ .+/]+$/.test(trimmed) ||\n    /^find\\s+(?:\\/Applications|~\\/Applications)(?:\\s+[^;&|<>`$()\\n]+)*$/.test(trimmed) ||\n    /^mdfind\\s+[^;&|<>`$()\\n]+$/.test(trimmed)\n  )\n}\n\nexport type IndexedSearchKind = 'launcher' | 'deep'\n\nconst MAJOR_HOME_FOLDER_PATTERN =\n  /(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)\\/(Desktop|Documents|Downloads|Pictures|Movies|Music|Library|code)(?=\\/|\\s|$)/gi\n\nfunction hasBroadHomeScope(command: string): boolean {\n  if (/(?:^|\\s)(?:~|\\$HOME|\\/Users\\/[^/\\s\"']+)(?=\\s|$|[|&;<>])/.test(command)) {\n    return true\n  }\n\n  const roots = new Set<string>()\n  for (const match of command.matchAll(MAJOR_HOME_FOLDER_PATTERN)) {\n    const root = match[1]?.toLowerCase()\n    if (root) roots.add(root)\n  }\n  return roots.size >= 2\n}\n\n/**\n * Keep broad personal-file discovery on Tezbar's indexes. Narrow searches\n * inside the active project remain valid shell work.\n */\nexport function preferredIndexedSearchForBash(command: string): IndexedSearchKind | null {\n  const trimmed = command.trim()\n  if (!trimmed) return null\n  if (/^(?:\\/usr\\/bin\\/)?mdfind\\b/i.test(trimmed)) return 'launcher'\n  if (!hasBroadHomeScope(trimmed)) return null\n\n  if (\n    /(?:^|[|&;]\\s*)(?:\\S+\\/)?(?:grep|rg|ag|ack)\\b/i.test(trimmed) ||\n    (/^(?:\\S+\\/)?find\\b/i.test(trimmed) && /-exec\\b[\\s\\S]*(?:grep|rg|ag|ack)\\b/i.test(trimmed))\n  ) {\n    return 'deep'\n  }\n  if (/^(?:\\S+\\/)?find\\b/i.test(trimmed)) return 'launcher'\n  return null\n}\n\nexport function isAutoAllowedBash(\n  command: string,\n  allowedCommands: ReadonlySet<string> = persistedAllowedCommands(),\n  allowedExactCommands: ReadonlySet<string> = persistedAllowedExactCommands()\n): boolean {\n  const trimmed = command.trim()\n  if (!trimmed) return false\n  if (allowedExactCommands.has(trimmed)) return true\n  if (isPersistentlyAllowedBash(trimmed, allowedCommands)) return true\n  if (hasUnsafeShellSyntax(trimmed)) return false\n\n  const parts = trimmed\n    .split(/\\s+&&\\s+/)\n    .map((part) => part.trim())\n    .filter(Boolean)\n  if (parts.length === 0) return false\n\n  const commandToRun = parts[parts.length - 1]\n  if (\n    !commandToRun ||\n    !(\n      isSafeGitStatus(commandToRun) ||\n      isSafeGitClone(commandToRun) ||\n      isSafeDirectoryRead(commandToRun)\n    )\n  ) {\n    return false\n  }\n\n  return parts.slice(0, -1).every(isSimpleCd)\n}\n\nexport default function raymesPiPolicy(pi: ExtensionAPI): void {\n  registerTokenRouterProvider(pi)\n  registerRaymesProvider(pi)\n\n  const knowledgeEndpoint = process.env['TEZBAR_KNOWLEDGE_ENDPOINT']\n  const knowledgeToken = process.env['TEZBAR_KNOWLEDGE_TOKEN']\n  const hasIndexedSearchTools = Boolean(\n    knowledgeEndpoint &&\n    knowledgeToken &&\n    /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/search$/.test(knowledgeEndpoint)\n  )\n  let launcherSearchAttempted = false\n  let deepSearchAttempted = false\n\n  if (knowledgeEndpoint && knowledgeToken && hasIndexedSearchTools) {\n    pi.registerTool({\n      name: 'launcher_search',\n      label: 'Search Tezbar',\n      description:\n        'Fast indexed Tezbar search for local files, folders, applications, commands, clipboard items, notes, snippets, and links by name or metadata.',\n      promptSnippet: \"Search Tezbar's normal launcher index for local items by name or metadata\",\n      promptGuidelines: [\n        'Use launcher_search first when the user asks to find a local file, folder, application, command, clipboard item, note, snippet, or link by name or metadata.',\n        'Do not use find, mdfind, or a recursive home-folder shell scan before launcher_search.',\n        'Use pc_search instead when the user is looking for text inside a document, PDF, screenshot, or image.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({\n          description: 'The file, app, command, note, or other local item to find',\n        }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 10)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/launcher-search'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 10 }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          results?: Array<{\n            id: string\n            title: string\n            subtitle: string\n            category: string\n            score: number\n            target?: string\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(payload.error || 'Tezbar search failed')\n        const results = payload.results ?? []\n        const text =\n          results.length === 0\n            ? 'No Tezbar launcher results matched this query.'\n            : results\n                .map((result, index) => {\n                  const target = result.target ? `\\nTarget: ${result.target}` : ''\n                  return `${index + 1}. [${result.category}] ${result.title}\\n${result.subtitle}${target}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { results } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_search',\n      label: 'Deep Search PC Knowledge',\n      description:\n        'Searches the user-approved, locally indexed Tezbar knowledge folders. Returns matching source paths, page numbers, and excerpts.',\n      promptSnippet:\n        'Deep Search inside user-approved local documents, PDFs, screenshots, images, and notes indexed by Tezbar',\n      promptGuidelines: [\n        'Use pc_search first when the user asks to find text or information inside their documents, PDFs, screenshots, images, or knowledge folders.',\n        'Do not use grep, rg, find, or a recursive home-folder shell scan before pc_search.',\n        'Use pc_read with a returned result ID when more surrounding content is needed.',\n        'Cite the source path and page number returned by pc_search when answering from indexed knowledge.',\n      ],\n      parameters: Type.Object({\n        query: Type.String({ description: 'A focused natural-language or keyword search query' }),\n        limit: Type.Optional(\n          Type.Number({ minimum: 1, maximum: 20, description: 'Maximum results (default 8)' })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint, {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({ query: params.query ?? '', limit: params.limit ?? 8 }),\n          signal,\n        })\n        const result = (await response.json()) as {\n          hits?: Array<{\n            chunkId: string\n            path: string\n            pageNumber?: number\n            text: string\n            score: number\n          }>\n          error?: string\n        }\n        if (!response.ok) throw new Error(result.error || 'Knowledge search failed')\n        const hits = result.hits ?? []\n        const text =\n          hits.length === 0\n            ? 'No indexed knowledge matched this query.'\n            : hits\n                .map((hit, index) => {\n                  const page = hit.pageNumber ? ` (page ${hit.pageNumber})` : ''\n                  return `${index + 1}. [${hit.chunkId}] ${hit.path}${page}\\n${hit.text}`\n                })\n                .join('\\n\\n')\n        return { content: [{ type: 'text', text }], details: { hits } }\n      },\n    })\n\n    pi.registerTool({\n      name: 'pc_read',\n      label: 'Read PC Knowledge Result',\n      description:\n        'Reads additional nearby content for one result returned by pc_search. It can only access content from user-approved active knowledge folders.',\n      parameters: Type.Object({\n        resultId: Type.String({ description: 'The result ID returned by pc_search' }),\n        maxChars: Type.Optional(\n          Type.Number({\n            minimum: 500,\n            maximum: 50_000,\n            description: 'Maximum text characters to return',\n          })\n        ),\n      }),\n      async execute(_toolCallId, params, signal) {\n        const response = await fetch(knowledgeEndpoint.replace(/\\/search$/, '/read'), {\n          method: 'POST',\n          headers: {\n            Authorization: `Bearer ${knowledgeToken}`,\n            'Content-Type': 'application/json',\n          },\n          body: JSON.stringify({\n            resultId: params.resultId ?? '',\n            maxChars: params.maxChars ?? 12_000,\n          }),\n          signal,\n        })\n        const payload = (await response.json()) as {\n          result?: { path: string; pageNumber?: number; text: string }\n          error?: string\n        }\n        if (!response.ok || !payload.result) {\n          throw new Error(payload.error || 'Knowledge result could not be read')\n        }\n        const page = payload.result.pageNumber ? ` (page ${payload.result.pageNumber})` : ''\n        return {\n          content: [\n            { type: 'text', text: `${payload.result.path}${page}\\n\\n${payload.result.text}` },\n          ],\n          details: payload.result,\n        }\n      },\n    })\n  }\n\n  pi.on('tool_call', async (event, ctx) => {\n    if (event.toolName === 'launcher_search') {\n      launcherSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName === 'pc_search') {\n      deepSearchAttempted = true\n      return undefined\n    }\n    if (event.toolName !== 'bash') return undefined\n\n    const command = event.input?.command\n    if (typeof command !== 'string') {\n      return { block: true, reason: 'Missing bash command.' }\n    }\n\n    if (hasIndexedSearchTools) {\n      const preferredSearch = preferredIndexedSearchForBash(command)\n      if (preferredSearch === 'deep' && !deepSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use pc_search (Tezbar Deep Search) before recursively scanning personal files with grep/rg. Shell is only a fallback after Deep Search.',\n        }\n      }\n      if (preferredSearch === 'launcher' && !launcherSearchAttempted) {\n        return {\n          block: true,\n          reason:\n            'Use launcher_search (Tezbar normal search) before broadly scanning personal folders with find/mdfind. Shell is only a fallback after indexed search.',\n        }\n      }\n    }\n\n    if (isAutoAllowedBash(command)) return undefined\n\n    const confirmed = await ctx.ui.confirm('Run bash command?', command)\n    if (confirmed) return undefined\n\n    return { block: true, reason: 'Bash command was not approved.' }\n  })\n}\n", "utf8");
     process.env.RAYMES_PI_EXTENSION = extensionPath;
   } catch (error) {
     console.error("[server] failed to materialize Pi policy:", error);
@@ -36557,6 +36875,9 @@ registerIpcHandlers(() => mockWin, {
   }
 });
 startClipboardWatcher();
+startLagMonitor((stallMs) => {
+  console.warn(`[server] event loop blocked for ${stallMs}ms`);
+});
 function writeReply(payload) {
   process.stdout.write(`${JSON.stringify(payload)}
 `);

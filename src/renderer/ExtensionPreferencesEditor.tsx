@@ -161,7 +161,7 @@ export function ExtensionPreferencesEditor({
                     {field.commandTitle}
                   </span>
                 ) : null}
-                {field.required ? <span className="text-[9px] uppercase text-accent-1">Required</span> : null}
+                {field.required ? <span className="text-[11px] text-accent-1">Required</span> : null}
               </span>
               {field.type === 'dropdown' ? (
                 <select

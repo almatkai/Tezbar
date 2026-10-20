@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
 import type { SnippetListRow } from '../shared/snippets'
 import { GlideList } from './ui/GlideList'
-import { Button, FieldLabel, Hint, HintBar, Kbd, Message, TextArea, TextField, ViewHeader } from './ui/primitives'
+import { Button, FieldLabel, Hint, HintBar, Kbd, ListRow, ListRowTag, Message, TextArea, TextField, ViewHeader } from './ui/primitives'
+import { Squircle } from './launcherIcons'
 
 type EditorState = null | 'create' | { mode: 'edit'; id: string }
 
@@ -212,7 +213,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
       tabIndex={-1}
       role="application"
       aria-label="Snippets"
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
@@ -233,7 +234,7 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search snippets…"
-              className="h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
+              className="glass-field h-8 text-[12.5px]"
             />
           </div>
         ) : null}
@@ -311,35 +312,23 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
                   <GlideList
                     selectedIndex={selected}
                     itemCount={filtered.length}
-                    className="flex flex-col gap-0.5 py-0.5"
+                    className="flex flex-col py-0.5"
+                    highlightClassName="glide-highlight--accent"
                   >
                     {filtered.map((row, i) => (
                       <li key={row.id} className="relative z-[1]">
-                        <button
-                          type="button"
+                        <ListRow
+                          selected={i === selected}
+                          icon={<Squircle kind="snippets" size={20} />}
+                          title={row.title}
+                          subtitle={row.subtitle}
+                          accessory={row.readonly ? <ListRowTag>Built-in</ListRowTag> : null}
                           onMouseEnter={() => setSelected(i)}
                           onClick={() => {
                             setSelected(i)
                             void copyRow(row)
                           }}
-                          className="flex w-full flex-col gap-0.5 rounded-tezbar-row px-2 py-1.5 text-left transition hover:bg-white/[0.04]"
-                        >
-                          <span className="flex items-center gap-1.5">
-                            <span
-                              className={`min-w-0 flex-1 truncate text-left text-[12.5px] ${i === selected ? 'text-ink-1' : 'text-ink-2'}`}
-                            >
-                              {row.title}
-                            </span>
-                            {row.readonly ? (
-                              <span className="shrink-0 rounded bg-white/[0.06] px-1 py-0.5 text-[9px] uppercase tracking-wide text-ink-4">
-                                Built-in
-                              </span>
-                            ) : null}
-                          </span>
-                          {row.subtitle ? (
-                            <span className="truncate text-[11px] text-ink-4">{row.subtitle}</span>
-                          ) : null}
-                        </button>
+                        />
                       </li>
                     ))}
                   </GlideList>
@@ -347,11 +336,11 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
               )}
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
+            <div className="sheet-above-bar flex min-h-0 flex-1 flex-col overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
               {current ? (
                 <div className="flex h-full min-h-0 flex-col p-3">
                   <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-ink-4">Preview</p>
+                    <p className="text-[11px] font-medium text-ink-4">Preview</p>
                     {!current.readonly ? (
                       <div className="flex items-center gap-1">
                         <Button type="button" variant="quiet" className="!px-2 !py-0.5 text-[10px]" onClick={() => openEdit(current)}>
@@ -382,14 +371,14 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
         )}
 
         {msg ? (
-          <div className="mt-2 shrink-0 px-1">
+          <div className="sheet-above-bar mt-2 shrink-0 px-1">
             <Message tone={msg.tone}>{msg.text}</Message>
           </div>
         ) : null}
       </div>
 
       <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
-        <span className="text-[10.5px] uppercase tracking-[0.14em] text-ink-4">
+        <span className="text-[11px] text-ink-4">
           {editor ? (editor === 'create' ? 'New snippet' : 'Editing') : `${filtered.length} snippet${filtered.length === 1 ? '' : 's'}`}
         </span>
         <HintBar>

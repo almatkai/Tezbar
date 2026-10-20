@@ -14,6 +14,8 @@ import type {
   SearchExecuteResult,
   SearchResult,
 } from '../../shared/search'
+import { searchQueryVariants } from '../../shared/searchQueryVariants'
+import { applicationNameMatchScore, applicationSearchAliases } from '../../shared/applicationSearch'
 import type { NativeCommandId } from '../../shared/nativeCommands'
 import type { SafetyActionId } from '../../shared/safety'
 import {
@@ -42,6 +44,7 @@ import { appsProvider, listApplications } from './providers/appsProvider'
 import { clipboardProvider } from './providers/clipboardProvider'
 import { commandsProvider } from './providers/commandsProvider'
 import { scanInitialFileDocumentBatches, startFileWatcher } from './providers/filesProvider'
+import { waitForForegroundIdle } from '../foreground'
 import { addQuickNote, notesProvider } from './providers/notesProvider'
 import { quickLinksProvider } from './providers/quickLinksProvider'
 import { snippetsProvider } from './providers/snippetsProvider'
@@ -277,6 +280,7 @@ async function upsertProvider(provider: SearchProvider): Promise<void> {
     indexDb.removeDocumentsByCategory('extensions')
   }
   if (docs.length > 0) {
+    await waitForForegroundIdle()
     indexDb.upsertDocuments(docs)
   }
 }
@@ -291,7 +295,6 @@ async function refreshAllProviders(): Promise<void> {
     upsertProvider(appsProvider),
   ])
   indexDb.clearSearchCache()
-
 }
 
 async function refreshVolatileProviders(): Promise<void> {
@@ -348,6 +351,9 @@ function startBackgroundFileIndexing(): void {
       FILE_INDEX_LIMIT,
       FILE_INDEX_WRITE_BATCH_SIZE
     )) {
+      // Walking the tree is synchronous `stat` work in the same process that
+      // answers the launcher, so it steps aside for a request in flight too.
+      await waitForForegroundIdle()
       const upserts = batch.filter((document) => {
         const persistedMtime = existing.get(document.id)
         existing.delete(document.id)
@@ -356,6 +362,10 @@ function startBackgroundFileIndexing(): void {
         )
       })
       if (upserts.length > 0) {
+        // A batch is a synchronous SQLite transaction. Let a request the user
+        // is waiting for (history, launcher, a chat turn) run first instead of
+        // queueing behind the file index.
+        await waitForForegroundIdle()
         indexDb.upsertDocuments(upserts)
         changed = true
       }
@@ -363,6 +373,7 @@ function startBackgroundFileIndexing(): void {
     }
     const removals = Array.from(existing.keys())
     for (let offset = 0; offset < removals.length; offset += FILE_INDEX_WRITE_BATCH_SIZE) {
+      await waitForForegroundIdle()
       indexDb.removeDocumentsByIds(removals.slice(offset, offset + FILE_INDEX_WRITE_BATCH_SIZE))
       changed = true
       await new Promise<void>((resolve) => setImmediate(resolve))
@@ -495,6 +506,7 @@ function internalSurfaceBoost(
     category === 'applications' ||
     category === 'quick-notes'
   if (!hit) return 0
+  if (category === 'applications') return applicationNameMatchScore(title, query) * 600
 
   const normalizedTitle = title.toLowerCase()
   const normalizedQuery = query.trim().toLowerCase()
@@ -596,7 +608,7 @@ function fullTokenMatchBoost(query: string, title: string, subtitle: string): nu
     query
       .trim()
       .toLowerCase()
-      .match(/[a-z0-9]+/g) ?? []
+      .match(/[\p{L}\p{N}]+/gu) ?? []
   if (tokens.length < 2) return 0
   const text = `${title} ${subtitle}`.toLowerCase()
   const allMatch = tokens.every((t) => text.includes(t))
@@ -608,6 +620,7 @@ function rankRows(
   docs: Array<{ doc: IndexedDocument; lexical: number; fuzzyDistance?: number }>
 ): Array<SearchResult & { updatedAt: number }> {
   const now = Date.now()
+  const queryVariants = searchQueryVariants(query)
   const queryStats =
     indexDb?.getQueryActionStats(
       query,
@@ -620,6 +633,22 @@ function rankRows(
     const querySuccessRate =
       queryTotalCount > 0 ? (queryStat?.successCount ?? 0) / queryTotalCount : 0
     const activityAt = entry.doc.updatedAt
+    const queryMatchBoost = Math.max(
+      0,
+      ...queryVariants.map((variant, index) => {
+        const boost =
+          internalSurfaceBoost(entry.doc.category, entry.doc.title, variant, entry.doc.subtitle) +
+          exactRecentQuickNoteBoost(
+            entry.doc.category,
+            entry.doc.title,
+            variant,
+            entry.doc.updatedAt,
+            now
+          ) +
+          fullTokenMatchBoost(variant, entry.doc.title, entry.doc.subtitle)
+        return boost * (index === 0 ? 1 : 0.9)
+      })
+    )
 
     const score =
       computeWeightedScore({
@@ -640,23 +669,15 @@ function rankRows(
         lastUsedAt: queryStat?.lastUsedAt ?? 0,
         now,
       }) +
-      internalSurfaceBoost(entry.doc.category, entry.doc.title, query, entry.doc.subtitle) +
+      queryMatchBoost +
       recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) +
-      exactRecentQuickNoteBoost(
-        entry.doc.category,
-        entry.doc.title,
-        query,
-        entry.doc.updatedAt,
-        now
-      ) +
       (() => {
         // Quick note add row should stay competitive with strong file hits
         const q = query.trim().toLowerCase()
         if (!q) return 120
         if (/\bnotes?\b/.test(q) || q.includes('quick note')) return 780
         return 120
-      })() +
-      fullTokenMatchBoost(query, entry.doc.title, entry.doc.subtitle)
+      })()
 
     return {
       id: entry.doc.id,
@@ -1009,17 +1030,16 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     return true
   })
   const fileResults = asResults.filter((result) => result.category === 'files')
-  const indexedSourceResults = (knowledgeService?.searchMetadata(trimmed, 24) ?? [])
-    .map(
-      (hit, index): SearchResult => ({
-        id: `file:${hit.path}`,
-        title: hit.title,
-        subtitle: hit.path,
-        category: 'files',
-        score: 760 + Math.round(hit.score * 160) - index,
-        action: { type: 'open-file', path: hit.path },
-      })
-    )
+  const indexedSourceResults = (knowledgeService?.searchMetadata(trimmed, 24) ?? []).map(
+    (hit, index): SearchResult => ({
+      id: `file:${hit.path}`,
+      title: hit.title,
+      subtitle: hit.path,
+      category: 'files',
+      score: 760 + Math.round(hit.score * 160) - index,
+      action: { type: 'open-file', path: hit.path },
+    })
+  )
   const allFileResults = uniqById([...fileResults, ...indexedSourceResults])
 
   const openPortResults = isDeepSearch ? [] : await searchPortManagerOpenPorts(trimmed)
@@ -1396,16 +1416,6 @@ function appAcronym(name: string): string {
     .join('')
 }
 
-function builtInAppAliases(appName: string): string[] {
-  const n = appName.toLowerCase()
-  if (n === 'visual studio code') return ['vscode', 'vsc', 'code', 'vs code']
-  if (n === 'quicktime player') return ['quicktime', 'qt', 'qtp']
-  if (n === 'activity monitor') return ['activity', 'taskmanager', 'task monitor']
-  if (n === 'terminal') return ['term', 'shell']
-  if (n === 'finder') return ['files', 'filemanager']
-  return []
-}
-
 function appMatchesTerm(
   appName: string,
   term: string,
@@ -1418,7 +1428,7 @@ function appMatchesTerm(
   if (normalizedName.includes(normalizedTerm)) return true
   if (appAcronym(appName).includes(normalizedTerm)) return true
   if (
-    builtInAppAliases(appName).some((alias) =>
+    applicationSearchAliases(appName).some((alias) =>
       normalizeAppSearchTerm(alias).includes(normalizedTerm)
     )
   ) {

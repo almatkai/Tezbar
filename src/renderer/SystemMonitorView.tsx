@@ -79,7 +79,7 @@ function StatCard({
         accents[accent]
       )}
     >
-      <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-ink-4">{eyebrow}</p>
+      <p className="text-[11px] font-semibold text-ink-4">{eyebrow}</p>
       <p className="mt-1.5 truncate font-display text-[22px] font-semibold leading-none tracking-[-0.035em] text-ink-1">
         {value}
       </p>
@@ -219,7 +219,7 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
       tabIndex={-1}
       role="application"
       aria-label="System Monitor"
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="glass-card shrink-0 px-4 py-3">
         <ViewHeader
@@ -319,7 +319,7 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
               <section className="rounded-[14px] border border-white/[0.07] bg-black/[0.11] p-3.5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-ink-4">
+                    <p className="text-[11px] font-semibold text-ink-4">
                       Storage
                     </p>
                     <p className="mt-1.5 font-display text-[17px] font-semibold tracking-[-0.025em] text-ink-1">
@@ -349,7 +349,7 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
               </section>
 
               <section className="rounded-[14px] border border-white/[0.07] bg-black/[0.11] p-3.5">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-ink-4">
+                <p className="text-[11px] font-semibold text-ink-4">
                   Battery Health
                 </p>
                 {snapshot.battery ? (
@@ -393,7 +393,7 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
 
             <div className="grid grid-cols-3 gap-2.5">
               <section className="rounded-[14px] border border-white/[0.07] bg-black/[0.11] p-3.5">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-ink-4">
+                <p className="text-[11px] font-semibold text-ink-4">
                   Processor & GPU
                 </p>
                 <div className="mt-1.5">
@@ -423,7 +423,7 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
               </section>
 
               <section className="rounded-[14px] border border-white/[0.07] bg-black/[0.11] p-3.5">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-ink-4">
+                <p className="text-[11px] font-semibold text-ink-4">
                   Network Activity
                 </p>
                 <div className="mt-2 grid grid-cols-2 gap-2">
@@ -459,7 +459,7 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
               </section>
 
               <section className="rounded-[14px] border border-white/[0.07] bg-black/[0.11] p-3.5">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-ink-4">
+                <p className="text-[11px] font-semibold text-ink-4">
                   Thermals & Activity
                 </p>
                 <div className="mt-1.5">

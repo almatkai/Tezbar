@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { emitTo, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { RaymesApi } from '../shared/desktop-api'
+import type { LauncherLayout, LauncherLayoutPatch, LauncherViewport, ResizeEdge } from '../shared/windowLayout'
 import type { AppUpdateStatus, UpdateChannelInfo } from '../shared/updater'
 import { formatTerminalSessionName, type TerminalSessionsAction } from '../shared/terminal'
 
@@ -17,6 +18,8 @@ type TauriRaymesApi = RaymesApi & {
   screenshot: () => Promise<string>
   isPhysicalKeyDown: (key: string) => Promise<unknown>
 }
+
+let launcherZoom = 1
 
 export function initTauriBridge(): void {
   // Check if we are running inside Tauri
@@ -253,7 +256,25 @@ export function initTauriBridge(): void {
     listLlmModels: (providerId: any, baseURLOverride?: string, apiKeyOverride?: string) =>
       callBackend('llm-list-models', providerId, baseURLOverride, apiKeyOverride),
 
-    getWindowZoomFactor: () => 1,
+    getWindowZoomFactor: () => launcherZoom,
+    getLauncherLayout: async () => {
+      const layout = await invoke<LauncherLayout>('get_launcher_layout')
+      launcherZoom = layout.zoom
+      return layout
+    },
+    setLauncherLayout: async (patch: LauncherLayoutPatch) => {
+      const layout = await invoke<LauncherLayout>('set_launcher_layout', patch)
+      launcherZoom = layout.zoom
+      return layout
+    },
+    onLauncherLayoutChanged: (listener: (layout: LauncherLayout) => void) =>
+      setupEventListener('launcher-layout-changed', (layout: LauncherLayout) => {
+        launcherZoom = layout.zoom
+        listener(layout)
+      }),
+    onLauncherViewportChanged: (listener: (viewport: LauncherViewport) => void) =>
+      setupEventListener('launcher-viewport-changed', listener),
+    startLauncherResize: (edge: ResizeEdge) => invoke('start_launcher_resize', { edge }),
     setWindowContentHeight: (height: number, zoomFactor: number) =>
       invoke('window_set_content_height', { height, zoomFactor }),
     openExternalUrl: (url: string) => callBackend('open-external-url', url),
@@ -476,7 +497,7 @@ export function initTauriBridge(): void {
         mimeType: 'image/png' as const,
       }
     },
-    agentCancel: () => callBackend('agent:cancel'),
+    agentCancel: (runId) => callBackend('agent:cancel', runId),
     agentApprove: (response) => callBackend('agent:approve', response),
 
     chatRun: (turns: any[]) => callBackend('chat:run', turns),
@@ -496,7 +517,8 @@ export function initTauriBridge(): void {
 
     getUpdateStatus: () => invoke('get_update_status') as Promise<AppUpdateStatus>,
     getUpdateChannel: () => invoke('get_update_channel') as Promise<UpdateChannelInfo>,
-    setUpdateChannel: (channel) => invoke('set_update_channel', { channel }) as Promise<UpdateChannelInfo>,
+    setUpdateChannel: (channel) =>
+      invoke('set_update_channel', { channel }) as Promise<UpdateChannelInfo>,
     checkForUpdates: () => invoke('check_for_updates') as Promise<AppUpdateStatus>,
     downloadAndInstallUpdate: async () => {
       try {
@@ -520,8 +542,7 @@ export function initTauriBridge(): void {
       setupEventListener('stream-error', listener),
     onWindowShown: (listener: (payload: { resetUi: boolean }) => void) =>
       setupEventListener('window-shown', listener),
-    onWindowHidden: (listener: () => void) =>
-      setupEventListener('window-hidden', listener),
+    onWindowHidden: (listener: () => void) => setupEventListener('window-hidden', listener),
     onWindowVisibility: (listener: (visible: boolean) => void) =>
       setupEventListener('window-visibility', listener),
     onWindowSnapGuides: (
@@ -532,8 +553,7 @@ export function initTauriBridge(): void {
         centered: boolean
         targetRect: { left: number; top: number; right: number; bottom: number } | null
       }) => void
-    ) =>
-      setupEventListener('window:snap-guides', listener),
+    ) => setupEventListener('window:snap-guides', listener),
     getWindowSnapGuides: () => invoke('get_window_snap_guides'),
     onTerminalData: (listener: (event: any) => void) =>
       setupEventListener('terminal:data', listener),
@@ -547,7 +567,8 @@ export function initTauriBridge(): void {
     onAgentEvent: (listener: (event: any) => void) => setupEventListener('agent:event', listener),
     onExtensionInstallProgress: (listener: (payload: any) => void) =>
       setupEventListener('extension:install-progress', listener),
-    onLlmConfigChanged: (listener: () => void) => setupEventListener('llm-config-changed', listener),
+    onLlmConfigChanged: (listener: () => void) =>
+      setupEventListener('llm-config-changed', listener),
 
     startWindowSnapDrag: () => invoke('start_window_snap_drag'),
     endWindowSnapDrag: () => invoke('end_window_snap_drag'),

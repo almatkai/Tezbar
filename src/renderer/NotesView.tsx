@@ -470,7 +470,7 @@ export default function NotesView({
       role="application"
       aria-label="Quick Notes"
       onKeyDown={onRootKeyDown}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
         <ViewHeader
@@ -593,14 +593,14 @@ export default function NotesView({
         </section>
 
         {msg ? (
-          <div className="mt-2 shrink-0">
+          <div className="sheet-above-bar mt-2 shrink-0">
             <Message tone={msg.tone}>{msg.text}</Message>
           </div>
         ) : null}
       </div>
 
       <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
-        <span className="text-[10.5px] uppercase tracking-[0.14em] text-ink-4">
+        <span className="text-[11px] text-ink-4">
           {filtered.length} note{filtered.length === 1 ? '' : 's'}
         </span>
         <HintBar>

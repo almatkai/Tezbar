@@ -32,6 +32,15 @@ function statusLabel(snapshot: KnowledgeSnapshot | null): string {
   if (state === 'indexing') return 'Indexing now'
   if (state === 'paused') return 'Paused'
   if (state === 'failed') return 'Needs attention'
+  if (
+    snapshot?.settings.embeddingModel === 'embeddinggemma-2' &&
+    snapshot?.semanticSearch?.modelState === 'ready' &&
+    (snapshot.semanticSearch.indexing ||
+      (snapshot.semanticSearch.totalChunks > 0 &&
+        snapshot.semanticSearch.indexedChunks < snapshot.semanticSearch.totalChunks))
+  ) {
+    return 'Building semantic index'
+  }
   if (state === 'completed') return 'Up to date'
   return 'Standing by'
 }
@@ -133,8 +142,27 @@ export default function IndexingView({
   }, [page.sources, selected])
 
   const selectedSource = page.sources[selected]
-  const progress = Math.round((snapshot?.status.progress ?? 0) * 100)
-  const isActive = snapshot?.status.state === 'indexing' || snapshot?.status.state === 'scanning'
+  const isScanningOrIndexing =
+    snapshot?.status.state === 'indexing' || snapshot?.status.state === 'scanning'
+  const isSemanticIndexing = Boolean(
+    !isScanningOrIndexing &&
+      snapshot?.settings.embeddingModel === 'embeddinggemma-2' &&
+      snapshot?.semanticSearch?.modelState === 'ready' &&
+      snapshot?.status.state !== 'paused' &&
+      (snapshot?.semanticSearch?.indexing ||
+        ((snapshot?.semanticSearch?.totalChunks ?? 0) > 0 &&
+          (snapshot?.semanticSearch?.indexedChunks ?? 0) <
+            (snapshot?.semanticSearch?.totalChunks ?? 0))) &&
+      (snapshot?.semanticSearch?.totalChunks ?? 0) > 0
+  )
+  const progress = isSemanticIndexing
+    ? Math.round(
+        ((snapshot?.semanticSearch?.indexedChunks ?? 0) /
+          Math.max(1, snapshot?.semanticSearch?.totalChunks ?? 1)) *
+          100
+      )
+    : Math.round((snapshot?.status.progress ?? 0) * 100)
+  const isActive = isScanningOrIndexing || isSemanticIndexing
   const depth = snapshot?.settings.depth ?? 'smart'
 
   const metricCards = useMemo(() => [
@@ -203,7 +231,7 @@ export default function IndexingView({
       role="application"
       aria-label="Indexing Status"
       onKeyDown={onKeyDown}
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
       <section className="glass-card shrink-0 overflow-hidden px-4 py-3">
         <ViewHeader
@@ -230,12 +258,14 @@ export default function IndexingView({
                     ? 'bg-rose-300' : snapshot?.status.state === 'paused' ? 'bg-amber-300' : 'bg-emerald-300',
                 )} />
                 <h2 className="font-display text-[15px] font-semibold text-ink-1">{statusLabel(snapshot)}</h2>
-                <span className="rounded-full border border-white/[0.08] bg-black/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-ink-3">
+                <span className="rounded-full border border-white/[0.08] bg-black/10 px-2 py-0.5 text-[11px] font-semibold text-ink-3">
                   {depth}
                 </span>
               </div>
               <p className="mt-1.5 max-w-[630px] truncate text-[10.5px] text-ink-3">
-                {snapshot?.status.detail ?? 'Preparing local knowledge status…'}
+                {isSemanticIndexing
+                  ? `${(snapshot?.semanticSearch?.indexedChunks ?? 0).toLocaleString()} / ${(snapshot?.semanticSearch?.totalChunks ?? 0).toLocaleString()} chunks`
+                  : snapshot?.status.detail ?? 'Preparing local knowledge status…'}
               </p>
             </div>
             <span className="font-mono text-[19px] font-medium tabular-nums text-cyan-100">{progress}%</span>
@@ -247,15 +277,31 @@ export default function IndexingView({
             />
           </div>
           <div className="relative mt-1.5 flex justify-between font-mono text-[9.5px] text-ink-4">
-            <span>{snapshot?.status.processedSources ?? 0} processed</span>
-            <span>{snapshot?.status.queuedSources ?? 0} remaining · {snapshot?.status.failedSources ?? 0} failed</span>
+            {isSemanticIndexing ? (
+              <>
+                <span>{(snapshot?.semanticSearch?.indexedChunks ?? 0).toLocaleString()} chunks indexed</span>
+                <span>
+                  {Math.max(
+                    0,
+                    (snapshot?.semanticSearch?.totalChunks ?? 0) -
+                      (snapshot?.semanticSearch?.indexedChunks ?? 0)
+                  ).toLocaleString()}{' '}
+                  remaining
+                </span>
+              </>
+            ) : (
+              <>
+                <span>{snapshot?.status.processedSources ?? 0} processed</span>
+                <span>{snapshot?.status.queuedSources ?? 0} remaining · {snapshot?.status.failedSources ?? 0} failed</span>
+              </>
+            )}
           </div>
         </div>
 
         <div className="mt-2.5 grid grid-cols-4 gap-2">
           {metricCards.map((metric) => (
             <div key={metric.label} className="rounded-[11px] border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
-              <p className="text-[9px] font-medium uppercase tracking-[0.11em] text-ink-4">{metric.label}</p>
+              <p className="text-[11px] font-medium text-ink-4">{metric.label}</p>
               <p className="mt-1 truncate font-display text-[13px] font-semibold text-ink-1" title={metric.value}>{metric.value}</p>
               <p className="mt-0.5 truncate text-[9.5px] text-ink-4">{metric.note}</p>
             </div>
@@ -302,7 +348,7 @@ export default function IndexingView({
                   </span>
                   <span className="max-w-[240px] shrink-0 text-right">
                     <span className={cx(
-                      'block text-[9px] font-semibold uppercase tracking-[0.08em]',
+                      'block text-[11px] font-semibold',
                       source.status === 'failed' ? 'text-rose-300' : source.status === 'pending' ? 'text-cyan-200' : 'text-emerald-300/80',
                     )}>
                       {source.status}

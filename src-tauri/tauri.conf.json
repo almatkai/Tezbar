@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Tezbar",
-  "version": "0.2.9",
+  "version": "0.2.9-beta.10",
   "identifier": "com.tezbar.app",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://127.0.0.1:5174",
+    "devUrl": "http://127.0.0.1:53147",
     "additionalWatchFolders": [
       "../dist-backend"
     ],
@@ -20,7 +20,9 @@
         "title": "Tezbar",
         "width": 760,
         "height": 640,
-        "resizable": false,
+        "resizable": true,
+        "minWidth": 480,
+        "minHeight": 360,
         "decorations": false,
         "alwaysOnTop": true,
         "transparent": true,

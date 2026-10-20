@@ -113,8 +113,27 @@ import { fetchFrankfurterLatest } from './currency/frankfurter'
 import { addNamedPort, listNamedPorts, removeNamedPort } from './portManager/namedPortsStore'
 import { runAiActionMode } from './llm/actionMode'
 import type { VoiceModelId } from '../shared/voice'
-import type { KnowledgeDepth, KnowledgeIndexingSpeed, KnowledgeRootDepth } from '../shared/knowledge'
+import type {
+  KnowledgeDepth,
+  KnowledgeIndexingSpeed,
+  KnowledgeRootDepth,
+} from '../shared/knowledge'
 import { listBackgroundTasks } from './backgroundTasks'
+import { countsAsForegroundActivity, noteForegroundActivity } from './foreground'
+
+type IpcHandleListener = Parameters<typeof ipcMain.handle>[1]
+
+/** Register a backend channel.
+ *
+ *  Requests the UI waits for open the foreground gate, so background indexing
+ *  yields between batches instead of making the reply queue behind its work.
+ *  Status polling is excluded in `countsAsForegroundActivity`. */
+function handleIpc(channel: string, listener: IpcHandleListener): void {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (countsAsForegroundActivity(channel)) noteForegroundActivity()
+    return listener(event, ...args)
+  })
+}
 import { requestPermission, snapshotPermissions } from './permissions/manager'
 import { checkPiAgent, installPiAgent } from './agent/piInstall'
 import type { PermissionId } from '../shared/permissions'
@@ -386,14 +405,15 @@ function startAgentRun(
   sender: WebContents,
   task: string,
   images: readonly AgentInputImage[] = [],
-  cwd?: string
+  cwd?: string,
+  requestedRunId?: string
 ): string {
   cancelPendingAgentApprovals()
   agentAbort?.abort()
   agentAbort = new AbortController()
   const ac = agentAbort
-  const runId =
-    (agentRunId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
+  const runId = (agentRunId =
+    requestedRunId ?? `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
   let emittedOutput = false
 
   sendAgentEvent(sender, { type: 'start', runId, task })
@@ -414,8 +434,6 @@ function startAgentRun(
   const onStderrLine = (line: string): void => {
     sendAgentEvent(sender, { type: 'log', runId, source: 'stderr', line })
   }
-
-  console.log('[tezbar:agent] run', { runId, taskPreview: task.slice(0, 120) })
 
   void (async () => {
     const [{ getSharedBridge }, { extractTextFromAgentImages }] = await Promise.all([
@@ -608,7 +626,7 @@ export function registerIpcHandlers(
 ): void {
   extensionProgressWindow = getWindow
 
-  ipcMain.handle('llm-config-get', async () => ({
+  handleIpc('llm-config-get', async () => ({
     ...LLM_DEFAULTS,
     ...readLLMConfig(),
     ...readRawConfig(),
@@ -619,7 +637,7 @@ export function registerIpcHandlers(
     terminalModeTimeoutMs: getCommandSurfaceTimeoutMs('terminalModeTimeoutMs'),
   }))
 
-  ipcMain.handle('llm-config-set', async (_event, patch: unknown) => {
+  handleIpc('llm-config-set', async (_event, patch: unknown) => {
     if (!patch || typeof patch !== 'object') return
     const configPatch = { ...(patch as Record<string, unknown>) }
     const requestedHotkey = configPatch.raymesHotkey
@@ -651,7 +669,7 @@ export function registerIpcHandlers(
     broadcast()
   })
 
-  ipcMain.handle('llm-provider-statuses', async () => {
+  handleIpc('llm-provider-statuses', async () => {
     const cfg = readLLMConfig()
     const ids: ProviderId[] = [
       'openai',
@@ -679,7 +697,7 @@ export function registerIpcHandlers(
     return Object.fromEntries(entries) as Record<ProviderId, boolean>
   })
 
-  ipcMain.handle(
+  handleIpc(
     'llm-list-models',
     async (_event, providerId: unknown, baseURLOverride?: unknown, apiKeyOverride?: unknown) => {
       const id = providerId as ProviderId
@@ -687,7 +705,9 @@ export function registerIpcHandlers(
         typeof id === 'string' &&
         (isCustomProvider(id) ||
           id.startsWith('custom:') ||
-          readLLMConfig().customProviders?.some((provider) => (provider.id as string) === (id as string)))
+          readLLMConfig().customProviders?.some(
+            (provider) => (provider.id as string) === (id as string)
+          ))
       if (
         id !== 'openai' &&
         id !== 'openai-compatible' &&
@@ -715,7 +735,7 @@ export function registerIpcHandlers(
     }
   )
 
-  ipcMain.handle('pi-extensions:list', async () => {
+  handleIpc('pi-extensions:list', async () => {
     const { getInstalledPiExtensions } = await import('./agent/piExtensions')
     return getInstalledPiExtensions()
   })
@@ -723,7 +743,7 @@ export function registerIpcHandlers(
   // Renderer reports its measured content height. We clamp to the launcher
   // bounds and update the window content size programmatically — the user
   // still cannot drag to resize because the BrowserWindow is resizable:false.
-  ipcMain.handle('window-set-content-height', async (_event, raw: unknown) => {
+  handleIpc('window-set-content-height', async (_event, raw: unknown) => {
     const win = getWindow()
     if (!win || win.isDestroyed()) return
     const payload =
@@ -737,68 +757,68 @@ export function registerIpcHandlers(
     setLauncherContentHeight(win, height, zoomFactor)
   })
 
-  ipcMain.handle('pi:check', async () => checkPiAgent())
+  handleIpc('pi:check', async () => checkPiAgent())
 
-  ipcMain.handle('pi:install', async () => installPiAgent())
+  handleIpc('pi:install', async () => installPiAgent())
 
-  ipcMain.handle('permissions:snapshot', async () => snapshotPermissions())
+  handleIpc('permissions:snapshot', async () => snapshotPermissions())
 
-  ipcMain.handle('permissions:request', async (_event, raw: unknown) => {
+  handleIpc('permissions:request', async (_event, raw: unknown) => {
     if (typeof raw !== 'string') {
       throw new Error('Permission id must be a string')
     }
     return requestPermission(raw as PermissionId)
   })
 
-  ipcMain.handle('safety:descriptors', async () => listSafetyDescriptors())
+  handleIpc('safety:descriptors', async () => listSafetyDescriptors())
 
-  ipcMain.handle('safety:log', async () => listSafetyLog())
+  handleIpc('safety:log', async () => listSafetyLog())
 
-  ipcMain.handle('safety:log-clear', async () => {
+  handleIpc('safety:log-clear', async () => {
     clearSafetyLog()
   })
 
-  ipcMain.handle('safety:dry-run:get', async () => getSafetyDryRun())
-  ipcMain.handle('safety:dry-run:set', async (_event, raw: unknown) => {
+  handleIpc('safety:dry-run:get', async () => getSafetyDryRun())
+  handleIpc('safety:dry-run:set', async (_event, raw: unknown) => {
     setSafetyDryRun(raw === true)
     return getSafetyDryRun()
   })
 
-  ipcMain.handle('native-commands:list', async () => listNativeCommands())
-  ipcMain.handle('system-stats:get', async () => getSystemStats())
+  handleIpc('native-commands:list', async () => listNativeCommands())
+  handleIpc('system-stats:get', async () => getSystemStats())
 
-  ipcMain.handle('clipboard:list', async () => listClipboardEntries())
+  handleIpc('clipboard:list', async () => listClipboardEntries())
 
-  ipcMain.handle('clipboard:restore', async (_event, id: unknown) => {
+  handleIpc('clipboard:restore', async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id) return false
     return restoreClipboardEntry(id)
   })
 
-  ipcMain.handle('clipboard:delete', async (_event, id: unknown) => {
+  handleIpc('clipboard:delete', async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id) return false
     return deleteClipboardEntry(id)
   })
 
-  ipcMain.handle('clipboard:toggle-pin', async (_event, id: unknown) => {
+  handleIpc('clipboard:toggle-pin', async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id) return false
     return togglePinClipboardEntry(id)
   })
 
-  ipcMain.handle('clipboard:reveal', async (_event, id: unknown) => {
+  handleIpc('clipboard:reveal', async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id) return false
     return revealClipboardEntryInFinder(id)
   })
 
-  ipcMain.handle('clipboard:image', async (_event, id: unknown) => {
+  handleIpc('clipboard:image', async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id) return null
     return readClipboardImagePayload(id)
   })
 
-  ipcMain.handle('clipboard:clear', async () => {
+  handleIpc('clipboard:clear', async () => {
     clearClipboardHistory()
   })
 
-  ipcMain.handle('app-icon:data-url', async (_event, raw: unknown) => {
+  handleIpc('app-icon:data-url', async (_event, raw: unknown) => {
     const appPath = typeof raw === 'string' ? raw.trim() : ''
     if (
       !appPath ||
@@ -811,7 +831,7 @@ export function registerIpcHandlers(
     return (await appIconDataUrl(appPath)) ?? null
   })
 
-  ipcMain.handle('asset-icon:data-url', async (_event, raw: unknown) => {
+  handleIpc('asset-icon:data-url', async (_event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return null
     const payload = raw as { kind?: unknown; path?: unknown }
     const kind = payload.kind as IconAssetKind
@@ -838,14 +858,14 @@ export function registerIpcHandlers(
     return null
   })
 
-  ipcMain.handle('snippets:list', async () => listSnippetsForUi())
+  handleIpc('snippets:list', async () => listSnippetsForUi())
 
-  ipcMain.handle('snippets:copy', async (_event, id: unknown) => {
+  handleIpc('snippets:copy', async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id) return { ok: false, message: 'Invalid snippet' }
     return copySnippetById(id)
   })
 
-  ipcMain.handle('snippets:add', async (_event, payload: unknown) => {
+  handleIpc('snippets:add', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') return { ok: false, message: 'Invalid payload' }
     const o = payload as { label?: unknown; trigger?: unknown; body?: unknown }
     const r = addUserSnippet({
@@ -857,7 +877,7 @@ export function registerIpcHandlers(
     return r
   })
 
-  ipcMain.handle('snippets:update', async (_event, id: unknown, payload: unknown) => {
+  handleIpc('snippets:update', async (_event, id: unknown, payload: unknown) => {
     if (typeof id !== 'string' || !id) return { ok: false, message: 'Invalid snippet id' }
     if (!payload || typeof payload !== 'object') return { ok: false, message: 'Invalid payload' }
     const o = payload as { label?: unknown; trigger?: unknown; body?: unknown }
@@ -870,23 +890,23 @@ export function registerIpcHandlers(
     return r
   })
 
-  ipcMain.handle('snippets:delete', async (_event, id: unknown) => {
+  handleIpc('snippets:delete', async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id) return { ok: false, message: 'Invalid snippet id' }
     const r = deleteUserSnippet(id)
     if (r.ok) await reindexSnippets()
     return r
   })
 
-  ipcMain.handle('notes:list', async () => listQuickNotes())
+  handleIpc('notes:list', async () => listQuickNotes())
 
-  ipcMain.handle('notes:append', async (_event, text: unknown) => {
+  handleIpc('notes:append', async (_event, text: unknown) => {
     if (typeof text !== 'string' || !text.trim()) return null
     const entry = addQuickNote(text)
     await reindexQuickNotes()
     return entry
   })
 
-  ipcMain.handle('notes:update', async (_event, payload: unknown) => {
+  handleIpc('notes:update', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') return false
     const o = payload as { createdAt?: unknown; text?: unknown }
     if (typeof o.createdAt !== 'number' || typeof o.text !== 'string') return false
@@ -895,14 +915,14 @@ export function registerIpcHandlers(
     return ok
   })
 
-  ipcMain.handle('notes:delete', async (_event, createdAt: unknown) => {
+  handleIpc('notes:delete', async (_event, createdAt: unknown) => {
     if (typeof createdAt !== 'number') return false
     const ok = deleteQuickNote(createdAt)
     if (ok) await reindexQuickNotes()
     return ok
   })
 
-  ipcMain.handle(TERMINAL_IPC.CREATE, async (event, raw: unknown) => {
+  handleIpc(TERMINAL_IPC.CREATE, async (event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') throw new Error('Invalid terminal request')
     const body = raw as Partial<TerminalCreateRequest>
     if (typeof body.cols !== 'number' || typeof body.rows !== 'number') {
@@ -930,7 +950,7 @@ export function registerIpcHandlers(
     return createTerminalSession(event.sender, body as TerminalCreateRequest)
   })
 
-  ipcMain.handle(TERMINAL_IPC.ATTACH, async (event, raw: unknown) => {
+  handleIpc(TERMINAL_IPC.ATTACH, async (event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return null
     const body = raw as Partial<TerminalAttachRequest>
     if (
@@ -944,7 +964,7 @@ export function registerIpcHandlers(
     return attachTerminalSession(event.sender, body as TerminalAttachRequest)
   })
 
-  ipcMain.handle(TERMINAL_IPC.DETACH, async (event, raw: unknown) => {
+  handleIpc(TERMINAL_IPC.DETACH, async (event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return false
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return false
@@ -952,12 +972,12 @@ export function registerIpcHandlers(
     return detachTerminalSession(event.sender.id, body.sessionId)
   })
 
-  ipcMain.handle(TERMINAL_IPC.LIST, async (event) => {
+  handleIpc(TERMINAL_IPC.LIST, async (event) => {
     const { listTerminalSessions } = await loadTerminal()
     return listTerminalSessions(event.sender.id)
   })
 
-  ipcMain.handle(TERMINAL_IPC.UPDATE, async (event, raw: unknown) => {
+  handleIpc(TERMINAL_IPC.UPDATE, async (event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return null
     const body = raw as Partial<TerminalUpdateRequest>
     if (typeof body.sessionId !== 'string') return null
@@ -969,7 +989,7 @@ export function registerIpcHandlers(
     return updateTerminalSession(event.sender.id, body as TerminalUpdateRequest)
   })
 
-  ipcMain.handle('terminal:native-create', async (_event, raw: unknown) => {
+  handleIpc('terminal:native-create', async (_event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return null
     const body = raw as {
       sessionId?: unknown
@@ -1018,7 +1038,7 @@ export function registerIpcHandlers(
     })
   })
 
-  ipcMain.handle('terminal:native-attach', async (_event, raw: unknown) => {
+  handleIpc('terminal:native-attach', async (_event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return null
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return null
@@ -1026,7 +1046,7 @@ export function registerIpcHandlers(
     return markNativeTerminalSessionAttached(body.sessionId)
   })
 
-  ipcMain.handle('terminal:native-restore', async (_event, raw: unknown) => {
+  handleIpc('terminal:native-restore', async (_event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return null
     const body = raw as { sessionId?: unknown; shell?: unknown; cwd?: unknown }
     if (
@@ -1044,7 +1064,7 @@ export function registerIpcHandlers(
     })
   })
 
-  ipcMain.handle('terminal:native-exit', async (_event, raw: unknown) => {
+  handleIpc('terminal:native-exit', async (_event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return null
     const body = raw as { sessionId?: unknown; exitCode?: unknown; signal?: unknown }
     if (typeof body.sessionId !== 'string') return null
@@ -1060,7 +1080,7 @@ export function registerIpcHandlers(
     return markNativeTerminalSessionExited(body.sessionId, exitCode, signal)
   })
 
-  ipcMain.handle(TERMINAL_IPC.WRITE, async (event, raw: unknown) => {
+  handleIpc(TERMINAL_IPC.WRITE, async (event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return false
     const body = raw as { sessionId?: unknown; data?: unknown }
     if (typeof body.sessionId !== 'string' || typeof body.data !== 'string') return false
@@ -1068,7 +1088,7 @@ export function registerIpcHandlers(
     return writeTerminalSession(event.sender.id, body.sessionId, body.data)
   })
 
-  ipcMain.handle(TERMINAL_IPC.RESIZE, async (event, raw: unknown) => {
+  handleIpc(TERMINAL_IPC.RESIZE, async (event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return false
     const body = raw as { sessionId?: unknown; cols?: unknown; rows?: unknown }
     if (
@@ -1082,7 +1102,7 @@ export function registerIpcHandlers(
     return resizeTerminalSession(event.sender.id, body.sessionId, body.cols, body.rows)
   })
 
-  ipcMain.handle(TERMINAL_IPC.GET_CWD, async (event, raw: unknown) => {
+  handleIpc(TERMINAL_IPC.GET_CWD, async (event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return null
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return null
@@ -1090,7 +1110,7 @@ export function registerIpcHandlers(
     return getTerminalSessionCwd(event.sender.id, body.sessionId)
   })
 
-  ipcMain.handle(TERMINAL_IPC.KILL, async (event, raw: unknown) => {
+  handleIpc(TERMINAL_IPC.KILL, async (event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return false
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return false
@@ -1098,7 +1118,7 @@ export function registerIpcHandlers(
     return killTerminalSession(event.sender.id, body.sessionId)
   })
 
-  ipcMain.handle(TERMINAL_IPC.DELETE, async (event, raw: unknown) => {
+  handleIpc(TERMINAL_IPC.DELETE, async (event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return false
     const body = raw as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return false
@@ -1106,12 +1126,12 @@ export function registerIpcHandlers(
     return deleteTerminalSession(event.sender.id, body.sessionId)
   })
 
-  ipcMain.handle(TERMINAL_IPC.GET_PROMPT_INFO, async () => {
+  handleIpc(TERMINAL_IPC.GET_PROMPT_INFO, async () => {
     const { getTerminalPromptInfo } = await loadTerminal()
     return getTerminalPromptInfo()
   })
 
-  ipcMain.handle('open-external-url', async (_event, url: unknown) => {
+  handleIpc('open-external-url', async (_event, url: unknown) => {
     if (typeof url !== 'string') return
     let parsed: URL
     try {
@@ -1124,11 +1144,11 @@ export function registerIpcHandlers(
     await shell.openExternal(url)
   })
 
-  ipcMain.handle('github-device-start', async (_event, clientId: unknown) => {
+  handleIpc('github-device-start', async (_event, clientId: unknown) => {
     return startGithubDeviceFlow(typeof clientId === 'string' ? clientId : undefined)
   })
 
-  ipcMain.handle('github-device-poll', async () => {
+  handleIpc('github-device-poll', async () => {
     const r = await pollGithubDeviceFlow()
     if (r.status === 'success') {
       persistCopilotTokens(r.access_token, r.refresh_token, r.expires_in, r.client_id)
@@ -1137,11 +1157,11 @@ export function registerIpcHandlers(
     return r
   })
 
-  ipcMain.handle('github-device-cancel', async () => {
+  handleIpc('github-device-cancel', async () => {
     clearDeviceSession()
   })
 
-  ipcMain.handle(IPC_CHANNELS.QUERY, async (event, input: unknown) => {
+  handleIpc(IPC_CHANNELS.QUERY, async (event, input: unknown) => {
     const text = typeof input === 'string' ? input : String(input ?? '')
     console.log('[IPC_CHANNELS.QUERY] received input:', text)
     const intent = await classifyIntent(text)
@@ -1151,11 +1171,13 @@ export function registerIpcHandlers(
       answerAbort?.abort()
       answerAbort = new AbortController()
       const ac = answerAbort
-      void import('./llm/answerStream').then(({ streamAnswerToRenderer }) =>
-        streamAnswerToRenderer(event.sender, intent.input, ac.signal)
-      ).finally(() => {
-        if (answerAbort === ac) answerAbort = null
-      })
+      void import('./llm/answerStream')
+        .then(({ streamAnswerToRenderer }) =>
+          streamAnswerToRenderer(event.sender, intent.input, ac.signal)
+        )
+        .finally(() => {
+          if (answerAbort === ac) answerAbort = null
+        })
     }
     if (intent.type === 'agent') {
       console.log('[IPC_CHANNELS.QUERY] starting startAgentRun')
@@ -1164,12 +1186,12 @@ export function registerIpcHandlers(
     return intent
   })
 
-  ipcMain.handle('cancel', async () => {
+  handleIpc('cancel', async () => {
     answerAbort?.abort()
     agentAbort?.abort()
   })
 
-  ipcMain.handle(AGENT_IPC.RUN, async (event, raw: unknown) => {
+  handleIpc(AGENT_IPC.RUN, async (event, raw: unknown) => {
     const request: AgentRunRequest =
       typeof raw === 'string'
         ? { task: raw }
@@ -1183,17 +1205,23 @@ export function registerIpcHandlers(
     if (request.cwd !== undefined && typeof request.cwd !== 'string') {
       return { ok: false, error: 'Invalid agent working directory' }
     }
+    if (
+      request.runId !== undefined &&
+      (typeof request.runId !== 'string' || !/^agent-[a-zA-Z0-9-]{1,100}$/.test(request.runId))
+    ) {
+      return { ok: false, error: 'Invalid agent run id' }
+    }
     const images = Array.isArray(request.images) ? request.images : []
     const requestedCwd = request.cwd?.trim() ?? ''
     const cwd = requestedCwd ? (resolveLauncherDirectory(requestedCwd) ?? undefined) : undefined
     if (requestedCwd && !cwd) {
       return { ok: false, error: `Directory does not exist: ${requestedCwd}` }
     }
-    const runId = startAgentRun(event.sender, task, images, cwd)
+    const runId = startAgentRun(event.sender, task, images, cwd, request.runId)
     return { ok: true, runId }
   })
 
-  ipcMain.handle(AGENT_IPC.CAPTURE_ACTIVE_SCREEN, async (event) => {
+  handleIpc(AGENT_IPC.CAPTURE_ACTIVE_SCREEN, async (event) => {
     const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
     const maxWidth = 1600
     const scale = Math.min(1, maxWidth / Math.max(1, display.size.width))
@@ -1232,13 +1260,15 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(AGENT_IPC.CANCEL, async () => {
+  handleIpc(AGENT_IPC.CANCEL, async (_event, expectedRunId: unknown) => {
+    // Late cancellation from a closed view must not stop a newer conversation.
+    if (expectedRunId !== undefined && expectedRunId !== agentRunId) return { ok: true }
     cancelPendingAgentApprovals(agentRunId ?? undefined)
     agentAbort?.abort()
     return { ok: true }
   })
 
-  ipcMain.handle(AGENT_IPC.APPROVE, async (_event, raw: unknown) => {
+  handleIpc(AGENT_IPC.APPROVE, async (_event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return { ok: false, error: 'Invalid approval' }
     const response = raw as Partial<AgentApprovalResponse>
     const decision = response.decision as AgentApprovalDecision | undefined
@@ -1265,7 +1295,7 @@ export function registerIpcHandlers(
   // The renderer owns the conversation state machine (30s continuation window,
   // active session, etc.) and tells us what to persist. We just provide
   // durable storage + list/get/delete/clear operations against sqlite.
-  ipcMain.handle(CHAT_IPC.RUN, async (event, rawTurns: unknown) => {
+  handleIpc(CHAT_IPC.RUN, async (event, rawTurns: unknown) => {
     const turns = normalizeChatTurns(rawTurns)
     if (!turns || turns.length === 0) {
       return { ok: false, error: 'Invalid chat run payload' }
@@ -1274,7 +1304,7 @@ export function registerIpcHandlers(
     return { ok: true, runId }
   })
 
-  ipcMain.handle(CHAT_IPC.LIST, async (_event, rawLimit: unknown) => {
+  handleIpc(CHAT_IPC.LIST, async (_event, rawLimit: unknown) => {
     const limit =
       typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit > 0
         ? Math.floor(rawLimit)
@@ -1282,12 +1312,12 @@ export function registerIpcHandlers(
     return listChatSessions(limit)
   })
 
-  ipcMain.handle(CHAT_IPC.GET, async (_event, id: unknown) => {
+  handleIpc(CHAT_IPC.GET, async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id) return null
     return getChatSession(id)
   })
 
-  ipcMain.handle(CHAT_IPC.APPEND, async (_event, payload: unknown) => {
+  handleIpc(CHAT_IPC.APPEND, async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') {
       return { ok: false, error: 'Invalid chat append payload' }
     }
@@ -1355,7 +1385,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(CHAT_IPC.DELETE_TURN, async (_event, payload: unknown) => {
+  handleIpc(CHAT_IPC.DELETE_TURN, async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') {
       return { ok: false, error: 'Invalid chat turn delete payload' }
     }
@@ -1370,7 +1400,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(CHAT_IPC.UPDATE_TITLE, async (_event, payload: unknown) => {
+  handleIpc(CHAT_IPC.UPDATE_TITLE, async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') return { ok: false }
     const body = payload as { id?: unknown; title?: unknown }
     if (typeof body.id !== 'string' || typeof body.title !== 'string') {
@@ -1384,12 +1414,12 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(CHAT_IPC.DELETE, async (_event, id: unknown) => {
+  handleIpc(CHAT_IPC.DELETE, async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id) return { ok: false }
     return { ok: await deleteChatSession(id) }
   })
 
-  ipcMain.handle(CHAT_IPC.CLEAR, async () => {
+  handleIpc(CHAT_IPC.CLEAR, async () => {
     try {
       await clearAllChatSessions()
       return { ok: true }
@@ -1398,7 +1428,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('app:confirm-quit', async () => confirmQuitRaymes(getWindow))
+  handleIpc('app:confirm-quit', async () => confirmQuitRaymes(getWindow))
 
   ipcMain.on('app:quit-confirmed', () => {
     if (!quitConfirmed) return
@@ -1415,23 +1445,23 @@ export function registerIpcHandlers(
       })
   })
 
-  ipcMain.handle('get-extensions', async () => {
+  handleIpc('get-extensions', async () => {
     const { listInstalledExtensions } = await import('./extensions/service')
     return listInstalledExtensions()
   })
 
-  ipcMain.handle('extensions:listInstalled', async () => {
+  handleIpc('extensions:listInstalled', async () => {
     const { listInstalledExtensions } = await import('./extensions/service')
     return listInstalledExtensions()
   })
 
-  ipcMain.handle('extensions:searchStore', async (_event, query: unknown) => {
+  handleIpc('extensions:searchStore', async (_event, query: unknown) => {
     const q = typeof query === 'string' ? query : ''
     const { searchStoreExtensions } = await import('./extensions/service')
     return searchStoreExtensions(q)
   })
 
-  ipcMain.handle('extensions:install', async (_event, extensionId: unknown) => {
+  handleIpc('extensions:install', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
@@ -1441,7 +1471,7 @@ export function registerIpcHandlers(
     return result
   })
 
-  ipcMain.handle('extensions:uninstall', async (_event, extensionId: unknown) => {
+  handleIpc('extensions:uninstall', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
@@ -1451,7 +1481,7 @@ export function registerIpcHandlers(
     return result
   })
 
-  ipcMain.handle('extensions:integrity', async (_event, extensionId: unknown) => {
+  handleIpc('extensions:integrity', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
@@ -1459,7 +1489,7 @@ export function registerIpcHandlers(
     return inspectExtensionIntegrity(extensionId)
   })
 
-  ipcMain.handle('extensions:reinstall', async (_event, extensionId: unknown) => {
+  handleIpc('extensions:reinstall', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
@@ -1467,18 +1497,18 @@ export function registerIpcHandlers(
     return reinstallExtension(extensionId)
   })
 
-  ipcMain.handle('extensions:install-error', async (_event, extensionId: unknown) => {
+  handleIpc('extensions:install-error', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) return null
     const { getExtensionInstallError } = await import('./extensions/service')
     return getExtensionInstallError(extensionId)
   })
 
-  ipcMain.handle('extension:list', async () => {
+  handleIpc('extension:list', async () => {
     const { listInstalledRegistryExtensions } = await loadExtensionRegistry()
     return listInstalledRegistryExtensions()
   })
 
-  ipcMain.handle('extension:search-store', async (_event, payload: unknown, maybeOptions?: unknown) => {
+  handleIpc('extension:search-store', async (_event, payload: unknown, maybeOptions?: unknown) => {
     let query = ''
     let offset: number | undefined
     let limit: number | undefined
@@ -1501,7 +1531,7 @@ export function registerIpcHandlers(
     return searchExtensionCatalog(query, { offset, limit })
   })
 
-  ipcMain.handle('extension:install', async (_event, extensionId: unknown) => {
+  handleIpc('extension:install', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
@@ -1511,7 +1541,7 @@ export function registerIpcHandlers(
     return result
   })
 
-  ipcMain.handle('extension:uninstall', async (_event, extensionId: unknown) => {
+  handleIpc('extension:uninstall', async (_event, extensionId: unknown) => {
     if (typeof extensionId !== 'string' || !extensionId.trim()) {
       throw new Error('A valid extension id is required')
     }
@@ -1521,7 +1551,7 @@ export function registerIpcHandlers(
     return result
   })
 
-  ipcMain.handle('extension:run-command', async (_event, payload: unknown) => {
+  handleIpc('extension:run-command', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') {
       throw new Error('Invalid extension run payload')
     }
@@ -1554,7 +1584,7 @@ export function registerIpcHandlers(
     })
   })
 
-  ipcMain.handle('extension:invoke-action', async (_event, payload: unknown) => {
+  handleIpc('extension:invoke-action', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') {
       throw new Error('Invalid extension action payload')
     }
@@ -1593,7 +1623,7 @@ export function registerIpcHandlers(
     })
   })
 
-  ipcMain.handle('extension:search-text-changed', async (_event, payload: unknown) => {
+  handleIpc('extension:search-text-changed', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') {
       throw new Error('Invalid extension search payload')
     }
@@ -1614,7 +1644,7 @@ export function registerIpcHandlers(
     })
   })
 
-  ipcMain.handle('extension:refresh-session', async (_event, payload: unknown) => {
+  handleIpc('extension:refresh-session', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') {
       throw new Error('Invalid extension refresh payload')
     }
@@ -1628,7 +1658,7 @@ export function registerIpcHandlers(
     return refreshExtensionSession({ sessionId: body.sessionId })
   })
 
-  ipcMain.handle('extension:dispose-session', async (_event, payload: unknown) => {
+  handleIpc('extension:dispose-session', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') return false
     const body = payload as { sessionId?: unknown }
     if (typeof body.sessionId !== 'string') return false
@@ -1636,7 +1666,7 @@ export function registerIpcHandlers(
     return disposeExtensionSession(body.sessionId)
   })
 
-  ipcMain.handle('extension:load-more', async (_event, payload: unknown) => {
+  handleIpc('extension:load-more', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') {
       throw new Error('Invalid extension pagination payload')
     }
@@ -1648,17 +1678,17 @@ export function registerIpcHandlers(
     return loadMoreExtensionSession({ sessionId: body.sessionId })
   })
 
-  ipcMain.handle('clipboard:read', async () => {
+  handleIpc('clipboard:read', async () => {
     return clipboard.readText()
   })
 
-  ipcMain.handle('clipboard:write', async (_event, raw: unknown) => {
+  handleIpc('clipboard:write', async (_event, raw: unknown) => {
     const text = typeof raw === 'string' ? raw : String(raw ?? '')
     await clipboard.writeTextAsync(text)
     return { ok: true }
   })
 
-  ipcMain.handle('clipboard:write-png', async (_event, raw: unknown) => {
+  handleIpc('clipboard:write-png', async (_event, raw: unknown) => {
     const bytes = typeof raw === 'string' ? decodePngDataUrl(raw) : null
     if (!bytes) return { ok: false, error: 'Invalid PNG data URL' }
     const path = join(app.getPath('temp'), 'tezbar-qr-clipboard.png')
@@ -1669,11 +1699,14 @@ export function registerIpcHandlers(
       clipboard.writeImage(image)
       return { ok: true }
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : 'Could not copy QR image' }
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Could not copy QR image',
+      }
     }
   })
 
-  ipcMain.handle('shell:open', async (_event, raw: unknown) => {
+  handleIpc('shell:open', async (_event, raw: unknown) => {
     const target = typeof raw === 'string' ? raw.trim() : ''
     if (!target) return { ok: false }
 
@@ -1681,7 +1714,7 @@ export function registerIpcHandlers(
     return { ok: true }
   })
 
-  ipcMain.handle('preferences:get', async (_event, payload: unknown) => {
+  handleIpc('preferences:get', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') return {}
     const body = payload as { extensionId?: unknown; commandName?: unknown }
     if (typeof body.extensionId !== 'string' || !body.extensionId.trim()) return {}
@@ -1691,7 +1724,7 @@ export function registerIpcHandlers(
     return getExtensionPreferences(body.extensionId, commandName)
   })
 
-  ipcMain.handle('preferences:setup', async (_event, payload: unknown) => {
+  handleIpc('preferences:setup', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') return null
     const body = payload as { extensionId?: unknown; commandName?: unknown }
     if (typeof body.extensionId !== 'string' || !body.extensionId.trim()) return null
@@ -1700,7 +1733,7 @@ export function registerIpcHandlers(
     return getExtensionPreferenceSetup(body.extensionId, commandName)
   })
 
-  ipcMain.handle('preferences:set', async (_event, payload: unknown) => {
+  handleIpc('preferences:set', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') return {}
     const body = payload as {
       extensionId?: unknown
@@ -1715,12 +1748,12 @@ export function registerIpcHandlers(
     return saveExtensionPreferences(body.extensionId, values, commandName)
   })
 
-  ipcMain.handle('get-installed-extensions-settings-schema', async () => {
+  handleIpc('get-installed-extensions-settings-schema', async () => {
     const { getInstalledExtensionsSettingsSchema } = await import('./extension-builder')
     return getInstalledExtensionsSettingsSchema()
   })
 
-  ipcMain.handle('toggle-command-enabled', async (_event, commandId: string, enabled: boolean) => {
+  handleIpc('toggle-command-enabled', async (_event, commandId: string, enabled: boolean) => {
     const disabled = { ...getDisabledCommands() }
     if (enabled) {
       delete disabled[commandId]
@@ -1732,14 +1765,14 @@ export function registerIpcHandlers(
     return true
   })
 
-  ipcMain.handle('update-command-hotkey', async (_event, commandId: string, hotkey: string) => {
+  handleIpc('update-command-hotkey', async (_event, commandId: string, hotkey: string) => {
     if (controls?.updateCommandHotkey) {
       return controls.updateCommandHotkey(commandId, hotkey)
     }
     return { ok: false, error: 'Controls not initialized' }
   })
 
-  ipcMain.handle('get-settings', async () => {
+  handleIpc('get-settings', async () => {
     return {
       commandHotkeys: getCommandHotkeys(),
       commandAliases: getCommandAliases(),
@@ -1747,7 +1780,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('save-settings', async (_event, patch: unknown) => {
+  handleIpc('save-settings', async (_event, patch: unknown) => {
     if (!patch || typeof patch !== 'object') return {}
     const body = patch as { commandAliases?: Record<string, string> }
     if (body.commandAliases) {
@@ -1757,32 +1790,37 @@ export function registerIpcHandlers(
     return { ok: true }
   })
 
-  ipcMain.handle('app:open-extensions', async () => {
+  handleIpc('app:open-extensions', async () => {
     if (controls?.openAppSurface) {
       controls.openAppSurface('extensions')
     }
     return true
   })
 
-  ipcMain.handle(IPC_CHANNELS.SEARCH_ALL, async (_event, query: unknown) => {
+  handleIpc(IPC_CHANNELS.SEARCH_ALL, async (_event, query: unknown) => {
     const q = typeof query === 'string' ? query : ''
     return searchEverything(q)
   })
 
-  ipcMain.handle(IPC_CHANNELS.SEARCH_CANDIDATES, async () => listSearchCandidates())
+  handleIpc(IPC_CHANNELS.SEARCH_CANDIDATES, async () => listSearchCandidates())
 
-  ipcMain.handle('knowledge:snapshot', async () => getKnowledgeService().snapshot())
-  ipcMain.handle('knowledge:embedding:set', async (_event, model: unknown) => {
-    if (model !== 'built-in' && model !== 'embeddinggemma-2') throw new Error('Invalid embedding model')
+  handleIpc('knowledge:snapshot', async () => getKnowledgeService().snapshot())
+  handleIpc('knowledge:embedding:set', async (_event, model: unknown) => {
+    if (model !== 'built-in' && model !== 'embeddinggemma-2')
+      throw new Error('Invalid embedding model')
     return getKnowledgeService().setEmbeddingModel(model)
   })
-  ipcMain.handle('knowledge:embedding:download', async () => getKnowledgeService().downloadEmbeddingModel())
-  ipcMain.handle('knowledge:embedding:cancel-download', async () => getKnowledgeService().cancelEmbeddingDownload())
-  ipcMain.handle('knowledge:embedding:remove', async () => getKnowledgeService().removeEmbeddingModel())
+  handleIpc('knowledge:embedding:download', async () =>
+    getKnowledgeService().downloadEmbeddingModel()
+  )
+  handleIpc('knowledge:embedding:cancel-download', async () =>
+    getKnowledgeService().cancelEmbeddingDownload()
+  )
+  handleIpc('knowledge:embedding:remove', async () => getKnowledgeService().removeEmbeddingModel())
 
-  ipcMain.handle('background-tasks:list', async () => listBackgroundTasks())
+  handleIpc('background-tasks:list', async () => listBackgroundTasks())
 
-  ipcMain.handle('knowledge:sources:list', async (_event, payload: unknown) => {
+  handleIpc('knowledge:sources:list', async (_event, payload: unknown) => {
     const body =
       payload && typeof payload === 'object'
         ? (payload as { query?: unknown; offset?: unknown; limit?: unknown })
@@ -1794,21 +1832,21 @@ export function registerIpcHandlers(
     })
   })
 
-  ipcMain.handle('knowledge:choose-folder', async () => chooseKnowledgeFolder())
+  handleIpc('knowledge:choose-folder', async () => chooseKnowledgeFolder())
 
-  ipcMain.handle('knowledge:root:add', async (_event, path: unknown) => {
+  handleIpc('knowledge:root:add', async (_event, path: unknown) => {
     if (typeof path !== 'string') throw new Error('A folder path is required')
     return getKnowledgeService().addRoot(path)
   })
 
-  ipcMain.handle('knowledge:roots:add-major', async () => getKnowledgeService().addMajorRoots())
+  handleIpc('knowledge:roots:add-major', async () => getKnowledgeService().addMajorRoots())
 
-  ipcMain.handle('knowledge:root:remove', async (_event, rootId: unknown) => {
+  handleIpc('knowledge:root:remove', async (_event, rootId: unknown) => {
     if (typeof rootId !== 'string') throw new Error('A knowledge folder id is required')
     return getKnowledgeService().removeRoot(rootId)
   })
 
-  ipcMain.handle('knowledge:root:set-enabled', async (_event, payload: unknown) => {
+  handleIpc('knowledge:root:set-enabled', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') throw new Error('Invalid knowledge folder update')
     const body = payload as { rootId?: unknown; enabled?: unknown }
     if (typeof body.rootId !== 'string' || typeof body.enabled !== 'boolean') {
@@ -1817,21 +1855,21 @@ export function registerIpcHandlers(
     return getKnowledgeService().setRootEnabled(body.rootId, body.enabled)
   })
 
-  ipcMain.handle('knowledge:depth:set', async (_event, depth: unknown) => {
+  handleIpc('knowledge:depth:set', async (_event, depth: unknown) => {
     if (typeof depth !== 'string' || !['off', 'basic', 'smart', 'deep'].includes(depth)) {
       throw new Error('Invalid Knowledge Depth')
     }
     return getKnowledgeService().setDepth(depth as KnowledgeDepth)
   })
 
-  ipcMain.handle('knowledge:speed:set', async (_event, speed: unknown) => {
+  handleIpc('knowledge:speed:set', async (_event, speed: unknown) => {
     if (typeof speed !== 'string' || !['slow', 'medium', 'fast'].includes(speed)) {
       throw new Error('Invalid indexing speed')
     }
     return getKnowledgeService().setIndexingSpeed(speed as KnowledgeIndexingSpeed)
   })
 
-  ipcMain.handle('knowledge:root:set-depth', async (_event, payload: unknown) => {
+  handleIpc('knowledge:root:set-depth', async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') throw new Error('Invalid folder Knowledge Depth')
     const body = payload as { rootId?: unknown; depth?: unknown }
     if (
@@ -1844,24 +1882,24 @@ export function registerIpcHandlers(
     return getKnowledgeService().setRootDepth(body.rootId, body.depth as KnowledgeRootDepth)
   })
 
-  ipcMain.handle('knowledge:index:start', async () => getKnowledgeService().startIndexing())
-  ipcMain.handle('knowledge:index:pause', async () => getKnowledgeService().pause())
-  ipcMain.handle('knowledge:index:resume', async () => getKnowledgeService().resume())
+  handleIpc('knowledge:index:start', async () => getKnowledgeService().startIndexing())
+  handleIpc('knowledge:index:pause', async () => getKnowledgeService().pause())
+  handleIpc('knowledge:index:resume', async () => getKnowledgeService().resume())
 
-  ipcMain.handle(IPC_CHANNELS.PATH_COMPLETE, async (_event, query: unknown) => {
+  handleIpc(IPC_CHANNELS.PATH_COMPLETE, async (_event, query: unknown) => {
     const q = typeof query === 'string' ? query : ''
     return completePath(q)
   })
 
-  ipcMain.handle(IPC_CHANNELS.PATH_RESOLVE_DIRECTORY, async (_event, input: unknown) => {
+  handleIpc(IPC_CHANNELS.PATH_RESOLVE_DIRECTORY, async (_event, input: unknown) => {
     return typeof input === 'string' ? resolveLauncherDirectory(input) : null
   })
 
-  ipcMain.handle(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path: unknown) => {
+  handleIpc(IPC_CHANNELS.DIRECTORY_VISIT_RECORD, async (_event, path: unknown) => {
     if (typeof path === 'string') recordDirectoryVisit(path)
   })
 
-  ipcMain.handle(IPC_CHANNELS.QUICK_LOOK_FILE, async (_event, input: unknown) => {
+  handleIpc(IPC_CHANNELS.QUICK_LOOK_FILE, async (_event, input: unknown) => {
     const paths = Array.isArray(input)
       ? input.filter((path): path is string => typeof path === 'string')
       : typeof input === 'string'
@@ -1870,28 +1908,28 @@ export function registerIpcHandlers(
     return quickLookFiles(paths)
   })
 
-  ipcMain.handle(IPC_CHANNELS.SEARCH_BENCHMARK_RUN, async () => {
+  handleIpc(IPC_CHANNELS.SEARCH_BENCHMARK_RUN, async () => {
     return runSearchBenchmarks()
   })
 
-  ipcMain.handle(IPC_CHANNELS.SEARCH_BENCHMARK_HISTORY, async () => {
+  handleIpc(IPC_CHANNELS.SEARCH_BENCHMARK_HISTORY, async () => {
     return getSearchBenchmarkHistory()
   })
 
-  ipcMain.handle('currency:frankfurter-latest', async (_event, from: unknown) => {
+  handleIpc('currency:frankfurter-latest', async (_event, from: unknown) => {
     if (typeof from !== 'string' || !from.trim()) {
       throw new Error('Frankfurter: currency code required')
     }
     return fetchFrankfurterLatest(from.trim())
   })
 
-  ipcMain.handle('open-ports:list', async () => {
+  handleIpc('open-ports:list', async () => {
     return listOpenPorts()
   })
 
-  ipcMain.handle('port-manager:named:list', async () => listNamedPorts())
+  handleIpc('port-manager:named:list', async () => listNamedPorts())
 
-  ipcMain.handle('port-manager:named:add', async (_event, raw: unknown) => {
+  handleIpc('port-manager:named:add', async (_event, raw: unknown) => {
     if (!raw || typeof raw !== 'object') return null
     const o = raw as Record<string, unknown>
     const name = typeof o.name === 'string' ? o.name : ''
@@ -1899,12 +1937,12 @@ export function registerIpcHandlers(
     return addNamedPort(name, port)
   })
 
-  ipcMain.handle('port-manager:named:remove', async (_event, id: unknown) => {
+  handleIpc('port-manager:named:remove', async (_event, id: unknown) => {
     if (typeof id !== 'string' || !id.trim()) return false
     return removeNamedPort(id.trim())
   })
 
-  ipcMain.handle(IPC_CHANNELS.SEARCH_EXECUTE, async (_event, payload: unknown) => {
+  handleIpc(IPC_CHANNELS.SEARCH_EXECUTE, async (_event, payload: unknown) => {
     try {
       const request = parseSearchExecuteRequest(payload)
       return executeSearchAction(request.action, request.context)
@@ -1916,12 +1954,12 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.SEARCH_RECORD_USAGE, async (_event, payload: unknown) => {
+  handleIpc(IPC_CHANNELS.SEARCH_RECORD_USAGE, async (_event, payload: unknown) => {
     const request = parseSearchExecuteRequest(payload)
     await recordSearchActionUsage(request.action, request.context)
   })
 
-  ipcMain.handle(IPC_CHANNELS.AI_ACTION, async (_event, payload: unknown) => {
+  handleIpc(IPC_CHANNELS.AI_ACTION, async (_event, payload: unknown) => {
     const req = parseAiActionRequest(payload)
     const cfg = readLLMConfig()
 
@@ -1938,25 +1976,25 @@ export function registerIpcHandlers(
     })
   })
 
-  ipcMain.handle(IPC_CHANNELS.VOICE_TTS_SPEAK, async (_event, payload: unknown) => {
+  handleIpc(IPC_CHANNELS.VOICE_TTS_SPEAK, async (_event, payload: unknown) => {
     const req = parseVoiceSpeakRequest(payload)
     const { speakText } = await import('./voice/service')
     await speakText(req.text)
     return { ok: true }
   })
 
-  ipcMain.handle(IPC_CHANNELS.VOICE_TTS_STOP, async () => {
+  handleIpc(IPC_CHANNELS.VOICE_TTS_STOP, async () => {
     const { stopSpeaking } = await import('./voice/service')
     stopSpeaking()
     return { ok: true }
   })
 
-  ipcMain.handle(IPC_CHANNELS.VOICE_STT_MODES, async () => {
+  handleIpc(IPC_CHANNELS.VOICE_STT_MODES, async () => {
     const { listSttModes } = await import('./voice/service')
     return listSttModes()
   })
 
-  ipcMain.handle(IPC_CHANNELS.VOICE_STT_TRANSCRIBE, async (_event, payload: unknown) => {
+  handleIpc(IPC_CHANNELS.VOICE_STT_TRANSCRIBE, async (_event, payload: unknown) => {
     const req = parseVoiceTranscribeRequest(payload)
     const { transcribeAudio } = await import('./voice/service')
     return transcribeAudio(req)
@@ -1964,40 +2002,40 @@ export function registerIpcHandlers(
 
   // Renderer toggles this around Hold-to-Speak so the mic permission sheet
   // or any brief focus change while recording does not hide the launcher.
-  ipcMain.handle('window:suppress-blur-hide', async (_event, payload: unknown) => {
+  handleIpc('window:suppress-blur-hide', async (_event, payload: unknown) => {
     setSuppressBlurHide(payload === true)
     return { ok: true }
   })
 
-  ipcMain.handle(IPC_CHANNELS.VOICE_MODELS_LIST, async () => {
+  handleIpc(IPC_CHANNELS.VOICE_MODELS_LIST, async () => {
     const { listVoiceModels } = await import('./voice/service')
     return listVoiceModels()
   })
 
-  ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_DOWNLOAD, async (_event, payload: unknown) => {
+  handleIpc(IPC_CHANNELS.VOICE_MODEL_DOWNLOAD, async (_event, payload: unknown) => {
     const req = parseVoiceModelRequest(payload)
     const { downloadVoiceModel } = await import('./voice/service')
     return downloadVoiceModel(req.modelId as VoiceModelId)
   })
 
-  ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_DELETE, async (_event, payload: unknown) => {
+  handleIpc(IPC_CHANNELS.VOICE_MODEL_DELETE, async (_event, payload: unknown) => {
     const req = parseVoiceModelRequest(payload)
     const { deleteVoiceModel } = await import('./voice/service')
     return { modelId: await deleteVoiceModel(req.modelId as VoiceModelId) }
   })
 
-  ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_GET_SELECTED, async () => {
+  handleIpc(IPC_CHANNELS.VOICE_MODEL_GET_SELECTED, async () => {
     const { getSelectedVoiceModelId } = await import('./voice/service')
     return { modelId: getSelectedVoiceModelId() }
   })
 
-  ipcMain.handle(IPC_CHANNELS.VOICE_MODEL_SET_SELECTED, async (_event, payload: unknown) => {
+  handleIpc(IPC_CHANNELS.VOICE_MODEL_SET_SELECTED, async (_event, payload: unknown) => {
     const req = parseVoiceModelRequest(payload)
     const { setSelectedVoiceModelId } = await import('./voice/service')
     return { modelId: setSelectedVoiceModelId(req.modelId as VoiceModelId) }
   })
 
-  ipcMain.handle('window:show', async () => {
+  handleIpc('window:show', async () => {
     if (controls?.showCommandBar) {
       controls.showCommandBar()
       return
@@ -2009,7 +2047,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('window:hide', async () => {
+  handleIpc('window:hide', async () => {
     if (controls?.hideCommandBar) {
       controls.hideCommandBar()
       return
@@ -2021,47 +2059,47 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('window:close-current', async (event) => {
+  handleIpc('window:close-current', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (win && !win.isDestroyed()) win.close()
   })
 
-  ipcMain.handle('window:snap-drag-start', async () => {
+  handleIpc('window:snap-drag-start', async () => {
     const win = getWindow()
     if (!win || win.isDestroyed()) return
     controls?.startWindowDragMonitoring(win)
   })
 
-  ipcMain.handle('window:snap-drag-end', async () => {
+  handleIpc('window:snap-drag-end', async () => {
     const win = getWindow()
     if (!win || win.isDestroyed()) return
     controls?.stopWindowDragMonitoring(win)
   })
 
-  ipcMain.handle('storage:breakdown', async () => {
+  handleIpc('storage:breakdown', async () => {
     return getStorageBreakdown()
   })
 
-  ipcMain.handle('storage:clipboard-config:get', async () => {
+  handleIpc('storage:clipboard-config:get', async () => {
     return getClipboardStorageConfig()
   })
 
-  ipcMain.handle('storage:clipboard-config:set', async (_event, payload: unknown) => {
+  handleIpc('storage:clipboard-config:set', async (_event, payload: unknown) => {
     const patch =
       typeof payload === 'object' && payload !== null ? (payload as Partial<ClipboardConfig>) : {}
     setClipboardStorageConfig(patch)
     return getClipboardStorageConfig()
   })
 
-  ipcMain.handle('storage:clear-clipboard-images', async () => {
+  handleIpc('storage:clear-clipboard-images', async () => {
     return clearClipboardImages()
   })
 
-  ipcMain.handle('storage:vacuum-search-db', async () => {
+  handleIpc('storage:vacuum-search-db', async () => {
     return vacuumSearchDatabase()
   })
 
-  ipcMain.handle('storage:clear-chromium-cache', async () => {
+  handleIpc('storage:clear-chromium-cache', async () => {
     await clearChromiumCache()
     return { ok: true }
   })

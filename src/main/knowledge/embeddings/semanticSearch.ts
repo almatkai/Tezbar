@@ -11,6 +11,7 @@ export type SemanticSearchOptions = {
   canIndex: () => boolean
   waitForIdle: (signal: AbortSignal) => Promise<void>
   speed?: () => KnowledgeIndexingSpeed
+  onProgress?: (force?: boolean) => void
 }
 
 /** Coordinates query inference and resumable embedding of already extracted text. */
@@ -36,14 +37,26 @@ export class SemanticSearch {
   ) {}
 
   snapshot(): SemanticSearchStatus {
+    return this.status(true)
+  }
+
+  /** Launcher polling must never refresh corpus counts or enumerate roots. */
+  cachedSnapshot(): SemanticSearchStatus {
+    return this.status(false)
+  }
+
+  private status(refreshCounts: boolean): SemanticSearchStatus {
     const runtime = this.runtime.snapshot()
     const counts =
       runtime.modelState === 'ready' && this.options.enabled()
-        ? this.counts()
+        ? refreshCounts
+          ? this.counts()
+          : this.countsCache ?? { indexedChunks: 0, totalChunks: 0 }
         : { indexedChunks: 0, totalChunks: 0 }
     return {
       ...runtime,
-      ...counts,
+      indexedChunks: counts.indexedChunks,
+      totalChunks: counts.totalChunks,
       indexing: this.controller !== null,
       error: this.error ?? runtime.error,
     }
@@ -71,9 +84,12 @@ export class SemanticSearch {
 
   download(): void {
     this.runtime.startDownload()
+    this.options.onProgress?.(true)
   }
   cancelDownload(): Promise<void> {
-    return this.runtime.cancelDownload()
+    const cancel = this.runtime.cancelDownload()
+    this.options.onProgress?.(true)
+    return cancel
   }
 
   async remove(): Promise<void> {
@@ -83,6 +99,7 @@ export class SemanticSearch {
     this.queryCache.clear()
     this.countsCache = null
     this.error = undefined
+    this.options.onProgress?.(true)
   }
 
   schedule(delay = 1000): void {
@@ -102,6 +119,7 @@ export class SemanticSearch {
         return
       this.controller = new AbortController()
       const signal = this.controller.signal
+      this.options.onProgress?.(true)
       this.run = this.backfill(signal)
         .catch((error: unknown) => {
           if (!signal.aborted) this.error = error instanceof Error ? error.message : String(error)
@@ -110,6 +128,7 @@ export class SemanticSearch {
           this.run = null
           this.controller = null
           this.countsCache = null
+          this.options.onProgress?.(true)
           if (this.rescheduleRequested) {
             this.rescheduleRequested = false
             this.schedule()
@@ -140,6 +159,7 @@ export class SemanticSearch {
           this.countsCache.indexedChunks + saved
         )
       }
+      this.options.onProgress?.(false)
       if (profile.gemmaDelayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, profile.gemmaDelayMs))
       } else {
@@ -190,6 +210,7 @@ export class SemanticSearch {
     this.rescheduleRequested = false
     this.controller?.abort()
     await this.run
+    this.options.onProgress?.(true)
   }
 
   shutdown(): void {

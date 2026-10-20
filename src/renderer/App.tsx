@@ -1,6 +1,10 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { tryConsumeCommandSurfaceEscape } from './escapeGate'
 import CommandBar from './CommandBar'
+import { LauncherResizeHandles } from './LauncherAppearance'
+import { LauncherFrame } from './LauncherFrame'
+import { useLauncherScaleShortcuts } from './useLauncherScaleShortcuts'
+import { installWindowDrag } from './windowDrag'
 import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_AI_NEW_CHAT_EVENT, RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
@@ -61,6 +65,25 @@ type Surface =
   | 'emoji-picker'
   | 'terminal'
   | 'release-notes'
+
+/** Surfaces drawn as one edge-to-edge sheet (`.view-sheet`) instead of
+ *  separate cards inset in the window. */
+const SHEET_SURFACES: ReadonlySet<Surface> = new Set<Surface>([
+  'command',
+  'ai-chat',
+  'extensions',
+  'extension-runtime',
+  'open-ports',
+  'system-monitor',
+  'indexing',
+  'permissions',
+  'clipboard',
+  'snippets',
+  'notes',
+  'emoji-picker',
+  'terminal',
+  'release-notes',
+])
 
 type SettingsTab =
   | 'general'
@@ -297,6 +320,7 @@ function SettingsWindowApp(): JSX.Element {
 
 function LauncherApp(): JSX.Element {
   const [surface, setSurface] = useState<Surface>('command')
+  useLauncherScaleShortcuts(surface)
   const [bootReady, setBootReady] = useState(false)
   const [hasUnreadReleaseNotes, setHasUnreadReleaseNotes] = useState(false)
   const markReleaseNotesRead = useCallback(() => setHasUnreadReleaseNotes(false), [])
@@ -420,6 +444,7 @@ function LauncherApp(): JSX.Element {
   useEffect(() => {
     const off = window.tezbar.onWindowShown(({ resetUi }) => {
       if (resetUi) {
+        setCommandInitialValue('')
         setSurface('command')
         setExtensionRuntimeInitial(null)
       }
@@ -532,54 +557,11 @@ function LauncherApp(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    const isWindows = navigator.platform.includes('Win')
-    let dragActive = false
-
-    const isNoDragTarget = (target: HTMLElement): boolean => {
-      return Boolean(
-        target.closest(
-          '.no-drag, input, textarea, select, button, a[href], [role="button"], [role="menuitem"], [role="option"], [contenteditable="true"], .glass-card > *, .glass-panel > *, .tezbar-popover, .agent-chat-shell > *, .tezbar-settings-window > *, .cleanmymac-sidebar'
-        )
-      )
-    }
-
-    const onMouseDown = (event: MouseEvent): void => {
-      if (event.button !== 0) return
-      const target = event.target
-      if (!(target instanceof HTMLElement)) return
-      if (!target.closest('.drag-region')) return
-      if (isNoDragTarget(target)) return
-      if (!isWindows) dragActive = true
-      void window.tezbar.startWindowSnapDrag()
-    }
-
-    const endDrag = (): void => {
-      if (!dragActive) return
-      dragActive = false
-      void window.tezbar.endWindowSnapDrag()
-    }
-
-    const onVisibilityChange = (): void => {
-      if (document.visibilityState !== 'visible') endDrag()
-    }
-
-    window.addEventListener('mousedown', onMouseDown, true)
-    // Showing the click-through guide WebView can make WebView2 synthesize
-    // blur/mouseup/visibility events. On Windows the host tracks the physical
-    // button and ends the drag itself, so renderer end signals are unnecessary.
-    if (!isWindows) {
-      window.addEventListener('mouseup', endDrag, true)
-      window.addEventListener('blur', endDrag)
-      document.addEventListener('visibilitychange', onVisibilityChange)
-    }
-    return () => {
-      window.removeEventListener('mousedown', onMouseDown, true)
-      if (!isWindows) {
-        window.removeEventListener('mouseup', endDrag, true)
-        window.removeEventListener('blur', endDrag)
-        document.removeEventListener('visibilitychange', onVisibilityChange)
-      }
-    }
+    return installWindowDrag({
+      isWindows: navigator.platform.includes('Win'),
+      start: () => window.tezbar.startWindowSnapDrag(),
+      end: () => window.tezbar.endWindowSnapDrag(),
+    })
   }, [])
 
   // Local ⌘N / Ctrl+N — route by surface when the app is focused
@@ -619,6 +601,13 @@ function LauncherApp(): JSX.Element {
   // from any sub-surface we pop back to `command`, and only from the
   // command surface does Escape actually hide the launcher. That
   // guarantee is the "back not close" contract users rely on.
+  /** Back to a plain launcher, dropping any AI (' ') / terminal ('>') sentinel
+   *  left over from an earlier visit to those surfaces. */
+  const returnToLauncher = (): void => {
+    setCommandInitialValue('')
+    setSurface('command')
+  }
+
   // The global shortcut Cmd+Escape also hides the window from anywhere.
   //
   // On the command surface, `CommandBar` may still need Escape first
@@ -644,6 +633,9 @@ function LauncherApp(): JSX.Element {
           return
         }
         if (surface !== 'command') {
+          // Clear any sentinel left by an earlier AI chat (' ') or terminal
+          // ('>') exit so the launcher reopens in plain search mode.
+          setCommandInitialValue('')
           setSurface('command')
           return
         }
@@ -664,14 +656,12 @@ function LauncherApp(): JSX.Element {
   }, [surface])
 
   return (
-    <div
-      className={[
-        'glass-shell drag-region flex h-screen w-full p-2 select-none',
-        surface === 'terminal' ? 'glass-shell--terminal' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+    <LauncherFrame
+      terminal={surface === 'terminal'}
+      launcher={surface === 'command'}
+      sheet={SHEET_SURFACES.has(surface)}
     >
+      <LauncherResizeHandles />
       <div
         key={surface}
         className="relative z-0 flex h-full min-h-0 w-full animate-tezbar-fade-in flex-col"
@@ -680,41 +670,39 @@ function LauncherApp(): JSX.Element {
           {!bootReady ? (
             <SurfaceFallback />
           ) : surface === 'onboarding' ? (
-            <OnboardingView onDone={() => setSurface('command')} />
+            <OnboardingView onDone={returnToLauncher} />
           ) : surface === 'release-notes' ? (
             <ReleaseNotesView
-              onBack={() => setSurface('command')}
+              onBack={returnToLauncher}
               onRead={markReleaseNotesRead}
             />
           ) : surface === 'settings' ? (
             <SettingsView
               initialTab={settingsInitialTab}
-              onBack={() => setSurface('command')}
+              onBack={returnToLauncher}
               onOpenPermissions={() => setSurface('permissions')}
               onBrowseStore={() => setSurface('extensions')}
             />
           ) : surface === 'extensions' ? (
-            <ExtensionsView key={extensionsKey} onBack={() => setSurface('command')} />
+            <ExtensionsView key={extensionsKey} onBack={returnToLauncher} />
           ) : surface === 'extension-runtime' && extensionRuntimeInitial ? (
             <ExtensionRuntimeView
               initial={extensionRuntimeInitial}
-              onBack={() => {
-                setSurface('command')
-              }}
+              onBack={returnToLauncher}
             />
           ) : surface === 'open-ports' ? (
             <OpenPortsView
               initialTab={openPortsInitialTab}
               onBack={() => {
                 setOpenPortsInitialTab('listen')
-                setSurface('command')
+                returnToLauncher()
               }}
             />
           ) : surface === 'system-monitor' ? (
-            <SystemMonitorView onBack={() => setSurface('command')} />
+            <SystemMonitorView onBack={returnToLauncher} />
           ) : surface === 'indexing' ? (
             <IndexingView
-              onBack={() => setSurface('command')}
+              onBack={returnToLauncher}
               onOpenSettings={() => {
                 void openNativeSettings('knowledge')
               }}
@@ -722,20 +710,28 @@ function LauncherApp(): JSX.Element {
           ) : surface === 'permissions' ? (
             <PermissionsView onBack={() => setSurface('settings')} />
           ) : surface === 'clipboard' ? (
-            <ClipboardView onBack={() => setSurface('command')} />
+            <ClipboardView onBack={returnToLauncher} />
           ) : surface === 'snippets' ? (
-            <SnippetsView onBack={() => setSurface('command')} />
+            <SnippetsView onBack={returnToLauncher} />
           ) : surface === 'notes' ? (
             <NotesView
-              onBack={() => setSurface('command')}
+              onBack={returnToLauncher}
               initialSelectedNoteId={notesInitialSelectedId}
             />
           ) : surface === 'emoji-picker' ? (
-            <EmojiPickerView onBack={() => setSurface('command')} />
+            <EmojiPickerView onBack={returnToLauncher} />
           ) : surface === 'ai-chat' ? (
             <AgentChatView
               key={aiChatKey}
               boot={aiChatBoot}
+              taskActions={{
+                onOpenIndexing: () => setSurface('indexing'),
+                onOpenExtensionRuntime: (initial) => {
+                  setExtensionRuntimeInitial(initial)
+                  setSurface('extension-runtime')
+                },
+                onOpenUpdate: () => { void openNativeSettings('general') },
+              }}
               onBack={() => setSurface('command')}
               onOpenSettings={() => {
                 void openNativeSettings('ai')
@@ -785,6 +781,10 @@ function LauncherApp(): JSX.Element {
               onConfigureAi={() => {
                 void openNativeSettings('ai')
               }}
+              onOpenKnowledgeSettings={() => {
+                setSettingsInitialTab('knowledge')
+                void openNativeSettings('knowledge')
+              }}
               onOpenExtensions={() => {
                 setCommandInitialValue('')
                 setSurface('extensions')
@@ -831,7 +831,7 @@ function LauncherApp(): JSX.Element {
           )}
         </Suspense>
       </div>
-    </div>
+    </LauncherFrame>
   )
 }
 

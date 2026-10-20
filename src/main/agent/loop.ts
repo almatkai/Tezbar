@@ -1,45 +1,14 @@
-/**
- * Agent loop — MIRRORS pi-coding-agent's turn structure.
+/** Pure Pi RPC → Tezbar event mapping.
  *
- * pi does NOT expose a plan → reflect → repeat meta-loop. Instead, the LLM
- * itself plans inline (via thinking blocks and tool-use), and pi's runtime
- * drives the tool calls. One pi "run" looks like:
- *
- *     agent_start                         ← pi begins processing the prompt
- *       turn_start
- *         message_start (assistant)
- *           message_update (text_delta | thinking_delta | toolcall_delta)
- *         message_end
- *         tool_execution_start            ← one per tool call
- *           tool_execution_update         ← streamed partial output
- *         tool_execution_end              ← per-call result
- *       turn_end                          ← includes tool results
- *       (repeat turn_start/… until no more tool calls)
- *     agent_end                           ← pi stops emitting messages
- *
- * The Tezbar HUD only needs "stage-level" granularity:
- *
- *   • each pi `tool_execution_start` becomes a new Stage{status:"running"}
- *   • the matching `tool_execution_end` flips it to "done" or "failed"
- *     depending on `isError`
- *   • we keep a final "answered" stage that flips to done when pi emits
- *     its last assistant text (no further tool_execution_start events)
- *
- * The driver is a PURE mapper from pi events → stage updates + message
- * deltas. It does not own the subprocess — bridge.ts does — so it stays
- * testable with a hand-rolled event iterator.
- *
- * This file is the READ-ME for the loop structure and the actual mapper.
+ * Pi 1.x ends low-level runs with agent_end, but can still retry or run queued
+ * work afterwards. Only agent_settled is terminal. Older event streams without
+ * the willRetry field retain their agent_end completion behavior.
+ * message_end is authoritative; deltas are only a live preview.
  */
-
-import type { Stage, StageStatus } from '../../shared/agent'
+import type { Stage } from '../../shared/agent'
 import { labelForToolCall } from './tools'
 
-/** Pi's RPC events are JSON objects keyed by `type`. We accept anything
- *  shaped like `{ type: string, ... }` for forward-compat with future pi
- *  releases, and narrow per-case inside `createLoopDriver`. */
 export type PiEvent = { type: string } & Record<string, unknown>
-
 export interface LoopCallbacks {
   onStage: (stage: Stage) => void
   onMessageDelta: (delta: string) => void
@@ -48,255 +17,224 @@ export interface LoopCallbacks {
   onError: (message: string) => void
 }
 
-interface StageTracker {
-  stages: Map<string /* toolCallId */, Stage>
-  nextIndex: number
-  /** Accumulated text for the most recent assistant message — flushed on
-   *  message_update text_end or message_end. */
-  currentText: string
-  /** Completed previous turns' text, to prevent intermediate turns from being overwritten. */
-  previousTurnsText: string[]
-  /** Track active thinking stage for reasoning models */
-  thinkingStage?: Stage
-  /** Whether a new turn has started and needs a separator on the next text delta */
-  turnStarted: boolean
-  /** Set to true on agent_end so we can coalesce a final "answered" stage. */
-  ended: boolean
-  lastError?: string
+const MAX_TOOL_OUTPUT_CHARS = 8_000
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
 }
-
-function errorDetail(result: unknown): string | undefined {
-  // pi returns a `result.content` array; the first text block usually
-  // carries the human error summary. Everything else is noise for the HUD.
-  if (!result || typeof result !== 'object') return undefined
-  const content = (result as { content?: unknown }).content
-  if (!Array.isArray(content)) return undefined
-  for (const item of content) {
-    if (item && typeof item === 'object' && (item as { type?: unknown }).type === 'text') {
-      const text = (item as { text?: unknown }).text
-      if (typeof text === 'string' && text.trim()) {
-        // Collapse multi-line errors to one line for the HUD.
-        return text.replace(/\s+/g, ' ').trim().slice(0, 160)
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+function contentText(value: unknown): string {
+  if (!Array.isArray(value)) return ''
+  return value
+    .flatMap((item) => {
+      const block = record(item)
+      return block?.type === 'text' && typeof block.text === 'string' ? [block.text] : []
+    })
+    .join('\n\n')
+}
+function toolOutput(value: unknown): Pick<Stage, 'output' | 'outputTruncated'> {
+  const output = contentText(record(value)?.content).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+  return output
+    ? {
+        output: output.slice(0, MAX_TOOL_OUTPUT_CHARS),
+        outputTruncated: output.length > MAX_TOOL_OUTPUT_CHARS,
       }
-    }
-  }
-  return undefined
+    : {}
 }
 
 export function createLoopDriver(callbacks: LoopCallbacks): (event: PiEvent) => void {
-  const tracker: StageTracker = {
-    stages: new Map(),
-    nextIndex: 0,
-    currentText: '',
-    previousTurnsText: [],
-    turnStarted: false,
-    ended: false,
-  }
+  const stages = new Map<string, Stage>()
+  const blocks = new Map<number, string>()
+  const previousText: string[] = []
+  let nextIndex = 0
+  let currentText = ''
+  let currentFailed = false
+  let needsSeparator = false
+  let modernLifecycle = false
+  let finished = false
+  let needsFinalAnswer = false
+  let lastError: string | undefined
 
-  const emitStage = (stage: Stage): void => {
-    tracker.stages.set(`stage:${stage.index}`, stage)
-    callbacks.onStage(stage)
-  }
-
-  const updateStageStatus = (
-    toolCallId: string,
-    status: StageStatus,
-    detail?: string,
-  ): void => {
-    const existing = tracker.stages.get(toolCallId)
-    if (!existing) return
-    const next: Stage = detail ? { ...existing, status, detail } : { ...existing, status }
-    tracker.stages.set(toolCallId, next)
+  const update = (key: string, patch: Partial<Stage>): void => {
+    const stage = stages.get(key)
+    if (!stage) return
+    const next = { ...stage, ...patch }
+    stages.set(key, next)
     callbacks.onStage(next)
   }
+  const startStage = (key: string, label: string, extra: Partial<Stage> = {}): void => {
+    const stage: Stage = { index: nextIndex++, label, status: 'running', ...extra }
+    stages.set(key, stage)
+    callbacks.onStage(stage)
+  }
+  const finishThinking = (): void => {
+    if (stages.get('thinking')?.status === 'running') update('thinking', { status: 'done' })
+  }
+  const snapshot = (value: unknown): void => {
+    const message = record(value)
+    if (message?.role !== 'assistant') return
+    const stopReason = text(message.stopReason)
+    if (stopReason === 'toolUse') needsFinalAnswer = true
+    else if (
+      contentText(message.content).trim() &&
+      stopReason !== 'error' &&
+      stopReason !== 'aborted'
+    )
+      needsFinalAnswer = false
+    if (stopReason === 'error' || stopReason === 'aborted' || message.errorMessage) {
+      lastError =
+        text(message.errorMessage) ||
+        (stopReason === 'aborted'
+          ? 'Agent run aborted'
+          : 'The model provider encountered an error.')
+      currentFailed = true
+    } else if (stopReason && stopReason !== 'pending') {
+      lastError = undefined
+      currentFailed = false
+    }
+    if (Array.isArray(message.content)) {
+      currentText = contentText(message.content)
+      blocks.clear()
+      message.content.forEach((value, index) => {
+        const block = record(value)
+        if (block?.type === 'text') blocks.set(index, text(block.text))
+      })
+    }
+  }
+  const finish = (): void => {
+    if (finished) return
+    finished = true
+    finishThinking()
+    const answer = [...previousText, currentFailed ? '' : currentText.trim()]
+      .filter(Boolean)
+      .join('\n\n')
+    for (const [key, stage] of stages) {
+      if (stage.status === 'running')
+        update(key, {
+          status: 'failed',
+          detail: lastError || 'Run ended before this step finished.',
+        })
+    }
+    if (answer) callbacks.onAnswer(answer)
+    if (lastError) callbacks.onError(lastError)
+    else if (!answer || needsFinalAnswer) callbacks.onError('Agent finished without a response.')
+    else callbacks.onDone()
+  }
 
-  const asString = (v: unknown, fallback = ''): string =>
-    typeof v === 'string' ? v : fallback
-  const asBool = (v: unknown): boolean => v === true
-  const asNumber = (v: unknown, fallback = 0): number =>
-    typeof v === 'number' && Number.isFinite(v) ? v : fallback
-  const asRecord = (v: unknown): Record<string, unknown> | undefined =>
-    v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined
-
-  return function handle(event: PiEvent): void {
+  return (event): void => {
+    if (finished) return
     switch (event.type) {
-      case 'agent_start': {
-        tracker.stages.clear()
-        tracker.nextIndex = 0
-        tracker.currentText = ''
-        tracker.previousTurnsText = []
-        tracker.thinkingStage = undefined
-        tracker.turnStarted = false
-        tracker.ended = false
-        tracker.lastError = undefined
+      case 'agent_start':
+        // A new low-level run can be an automatic retry. Do not erase progress.
         return
-      }
-
-      case 'turn_start': {
-        if (tracker.currentText.trim().length > 0) {
-          tracker.previousTurnsText.push(tracker.currentText.trim())
-          tracker.currentText = ''
-          tracker.turnStarted = true
-        }
+      case 'turn_start':
+        if (currentText.trim() && !currentFailed) previousText.push(currentText.trim())
+        currentText = ''
+        blocks.clear()
+        currentFailed = false
+        needsSeparator = previousText.length > 0
         return
-      }
-
       case 'message_start':
+        return
       case 'message_end':
-      case 'turn_end': {
-        const msg = asRecord(event['message'])
-        if (msg) {
-          const stopReason = asString(msg['stopReason'])
-          const errorMessage = asString(msg['errorMessage'])
-          if (stopReason === 'error' || errorMessage) {
-            tracker.lastError = errorMessage || 'The model provider encountered an error.'
-          }
-        }
+      case 'turn_end':
+        snapshot(event.message)
         return
-      }
-
       case 'message_update': {
-        const ev = asRecord(event['assistantMessageEvent'])
-        if (!ev) return
-        const subType = asString(ev['type'])
-        const delta = ev['delta']
-        const content = ev['content']
-        if (subType === 'thinking_delta' && typeof delta === 'string') {
-          if (!tracker.thinkingStage) {
-            const stage: Stage = {
-              index: tracker.nextIndex++,
-              label: 'Thinking…',
-              status: 'running',
+        const updateEvent = record(event.assistantMessageEvent)
+        if (!updateEvent) return
+        if (updateEvent.type === 'thinking_delta') {
+          if (stages.get('thinking')?.status !== 'running') startStage('thinking', 'Thinking…')
+        } else if (updateEvent.type === 'thinking_end') {
+          finishThinking()
+        } else if (updateEvent.type === 'text_delta' || updateEvent.type === 'text_end') {
+          finishThinking()
+          const index = typeof updateEvent.contentIndex === 'number' ? updateEvent.contentIndex : 0
+          if (updateEvent.type === 'text_delta') {
+            const delta = text(updateEvent.delta)
+            if (delta.trim()) needsFinalAnswer = false
+            if (needsSeparator && delta) {
+              callbacks.onMessageDelta('\n\n')
+              needsSeparator = false
             }
-            tracker.thinkingStage = stage
-            tracker.stages.set('thinking', stage)
-            emitStage(stage)
+            blocks.set(index, (blocks.get(index) ?? '') + delta)
+            callbacks.onMessageDelta(delta)
+          } else {
+            blocks.set(index, text(updateEvent.content))
+            if (text(updateEvent.content).trim()) needsFinalAnswer = false
           }
-        } else if (subType === 'thinking_end') {
-          if (tracker.thinkingStage) {
-            updateStageStatus('thinking', 'done')
-            tracker.thinkingStage = undefined
-          }
-        } else if (subType === 'text_delta' && typeof delta === 'string') {
-          if (tracker.thinkingStage) {
-            updateStageStatus('thinking', 'done')
-            tracker.thinkingStage = undefined
-          }
-          if (tracker.turnStarted && tracker.previousTurnsText.length > 0 && tracker.currentText.length === 0) {
-            callbacks.onMessageDelta('\n\n')
-            tracker.turnStarted = false
-          }
-          tracker.currentText += delta
-          callbacks.onMessageDelta(delta)
-        } else if (subType === 'text_end' && typeof content === 'string') {
-          if (tracker.thinkingStage) {
-            updateStageStatus('thinking', 'done')
-            tracker.thinkingStage = undefined
-          }
-          tracker.currentText = content
+          currentText = [...blocks.entries()]
+            .sort(([a], [b]) => a - b)
+            .map(([, value]) => value)
+            .join('\n\n')
         }
         return
       }
-
       case 'tool_execution_start': {
-        if (tracker.thinkingStage) {
-          updateStageStatus('thinking', 'done')
-          tracker.thinkingStage = undefined
-        }
-        const toolCallId = asString(event['toolCallId'])
-        if (!toolCallId) return
-        const index = tracker.nextIndex++
-        const stage: Stage = {
-          index,
-          label: labelForToolCall(asString(event['toolName'], 'tool'), event['args']),
-          status: 'running',
-        }
-        tracker.stages.set(toolCallId, stage)
-        emitStage(stage)
+        needsFinalAnswer = true
+        finishThinking()
+        const id = text(event.toolCallId)
+        if (id)
+          startStage(id, labelForToolCall(text(event.toolName) || 'tool', event.args), {
+            toolName: text(event.toolName),
+          })
         return
       }
-
+      case 'tool_execution_update':
+        update(text(event.toolCallId), toolOutput(event.partialResult))
+        return
       case 'tool_execution_end': {
-        const toolCallId = asString(event['toolCallId'])
-        if (!toolCallId) return
-        const isError = asBool(event['isError'])
-        updateStageStatus(
-          toolCallId,
-          isError ? 'failed' : 'done',
-          isError ? errorDetail(event['result']) : undefined,
-        )
+        const output = toolOutput(event.result)
+        const failed = event.isError === true
+        update(text(event.toolCallId), {
+          ...output,
+          status: failed ? 'failed' : 'done',
+          detail: failed
+            ? (output.output || 'Tool failed').replace(/\s+/g, ' ').slice(0, 160)
+            : undefined,
+          durationMs:
+            typeof event.durationMs === 'number' && event.durationMs >= 0
+              ? event.durationMs
+              : undefined,
+        })
         return
       }
-
-      case 'auto_retry_start': {
-        const attempt = asNumber(event['attempt'])
-        const maxAttempts = asNumber(event['maxAttempts'])
-        const stage: Stage = {
-          index: tracker.nextIndex++,
-          label: `retry (${attempt}/${maxAttempts})`,
-          status: 'running',
-          detail: asString(event['errorMessage']).slice(0, 160) || undefined,
-        }
-        tracker.stages.set(`retry:${attempt}`, stage)
-        emitStage(stage)
+      case 'auto_retry_start':
+        finishThinking()
+        if (stages.get('retry')?.status === 'running')
+          update('retry', { status: 'failed', detail: 'Attempt failed; trying again.' })
+        startStage('retry', `Retrying (${event.attempt ?? 1}/${event.maxAttempts ?? 3})`, {
+          detail: text(event.errorMessage).slice(0, 160) || undefined,
+        })
         return
-      }
-
-      case 'auto_retry_end': {
-        const retryKey = Array.from(tracker.stages.keys())
-          .reverse()
-          .find((k) => k.startsWith('retry:'))
-        if (retryKey) {
-          updateStageStatus(
-            retryKey,
-            asBool(event['success']) ? 'done' : 'failed',
-            asString(event['finalError']) || undefined,
-          )
-        }
+      case 'auto_retry_end':
+        if (event.success === true) lastError = undefined
+        else
+          lastError =
+            text(event.finalError) || lastError || 'The provider could not complete the request.'
+        update('retry', {
+          status: event.success === true ? 'done' : 'failed',
+          detail: event.success === true ? undefined : lastError,
+        })
         return
-      }
-
       case 'agent_end': {
-        tracker.ended = true
-        if (tracker.thinkingStage) {
-          updateStageStatus('thinking', 'done')
-          tracker.thinkingStage = undefined
-        }
-        if (!tracker.lastError) {
-          const messages = Array.isArray(event['messages']) ? event['messages'] : []
-          for (const m of messages) {
-            const rec = asRecord(m)
-            if (rec) {
-              const stopReason = asString(rec['stopReason'])
-              const err = asString(rec['errorMessage'])
-              if (stopReason === 'error' || err) {
-                tracker.lastError = err || 'The model provider encountered an error.'
-                break
-              }
-            }
-          }
-        }
-        const allText = [...tracker.previousTurnsText, tracker.currentText.trim()]
-          .filter(Boolean)
-          .join('\n\n')
-        const hasText = allText.trim().length > 0
-        const hasStages = tracker.stages.size > 0
-        if (hasText) {
-          callbacks.onAnswer(allText.trim())
-        }
-        if (tracker.lastError) {
-          callbacks.onError(tracker.lastError)
-          return
-        }
-        if (!hasText && !hasStages) {
-          callbacks.onError('Agent finished without a response.')
-          return
-        }
-        callbacks.onDone()
+        if (typeof event.willRetry === 'boolean') modernLifecycle = true
+        const messages = Array.isArray(event.messages) ? event.messages : []
+        const assistantMessages = messages.filter(
+          (message) => record(message)?.role === 'assistant'
+        )
+        const last = assistantMessages.at(-1)
+        if (last) snapshot(last)
+        if (event.willRetry === true || modernLifecycle) return
+        finish()
         return
       }
-
-      default:
+      case 'agent_settled':
+        if (event.aborted === true) lastError = 'Agent run aborted'
+        finish()
         return
     }
   }

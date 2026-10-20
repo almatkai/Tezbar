@@ -213,7 +213,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
           trailing={
             <>
               {connected ? <StatusDots /> : null}
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-4">
+              <span className="font-mono text-[11px] text-ink-4">
                 {connected ? 'Active' : 'Offline'}
               </span>
             </>
@@ -352,7 +352,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
                 aria-live="polite"
                 className="rounded-tezbar-row border border-emerald-300/35 bg-emerald-400/10 px-3 py-3 shadow-[0_0_0_1px_rgba(110,231,183,0.08)]"
               >
-                <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200">
+                <div className="text-[11px] font-semibold text-emerald-200">
                   Enter this code on GitHub
                 </div>
                 <div className="mt-2 select-all rounded-tezbar-field border border-emerald-300/25 bg-black/25 px-3 py-2 text-center font-mono text-[28px] font-black tracking-[0.18em] text-emerald-100">
@@ -558,7 +558,7 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
               title="Providers"
               onBack={onBack}
               trailing={
-                <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+                <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] text-ink-3">
                   {cfg.provider ?? 'ollama'}
                 </span>
               }
@@ -590,7 +590,7 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
                       </span>
                       <span className="flex shrink-0 items-center gap-2">
                         {cfg.provider === row.id ? (
-                          <span className="rounded-tezbar-chip border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-accent-strong">
+                          <span className="rounded-tezbar-chip border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[11px] font-semibold text-accent-strong">
                             Active
                           </span>
                         ) : null}

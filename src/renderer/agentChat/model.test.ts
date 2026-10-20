@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatSession } from '../../shared/chat'
-import { buildAgentPromptFromChat } from './model'
+import { buildAgentPromptFromChat, historyPlaceholder } from './model'
+
+describe('agent chat history placeholder', () => {
+  it('distinguishes a slow backend from an empty history', () => {
+    expect(historyPlaceholder(true)).toBe('Loading conversations…')
+    expect(historyPlaceholder(false)).toBe('No saved conversations yet.')
+  })
+})
 
 describe('agent chat prompt', () => {
   it('keeps a directory-rooted Pi chat inside its working directory by default', () => {

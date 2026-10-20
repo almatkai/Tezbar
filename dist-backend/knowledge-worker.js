@@ -2773,11 +2773,19 @@ var SemanticSearch = class {
   queryCache = /* @__PURE__ */ new Map();
   countsCache = null;
   snapshot() {
+    return this.status(true);
+  }
+  /** Launcher polling must never refresh corpus counts or enumerate roots. */
+  cachedSnapshot() {
+    return this.status(false);
+  }
+  status(refreshCounts) {
     const runtime = this.runtime.snapshot();
-    const counts = runtime.modelState === "ready" && this.options.enabled() ? this.counts() : { indexedChunks: 0, totalChunks: 0 };
+    const counts = runtime.modelState === "ready" && this.options.enabled() ? refreshCounts ? this.counts() : this.countsCache ?? { indexedChunks: 0, totalChunks: 0 } : { indexedChunks: 0, totalChunks: 0 };
     return {
       ...runtime,
-      ...counts,
+      indexedChunks: counts.indexedChunks,
+      totalChunks: counts.totalChunks,
       indexing: this.controller !== null,
       error: this.error ?? runtime.error
     };
@@ -2796,9 +2804,12 @@ var SemanticSearch = class {
   }
   download() {
     this.runtime.startDownload();
+    this.options.onProgress?.(true);
   }
   cancelDownload() {
-    return this.runtime.cancelDownload();
+    const cancel = this.runtime.cancelDownload();
+    this.options.onProgress?.(true);
+    return cancel;
   }
   async remove() {
     await this.pause();
@@ -2807,6 +2818,7 @@ var SemanticSearch = class {
     this.queryCache.clear();
     this.countsCache = null;
     this.error = void 0;
+    this.options.onProgress?.(true);
   }
   schedule(delay = 1e3) {
     if (this.closed || !this.options.enabled() || !this.options.canIndex()) return;
@@ -2821,12 +2833,14 @@ var SemanticSearch = class {
         return;
       this.controller = new AbortController();
       const signal = this.controller.signal;
+      this.options.onProgress?.(true);
       this.run = this.backfill(signal).catch((error) => {
         if (!signal.aborted) this.error = error instanceof Error ? error.message : String(error);
       }).finally(() => {
         this.run = null;
         this.controller = null;
         this.countsCache = null;
+        this.options.onProgress?.(true);
         if (this.rescheduleRequested) {
           this.rescheduleRequested = false;
           this.schedule();
@@ -2856,6 +2870,7 @@ var SemanticSearch = class {
           this.countsCache.indexedChunks + saved
         );
       }
+      this.options.onProgress?.(false);
       if (profile.gemmaDelayMs > 0) {
         await new Promise((resolve2) => setTimeout(resolve2, profile.gemmaDelayMs));
       } else {
@@ -2901,6 +2916,7 @@ var SemanticSearch = class {
     this.rescheduleRequested = false;
     this.controller?.abort();
     await this.run;
+    this.options.onProgress?.(true);
   }
   shutdown() {
     this.closed = true;
@@ -2910,6 +2926,15 @@ var SemanticSearch = class {
     this.runtime.shutdown();
   }
 };
+
+// src/main/foreground.ts
+var holdUntil = 0;
+function foregroundRemainingMs(now = Date.now()) {
+  return Math.max(0, holdUntil - now);
+}
+function backgroundHoldRemainingMs(localUntil = 0, now = Date.now()) {
+  return Math.max(0, localUntil - now, foregroundRemainingMs(now));
+}
 
 // src/main/knowledge/service.ts
 var execFileAsync4 = (0, import_node_util4.promisify)(import_node_child_process6.execFile);
@@ -3041,7 +3066,8 @@ var KnowledgeService = class {
     }).map((root) => root.id),
     canIndex: () => this.mode !== "worker" && !this.manuallyPaused,
     waitForIdle: (signal) => this.waitForInteractiveIdle(signal),
-    speed: () => this.settings.indexingSpeed ?? "medium"
+    speed: () => this.settings.indexingSpeed ?? "medium",
+    onProgress: (force) => this.emitSemanticStatusEvent(force)
   });
   backends = /* @__PURE__ */ new Map([
     ["local", new LocalIndexingBackend()],
@@ -3135,6 +3161,23 @@ var KnowledgeService = class {
       settings: { ...this.settings },
       storageBytes: this.store.storageBytes(),
       semanticSearch: this.mode !== "worker" ? this.semanticSearch.snapshot() : void 0
+    };
+  }
+  /** Status alone, straight from memory.
+   *
+   *  The launcher polls background tasks about once a second. Building a full
+   *  snapshot there would mean storage stats and corpus counts on every tick,
+   *  which on a large library blocks the event loop that answers chat history. */
+  cachedStatus() {
+    return this.initialized ? { ...this.status } : null;
+  }
+  /** Minimal launcher progress; no initialization, root reads, or corpus counts. */
+  cachedBackgroundStatus() {
+    if (!this.initialized) return null;
+    return {
+      status: { ...this.status },
+      settings: { embeddingModel: this.settings.embeddingModel },
+      semanticSearch: this.mode !== "worker" ? this.semanticSearch.cachedSnapshot() : void 0
     };
   }
   addRoot(path) {
@@ -3678,6 +3721,13 @@ var KnowledgeService = class {
     const counts = this.store.counts();
     this.status = { ...this.status, ...counts };
   }
+  emitSemanticStatusEvent(force = false) {
+    const now = Date.now();
+    if (force || now - this.lastStatusEventAt >= STATUS_EVENT_INTERVAL_MS) {
+      this.statusSink(this.status);
+      this.lastStatusEventAt = now;
+    }
+  }
   updateStatus(status) {
     const stateChanged = status.state !== this.status.state;
     this.status = status;
@@ -3696,8 +3746,9 @@ var KnowledgeService = class {
     this.store.saveStatus(this.status);
   }
   async waitForInteractiveIdle(signal) {
-    while (!signal.aborted && Date.now() < this.interactiveUntil) {
-      const remaining = this.interactiveUntil - Date.now();
+    while (!signal.aborted) {
+      const remaining = backgroundHoldRemainingMs(this.interactiveUntil);
+      if (remaining <= 0) return;
       await new Promise((resolve2) => setTimeout(resolve2, Math.min(100, remaining)));
     }
   }
@@ -3721,7 +3772,7 @@ var KnowledgeService = class {
     const effectiveDelay = delayMs ?? profile.vectorBackfillDelayMs;
     this.vectorBackfillTimer = setTimeout(() => {
       this.vectorBackfillTimer = null;
-      if (Date.now() < this.interactiveUntil) {
+      if (backgroundHoldRemainingMs(this.interactiveUntil) > 0) {
         this.scheduleVectorBackfill(250);
         return;
       }

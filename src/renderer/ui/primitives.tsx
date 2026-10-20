@@ -90,7 +90,7 @@ export function FieldLabel({
     <label
       htmlFor={htmlFor}
       className={cx(
-        'mb-1.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-ink-3',
+        'mb-1.5 block text-[11px] font-medium text-ink-3',
         className,
       )}
     >
@@ -134,7 +134,7 @@ export function ViewHeader({
   backLabel?: string
 }): JSX.Element {
   return (
-    <header className="flex items-center justify-between gap-3 pb-1.5">
+    <header className="view-header flex items-center justify-between gap-3 pb-1.5">
       <div className="flex min-w-0 items-center gap-2.5">
         {onBack ? (
           <button
@@ -180,9 +180,93 @@ export function Hint({
   className?: string
 }): JSX.Element {
   return (
-    <span className={cx('inline-flex items-center gap-1.5 select-none', className)}>
-      <span className="inline-flex items-center gap-0.5">{keys}</span>
+    <span className={cx('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap select-none', className)}>
       <span className={className ? undefined : 'text-ink-3'}>{label}</span>
+      <span className="kbd-group">{keys}</span>
+    </span>
+  )
+}
+
+/* =========================================================================
+   Section label — quiet sentence-case heading above a group of rows
+   ========================================================================= */
+export function SectionLabel({
+  children,
+  count,
+  trailing,
+  className,
+}: {
+  children: ReactNode
+  count?: number
+  trailing?: ReactNode
+  className?: string
+}): JSX.Element {
+  return (
+    <div className={cx('section-label', className)}>
+      <span>{children}</span>
+      {count !== undefined ? <span className="section-label__count">{count}</span> : null}
+      {trailing ? <span className="ml-auto">{trailing}</span> : null}
+    </div>
+  )
+}
+
+/* =========================================================================
+   List row — the shared one-line row: icon, title, muted subtitle and a
+   right-hand accessory. `tone="accent"` pairs with the accent glide
+   highlight (white text when selected); `tone="subtle"` with the tint one.
+   ========================================================================= */
+export function ListRow({
+  selected,
+  tone = 'accent',
+  icon,
+  title,
+  subtitle,
+  monoSubtitle,
+  accessory,
+  className,
+  ...rest
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'title'> & {
+  selected?: boolean
+  tone?: 'accent' | 'subtle'
+  icon?: ReactNode
+  title: ReactNode
+  subtitle?: ReactNode
+  monoSubtitle?: boolean
+  accessory?: ReactNode
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      data-selected={selected ? 'true' : undefined}
+      data-tone={tone}
+      className={cx('list-row', className)}
+      {...rest}
+    >
+      {icon}
+      <span className="list-row__text">
+        <span className="list-row__title">{title}</span>
+        {subtitle ? (
+          <span className={cx('list-row__subtitle', monoSubtitle && 'font-mono text-[11.5px]')}>
+            {subtitle}
+          </span>
+        ) : null}
+      </span>
+      {accessory ? <span className="list-row__accessory">{accessory}</span> : null}
+    </button>
+  )
+}
+
+/** Small pill for a row's kind / status ("Command", "Running"). */
+export function ListRowTag({
+  children,
+  tone,
+}: {
+  children: ReactNode
+  tone?: 'success' | 'accent'
+}): JSX.Element {
+  return (
+    <span className="list-row__tag" data-tone={tone}>
+      {children}
     </span>
   )
 }

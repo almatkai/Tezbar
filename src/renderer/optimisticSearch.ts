@@ -1,7 +1,9 @@
 import type { SearchResult } from '../shared/search'
+import { applicationNameMatchScore } from '../shared/applicationSearch'
+import { searchQueryVariants } from '../shared/searchQueryVariants'
 
 function searchTokens(value: string): string[] {
-  return value.toLowerCase().match(/[a-z0-9]+/g) ?? []
+  return value.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
 }
 
 /**
@@ -56,17 +58,34 @@ export function optimisticSearchResults(candidates: SearchResult[], query: strin
   const normalizedQuery = query.trim().toLowerCase()
   if (!normalizedQuery) return candidates
 
-  const queryTerms = searchTokens(normalizedQuery)
+  const variants = searchQueryVariants(normalizedQuery).map((variant) => ({
+    query: variant,
+    terms: searchTokens(variant),
+  }))
   return candidates
     .map((item, originalIndex) => {
       const haystack = `${item.title} ${item.subtitle}`.toLowerCase()
-      if (!queryTerms.every((term) => haystack.includes(term))) return null
-
-      return {
-        item,
-        relevance: optimisticRelevance(item, normalizedQuery),
-        originalIndex,
+      let relevance = -1
+      for (const [index, variant] of variants.entries()) {
+        const appMatch =
+          item.category === 'applications'
+            ? applicationNameMatchScore(item.title, variant.query)
+            : 0
+        if (
+          !variant.terms.length ||
+          (!appMatch && !variant.terms.every((term) => haystack.includes(term)))
+        ) {
+          continue
+        }
+        relevance = Math.max(
+          relevance,
+          Math.max(optimisticRelevance(item, variant.query), appMatch * 1_600) *
+            (index === 0 ? 1 : 0.9)
+        )
       }
+      if (relevance < 0) return null
+
+      return { item, relevance, originalIndex }
     })
     .filter(
       (match): match is { item: SearchResult; relevance: number; originalIndex: number } =>
