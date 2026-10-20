@@ -3,7 +3,10 @@ import { dirname, extname, join } from 'node:path'
 import { app } from '@tezbar/desktop-runtime'
 import type { BackgroundTask } from '../shared/backgroundTasks'
 import type { KnowledgeStatus } from '../shared/knowledge'
-import { getKnowledgeStatusIfInitialized } from './knowledge/service'
+import {
+  getKnowledgeBackgroundStatusIfInitialized,
+  type KnowledgeBackgroundStatus,
+} from './knowledge/service'
 
 type TimerFileContents = {
   name?: unknown
@@ -25,6 +28,62 @@ export function indexingBackgroundTask(status: KnowledgeStatus): BackgroundTask 
     detail:
       status.detail ?? (status.state === 'scanning' ? 'Scanning folders' : 'Building local index'),
     progress: clampProgress(status.progress),
+  }
+}
+
+export function semanticDownloadingBackgroundTask(
+  knowledge: KnowledgeBackgroundStatus
+): BackgroundTask | null {
+  const semantic = knowledge.semanticSearch
+  if (!semantic || semantic.modelState !== 'downloading') return null
+
+  const downloadedMb = (semantic.downloadBytes / 1_000_000).toFixed(1)
+  const totalMb =
+    semantic.downloadTotalBytes > 0
+      ? (semantic.downloadTotalBytes / 1_000_000).toFixed(1)
+      : null
+
+  return {
+    id: 'semantic-downloading:active',
+    kind: 'indexing',
+    title: 'Downloading model…',
+    detail: totalMb
+      ? `EmbeddingGemma 2 · ${downloadedMb} / ${totalMb} MB`
+      : `EmbeddingGemma 2 · ${downloadedMb} MB`,
+    progress: clampProgress(semantic.downloadProgress),
+  }
+}
+
+export function semanticIndexingBackgroundTask(
+  knowledge: KnowledgeBackgroundStatus
+): BackgroundTask | null {
+  const semantic = knowledge.semanticSearch
+  if (!semantic) return null
+  if (knowledge.settings.embeddingModel !== 'embeddinggemma-2') return null
+  if (semantic.modelState !== 'ready') return null
+  if (knowledge.status.state === 'paused' || semantic.error) return null
+
+  const isIndexing =
+    semantic.indexing ||
+    (semantic.totalChunks > 0 && semantic.indexedChunks < semantic.totalChunks)
+  if (!isIndexing) return null
+  if (semantic.totalChunks > 0 && semantic.indexedChunks >= semantic.totalChunks) return null
+
+  const progress =
+    semantic.totalChunks > 0
+      ? clampProgress(semantic.indexedChunks / semantic.totalChunks)
+      : undefined
+  const detail =
+    semantic.totalChunks > 0
+      ? `${semantic.indexedChunks.toLocaleString()} / ${semantic.totalChunks.toLocaleString()} chunks`
+      : 'Preparing semantic index…'
+
+  return {
+    id: 'semantic-indexing:active',
+    kind: 'indexing',
+    title: 'Semantic indexing…',
+    detail,
+    progress,
   }
 }
 
@@ -108,12 +167,18 @@ function listRunningTimers(now = Date.now()): BackgroundTask[] {
 
 export function listBackgroundTasks(now = Date.now()): BackgroundTask[] {
   const tasks: BackgroundTask[] = []
-  // Polled at ~1 Hz by the launcher footer, so this must not build a full
-  // knowledge snapshot: corpus counts and storage stats belong in the settings
-  // view, not on a status tick.
-  const status = getKnowledgeStatusIfInitialized()
-  const indexing = status ? indexingBackgroundTask(status) : null
-  if (indexing) tasks.push(indexing)
+  // Polled at ~1 Hz: read cached progress without corpus counts or storage stats.
+  const knowledge = getKnowledgeBackgroundStatusIfInitialized()
+  if (knowledge) {
+    const indexing = indexingBackgroundTask(knowledge.status)
+    if (indexing) tasks.push(indexing)
+
+    const semanticDownloading = semanticDownloadingBackgroundTask(knowledge)
+    if (semanticDownloading) tasks.push(semanticDownloading)
+
+    const semanticIndexing = semanticIndexingBackgroundTask(knowledge)
+    if (semanticIndexing) tasks.push(semanticIndexing)
+  }
   tasks.push(...listRunningTimers(now))
   return tasks
 }

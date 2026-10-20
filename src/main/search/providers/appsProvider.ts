@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { IndexedDocument, SearchProvider } from './types'
+import { applicationSearchAliases } from '../../../shared/applicationSearch'
 
 export type InstalledApplication = {
   name: string
@@ -170,7 +171,7 @@ export const appsProvider: SearchProvider = {
       category: 'applications',
       title: app.name,
       subtitle: app.path,
-      tokens: `${app.name} ${app.path}`,
+      tokens: `${app.name} ${app.path} ${applicationSearchAliases(app.name).join(' ')}`,
       action: { type: 'open-app', appName: app.name, appPath: app.path },
       updatedAt: now,
       sourcePath: app.path,

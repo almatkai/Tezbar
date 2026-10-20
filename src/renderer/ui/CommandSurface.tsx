@@ -20,7 +20,7 @@ export function CommandSurfaceHeader({
     <header
       data-window-search-drag
       data-command-surface-header
-      className="command-surface-header command-search relative z-30 shrink-0 px-3.5"
+      className="command-surface-header command-search relative z-30 shrink-0 select-none px-3.5"
     >
       {onSubmit ? (
         <form className="relative w-full" onSubmit={onSubmit}>
@@ -90,16 +90,19 @@ export type CommandSurfaceTaskActions = {
     initial: Extract<ExtensionRunCommandResult, { ok: true; mode: 'view' }>
   ) => void
   onOpenUpdate: () => void
+  onOpenKnowledgeSettings?: () => void
 }
 
 export function CommandSurfaceFooter({
   children,
   taskActions,
   status,
+  trailing,
 }: {
   children: ReactNode
   taskActions?: CommandSurfaceTaskActions
   status?: ReactNode
+  trailing?: ReactNode
 }): JSX.Element {
   return (
     <footer
@@ -114,6 +117,7 @@ export function CommandSurfaceFooter({
         <HintBar className="launcher-hints min-w-0 flex-1 flex-nowrap justify-end gap-x-3 overflow-hidden text-[11px]">
           {children}
         </HintBar>
+        {trailing}
       </div>
     </footer>
   )

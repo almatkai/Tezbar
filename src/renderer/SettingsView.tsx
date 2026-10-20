@@ -32,6 +32,7 @@ import {
 import type { VoiceModel, VoiceModelId } from '../shared/voice'
 import type { KnowledgeDepth, KnowledgeRootDepth, KnowledgeSnapshot } from '../shared/knowledge'
 import { KnowledgeEmbeddingSettings } from './KnowledgeEmbeddingSettings'
+import { LauncherAppearanceSettings } from './LauncherAppearance'
 import type { PiExtensionItem } from '../shared/desktop-api'
 import {
   Button,
@@ -1766,6 +1767,13 @@ export default function SettingsView({
         <main className="no-drag min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {activeTab === 'general' ? (
             <div className="mx-auto max-w-[610px]">
+              <SettingsRow
+                label="Launcher appearance"
+                detail="Adjust the launcher on its current display, independently of other monitors."
+              >
+                <LauncherAppearanceSettings />
+              </SettingsRow>
+              <Divider />
               <SettingsRow
                 label="Startup"
                 detail="Keeps the launcher surface alive between quick open and close cycles."

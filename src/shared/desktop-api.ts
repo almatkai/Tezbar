@@ -6,6 +6,7 @@ import type {
 } from './agent'
 import type { ChatSession, ChatSessionSummary, ChatTurn } from './chat'
 import type { BackgroundTask } from './backgroundTasks'
+import type { LauncherLayout, LauncherLayoutPatch, LauncherViewport, ResizeEdge } from './windowLayout'
 import type { Intent } from './intent'
 import type { ClipboardEntry, ClipboardImagePayload } from './clipboard'
 import type { ExtensionIntegrityReport, ExtensionManifest, InstalledExtension } from './extensions'
@@ -244,6 +245,11 @@ export type RaymesApi = {
     apiKeyOverride?: string
   ) => Promise<string[]>
   getWindowZoomFactor: () => number
+  getLauncherLayout: () => Promise<LauncherLayout>
+  setLauncherLayout: (patch: LauncherLayoutPatch) => Promise<LauncherLayout>
+  onLauncherLayoutChanged: (listener: (layout: LauncherLayout) => void) => () => void
+  onLauncherViewportChanged: (listener: (viewport: LauncherViewport) => void) => () => void
+  startLauncherResize: (edge: ResizeEdge) => Promise<void>
   setWindowContentHeight: (height: number, zoomFactor: number) => Promise<void>
   openExternalUrl: (url: string) => Promise<void>
   githubDeviceStart: (clientId?: string) => Promise<{

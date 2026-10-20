@@ -163,7 +163,7 @@ function readClipboardSnapshot() {
   if (process.platform === "darwin") return readMacClipboardSnapshot();
   if (process.platform === "win32") return readWindowsClipboardSnapshot();
   try {
-    return { text: (0, import_node_child_process.execFileSync)("pbpaste", [], { encoding: "utf8" }), filePaths: [], hasImage: false, changeCount: 0 };
+    return { text: (0, import_node_child_process.execFileSync)("pbpaste", [], { encoding: "utf8", env: macClipboardProcessEnv() }), filePaths: [], hasImage: false, changeCount: 0 };
   } catch {
     return { text: "", filePaths: [], hasImage: false, changeCount: 0 };
   }
@@ -173,6 +173,9 @@ function windowsClipboardWriteTextScript() {
 }
 function windowsClipboardReadTextScript() {
   return "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::Write((Get-Clipboard -Raw))";
+}
+function macClipboardProcessEnv() {
+  return { ...process.env, LANG: "en_US.UTF-8", LC_CTYPE: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" };
 }
 var import_node_path, import_node_os, import_node_child_process, import_node_fs, import_node_util, execFileAsync, backendWebContents, IpcMain, ipcMain, app, shell, clipboard, dialog, session, screen, desktopCapturer, nativeImage, globalShortcut, BrowserWindow, systemPreferences;
 var init_desktop_runtime = __esm({
@@ -286,23 +289,21 @@ var init_desktop_runtime = __esm({
     };
     clipboard = {
       async writeTextAsync(text4) {
-        if (process.platform !== "win32") {
-          this.writeText(text4);
-          return;
-        }
+        const windows = process.platform === "win32";
         await new Promise((resolve6, reject) => {
-          const child2 = (0, import_node_child_process.spawn)(
+          const child2 = windows ? (0, import_node_child_process.spawn)(
             "powershell.exe",
             ["-NoProfile", "-NonInteractive", "-Sta", "-Command", windowsClipboardWriteTextScript()],
             { windowsHide: true }
-          );
+          ) : (0, import_node_child_process.spawn)("pbcopy", [], { env: macClipboardProcessEnv() });
           child2.on("error", reject);
           child2.stdin.on("error", reject);
           child2.on("close", (code) => {
             if (code === 0) resolve6();
-            else reject(new Error(`Windows clipboard write failed (${code})`));
+            else reject(new Error(`${windows ? "Windows" : "macOS"} clipboard write failed (${code})`));
           });
-          child2.stdin.end(Buffer.from(text4, "utf8").toString("base64"));
+          const bytes = Buffer.from(text4, "utf8");
+          child2.stdin.end(windows ? bytes.toString("base64") : bytes);
         });
       },
       async readSnapshotAsync() {
@@ -329,33 +330,15 @@ var init_desktop_runtime = __esm({
               { encoding: "utf8", windowsHide: true, timeout: 3e3 }
             );
           }
-          return (0, import_node_child_process.execFileSync)("pbpaste", [], { encoding: "utf8" });
+          return (0, import_node_child_process.execFileSync)("pbpaste", [], { encoding: "utf8", env: macClipboardProcessEnv() });
         } catch {
           return "";
         }
       },
       writeText(text4) {
-        try {
-          if (process.platform === "win32") {
-            void this.writeTextAsync(text4).catch(
-              (error) => console.error("[desktop-runtime] clipboard text copy failed:", error)
-            );
-            return;
-          }
-          const child2 = (0, import_node_child_process.spawn)("pbcopy");
-          child2.on(
-            "error",
-            (error) => console.error("[desktop-runtime] clipboard text copy failed:", error)
-          );
-          child2.stdin.on(
-            "error",
-            (error) => console.error("[desktop-runtime] clipboard input failed:", error)
-          );
-          child2.stdin.write(text4);
-          child2.stdin.end();
-        } catch (error) {
-          console.error("[desktop-runtime] clipboard text copy failed:", error);
-        }
+        void this.writeTextAsync(text4).catch(
+          (error) => console.error("[desktop-runtime] clipboard text copy failed:", error)
+        );
       },
       availableFormats() {
         return this.readText() ? ["text/plain"] : [];
@@ -8979,6 +8962,83 @@ var init_prompt = __esm({
   }
 });
 
+// src/shared/applicationSearch.ts
+function normalize(value) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+function applicationSearchAliases(appName) {
+  const name = normalize(appName);
+  return Object.hasOwn(APPLICATION_ALIASES, name) ? APPLICATION_ALIASES[name] ?? [] : [];
+}
+function applicationNameMatchScore(appName, query) {
+  const normalizedQuery = normalize(query);
+  const queryTokens = normalizedQuery.match(/[\p{L}\p{N}]+/gu) ?? [];
+  if (!queryTokens.length) return 0;
+  let best = 0;
+  for (const name of [normalize(appName), ...applicationSearchAliases(appName)]) {
+    if (name === normalizedQuery) return 1;
+    if (name.startsWith(normalizedQuery)) {
+      best = Math.max(best, 0.92);
+      continue;
+    }
+    const nameTokens = name.match(/[\p{L}\p{N}]+/gu) ?? [];
+    if (queryTokens.every((term) => nameTokens.some((word) => word.startsWith(term)))) {
+      best = Math.max(best, 0.9);
+    }
+  }
+  return best;
+}
+var APPLICATION_ALIASES;
+var init_applicationSearch = __esm({
+  "src/shared/applicationSearch.ts"() {
+    "use strict";
+    APPLICATION_ALIASES = {
+      "visual studio code": ["vscode", "vsc", "code", "vs code", "\u0432\u0441 \u043A\u043E\u0434", "\u0432\u0441\u043A\u043E\u0434"],
+      "google chrome": ["chrome", "\u0445\u0440\u043E\u043C", "\u0433\u0443\u0433\u043B \u0445\u0440\u043E\u043C"],
+      chrome: ["\u0445\u0440\u043E\u043C", "\u0433\u0443\u0433\u043B \u0445\u0440\u043E\u043C"],
+      telegram: ["\u0442\u0435\u043B\u0435\u0433\u0440\u0430\u043C", "\u0442\u0435\u043B\u0435\u0433\u0440\u0430\u043C\u043C"],
+      discord: ["\u0434\u0438\u0441\u043A\u043E\u0440\u0434"],
+      docker: ["\u0434\u043E\u043A\u0435\u0440", "\u0434\u043E\u043A\u043A\u0435\u0440"],
+      safari: ["\u0441\u0430\u0444\u0430\u0440\u0438"],
+      raycast: ["\u0440\u0435\u0439\u043A\u0430\u0441\u0442"],
+      claude: ["\u043A\u043B\u043E\u0434", "\u043A\u043B\u0430\u0443\u0434"],
+      xcode: ["\u0438\u043A\u0441\u043A\u043E\u0434"],
+      finder: ["files", "filemanager", "\u0444\u0430\u0439\u043D\u0434\u0435\u0440"],
+      terminal: ["term", "shell", "\u0442\u0435\u0440\u043C\u0438\u043D\u0430\u043B"],
+      "quicktime player": ["quicktime", "qt", "qtp"],
+      "activity monitor": ["activity", "taskmanager", "task monitor", "\u043C\u043E\u043D\u0438\u0442\u043E\u0440\u0438\u043D\u0433 \u0441\u0438\u0441\u0442\u0435\u043C\u044B"]
+    };
+  }
+});
+
+// src/shared/searchQueryVariants.ts
+function remapKeys(query, from, to) {
+  return Array.from(query, (char) => {
+    const index = from.indexOf(char);
+    return index < 0 ? char : to[index];
+  }).join("");
+}
+function searchQueryVariants(query) {
+  const literal = query.trim().toLowerCase();
+  if (!literal) return [];
+  const variants = /* @__PURE__ */ new Set([literal]);
+  if (/[а-яё]/u.test(literal)) {
+    variants.add(remapKeys(literal, RUSSIAN_KEYS, ENGLISH_KEYS));
+  }
+  if (/[a-z]/.test(literal)) {
+    variants.add(remapKeys(literal, ENGLISH_KEYS, RUSSIAN_KEYS));
+  }
+  return Array.from(variants);
+}
+var ENGLISH_KEYS, RUSSIAN_KEYS;
+var init_searchQueryVariants = __esm({
+  "src/shared/searchQueryVariants.ts"() {
+    "use strict";
+    ENGLISH_KEYS = "`qwertyuiop[]asdfghjkl;'zxcvbnm,.";
+    RUSSIAN_KEYS = "\u0451\u0439\u0446\u0443\u043A\u0435\u043D\u0433\u0448\u0449\u0437\u0445\u044A\u0444\u044B\u0432\u0430\u043F\u0440\u043E\u043B\u0434\u0436\u044D\u044F\u0447\u0441\u043C\u0438\u0442\u044C\u0431\u044E";
+  }
+});
+
 // src/shared/searchMode.ts
 function parseSearchQuery(input) {
   if (input.startsWith(DEEP_SEARCH_PREFIX)) {
@@ -9002,20 +9062,26 @@ function hasGoodMetadataMatch(query, results) {
   const normalizedQuery = query.trim().toLowerCase();
   const queryTokens = tokens(normalizedQuery);
   if (normalizedQuery.length < 2 || queryTokens.length === 0) return true;
+  const variants = searchQueryVariants(normalizedQuery);
   return results.slice(0, 10).some((result) => {
     if (result.category === "knowledge" || result.id.startsWith(DEEP_SEARCH_RESULT_PREFIX) || result.id.startsWith("note-add:")) {
       return false;
     }
     const title = result.title.trim().toLowerCase();
     const metadata = `${title} ${result.subtitle.trim().toLowerCase()}`.trim();
-    if (title === normalizedQuery || title.startsWith(normalizedQuery)) return true;
-    if (metadata.includes(normalizedQuery)) return true;
     const metadataTokens = tokens(metadata);
-    const coversEveryTerm = queryTokens.every(
-      (queryToken) => metadataTokens.some((metadataToken) => metadataTokenMatchesQuery(metadataToken, queryToken))
-    );
-    if (!coversEveryTerm) return false;
-    return queryTokens.length > 1 || result.score >= 650;
+    return variants.some((variant) => {
+      if (result.category === "applications" && applicationNameMatchScore(title, variant) > 0) {
+        return true;
+      }
+      if (title === variant || title.startsWith(variant) || metadata.includes(variant)) return true;
+      const variantTokens = tokens(variant);
+      if (!variantTokens.length) return false;
+      const coversEveryTerm = variantTokens.every(
+        (queryToken) => metadataTokens.some((metadataToken) => metadataTokenMatchesQuery(metadataToken, queryToken))
+      );
+      return coversEveryTerm && (variantTokens.length > 1 || result.score >= 650);
+    });
   });
 }
 function buildDeepSearchRecommendation(query, results) {
@@ -9039,6 +9105,8 @@ var DEEP_SEARCH_PREFIX, ACTIVATE_DEEP_SEARCH_COMMAND, DEEP_SEARCH_RESULT_PREFIX;
 var init_searchMode = __esm({
   "src/shared/searchMode.ts"() {
     "use strict";
+    init_applicationSearch();
+    init_searchQueryVariants();
     DEEP_SEARCH_PREFIX = "!";
     ACTIVATE_DEEP_SEARCH_COMMAND = "activate-deep-search";
     DEEP_SEARCH_RESULT_PREFIX = "deep-search:";
@@ -10030,7 +10098,7 @@ async function executeNativeCommandRaw(id) {
         }
         try {
           const root = await runShell(`cd ${JSON.stringify(path8)} && git rev-parse --show-toplevel`);
-          await runShell(`printf %s ${JSON.stringify(root)} | pbcopy`);
+          await clipboard.writeTextAsync(root);
           return { ok: true, message: root };
         } catch {
           return { ok: false, message: `${path8} is not inside a git repo.` };
@@ -13136,11 +13204,19 @@ var init_semanticSearch = __esm({
       queryCache = /* @__PURE__ */ new Map();
       countsCache = null;
       snapshot() {
+        return this.status(true);
+      }
+      /** Launcher polling must never refresh corpus counts or enumerate roots. */
+      cachedSnapshot() {
+        return this.status(false);
+      }
+      status(refreshCounts) {
         const runtime = this.runtime.snapshot();
-        const counts = runtime.modelState === "ready" && this.options.enabled() ? this.counts() : { indexedChunks: 0, totalChunks: 0 };
+        const counts = runtime.modelState === "ready" && this.options.enabled() ? refreshCounts ? this.counts() : this.countsCache ?? { indexedChunks: 0, totalChunks: 0 } : { indexedChunks: 0, totalChunks: 0 };
         return {
           ...runtime,
-          ...counts,
+          indexedChunks: counts.indexedChunks,
+          totalChunks: counts.totalChunks,
           indexing: this.controller !== null,
           error: this.error ?? runtime.error
         };
@@ -13159,9 +13235,12 @@ var init_semanticSearch = __esm({
       }
       download() {
         this.runtime.startDownload();
+        this.options.onProgress?.(true);
       }
       cancelDownload() {
-        return this.runtime.cancelDownload();
+        const cancel = this.runtime.cancelDownload();
+        this.options.onProgress?.(true);
+        return cancel;
       }
       async remove() {
         await this.pause();
@@ -13170,6 +13249,7 @@ var init_semanticSearch = __esm({
         this.queryCache.clear();
         this.countsCache = null;
         this.error = void 0;
+        this.options.onProgress?.(true);
       }
       schedule(delay2 = 1e3) {
         if (this.closed || !this.options.enabled() || !this.options.canIndex()) return;
@@ -13184,12 +13264,14 @@ var init_semanticSearch = __esm({
             return;
           this.controller = new AbortController();
           const signal = this.controller.signal;
+          this.options.onProgress?.(true);
           this.run = this.backfill(signal).catch((error) => {
             if (!signal.aborted) this.error = error instanceof Error ? error.message : String(error);
           }).finally(() => {
             this.run = null;
             this.controller = null;
             this.countsCache = null;
+            this.options.onProgress?.(true);
             if (this.rescheduleRequested) {
               this.rescheduleRequested = false;
               this.schedule();
@@ -13219,6 +13301,7 @@ var init_semanticSearch = __esm({
               this.countsCache.indexedChunks + saved
             );
           }
+          this.options.onProgress?.(false);
           if (profile.gemmaDelayMs > 0) {
             await new Promise((resolve6) => setTimeout(resolve6, profile.gemmaDelayMs));
           } else {
@@ -13264,6 +13347,7 @@ var init_semanticSearch = __esm({
         this.rescheduleRequested = false;
         this.controller?.abort();
         await this.run;
+        this.options.onProgress?.(true);
       }
       shutdown() {
         this.closed = true;
@@ -13374,8 +13458,8 @@ function getKnowledgeService() {
 function notifyKnowledgeInteractiveActivity(durationMs = 1e3) {
   service?.notifyInteractiveActivity(durationMs);
 }
-function getKnowledgeStatusIfInitialized() {
-  return service?.cachedStatus() ?? null;
+function getKnowledgeBackgroundStatusIfInitialized() {
+  return service?.cachedBackgroundStatus() ?? null;
 }
 function shutdownKnowledgeService() {
   service?.shutdown();
@@ -13514,7 +13598,8 @@ var init_service = __esm({
         }).map((root) => root.id),
         canIndex: () => this.mode !== "worker" && !this.manuallyPaused,
         waitForIdle: (signal) => this.waitForInteractiveIdle(signal),
-        speed: () => this.settings.indexingSpeed ?? "medium"
+        speed: () => this.settings.indexingSpeed ?? "medium",
+        onProgress: (force) => this.emitSemanticStatusEvent(force)
       });
       backends = /* @__PURE__ */ new Map([
         ["local", new LocalIndexingBackend()],
@@ -13617,6 +13702,15 @@ var init_service = __esm({
        *  which on a large library blocks the event loop that answers chat history. */
       cachedStatus() {
         return this.initialized ? { ...this.status } : null;
+      }
+      /** Minimal launcher progress; no initialization, root reads, or corpus counts. */
+      cachedBackgroundStatus() {
+        if (!this.initialized) return null;
+        return {
+          status: { ...this.status },
+          settings: { embeddingModel: this.settings.embeddingModel },
+          semanticSearch: this.mode !== "worker" ? this.semanticSearch.cachedSnapshot() : void 0
+        };
       }
       addRoot(path8) {
         this.initialize();
@@ -14159,6 +14253,13 @@ var init_service = __esm({
         const counts = this.store.counts();
         this.status = { ...this.status, ...counts };
       }
+      emitSemanticStatusEvent(force = false) {
+        const now = Date.now();
+        if (force || now - this.lastStatusEventAt >= STATUS_EVENT_INTERVAL_MS) {
+          this.statusSink(this.status);
+          this.lastStatusEventAt = now;
+        }
+      }
       updateStatus(status) {
         const stateChanged = status.state !== this.status.state;
         this.status = status;
@@ -14387,6 +14488,14 @@ var init_commandBus = __esm({
 });
 
 // src/main/search/indexDb.ts
+function bestQueryMatch(text4, variants) {
+  let best = { lexical: 0, query: variants[0] ?? "" };
+  for (const [index, query] of variants.entries()) {
+    const lexical = Math.max(lexicalScore(text4, query), fuzzySimilarityScore(text4, query)) * (index === 0 ? 1 : 0.9);
+    if (lexical > best.lexical) best = { lexical, query };
+  }
+  return best;
+}
 function normalizeStoredQuery(query) {
   return query.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -14421,6 +14530,8 @@ var init_indexDb = __esm({
     init_better_sqlite3_shim();
     import_node_fs15 = require("node:fs");
     import_node_path19 = require("node:path");
+    init_applicationSearch();
+    init_searchQueryVariants();
     init_textMatch();
     CLICK_EVENTS_RETAIN = 1e3;
     ACTION_USAGE_EVENTS_RETAIN = 5e3;
@@ -14468,6 +14579,8 @@ var init_indexDb = __esm({
         source_mtime INTEGER,
         popularity REAL NOT NULL DEFAULT 0
       );
+
+      CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 
       CREATE TABLE IF NOT EXISTS action_stats (
         action_id TEXT PRIMARY KEY,
@@ -14684,7 +14797,8 @@ var init_indexDb = __esm({
         this.clearSearchCache();
       }
       search(query, limit) {
-        const ftsQuery = buildFtsQuery(query);
+        const variants = searchQueryVariants(query);
+        const ftsQuery = buildFtsQuery(variants.join(" "));
         const trimmed = query.trim();
         if (!trimmed) return [];
         const candidateLimit = Math.max(limit * 2, 20);
@@ -14711,11 +14825,7 @@ var init_indexDb = __esm({
             return negBm25 / (1 + negBm25);
           })() : 0.5;
           const searchableText2 = `${row.title} ${row.subtitle}`;
-          const lexical = Math.max(
-            inverseBm25,
-            lexicalScore(searchableText2, trimmed),
-            fuzzySimilarityScore(searchableText2, trimmed)
-          );
+          const lexical = Math.max(inverseBm25, bestQueryMatch(searchableText2, variants).lexical);
           return {
             id: row.id,
             category: row.category,
@@ -14727,7 +14837,7 @@ var init_indexDb = __esm({
             popularity: row.popularity
           };
         });
-        const fuzzyRows = mapped.length >= candidateLimit ? [] : this.fuzzySearch(trimmed, candidateLimit);
+        const fuzzyRows = mapped.length >= candidateLimit ? [] : this.fuzzySearch(variants, candidateLimit);
         const byId = /* @__PURE__ */ new Map();
         for (const row of [...mapped, ...fuzzyRows]) {
           const existing = byId.get(row.id);
@@ -14735,24 +14845,31 @@ var init_indexDb = __esm({
             byId.set(row.id, row);
           }
         }
-        const result = Array.from(byId.values()).sort((a, b) => b.lexical - a.lexical).slice(0, candidateLimit);
-        if (trimmed === "process kill" || trimmed === "timer stop" || trimmed === "stop timer") {
-          const lines = [];
-          lines.push(
-            `[Search DEBUG] query="${trimmed}" ftsQuery="${ftsQuery}" FTS rows=${rows.length} mapped=${mapped.length} fuzzyRows=${fuzzyRows.length}`
-          );
-          for (const r of result.slice(0, 10)) {
-            lines.push(`  [DEBUG] lex=${r.lexical.toFixed(3)} cat=${r.category} title="${r.title}"`);
-          }
-          try {
-            const fs5 = require("fs");
-            fs5.appendFileSync("/tmp/search_debug.log", lines.join("\n") + "\n\n");
-          } catch {
-          }
-        }
+        const appRows = this.searchApplicationNames(variants, Math.min(candidateLimit, 20));
+        const appIds = new Set(appRows.map((row) => row.id));
+        const result = [
+          ...appRows,
+          ...Array.from(byId.values()).filter((row) => !appIds.has(row.id)).sort((a, b) => b.lexical - a.lexical)
+        ].slice(0, candidateLimit);
         return result;
       }
-      fuzzySearch(query, limit) {
+      searchApplicationNames(variants, limit) {
+        const rows = this.db.prepare(
+          `SELECT id, category, title, subtitle, action_json AS actionJson,
+                updated_at AS updatedAt, popularity
+         FROM documents WHERE category = 'applications'`
+        ).all();
+        return rows.map((row) => ({
+          ...row,
+          lexical: Math.max(
+            0,
+            ...variants.map(
+              (query, index) => applicationNameMatchScore(row.title, query) * (index === 0 ? 1 : 0.9)
+            )
+          )
+        })).filter((row) => row.lexical > 0).sort((left, right) => right.lexical - left.lexical || left.title.localeCompare(right.title)).slice(0, limit);
+      }
+      fuzzySearch(variants, limit) {
         if (limit <= 0) return [];
         const rows = this.db.prepare(
           `
@@ -14765,12 +14882,9 @@ var init_indexDb = __esm({
         const scored = [];
         for (const row of rows) {
           const searchableText2 = `${row.title} ${row.subtitle} ${row.tokens}`;
-          const lexical = Math.max(
-            lexicalScore(searchableText2, query),
-            fuzzySimilarityScore(searchableText2, query)
-          );
+          const { lexical, query } = bestQueryMatch(searchableText2, variants);
           if (lexical <= 0) continue;
-          const distance = levenshteinDistance(row.title.toLowerCase(), query.toLowerCase());
+          const distance = levenshteinDistance(row.title.toLowerCase(), query);
           scored.push({
             id: row.id,
             category: row.category,
@@ -15152,6 +15266,7 @@ var init_appsProvider = __esm({
     import_node_child_process13 = require("node:child_process");
     import_node_os7 = require("node:os");
     import_node_path20 = require("node:path");
+    init_applicationSearch();
     bundleIdCache = /* @__PURE__ */ new Map();
     appsProvider = {
       providerId: "apps",
@@ -15162,7 +15277,7 @@ var init_appsProvider = __esm({
           category: "applications",
           title: app2.name,
           subtitle: app2.path,
-          tokens: `${app2.name} ${app2.path}`,
+          tokens: `${app2.name} ${app2.path} ${applicationSearchAliases(app2.name).join(" ")}`,
           action: { type: "open-app", appName: app2.name, appPath: app2.path },
           updatedAt: now,
           sourcePath: app2.path
@@ -24831,6 +24946,7 @@ async function reindexExtensions() {
 function internalSurfaceBoost(category, title, query, subtitle) {
   const hit = category === "native-command" || category === "commands" || category === "extensions" || category === "applications" || category === "quick-notes";
   if (!hit) return 0;
+  if (category === "applications") return applicationNameMatchScore(title, query) * 600;
   const normalizedTitle = title.toLowerCase();
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return 0;
@@ -24888,7 +25004,7 @@ function exactRecentQuickNoteBoost(category, title, query, updatedAt, now) {
   return 0;
 }
 function fullTokenMatchBoost(query, title, subtitle) {
-  const tokens2 = query.trim().toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const tokens2 = query.trim().toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
   if (tokens2.length < 2) return 0;
   const text4 = `${title} ${subtitle}`.toLowerCase();
   const allMatch = tokens2.every((t) => text4.includes(t));
@@ -24896,6 +25012,7 @@ function fullTokenMatchBoost(query, title, subtitle) {
 }
 function rankRows(query, docs) {
   const now = Date.now();
+  const queryVariants = searchQueryVariants(query);
   const queryStats = indexDb?.getQueryActionStats(
     query,
     docs.map((entry) => entry.doc.id)
@@ -24905,6 +25022,19 @@ function rankRows(query, docs) {
     const queryTotalCount = queryStat?.totalCount ?? 0;
     const querySuccessRate = queryTotalCount > 0 ? (queryStat?.successCount ?? 0) / queryTotalCount : 0;
     const activityAt = entry.doc.updatedAt;
+    const queryMatchBoost = Math.max(
+      0,
+      ...queryVariants.map((variant, index) => {
+        const boost = internalSurfaceBoost(entry.doc.category, entry.doc.title, variant, entry.doc.subtitle) + exactRecentQuickNoteBoost(
+          entry.doc.category,
+          entry.doc.title,
+          variant,
+          entry.doc.updatedAt,
+          now
+        ) + fullTokenMatchBoost(variant, entry.doc.title, entry.doc.subtitle);
+        return boost * (index === 0 ? 1 : 0.9);
+      })
+    );
     const score = computeWeightedScore({
       lexical: entry.lexical,
       recencyMs: now - activityAt,
@@ -24921,18 +25051,12 @@ function rankRows(query, docs) {
       successRate: querySuccessRate,
       lastUsedAt: queryStat?.lastUsedAt ?? 0,
       now
-    }) + internalSurfaceBoost(entry.doc.category, entry.doc.title, query, entry.doc.subtitle) + recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) + exactRecentQuickNoteBoost(
-      entry.doc.category,
-      entry.doc.title,
-      query,
-      entry.doc.updatedAt,
-      now
-    ) + (() => {
+    }) + queryMatchBoost + recentQuickNoteBoost(entry.doc.category, entry.doc.updatedAt, now) + (() => {
       const q = query.trim().toLowerCase();
       if (!q) return 120;
       if (/\bnotes?\b/.test(q) || q.includes("quick note")) return 780;
       return 120;
-    })() + fullTokenMatchBoost(query, entry.doc.title, entry.doc.subtitle);
+    })();
     return {
       id: entry.doc.id,
       title: entry.doc.title,
@@ -25515,22 +25639,13 @@ function normalizeAppSearchTerm(value) {
 function appAcronym(name) {
   return name.split(/[^a-zA-Z0-9]+/).filter(Boolean).map((part) => part[0]?.toLowerCase() ?? "").join("");
 }
-function builtInAppAliases(appName) {
-  const n = appName.toLowerCase();
-  if (n === "visual studio code") return ["vscode", "vsc", "code", "vs code"];
-  if (n === "quicktime player") return ["quicktime", "qt", "qtp"];
-  if (n === "activity monitor") return ["activity", "taskmanager", "task monitor"];
-  if (n === "terminal") return ["term", "shell"];
-  if (n === "finder") return ["files", "filemanager"];
-  return [];
-}
 function appMatchesTerm(appName, term, learnedAliases) {
   const normalizedTerm = normalizeAppSearchTerm(term);
   if (!normalizedTerm) return true;
   const normalizedName = normalizeAppSearchTerm(appName);
   if (normalizedName.includes(normalizedTerm)) return true;
   if (appAcronym(appName).includes(normalizedTerm)) return true;
-  if (builtInAppAliases(appName).some(
+  if (applicationSearchAliases(appName).some(
     (alias) => normalizeAppSearchTerm(alias).includes(normalizedTerm)
   )) {
     return true;
@@ -26029,6 +26144,8 @@ var init_service3 = __esm({
     import_node_os12 = require("node:os");
     import_node_path29 = require("node:path");
     import_node_util15 = require("node:util");
+    init_searchQueryVariants();
+    init_applicationSearch();
     init_searchMode();
     init_executor();
     init_configStore();
@@ -33982,6 +34099,38 @@ function indexingBackgroundTask(status) {
     progress: clampProgress(status.progress)
   };
 }
+function semanticDownloadingBackgroundTask(knowledge) {
+  const semantic = knowledge.semanticSearch;
+  if (!semantic || semantic.modelState !== "downloading") return null;
+  const downloadedMb = (semantic.downloadBytes / 1e6).toFixed(1);
+  const totalMb = semantic.downloadTotalBytes > 0 ? (semantic.downloadTotalBytes / 1e6).toFixed(1) : null;
+  return {
+    id: "semantic-downloading:active",
+    kind: "indexing",
+    title: "Downloading model\u2026",
+    detail: totalMb ? `EmbeddingGemma 2 \xB7 ${downloadedMb} / ${totalMb} MB` : `EmbeddingGemma 2 \xB7 ${downloadedMb} MB`,
+    progress: clampProgress(semantic.downloadProgress)
+  };
+}
+function semanticIndexingBackgroundTask(knowledge) {
+  const semantic = knowledge.semanticSearch;
+  if (!semantic) return null;
+  if (knowledge.settings.embeddingModel !== "embeddinggemma-2") return null;
+  if (semantic.modelState !== "ready") return null;
+  if (knowledge.status.state === "paused" || semantic.error) return null;
+  const isIndexing = semantic.indexing || semantic.totalChunks > 0 && semantic.indexedChunks < semantic.totalChunks;
+  if (!isIndexing) return null;
+  if (semantic.totalChunks > 0 && semantic.indexedChunks >= semantic.totalChunks) return null;
+  const progress = semantic.totalChunks > 0 ? clampProgress(semantic.indexedChunks / semantic.totalChunks) : void 0;
+  const detail = semantic.totalChunks > 0 ? `${semantic.indexedChunks.toLocaleString()} / ${semantic.totalChunks.toLocaleString()} chunks` : "Preparing semantic index\u2026";
+  return {
+    id: "semantic-indexing:active",
+    kind: "indexing",
+    title: "Semantic indexing\u2026",
+    detail,
+    progress
+  };
+}
 function timerBackgroundTask(fileName, rawContents, now = Date.now()) {
   const match = /^(.*?)---(\d+(?:\.\d+)?)\.timer$/.exec(fileName);
   if (!match) return null;
@@ -34040,9 +34189,15 @@ function listRunningTimers(now = Date.now()) {
 }
 function listBackgroundTasks(now = Date.now()) {
   const tasks = [];
-  const status = getKnowledgeStatusIfInitialized();
-  const indexing = status ? indexingBackgroundTask(status) : null;
-  if (indexing) tasks.push(indexing);
+  const knowledge = getKnowledgeBackgroundStatusIfInitialized();
+  if (knowledge) {
+    const indexing = indexingBackgroundTask(knowledge.status);
+    if (indexing) tasks.push(indexing);
+    const semanticDownloading = semanticDownloadingBackgroundTask(knowledge);
+    if (semanticDownloading) tasks.push(semanticDownloading);
+    const semanticIndexing = semanticIndexingBackgroundTask(knowledge);
+    if (semanticIndexing) tasks.push(semanticIndexing);
+  }
   tasks.push(...listRunningTimers(now));
   return tasks;
 }

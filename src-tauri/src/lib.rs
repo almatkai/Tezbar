@@ -1,5 +1,6 @@
 // src-tauri/src/lib.rs
 mod backend_health;
+mod window_layout;
 mod native_input;
 use backend_health::{BackendStatus, HealthCheck, CONNECT_TIMEOUT};
 mod manual_releases;
@@ -182,11 +183,6 @@ struct WindowBehaviorState {
     // mixed-DPI finalizer from racing a newer launcher invocation.
     #[cfg(target_os = "windows")]
     window_placement_generation: Mutex<u64>,
-    // The renderer can report a content height immediately after show. Hold
-    // the newest value until mixed-DPI placement has finished so neither
-    // operation can overwrite the other.
-    #[cfg(target_os = "windows")]
-    pending_content_height: Mutex<Option<f64>>,
     snap_drag_active: Mutex<bool>,
     snap_locked: Mutex<SnapLockState>,
     snap_guides: Mutex<SnapGuidesState>,
@@ -1905,6 +1901,7 @@ fn active_monitor(window: &WebviewWindow) -> Result<Monitor, String> {
     .ok_or_else(|| "No monitor found".to_string())
 }
 
+#[cfg(test)]
 fn window_size_for_target_monitor(
     _current_size: (f64, f64),
     _current_scale_factor: f64,
@@ -1934,21 +1931,6 @@ fn logical_position_for_monitor(
     PersistedWindowPosition {
         x: position.x / target_scale_factor,
         y: position.y / target_scale_factor,
-    }
-}
-
-fn window_size_for_monitor(window: &WebviewWindow, monitor: &Monitor) -> (f64, f64) {
-    let target_scale_factor = monitor.scale_factor();
-    match window.outer_size() {
-        Ok(current_size) => window_size_for_target_monitor(
-            (current_size.width as f64, current_size.height as f64),
-            window.scale_factor().unwrap_or(target_scale_factor),
-            target_scale_factor,
-        ),
-        Err(_) => (
-            WINDOW_WIDTH * target_scale_factor,
-            WINDOW_HEIGHT * target_scale_factor,
-        ),
     }
 }
 
@@ -2140,6 +2122,11 @@ fn schedule_windows_window_placement_finalization(
 
         let mut placement_settled = false;
         if target_reached {
+            // Min/max constraints are logical values. Reapply after the DPI
+            // transition so the old monitor's DPI cannot clamp the saved size.
+            if let Some(monitor) = window.current_monitor().ok().flatten() {
+                let _ = window_layout::prepare(&window, &monitor);
+            }
             let desired_size = PhysicalSize::new(
                 target_size.0.round().max(1.0) as u32,
                 target_size.1.round().max(1.0) as u32,
@@ -2180,33 +2167,8 @@ fn schedule_windows_window_placement_finalization(
         if !placement_is_current() {
             return;
         }
-        // Coordinate with a content-height command that may have arrived
-        // while placement was in progress. Both paths lock `main_window_placed`
-        // before `pending_content_height`, so no update can fall between the
-        // final pending read and releasing the placement guard.
-        let pending_content_height = {
-            let state = window.state::<WindowBehaviorState>();
-            let mut placed = state.main_window_placed.lock().unwrap();
-            let pending = state.pending_content_height.lock().unwrap().take();
-            *placed = true;
-            pending
-        };
-        if let Some(height) = pending_content_height {
-            match apply_window_content_height(&window, height) {
-                Ok(()) if persist_position => {
-                    // Position updates are asynchronous on Windows. Persist the
-                    // post-resize coordinate after that final move can land.
-                    tokio::time::sleep(Duration::from_millis(16)).await;
-                    if placement_is_current() {
-                        persist_current_window_position(&window);
-                    }
-                }
-                Ok(()) => {}
-                Err(error) => {
-                    log::warn!("failed to apply deferred Windows content height: {error}");
-                }
-            }
-        } else if target_reached && placement_settled && persist_position {
+        *window.state::<WindowBehaviorState>().main_window_placed.lock().unwrap() = true;
+        if target_reached && placement_settled && persist_position {
             persist_current_window_position(&window);
         }
     });
@@ -2214,7 +2176,8 @@ fn schedule_windows_window_placement_finalization(
 
 fn place_window(window: &WebviewWindow) -> Result<(), String> {
     let monitor = active_monitor(window)?;
-    let (window_width, window_height) = window_size_for_monitor(window, &monitor);
+    let profile = window_layout::prepare(window, &monitor)?;
+    let (window_width, window_height) = profile.physical_size(monitor.scale_factor());
     let target_monitor_id = monitor_id(window, &monitor);
     let stored = target_monitor_id
         .as_deref()
@@ -2231,12 +2194,7 @@ fn place_window(window: &WebviewWindow) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         let state = window.state::<WindowBehaviorState>();
-        {
-            let mut placed = state.main_window_placed.lock().unwrap();
-            let mut pending = state.pending_content_height.lock().unwrap();
-            *placed = false;
-            *pending = None;
-        }
+        *state.main_window_placed.lock().unwrap() = false;
         let generation = {
             let mut generation = state.window_placement_generation.lock().unwrap();
             *generation = generation.wrapping_add(1);
@@ -2270,7 +2228,7 @@ fn place_window(window: &WebviewWindow) -> Result<(), String> {
     #[cfg(not(target_os = "windows"))]
     {
         window
-            .set_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
+            .set_size(LogicalSize::new(profile.width, profile.height))
             .map_err(|error| error.to_string())?;
         set_window_position_on_monitor(window, position, &monitor)?;
         *window
@@ -2766,6 +2724,7 @@ fn finish_window_snap_drag(window: &WebviewWindow, app: &AppHandle, state: &Wind
     *state.snap_motion.lock().unwrap() = SnapMotionState::default();
     hide_snap_overlay(app, Some(window));
     *state.suppress_blur_hide.lock().unwrap() = false;
+    window_layout::schedule_capture(window.clone());
 }
 
 #[cfg(target_os = "windows")]
@@ -3120,21 +3079,13 @@ fn start_window_snap_drag(
 ) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        // A visible user drag owns the window immediately. Cancel any delayed
-        // placement writes and apply the latest deferred content height first.
+        // A visible user drag owns the window immediately. Cancel delayed
+        // mixed-DPI placement writes so they cannot undo the user's move.
         {
             let mut generation = state.window_placement_generation.lock().unwrap();
             *generation = generation.wrapping_add(1);
         }
-        let pending_content_height = {
-            let mut placed = state.main_window_placed.lock().unwrap();
-            let pending = state.pending_content_height.lock().unwrap().take();
-            *placed = true;
-            pending
-        };
-        if let Some(height) = pending_content_height {
-            apply_window_content_height(&window, height)?;
-        }
+        *state.main_window_placed.lock().unwrap() = true;
     }
 
     let initial_position = window.outer_position().map_err(|error| error.to_string())?;
@@ -3224,70 +3175,16 @@ fn set_quick_look_window_state(window: WebviewWindow, previewing: bool) -> Resul
     Ok(())
 }
 
-fn apply_window_content_height(window: &WebviewWindow, clamped_height: f64) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    let previous_center = if window.is_visible().unwrap_or(false) {
-        window
-            .outer_position()
-            .ok()
-            .zip(window.outer_size().ok())
-            .map(|(position, size)| {
-                (
-                    position.x as f64 + size.width as f64 / 2.0,
-                    position.y as f64 + size.height as f64 / 2.0,
-                )
-            })
-    } else {
-        None
-    };
-
-    window
-        .set_size(LogicalSize::new(WINDOW_WIDTH, clamped_height))
-        .map_err(|e| e.to_string())?;
-
-    #[cfg(target_os = "windows")]
-    if let (Some((center_x, center_y)), Ok(size)) = (previous_center, window.outer_size()) {
-        // Resizing a borderless WebView keeps its top-left corner fixed. Move
-        // it back by half the size delta so a content-height update cannot
-        // pull the launcher away from the monitor center.
-        set_window_position(
-            &window,
-            PersistedWindowPosition {
-                x: center_x - size.width as f64 / 2.0,
-                y: center_y - size.height as f64 / 2.0,
-            },
-        )?;
-    }
-
-    let _ = sync_terminal_sessions_window(window.app_handle());
-    Ok(())
-}
-
 #[tauri::command]
 fn window_set_content_height(
     window: WebviewWindow,
     height: f64,
     zoom_factor: f64,
 ) -> Result<(), String> {
-    // Retain compatibility with older renderers, but content and page zoom
-    // must never change the launcher's standard native dimensions.
-    let _ = (height, zoom_factor);
-    if window.label() != "main" {
-        return Ok(());
-    }
-    let clamped_height = WINDOW_HEIGHT;
-
-    #[cfg(target_os = "windows")]
-    if window.label() == "main" {
-        let state = window.state::<WindowBehaviorState>();
-        let placed = state.main_window_placed.lock().unwrap();
-        if !*placed {
-            *state.pending_content_height.lock().unwrap() = Some(clamped_height);
-            return Ok(());
-        }
-    }
-
-    apply_window_content_height(&window, clamped_height)
+    // Legacy renderers may still report content height. The user's per-display
+    // dimensions, not the current surface or UI zoom, now own native sizing.
+    let _ = (window, height, zoom_factor);
+    Ok(())
 }
 
 #[tauri::command]
@@ -3496,6 +3393,7 @@ pub fn run() {
             shutting_down: AtomicBool::new(false),
         })
         .manage(WindowBehaviorState::default())
+        .manage(window_layout::WindowLayoutState::default())
         .manage(native_terminal::NativeTerminalState::default())
         .on_window_event(|window, event| {
             if window.label() == "settings" {
@@ -3550,6 +3448,20 @@ pub fn run() {
                 return;
             }
             match event {
+                tauri::WindowEvent::Resized(size) => {
+                    if let Some(main_window) = window.app_handle().get_webview_window("main") {
+                        window_layout::sync_viewport(&main_window, *size);
+                        window_layout::schedule_capture(main_window);
+                        let _ = sync_terminal_sessions_window(window.app_handle());
+                    }
+                }
+                tauri::WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    if let Some(main_window) = window.app_handle().get_webview_window("main") {
+                        window_layout::sync_viewport(&main_window, *new_inner_size);
+                        window_layout::schedule_capture(main_window);
+                        let _ = sync_terminal_sessions_window(window.app_handle());
+                    }
+                }
                 tauri::WindowEvent::Moved(position) => {
                     #[cfg(target_os = "windows")]
                     let _ = position;
@@ -3593,6 +3505,7 @@ pub fn run() {
                             }
                         }
                         persist_current_window_position(&main_window);
+                        window_layout::schedule_capture(main_window.clone());
                         let _ = sync_terminal_sessions_window(window.app_handle());
                     }
                 }
@@ -3671,6 +3584,9 @@ pub fn run() {
             set_suppress_blur_hide,
             set_quick_look_window_state,
             window_set_content_height,
+            window_layout::get_launcher_layout,
+            window_layout::set_launcher_layout,
+            window_layout::start_launcher_resize,
             update_raymes_shortcut,
             native_input::move_mouse,
             native_input::click,

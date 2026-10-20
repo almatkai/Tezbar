@@ -60,6 +60,7 @@ import {
   shouldPromoteUpdateCommand,
 } from '../shared/updater'
 import { CommandSurfaceBadge, CommandSurfaceFooter, CommandSurfaceHeader } from './ui/CommandSurface'
+import { LauncherAppearanceButton } from './LauncherAppearance'
 import {
   addLauncherQueryHistoryEntry,
   launcherQueryHistoryEntry,
@@ -86,10 +87,21 @@ import { aiChatBootForInput, commandBarInputMode } from './commandBarInputMode'
 import { readCachedChatHistory, writeCachedChatHistory } from './agentChat/historyCache'
 import { RELEASE_NOTES_COMMAND_ID, withReleaseNotesResult } from './releaseNotes'
 import { LauncherGlyph, Squircle, launcherIcon } from './launcherIcons'
+import {
+  MAX_PINNED_COMMANDS,
+  type PinnedCommand,
+  insertPinnedCommand,
+  isPinnableSearchResult,
+  normalizePinnedSlots,
+  parsePinnedSlotFromKeyEvent,
+  pinnedSlotShortcutKey,
+  readPinnedCommands,
+  reorderPinnedByInsertIndex,
+  writePinnedCommands,
+} from './pinnedCommands'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
-const PINNED_COMMANDS_KEY = 'tezbar:pinned-commands'
 const LAUNCHER_QUERY_HISTORY_KEY = 'tezbar:launcher-query-history:v1'
 const HOME_SEARCH_RESULTS_CACHE_KEY = 'tezbar:home-search-results:v1'
 const SEARCH_CANDIDATES_CACHE_KEY = 'tezbar:search-candidates:v1'
@@ -98,7 +110,6 @@ const MAX_OPTIMISTIC_SEARCH_CANDIDATES = 1_000
 const QUERY_RESULTS_CACHE_TTL_MS = 5_000
 const QUERY_RESULTS_CACHE_LIMIT = 32
 const PINNED_HOME_RESULT_SCORE_PENALTY = 850
-const MAX_PINNED_COMMANDS = 12
 const SEARCH_RESULT_PIN_DRAG_THRESHOLD = 6
 const COMMAND_HINT = { shortcut: '>', label: 'Open terminal' } as const
 let measureCanvas: HTMLCanvasElement | undefined
@@ -169,17 +180,6 @@ function terminalSessionAge(ts: number): string {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-type PinnedCommand = {
-  id: string
-  title: string
-  subtitle: string
-  category: SearchResult['category']
-  action: SearchResult['action']
-  iconDataUrl?: string
-  /** ⌥ + number-row key derived from the pin's current order (10→0, 11→-, 12→=). */
-  slot: number
-}
-
 type PinnedCommandTooltip = {
   id: string
   title: string
@@ -244,58 +244,6 @@ function writeRecentExtensionCommands(next: string[]): void {
     RECENT_EXTENSION_COMMANDS_KEY,
     JSON.stringify(next.slice(0, RECENT_EXTENSION_COMMANDS_LIMIT))
   )
-}
-
-function readPinnedCommands(): PinnedCommand[] {
-  try {
-    const raw = window.localStorage.getItem(PINNED_COMMANDS_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-
-    const drafts = parsed
-      .map((item) => {
-        const id = String(item?.id ?? '').trim()
-        const title = String(item?.title ?? '').trim()
-        const subtitle = String(item?.subtitle ?? '').trim()
-        const category = item?.category
-        const action = item?.action
-        const hasValidAction =
-          typeof action === 'object' &&
-          action !== null &&
-          typeof (action as { type?: unknown }).type === 'string'
-
-        if (!id || !title || typeof category !== 'string' || !hasValidAction) {
-          return null
-        }
-
-        const rawSlot = item?.slot
-        const slotNum =
-          typeof rawSlot === 'number' && rawSlot >= 1 && rawSlot <= MAX_PINNED_COMMANDS
-            ? Math.floor(rawSlot)
-            : undefined
-        const iconDataUrl =
-          typeof item?.iconDataUrl === 'string' && item.iconDataUrl.trim()
-            ? item.iconDataUrl
-            : undefined
-
-        return {
-          id,
-          title,
-          subtitle,
-          category: category as SearchResult['category'],
-          action: action as SearchResult['action'],
-          ...(iconDataUrl ? { iconDataUrl } : {}),
-          ...(slotNum !== undefined ? { slot: slotNum } : {}),
-        } satisfies PinnedCommandDraft
-      })
-      .filter((item): item is PinnedCommandDraft => item !== null)
-      .slice(0, MAX_PINNED_COMMANDS)
-
-    return normalizePinnedSlots(drafts)
-  } catch {
-    return []
-  }
 }
 
 function readCachedHomeSearchResults(): SearchResult[] {
@@ -404,62 +352,6 @@ function mergeSearchCandidates(current: SearchResult[], incoming: SearchResult[]
     if (!byId.has(item.id)) byId.set(item.id, item)
   }
   return Array.from(byId.values()).slice(0, MAX_OPTIMISTIC_SEARCH_CANDIDATES)
-}
-
-function writePinnedCommands(next: PinnedCommand[]): void {
-  window.localStorage.setItem(
-    PINNED_COMMANDS_KEY,
-    JSON.stringify(next.slice(0, MAX_PINNED_COMMANDS))
-  )
-}
-
-function parsePinnedSlotFromKeyEvent(event: KeyboardEvent): number | null {
-  const fromCode = /^Digit([0-9])$/.exec(event.code)?.[1]
-  if (fromCode) return fromCode === '0' ? 10 : Number(fromCode)
-  if (event.code === 'Minus') return 11
-  if (event.code === 'Equal') return 12
-  if (/^[1-9]$/.test(event.key)) return Number(event.key)
-  if (event.key === '0') return 10
-  return null
-}
-
-function pinnedSlotShortcutKey(slot: number): string {
-  if (slot === 10) return '0'
-  if (slot === 11) return '-'
-  if (slot === 12) return '='
-  return String(slot)
-}
-
-type PinnedCommandDraft = Omit<PinnedCommand, 'slot'> & { slot?: number }
-
-function isPinnableSearchResult(result: SearchResult): boolean {
-  return (
-    result.category !== 'calculator' &&
-    result.category !== 'color-converter' &&
-    !result.id.startsWith(DEEP_SEARCH_RESULT_PREFIX)
-  )
-}
-
-/** Keep shortcuts aligned with the current pin order. */
-function normalizePinnedSlots(pins: PinnedCommandDraft[]): PinnedCommand[] {
-  return pins.slice(0, MAX_PINNED_COMMANDS).map((pin, index) => ({ ...pin, slot: index + 1 }))
-}
-
-function reorderPinnedByInsertIndex(
-  pins: PinnedCommand[],
-  draggedId: string,
-  insertIndex: number
-): PinnedCommand[] {
-  const from = pins.findIndex((p) => p.id === draggedId)
-  if (from < 0) return pins
-  let to = Math.max(0, Math.min(insertIndex, pins.length))
-  const next = [...pins]
-  const [item] = next.splice(from, 1)
-  if (!item) return pins
-  if (from < to) to -= 1
-  if (from === to) return pins
-  next.splice(to, 0, item)
-  return next
 }
 
 /* Small search icon — refined, not emoji */
@@ -1375,6 +1267,7 @@ export default function CommandBar({
   onOpenEmojiPicker,
   onStartOnboarding,
   onOpenTerminal,
+  onOpenKnowledgeSettings,
 }: {
   hasUnreadReleaseNotes: boolean
   onOpenReleaseNotes: () => void
@@ -1394,6 +1287,7 @@ export default function CommandBar({
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
   onOpenEmojiPicker: () => void
   onStartOnboarding: () => void
+  onOpenKnowledgeSettings?: () => void
   onOpenTerminal: (
     initialCommand?: string,
     workingDirectory?: string,
@@ -2492,7 +2386,7 @@ export default function CommandBar({
     showActionMsg(`Unpinned: ${target.title}`)
   }
 
-  const pinCommand = (result: SearchResult, insertIndex = 0): void => {
+  const pinCommand = (result: SearchResult, insertIndex = pinnedCommands.length): void => {
     if (!isPinnableSearchResult(result)) {
       showActionMsg('Temporary results can’t be pinned')
       return
@@ -2509,21 +2403,7 @@ export default function CommandBar({
       return
     }
 
-    const to = Math.max(0, Math.min(insertIndex, pinnedCommands.length))
-    const next: PinnedCommand[] = [
-      ...pinnedCommands.slice(0, to),
-      {
-        id: result.id,
-        title: result.title,
-        subtitle: result.subtitle,
-        category: result.category,
-        action: result.action,
-        ...(result.iconDataUrl ? { iconDataUrl: result.iconDataUrl } : {}),
-        slot: 1,
-      },
-      ...pinnedCommands.slice(to),
-    ].slice(0, MAX_PINNED_COMMANDS)
-
+    const next = insertPinnedCommand(pinnedCommands, result, insertIndex)
     persistPinnedCommands(next)
     showActionMsg(`Pinned: ${result.title}`)
     focusCommandInput()
@@ -4288,7 +4168,7 @@ export default function CommandBar({
             ) : null}
             {killPortMode ? (
               <>
-                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1">
+                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1 select-none">
                   {killPortQuery}
                 </span>
                 <PortArgumentChip />
@@ -4296,7 +4176,7 @@ export default function CommandBar({
             ) : null}
             {pendingInlineArgument ? (
               <>
-                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1">
+                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1 select-none">
                   {value.trim() || pendingAction?.title}
                 </span>
                 <InlineArgumentChip
@@ -4305,7 +4185,7 @@ export default function CommandBar({
               </>
             ) : null}
             <div
-              className="relative min-w-0 flex-1 flex items-center"
+              className="relative min-w-0 flex-1 flex items-center select-none"
               style={inputTextWidth ? { minWidth: inputTextWidth } : undefined}
             >
               {terminalMode ? (
@@ -4317,10 +4197,10 @@ export default function CommandBar({
                 <RollingText items={COMMAND_HINTS} />
               ) : null}
               {isSlashInput && !isAiMode ? (
-                <span className="path-command-hint" aria-hidden>
-                  <span className="path-command-hint__value">{value}</span>
-                  <span className="rolling-command-hint__shortcut">{COMMAND_HINT.shortcut}</span>
-                  <span className="rolling-command-hint__label">{COMMAND_HINT.label}</span>
+                <span className="path-command-hint select-none" aria-hidden>
+                  <span className="path-command-hint__value select-none">{value}</span>
+                  <span className="rolling-command-hint__shortcut select-none">{COMMAND_HINT.shortcut}</span>
+                  <span className="rolling-command-hint__label select-none">{COMMAND_HINT.label}</span>
                 </span>
               ) : null}
               <input
@@ -4465,7 +4345,7 @@ export default function CommandBar({
                 }
                 autoComplete="off"
                 spellCheck={false}
-                className="w-full min-w-0 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0"
+                className="w-full min-w-0 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0 select-text"
               />
             </div>
             {canEnterKillPortMode ? (
@@ -4986,7 +4866,7 @@ export default function CommandBar({
           {/* AI mode chat history */}
           {showChatHistoryPlaceholder ? (
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5 select-none">
                 <ul className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5">
                   <li className="relative z-[1] px-2 py-2 text-[12px] text-ink-4">
                     {chatHistoryLoaded
@@ -5005,7 +4885,7 @@ export default function CommandBar({
                 setFollowSearchSelection(false)
               }}
             >
-              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5 select-none">
                 <GlideList
                   selectedIndex={selectedSearch}
                   itemCount={filteredChatHistory.length}
@@ -5054,7 +4934,7 @@ export default function CommandBar({
                 setSelectedSearch(-1)
               }}
             >
-              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5 select-none">
                 <GlideList
                   selectedIndex={terminalSelectedIndex}
                   itemCount={terminalSessionCount === 0 ? 1 : terminalSessionCount}
@@ -5119,7 +4999,7 @@ export default function CommandBar({
                 setFollowSearchSelection(false)
               }}
             >
-              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5 select-none">
                 <GlideList
                   selectedIndex={selectedSearch}
                   itemCount={visibleSearchCount}
@@ -5536,11 +5416,15 @@ export default function CommandBar({
       </div>
 
       {/* Status bar: shortcut hints, Deep Search and background tasks */}
-      <CommandSurfaceFooter taskActions={{
-        onOpenIndexing: onOpenIndexingPage,
-        onOpenExtensionRuntime,
-        onOpenUpdate: onOpenSettings,
-      }}>
+      <CommandSurfaceFooter
+        trailing={<LauncherAppearanceButton />}
+        taskActions={{
+          onOpenIndexing: onOpenIndexingPage,
+          onOpenExtensionRuntime,
+          onOpenUpdate: onOpenSettings,
+          onOpenKnowledgeSettings,
+        }}
+      >
             {terminalMode ? (
               <>
                 <Hint

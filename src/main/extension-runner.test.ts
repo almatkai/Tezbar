@@ -1210,7 +1210,12 @@ describe('extension runtime list pagination', () => {
     }
   })
 
-  it('supports com.raycast:/oauth custom protocol redirect and bridge for Google OAuth services', async () => {
+  // This fixture reads the port file created by registerWindowsOAuthProtocols;
+  // that OS bridge intentionally does not register or write a port on macOS.
+  // The cross-platform loopback OAuth flow is exercised by the preceding test.
+  it.runIf(process.platform === 'win32')(
+    'supports com.raycast:/oauth custom protocol redirect and bridge for Google OAuth services',
+    async () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-google-custom-oauth-'))
     mkdirSync(join(extensionRoot, '.sc-build'))
     let tokenRequests = 0

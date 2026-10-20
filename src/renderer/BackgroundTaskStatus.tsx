@@ -90,7 +90,7 @@ function TaskIcon({
 function taskValue(task: BackgroundTask): string {
   if (task.kind === 'indexing' || task.kind === 'update') {
     if (task.progress !== undefined) return `${Math.round(task.progress * 100)}%`
-    return 'Updating…'
+    return task.kind === 'indexing' ? 'Indexing…' : 'Updating…'
   }
   return formatDuration(task.remainingSeconds ?? 0)
 }
@@ -99,11 +99,13 @@ export default function BackgroundTaskStatus({
   onOpenIndexing,
   onOpenExtensionRuntime,
   onOpenUpdate,
+  onOpenKnowledgeSettings,
   placement = 'end',
 }: {
   onOpenIndexing: () => void
   onOpenExtensionRuntime: (initial: ExtensionRuntimeViewPayload) => void
   onOpenUpdate?: () => void
+  onOpenKnowledgeSettings?: () => void
   /** Which footer edge the chip sits on; the popover opens toward the window. */
   placement?: 'start' | 'end'
 }): JSX.Element | null {
@@ -261,6 +263,10 @@ export default function BackgroundTaskStatus({
       return
     }
     if (task.kind === 'indexing') {
+      if (task.id.startsWith('semantic-') && onOpenKnowledgeSettings) {
+        onOpenKnowledgeSettings()
+        return
+      }
       onOpenIndexing()
       return
     }
@@ -396,7 +402,7 @@ export default function BackgroundTaskStatus({
         )}
       >
         <TaskIcon kind={primaryTask.kind} compact />
-        <span className="max-w-[120px] truncate font-medium">{primaryTask.title}</span>
+        <span className="max-w-[140px] truncate font-medium">{primaryTask.title}</span>
         <span className="ml-0.5 font-mono tabular-nums opacity-80">{taskValue(primaryTask)}</span>
         <svg
           width="12"

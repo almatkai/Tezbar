@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   discoverMajorKnowledgeFolders,
   isKnowledgeCandidatePath,
@@ -31,6 +31,35 @@ async function waitUntilComplete(service: KnowledgeService): Promise<void> {
 }
 
 describe('knowledge service', () => {
+  it('serves minimal background progress without querying storage', async () => {
+    const data = await mkdtemp(join(tmpdir(), 'tezbar-cached-progress-'))
+    cleanup.push(data)
+    process.env.APPDATA_DIR = data
+    const service = new KnowledgeService()
+    expect(service.cachedBackgroundStatus()).toBeNull()
+    service.snapshot()
+    const store = getKnowledgeStore()
+    const reads = [
+      vi.spyOn(store, 'counts'),
+      vi.spyOn(store, 'storageBytes'),
+      vi.spyOn(store, 'listRoots'),
+      vi.spyOn(store, 'getGemmaIndex'),
+    ]
+    try {
+      for (let tick = 0; tick < 3; tick += 1) {
+        const progress = service.cachedBackgroundStatus()
+        expect(progress?.status).toEqual(service.cachedStatus())
+        expect(Object.keys(progress?.settings ?? {})).toEqual(['embeddingModel'])
+        expect(progress).not.toHaveProperty('roots')
+        expect(progress).not.toHaveProperty('storageBytes')
+      }
+      for (const read of reads) expect(read).not.toHaveBeenCalled()
+    } finally {
+      for (const read of reads) read.mockRestore()
+      service.shutdown()
+    }
+  })
+
   it('discovers useful major folders and rejects system/generated entries', async () => {
     const home = await mkdtemp(join(tmpdir(), 'tezbar-major-folders-'))
     cleanup.push(home)

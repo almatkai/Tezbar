@@ -119,6 +119,33 @@ describe('search modes', () => {
     })
   })
 
+  it.each(['сркщьу', 'СРКЩЬУ', 'chrome'])(
+    'keeps a matching app ahead of Deep Search for %s',
+    (query) => {
+      const candidates = [
+        result('app:chrome', 'Google Chrome', '/Applications/Google Chrome.app', 'applications'),
+      ]
+      expect(hasGoodMetadataMatch(query, candidates)).toBe(true)
+      expect(buildDeepSearchRecommendation(query, candidates)).toBeNull()
+    }
+  )
+
+  it.each(['vs code', 'мы сщву', 'vs сщву', 'мы code', 'вс код'])(
+    'recognizes the real Visual Studio Code name for %s',
+    (query) => {
+      expect(
+        buildDeepSearchRecommendation(query, [
+          result(
+            'app:vscode',
+            'Visual Studio Code',
+            '/Applications/Visual Studio Code.app',
+            'applications'
+          ),
+        ])
+      ).toBeNull()
+    }
+  )
+
   it('does not recommend Deep Search when local metadata is already close', () => {
     expect(
       buildDeepSearchRecommendation('quarterly revenue', [

@@ -185,6 +185,10 @@ type KnowledgeServiceOptions = {
   statusSink?: (status: KnowledgeStatus) => void
 }
 
+export type KnowledgeBackgroundStatus = Pick<KnowledgeSnapshot, 'status' | 'semanticSearch'> & {
+  settings: Pick<KnowledgeSettings, 'embeddingModel'>
+}
+
 export class KnowledgeService {
   private readonly store = getKnowledgeStore()
   private readonly semanticSearch = new SemanticSearch(this.store, {
@@ -200,6 +204,7 @@ export class KnowledgeService {
     canIndex: () => this.mode !== 'worker' && !this.manuallyPaused,
     waitForIdle: (signal) => this.waitForInteractiveIdle(signal),
     speed: () => this.settings.indexingSpeed ?? 'medium',
+    onProgress: (force) => this.emitSemanticStatusEvent(force),
   })
   private readonly backends = new Map<string, IndexingBackend>([
     ['local', new LocalIndexingBackend()],
@@ -313,6 +318,16 @@ export class KnowledgeService {
    *  which on a large library blocks the event loop that answers chat history. */
   cachedStatus(): KnowledgeStatus | null {
     return this.initialized ? { ...this.status } : null
+  }
+
+  /** Minimal launcher progress; no initialization, root reads, or corpus counts. */
+  cachedBackgroundStatus(): KnowledgeBackgroundStatus | null {
+    if (!this.initialized) return null
+    return {
+      status: { ...this.status },
+      settings: { embeddingModel: this.settings.embeddingModel },
+      semanticSearch: this.mode !== 'worker' ? this.semanticSearch.cachedSnapshot() : undefined,
+    }
   }
 
   addRoot(path: string): KnowledgeSnapshot {
@@ -934,6 +949,14 @@ export class KnowledgeService {
     this.status = { ...this.status, ...counts }
   }
 
+  private emitSemanticStatusEvent(force = false): void {
+    const now = Date.now()
+    if (force || now - this.lastStatusEventAt >= STATUS_EVENT_INTERVAL_MS) {
+      this.statusSink(this.status)
+      this.lastStatusEventAt = now
+    }
+  }
+
   private updateStatus(status: KnowledgeStatus): void {
     const stateChanged = status.state !== this.status.state
     this.status = status
@@ -1092,6 +1115,10 @@ export function getKnowledgeSnapshotIfInitialized(): KnowledgeSnapshot | null {
 /** Cheap status for UI polling; never touches storage. */
 export function getKnowledgeStatusIfInitialized(): KnowledgeStatus | null {
   return service?.cachedStatus() ?? null
+}
+
+export function getKnowledgeBackgroundStatusIfInitialized(): KnowledgeBackgroundStatus | null {
+  return service?.cachedBackgroundStatus() ?? null
 }
 
 export function shutdownKnowledgeService(): void {
