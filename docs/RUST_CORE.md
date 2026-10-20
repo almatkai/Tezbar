@@ -16,6 +16,7 @@ JavaScript extension ecosystem; there is no general TypeScript backend fallback.
 | OS opening, capture, input, settings windows and paste                                | Native platform adapters                |
 | PTY / ConPTY sessions, output, resize and termination                                 | `native_terminal` and `terminal_bridge` |
 | Installed extension metadata, preferences and catalog                                 | `native_core/extensions`                |
+| Ported extension commands (first pilot: Perplexity)                                    | `native_core/extensions`                |
 | Extension installation/build and Raycast JavaScript execution                         | Isolated extension worker               |
 
 External tools remain external: Pi/OpenCode, local speech engines, document
@@ -31,8 +32,10 @@ IPC channels checks that every old route has an owner; this verifies coverage,
 while service fixtures verify payloads and behavior.
 
 Starting Tezbar, searching, opening settings, reading installed extensions and
-using notes do not start or download Bun. Extension execution/install operations
-start the compatibility worker on demand. The host uses bounded, strict UTF-8
+using notes do not start or download Bun. Ported extension commands also run
+without Bun; [the native extension pilot](NATIVE_EXTENSIONS.md) documents their
+coverage. Unported extension execution and extension installation start the
+compatibility worker on demand. The host uses bounded, strict UTF-8
 JSON frames separated by LF, correlated requests/replies, readiness and operation
 deadlines, and an explicit host-service allowlist. Logs go to stderr. Worker
 failure rejects pending calls; a later request can start a replacement. App
@@ -110,7 +113,7 @@ packaging. A separate-profile debug desktop smoke with Bun absent from PATH veri
 Unicode note search/opening, settings, Knowledge state and the installed-extension
 list without creating a JS child process.
 
-Final local checks on 2026-10-21 passed 594 TypeScript tests (9 skipped), 169
+Rust core migration checks on 2026-10-21 passed 594 TypeScript tests (9 skipped), 169
 native library tests (2 opt-in tests ignored), the separately invoked real-host
 worker test, type checking and 8 release-policy tests. Native tests ran on Rust
 1.85 with the default thread stack. The local macOS release app was built with
@@ -119,6 +122,11 @@ notarized release. Its isolated startup reached Rust-core readiness with no chil
 process. The optimized Rust-host test also passed against the actual bundled
 worker/resources with Bun 1.2.5. UI automation could not attach to this release window, so that attempt
 does not establish a release UI smoke pass.
+
+The subsequent [Perplexity native pilot](NATIVE_EXTENSIONS.md#verification)
+passed 175 native tests in total, including six new extension tests that also
+passed in an optimized release build. Its documentation records the desktop
+validation limits separately.
 
 The CI matrix covers Windows x64 and macOS Intel/Apple Silicon. A configured CI
 matrix is not evidence of a completed run: Windows runtime/installer validation,

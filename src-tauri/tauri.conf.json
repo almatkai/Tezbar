@@ -58,6 +58,7 @@
       "icons/icon.ico"
     ],
     "resources": {
+      "../licenses/raycast-extensions-MIT.txt": "licenses/raycast-extensions-MIT.txt",
       "../dist-backend/vec0": "dist-backend/vec0",
       "../dist-backend/node_modules": "dist-backend/node_modules",
       "../resources/icons": "dist-backend/resources/icons",

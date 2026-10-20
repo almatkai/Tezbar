@@ -10,7 +10,7 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-struct Installed {
+pub(super) struct Installed {
     slug: String,
     path: PathBuf,
     manifest: Value,
@@ -88,6 +88,18 @@ fn installed(ctx: &CoreContext, id: &str) -> Result<Installed, String> {
         .into_iter()
         .find(|entry| entry.slug == wanted)
         .ok_or_else(|| format!("Extension is not installed: {id}"))
+}
+
+/// Native implementations use the same discovery and platform rules as the launcher.
+pub(super) fn installed_command(ctx: &CoreContext, id: &str, command: &str) -> Option<Installed> {
+    let extension = installed(ctx, id).ok()?;
+    (compatible(&extension.manifest, false)
+        && extension.manifest["commands"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|cmd| cmd["name"].as_str() == Some(command) && compatible(cmd, true)))
+    .then_some(extension)
 }
 
 fn platform() -> &'static str {
@@ -291,7 +303,7 @@ fn preference_schemas(extension: &Installed, command: Option<&str>) -> Vec<Value
     prefs
 }
 
-fn preferences(extension: &Installed, command: Option<&str>) -> CoreResult {
+pub(super) fn preferences(extension: &Installed, command: Option<&str>) -> CoreResult {
     let mut values = Map::new();
     for pref in preference_schemas(extension, command) {
         let Some(name) = pref["name"].as_str() else {
