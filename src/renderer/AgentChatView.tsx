@@ -23,9 +23,17 @@ import { formatLlmErrorMessage } from '../shared/llmErrors'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import { ModelPicker } from './ModelPicker'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
-import { Hint, HintBar, Kbd, cx } from './ui/primitives'
+import { Hint, Kbd, cx } from './ui/primitives'
+import {
+  CommandSurfaceAction,
+  CommandSurfaceBadge,
+  CommandSurfaceFooter,
+  CommandSurfaceHeader,
+  type CommandSurfaceTaskActions,
+} from './ui/CommandSurface'
 import { AgentMessage } from './agentChat/messages'
-import { makeChatId, summarizeChatTitle } from './agentChat/model'
+import { readCachedChatHistory, writeCachedChatHistory } from './agentChat/historyCache'
+import { historyPlaceholder, makeChatId, summarizeChatTitle } from './agentChat/model'
 import { isNearScrollBottom } from './agentChat/streaming'
 import {
   agentMessageApproval,
@@ -65,16 +73,23 @@ export default function AgentChatView({
   boot,
   onBack,
   onOpenSettings,
+  taskActions,
 }: {
   boot: AiChatBoot
   onBack: () => void
   onOpenSettings: () => void
+  taskActions?: CommandSurfaceTaskActions
 }): JSX.Element {
   const [session, setSession] = useState<ChatSession | null>(null)
   const [workingDirectory, setWorkingDirectory] = useState<string | undefined>(
     boot.kind === 'submit' || boot.kind === 'newChat' ? boot.workingDirectory : undefined
   )
-  const [history, setHistory] = useState<ChatSessionSummary[]>([])
+  const [history, setHistory] = useState<ChatSessionSummary[]>(
+    () => readCachedChatHistory() ?? []
+  )
+  const [historyLoading, setHistoryLoading] = useState(
+    () => readCachedChatHistory() === null
+  )
   const [historyOpen, setHistoryOpen] = useState(false)
   const [config, setConfig] = useState<LlmConfigRecord>({})
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -103,15 +118,23 @@ export default function AgentChatView({
   const followRef = useRef(true)
   const submittedBoot = useRef<string | null>(null)
 
-  const refreshHistory = useCallback(async () => {
+  const refreshHistory = useCallback(async (): Promise<ChatSessionSummary[]> => {
     try {
       const rows = await window.tezbar.chatList(40)
-      if (mounted.current) setHistory(rows)
+      writeCachedChatHistory(rows)
+      if (mounted.current) {
+        setHistory(rows)
+        setHistoryLoading(false)
+      }
+      return rows
     } catch {
-      if (mounted.current)
+      if (mounted.current) {
+        setHistoryLoading(false)
         setSaveWarning(
           'Chat history could not be loaded. Your current response is still available.'
         )
+      }
+      return readCachedChatHistory() ?? []
     }
   }, [])
 
@@ -196,7 +219,7 @@ export default function AgentChatView({
         ? lastStage?.status === 'running'
           ? lastStage.label
           : 'Generating response…'
-        : chat.status === 'error'
+        : chat.status === 'error' || (activeMessage && agentMessageError(activeMessage))
           ? 'Run failed'
           : 'Ready'
 
@@ -262,13 +285,7 @@ export default function AgentChatView({
   const send = useCallback(
     async (input: string, image?: AgentInputImage | null): Promise<void> => {
       const text = input.trim()
-      if (
-        !text ||
-        submissionRef.current ||
-        status === 'streaming' ||
-        status === 'submitted'
-      )
-        return
+      if (!text || submissionRef.current || status === 'streaming' || status === 'submitted') return
       const submission = makeChatId()
       const revision = viewRevision.current
       submissionRef.current = submission
@@ -456,12 +473,15 @@ export default function AgentChatView({
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      // Both requests are independent: waiting for the provider config before
+      // asking for history only doubles the time to the first list.
+      const rowsPromise = refreshHistory()
       try {
         const fresh = await window.tezbar.getLlmConfig()
         if (cancelled) return
         configRef.current = fresh
         setConfig(fresh)
-        await refreshHistory()
+        await rowsPromise
         if (cancelled) return
         if (boot.kind === 'resume') {
           await loadSession(boot.sessionId)
@@ -476,7 +496,7 @@ export default function AgentChatView({
           await attachScreen()
           return
         }
-        const rows = await window.tezbar.chatList(40)
+        const rows = await rowsPromise
         if (cancelled) return
         const recent = rows[0]
         if (
@@ -539,7 +559,7 @@ export default function AgentChatView({
     const textarea = document.getElementById('ai-chat-input')
     if (textarea) {
       textarea.style.height = 'auto'
-      textarea.style.height = `${Math.min(120, Math.max(42, textarea.scrollHeight))}px`
+      textarea.style.height = `${Math.min(120, Math.max(28, textarea.scrollHeight))}px`
     }
   }, [draft])
   useEffect(() => {
@@ -642,15 +662,22 @@ export default function AgentChatView({
       className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none"
     >
       <div className="agent-chat-shell flex min-h-0 flex-1 flex-col overflow-hidden">
-        <header className="relative flex shrink-0 items-center gap-3 border-b border-white/[0.075] px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[13px] font-semibold text-ink-1">
-              {session?.title || 'Agent'}
-            </h1>
-            <p className="truncate text-[10.5px] text-ink-4">
-              {workingDirectory || 'Inspect, find, and work on this computer'}
-            </p>
-          </div>
+        <CommandSurfaceHeader>
+          <CommandSurfaceBadge tone="ai" label="AI mode">
+            <span aria-hidden className="text-[11px] font-semibold leading-none">
+              AI
+            </span>
+          </CommandSurfaceBadge>
+          <h1
+            className="min-w-0 flex-1 truncate font-display text-[15px] font-normal text-ink-1"
+            title={
+              workingDirectory
+                ? `${session?.title || 'Agent'} · ${workingDirectory}`
+                : session?.title
+            }
+          >
+            {session?.title || 'New chat'}
+          </h1>
           <div className={cx('min-w-0 max-w-[45%]', busy ? 'pointer-events-none opacity-50' : '')}>
             <ModelPicker
               config={pickerConfig}
@@ -663,9 +690,8 @@ export default function AgentChatView({
               onBeforeOpen={() => setHistoryOpen(false)}
             />
           </div>
-          <button
-            type="button"
-            className={smallButton}
+          <CommandSurfaceAction
+            title="Chat history"
             aria-label="Chat history"
             aria-expanded={historyOpen}
             onClick={() => {
@@ -674,35 +700,59 @@ export default function AgentChatView({
               void refreshHistory()
             }}
           >
-            <span className="hidden sm:inline">History</span>
-            <span className="sm:hidden" aria-hidden>
-              ↺
-            </span>
-          </button>
-          <button
-            type="button"
-            className={smallButton}
+            <svg
+              aria-hidden
+              width="16"
+              height="16"
+              viewBox="0 0 18 18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.35"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4.7 4v3h3M4.7 7A4.8 4.8 0 1 1 4.2 10M9 6.5v3l2 1.2" />
+            </svg>
+          </CommandSurfaceAction>
+          <CommandSurfaceAction
+            title="New chat (⌘N)"
             aria-label="New chat"
             onClick={() => void resetChat()}
           >
-            <span className="hidden sm:inline">New</span>
-            <span className="sm:hidden" aria-hidden>
-              +
-            </span>
-          </button>
-          <button
-            type="button"
-            className={smallButton}
+            <svg
+              aria-hidden
+              width="16"
+              height="16"
+              viewBox="0 0 18 18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.35"
+              strokeLinecap="round"
+            >
+              <path d="M9 3.5v11M3.5 9h11" />
+            </svg>
+          </CommandSurfaceAction>
+          <CommandSurfaceAction
+            title="Back (Esc)"
             aria-label="Back"
             onClick={() => {
               void stopRun().then(onBack)
             }}
           >
-            <span className="hidden sm:inline">Back</span>
-            <span className="sm:hidden" aria-hidden>
-              ‹
-            </span>
-          </button>
+            <svg
+              aria-hidden
+              width="16"
+              height="16"
+              viewBox="0 0 18 18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.35"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m10.8 4.5-4.5 4.5 4.5 4.5" />
+            </svg>
+          </CommandSurfaceAction>
           {historyOpen ? (
             <div
               className="tezbar-popover absolute right-3 top-full z-40 mt-1 max-h-72 w-[min(360px,90vw)] overflow-auto p-2"
@@ -715,7 +765,7 @@ export default function AgentChatView({
                 </button>
               </div>
               {!history.length ? (
-                <p className="p-3 text-[12px] text-ink-4">No saved conversations yet.</p>
+                <p className="p-3 text-[12px] text-ink-4">{historyPlaceholder(historyLoading)}</p>
               ) : (
                 history.map((row) => (
                   <div
@@ -752,30 +802,7 @@ export default function AgentChatView({
               )}
             </div>
           ) : null}
-        </header>
-
-        <div className="flex shrink-0 items-center gap-2 border-b border-white/[0.045] px-4 py-2 text-[10.5px] text-ink-4">
-          <span
-            aria-hidden
-            className={cx(
-              'h-1.5 w-1.5 rounded-full',
-              busy ? 'bg-sky-300' : chat.status === 'error' ? 'bg-rose-400' : 'bg-ink-4/50'
-            )}
-          />
-          <span role="status" className="min-w-0 flex-1 truncate">
-            {statusLabel}
-          </span>
-          {busy ? <span aria-label="Elapsed time">{elapsed}s</span> : null}
-          {busy ? (
-            <button
-              type="button"
-              className="rounded-md px-2 py-0.5 text-ink-2 hover:bg-white/[0.07]"
-              onClick={() => void stopRun()}
-            >
-              Stop
-            </button>
-          ) : null}
-        </div>
+        </CommandSurfaceHeader>
 
         <div className="relative flex min-h-0 flex-1">
           <div
@@ -943,8 +970,8 @@ export default function AgentChatView({
           </p>
         ) : null}
 
-        <form onSubmit={submit} className="shrink-0 px-4 pb-4 pt-2" aria-label="Agent composer">
-          <div className="agent-composer mx-auto max-w-[780px] rounded-2xl border border-white/[0.12] bg-white/[0.035] p-2 focus-within:border-white/25">
+        <form onSubmit={submit} className="shrink-0 px-3.5 pb-3.5 pt-2" aria-label="Agent composer">
+          <div className="agent-composer mx-auto max-w-[780px] rounded-xl border border-white/[0.12] bg-white/[0.035] p-2 focus-within:border-white/25">
             {attachment ? (
               <div className="mb-2 flex items-center gap-3 px-2 pt-1">
                 <img
@@ -963,60 +990,120 @@ export default function AgentChatView({
                 </button>
               </div>
             ) : null}
-            <textarea
-              id="ai-chat-input"
-              aria-label="Message Agent"
-              rows={2}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={enterToSubmit}
-              placeholder="Ask the agent to inspect, find, or do something…"
-              className="block max-h-[120px] min-h-[42px] w-full resize-none bg-transparent px-2 py-1 text-[13px] leading-5 text-ink-1 outline-none placeholder:text-ink-4"
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <button
-                type="button"
-                className={smallButton}
+            <div className="flex min-w-0 items-end gap-2">
+              <CommandSurfaceAction
                 disabled={busy || capturing}
                 onClick={() => void attachScreen()}
                 aria-label="Attach active screen"
+                title="Attach active screen (⌘⇧S)"
               >
-                {capturing ? 'Capturing…' : 'Attach screen'}
-              </button>
-              <span className="hidden text-[10px] text-ink-4 sm:block">
-                Shift + Enter for a new line
-              </span>
+                {capturing ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-r-transparent motion-reduce:animate-none" />
+                ) : (
+                  <svg
+                    aria-hidden
+                    width="16"
+                    height="16"
+                    viewBox="0 0 18 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.35"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m5.2 9.5 3.8-3.8a2.3 2.3 0 0 1 3.2 3.2l-4.5 4.5a3.2 3.2 0 0 1-4.5-4.5l4.7-4.7" />
+                  </svg>
+                )}
+              </CommandSurfaceAction>
+              <textarea
+                id="ai-chat-input"
+                aria-label="Message Agent"
+                rows={1}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={enterToSubmit}
+                placeholder="Message Agent"
+                className="block max-h-[120px] min-h-7 min-w-0 flex-1 resize-none bg-transparent px-1 py-1 text-[13px] leading-5 text-ink-1 outline-none placeholder:text-ink-4"
+                autoComplete="off"
+                spellCheck={false}
+              />
               {busy ? (
                 <button
                   type="button"
-                  className="rounded-lg border border-white/15 px-3 py-1.5 text-[11.5px] text-ink-1 hover:bg-white/[0.06]"
+                  aria-label="Stop agent"
+                  title="Stop (Esc)"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/15 text-ink-1 hover:bg-white/[0.06]"
                   onClick={() => void stopRun()}
                 >
-                  Stop
+                  <svg aria-hidden width="14" height="14" viewBox="0 0 16 16">
+                    <rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor" />
+                  </svg>
                 </button>
               ) : (
                 <button
                   type="submit"
                   aria-label="Send message"
                   disabled={!draft.trim() || savingModel || capturing}
-                  className="rounded-lg bg-ink-1 px-4 py-1.5 text-[11.5px] font-medium text-glass-shell disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-ink-4"
+                  title={savingModel ? 'Saving model…' : 'Send (Enter)'}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-ink-1 text-glass-shell disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-ink-4"
                 >
-                  {savingModel ? 'Saving model…' : 'Send'}
+                  <svg
+                    aria-hidden
+                    width="16"
+                    height="16"
+                    viewBox="0 0 18 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M9 13.5v-9m-3.5 3L9 4l3.5 3.5" />
+                  </svg>
                 </button>
               )}
             </div>
           </div>
         </form>
       </div>
-      <div className="shrink-0 px-3 pb-1 text-ink-4">
-        <HintBar>
-          <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
-          <Hint label="New chat" keys={<Kbd>⌘N</Kbd>} />
-          <Hint label={busy ? 'Stop' : 'Back'} keys={<Kbd>Esc</Kbd>} />
-        </HintBar>
-      </div>
+      <CommandSurfaceFooter
+        taskActions={taskActions}
+        status={
+          busy || statusLabel === 'Run failed' ? (
+            <span
+              role="status"
+              className="max-w-[180px] truncate text-[11px] text-ink-3"
+              title={statusLabel}
+            >
+              {statusLabel}
+              {busy ? ` · ${elapsed}s` : ''}
+            </span>
+          ) : undefined
+        }
+      >
+        <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
+        <Hint
+          label="Attach screen"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>⇧</Kbd>
+              <Kbd>S</Kbd>
+            </>
+          }
+        />
+        <Hint label={busy ? 'Stop' : 'Send'} keys={<Kbd>{busy ? 'Esc' : '↵'}</Kbd>} />
+        <Hint
+          label="New chat"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>N</Kbd>
+            </>
+          }
+        />
+        {!busy ? <Hint label="Back" keys={<Kbd>Esc</Kbd>} /> : null}
+      </CommandSurfaceFooter>
     </div>
   )
 }

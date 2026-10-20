@@ -2911,6 +2911,15 @@ var SemanticSearch = class {
   }
 };
 
+// src/main/foreground.ts
+var holdUntil = 0;
+function foregroundRemainingMs(now = Date.now()) {
+  return Math.max(0, holdUntil - now);
+}
+function backgroundHoldRemainingMs(localUntil = 0, now = Date.now()) {
+  return Math.max(0, localUntil - now, foregroundRemainingMs(now));
+}
+
 // src/main/knowledge/service.ts
 var execFileAsync4 = (0, import_node_util4.promisify)(import_node_child_process6.execFile);
 var MAX_SCANNED_FILES = 75e3;
@@ -3136,6 +3145,14 @@ var KnowledgeService = class {
       storageBytes: this.store.storageBytes(),
       semanticSearch: this.mode !== "worker" ? this.semanticSearch.snapshot() : void 0
     };
+  }
+  /** Status alone, straight from memory.
+   *
+   *  The launcher polls background tasks about once a second. Building a full
+   *  snapshot there would mean storage stats and corpus counts on every tick,
+   *  which on a large library blocks the event loop that answers chat history. */
+  cachedStatus() {
+    return this.initialized ? { ...this.status } : null;
   }
   addRoot(path) {
     this.initialize();
@@ -3696,8 +3713,9 @@ var KnowledgeService = class {
     this.store.saveStatus(this.status);
   }
   async waitForInteractiveIdle(signal) {
-    while (!signal.aborted && Date.now() < this.interactiveUntil) {
-      const remaining = this.interactiveUntil - Date.now();
+    while (!signal.aborted) {
+      const remaining = backgroundHoldRemainingMs(this.interactiveUntil);
+      if (remaining <= 0) return;
       await new Promise((resolve2) => setTimeout(resolve2, Math.min(100, remaining)));
     }
   }
@@ -3721,7 +3739,7 @@ var KnowledgeService = class {
     const effectiveDelay = delayMs ?? profile.vectorBackfillDelayMs;
     this.vectorBackfillTimer = setTimeout(() => {
       this.vectorBackfillTimer = null;
-      if (Date.now() < this.interactiveUntil) {
+      if (backgroundHoldRemainingMs(this.interactiveUntil) > 0) {
         this.scheduleVectorBackfill(250);
         return;
       }

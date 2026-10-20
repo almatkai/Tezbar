@@ -724,6 +724,14 @@ function LauncherApp(): JSX.Element {
             <AgentChatView
               key={aiChatKey}
               boot={aiChatBoot}
+              taskActions={{
+                onOpenIndexing: () => setSurface('indexing'),
+                onOpenExtensionRuntime: (initial) => {
+                  setExtensionRuntimeInitial(initial)
+                  setSurface('extension-runtime')
+                },
+                onOpenUpdate: () => { void openNativeSettings('general') },
+              }}
               onBack={() => setSurface('command')}
               onOpenSettings={() => {
                 void openNativeSettings('ai')

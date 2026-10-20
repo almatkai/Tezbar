@@ -14,6 +14,7 @@ import { createConnection } from 'node:net'
 import { getKnowledgeService, shutdownKnowledgeService } from './knowledge/service'
 import { stopKnowledgeAgentGateway } from './knowledge/agent/gateway'
 import { warmSearchIndex } from './search/service'
+import { startLagMonitor } from './lagMonitor'
 
 declare const __RAYMES_PI_POLICY_SOURCE__: string
 
@@ -91,6 +92,13 @@ registerIpcHandlers(() => mockWin, {
 })
 
 startClipboardWatcher()
+
+// Every reply this process sends shares one event loop. Report a blocking
+// window as it happens, so a frozen launcher or history list points at the
+// operation that blocked instead of only at the channels that queued behind it.
+startLagMonitor((stallMs) => {
+  console.warn(`[server] event loop blocked for ${stallMs}ms`)
+})
 
 function writeReply(payload: Record<string, unknown>): void {
   process.stdout.write(`${JSON.stringify(payload)}\n`)

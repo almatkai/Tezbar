@@ -3,7 +3,7 @@ import { dirname, extname, join } from 'node:path'
 import { app } from '@tezbar/desktop-runtime'
 import type { BackgroundTask } from '../shared/backgroundTasks'
 import type { KnowledgeStatus } from '../shared/knowledge'
-import { getKnowledgeSnapshotIfInitialized } from './knowledge/service'
+import { getKnowledgeStatusIfInitialized } from './knowledge/service'
 
 type TimerFileContents = {
   name?: unknown
@@ -108,8 +108,11 @@ function listRunningTimers(now = Date.now()): BackgroundTask[] {
 
 export function listBackgroundTasks(now = Date.now()): BackgroundTask[] {
   const tasks: BackgroundTask[] = []
-  const knowledge = getKnowledgeSnapshotIfInitialized()
-  const indexing = knowledge ? indexingBackgroundTask(knowledge.status) : null
+  // Polled at ~1 Hz by the launcher footer, so this must not build a full
+  // knowledge snapshot: corpus counts and storage stats belong in the settings
+  // view, not on a status tick.
+  const status = getKnowledgeStatusIfInitialized()
+  const indexing = status ? indexingBackgroundTask(status) : null
   if (indexing) tasks.push(indexing)
   tasks.push(...listRunningTimers(now))
   return tasks

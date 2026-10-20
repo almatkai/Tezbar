@@ -12,6 +12,12 @@ export function summarizeChatTitle(firstUserText: string): string {
   return cleaned.length > 64 ? cleaned.slice(0, 61) + '…' : cleaned
 }
 
+/** Placeholder for the history panel: an empty list while the backend is still
+ *  answering is not the same as having no saved conversations. */
+export function historyPlaceholder(loading: boolean): string {
+  return loading ? 'Loading conversations…' : 'No saved conversations yet.'
+}
+
 export function buildAgentPromptFromChat(session: ChatSession, nextUserText: string): string {
   const turns = session.turns.slice()
   const lastTurn = turns.at(-1)

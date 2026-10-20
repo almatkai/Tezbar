@@ -42,6 +42,7 @@ import { appsProvider, listApplications } from './providers/appsProvider'
 import { clipboardProvider } from './providers/clipboardProvider'
 import { commandsProvider } from './providers/commandsProvider'
 import { scanInitialFileDocumentBatches, startFileWatcher } from './providers/filesProvider'
+import { waitForForegroundIdle } from '../foreground'
 import { addQuickNote, notesProvider } from './providers/notesProvider'
 import { quickLinksProvider } from './providers/quickLinksProvider'
 import { snippetsProvider } from './providers/snippetsProvider'
@@ -277,6 +278,7 @@ async function upsertProvider(provider: SearchProvider): Promise<void> {
     indexDb.removeDocumentsByCategory('extensions')
   }
   if (docs.length > 0) {
+    await waitForForegroundIdle()
     indexDb.upsertDocuments(docs)
   }
 }
@@ -291,7 +293,6 @@ async function refreshAllProviders(): Promise<void> {
     upsertProvider(appsProvider),
   ])
   indexDb.clearSearchCache()
-
 }
 
 async function refreshVolatileProviders(): Promise<void> {
@@ -348,6 +349,9 @@ function startBackgroundFileIndexing(): void {
       FILE_INDEX_LIMIT,
       FILE_INDEX_WRITE_BATCH_SIZE
     )) {
+      // Walking the tree is synchronous `stat` work in the same process that
+      // answers the launcher, so it steps aside for a request in flight too.
+      await waitForForegroundIdle()
       const upserts = batch.filter((document) => {
         const persistedMtime = existing.get(document.id)
         existing.delete(document.id)
@@ -356,6 +360,10 @@ function startBackgroundFileIndexing(): void {
         )
       })
       if (upserts.length > 0) {
+        // A batch is a synchronous SQLite transaction. Let a request the user
+        // is waiting for (history, launcher, a chat turn) run first instead of
+        // queueing behind the file index.
+        await waitForForegroundIdle()
         indexDb.upsertDocuments(upserts)
         changed = true
       }
@@ -363,6 +371,7 @@ function startBackgroundFileIndexing(): void {
     }
     const removals = Array.from(existing.keys())
     for (let offset = 0; offset < removals.length; offset += FILE_INDEX_WRITE_BATCH_SIZE) {
+      await waitForForegroundIdle()
       indexDb.removeDocumentsByIds(removals.slice(offset, offset + FILE_INDEX_WRITE_BATCH_SIZE))
       changed = true
       await new Promise<void>((resolve) => setImmediate(resolve))
@@ -1009,17 +1018,16 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
     return true
   })
   const fileResults = asResults.filter((result) => result.category === 'files')
-  const indexedSourceResults = (knowledgeService?.searchMetadata(trimmed, 24) ?? [])
-    .map(
-      (hit, index): SearchResult => ({
-        id: `file:${hit.path}`,
-        title: hit.title,
-        subtitle: hit.path,
-        category: 'files',
-        score: 760 + Math.round(hit.score * 160) - index,
-        action: { type: 'open-file', path: hit.path },
-      })
-    )
+  const indexedSourceResults = (knowledgeService?.searchMetadata(trimmed, 24) ?? []).map(
+    (hit, index): SearchResult => ({
+      id: `file:${hit.path}`,
+      title: hit.title,
+      subtitle: hit.path,
+      category: 'files',
+      score: 760 + Math.round(hit.score * 160) - index,
+      action: { type: 'open-file', path: hit.path },
+    })
+  )
   const allFileResults = uniqById([...fileResults, ...indexedSourceResults])
 
   const openPortResults = isDeepSearch ? [] : await searchPortManagerOpenPorts(trimmed)

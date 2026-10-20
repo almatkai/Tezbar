@@ -34,6 +34,7 @@ import {
 } from './depth'
 import { KnowledgeWorkerHost } from './workerHost'
 import { SemanticSearch } from './embeddings/semanticSearch'
+import { backgroundHoldRemainingMs } from '../foreground'
 
 const execFileAsync = promisify(execFile)
 const MAX_SCANNED_FILES = 75_000
@@ -303,6 +304,15 @@ export class KnowledgeService {
       storageBytes: this.store.storageBytes(),
       semanticSearch: this.mode !== 'worker' ? this.semanticSearch.snapshot() : undefined,
     }
+  }
+
+  /** Status alone, straight from memory.
+   *
+   *  The launcher polls background tasks about once a second. Building a full
+   *  snapshot there would mean storage stats and corpus counts on every tick,
+   *  which on a large library blocks the event loop that answers chat history. */
+  cachedStatus(): KnowledgeStatus | null {
+    return this.initialized ? { ...this.status } : null
   }
 
   addRoot(path: string): KnowledgeSnapshot {
@@ -944,8 +954,9 @@ export class KnowledgeService {
   }
 
   private async waitForInteractiveIdle(signal: AbortSignal): Promise<void> {
-    while (!signal.aborted && Date.now() < this.interactiveUntil) {
-      const remaining = this.interactiveUntil - Date.now()
+    while (!signal.aborted) {
+      const remaining = backgroundHoldRemainingMs(this.interactiveUntil)
+      if (remaining <= 0) return
       await new Promise<void>((resolve) => setTimeout(resolve, Math.min(100, remaining)))
     }
   }
@@ -971,7 +982,7 @@ export class KnowledgeService {
     const effectiveDelay = delayMs ?? profile.vectorBackfillDelayMs
     this.vectorBackfillTimer = setTimeout(() => {
       this.vectorBackfillTimer = null
-      if (Date.now() < this.interactiveUntil) {
+      if (backgroundHoldRemainingMs(this.interactiveUntil) > 0) {
         this.scheduleVectorBackfill(250)
         return
       }
@@ -1076,6 +1087,11 @@ export function notifyKnowledgeInteractiveActivity(durationMs = 1_000): void {
 
 export function getKnowledgeSnapshotIfInitialized(): KnowledgeSnapshot | null {
   return service?.snapshot() ?? null
+}
+
+/** Cheap status for UI polling; never touches storage. */
+export function getKnowledgeStatusIfInitialized(): KnowledgeStatus | null {
+  return service?.cachedStatus() ?? null
 }
 
 export function shutdownKnowledgeService(): void {

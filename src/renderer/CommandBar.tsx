@@ -23,7 +23,7 @@ import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { IconAssetKind, PathCompletionItem, SearchResult } from '../shared/search'
 import type { NativeCommandId } from '../shared/nativeCommands'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
-import { Hint, HintBar, Kbd, ListRow, ListRowTag, Message, SelectField, TextField, cx } from './ui/primitives'
+import { Hint, Kbd, ListRow, ListRowTag, Message, SelectField, TextField, cx } from './ui/primitives'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { GlideList } from './ui/GlideList'
 import { RollingText } from './ui/RollingText'
@@ -59,7 +59,7 @@ import {
   recordUpdateCheck,
   shouldPromoteUpdateCommand,
 } from '../shared/updater'
-import BackgroundTaskStatus from './BackgroundTaskStatus'
+import { CommandSurfaceBadge, CommandSurfaceFooter, CommandSurfaceHeader } from './ui/CommandSurface'
 import {
   addLauncherQueryHistoryEntry,
   launcherQueryHistoryEntry,
@@ -83,6 +83,7 @@ import {
   searchRequestInput,
 } from '../shared/searchMode'
 import { aiChatBootForInput, commandBarInputMode } from './commandBarInputMode'
+import { readCachedChatHistory, writeCachedChatHistory } from './agentChat/historyCache'
 import { RELEASE_NOTES_COMMAND_ID, withReleaseNotesResult } from './releaseNotes'
 import { LauncherGlyph, Squircle, launcherIcon } from './launcherIcons'
 
@@ -1438,7 +1439,12 @@ export default function CommandBar({
   const [pinnedCommandTooltip, setPinnedCommandTooltip] = useState<PinnedCommandTooltip | null>(
     null
   )
-  const [chatHistory, setChatHistory] = useState<ChatSessionSummary[]>([])
+  const [chatHistory, setChatHistory] = useState<ChatSessionSummary[]>(
+    () => readCachedChatHistory() ?? []
+  )
+  const [chatHistoryLoaded, setChatHistoryLoaded] = useState(
+    () => readCachedChatHistory() !== null
+  )
   const [draggingPinId, setDraggingPinId] = useState<string | null>(null)
   const [draggingSearchResultId, setDraggingSearchResultId] = useState<string | null>(null)
   const [pinDropIndex, setPinDropIndex] = useState<number | null>(null)
@@ -1803,7 +1809,17 @@ export default function CommandBar({
     writeLauncherQueryHistory(launcherQueryHistory)
     setRecentExtensionCommands(readRecentExtensionCommands())
     setPinnedTerminalSessionIds(readPinnedTerminalSessionIds())
-    void window.tezbar.chatList(40).then(setChatHistory).catch(() => undefined)
+    void window.tezbar
+      .chatList(40)
+      .then((rows) => {
+        writeCachedChatHistory(rows)
+        setChatHistory(rows)
+        setChatHistoryLoaded(true)
+      })
+      .catch(() => {
+        // Keep the cached rows: a failed refresh is not an empty history.
+        setChatHistoryLoaded(readCachedChatHistory() !== null)
+      })
   }, [backendGeneration])
 
   useEffect(() => {
@@ -1900,6 +1916,9 @@ export default function CommandBar({
     })
   }, [chatHistory, chatHistoryQuery])
   const showChatHistory = isAiMode && filteredChatHistory.length > 0
+  // AI mode with nothing to list still needs a body: an empty transparent
+  // panel reads as a broken window rather than as "no saved conversations".
+  const showChatHistoryPlaceholder = isAiMode && filteredChatHistory.length === 0
 
   const filteredTerminalSessions = useMemo(() => {
     if (!terminalMode) return []
@@ -4241,27 +4260,10 @@ export default function CommandBar({
   return (
     <div className="tezbar-launcher flex h-full min-h-0 w-full flex-col">
       {/* Search row: icon + input, separated from the list by a hairline */}
-      <div
-        data-window-search-drag
-        className="command-search glass-card relative z-30 shrink-0 px-3.5"
-      >
-        <form className="relative w-full" onSubmit={(ev) => void onSubmit(ev)}>
-          <div className="flex h-11 items-center gap-2.5">
-            <span
-              role={isAiMode ? 'img' : undefined}
-              aria-label={isAiMode ? 'AI mode' : undefined}
-              className={cx(
-                'launcher-search-badge grid h-6 w-6 shrink-0 place-items-center rounded-[7px] text-white',
-                isAiMode
-                  ? 'command-ai-icon bg-violet-500'
-                  : terminalMode
-                    ? 'command-terminal-icon bg-emerald-600'
-                    : isApplicationInput
-                      ? 'bg-transparent'
-                      : isDeepSearchMode
-                        ? 'bg-cyan-500'
-                        : 'bg-[#5b5ef0]'
-              )}
+      <CommandSurfaceHeader onSubmit={(ev) => void onSubmit(ev)}>
+            <CommandSurfaceBadge
+              label={isAiMode ? 'AI mode' : undefined}
+              tone={isAiMode ? 'ai' : terminalMode ? 'terminal' : isApplicationInput ? 'application' : isDeepSearchMode ? 'deep' : 'search'}
             >
               {isAiMode ? (
                 <span aria-hidden className="text-[11px] font-semibold leading-none">
@@ -4274,7 +4276,7 @@ export default function CommandBar({
               ) : (
                 <SearchIcon />
               )}
-            </span>
+            </CommandSurfaceBadge>
             {!isAiMode && isDeepSearchMode ? (
               <span
                 aria-label="Deep Search mode"
@@ -4527,9 +4529,7 @@ export default function CommandBar({
                 triggerClassName="font-mono leading-none tabular-nums tracking-normal"
               />
             ) : null}
-          </div>
-        </form>
-      </div>
+      </CommandSurfaceHeader>
 
       {/* Middle column: the pin rail sits on the left; inner panels scroll
           (GlideList, answer, …) instead of this outer region. */}
@@ -4984,6 +4984,19 @@ export default function CommandBar({
           ) : null}
 
           {/* AI mode chat history */}
+          {showChatHistoryPlaceholder ? (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5">
+                <ul className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5">
+                  <li className="relative z-[1] px-2 py-2 text-[12px] text-ink-4">
+                    {chatHistoryLoaded
+                      ? 'No saved conversations yet. Type a question and press Enter to start one.'
+                      : 'Loading conversations…'}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          ) : null}
           {showChatHistory ? (
             <div
               className="flex min-h-0 flex-1 flex-col"
@@ -5523,15 +5536,11 @@ export default function CommandBar({
       </div>
 
       {/* Status bar: shortcut hints, Deep Search and background tasks */}
-      <div className="launcher-footer glass-card mt-auto shrink-0 pl-2 pr-3">
-        <div className="flex h-8 min-w-0 items-center gap-3">
-          <BackgroundTaskStatus
-            placement="start"
-            onOpenIndexing={onOpenIndexingPage}
-            onOpenExtensionRuntime={onOpenExtensionRuntime}
-            onOpenUpdate={onOpenSettings}
-          />
-          <HintBar className="launcher-hints min-w-0 flex-1 flex-nowrap justify-end gap-x-3 overflow-hidden text-[11px]">
+      <CommandSurfaceFooter taskActions={{
+        onOpenIndexing: onOpenIndexingPage,
+        onOpenExtensionRuntime,
+        onOpenUpdate: onOpenSettings,
+      }}>
             {terminalMode ? (
               <>
                 <Hint
@@ -5674,9 +5683,7 @@ export default function CommandBar({
                 ) : null}
               </>
             )}
-          </HintBar>
-        </div>
-      </div>
+      </CommandSurfaceFooter>
 
       {pinnedCommandTooltip
         ? createPortal(

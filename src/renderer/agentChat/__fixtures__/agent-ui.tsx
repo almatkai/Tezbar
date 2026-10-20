@@ -76,15 +76,13 @@ async function execute(request: AgentRunRequest): Promise<void> {
   let answer = ''
   let previewSent = false
   try {
-    const stream = await script
-      .transport({ delayMs: 8 })
-      .sendMessages({
-        trigger: 'submit-message',
-        chatId: runId,
-        messageId: undefined,
-        messages: script.get(1),
-        abortSignal: abort.signal,
-      })
+    const stream = await script.transport({ delayMs: 8 }).sendMessages({
+      trigger: 'submit-message',
+      chatId: runId,
+      messageId: undefined,
+      messages: script.get(1),
+      abortSignal: abort.signal,
+    })
     const reader = stream.getReader()
     while (true) {
       const { value: chunk, done } = await reader.read()
@@ -145,14 +143,24 @@ const api: Partial<RaymesApi> = {
   listLlmModels: async () => ['fixture-model'],
   onLlmConfigChanged: () => () => {},
   onWindowShown: () => () => {},
-  chatList: async () =>
-    [...sessions.values()].map(
+  getUpdateStatus: async () => ({ kind: 'ready', version: '0.2.9-beta.10' }),
+  onUpdateStatus: () => () => {},
+  listBackgroundTasks: async () => [],
+  onKnowledgeStatus: () => () => {},
+  chatList: async () => {
+    // Simulates a backend that is busy: the panel must still open and explain
+    // what it is waiting for instead of claiming there is no history.
+    if (new URLSearchParams(location.search).get('slowHistory') === '1') {
+      await new Promise((resolve) => setTimeout(resolve, 3_000))
+    }
+    return [...sessions.values()].map(
       ({ turns, ...item }): ChatSessionSummary => ({
         ...item,
         turnCount: turns.length,
         preview: turns.at(-1)?.text || '',
       })
-    ),
+    )
+  },
   chatGet: async (id) => sessions.get(id) ?? null,
   chatAppend: async ({ session, turn }) => {
     const old = sessions.get(session.id)?.turns ?? []
@@ -174,6 +182,9 @@ const api: Partial<RaymesApi> = {
   agentRun: async (request) => {
     if (typeof request === 'string') throw new Error('Expected a correlated native request')
     calls.push(request.runId!)
+    if (scenario === 'recovery') {
+      throw new Error('Failed to write to backend runner process; recovery is in progress')
+    }
     void execute(request)
     return { ok: true, runId: request.runId }
   },
@@ -216,11 +227,16 @@ createRoot(document.getElementById('fixture-root')!).render(
     <div className="fixture-note">
       Scripted UI regression fixture · @shadcn/helpers/ai-sdk · not live machine data
     </div>
-    <div className="fixture-app">
+    <div className="fixture-app glass-shell">
       <AgentChatView
         boot={{ kind: 'newChat' }}
         onBack={() => calls.push('back')}
         onOpenSettings={() => calls.push('settings')}
+        taskActions={{
+          onOpenIndexing: () => calls.push('indexing'),
+          onOpenExtensionRuntime: () => calls.push('extension'),
+          onOpenUpdate: () => calls.push('updates'),
+        }}
       />
     </div>
   </>
