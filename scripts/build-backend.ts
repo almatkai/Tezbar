@@ -8,6 +8,9 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
 } from 'node:fs'
 import { join } from 'node:path'
 import { getLoadablePath } from 'sqlite-vec'
@@ -46,24 +49,35 @@ async function runBuild(): Promise<void> {
   const root = join(__dirname, '..')
   const outputDirectory = join(root, 'dist-backend')
 
-  console.log('Building TypeScript backend runner with esbuild...')
-  await build({
+  console.log('Building isolated Extension Worker...')
+  const result = await build({
     entryPoints: {
-      main: join(root, 'src/main/server.ts'),
-      'knowledge-worker': join(root, 'src/main/knowledge/worker.ts'),
+      'extension-worker': join(root, 'src/main/extensionWorker/main.ts'),
     },
     bundle: true,
     platform: 'node',
     target: 'node22',
     outdir: outputDirectory,
     entryNames: '[name]',
-    define: {
-      __RAYMES_PI_POLICY_SOURCE__: JSON.stringify(
-        readFileSync(join(root, 'src/main/agent/raymes-pi-policy.ts'), 'utf8')
-      ),
-    },
+    metafile: true,
+    plugins: [
+      {
+        name: 'native-core-boundary',
+        setup(builder) {
+          builder.onResolve(
+            { filter: /(?:llm\/extensionAI|search\/providers\/appsProvider|selected-text)$/ },
+            () => ({
+              path: join(root, 'src/main/extensionWorker/services.ts'),
+            })
+          )
+          builder.onResolve({ filter: /(?:^|\/)windowState$/ }, () => ({
+            path: join(root, 'src/main/extensionWorker/windowState.ts'),
+          }))
+        },
+      },
+    ],
     alias: {
-      '@tezbar/desktop-runtime': join(root, 'src/main/desktop-runtime.ts'),
+      '@tezbar/desktop-runtime': join(root, 'src/main/extensionWorker/desktop.ts'),
       'better-sqlite3': join(root, 'src/main/better-sqlite3-shim.ts'),
       'sqlite-vec': join(root, 'src/main/sqlite-vec-bundled.ts'),
     },
@@ -72,15 +86,32 @@ async function runBuild(): Promise<void> {
     minify: false,
     format: 'cjs',
   })
+  // Enforce isolation at build time, including transitive dynamic imports.
+  const forbidden = Object.keys(result.metafile.inputs).filter((file) =>
+    /^src\/main\/(?:ipc\.|server\.|knowledge\/|search\/|agent\/|llm\/|voice\/|storage\/)/.test(file)
+  )
+  if (forbidden.length)
+    throw new Error(`Core modules leaked into Extension Worker: ${forbidden.join(', ')}`)
+  writeFileSync(
+    join(outputDirectory, 'extension-worker.meta.json'),
+    JSON.stringify(result.metafile, null, 2)
+  )
+  for (const obsolete of [
+    'main.js',
+    'main.js.map',
+    'knowledge-worker.js',
+    'knowledge-worker.js.map',
+    'gemma-supervisor.cjs',
+    'watch-supervisor.cjs',
+  ]) {
+    rmSync(join(outputDirectory, obsolete), { force: true })
+  }
+  mkdirSync(join(outputDirectory, 'agent'), { recursive: true })
+  copyFileIfChanged(
+    join(root, 'src/main/agent/raymes-pi-policy.ts'),
+    join(outputDirectory, 'agent/raymes-pi-policy.ts')
+  )
   const loadablePath = getLoadablePath()
-  copyFileIfChanged(
-    join(root, 'src/main/knowledge/embeddings/gemma-supervisor.cjs'),
-    join(outputDirectory, 'gemma-supervisor.cjs')
-  )
-  copyFileIfChanged(
-    join(root, 'src/main/fs/watch-supervisor.cjs'),
-    join(outputDirectory, 'watch-supervisor.cjs')
-  )
   const extensionSuffix =
     process.platform === 'win32' ? 'dll' : process.platform === 'darwin' ? 'dylib' : 'so'
   // Keep the historical extensionless copy for compatibility with existing
@@ -126,7 +157,7 @@ async function runBuild(): Promise<void> {
     }
     replaceGeneratedFile(sqliteLibrary, join(outputDirectory, 'libsqlite3.dylib'))
   }
-  console.log('TypeScript backend runners built successfully at dist-backend/')
+  console.log('Extension Worker built successfully at dist-backend/')
 }
 
 runBuild().catch((err) => {

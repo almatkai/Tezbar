@@ -1,0 +1,162 @@
+[
+  {
+    "id": "moonshine-base-en",
+    "name": "Moonshine Base (English)",
+    "family": "moonshine",
+    "description": "Low-latency Moonshine STT model from Moonshine AI.",
+    "homepageUrl": "https://github.com/moonshine-ai/moonshine",
+    "sizeLabel": "~140 MB",
+    "language": "en",
+    "tier": "balanced",
+    "estimatedSizeMb": 140,
+    "runtime": "moonshine-python",
+    "assets": [
+      {
+        "fileName": "encoder_model.ort",
+        "url": "https://download.moonshine.ai/model/base-en/quantized/base-en/encoder_model.ort"
+      },
+      {
+        "fileName": "decoder_model_merged.ort",
+        "url": "https://download.moonshine.ai/model/base-en/quantized/base-en/decoder_model_merged.ort"
+      },
+      {
+        "fileName": "tokenizer.bin",
+        "url": "https://download.moonshine.ai/model/base-en/quantized/base-en/tokenizer.bin"
+      }
+    ]
+  },
+  {
+    "id": "moonshine-tiny-en",
+    "name": "Moonshine Tiny (English)",
+    "family": "moonshine",
+    "description": "Smallest Moonshine STT model for very low-latency English dictation.",
+    "homepageUrl": "https://github.com/moonshine-ai/moonshine",
+    "sizeLabel": "~60 MB",
+    "language": "en",
+    "tier": "fast",
+    "estimatedSizeMb": 60,
+    "runtime": "moonshine-python",
+    "assets": [
+      {
+        "fileName": "encoder_model.ort",
+        "url": "https://download.moonshine.ai/model/tiny-en/quantized/tiny-en/encoder_model.ort"
+      },
+      {
+        "fileName": "decoder_model_merged.ort",
+        "url": "https://download.moonshine.ai/model/tiny-en/quantized/tiny-en/decoder_model_merged.ort"
+      },
+      {
+        "fileName": "tokenizer.bin",
+        "url": "https://download.moonshine.ai/model/tiny-en/quantized/tiny-en/tokenizer.bin"
+      }
+    ]
+  },
+  {
+    "id": "whisper-tiny-en",
+    "name": "Whisper Tiny (English, whisper.cpp)",
+    "family": "whisper",
+    "description": "Small English-only whisper.cpp ggml model for quick dictation.",
+    "homepageUrl": "https://huggingface.co/ggerganov/whisper.cpp",
+    "sizeLabel": "~78 MB",
+    "language": "en",
+    "tier": "fast",
+    "estimatedSizeMb": 78,
+    "runtime": "whisper-cpp",
+    "assets": [
+      {
+        "fileName": "ggml-tiny.en.bin",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin"
+      }
+    ]
+  },
+  {
+    "id": "whisper-tiny",
+    "name": "Whisper Tiny (Multilingual, whisper.cpp)",
+    "family": "whisper",
+    "description": "Small multilingual whisper.cpp ggml model for fast local transcription.",
+    "homepageUrl": "https://huggingface.co/ggerganov/whisper.cpp",
+    "sizeLabel": "~78 MB",
+    "language": "multilingual",
+    "tier": "fast",
+    "estimatedSizeMb": 78,
+    "runtime": "whisper-cpp",
+    "assets": [
+      {
+        "fileName": "ggml-tiny.bin",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"
+      }
+    ]
+  },
+  {
+    "id": "whisper-base",
+    "name": "Whisper Base (Multilingual, whisper.cpp)",
+    "family": "whisper",
+    "description": "Balanced multilingual whisper.cpp ggml model for local transcription.",
+    "homepageUrl": "https://huggingface.co/ggerganov/whisper.cpp",
+    "sizeLabel": "~150 MB",
+    "language": "multilingual",
+    "tier": "balanced",
+    "estimatedSizeMb": 150,
+    "runtime": "whisper-cpp",
+    "assets": [
+      {
+        "fileName": "ggml-base.bin",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+      }
+    ]
+  },
+  {
+    "id": "whisper-small",
+    "name": "Whisper Small (Multilingual, whisper.cpp)",
+    "family": "whisper",
+    "description": "Higher-accuracy multilingual whisper.cpp ggml model.",
+    "homepageUrl": "https://huggingface.co/ggerganov/whisper.cpp",
+    "sizeLabel": "~490 MB",
+    "language": "multilingual",
+    "tier": "balanced",
+    "estimatedSizeMb": 490,
+    "runtime": "whisper-cpp",
+    "assets": [
+      {
+        "fileName": "ggml-small.bin",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
+      }
+    ]
+  },
+  {
+    "id": "whisper-medium-en",
+    "name": "Whisper Medium (English, whisper.cpp)",
+    "family": "whisper",
+    "description": "Accurate English-only whisper.cpp ggml model for local transcription.",
+    "homepageUrl": "https://huggingface.co/ggerganov/whisper.cpp",
+    "sizeLabel": "~1.5 GB",
+    "language": "en",
+    "tier": "accurate",
+    "estimatedSizeMb": 1530,
+    "runtime": "whisper-cpp",
+    "assets": [
+      {
+        "fileName": "ggml-medium.en.bin",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin"
+      }
+    ]
+  },
+  {
+    "id": "whisper-large-v3-turbo",
+    "name": "Whisper Large v3 Turbo (Multilingual, whisper.cpp)",
+    "family": "whisper",
+    "description": "Accurate multilingual whisper.cpp turbo model for local transcription.",
+    "homepageUrl": "https://huggingface.co/ggerganov/whisper.cpp",
+    "sizeLabel": "~574 MB-1.6 GB",
+    "language": "multilingual",
+    "tier": "accurate",
+    "estimatedSizeMb": 1620,
+    "runtime": "whisper-cpp",
+    "assets": [
+      {
+        "fileName": "ggml-large-v3-turbo.bin",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"
+      }
+    ]
+  }
+]

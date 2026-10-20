@@ -26,7 +26,7 @@ fn main() {
         Some("Tezbar"),
         "Installer product name must match its release identity"
     );
-    println!("cargo:rerun-if-changed=../dist-backend/main.js");
+    println!("cargo:rerun-if-changed=../dist-backend/extension-worker.js");
     tauri_build::build()
 }
 

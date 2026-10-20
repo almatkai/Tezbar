@@ -16,6 +16,7 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
     "test": "vitest run",
+    "test:extension-worker": "pnpm build:backend && tsx scripts/test-extension-worker.ts",
     "build:native:axhelper": "./native/axhelper/build.sh",
     "build:native:screenocr": "./native/screenocr/build.sh",
     "build:native:color-picker": "./native/color-picker/build.sh",

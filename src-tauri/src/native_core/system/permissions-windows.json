@@ -1,0 +1,50 @@
+[
+  {
+    "id": "accessibility",
+    "title": "Input Automation",
+    "summary": "Synthesize keystrokes, control windows, automate UI.",
+    "rationale": "Needed to automate the active app: move windows, click through menus, send keystrokes to focused controls.",
+    "settingsUrl": "ms-settings:privacy",
+    "remediation": "Windows input automation is available automatically for apps running at the same privilege level."
+  },
+  {
+    "id": "automation",
+    "title": "Automation (Apple Events)",
+    "summary": "Talk to other apps via AppleScript / Apple Events.",
+    "rationale": "Required for AppleScript-based commands (toggle dark mode, empty trash, control Music/Finder).",
+    "settingsUrl": "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+    "remediation": "Open System Settings → Privacy & Security → Automation and allow Tezbar to control the target app."
+  },
+  {
+    "id": "input-monitoring",
+    "title": "Input Monitoring",
+    "summary": "Observe keyboard and mouse events globally.",
+    "rationale": "Used for global hotkeys and key-capture flows (e.g. global Alt+Space, keystroke recording).",
+    "settingsUrl": "ms-settings:privacy",
+    "remediation": "Global shortcut and key-state monitoring are available automatically on Windows."
+  },
+  {
+    "id": "microphone",
+    "title": "Microphone",
+    "summary": "Capture audio for voice commands.",
+    "rationale": "Voice-activated commands and transcription features require microphone access.",
+    "settingsUrl": "ms-settings:privacy-microphone",
+    "remediation": "Open Settings → Privacy & security → Microphone and allow desktop apps to use the microphone."
+  },
+  {
+    "id": "calendar",
+    "title": "Calendar",
+    "summary": "Read and create events for calendar-aware commands.",
+    "rationale": "Calendar-related extensions and the built-in \"next meeting\" command need access to your Calendar database.",
+    "settingsUrl": "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars",
+    "remediation": "Open System Settings → Privacy & Security → Calendars and enable Tezbar."
+  },
+  {
+    "id": "screen-recording",
+    "title": "Screen Recording",
+    "summary": "Capture screen content for screenshots and window vision.",
+    "rationale": "Needed for screenshot-based flows, window snapshots, and visual automation helpers.",
+    "settingsUrl": "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+    "remediation": "Open System Settings → Privacy & Security → Screen Recording and enable Tezbar."
+  }
+]

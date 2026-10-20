@@ -39,6 +39,14 @@ jobs:
         run: brew list sqlite >/dev/null 2>&1 || brew install sqlite
       - run: pnpm build:native
       - run: pnpm build:backend
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.2.5'
+      - name: Check isolated extension worker protocol
+        run: pnpm exec tsx scripts/test-extension-worker.ts
       - run: pnpm build:frontend
       - run: cargo test --lib --locked
+        working-directory: src-tauri
+      - name: Check real Rust host and extension worker lifecycle
+        run: cargo test --lib --locked native_core::extension_worker::integration_tests::real_rust_host_bun_roundtrip_and_termination -- --ignored --exact
         working-directory: src-tauri

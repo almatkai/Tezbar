@@ -4,9 +4,14 @@ import { invoke } from '@tauri-apps/api/core'
 import { emitTo, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { RaymesApi } from '../shared/desktop-api'
-import type { LauncherLayout, LauncherLayoutPatch, LauncherViewport, ResizeEdge } from '../shared/windowLayout'
+import type {
+  LauncherLayout,
+  LauncherLayoutPatch,
+  LauncherViewport,
+  ResizeEdge,
+} from '../shared/windowLayout'
 import type { AppUpdateStatus, UpdateChannelInfo } from '../shared/updater'
-import { formatTerminalSessionName, type TerminalSessionsAction } from '../shared/terminal'
+import type { TerminalSessionsAction } from '../shared/terminal'
 
 type TauriRaymesApi = RaymesApi & {
   moveMouse: (x: number, y: number) => Promise<unknown>
@@ -68,17 +73,6 @@ export function initTauriBridge(): void {
     return callBackend('window:suppress-blur-hide', value)
   }
 
-  const recordNativeTerminalExit = (payload: any): void => {
-    if (!payload || typeof payload.sessionId !== 'string') return
-    void callBackend('terminal:native-exit', {
-      sessionId: payload.sessionId,
-      exitCode: typeof payload.exitCode === 'number' ? payload.exitCode : undefined,
-      signal: typeof payload.signal === 'number' ? payload.signal : undefined,
-    }).catch((error: unknown) => {
-      console.error('[Tauri bridge] terminal:native-exit failed:', error)
-    })
-  }
-
   const listenersMap = new Map<string, Set<Function>>()
   const eventListeners = new Map<string, Promise<any>>()
   const eventBacklog = new Map<string, unknown[]>()
@@ -89,9 +83,6 @@ export function initTauriBridge(): void {
     if (existing) return existing
 
     const listenPromise = listen(channel, (event: any) => {
-      if (channel === 'terminal:exit') {
-        recordNativeTerminalExit(event.payload)
-      }
       const listeners = listenersMap.get(channel)
       if (listeners?.size) {
         listeners.forEach((listener) => listener(event.payload))
@@ -237,20 +228,7 @@ export function initTauriBridge(): void {
     setSelectedVoiceModel: (modelId: any) => callBackend('voice:model:set-selected', { modelId }),
 
     getLlmConfig: () => callBackend('llm-config-get'),
-    setLlmConfig: async (patch: any) => {
-      if (typeof patch?.raymesHotkey === 'string') {
-        try {
-          await invoke('update_raymes_shortcut', { shortcutStr: patch.raymesHotkey })
-        } catch (error) {
-          return {
-            ok: false,
-            accelerator: patch.raymesHotkey,
-            error: error instanceof Error ? error.message : String(error),
-          }
-        }
-      }
-      return callBackend('llm-config-set', patch)
-    },
+    setLlmConfig: (patch: any) => callBackend('llm-config-set', patch),
     getLlmProviderStatuses: () => callBackend('llm-provider-statuses'),
     listPiExtensions: () => callBackend('pi-extensions:list'),
     listLlmModels: (providerId: any, baseURLOverride?: string, apiKeyOverride?: string) =>
@@ -319,133 +297,31 @@ export function initTauriBridge(): void {
     deleteQuickNote: (createdAt: number) => callBackend('notes:delete', createdAt),
 
     terminalCreate: async (request: any) => {
-      // Tauri listener registration is asynchronous. Starting the shell before
-      // these promises settle drops its prompt and fast initial-command output.
-      await Promise.all([eventListeners.get('terminal:data'), eventListeners.get('terminal:exit')])
-      const created = (await invoke('native_terminal_create', { request })) as any
-      // Persisting the session summary goes through the backend sidecar. If that
-      // process is down, the native PTY still works вЂ” don't fail the open.
-      let summary: any = null
-      try {
-        summary = request?.restoreSessionId
-          ? await callBackend('terminal:native-restore', {
-              sessionId: created.sessionId,
-              shell: created.shell,
-              cwd: created.cwd,
-            })
-          : await callBackend('terminal:native-create', {
-              sessionId: created.sessionId,
-              shell: created.shell,
-              cwd: created.cwd,
-              initialCommand: request?.initialCommand,
-              name: request?.name,
-              saveFor: request?.saveFor,
-              keepAliveFor: request?.keepAliveFor,
-            })
-      } catch (error: unknown) {
-        console.warn('[Tauri bridge] terminal:native-create failed (backend down?):', error)
-      }
-      return { ...created, summary }
+      // Register listeners before spawning even when no component subscribed yet.
+      await Promise.all([
+        ensureEventListener('terminal:data'),
+        ensureEventListener('terminal:exit'),
+      ])
+      return invoke('native_terminal_create', { request })
     },
     terminalAttach: async (request: any) => {
-      const attached = (await invoke('native_terminal_attach', { request })) as any
-      if (!attached) {
-        if (typeof request?.sessionId === 'string') {
-          await callBackend('terminal:native-exit', {
-            sessionId: request.sessionId,
-            exitCode: 1,
-          }).catch((error: unknown) => {
-            console.error('[Tauri bridge] terminal:native-exit failed:', error)
-          })
-        }
-        return null
-      }
-      let summary: any = null
-      try {
-        summary = await callBackend('terminal:native-attach', {
-          sessionId: attached.sessionId,
-        })
-      } catch (error: unknown) {
-        console.warn('[Tauri bridge] terminal:native-attach failed (backend down?):', error)
-      }
-      return { ...attached, summary }
+      await Promise.all([
+        ensureEventListener('terminal:data'),
+        ensureEventListener('terminal:exit'),
+      ])
+      return invoke('native_terminal_attach', { request })
     },
     terminalDetach: async (sessionId: string) =>
       Boolean(await invoke('native_terminal_detach', { sessionId })),
-    terminalList: async () => {
-      const listed = await callBackend('terminal:list')
-      const sessions = Array.isArray(listed)
-        ? await Promise.all(
-            listed.map(async (session: any) => {
-              if (session?.status !== 'running' || typeof session?.sessionId !== 'string') {
-                return session
-              }
-              try {
-                const cwd = await invoke<string | null>('native_terminal_cwd', {
-                  sessionId: session.sessionId,
-                })
-                if (!cwd || cwd === session.cwd) return session
-                return (
-                  (await callBackend('terminal:update', {
-                    sessionId: session.sessionId,
-                    cwd,
-                    name: formatTerminalSessionName(
-                      cwd,
-                      session.lastCommand ?? session.initialCommand ?? ''
-                    ),
-                  })) ?? session
-                )
-              } catch {
-                return session
-              }
-            })
-          )
-        : listed
-      if (Array.isArray(sessions)) {
-        void invoke('native_terminal_prune_history', {
-          sessionIds: sessions
-            .map((session: any) => session?.sessionId)
-            .filter((sessionId: unknown): sessionId is string => typeof sessionId === 'string'),
-        }).catch((error: unknown) => {
-          console.warn('[Tauri bridge] terminal history pruning failed:', error)
-        })
-      }
-      return sessions
-    },
+    terminalList: () => callBackend('terminal:list'),
     terminalUpdate: (request: any) => callBackend('terminal:update', request),
     terminalWrite: (sessionId: string, data: string) =>
       invoke('native_terminal_write', { sessionId, data }),
     terminalResize: (sessionId: string, cols: number, rows: number) =>
       invoke('native_terminal_resize', { sessionId, cols, rows }),
     terminalGetCwd: (sessionId: string) => invoke('native_terminal_cwd', { sessionId }),
-    terminalKill: async (sessionId: string) => {
-      const killed = Boolean(await invoke('native_terminal_kill', { sessionId }))
-      if (killed) {
-        await callBackend('terminal:native-exit', { sessionId, exitCode: 0 }).catch(
-          (error: unknown) => {
-            console.error('[Tauri bridge] terminal:native-exit failed:', error)
-          }
-        )
-      }
-      return killed
-    },
-    terminalDelete: async (sessionId: string) => {
-      const killed = Boolean(await invoke('native_terminal_kill', { sessionId }))
-      if (killed) {
-        await callBackend('terminal:native-exit', { sessionId, exitCode: 0 }).catch(
-          (error: unknown) => {
-            console.error('[Tauri bridge] terminal:native-exit failed:', error)
-          }
-        )
-      }
-      const deleted = Boolean(await callBackend('terminal:delete', { sessionId }))
-      if (deleted) {
-        await invoke('native_terminal_delete_history', { sessionId }).catch((error: unknown) => {
-          console.warn('[Tauri bridge] terminal history deletion failed:', error)
-        })
-      }
-      return deleted
-    },
+    terminalKill: (sessionId: string) => invoke('native_terminal_kill', { sessionId }),
+    terminalDelete: (sessionId: string) => callBackend('terminal:delete', { sessionId }),
     getTerminalPromptInfo: () => callBackend('terminal:get-prompt-info'),
     terminalSessionsShow: () => invoke('terminal_sessions_show'),
     terminalSessionsHide: () => invoke('terminal_sessions_hide'),
@@ -562,7 +438,27 @@ export function initTauriBridge(): void {
     onQuickNoteSaveShortcut: (listener: () => void) =>
       setupEventListener('notes:quick-save-shortcut', listener),
     onAppSurfaceOpen: (
-      listener: (surface: 'command' | 'settings' | 'clipboard' | 'extensions') => void
+      listener: (
+        surface:
+          | 'command'
+          | 'settings'
+          | 'settings-extensions'
+          | 'settings-ai'
+          | 'settings-voice'
+          | 'settings-knowledge'
+          | 'settings-permissions'
+          | 'settings-storage'
+          | 'settings-advanced'
+          | 'clipboard'
+          | 'extensions'
+          | 'indexing'
+          | 'snippets'
+          | 'notes'
+          | 'emoji-picker'
+          | 'open-ports'
+          | 'system-monitor'
+          | 'onboarding'
+      ) => void
     ) => setupEventListener('app:open-surface', listener),
     onAgentEvent: (listener: (event: any) => void) => setupEventListener('agent:event', listener),
     onExtensionInstallProgress: (listener: (payload: any) => void) =>
@@ -602,24 +498,12 @@ export function initTauriBridge(): void {
       callBackend('toggle-command-enabled', commandId, enabled),
     getSettings: () => callBackend('get-settings'),
     saveSettings: (patch: unknown) => callBackend('save-settings', patch),
-    onRunExtensionCommandFromHotkey: () => () => {},
+    onRunExtensionCommandFromHotkey: (
+      listener: (payload: { extensionId: string; commandName: string }) => void
+    ) => setupEventListener('run-extension-command-from-hotkey', listener),
   }
 
   window.tezbar = tezbar
 
-  // Only the launcher owns the global shortcut. Re-registering it from a
-  // hidden secondary WebView creates needless backend traffic during WebView2
-  // startup and can contend with the Settings window being shown.
-  if (window.__TEZBAR_WINDOW_LABEL__ !== 'settings') {
-    void tezbar
-      .getLlmConfig()
-      .then((config) => {
-        if (typeof config.raymesHotkey === 'string' && config.raymesHotkey.trim()) {
-          return invoke('update_raymes_shortcut', { shortcutStr: config.raymesHotkey })
-        }
-      })
-      .catch((error: unknown) => {
-        console.warn('Could not restore the configured global shortcut:', error)
-      })
-  }
+  // Rust initializes and restores global shortcuts for every native window.
 }

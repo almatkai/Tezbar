@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Tezbar uses the microphone for voice commands and transcription.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Tezbar controls applications to run the system commands you choose.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>Tezbar uses calendar access for calendar-aware commands.</string>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>Tezbar reads and creates calendar events for calendar-aware commands.</string>
+</dict>
+</plist>

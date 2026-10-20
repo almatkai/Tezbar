@@ -8,24 +8,29 @@
 ## Key Features
 
 ### 🔌 Bring Your Own Extensions (Raycast Compatible)
+
 - **Zero-approval installs**: Run any Raycast extension natively.
 - **Install from GitHub**: Simply paste any GitHub repository URL into Tezbar — it clones, builds, and registers the extension into your launcher in seconds. No centralized store approvals required.
 
 ### 🤖 Autonomous AI Agent (Pi Agent Under the Hood)
+
 - **Active Screen Vision (`⌘⇧S`)**: Attach a snapshot of your active display or specific window directly into your chat.
 - **Multimodal context**: Ask the agent to debug code, inspect terminal outputs, analyze error stacks, or redesign UI components with full visual and OCR context.
 - **Local knowledge search**: Vector index and local document parsing (PDFs, text, OCR) accessible directly by the agent and command bar.
 
 ### 💻 Built-in Native Terminal
+
 - Launch shell commands, run one-liners, inspect logs, and manage background processes directly from the overlay without switching windows.
 - Persistent session management and quick shortcuts.
 
 ### 🔓 Zero Lock-In & Local-First
+
 - **Offline with Ollama**: Run completely local, private LLMs on your machine.
 - **Bring Your Own Keys**: First-class support for Google Gemini, Anthropic Claude, DeepSeek, OpenAI, and GitHub Copilot.
 - Your data and keys stay entirely on your device.
 
 ### 🛠 Developer Swiss Army Knife
+
 - **Folder Navigation (`/`)**: Press `/` in the command bar to rapidly search directories, launch IDEs, or open terminal sessions.
 - **Open Ports Inspector**: View active processes bound to local ports (3000, 8080, etc.) and kill rogue processes in one click.
 - **System Monitor**: Live CPU, RAM, and GPU metrics in a compact glass interface.
@@ -41,14 +46,20 @@
 - **Native Modules**: Swift helpers on macOS (Screen OCR, Accessibility, Color Picker), ConPTY on Windows
 - **Storage & Indexing**: SQLite with local vector embeddings
 
+The Rust core owns search, settings, persistence, AI orchestration, Knowledge,
+clipboard history, system commands and terminal sessions. Raycast JavaScript
+extensions run in a separate Bun worker, started only when extension execution
+or installation needs it. Starting Tezbar and using its built-in features does
+not start Bun. See [Rust core architecture and validation](docs/RUST_CORE.md).
+
 ---
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Node.js**: v18+ & [pnpm](https://pnpm.io/)
-- **Rust toolchain**: latest stable (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
+- **Node.js**: v22+ & [pnpm](https://pnpm.io/) for development and builds
+- **Rust toolchain**: 1.85 or newer (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
 - **macOS** (12+) or **Windows** (10/11)
 
 ### Setup & Run in Development
@@ -76,13 +87,17 @@ When preparing a Tezbar release, add its user-facing Markdown notes to
 `docs/releases/<package.json version>.md`. The frontend build requires this file
 and bundles it into the app for the Release Notes launcher command and release-notes page.
 
-| Script | Description |
-|---|---|
-| `pnpm dev` | Start the Tauri app in development mode with hot reload |
-| `pnpm build` | Build and package the production desktop application |
-| `pnpm build:native` | Compile macOS Swift native helpers |
-| `pnpm build:windows` | Build Windows NSIS and MSI installers |
-| `pnpm icons:generate` | Regenerate app icon assets across all formats from SVG |
+| Script                                                           | Description                                                          |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `pnpm dev`                                                       | Start the Tauri app in development mode with hot reload              |
+| `pnpm build`                                                     | Build and package the production desktop application                 |
+| `pnpm build:native`                                              | Compile macOS Swift native helpers                                   |
+| `pnpm build:windows`                                             | Build Windows NSIS and MSI installers                                |
+| `pnpm typecheck && pnpm test`                                    | Check TypeScript contracts and regression fixtures                   |
+| `cargo test --manifest-path src-tauri/Cargo.toml --lib --locked` | Check native services, migration and lifecycle fixtures              |
+| `pnpm test:extension-worker`                                     | Build and exercise the real isolated extension worker; requires Bun  |
+| `node scripts/check-backend-lifecycle.mjs`                       | Check native profile persistence across restart without a JS runtime |
+| `pnpm icons:generate`                                            | Regenerate app icon assets across all formats from SVG               |
 
 ---
 

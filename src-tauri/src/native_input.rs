@@ -259,25 +259,38 @@ mod platform {
 
     #[tauri::command]
     pub async fn screenshot(window: WebviewWindow) -> Result<Vec<u8>, String> {
-        window
-            .set_content_protected(true)
-            .map_err(|e| format!("failed to protect Raymes window: {e}"))?;
-        tokio::time::sleep(std::time::Duration::from_millis(120)).await;
-
-        let result = capture_display();
-        let restore_result = window
-            .set_content_protected(false)
-            .map_err(|e| format!("failed to restore Raymes window capture setting: {e}"));
-
-        match (result, restore_result) {
-            (Ok(bytes), Ok(())) => Ok(bytes),
-            (Err(error), _) => Err(error),
-            (Ok(_), Err(error)) => Err(error),
-        }
+        super::capture_protected(window, false).await
     }
 
-    fn capture_display() -> Result<Vec<u8>, String> {
-        let image = CGDisplay::main()
+    pub(super) fn capture(active: bool) -> Result<Vec<u8>, String> {
+        let display = if active {
+            let point = CGEvent::new(event_source()?)
+                .map_err(|_| "failed to read pointer position".to_string())?
+                .location();
+            CGDisplay::active_displays()
+                .map_err(|e| format!("failed to enumerate displays: {e}"))?
+                .into_iter()
+                .map(CGDisplay::new)
+                .find(|display| {
+                    let bounds = display.bounds();
+                    super::contains_point(
+                        bounds.origin.x,
+                        bounds.origin.y,
+                        bounds.size.width,
+                        bounds.size.height,
+                        point.x,
+                        point.y,
+                    )
+                })
+                .ok_or_else(|| "No display contains the pointer".to_string())?
+        } else {
+            CGDisplay::main()
+        };
+        capture_display(display)
+    }
+
+    fn capture_display(display: CGDisplay) -> Result<Vec<u8>, String> {
+        let image = display
             .image()
             .ok_or_else(|| "failed to capture display image".to_string())?;
 
@@ -505,25 +518,43 @@ mod platform {
 
     #[tauri::command]
     pub async fn screenshot(window: WebviewWindow) -> Result<Vec<u8>, String> {
-        window
-            .set_content_protected(true)
-            .map_err(|error| format!("failed to protect Tezbar window: {error}"))?;
-        tokio::time::sleep(std::time::Duration::from_millis(120)).await;
-        let result = capture_virtual_desktop();
-        let restore = window
-            .set_content_protected(false)
-            .map_err(|error| format!("failed to restore Tezbar capture setting: {error}"));
-        match (result, restore) {
-            (Ok(bytes), Ok(())) => Ok(bytes),
-            (Err(error), _) | (Ok(_), Err(error)) => Err(error),
-        }
+        super::capture_protected(window, false).await
     }
 
-    fn capture_virtual_desktop() -> Result<Vec<u8>, String> {
-        let x = unsafe { GetSystemMetrics(SM_XVIRTUALSCREEN) };
-        let y = unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) };
-        let width = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
-        let height = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
+    pub(super) fn capture(active: bool) -> Result<Vec<u8>, String> {
+        let (x, y, width, height) = if active {
+            use windows_sys::Win32::Foundation::POINT;
+            use windows_sys::Win32::Graphics::Gdi::{
+                GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+            };
+            use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+            let mut point: POINT = unsafe { zeroed() };
+            if unsafe { GetCursorPos(&mut point) } == 0 {
+                return Err("failed to read pointer position".into());
+            }
+            let monitor = unsafe { MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST) };
+            let mut info: MONITORINFO = unsafe { zeroed() };
+            info.cbSize = size_of::<MONITORINFO>() as u32;
+            if monitor.is_null() || unsafe { GetMonitorInfoW(monitor, &mut info) } == 0 {
+                return Err("failed to find display under pointer".into());
+            }
+            let rect = info.rcMonitor;
+            (
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top,
+            )
+        } else {
+            unsafe {
+                (
+                    GetSystemMetrics(SM_XVIRTUALSCREEN),
+                    GetSystemMetrics(SM_YVIRTUALSCREEN),
+                    GetSystemMetrics(SM_CXVIRTUALSCREEN),
+                    GetSystemMetrics(SM_CYVIRTUALSCREEN),
+                )
+            }
+        };
         if width <= 0 || height <= 0 {
             return Err("Windows reported an invalid virtual desktop size".to_string());
         }
@@ -561,6 +592,9 @@ mod platform {
                 SRCCOPY | CAPTUREBLT,
             )
         };
+        unsafe {
+            SelectObject(memory_dc, previous);
+        }
         let mut info: BITMAPINFO = unsafe { zeroed() };
         info.bmiHeader = BITMAPINFOHEADER {
             biSize: size_of::<BITMAPINFOHEADER>() as u32,
@@ -593,7 +627,6 @@ mod platform {
         };
 
         unsafe {
-            SelectObject(memory_dc, previous);
             DeleteObject(bitmap);
             DeleteDC(memory_dc);
             ReleaseDC(null_mut(), screen_dc);
@@ -660,3 +693,82 @@ mod platform {
 }
 
 pub use platform::*;
+
+// The blocking task owns both the serialization lock and the guards: dropping
+// the requesting future cannot expose the window halfway through another capture.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+async fn capture_protected(window: tauri::WebviewWindow, active: bool) -> Result<Vec<u8>, String> {
+    use tauri::Manager;
+    tokio::task::spawn_blocking(move || {
+        static CAPTURE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _capture = CAPTURE.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guards = Vec::new();
+        for (_, window) in window.app_handle().webview_windows() {
+            window
+                .set_content_protected(true)
+                .map_err(|e| format!("failed to protect Tezbar window: {e}"))?;
+            guards.push(RestoreOnDrop::new(move || {
+                window
+                    .set_content_protected(false)
+                    .map_err(|e| e.to_string())
+            }));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        let result = platform::capture(active);
+        let mut restore_error = None;
+        for guard in &mut guards {
+            if let Err(error) = guard.restore() {
+                restore_error = Some(error);
+            }
+        }
+        match (result, restore_error) {
+            (Ok(_), Some(error)) => {
+                Err(format!("failed to restore Tezbar capture setting: {error}"))
+            }
+            (result, _) => result,
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+pub async fn active_capture(window: tauri::WebviewWindow) -> Result<Vec<u8>, String> {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        capture_protected(window, true).await
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        screenshot(window).await
+    }
+}
+
+struct RestoreOnDrop<F: FnMut() -> Result<(), String>>(Option<F>);
+impl<F: FnMut() -> Result<(), String>> RestoreOnDrop<F> {
+    fn new(restore: F) -> Self {
+        Self(Some(restore))
+    }
+    fn restore(&mut self) -> Result<(), String> {
+        if let Some(restore) = &mut self.0 {
+            restore()?;
+            self.0 = None;
+        }
+        Ok(())
+    }
+}
+impl<F: FnMut() -> Result<(), String>> Drop for RestoreOnDrop<F> {
+    fn drop(&mut self) {
+        if let Err(error) = self.restore() {
+            log::error!("Capture protection restoration failed: {error}");
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn contains_point(x: f64, y: f64, width: f64, height: f64, px: f64, py: f64) -> bool {
+    px >= x && py >= y && px < x + width && py < y + height
+}
+
+#[cfg(test)]
+#[path = "native_input_platform_tests.rs"]
+mod capture_tests;

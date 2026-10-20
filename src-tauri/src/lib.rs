@@ -1,8 +1,9 @@
 // src-tauri/src/lib.rs
 mod backend_health;
-mod window_layout;
+mod native_core;
 mod native_input;
-use backend_health::{BackendStatus, HealthCheck, CONNECT_TIMEOUT};
+mod window_layout;
+use backend_health::BackendStatus;
 mod manual_releases;
 mod native_terminal;
 mod qr_download;
@@ -32,19 +33,15 @@ use core_graphics::window::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[cfg(target_os = "macos")]
@@ -54,8 +51,7 @@ use tauri::PhysicalSize;
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, State, WebviewWindow,
 };
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-use tokio::sync::oneshot;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const WINDOW_WIDTH: f64 = 760.0;
 const WINDOW_HEIGHT: f64 = 640.0;
@@ -85,7 +81,7 @@ const LEGACY_WINDOW_POSITION_KEYS: &[&str] = &[
     "tezbarWindowPlacementInitialized",
 ];
 const DEFAULT_BACKEND_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-const EXTENSION_INSTALL_REQUEST_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+const EXTENSION_INSTALL_REQUEST_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const EXTENSION_RUNTIME_REQUEST_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 
 #[cfg(target_os = "macos")]
@@ -95,11 +91,7 @@ extern "C" {
 }
 
 struct BackendState {
-    writer: Arc<Mutex<Option<TcpStream>>>,
-    pending_requests: Arc<Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>>,
-    request_counter: Arc<Mutex<u64>>,
     status: Mutex<BackendStatus>,
-    restart_requested: AtomicBool,
     shutting_down: AtomicBool,
 }
 
@@ -115,6 +107,7 @@ fn set_backend_status(app: &AppHandle, phase: &str, detail: &str) {
     status.phase = phase.into();
     status.detail = detail.into();
     status.revision += 1;
+    log::info!("Backend {phase}: {detail}");
     let _ = app.emit("backend-status", status.clone());
 }
 
@@ -124,34 +117,34 @@ fn get_backend_status(state: State<'_, BackendState>) -> BackendStatus {
 }
 
 #[tauri::command]
-fn restart_backend(state: State<'_, BackendState>) {
-    state.restart_requested.store(true, Ordering::Relaxed);
-}
-
-// Backoff is interruptible by Retry and app shutdown, without polling the renderer.
-fn wait_backend_retry(app: &AppHandle, delay: Duration) -> bool {
-    let state = app.state::<BackendState>();
-    let deadline = Instant::now() + delay;
-    loop {
-        if state.shutting_down.load(Ordering::Relaxed) {
-            return false;
+async fn restart_backend(
+    app: AppHandle,
+    core: State<'_, Arc<native_core::NativeCore>>,
+) -> Result<(), String> {
+    core.extensions.restart_worker().await;
+    match core.start().await {
+        Ok(()) => {
+            set_backend_status(&app, "ready", "Rust core ready");
+            Ok(())
         }
-        if state.restart_requested.swap(false, Ordering::Relaxed) || Instant::now() >= deadline {
-            return true;
+        Err(error) => {
+            set_backend_status(&app, "failed", &error);
+            Err(error)
         }
-        std::thread::sleep(Duration::from_millis(100));
     }
-}
-
-#[derive(Clone)]
-struct BackendLaunchConfig {
-    executable: PathBuf,
-    script_path: PathBuf,
-    env: Vec<(String, String)>,
 }
 
 fn backend_request_timeout(channel: &str) -> Duration {
     match channel {
+        "file:quick-look" => Duration::from_secs(24 * 60 * 60),
+        "app:confirm-quit" => Duration::from_secs(10 * 60),
+        "ai:action" => Duration::from_secs(16 * 60),
+        "voice:stt:transcribe" => Duration::from_secs(15 * 60),
+        "pi:install" => Duration::from_secs(4 * 60),
+        "llm-list-models" => Duration::from_secs(70),
+        "voice:models:list" | "voice:stt:modes" | "voice:model:download" => Duration::from_secs(60),
+        // Deep search can cold-start the native embedding runtime before inference.
+        "search:all" => Duration::from_secs(150),
         // Installing can include a runtime download, source download,
         // dependency installation, and an esbuild pass. Each stage has its own
         // bounded timeout, so the bridge must not abandon the request first.
@@ -440,345 +433,28 @@ fn hide_snap_overlay(app: &AppHandle, main_window: Option<&WebviewWindow>) {
     }
 }
 
-/// Close the sidecar connection before leaving the Tauri event loop. The
-/// backend treats EOF on this socket as its shutdown signal, which gives it a
-/// chance to stop its own workers instead of leaving a Bun process behind.
-fn close_backend_connection(app: &AppHandle) {
-    let Some(state) = app.try_state::<BackendState>() else {
-        return;
-    };
-    state.shutting_down.store(true, Ordering::Relaxed);
-    state.writer.lock().unwrap().take();
-    let mut pending = state.pending_requests.lock().unwrap();
-    for (_, sender) in pending.drain() {
-        let _ = sender.send(json!({ "error": "Tezbar is shutting down" }));
-    }
-}
-
 fn quit_app_now(app: &AppHandle) {
-    // Release the global shortcut and sidecar IPC before asking Tauri to exit.
-    // This makes tray/menu quits behave the same as the Settings quit action.
+    let state = app.state::<BackendState>();
+    if state.shutting_down.swap(true, Ordering::AcqRel) {
+        return;
+    }
     let _ = app.global_shortcut().unregister_all();
-    close_backend_connection(app);
-    app.exit(0);
-}
-
-fn handle_backend_message(
-    app: &AppHandle,
-    pending_requests: &Arc<Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>>,
-    line: &str,
-) {
-    let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
-        log::error!("backend sidecar emitted invalid JSON on stdout: {}", line);
-        return;
-    };
-
-    log::debug!("received backend sidecar message");
-    let Some(msg_type) = val.get("type").and_then(|value| value.as_str()) else {
-        return;
-    };
-    match msg_type {
-        "reply" => {
-            let Some(id) = val.get("id").and_then(|value| value.as_u64()) else {
-                return;
-            };
-            let mut pending = pending_requests.lock().unwrap();
-            if let Some(tx) = pending.remove(&id) {
-                let reply = if let Some(error) = val.get("error") {
-                    json!({ "error": error })
-                } else {
-                    json!({ "result": val.get("result").unwrap_or(&serde_json::Value::Null) })
-                };
-                let _ = tx.send(reply);
-            }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        native_terminal::shutdown_all(&app);
+        if let Some(core) = app.try_state::<Arc<native_core::NativeCore>>() {
+            let _ = tokio::time::timeout(Duration::from_secs(8), core.shutdown()).await;
         }
-        "event" => {
-            if let Some(channel) = val.get("channel").and_then(|value| value.as_str()) {
-                let payload = val.get("payload").unwrap_or(&serde_json::Value::Null);
-                let _ = app.emit(channel, payload);
-            }
-        }
-        "dialog" => println!("[Tauri Dialog] Dialog options: {:?}", val.get("options")),
-        "app_quit" => quit_app_now(app),
-        "window_suppress_blur" => {
-            if let Some(value) = val.get("value").and_then(|value| value.as_bool()) {
-                let state = app.state::<WindowBehaviorState>();
-                *state.suppress_blur_hide.lock().unwrap() = value;
-            }
-        }
-        "app_visibility" => {
-            if let Some(value) = val.get("visible").and_then(|value| value.as_bool()) {
-                set_backend_app_visibility(app, value);
-            }
-        }
-        #[cfg(target_os = "macos")]
-        "timer_notification" => {
-            let timer_file = val.get("timerFile").and_then(|value| value.as_str());
-            let name = val.get("name").and_then(|value| value.as_str());
-            if let (Some(timer_file), Some(name)) = (timer_file, name) {
-                timer_notifications::deliver(name, timer_file);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn run_backend_generation(
-    app: &AppHandle,
-    config: &BackendLaunchConfig,
-    writer: &Arc<Mutex<Option<TcpStream>>>,
-    pending_requests: &Arc<Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>>,
-) -> Result<Duration, String> {
-    let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| error.to_string())?;
-    let ipc_port = listener
-        .local_addr()
-        .map_err(|error| error.to_string())?
-        .port();
-    listener
-        .set_nonblocking(true)
-        .map_err(|error| error.to_string())?;
-
-    let mut command = Command::new(&config.executable);
-    command
-        .arg(&config.script_path)
-        .envs(config.env.iter().map(|(key, value)| (key, value)))
-        .env("BACKEND_IPC_PORT", ipc_port.to_string())
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    #[cfg(target_os = "windows")]
-    {
-        // Bun is a console executable. Without this flag Windows may surface
-        // it through the user's default terminal every time the supervised
-        // backend starts or restarts.
-        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
-
-    log::info!(
-        "launching backend sidecar: {}",
-        config.script_path.display()
-    );
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("Failed to spawn background runner process: {error}"))?;
-    let stdout = child.stdout.take().ok_or("Failed to open backend stdout")?;
-    let stderr = child.stderr.take().ok_or("Failed to open backend stderr")?;
-
-    // Start draining stderr before waiting for the IPC handshake. A startup
-    // failure used to be hidden until after the five-second timeout, leaving
-    // only the misleading "still recovering" message in the UI.
-    let stderr_thread = std::thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-            log::info!("backend sidecar: {}", line);
-        }
-        log::info!("backend stderr reader stopped");
+        app.exit(0);
     });
-
-    // Drain stdout during startup too: logging/dependency output must not fill
-    // its pipe and prevent the process from ever connecting. Bound the queue.
-    let (lines_tx, lines_rx) = mpsc::sync_channel(64);
-    std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines() {
-            if lines_tx.send(line).is_err() {
-                break;
-            }
-        }
-    });
-    let connect_deadline = Instant::now() + CONNECT_TIMEOUT;
-    let backend_stream = loop {
-        while let Ok(line) = lines_rx.try_recv() {
-            if let Ok(line) = line {
-                handle_backend_message(app, pending_requests, &line);
-            }
-        }
-        let state = app.state::<BackendState>();
-        if state.shutting_down.load(Ordering::Relaxed)
-            || state.restart_requested.swap(false, Ordering::Relaxed)
-            || child.try_wait().ok().flatten().is_some()
-        {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("Backend startup interrupted or process exited".into());
-        }
-        match listener.accept() {
-            Ok((stream, _)) => break stream,
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                if Instant::now() >= connect_deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err("Backend runner did not connect to its IPC socket".to_string());
-                }
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(format!("Failed to accept backend IPC connection: {error}"));
-            }
-        }
-    };
-    if let Err(error) = backend_stream.set_write_timeout(Some(Duration::from_secs(2))) {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(format!("Failed to configure backend connection: {error}"));
-    }
-    *writer.lock().unwrap() = Some(backend_stream);
-    let connected_at = Instant::now();
-    log::info!("backend sidecar IPC connected on localhost");
-    set_backend_status(app, "ready", "Background service ready");
-    let mut health = HealthCheck::new(connected_at);
-    #[cfg(target_os = "windows")]
-    let mut clipboard_sequence = None;
-
-    loop {
-        let state = app.state::<BackendState>();
-        if state.shutting_down.load(Ordering::Relaxed)
-            || state.restart_requested.swap(false, Ordering::Relaxed)
-        {
-            break;
-        }
-        match lines_rx.recv_timeout(Duration::from_millis(250)) {
-            Ok(Ok(line)) if !line.trim().is_empty() => {
-                if serde_json::from_str::<serde_json::Value>(&line)
-                    .ok()
-                    .and_then(|value| value.get("type").cloned())
-                    == Some(json!("pong"))
-                {
-                    health.pong();
-                } else {
-                    handle_backend_message(app, pending_requests, &line);
-                }
-            }
-            Ok(Err(_)) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            _ => {}
-        }
-        let now = Instant::now();
-        if health.expired(now) || child.try_wait().ok().flatten().is_some() {
-            log::error!("backend stopped responding; replacing the process");
-            break;
-        }
-        let mut messages = Vec::new();
-        if health.should_ping(now) {
-            messages.push("{\"type\":\"ping\"}");
-        }
-        #[cfg(target_os = "windows")]
-        {
-            // Reading this native counter is cheap and does not open the
-            // clipboard. Only changed contents need a PowerShell read.
-            let sequence = unsafe { windows_clipboard_sequence() };
-            if clipboard_sequence != Some(sequence) {
-                clipboard_sequence = Some(sequence);
-                messages.push("{\"type\":\"clipboard-changed\"}");
-            }
-        }
-        let mut connection = writer.lock().unwrap();
-        let Some(stream) = connection.as_mut() else {
-            break;
-        };
-        if messages
-            .iter()
-            .any(|message| writeln!(stream, "{message}").is_err())
-        {
-            break;
-        }
-    }
-
-    set_backend_status(
-        app,
-        "reconnecting",
-        "The background service stopped responding. Reconnecting…",
-    );
-    *writer.lock().unwrap() = None;
-    let mut pending = pending_requests.lock().unwrap();
-    for (_, sender) in pending.drain() {
-        let _ = sender.send(json!({ "error": "Backend runner stopped; restarting" }));
-    }
-    drop(pending);
-
-    if child.try_wait().ok().flatten().is_none() {
-        let _ = child.kill();
-    }
-    let status = child.wait().ok();
-    // A descendant can inherit a pipe; never block recovery joining a reader.
-    drop(stderr_thread);
-    log::error!("backend sidecar stopped with status {:?}", status);
-    Ok(connected_at.elapsed())
-}
-
-fn supervise_backend(
-    app: AppHandle,
-    config: BackendLaunchConfig,
-    writer: Arc<Mutex<Option<TcpStream>>>,
-    pending_requests: Arc<Mutex<HashMap<u64, oneshot::Sender<serde_json::Value>>>>,
-) {
-    let mut consecutive_failures = 0_u32;
-    loop {
-        if app
-            .state::<BackendState>()
-            .shutting_down
-            .load(Ordering::Relaxed)
-        {
-            return;
-        }
-        set_backend_status(
-            &app,
-            if consecutive_failures == 0 {
-                "starting"
-            } else {
-                "reconnecting"
-            },
-            "Starting the background service…",
-        );
-        match run_backend_generation(&app, &config, &writer, &pending_requests) {
-            Ok(uptime) if uptime >= Duration::from_secs(30) => consecutive_failures = 0,
-            Ok(_) => consecutive_failures = consecutive_failures.saturating_add(1),
-            Err(error) => {
-                consecutive_failures = consecutive_failures.saturating_add(1);
-                log::error!("backend sidecar launch failed: {}", error);
-                set_backend_status(&app, "reconnecting", &error);
-            }
-        }
-
-        // A crash-loop used to keep respawning the whole Bun sidecar at full
-        // speed (max 8s). With infinite retries and a 8s cap this is still
-        // resilient, but soaks the machine if the bundle is broken.
-        // After four failures, keep retrying slowly with a visible error.
-        if consecutive_failures >= 4 {
-            log::error!(
-                "backend sidecar kept failing ({} consecutive); sleeping 60s before retry",
-                consecutive_failures
-            );
-            set_backend_status(
-                &app,
-                "failed",
-                "The background service could not start. Retrying in 60 seconds.",
-            );
-            if !wait_backend_retry(&app, Duration::from_secs(60)) {
-                return;
-            }
-            // Try one more time; if it still fails, keep the 60s sleep loop
-            // without the boot-time churn. The user can restart the app.
-            continue;
-        }
-        let exponent = consecutive_failures.min(5);
-        let delay_ms = (250_u64 * (1_u64 << exponent)).min(8_000);
-        log::info!("restarting backend sidecar in {}ms", delay_ms);
-        if !wait_backend_retry(&app, Duration::from_millis(delay_ms)) {
-            return;
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-#[link(name = "user32")]
-extern "system" {
-    #[link_name = "GetClipboardSequenceNumber"]
-    fn windows_clipboard_sequence() -> u32;
 }
 
 fn openray_config_path() -> Option<PathBuf> {
     if let Some(path) = PROFILE_CONFIG_PATH.get() {
         return Some(path.clone());
+    }
+    if let Some(directory) = std::env::var_os("TEZBAR_CONFIG_DIR") {
+        return Some(PathBuf::from(directory).join("config.json"));
     }
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
@@ -794,6 +470,8 @@ fn bun_executable_name() -> &'static str {
 }
 
 static PROFILE_CONFIG_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+static PROFILE_STORE: std::sync::OnceLock<Arc<native_core::common::ConfigStore>> =
+    std::sync::OnceLock::new();
 
 fn bun_in_user_profile() -> Option<PathBuf> {
     std::env::var_os("HOME")
@@ -879,6 +557,12 @@ fn install_unix_bun(app_local_data: &Path) -> Result<PathBuf, String> {
                 "--show-error",
                 "--retry",
                 "3",
+                "--connect-timeout",
+                "15",
+                "--max-time",
+                "180",
+                "--retry-max-time",
+                "240",
                 "--output",
             ])
             .arg(&archive_path)
@@ -980,95 +664,18 @@ fn locate_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
     return install_unix_bun(app_local_data);
 
     #[allow(unreachable_code)]
-    Err("Bun is required to run the Tauri backend, and automatic installation is not supported on this platform.".to_string())
-}
-
-fn copy_backend_directory(
-    source: &std::path::Path,
-    destination: &std::path::Path,
-) -> Result<(), String> {
-    fs::create_dir_all(destination).map_err(|error| {
-        format!(
-            "failed to create backend directory {}: {error}",
-            destination.display()
-        )
-    })?;
-    for entry in fs::read_dir(source).map_err(|error| {
-        format!(
-            "failed to read backend resources {}: {error}",
-            source.display()
-        )
-    })? {
-        let entry =
-            entry.map_err(|error| format!("failed to enumerate backend resources: {error}"))?;
-        let source_path = entry.path();
-        let destination_path = destination.join(entry.file_name());
-        let file_type = entry.file_type().map_err(|error| {
-            format!(
-                "failed to inspect backend resource {}: {error}",
-                source_path.display()
-            )
-        })?;
-        if file_type.is_dir() {
-            copy_backend_directory(&source_path, &destination_path)?;
-        } else if file_type.is_file() {
-            fs::copy(&source_path, &destination_path).map_err(|error| {
-                format!(
-                    "failed to stage backend resource {} -> {}: {error}",
-                    source_path.display(),
-                    destination_path.display()
-                )
-            })?;
-        }
-    }
-    Ok(())
-}
-
-fn stage_backend_bundle(
-    source_dir: &std::path::Path,
-    app_local_data: &std::path::Path,
-) -> Result<PathBuf, String> {
-    let destination_dir = app_local_data.join("backend");
-    copy_backend_directory(source_dir, &destination_dir)?;
-
-    // The bundle keeps esbuild external because it includes a native binary.
-    // Stage the two packaged module trees beside the relocated JS so Bun's
-    // normal CommonJS resolution still works from the writable directory.
-    let source_node_modules = source_dir
-        .parent()
-        .map(|parent| parent.join("node_modules"))
-        .ok_or("could not resolve packaged node_modules directory")?;
-    for module in ["esbuild", "@esbuild"] {
-        let source_module = source_node_modules.join(module);
-        if source_module.is_dir() {
-            copy_backend_directory(
-                &source_module,
-                &destination_dir.join("node_modules").join(module),
-            )?;
-        }
-    }
-
-    for required in ["main.js", "knowledge-worker.js"] {
-        if !destination_dir.join(required).is_file() {
-            return Err(format!(
-                "packaged backend resource is missing after staging: {}",
-                destination_dir.join(required).display()
-            ));
-        }
-    }
-    Ok(destination_dir.join("main.js"))
+    Err("Bun is required for JavaScript extensions, and automatic installation is not supported on this platform.".to_string())
 }
 
 fn read_openray_config() -> serde_json::Value {
-    let Some(path) = openray_config_path() else {
-        return json!({});
-    };
-    let Ok(raw) = fs::read_to_string(path) else {
-        return json!({});
-    };
-    serde_json::from_str::<serde_json::Value>(&raw)
-        .ok()
-        .filter(|value| value.is_object())
+    if let Some(config) = PROFILE_STORE.get() {
+        return config.read().unwrap_or_else(|error| {
+            log::error!("Profile: {error}");
+            json!({})
+        });
+    }
+    openray_config_path()
+        .and_then(|path| native_core::common::ConfigStore::new(path).read().ok())
         .unwrap_or_else(|| json!({}))
 }
 
@@ -1157,14 +764,13 @@ fn set_persisted_window_position_for_monitor(
     let Some(monitor_id) = monitor_id(window, monitor) else {
         return;
     };
-    let mut config = read_openray_config();
-    update_window_position_config(&mut config, &monitor_id, position);
-
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    if let Ok(serialized) = serde_json::to_string_pretty(&config) {
-        let _ = fs::write(path, format!("{serialized}\n"));
+    let fallback = Arc::new(native_core::common::ConfigStore::new(path));
+    let config = PROFILE_STORE.get().unwrap_or(&fallback);
+    if let Err(error) = config.update(|value| {
+        update_window_position_config(value, &monitor_id, position);
+        Ok(())
+    }) {
+        log::warn!("Could not save window position: {error}");
     }
 }
 
@@ -2167,7 +1773,11 @@ fn schedule_windows_window_placement_finalization(
         if !placement_is_current() {
             return;
         }
-        *window.state::<WindowBehaviorState>().main_window_placed.lock().unwrap() = true;
+        *window
+            .state::<WindowBehaviorState>()
+            .main_window_placed
+            .lock()
+            .unwrap() = true;
         if target_reached && placement_settled && persist_position {
             persist_current_window_position(&window);
         }
@@ -3189,149 +2799,29 @@ fn window_set_content_height(
 
 #[tauri::command]
 fn update_raymes_shortcut(app: AppHandle, shortcut_str: String) -> Result<(), String> {
-    let clean_shortcut = shortcut_str
-        .replace("Option", "Alt")
-        .replace("CommandOrControl", "Super")
-        .replace("CmdOrCtrl", "Super")
-        .replace("Cmd", "Super")
-        .replace("Ctrl", "Control");
-    // Alt+Space is reserved by Windows for the native window menu. It was
-    // previously the cross-platform default, so make old installations
-    // usable instead of silently leaving them without a launcher shortcut.
-    let clean_shortcut =
-        if cfg!(target_os = "windows") && clean_shortcut.eq_ignore_ascii_case("Alt+Space") {
-            "Control+Space".to_string()
-        } else {
-            clean_shortcut
-        };
-    let shortcut = Shortcut::from_str(&clean_shortcut)
-        .map_err(|e| format!("Invalid shortcut format: {:?}", e))?;
-    let _ = app.global_shortcut().unregister_all();
-    app.global_shortcut()
-        .register(shortcut)
-        .map_err(|e| format!("Failed to register shortcut: {:?}", e))?;
-    Ok(())
+    let core = app.state::<Arc<native_core::NativeCore>>();
+    core.platform
+        .register_shortcut(None, &shortcut_str)
+        .map(|_| ())
 }
 
 #[tauri::command]
 async fn call_backend(
-    state: State<'_, BackendState>,
+    core: State<'_, Arc<native_core::NativeCore>>,
     channel: String,
     payload: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    let started_at = Instant::now();
-    let request_timeout = backend_request_timeout(&channel);
-    let id = {
-        let mut counter = state.request_counter.lock().unwrap();
-        *counter += 1;
-        *counter
-    };
-
-    let (tx, rx) = oneshot::channel();
-    let mut response_sender = Some(tx);
-
-    let msg = json!({
-      "type": "invoke",
-      "id": id,
-      "channel": channel,
-      "payload": payload
-    })
-    .to_string();
-
-    // Startup and crash recovery briefly leave the writer empty. Give the
-    // supervisor a chance to reconnect instead of immediately surfacing a
-    // permanent-looking error to every feature that uses the backend.
-    let writer_deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        let write_result = {
-            let mut backend_writer = state.writer.lock().unwrap();
-            backend_writer.as_mut().map(|writer| {
-                // Register only after a live generation is available. This
-                // prevents the previous generation's shutdown drain from
-                // consuming requests that are waiting for the replacement.
-                state
-                    .pending_requests
-                    .lock()
-                    .unwrap()
-                    .insert(id, response_sender.take().unwrap());
-                writeln!(writer, "{}", msg).and_then(|_| writer.flush())
-            })
-        };
-
-        match write_result {
-            Some(Ok(())) => {
-                log::debug!("wrote backend request: id={} channel={}", id, channel);
-                break;
-            }
-            Some(Err(_)) => {
-                state.pending_requests.lock().unwrap().remove(&id);
-                *state.writer.lock().unwrap() = None;
-                return Err(
-                    "Failed to write to backend runner process; recovery is in progress"
-                        .to_string(),
-                );
-            }
-            None if Instant::now() < writer_deadline => {
-                tokio::time::sleep(Duration::from_millis(50)).await;
-            }
-            None => {
-                return Err("Backend runner is still recovering".to_string());
-            }
-        }
-    }
-
-    match tokio::time::timeout(request_timeout, rx).await {
-        Ok(Ok(res)) => {
-            if let Some(err) = res.get("error") {
-                let message = err.as_str().unwrap_or("Unknown backend error").to_string();
-                log::error!(
-                    "backend request failed: id={} channel={} elapsed_ms={} error={}",
-                    id,
-                    channel,
-                    started_at.elapsed().as_millis(),
-                    message
-                );
-                Err(message)
-            } else {
-                log::debug!(
-                    "backend request completed: id={} channel={} elapsed_ms={}",
-                    id,
-                    channel,
-                    started_at.elapsed().as_millis()
-                );
-                Ok(res
-                    .get("result")
-                    .cloned()
-                    .unwrap_or(serde_json::Value::Null))
-            }
-        }
-        Ok(Err(_)) => {
-            let message = "Backend runner stopped before replying".to_string();
-            log::error!("{}: id={} channel={}", message, id, channel);
-            Err(message)
-        }
-        Err(_) => {
-            state.pending_requests.lock().unwrap().remove(&id);
-            let message = format!(
-                "Backend request for {channel} timed out after {} seconds",
-                request_timeout.as_secs()
-            );
-            log::error!("{}: id={} channel={}", message, id, channel);
-            Err(message)
-        }
-    }
+    let args = payload
+        .as_array()
+        .ok_or("IPC payload must be an argument array")?;
+    let timeout = backend_request_timeout(&channel);
+    tokio::time::timeout(timeout, core.request(&channel, args))
+        .await
+        .map_err(|_| format!("Native request timed out: {channel}"))?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let pending_requests = Arc::new(Mutex::new(
-        HashMap::<u64, oneshot::Sender<serde_json::Value>>::new(),
-    ));
-    let request_counter = Arc::new(Mutex::new(0));
-    let backend_writer = Arc::new(Mutex::new(None::<TcpStream>));
-
-    let pending_requests_app = pending_requests.clone();
-    let backend_writer_app = backend_writer.clone();
     tauri::Builder::default()
         // This must stay before every other plugin. A second launch should
         // wake the existing UI and exit before it creates another tray icon,
@@ -3349,16 +2839,32 @@ pub fn run() {
                 log::debug!("failed to focus existing Tezbar instance: {error}");
             }
         }))
-        .plugin(tauri_plugin_log::Builder::default().max_file_size(5_000_000).build())
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .level(log::LevelFilter::Info)
+                .max_file_size(5_000_000)
+                .build(),
+        )
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(move |app, _shortcut, event| {
-                    if event.state() == ShortcutState::Pressed {
+                .with_handler(move |app, shortcut, event| {
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    let Some(core) = app.try_state::<Arc<native_core::NativeCore>>() else {
+                        return;
+                    };
+                    if let Some(command) = core.platform.command_for_shortcut(shortcut.id()) {
+                        let core = core.inner().clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(error) = core.execute_command_shortcut(&command).await {
+                                core.ctx.emit("command-error", json!({"message":error}));
+                            }
+                        });
+                    } else if core.platform.is_launcher_shortcut(shortcut.id()) {
                         if let Some(win) = app.get_webview_window("main") {
                             if let Err(error) = toggle_window(win) {
-                                log::error!(
-                                    "failed to toggle launcher from global shortcut: {error}"
-                                );
+                                log::error!("Launcher shortcut: {error}");
                             }
                         }
                     }
@@ -3385,11 +2891,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(updater::UpdaterState::default())
         .manage(BackendState {
-            writer: backend_writer,
-            pending_requests,
-            request_counter,
             status: Mutex::new(BackendStatus::default()),
-            restart_requested: AtomicBool::new(false),
             shutting_down: AtomicBool::new(false),
         })
         .manage(WindowBehaviorState::default())
@@ -3618,229 +3120,42 @@ pub fn run() {
             let handle = app.handle().clone();
             #[cfg(target_os = "macos")]
             timer_notifications::setup(&handle);
-            let app_local_data = handle.path().app_local_data_dir()?;
+            let app_local_data = std::env::var_os("TEZBAR_DATA_DIR")
+                .filter(|path| !path.is_empty())
+                .map(PathBuf::from)
+                .unwrap_or(handle.path().app_local_data_dir()?);
             let config_path = openray_config_path();
             if let Some(path) = &config_path {
                 let _ = PROFILE_CONFIG_PATH.set(path.clone());
             }
-            let mut backend_env = vec![
-                (
-                    "APPDATA_DIR".to_string(),
-                    app_local_data.to_string_lossy().into_owned(),
-                ),
-                (
-                    "TEMP_DIR".to_string(),
-                    handle
-                        .path()
-                        .temp_dir()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .into_owned(),
-                ),
-                (
-                    "APP_VERSION".to_string(),
-                    handle.package_info().version.to_string(),
-                ),
-                ("IS_TAURI".to_string(), "true".to_string()),
-            ];
-            if let Some(directory) = config_path.as_ref().and_then(|path| path.parent()) {
-                backend_env.push((
-                    "TEZBAR_CONFIG_DIR".into(),
-                    directory.to_string_lossy().into_owned(),
-                ));
-            }
-
-            #[cfg(target_os = "macos")]
-            if let Ok(resource_dir) = handle.path().resource_dir() {
-                backend_env.extend([
-                    (
-                        "AXHELPER_PATH".to_string(),
-                        resource_dir
-                            .join("native")
-                            .join("axhelper")
-                            .join("axhelper")
-                            .to_string_lossy()
-                            .into_owned(),
-                    ),
-                    (
-                        "SCREENOCR_HELPER_PATH".to_string(),
-                        resource_dir
-                            .join("native")
-                            .join("screenocr")
-                            .join("screenocr-helper")
-                            .to_string_lossy()
-                            .into_owned(),
-                    ),
-                    (
-                        "COLOR_PICKER_HELPER_PATH".to_string(),
-                        resource_dir
-                            .join("native")
-                            .join("color-picker")
-                            .join("color-picker-helper")
-                            .to_string_lossy()
-                            .into_owned(),
-                    ),
-                ]);
-            }
-
-            #[cfg(target_os = "windows")]
-            {
-                let helper_path = if cfg!(debug_assertions) {
-                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                        .join("../native/color-picker/windows.ps1")
+            let home_dir = handle.path().home_dir()?;
+            let paths = native_core::common::CorePaths {
+                data_dir: app_local_data,
+                config_dir: config_path
+                    .as_ref()
+                    .and_then(|p| p.parent())
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| home_dir.join(".openray")),
+                resource_dir: if cfg!(debug_assertions) {
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
                 } else {
-                    handle
-                        .path()
-                        .resource_dir()
-                        .unwrap_or_default()
-                        .join("native")
-                        .join("color-picker")
-                        .join("windows.ps1")
-                };
-                backend_env.push((
-                    "COLOR_PICKER_HELPER_PATH".to_string(),
-                    helper_path.to_string_lossy().into_owned(),
-                ));
-                let image_colors_helper_path = if cfg!(debug_assertions) {
-                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                        .join("../native/image-colors/windows.ps1")
-                } else {
-                    handle
-                        .path()
-                        .resource_dir()
-                        .unwrap_or_default()
-                        .join("native")
-                        .join("image-colors")
-                        .join("windows.ps1")
-                };
-                backend_env.push((
-                    "IMAGE_COLORS_HELPER_PATH".to_string(),
-                    image_colors_helper_path.to_string_lossy().into_owned(),
-                ));
-            }
-
-            let script_path = if cfg!(debug_assertions) {
-                // Tauri copies resources into target/debug only during a Rust build.
-                // The backend bundler runs independently, so that copy quickly becomes
-                // stale during development. Always execute the live workspace bundle.
-                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist-backend/main.js")
-            } else {
-                handle
-                    .path()
-                    .resource_dir()
-                    .map(|dir| dir.join("dist-backend").join("main.js"))
-                    .unwrap_or_else(|_| std::path::PathBuf::from("dist-backend/main.js"))
+                    handle.path().resource_dir()?
+                },
+                temp_dir: handle.path().temp_dir()?,
+                home_dir,
             };
-            let supervisor_handle = handle.clone();
-            let supervisor_pending = pending_requests_app.clone();
-            let supervisor_writer = backend_writer_app.clone();
-            std::thread::spawn(move || {
-                let script_path = if cfg!(debug_assertions) {
-                    script_path
-                } else {
-                    let source_dir = script_path
-                        .parent()
-                        .map(std::path::Path::to_path_buf)
-                        .unwrap_or_else(|| std::path::PathBuf::from("dist-backend"));
-                    loop {
-                        match stage_backend_bundle(&source_dir, &app_local_data) {
-                            Ok(path) => break path,
-                            Err(error) => {
-                                log::error!("backend bundle staging failed: {}", error);
-                                set_backend_status(&supervisor_handle, "failed", &error);
-                                if !wait_backend_retry(&supervisor_handle, Duration::from_secs(10))
-                                {
-                                    return;
-                                }
-                            }
-                        }
+            let context = native_core::common::CoreContext::new(paths, Some(handle.clone()));
+            let _ = PROFILE_STORE.set(context.config.clone());
+            let core = native_core::NativeCore::new(context).map_err(std::io::Error::other)?;
+            app.manage(core.clone());
+            let core_handle = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                match core.start().await {
+                    Ok(()) => set_backend_status(&core_handle, "ready", "Rust core ready"),
+                    Err(error) => {
+                        log::error!("Native service initialization: {error}");
+                        set_backend_status(&core_handle, "failed", &error);
                     }
-                };
-                let mut backend_env = backend_env;
-                let backend_root = script_path
-                    .parent()
-                    .map(std::path::Path::to_path_buf)
-                    .unwrap_or_else(|| app_local_data.join("backend"));
-                let esbuild_platform = if cfg!(target_os = "windows") {
-                    if cfg!(target_arch = "aarch64") {
-                        "win32-arm64"
-                    } else {
-                        "win32-x64"
-                    }
-                } else if cfg!(target_arch = "aarch64") {
-                    "darwin-arm64"
-                } else {
-                    "darwin-x64"
-                };
-                let esbuild_relative = if cfg!(target_os = "windows") {
-                    std::path::PathBuf::from("esbuild.exe")
-                } else {
-                    std::path::PathBuf::from("bin").join("esbuild")
-                };
-                backend_env.push((
-                    "ESBUILD_BINARY_PATH".to_string(),
-                    backend_root
-                        .join("node_modules")
-                        .join("@esbuild")
-                        .join(esbuild_platform)
-                        .join(esbuild_relative)
-                        .to_string_lossy()
-                        .into_owned(),
-                ));
-                if !cfg!(debug_assertions) {
-                    backend_env.push((
-                        "NODE_PATH".to_string(),
-                        backend_root
-                            .join("node_modules")
-                            .to_string_lossy()
-                            .into_owned(),
-                    ));
-                    backend_env.push((
-                        "BUN_RUNTIME_TRANSPILER_CACHE_PATH".to_string(),
-                        backend_root
-                            .join("bun-cache")
-                            .to_string_lossy()
-                            .into_owned(),
-                    ));
-                }
-
-                // Bun bootstrap/download can involve the network and may take
-                // seconds. Never perform it on Tauri's setup thread: doing so
-                // blocks the Windows message loop and produces a frozen,
-                // apparently non-responsive launcher window.
-                let mut failures = 0_u32;
-                loop {
-                    let bun_command = match locate_bun(&app_local_data) {
-                        Ok(path) => path,
-                        Err(error) => {
-                            failures = failures.saturating_add(1);
-                            log::error!("backend runtime unavailable: {}", error);
-                            set_backend_status(&supervisor_handle, "failed", &error);
-                            let exponent = failures.min(5);
-                            let delay_ms = (500_u64 * (1_u64 << exponent)).min(15_000);
-                            log::info!("retrying backend runtime discovery in {}ms", delay_ms);
-                            if !wait_backend_retry(
-                                &supervisor_handle,
-                                Duration::from_millis(delay_ms),
-                            ) {
-                                return;
-                            }
-                            continue;
-                        }
-                    };
-
-                    let backend_config = BackendLaunchConfig {
-                        executable: bun_command,
-                        script_path: script_path.clone(),
-                        env: backend_env.clone(),
-                    };
-                    supervise_backend(
-                        supervisor_handle.clone(),
-                        backend_config,
-                        supervisor_writer.clone(),
-                        supervisor_pending.clone(),
-                    );
-                    return;
                 }
             });
 
@@ -3850,12 +3165,20 @@ pub fn run() {
 
             let app_name = handle.package_info().name.clone();
             let show_item = MenuItem::with_id(
-                &handle, "show", format!("Show {app_name}"), true, None::<&str>,
+                &handle,
+                "show",
+                format!("Show {app_name}"),
+                true,
+                None::<&str>,
             )?;
             let settings_item =
                 MenuItem::with_id(&handle, "settings", "Settings", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(
-                &handle, "quit", format!("Quit {app_name}"), true, None::<&str>,
+                &handle,
+                "quit",
+                format!("Quit {app_name}"),
+                true,
+                None::<&str>,
             )?;
 
             let menu = Menu::with_items(&handle, &[&show_item, &settings_item, &quit_item])?;
@@ -3932,19 +3255,6 @@ pub fn run() {
                 })
                 .build(&handle_tray)?;
 
-            let shortcut_modifiers = if cfg!(target_os = "windows") {
-                tauri_plugin_global_shortcut::Modifiers::CONTROL
-            } else {
-                tauri_plugin_global_shortcut::Modifiers::ALT
-            };
-            let default_shortcut = Shortcut::new(
-                Some(shortcut_modifiers),
-                tauri_plugin_global_shortcut::Code::Space,
-            );
-            if let Err(error) = handle.global_shortcut().register(default_shortcut) {
-                log::error!("failed to register default launcher shortcut: {:?}", error);
-            }
-
             let handle_for_updater = handle.clone();
             tauri::async_runtime::spawn(async move {
                 tokio::time::sleep(Duration::from_secs(3)).await;
@@ -3957,6 +3267,16 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = &event {
+                if !app
+                    .state::<BackendState>()
+                    .shutting_down
+                    .load(Ordering::Acquire)
+                {
+                    api.prevent_exit();
+                    quit_app_now(app);
+                }
+            }
             if let tauri::RunEvent::Ready = event {
                 // Place the initially hidden launcher before showing it on
                 // every launch, including the new process after an update.

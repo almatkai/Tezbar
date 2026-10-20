@@ -1,0 +1,529 @@
+use super::text;
+use crate::native_core::common::{now_ms, CoreResult};
+use rusqlite::{params, Connection, OptionalExtension};
+use serde_json::{json, Value};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{mpsc, Arc, Mutex},
+};
+#[derive(Clone)]
+pub struct Database {
+    tx: mpsc::Sender<Message>,
+    thread: Arc<Mutex<Option<std::thread::JoinHandle<()>>>>,
+}
+enum Message {
+    Run(Job),
+    Stop(tokio::sync::oneshot::Sender<()>),
+}
+type Job = Box<dyn FnOnce(Result<&mut Connection, String>) + Send>;
+impl Database {
+    pub fn new(path: PathBuf) -> Self {
+        let (tx, rx) = mpsc::channel::<Message>();
+        let thread = std::thread::Builder::new()
+            .name("launcher-sqlite".into())
+            .spawn(move || {
+                let mut db = init(path.clone());
+                while let Ok(message) = rx.recv() {
+                    match message {
+                        Message::Run(job) => {
+                            if db.is_err() {
+                                db = init(path.clone());
+                            }
+                            job(db.as_mut().map_err(|e| e.clone()))
+                        }
+                        Message::Stop(reply) => {
+                            drop(db);
+                            let _ = reply.send(());
+                            break;
+                        }
+                    }
+                }
+            })
+            .expect("launcher database thread");
+        Self {
+            tx,
+            thread: Arc::new(Mutex::new(Some(thread))),
+        }
+    }
+    pub async fn call<F>(&self, f: F) -> CoreResult
+    where
+        F: FnOnce(&mut Connection) -> CoreResult + Send + 'static,
+    {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.tx
+            .send(Message::Run(Box::new(move |db| {
+                let _ = tx.send(db.and_then(f));
+            })))
+            .map_err(|_| "Launcher database stopped")?;
+        rx.await.map_err(|e| e.to_string())?
+    }
+    pub async fn shutdown(&self) -> Result<(), String> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        if self.tx.send(Message::Stop(tx)).is_ok() {
+            let _ = rx.await;
+        }
+        let thread = self.thread.lock().map_err(|e| e.to_string())?.take();
+        if let Some(thread) = thread {
+            tokio::task::spawn_blocking(move || thread.join())
+                .await
+                .map_err(|e| e.to_string())?
+                .map_err(|_| "Launcher database thread panicked")?;
+        }
+        Ok(())
+    }
+    pub async fn upsert(&self, docs: Vec<Value>, replace: Vec<String>) -> CoreResult {
+        self.call(move |db| {
+            let tx = db.transaction().map_err(err)?;
+            // Preserve unchanged rows (and their FTS entries) during periodic refresh.
+            // The temporary ID set also avoids SQLite's parameter limit for large corpora.
+            if !replace.is_empty() {
+                tx.execute_batch("CREATE TEMP TABLE IF NOT EXISTS refresh_ids(id TEXT PRIMARY KEY); DELETE FROM refresh_ids;").map_err(err)?;
+                for d in &docs {
+                    tx.execute("INSERT OR IGNORE INTO refresh_ids(id) VALUES(?)", [d["id"].as_str().ok_or("Document id required")?]).map_err(err)?;
+                }
+                for category in replace {
+                    tx.execute("DELETE FROM documents WHERE category=? AND id NOT IN (SELECT id FROM refresh_ids)", [category]).map_err(err)?;
+                }
+            }
+            for d in docs {
+                upsert(&tx, &d)?;
+            }
+            tx.commit().map_err(err)?;
+            Ok(Value::Null)
+        })
+        .await
+    }
+    pub async fn search(&self, q: String, candidates: bool) -> CoreResult {
+        self.call(move |db| search(db, &q, candidates)).await
+    }
+    pub async fn record(&self, id: String, context: Value, success: bool) -> CoreResult {
+        self.call(move|db|{let tx=db.transaction().map_err(err)?;let now=now_ms();tx.execute("INSERT INTO action_stats(action_id,frequency,success_count,total_count,last_used_at) VALUES(?1,1,?2,1,?3) ON CONFLICT(action_id) DO UPDATE SET frequency=frequency+1, success_count=success_count+excluded.success_count,total_count=total_count+1,last_used_at=excluded.last_used_at",params![id,success,now]).map_err(err)?;if success{tx.execute("INSERT INTO action_usage_events(action_id,created_at) VALUES(?,?)",params![id,now]).map_err(err)?;}
+ let q=text::normalize(context["query"].as_str().unwrap_or(""));if !q.is_empty()&&success{tx.execute("INSERT INTO query_action_stats(query,action_id,frequency,success_count,total_count,last_used_at) VALUES(?1,?2,1,?3,1,?4) ON CONFLICT(query,action_id) DO UPDATE SET frequency=frequency+1,success_count=success_count+excluded.success_count,total_count=total_count+1,last_used_at=excluded.last_used_at",params![q,id,success,now]).map_err(err)?;}
+ if let Some(rank)=context["rank"].as_f64().filter(|n|n.is_finite()){tx.execute("INSERT INTO click_events(created_at,query,result_id,rank,success) VALUES(?,?,?,?,?)",params![now,q,id,rank.round() as i64,success]).map_err(err)?;}
+ prune(&tx)?;tx.commit().map_err(err)?;Ok(Value::Null)}).await
+    }
+}
+pub fn err(e: impl std::fmt::Display) -> String {
+    e.to_string()
+}
+fn init(path: PathBuf) -> Result<Connection, String> {
+    std::fs::create_dir_all(path.parent().ok_or("Invalid DB path")?).map_err(err)?;
+    let db = Connection::open(path).map_err(err)?;
+    db.busy_timeout(std::time::Duration::from_secs(10))
+        .map_err(err)?;
+    db.execute_batch("PRAGMA journal_mode=WAL;PRAGMA synchronous=NORMAL;
+CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY,category TEXT NOT NULL,title TEXT NOT NULL,subtitle TEXT NOT NULL,tokens TEXT NOT NULL,action_json TEXT NOT NULL,updated_at INTEGER NOT NULL,source_path TEXT,source_mtime INTEGER,popularity REAL NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
+CREATE TABLE IF NOT EXISTS action_stats(action_id TEXT PRIMARY KEY,frequency INTEGER NOT NULL DEFAULT 0,success_count INTEGER NOT NULL DEFAULT 0,total_count INTEGER NOT NULL DEFAULT 0,last_used_at INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS query_action_stats(query TEXT NOT NULL,action_id TEXT NOT NULL,frequency INTEGER NOT NULL DEFAULT 0,success_count INTEGER NOT NULL DEFAULT 0,total_count INTEGER NOT NULL DEFAULT 0,last_used_at INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(query,action_id));
+CREATE TABLE IF NOT EXISTS action_usage_events(id INTEGER PRIMARY KEY AUTOINCREMENT,action_id TEXT NOT NULL,created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_action_usage_events_action_time ON action_usage_events(action_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS benchmark_snapshots(id INTEGER PRIMARY KEY AUTOINCREMENT,created_at INTEGER NOT NULL,precision_at_5 REAL NOT NULL,precision_at_10 REAL NOT NULL,avg_click_rank REAL NOT NULL,benchmark_size INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS click_events(id INTEGER PRIMARY KEY AUTOINCREMENT,created_at INTEGER NOT NULL,query TEXT NOT NULL,result_id TEXT NOT NULL,rank INTEGER NOT NULL,success INTEGER NOT NULL);").map_err(err)?;
+    let columns: Vec<String> = db
+        .prepare("PRAGMA table_info(documents)")
+        .map_err(err)?
+        .query_map([], |r| r.get(1))
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)?;
+    for (name, ddl) in [
+        ("source_path", "TEXT"),
+        ("source_mtime", "INTEGER"),
+        ("popularity", "REAL NOT NULL DEFAULT 0"),
+    ] {
+        if !columns.iter().any(|x| x == name) {
+            db.execute_batch(&format!("ALTER TABLE documents ADD COLUMN {name} {ddl}"))
+                .map_err(err)?;
+        }
+    }
+    db.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_documents_source_path ON documents(source_path)",
+    )
+    .map_err(err)?;
+    let sql: String = db
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE name='documents_fts'",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(err)?
+        .unwrap_or_default()
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_lowercase();
+    let migrate = !sql.contains("content='documents'") && !sql.contains("content=\"documents\"");
+    db.execute_batch("BEGIN IMMEDIATE;").map_err(err)?;
+    let migration = (|| {
+        if migrate {
+            db.execute_batch("DROP TRIGGER IF EXISTS documents_fts_after_insert;DROP TRIGGER IF EXISTS documents_fts_after_delete;DROP TRIGGER IF EXISTS documents_fts_after_update;DROP TABLE IF EXISTS documents_fts;CREATE VIRTUAL TABLE documents_fts USING fts5(title,subtitle,tokens,content='documents',content_rowid='rowid',tokenize='unicode61');").map_err(err)?;
+        }
+        db.execute_batch("CREATE TRIGGER IF NOT EXISTS documents_fts_after_insert AFTER INSERT ON documents BEGIN INSERT INTO documents_fts(rowid,title,subtitle,tokens) VALUES(new.rowid,new.title,new.subtitle,new.tokens);END;
+CREATE TRIGGER IF NOT EXISTS documents_fts_after_delete AFTER DELETE ON documents BEGIN INSERT INTO documents_fts(documents_fts,rowid,title,subtitle,tokens) VALUES('delete',old.rowid,old.title,old.subtitle,old.tokens);END;
+CREATE TRIGGER IF NOT EXISTS documents_fts_after_update AFTER UPDATE ON documents BEGIN INSERT INTO documents_fts(documents_fts,rowid,title,subtitle,tokens) VALUES('delete',old.rowid,old.title,old.subtitle,old.tokens);INSERT INTO documents_fts(rowid,title,subtitle,tokens) VALUES(new.rowid,new.title,new.subtitle,new.tokens);END;").map_err(err)?;
+        if migrate {
+            db.execute_batch("INSERT INTO documents_fts(documents_fts) VALUES('rebuild');")
+                .map_err(err)?;
+        }
+        Ok::<_, String>(())
+    })();
+    match migration {
+        Ok(()) => db.execute_batch("COMMIT;").map_err(err)?,
+        Err(e) => {
+            let _ = db.execute_batch("ROLLBACK;");
+            return Err(e);
+        }
+    }
+    prune(&db)?;
+    Ok(db)
+}
+fn prune(db: &Connection) -> Result<(), String> {
+    for (table, n) in [
+        ("click_events", 1000),
+        ("action_usage_events", 5000),
+        ("benchmark_snapshots", 50),
+    ] {
+        db.execute(&format!("DELETE FROM {table} WHERE id NOT IN(SELECT id FROM {table} ORDER BY id DESC LIMIT ? )"),[n]).map_err(err)?;
+    }
+    Ok(())
+}
+pub fn upsert(db: &Connection, d: &Value) -> Result<(), String> {
+    let id = d["id"].as_str().ok_or("Document id required")?;
+    let category = d["category"].as_str().ok_or("Document category required")?;
+    db.execute("INSERT INTO documents(id,category,title,subtitle,tokens,action_json,updated_at,source_path,source_mtime,popularity) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(id) DO UPDATE SET category=excluded.category,title=excluded.title,subtitle=excluded.subtitle,tokens=excluded.tokens,action_json=excluded.action_json,updated_at=excluded.updated_at,source_path=excluded.source_path,source_mtime=excluded.source_mtime,popularity=excluded.popularity WHERE title<>excluded.title OR subtitle<>excluded.subtitle OR tokens<>excluded.tokens OR action_json<>excluded.action_json OR updated_at<>excluded.updated_at OR popularity<>excluded.popularity OR source_path IS NOT excluded.source_path OR source_mtime IS NOT excluded.source_mtime",params![id,category,d["title"].as_str().unwrap_or(""),d["subtitle"].as_str().unwrap_or(""),d["tokens"].as_str().unwrap_or(""),serde_json::to_string(&d["action"]).map_err(err)?,d["updatedAt"].as_u64().unwrap_or(0),d["sourcePath"].as_str(),d["sourceMtime"].as_u64(),d["popularity"].as_f64().unwrap_or(0.)]).map_err(err)?;
+    Ok(())
+}
+const SELECT:&str="SELECT d.id,d.category,d.title,d.subtitle,d.tokens,d.action_json,d.updated_at,d.popularity FROM documents d ";
+fn row(r: &rusqlite::Row) -> rusqlite::Result<Value> {
+    let action: String = r.get(5)?;
+    Ok(
+        json!({"id":r.get::<_,String>(0)?,"category":r.get::<_,String>(1)?,"title":r.get::<_,String>(2)?,"subtitle":r.get::<_,String>(3)?,"tokens":r.get::<_,String>(4)?,"action":serde_json::from_str::<Value>(&action).unwrap_or(Value::Null),"updatedAt":r.get::<_,i64>(6)?,"popularity":r.get::<_,f64>(7)?}),
+    )
+}
+fn collect(db: &Connection, sql: &str, args: impl rusqlite::Params) -> Result<Vec<Value>, String> {
+    db.prepare(sql)
+        .map_err(err)?
+        .query_map(args, row)
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)
+}
+fn stat(db: &Connection, id: &str, q: &str) -> Result<(f64, f64, u64), String> {
+    let sql = if q.is_empty() {
+        "SELECT frequency,success_count,total_count,last_used_at FROM action_stats WHERE action_id=?1"
+    } else {
+        "SELECT frequency,success_count,total_count,last_used_at FROM query_action_stats WHERE action_id=?1 AND query=?2"
+    };
+    let mut stmt = db.prepare_cached(sql).map_err(err)?;
+    let mut rows = if q.is_empty() {
+        stmt.query(params![id])
+    } else {
+        stmt.query(params![id, q])
+    }
+    .map_err(err)?;
+    if let Some(r) = rows.next().map_err(err)? {
+        let total = r.get::<_, f64>(2).map_err(err)?;
+        Ok((
+            r.get(0).map_err(err)?,
+            r.get::<_, f64>(1).map_err(err)? / total.max(1.),
+            r.get(3).map_err(err)?,
+        ))
+    } else {
+        Ok((0., 0., 0))
+    }
+}
+fn best_match(text: &str, variants: &[String]) -> (f64, String) {
+    variants
+        .iter()
+        .enumerate()
+        .map(|(i, q)| {
+            (
+                text::lexical(text, q).max(text::fuzzy(text, q)) * if i == 0 { 1. } else { 0.9 },
+                q.clone(),
+            )
+        })
+        .max_by(|a, b| a.0.total_cmp(&b.0))
+        .unwrap_or((0., String::new()))
+}
+pub fn search(db: &mut Connection, q: &str, candidates: bool) -> CoreResult {
+    let now = now_ms();
+    let variants = text::variants(q);
+    let normalized = text::normalize(q);
+    let home = normalized.is_empty();
+    let mut docs = HashMap::new();
+    if home {
+        let sql=format!("{SELECT} LEFT JOIN action_stats a ON a.action_id=d.id WHERE d.category<>'files' ORDER BY coalesce(a.last_used_at,0) DESC,updated_at DESC LIMIT 1200");
+        for mut d in collect(db, &sql, [])? {
+            d["_lex"] = json!(0.92);
+            docs.insert(d["id"].as_str().unwrap().to_owned(), d);
+        }
+    } else {
+        let query = text::fts(&variants.join(" "));
+        if !query.is_empty() {
+            let sql="SELECT d.id,d.category,d.title,d.subtitle,d.tokens,d.action_json,d.updated_at,d.popularity,bm25(documents_fts,5.0,2.0,1.0) FROM documents d JOIN documents_fts f ON f.rowid=d.rowid WHERE documents_fts MATCH ? ORDER BY bm25(documents_fts,5.0,2.0,1.0) LIMIT 160";
+            let mut statement = db.prepare(sql).map_err(err)?;
+            let rows = statement
+                .query_map([query], |r| {
+                    let mut d = row(r)?;
+                    let bm25: f64 = r.get(8)?;
+                    let inverse = if bm25.is_finite() {
+                        let n = (-bm25).max(0.);
+                        n / (1. + n)
+                    } else {
+                        0.5
+                    };
+                    let metadata = format!(
+                        "{} {}",
+                        d["title"].as_str().unwrap_or(""),
+                        d["subtitle"].as_str().unwrap_or("")
+                    );
+                    d["_lex"] = json!(inverse.max(best_match(&metadata, &variants).0));
+                    Ok(d)
+                })
+                .map_err(err)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(err)?;
+            for d in rows {
+                docs.insert(d["id"].as_str().unwrap().to_owned(), d);
+            }
+        }
+        if docs.len() < 160 {
+            let rows=collect(db,&format!("{SELECT} ORDER BY CASE WHEN category='files' THEN 1 ELSE 0 END,updated_at DESC LIMIT 1600"),[])?;
+            let mut fuzzy = vec![];
+            for mut d in rows {
+                let content = format!(
+                    "{} {} {}",
+                    d["title"].as_str().unwrap_or(""),
+                    d["subtitle"].as_str().unwrap_or(""),
+                    d["tokens"].as_str().unwrap_or("")
+                );
+                let (lex, query) = best_match(&content, &variants);
+                if lex <= 0. {
+                    continue;
+                }
+                d["_lex"] = json!(lex);
+                d["_distance"] = json!(text::distance(d["title"].as_str().unwrap_or(""), &query));
+                fuzzy.push(d);
+            }
+            fuzzy.sort_by(|a, b| {
+                b["_lex"]
+                    .as_f64()
+                    .unwrap_or(0.)
+                    .total_cmp(&a["_lex"].as_f64().unwrap_or(0.))
+            });
+            fuzzy.truncate(160);
+            for d in fuzzy {
+                let id = d["id"].as_str().unwrap().to_owned();
+                if docs.get(&id).map_or(true, |old| {
+                    d["_lex"].as_f64().unwrap_or(0.) > old["_lex"].as_f64().unwrap_or(0.)
+                }) {
+                    docs.insert(id, d);
+                }
+            }
+        }
+        // Applications reserve a compact name/alias page even when files fill FTS.
+        let mut applications = vec![];
+        for mut d in collect(
+            db,
+            &format!("{SELECT} WHERE category='applications' LIMIT 2000"),
+            [],
+        )? {
+            let title = d["title"].as_str().unwrap_or("");
+            let lex = variants
+                .iter()
+                .enumerate()
+                .map(|(i, q)| text::app_match(title, q) * if i == 0 { 1. } else { 0.9 })
+                .fold(0., f64::max);
+            if lex > 0. {
+                d["_lex"] = json!(lex);
+                d.as_object_mut().unwrap().remove("_distance");
+                applications.push(d);
+            }
+        }
+        applications.sort_by(|a, b| {
+            b["_lex"]
+                .as_f64()
+                .unwrap_or(0.)
+                .total_cmp(&a["_lex"].as_f64().unwrap_or(0.))
+        });
+        applications.truncate(20);
+        for d in applications {
+            docs.insert(d["id"].as_str().unwrap().to_owned(), d);
+        }
+        for mut d in collect(db,&format!("{SELECT} JOIN query_action_stats q ON q.action_id=d.id WHERE q.query=? AND q.success_count>0 ORDER BY q.last_used_at DESC LIMIT 20"),[&normalized])?{let id=d["id"].as_str().unwrap().to_owned();d["_lex"]=json!(0.);docs.entry(id).or_insert(d);}
+    }
+    let note_query = regex::Regex::new(r"(?i)\bnotes?\b|quick note")
+        .unwrap()
+        .is_match(&normalized);
+    let mut out = vec![];
+    for (_, mut d) in docs {
+        let id = d["id"].as_str().unwrap_or("");
+        let category = d["category"].as_str().unwrap_or("");
+        let title = d["title"].as_str().unwrap_or("");
+        let subtitle = d["subtitle"].as_str().unwrap_or("");
+        let lex = d["_lex"].as_f64().unwrap_or(0.);
+        let (freq, rate, last) = stat(db, id, if home { "" } else { &normalized })?;
+        let age = now.saturating_sub(d["updatedAt"].as_u64().unwrap_or(0));
+        let mut score = text::weighted(lex, age, category, d["popularity"].as_f64().unwrap_or(0.));
+        if home {
+            let recent: u64 = db
+                .query_row(
+                    "SELECT count(*) FROM action_usage_events WHERE action_id=? AND created_at>=?",
+                    params![id, now.saturating_sub(300_000)],
+                    |r| r.get(0),
+                )
+                .map_err(err)?;
+            let activity = if last > 0 {
+                last
+            } else {
+                d["updatedAt"].as_u64().unwrap_or(0)
+            };
+            let learned_category = [
+                "applications",
+                "extensions",
+                "native-command",
+                "commands",
+                "quick-notes",
+                "snippets",
+                "quick-links",
+            ]
+            .contains(&category);
+            score = text::weighted(0.92, now.saturating_sub(activity), category, 0.)
+                + if freq > 0. {
+                    ((freq + 1.).log10() / 2.).min(1.) * 100.
+                } else {
+                    0.
+                }
+                + rate.clamp(0., 1.) * 50.
+                + if learned_category {
+                    text::learned(freq, rate, last, now)
+                } else {
+                    0.
+                }
+                + text::hot(recent)
+                + text::recommendation(id);
+        } else {
+            if let Some(distance) = d["_distance"].as_u64() {
+                score += match distance {
+                    0 => 80.,
+                    1 => 50.,
+                    2 => 20.,
+                    _ => 0.,
+                };
+            }
+            score += text::query_boost(freq, rate, last, now)
+                + variants
+                    .iter()
+                    .enumerate()
+                    .map(|(i, q)| {
+                        (text::surface_boost(category, title, subtitle, q)
+                            + text::exact_note(category, title, q, age)
+                            + text::full_tokens(title, subtitle, q))
+                            * if i == 0 { 1. } else { 0.9 }
+                    })
+                    .fold(0., f64::max)
+                + text::note_recency(category, age)
+                + if note_query { 780. } else { 120. };
+        }
+        d["score"] = json!(score.round());
+        for key in ["tokens", "popularity", "_lex", "_distance"] {
+            d.as_object_mut().unwrap().remove(key);
+        }
+        out.push(d);
+    }
+    out.sort_by(|a, b| {
+        b["score"]
+            .as_f64()
+            .unwrap_or(0.)
+            .total_cmp(&a["score"].as_f64().unwrap_or(0.))
+            .then_with(|| b["updatedAt"].as_u64().cmp(&a["updatedAt"].as_u64()))
+    });
+    out.truncate(if candidates { 1000 } else { 80 });
+    for d in &mut out {
+        d.as_object_mut().unwrap().remove("updatedAt");
+    }
+    Ok(json!(out))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn legacy_migration_keeps_usage_and_non_ascii() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("index.sqlite3");
+        let c = Connection::open(&path).unwrap();
+        c.execute_batch("CREATE TABLE documents(id TEXT PRIMARY KEY,category TEXT NOT NULL,title TEXT NOT NULL,subtitle TEXT NOT NULL,tokens TEXT NOT NULL,action_json TEXT NOT NULL,updated_at INTEGER NOT NULL);CREATE VIRTUAL TABLE documents_fts USING fts5(id UNINDEXED,title,subtitle,tokens);").unwrap();
+        drop(c);
+        let db = Database::new(path);
+        db.upsert(vec![json!({"id":"app:chrome","category":"applications","title":"Google Chrome","subtitle":"Application","tokens":"chrome хром","action":{"type":"open-app","appName":"Google Chrome"},"updatedAt":1})],vec![]).await.unwrap();
+        db.record("app:chrome".into(), json!({"query":"хром"}), true)
+            .await
+            .unwrap();
+        let r = db.search("сркщьу".into(), false).await.unwrap();
+        assert_eq!(r[0]["id"], "app:chrome");
+        db.upsert(vec![], vec!["applications".into()])
+            .await
+            .unwrap();
+        assert_eq!(
+            db.call(|c| Ok(json!(c
+                .query_row("SELECT frequency FROM action_stats", [], |r| r
+                    .get::<_, i64>(0))
+                .unwrap())))
+                .await
+                .unwrap(),
+            1
+        );
+    }
+}
+
+#[cfg(test)]
+mod refresh_tests {
+    use super::*;
+    #[tokio::test]
+    async fn refresh_preserves_unchanged_rows_and_removes_stale_documents() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("index.sqlite3"));
+        let doc = json!({"id":"app:keep","category":"applications","title":"Keep","action":{"type":"open-app","appName":"Keep"},"updatedAt":1});
+        let mut stale = doc.clone();
+        stale["id"] = json!("app:stale");
+        db.upsert(vec![doc.clone(), stale], vec![]).await.unwrap();
+        db.call(|c| {
+            c.execute_batch("CREATE TABLE refresh_changes(kind TEXT); CREATE TRIGGER refresh_deleted AFTER DELETE ON documents BEGIN INSERT INTO refresh_changes VALUES('delete'); END; CREATE TRIGGER refresh_updated AFTER UPDATE ON documents BEGIN INSERT INTO refresh_changes VALUES('update'); END;").map_err(err)?;
+            Ok(Value::Null)
+        }).await.unwrap();
+        db.upsert(vec![doc.clone()], vec!["applications".into()])
+            .await
+            .unwrap();
+        db.upsert(vec![doc], vec!["applications".into()])
+            .await
+            .unwrap();
+        let changes = db
+            .call(|c| {
+                Ok(json!([
+                    c.query_row(
+                        "SELECT count(*) FROM refresh_changes WHERE kind='delete'",
+                        [],
+                        |r| r.get::<_, i64>(0)
+                    )
+                    .map_err(err)?,
+                    c.query_row(
+                        "SELECT count(*) FROM refresh_changes WHERE kind='update'",
+                        [],
+                        |r| r.get::<_, i64>(0)
+                    )
+                    .map_err(err)?
+                ]))
+            })
+            .await
+            .unwrap();
+        assert_eq!(changes, json!([1, 0]));
+        assert_eq!(
+            db.search("keep".into(), false).await.unwrap()[0]["id"],
+            "app:keep"
+        );
+        db.shutdown().await.unwrap();
+    }
+}

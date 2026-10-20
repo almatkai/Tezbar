@@ -4,6 +4,11 @@
 // restarts the app.
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
+mod child_supervisor;
+
 fn main() {
+    if let Some(code) = child_supervisor::dispatch() {
+        std::process::exit(code);
+    }
     app_lib::run();
 }

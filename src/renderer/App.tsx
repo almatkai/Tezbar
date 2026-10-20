@@ -99,6 +99,7 @@ const SETTINGS_TAB_STORAGE_KEY = 'tezbar:settings-tab'
 
 function normalizeSettingsTab(tab: unknown): SettingsTab {
   return tab === 'ai' ||
+    tab === 'voice' ||
     tab === 'knowledge' ||
     tab === 'extensions' ||
     tab === 'permissions' ||
@@ -184,13 +185,13 @@ type SnapGuidesState = {
 }
 
 function SnapOverlayApp(): JSX.Element {
-  const [snapGuides, setSnapGuides] = useState<SnapGuidesState>(({
+  const [snapGuides, setSnapGuides] = useState<SnapGuidesState>({
     visible: true,
     snapX: false,
     snapY: false,
     centered: false,
     targetRect: null,
-  }))
+  })
 
   useEffect(() => {
     let mounted = true
@@ -517,8 +518,17 @@ function LauncherApp(): JSX.Element {
 
   useEffect(() => {
     return window.tezbar.onAppSurfaceOpen((nextSurface) => {
-      if (nextSurface === 'settings') {
-        void openNativeSettings('general')
+      if (
+        nextSurface === 'settings' ||
+        nextSurface === 'settings-extensions' ||
+        nextSurface === 'settings-ai' ||
+        nextSurface === 'settings-voice' ||
+        nextSurface === 'settings-knowledge' ||
+        nextSurface === 'settings-permissions' ||
+        nextSurface === 'settings-storage' ||
+        nextSurface === 'settings-advanced'
+      ) {
+        void openNativeSettings(normalizeSettingsTab(nextSurface.replace('settings-', '')))
         return
       }
       if (nextSurface === 'extensions') {
@@ -672,10 +682,7 @@ function LauncherApp(): JSX.Element {
           ) : surface === 'onboarding' ? (
             <OnboardingView onDone={returnToLauncher} />
           ) : surface === 'release-notes' ? (
-            <ReleaseNotesView
-              onBack={returnToLauncher}
-              onRead={markReleaseNotesRead}
-            />
+            <ReleaseNotesView onBack={returnToLauncher} onRead={markReleaseNotesRead} />
           ) : surface === 'settings' ? (
             <SettingsView
               initialTab={settingsInitialTab}
@@ -686,10 +693,7 @@ function LauncherApp(): JSX.Element {
           ) : surface === 'extensions' ? (
             <ExtensionsView key={extensionsKey} onBack={returnToLauncher} />
           ) : surface === 'extension-runtime' && extensionRuntimeInitial ? (
-            <ExtensionRuntimeView
-              initial={extensionRuntimeInitial}
-              onBack={returnToLauncher}
-            />
+            <ExtensionRuntimeView initial={extensionRuntimeInitial} onBack={returnToLauncher} />
           ) : surface === 'open-ports' ? (
             <OpenPortsView
               initialTab={openPortsInitialTab}
@@ -714,10 +718,7 @@ function LauncherApp(): JSX.Element {
           ) : surface === 'snippets' ? (
             <SnippetsView onBack={returnToLauncher} />
           ) : surface === 'notes' ? (
-            <NotesView
-              onBack={returnToLauncher}
-              initialSelectedNoteId={notesInitialSelectedId}
-            />
+            <NotesView onBack={returnToLauncher} initialSelectedNoteId={notesInitialSelectedId} />
           ) : surface === 'emoji-picker' ? (
             <EmojiPickerView onBack={returnToLauncher} />
           ) : surface === 'ai-chat' ? (
@@ -730,7 +731,9 @@ function LauncherApp(): JSX.Element {
                   setExtensionRuntimeInitial(initial)
                   setSurface('extension-runtime')
                 },
-                onOpenUpdate: () => { void openNativeSettings('general') },
+                onOpenUpdate: () => {
+                  void openNativeSettings('general')
+                },
               }}
               onBack={() => setSurface('command')}
               onOpenSettings={() => {

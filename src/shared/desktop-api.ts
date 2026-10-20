@@ -6,7 +6,12 @@ import type {
 } from './agent'
 import type { ChatSession, ChatSessionSummary, ChatTurn } from './chat'
 import type { BackgroundTask } from './backgroundTasks'
-import type { LauncherLayout, LauncherLayoutPatch, LauncherViewport, ResizeEdge } from './windowLayout'
+import type {
+  LauncherLayout,
+  LauncherLayoutPatch,
+  LauncherViewport,
+  ResizeEdge,
+} from './windowLayout'
 import type { Intent } from './intent'
 import type { ClipboardEntry, ClipboardImagePayload } from './clipboard'
 import type { ExtensionIntegrityReport, ExtensionManifest, InstalledExtension } from './extensions'
@@ -387,7 +392,27 @@ export type RaymesApi = {
   onQuickNoteSaveShortcut: (listener: () => void) => () => void
   /** Fired from the top-bar tray menu to open a built-in Tezbar surface. */
   onAppSurfaceOpen: (
-    listener: (surface: 'command' | 'settings' | 'clipboard' | 'extensions') => void
+    listener: (
+      surface:
+        | 'command'
+        | 'settings'
+        | 'settings-extensions'
+        | 'settings-ai'
+        | 'settings-voice'
+        | 'settings-knowledge'
+        | 'settings-permissions'
+        | 'settings-storage'
+        | 'settings-advanced'
+        | 'clipboard'
+        | 'extensions'
+        | 'indexing'
+        | 'snippets'
+        | 'notes'
+        | 'emoji-picker'
+        | 'open-ports'
+        | 'system-monitor'
+        | 'onboarding'
+    ) => void
   ) => () => void
   /** Kick off a pi-backed agent run. Events stream via `onAgentEvent`. */
   agentRun: (

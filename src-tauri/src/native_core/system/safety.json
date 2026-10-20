@@ -1,0 +1,86 @@
+[
+  {
+    "id": "shell.run",
+    "title": "Run shell command",
+    "summary": "Execute a shell command in your user environment.",
+    "risk": "high",
+    "requiresConfirmation": true
+  },
+  {
+    "id": "process.kill",
+    "title": "Kill process",
+    "summary": "Forcibly terminate a running process.",
+    "risk": "high",
+    "requiresConfirmation": true
+  },
+  {
+    "id": "port.kill",
+    "title": "Kill listener on port",
+    "summary": "Terminate the process listening on this TCP port.",
+    "risk": "medium",
+    "requiresConfirmation": true
+  },
+  {
+    "id": "system.shutdown",
+    "title": "Shut down Mac",
+    "summary": "Shut the computer down immediately.",
+    "risk": "high",
+    "requiresConfirmation": true
+  },
+  {
+    "id": "system.restart",
+    "title": "Restart Mac",
+    "summary": "Restart the computer immediately.",
+    "risk": "high",
+    "requiresConfirmation": true
+  },
+  {
+    "id": "system.sleep",
+    "title": "Sleep Mac",
+    "summary": "Put the computer to sleep.",
+    "risk": "low",
+    "requiresConfirmation": false
+  },
+  {
+    "id": "system.logout",
+    "title": "Log out",
+    "summary": "Log out of the current macOS user.",
+    "risk": "high",
+    "requiresConfirmation": true
+  },
+  {
+    "id": "trash.empty",
+    "title": "Empty Trash",
+    "summary": "Permanently delete everything in the Trash.",
+    "risk": "high",
+    "requiresConfirmation": true
+  },
+  {
+    "id": "app.quit",
+    "title": "Quit application",
+    "summary": "Quit a running application.",
+    "risk": "low",
+    "requiresConfirmation": false
+  },
+  {
+    "id": "extension.install",
+    "title": "Install extension",
+    "summary": "Download and install a Raycast extension.",
+    "risk": "medium",
+    "requiresConfirmation": false
+  },
+  {
+    "id": "extension.uninstall",
+    "title": "Uninstall extension",
+    "summary": "Remove an installed extension and its files.",
+    "risk": "medium",
+    "requiresConfirmation": true
+  },
+  {
+    "id": "native.command",
+    "title": "Run system command",
+    "summary": "Execute a built-in macOS control (toggle, query, helper).",
+    "risk": "low",
+    "requiresConfirmation": false
+  }
+]

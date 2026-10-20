@@ -1,8 +1,9 @@
-import { app, BrowserWindow, clipboard, nativeImage, shell } from '@tezbar/desktop-runtime'
+import { app, BrowserWindow, clipboard, shell } from '@tezbar/desktop-runtime'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { open as openFile, rm as removePath, writeFile } from 'node:fs/promises'
 import { execFile, execFileSync } from 'node:child_process'
 import { executeExtensionSQL } from './extension-sql'
+import { copyClipboardContent, pasteClipboardContent } from './extensionWorker/clipboard'
 import { confirmExtensionAlert, type ExtensionAlertOptions } from './extension-confirm-alert'
 import { runPowerShellScript, type PowerShellScriptOptions } from './powershell-script'
 import { readSelectedText } from './selected-text'
@@ -1447,7 +1448,7 @@ function createCacheShim(packageRoot: string): new (options?: { namespace?: stri
   }
 }
 
-function copyToSystemClipboard(session: RuntimeSession, value: unknown): void {
+async function copyToSystemClipboard(session: RuntimeSession, value: unknown): Promise<void> {
   const effectValue =
     typeof value === 'string'
       ? value
@@ -1461,33 +1462,7 @@ function copyToSystemClipboard(session: RuntimeSession, value: unknown): void {
   pushEffect(session, { kind: 'clipboard', value: effectValue.slice(0, 2_000) })
   if (session.effectMode === 'record') return
 
-  if (value && typeof value === 'object') {
-    const payload = value as { text?: unknown; file?: unknown; html?: unknown }
-    if (typeof payload.file === 'string' && payload.file.trim()) {
-      const filePath = payload.file.trim()
-      const image = nativeImage.createFromPath(filePath)
-      if (!image.isEmpty()) {
-        clipboard.writeImage(image)
-        return
-      }
-      clipboard.writeText(filePath)
-      return
-    }
-    if (typeof payload.html === 'string' && typeof payload.text === 'string') {
-      clipboard.write({ html: payload.html, text: payload.text })
-      return
-    }
-    if (typeof payload.html === 'string') {
-      clipboard.write({ html: payload.html, text: payload.html })
-      return
-    }
-    if (typeof payload.text === 'string') {
-      clipboard.writeText(payload.text)
-      return
-    }
-  }
-
-  clipboard.writeText(String(value ?? ''))
+  await copyClipboardContent(value)
 }
 
 function avatarIcon(value: unknown): { source: string } {
@@ -1823,13 +1798,17 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     runAppleScript: (source: string): Promise<string> => runAppleScriptForSession(session, source),
     Clipboard: {
       copy: async (value: unknown): Promise<void> => {
-        copyToSystemClipboard(session, value)
+        await copyToSystemClipboard(session, value)
       },
       paste: async (value: unknown): Promise<void> => {
-        copyToSystemClipboard(session, value)
+        await copyToSystemClipboard(session, value)
+        if (session.effectMode !== 'record') await pasteClipboardContent()
+      },
+      clear: async (): Promise<void> => {
+        await copyToSystemClipboard(session, '')
       },
       read: async (): Promise<{ text?: string }> => {
-        const text = clipboard.readText()
+        const text = await clipboard.readText()
         return text ? { text } : {}
       },
       readText: async (): Promise<string> => clipboard.readText(),
@@ -1977,7 +1956,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
 
       console.log('[getApplications] Starting Spotlight query for installed apps...')
       const promise = (async (): Promise<InstalledApplication[]> => {
-        if (process.platform === 'win32') {
+        if (process.env.TEZBAR_EXTENSION_WORKER === '1' || process.platform === 'win32') {
           return listApplications().sort((a, b) => a.name.localeCompare(b.name))
         }
         try {
@@ -3289,7 +3268,8 @@ function registerAction(
   const handler: RuntimeActionHandler = async (formValues) => {
     if (kind === 'copy') {
       const content = props.content ?? props.title ?? ''
-      copyToSystemClipboard(session, content)
+      await copyToSystemClipboard(session, content)
+      if (typeName === 'Action.Paste' && session.effectMode !== 'record') await pasteClipboardContent()
       const callback = typeName === 'Action.Paste' ? props.onPaste : props.onCopy
       if (typeof callback === 'function') await Promise.resolve(callback())
     }
