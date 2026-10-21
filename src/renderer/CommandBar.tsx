@@ -50,6 +50,7 @@ import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 import { ModelPicker } from './ModelPicker'
 import { moveTerminalSelectionDown, terminalSessionAtIndex } from './terminalSessionSelection'
+import { visibleEventRefresh } from './visibleEventRefresh'
 import {
   type AppUpdateStatus,
   computeEffectiveUpdateStatus,
@@ -1692,7 +1693,6 @@ export default function CommandBar({
       return
     }
     let cancelled = false
-    let interval: number | null = null
     const load = async (): Promise<void> => {
       try {
         const sessions = await window.tezbar.terminalList()
@@ -1701,32 +1701,13 @@ export default function CommandBar({
         if (!cancelled) setTerminalSessions([])
       }
     }
-    const startPolling = (): void => {
-      if (interval !== null) return
-      interval = window.setInterval(() => {
-        void load()
-      }, 2500)
-    }
-    const stopPolling = (): void => {
-      if (interval !== null) window.clearInterval(interval)
-      interval = null
-    }
-    void load()
-    startPolling()
-    // Pause when the launcher is hidden — there's no status dot to update if
-    // nobody can see it.
-    const onVisibility = (): void => {
-      if (document.hidden) stopPolling()
-      else {
-        void load()
-        startPolling()
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibility)
+    const stopRefresh = visibleEventRefresh(
+      () => { void load() },
+      window.tezbar.onTerminalSessionsChanged,
+    )
     return () => {
       cancelled = true
-      stopPolling()
-      document.removeEventListener('visibilitychange', onVisibility)
+      stopRefresh()
     }
   }, [terminalMode])
 

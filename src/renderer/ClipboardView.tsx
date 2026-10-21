@@ -3,6 +3,7 @@ import type { ClipboardEntry, ClipboardImagePayload } from '../shared/clipboard'
 import { Hint, HintBar, Kbd, Message, ViewHeader } from './ui/primitives'
 import { GlideList } from './ui/GlideList'
 import { ConvertActionRow } from './clipboardActions'
+import { visibleEventRefresh } from './visibleEventRefresh'
 
 /** Extra kind bucket the UI tracks on top of the persisted kinds — a URL
  *  is really a text entry but users think of it as its own category, so
@@ -166,22 +167,10 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
   }, [])
 
   useEffect(() => {
-    void reload()
-
-    // The launcher window is hidden rather than destroyed. Refresh immediately
-    // when it is shown again, then keep the history lively while this view is
-    // open so copies made outside Tezbar appear without remounting the view.
-    const offWindowShown = window.tezbar.onWindowShown(() => {
-      void reload()
-    })
-    const refreshTimer = window.setInterval(() => {
-      void reload()
-    }, 500)
-
-    return () => {
-      offWindowShown()
-      window.clearInterval(refreshTimer)
-    }
+    return visibleEventRefresh(
+      () => { void reload() },
+      window.tezbar.onClipboardChanged,
+    )
   }, [reload])
 
   useEffect(() => {

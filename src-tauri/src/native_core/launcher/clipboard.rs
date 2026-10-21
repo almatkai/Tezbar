@@ -212,10 +212,14 @@ impl Worker {
         self.db.as_ref().unwrap()["items"].as_array().unwrap()
     }
     fn save_items(&mut self, items: Vec<Value>) -> Result<(), String> {
+        if *self.items() == items {
+            return Ok(());
+        }
         let mut next = self.db.as_ref().unwrap().clone();
         next["items"] = json!(items);
         write_json_atomic(&self.path(), &next)?;
         self.db = Some(next);
+        self.ctx.emit("clipboard:changed", json!({}));
         Ok(())
     }
     fn native(&mut self) -> Result<&mut arboard::Clipboard, String> {
@@ -578,6 +582,7 @@ impl Worker {
                 }
                 self.last_sequence = native::sequence();
                 self.last_id = id.into();
+                self.ctx.emit("clipboard:changed", json!({}));
                 Ok(json!(true))
             }
             "clipboard:image" => {
@@ -625,6 +630,46 @@ mod tests {
             temp_dir: p.join("tmp"),
             home_dir: p.join("home"),
         })
+    }
+    #[tokio::test]
+    async fn history_mutations_emit_only_after_successful_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink = events.clone();
+        let ctx = context(dir.path()).with_event_sink(Arc::new(move |channel, payload| {
+            sink.lock().unwrap().push((channel.to_owned(), payload));
+        }));
+        let clipboard = ClipboardCore::new(ctx);
+        clipboard
+            .handle("core:clipboard:capture-text", &[json!("first")])
+            .await
+            .unwrap();
+        clipboard
+            .handle("core:clipboard:capture-text", &[json!("first")])
+            .await
+            .unwrap();
+        let id = clipboard.handle("clipboard:list", &[]).await.unwrap()[0]["id"].clone();
+        clipboard
+            .handle("clipboard:toggle-pin", &[id.clone()])
+            .await
+            .unwrap();
+        clipboard.handle("clipboard:delete", &[id]).await.unwrap();
+        clipboard
+            .handle("core:clipboard:capture-text", &[json!("second")])
+            .await
+            .unwrap();
+        clipboard.handle("clipboard:clear", &[]).await.unwrap();
+        assert_eq!(
+            *events.lock().unwrap(),
+            vec![
+                ("clipboard:changed".to_owned(), json!({})),
+                ("clipboard:changed".to_owned(), json!({})),
+                ("clipboard:changed".to_owned(), json!({})),
+                ("clipboard:changed".to_owned(), json!({})),
+                ("clipboard:changed".to_owned(), json!({})),
+            ]
+        );
+        clipboard.shutdown().await;
     }
     #[tokio::test]
     async fn blank_legacy_text_is_ignored_and_failed_capture_can_retry() {

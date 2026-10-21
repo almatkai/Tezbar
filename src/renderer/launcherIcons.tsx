@@ -536,7 +536,7 @@ export function launcherIcon(kind: string): { color: string; glyph: ReactNode } 
   if (ICONS[kind]) return ICONS[kind]
 
   // Dynamic deterministic squircle for arbitrary extension slugs
-  const color = COLOR_PALETTE[hashString(normalized) % COLOR_PALETTE.length]
+  const color = COLOR_PALETTE[hashString(normalized) % COLOR_PALETTE.length] ?? BLUE
   return { color, glyph: BLOCKS }
 }
 

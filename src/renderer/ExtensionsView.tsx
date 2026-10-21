@@ -104,7 +104,7 @@ function installProgressLabel(progress: number): string {
 }
 
 function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 'small' | 'large' }): JSX.Element {
-  const slug = normalizeIconKind(ext.slug || ext.id || '')
+  const slug = normalizeIconKind(ext.id || '')
   const knownAppPath = KNOWN_EXTENSION_APP_MAP[slug]
   const [appIconUrl, setAppIconUrl] = useState<string | null>(null)
   const [failedIconUrl, setFailedIconUrl] = useState<string | null>(null)
