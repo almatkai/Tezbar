@@ -1147,29 +1147,27 @@ pub async fn native_terminal_detach(
     .map_err(|error| error.to_string())?
 }
 
+// Write and resize stay synchronous on purpose: the renderer fires writes
+// without awaiting them, and only the UI thread handles IPC in arrival order.
+// Async commands would race keystrokes on separate workers. Both are cheap now:
+// write only enqueues bytes for the session's writer thread.
 #[tauri::command]
-pub async fn native_terminal_write(
-    app: AppHandle,
+pub fn native_terminal_write(
+    state: State<'_, NativeTerminalState>,
     session_id: String,
     data: String,
 ) -> Result<bool, String> {
-    tokio::task::spawn_blocking(move || native_terminal_write_impl(app.state(), session_id, data))
-        .await
-        .map_err(|error| error.to_string())?
+    native_terminal_write_impl(state, session_id, data)
 }
 
 #[tauri::command]
-pub async fn native_terminal_resize(
-    app: AppHandle,
+pub fn native_terminal_resize(
+    state: State<'_, NativeTerminalState>,
     session_id: String,
     cols: u16,
     rows: u16,
 ) -> Result<bool, String> {
-    tokio::task::spawn_blocking(move || {
-        native_terminal_resize_impl(app.state(), session_id, cols, rows)
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    native_terminal_resize_impl(state, session_id, cols, rows)
 }
 
 #[tauri::command]
