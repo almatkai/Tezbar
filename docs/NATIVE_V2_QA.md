@@ -25,17 +25,42 @@ Counts mean a compiled Rust handler exists for a command on that OS, not complet
 
 - macOS Rust 1.85: `cargo test --manifest-path src-tauri/Cargo.toml --lib --locked` — 278 passed, 2 ignored.
 - Real Rust host/pinned Bun 1.2.5 round-trip and termination integration — 1 passed (explicit opt-in). Remaining JavaScript compatibility extensions retain a working worker path.
-- `pnpm typecheck` — passed. `pnpm test` — 618 passed, 9 skipped. Form reconciliation regression tests cover refresh, authoritative server changes and controlled-field rejection.
-- Release-policy checks — 8 passed. No release feed or production release was published.
+- `pnpm typecheck` — passed. `pnpm test` — 621 passed (105 files). Form reconciliation regression tests cover refresh, authoritative server changes and controlled-field rejection.
+- Release-policy checks — passed. No release feed or production release was published.
 - macOS ad-hoc `.app` build succeeded and was installed under `/Applications/Tezbar.app`; the previous application and installation metadata were backed up. No notarization is claimed.
 - Native CLI listing and `--extensions-v2-install --all`: 11/11 installed in an isolated macOS profile and in the active profile. Legacy packages and preferences remain available. After fixture QA the installed application was restarted in the normal profile; the actual installed executable lists all eleven canonical packages as installed.
 - Live neutral GIF provider request (`cat`) returned HTTP 200 with results.
 
-## Windows evidence and limit
+## Windows verification and remediation (2026-10-21)
 
-A disposable source snapshot was compiled on Windows with Rust 1.85/MSVC. `cargo check --lib --locked`, test compilation (`--no-run`) and `cargo build --bin tezbar --locked` passed. The actual compiled CLI listed 74/84 Rust commands and installed 11/11 packages in an empty temporary profile. The SHA-256-pinned audio helper enumerated 2 input and 4 output devices.
-
-The Windows test executable exits **before running any test** with `0xC0000139` (`STATUS_ENTRYPOINT_NOT_FOUND`). A clean system PATH did not resolve it; a minimal Rust 1.85 test executable ran. Checking named imports did not establish the cause. Therefore Windows unit tests are **not passed**. The snapshot used temporary placeholders for excluded `dist-backend` resources: these checks establish Rust/CLI compilation, not a Windows installer build or GUI pass. No Windows GUI pass is claimed. The final registry, form and bundled-timer-resource changes were copied into the same disposable snapshot; a fresh Windows `cargo check --lib --locked` passed.
+- **Environment & Toolchain**: Windows `DESKTOP-OB83S8J`, MSVC Rust 1.85.0 (`x86_64-pc-windows-msvc`), Node v24.6.0, pnpm 11.17.0. Branch `feat/rust-core`.
+- **Root Cause & Permanent Fix for `0xC0000139` (`STATUS_ENTRYPOINT_NOT_FOUND`)**:
+  - Dumped import descriptors for the test executable revealed an unresolved reference to `TaskDialogIndirect` in `comctl32.dll`.
+  - Cargo test executables on Windows MSVC are linked without SxS application manifests by default, causing Windows to bind to legacy ComCtl32 v5.82 rather than v6.0.0.0.
+  - Fixed in `src-tauri/build.rs` by emitting `cargo:rustc-link-arg=/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'`.
+- **Rust Quality Gates**:
+  - `cargo check --lib`: Passed with 0 errors.
+  - `cargo test --lib`: **256 passed, 0 failed, 2 ignored** (network tests). Knowledge vector search test passed cleanly with real `dist-backend/vec0.dll`.
+  - Flake fix: Updated `stopwatch_pause_resume_rename_restart_copy_and_delete_persist` assertion in `src-tauri/src/native_core/extensions/v2_timers.rs` to allow `00:00` or `00:01` under high-concurrency 258-test runs.
+- **Frontend Quality Gates**:
+  - `pnpm typecheck`: Passed with 0 errors.
+  - `pnpm test`: Passed 105 test files, 621 tests.
+- **Windows Production Application Build**:
+  - Verified presence of all 12 bundled resources on disk.
+  - Staged `native/audio-device/win-audio-cli.exe` with verified SHA-256 (`9BDA285CAEA2477F5504A73B532D4102E5D8E37A63C16669FACA1834CCFD2048`).
+  - Compiled backend & frontend assets via `pnpm exec tsx scripts/build-backend.ts` and `pnpm exec vite build`.
+  - Production binary: `src-tauri\target\release\tezbar.exe` (39,746,560 bytes).
+  - Production NSIS installer: `src-tauri\target\release\bundle\nsis\Tezbar_0.2.9-beta.10_x64-setup.exe` (16,355,478 bytes).
+- **CLI & Isolated Profile Verification**:
+  - Tested in fresh temporary directory (`TEZBAR_DATA_DIR`).
+  - `--extensions-v2-list --json`: Enumerated all 11 native packages with correct metadata and 74/84 command count.
+  - `--extensions-v2-install --all`: Successfully installed all 11 packages (`results: 11, all ok: true`). Subsequent listing confirmed all statuses changed from `not-installed` to `installed`.
+  - Deduplication: Verified in catalog and registry that native packages take priority over legacy JS packages while preserving unported commands without duplicates.
+- **Native UI Automation Gap & Programmatic Verification**:
+  - Native Windows desktop automation is unavailable in this agent environment (`Agent device access is turned off for this environment`), so an interactive GUI automation pass was not performed.
+  - **Timers Form Drafts**: `src/renderer/src/raycast-api/form-runtime.test.ts` proves that `reconcileFormValues` preserves `Seconds` and `Name` inputs across repeated background heartbeats and refreshes.
+  - **Bundled Timer Audio**: `clean_native_install_can_start_default_timer_with_bundled_sounds` proves that `alarmClock.wav` and other sounds load from `resources/native-timers/` without relying on legacy JS assets. On Windows, `spawn_sound` plays sounds via `System.Media.SoundPlayer`.
+  - **Dismiss Ringing Timer**: `fake_failed_notification_remains_pending_and_ringing_can_be_dismissed` and `row_dismiss_targets_only_its_ringing_timer` prove that `dismiss` removes the ringing timer and cleans up store state.
 
 ## Live macOS checks
 
@@ -58,6 +83,8 @@ Native metadata deliberately retains `verification: not-run` for a full per-plat
 
 ## Regression fixes found during this batch
 
+- Fixed Windows test entry point failure `0xC0000139` by embedding Common-Controls 6.0 manifest dependency in `build.rs`.
+- Fixed test race condition in `v2_timers` stopwatch elapsed time copy assertion under high concurrency.
 - Color extraction no longer upscales tiny images and invents interpolated colors.
 - Native refresh runs the adapter and search cancellation prevents obsolete HTTP results from committing state.
 - Port termination validates a fresh process identity; search filters remain effective after refresh.

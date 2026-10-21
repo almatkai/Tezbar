@@ -27,6 +27,11 @@ fn main() {
         "Installer product name must match its release identity"
     );
     println!("cargo:rerun-if-changed=../dist-backend/extension-worker.js");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!(
+            r#"cargo:rustc-link-arg=/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"#
+        );
+    }
     tauri_build::build()
 }
 

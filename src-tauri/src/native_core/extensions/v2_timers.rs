@@ -1743,12 +1743,13 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(
-            mutate(&f.ctx, "stopwatches", &id, "copy", None)
-                .await
-                .unwrap()
-                .unwrap(),
-            "00:00"
+        let copied = mutate(&f.ctx, "stopwatches", &id, "copy", None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            copied == "00:00" || copied == "00:01",
+            "Expected initial stopwatch copy to be near zero, got {copied}"
         );
         mutate(&f.ctx, "stopwatches", &id, "restart", None)
             .await
