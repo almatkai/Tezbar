@@ -467,6 +467,8 @@ export function initTauriBridge(): void {
     onAgentEvent: (listener: (event: any) => void) => setupEventListener('agent:event', listener),
     onExtensionInstallProgress: (listener: (payload: any) => void) =>
       setupEventListener('extension:install-progress', listener),
+    onExtensionCatalogUpdated: (listener: () => void) =>
+      setupEventListener('extensions-catalog-updated', listener),
     onLlmConfigChanged: (listener: () => void) =>
       setupEventListener('llm-config-changed', listener),
 

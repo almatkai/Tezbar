@@ -9,6 +9,7 @@ use std::{
 pub struct Catalog {
     ctx: CoreContext,
     cache: Arc<tokio::sync::Mutex<Option<(u64, Arc<Vec<Entry>>)>>>,
+    fetching: Arc<tokio::sync::Mutex<bool>>,
 }
 
 impl Catalog {
@@ -16,74 +17,116 @@ impl Catalog {
         Self {
             ctx,
             cache: Arc::new(tokio::sync::Mutex::new(None)),
+            fetching: Arc::new(tokio::sync::Mutex::new(false)),
         }
     }
 
     async fn entries(&self) -> Result<Arc<Vec<Entry>>, String> {
         let mut cache = self.cache.lock().await;
-        if let Some((time, entries)) = cache
-            .as_ref()
-            .filter(|(time, _)| now_ms().saturating_sub(*time) < 3_600_000)
-        {
-            let _ = time;
+        if let Some((_, entries)) = cache.as_ref() {
             return Ok(entries.clone());
         }
+
         let path = self.ctx.paths.data_dir.join("extension-catalog.json");
         let read_path = path.clone();
         let disk = tokio::task::spawn_blocking(move || read_json(&read_path).ok())
             .await
             .map_err(|e| e.to_string())?;
-        if let Some(value) = disk.as_ref().filter(|v| {
-            v["version"].as_u64().unwrap_or(0) >= 6
-                && now_ms().saturating_sub(v["fetchedAt"].as_u64().unwrap_or(0)) < 3_600_000
-        }) {
+
+        if let Some(value) = disk.as_ref().filter(|v| v["version"].as_u64().unwrap_or(0) >= 6) {
+            let fetched_at = value["fetchedAt"].as_u64().unwrap_or(0);
             let entries = prepare(normalize(&value["entries"]));
             if !entries.is_empty() {
-                *cache = Some((now_ms(), entries.clone()));
+                *cache = Some((fetched_at, entries.clone()));
+
+                // Non-blocking background refresh if catalog is older than 24 hours
+                if now_ms().saturating_sub(fetched_at) >= 86_400_000 {
+                    let this = self.clone();
+                    tokio::spawn(async move {
+                        let _ = this.refresh().await;
+                    });
+                }
+
                 return Ok(entries);
             }
         }
+
+        // Fresh start without disk cache: trigger background download without blocking UI
+        let this = self.clone();
+        tokio::spawn(async move {
+            let _ = this.refresh().await;
+        });
+
+        // Return empty entries immediately so curated loved + native extensions render in 0ms
+        let fallback = prepare(vec![]);
+        Ok(fallback)
+    }
+
+    pub async fn refresh(&self) -> Result<Arc<Vec<Entry>>, String> {
+        {
+            let mut fetching = self.fetching.lock().await;
+            if *fetching {
+                if let Some((_, entries)) = self.cache.lock().await.as_ref() {
+                    return Ok(entries.clone());
+                }
+                return Ok(prepare(vec![]));
+            }
+            *fetching = true;
+        }
+
+        let result = self.do_refresh().await;
+        *self.fetching.lock().await = false;
+        if result.is_ok() {
+            self.ctx.emit("extensions-catalog-updated", json!({}));
+        }
+        result
+    }
+
+    async fn do_refresh(&self) -> Result<Arc<Vec<Entry>>, String> {
         let base = std::env::var("RAYMES_EXTENSION_API_URL")
             .unwrap_or_else(|_| "https://api.supercmd.sh".into());
-        let response = async {
+        let raw = Self::fetch_catalog(&base).await?;
+        let normalized = normalize(&raw);
+        if normalized.is_empty() {
+            return Err("Empty catalog received".into());
+        }
+
+        let path = self.ctx.paths.data_dir.join("extension-catalog.json");
+        let saved = json!({
+            "version": 6,
+            "fetchedAt": now_ms(),
+            "entries": normalized,
+        });
+
+        tokio::task::spawn_blocking(move || write_json_atomic(&path, &saved))
+            .await
+            .map_err(|e| e.to_string())??;
+
+        let prepared = prepare(normalized);
+        let mut cache = self.cache.lock().await;
+        *cache = Some((now_ms(), prepared.clone()));
+        Ok(prepared)
+    }
+
+    async fn fetch_catalog(base: &str) -> Result<Value, String> {
+        static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+        let client = CLIENT.get_or_init(|| {
             reqwest::Client::builder()
                 .timeout(Duration::from_secs(15))
                 .build()
-                .map_err(|e| e.to_string())?
-                .get(format!("{}/extensions/catalog", base.trim_end_matches('/')))
-                .send()
-                .await
-                .map_err(|e| e.to_string())?
-                .error_for_status()
-                .map_err(|e| e.to_string())?
-                .json::<Value>()
-                .await
-                .map_err(|e| e.to_string())
-        }
-        .await;
-        let entries = match response {
-            Ok(value) => {
-                let entries = normalize(&value);
-                let saved = json!({"version":6,"fetchedAt":now_ms(),"entries":entries});
-                tokio::task::spawn_blocking(move || write_json_atomic(&path, &saved))
-                    .await
-                    .map_err(|e| e.to_string())??;
-                entries
-            }
-            Err(error) => {
-                let entries = disk
-                    .as_ref()
-                    .map(|v| normalize(&v["entries"]))
-                    .unwrap_or_default();
-                if entries.is_empty() {
-                    return Err(format!("Extension catalog is unavailable: {error}"));
-                }
-                entries
-            }
-        };
-        let entries = prepare(entries);
-        *cache = Some((now_ms(), entries.clone()));
-        Ok(entries)
+                .unwrap_or_default()
+        });
+        let url = format!("{}/extensions/catalog", base.trim_end_matches('/'));
+        client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .error_for_status()
+            .map_err(|e| e.to_string())?
+            .json::<Value>()
+            .await
+            .map_err(|e| e.to_string())
     }
 
     pub async fn search(&self, channel: &str, args: &[Value]) -> CoreResult {
@@ -101,6 +144,14 @@ impl Catalog {
             .to_lowercase();
         let offset = options["offset"].as_u64().unwrap_or(0).min(1_000_000) as usize;
         let limit = options["limit"].as_u64().unwrap_or(25).clamp(1, 1000) as usize;
+
+        if options["refresh"].as_bool().unwrap_or(false) {
+            let this = self.clone();
+            tokio::spawn(async move {
+                let _ = this.refresh().await;
+            });
+        }
+
         let catalog = if cfg!(target_os = "windows") {
             Arc::default()
         } else {
@@ -252,17 +303,47 @@ fn normalize(value: &Value) -> Vec<Value> {
         .flatten()
         .filter(|v| v["name"].as_str().is_some_and(|s| !s.is_empty()))
         .map(|v| {
-            let mut entry = v.clone();
-            for (camel, snake) in [
-                ("iconUrl", "icon_url"),
-                ("screenshotUrls", "screenshot_urls"),
-                ("installCount", "install_count"),
-            ] {
-                if entry[camel].is_null() {
-                    entry[camel] = v[snake].clone();
-                }
-            }
-            entry
+            let name = v["name"].as_str().unwrap_or("");
+            let title = v["title"].as_str().filter(|s| !s.is_empty()).unwrap_or(name);
+            let description = v["description"].as_str().unwrap_or("");
+            let author = v["author"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .or_else(|| v["contributors"][0].as_str())
+                .unwrap_or("Raycast Community");
+            let icon_url = v["iconUrl"].as_str().or_else(|| v["icon_url"].as_str());
+            let icon = v["icon"].as_str();
+            let screenshots = v["screenshotUrls"].as_array().or_else(|| v["screenshot_urls"].as_array());
+            let install_count = v["installCount"].as_u64().or_else(|| v["install_count"].as_u64()).unwrap_or(0);
+            let categories = v["categories"].clone();
+            let commands = v["commands"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|c| {
+                    let cmd_name = c["name"].as_str()?;
+                    let cmd_title = c["title"].as_str().filter(|s| !s.is_empty()).unwrap_or(cmd_name);
+                    let cmd_desc = c["description"].as_str().unwrap_or("");
+                    Some(json!({
+                        "name": cmd_name,
+                        "title": cmd_title,
+                        "description": cmd_desc
+                    }))
+                })
+                .collect::<Vec<_>>();
+
+            let mut obj = serde_json::Map::new();
+            obj.insert("name".into(), json!(name));
+            obj.insert("title".into(), json!(title));
+            obj.insert("description".into(), json!(description));
+            obj.insert("author".into(), json!(author));
+            obj.insert("installCount".into(), json!(install_count));
+            obj.insert("categories".into(), categories);
+            obj.insert("commands".into(), json!(commands));
+            if let Some(u) = icon_url { obj.insert("iconUrl".into(), json!(u)); }
+            if let Some(i) = icon { obj.insert("icon".into(), json!(i)); }
+            if let Some(s) = screenshots { obj.insert("screenshotUrls".into(), json!(s)); }
+            Value::Object(obj)
         })
         .collect()
 }
@@ -296,9 +377,9 @@ fn token_score(value: &str, query: &str, exact: f64, prefix: f64) -> f64 {
     }
 }
 
-struct Entry {
-    value: Value,
-    keys: SearchKeys,
+pub struct Entry {
+    pub value: Value,
+    pub keys: SearchKeys,
 }
 
 fn prepare(values: Vec<Value>) -> Arc<Vec<Entry>> {
@@ -313,14 +394,14 @@ fn prepare(values: Vec<Value>) -> Arc<Vec<Entry>> {
     )
 }
 
-struct SearchKeys {
+pub struct SearchKeys {
     name: String,
     title: String,
     fields: [String; 6],
 }
 
 impl SearchKeys {
-    fn new(v: &Value) -> Self {
+    pub fn new(v: &Value) -> Self {
         let name = v["name"].as_str().unwrap_or("").to_lowercase();
         let title = v["title"].as_str().unwrap_or("").to_lowercase();
         Self {
@@ -350,7 +431,7 @@ impl SearchKeys {
         }
     }
 
-    fn score(&self, v: &Value, query: &str) -> f64 {
+    pub fn score(&self, v: &Value, query: &str) -> f64 {
         if query.is_empty() {
             return 1.;
         }

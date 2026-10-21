@@ -277,6 +277,10 @@ export default function ExtensionsView({
     }
   }, [loadStorePage])
 
+  useEffect(() => window.tezbar.onExtensionCatalogUpdated(() => {
+    void reload()
+  }), [reload])
+
   const loadMore = useCallback(
     async (options?: { selectNext?: boolean }) => {
       if (loadingMore || !hasMore || loading) return
