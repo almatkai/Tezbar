@@ -86,7 +86,13 @@ import {
 import { aiChatBootForInput, commandBarInputMode } from './commandBarInputMode'
 import { readCachedChatHistory, writeCachedChatHistory } from './agentChat/historyCache'
 import { RELEASE_NOTES_COMMAND_ID, withReleaseNotesResult } from './releaseNotes'
-import { LauncherGlyph, Squircle, launcherIcon } from './launcherIcons'
+import {
+  KNOWN_EXTENSION_APP_MAP,
+  LauncherGlyph,
+  Squircle,
+  launcherIcon,
+  normalizeIconKind,
+} from './launcherIcons'
 import {
   MAX_PINNED_COMMANDS,
   type PinnedCommand,
@@ -756,12 +762,12 @@ function commandIconForResult(item: SearchResult): CommandIconKind | undefined {
   if (item.action.type === 'run-native-command') {
     return NATIVE_COMMAND_ICON_BY_ID[item.action.commandId as NativeCommandId]
   }
-  if (item.action.type === 'run-extension-command') {
-    const extId = item.action.extensionId
-    return extId
-      .replace(/^com\.tezbar\.native\./, '')
-      .replace(/^raycast\./, '')
-      .replace(/^com\.tezbar\./, '') as CommandIconKind
+  if (item.category === 'extensions') {
+    const rawId =
+      item.action.type === 'run-extension-command'
+        ? item.action.extensionId
+        : item.id.replace(/^extcmd:/, '').split(':')[0]
+    return normalizeIconKind(rawId || '') as CommandIconKind
   }
   return undefined
 }
@@ -1259,10 +1265,17 @@ function searchResultIconAsset(item: SearchResult): {
   }
   if (
     item.category === 'extensions' &&
-    item.action.type === 'run-extension-command' &&
-    item.action.iconPath
+    item.action.type === 'run-extension-command'
   ) {
-    return { kind: 'extension', path: item.action.iconPath }
+    const rawId = item.action.extensionId || ''
+    const extId = normalizeIconKind(rawId)
+    const appPath = KNOWN_EXTENSION_APP_MAP[extId]
+    if (appPath) {
+      return { kind: 'application', path: appPath }
+    }
+    if (item.action.iconPath) {
+      return { kind: 'extension', path: item.action.iconPath }
+    }
   }
   return null
 }

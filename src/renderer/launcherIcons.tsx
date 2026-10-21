@@ -35,6 +35,14 @@ const COLOR_PALETTE = [
   SLATE,
 ]
 
+export const KNOWN_EXTENSION_APP_MAP: Record<string, string> = {
+  cleanshotx: '/Applications/CleanShot X.app',
+  cleanshot: '/Applications/CleanShot X.app',
+  'clean-shot': '/Applications/CleanShot X.app',
+  'clean-shot-x': '/Applications/CleanShot X.app',
+  amphetamine: '/Applications/Amphetamine.app',
+}
+
 function hashString(str: string): number {
   let hash = 0
   for (let i = 0; i < str.length; i++) {
@@ -408,6 +416,7 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
     ),
   },
   quit: { color: ROSE, glyph: <path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0" /> },
+  'kill-process': { color: ROSE, glyph: <path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0" /> },
   macos: {
     color: ZINC,
     glyph: (
@@ -471,15 +480,25 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
 
   // Native and bundled extensions
   amphetamine: { color: AMBER, glyph: COFFEE },
+  coffee: { color: AMBER, glyph: COFFEE },
   'audio-device': { color: PINK, glyph: HEADPHONES },
+  audio: { color: PINK, glyph: HEADPHONES },
   cleanshotx: { color: INDIGO, glyph: CAMERA },
+  cleanshot: { color: INDIGO, glyph: CAMERA },
+  'clean-shot': { color: INDIGO, glyph: CAMERA },
+  'clean-shot-x': { color: INDIGO, glyph: CAMERA },
   'color-picker': { color: ROSE, glyph: PIPETTE },
+  colorpicker: { color: ROSE, glyph: PIPETTE },
   'gif-search': { color: CYAN, glyph: PICTURE },
+  gif: { color: CYAN, glyph: PICTURE },
+  gifs: { color: CYAN, glyph: PICTURE },
   'google-calendar': { color: BLUE, glyph: CALENDAR },
+  calendar: { color: BLUE, glyph: CALENDAR },
   'google-search': { color: BLUE, glyph: SEARCH },
   perplexity: { color: TEAL, glyph: SPARKLES },
   'port-manager': { color: ORANGE, glyph: ETHERNET },
   speedtest: { color: GREEN, glyph: SPEEDOMETER },
+  'speed-test': { color: GREEN, glyph: SPEEDOMETER },
   timers: { color: AMBER, glyph: STOPWATCH },
   timer: { color: AMBER, glyph: STOPWATCH },
 
@@ -504,6 +523,11 @@ export function normalizeIconKind(kind: string): string {
     .replace(/^com\.tezbar\.native\./, '')
     .replace(/^raycast\./, '')
     .replace(/^com\.tezbar\./, '')
+}
+
+export function hasCustomLauncherIcon(kind: string): boolean {
+  const normalized = normalizeIconKind(kind)
+  return normalized in ICONS || kind in ICONS
 }
 
 export function launcherIcon(kind: string): { color: string; glyph: ReactNode } {

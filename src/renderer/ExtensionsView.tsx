@@ -3,7 +3,7 @@ import type { ExtensionManifest, ExtensionPlatform } from '../shared/extensions'
 import type { ExtensionStorePage } from '../shared/desktop-api'
 import { parseGitHubRepositoryUrl } from '../shared/extensionRepository'
 import { Button, Hint, HintBar, Kbd, Message, ViewHeader, cx } from './ui/primitives'
-import { Squircle } from './launcherIcons'
+import { KNOWN_EXTENSION_APP_MAP, Squircle, normalizeIconKind } from './launcherIcons'
 import { GlideList } from './ui/GlideList'
 import { ExtensionPreferencesEditor } from './ExtensionPreferencesEditor'
 import {
@@ -104,18 +104,49 @@ function installProgressLabel(progress: number): string {
 }
 
 function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 'small' | 'large' }): JSX.Element {
-  const iconUrl = ext.iconUrl?.trim() || ''
+  const slug = normalizeIconKind(ext.slug || ext.id || '')
+  const knownAppPath = KNOWN_EXTENSION_APP_MAP[slug]
+  const [appIconUrl, setAppIconUrl] = useState<string | null>(null)
   const [failedIconUrl, setFailedIconUrl] = useState<string | null>(null)
+  const sizePx = size === 'large' ? 48 : 28
+  const roundedClass = size === 'large' ? 'rounded-[12px]' : 'rounded-[7px]'
+
+  useEffect(() => {
+    if (!knownAppPath) return
+    let cancelled = false
+    void window.tezbar?.getAppIconDataUrl(knownAppPath).then((url) => {
+      if (!cancelled && url) setAppIconUrl(url)
+    }).catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [knownAppPath])
+
+  if (appIconUrl) {
+    return (
+      <span
+        role="img"
+        aria-label={`${ext.name} icon`}
+        className={cx('grid shrink-0 place-items-center overflow-hidden bg-transparent', roundedClass)}
+        style={{ width: sizePx, height: sizePx }}
+      >
+        <img
+          src={appIconUrl}
+          alt=""
+          className="h-full w-full object-contain"
+          draggable={false}
+        />
+      </span>
+    )
+  }
+
+  const iconUrl = ext.iconUrl?.trim() || ''
   const isImageSrc =
     iconUrl &&
-    (iconUrl.startsWith('http://') ||
-      iconUrl.startsWith('https://') ||
-      iconUrl.startsWith('data:image/') ||
+    (iconUrl.startsWith('data:image/') ||
       iconUrl.startsWith('blob:') ||
       iconUrl.startsWith('file://'))
   const hasIcon = Boolean(isImageSrc) && failedIconUrl !== iconUrl
-  const sizePx = size === 'large' ? 48 : 28
-  const roundedClass = size === 'large' ? 'rounded-[12px]' : 'rounded-[7px]'
 
   if (hasIcon) {
     return (
@@ -138,7 +169,7 @@ function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 's
 
   return (
     <Squircle
-      kind={ext.slug || ext.id || 'extensions'}
+      kind={slug || 'extensions'}
       size={sizePx}
       className={roundedClass}
     />
@@ -695,8 +726,23 @@ export default function ExtensionsView({
                     ) : null}
                   </section>
 
-                  <section aria-label="Screenshots" className="px-5 pb-5">
-                    {screenshots.length > 0 ? (
+                  <section aria-label="Extension details" className="px-5 pb-5">
+                    {Boolean(selected.nativeV2 || selected.runtime === 'rust' || selected.id.startsWith('com.tezbar.native.')) ? (
+                      <div className="flex items-center gap-3 rounded-[10px] border border-white/10 bg-white/[0.03] p-3.5">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] bg-emerald-500/15 text-emerald-400">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            <path d="m9 12 2 2 4-4" />
+                          </svg>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-medium text-ink-1">Native Rust Extension</p>
+                          <p className="mt-0.5 text-[11px] leading-snug text-ink-3">
+                            Executes in-process with zero latency, low memory footprint, and no external runtime dependency.
+                          </p>
+                        </div>
+                      </div>
+                    ) : screenshots.length > 0 ? (
                       <div className="extension-screenshots grid grid-cols-2 gap-3">
                         {screenshots.map((url, index) => (
                           <div
