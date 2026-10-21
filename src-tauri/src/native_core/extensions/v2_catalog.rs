@@ -75,6 +75,8 @@ pub(super) fn store_item(native: Value) -> Value {
         "author": "Tezbar",
         "owner": "Tezbar",
         "runtime": "rust",
+        "icon": native["icon"],
+        "iconUrl": native["icon"],
         "platforms": native["platforms"],
         "commands": native["commands"],
         "nativeV2": native

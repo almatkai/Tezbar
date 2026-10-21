@@ -3,9 +3,35 @@ import { describe, expect, it } from 'vitest'
 import {
   extensionCatalogReducer,
   INITIAL_EXTENSION_CATALOG_STATE,
+  normalizeInstalledExtension,
 } from './extensionCatalogState'
+import { mergeCatalog } from './extensionRuntimeStatus'
 
 describe('extension catalog state', () => {
+  it('retains bundled artwork for installed entries absent from the current store page', () => {
+    const artwork = '/extensions/artwork/perplexity.webp'
+    const installed = normalizeInstalledExtension({
+      id: 'com.tezbar.native.perplexity', slug: 'perplexity', name: 'Perplexity',
+      description: '', author: 'Tezbar', version: '2', installedAt: 42,
+      packageJsonPath: '/fixture/package.json', extensionPath: '/fixture', commands: [],
+      iconPath: '/old/icon.png', iconUrl: artwork, artwork, artworkBackground: '#6B2C30',
+    })
+    const rows = mergeCatalog([], [installed], 'macOS')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ iconUrl: artwork, artwork, artworkBackground: '#6B2C30' })
+  })
+
+  it('keeps legacy installed filesystem icons when artwork is absent', () => {
+    const installed = normalizeInstalledExtension({
+      id: 'raycast.example', slug: 'example', name: 'Example', description: '',
+      version: '1', installedAt: 42, commands: [],
+      packageJsonPath: '/fixture/package.json', extensionPath: '/fixture',
+      iconPath: '/fixture/assets/icon.png',
+    })
+    expect(installed.iconUrl).toBe('/fixture/assets/icon.png')
+    expect(installed.artwork).toBeUndefined()
+  })
+
   it('retains installed runtime, Native V2 and platform metadata on load', () => {
     const started = extensionCatalogReducer(INITIAL_EXTENSION_CATALOG_STATE, {
       type: 'load-started', requestId: 9,

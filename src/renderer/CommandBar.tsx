@@ -1162,7 +1162,9 @@ function ListItemIcon({
       aria-hidden
       className={cx(
         'command-result-icon relative grid h-[22px] w-[22px] shrink-0 place-items-center',
-        resolvedIconDataUrl
+        resolvedIconDataUrl?.startsWith('/extensions/artwork/')
+          ? 'squircle overflow-hidden rounded-[6px] bg-transparent'
+          : resolvedIconDataUrl
           ? 'overflow-visible bg-transparent'
           : 'squircle overflow-hidden rounded-[6px] text-white'
       )}

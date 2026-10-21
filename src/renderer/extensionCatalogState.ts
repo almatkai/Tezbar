@@ -1,4 +1,30 @@
 import type { ExtensionManifest, InstalledExtension } from '../shared/extensions'
+import type { InstalledRegistryExtension } from '../shared/extensionRuntime'
+
+export function normalizeInstalledExtension(entry: InstalledRegistryExtension): InstalledExtension {
+  return {
+    id: entry.id,
+    name: entry.name,
+    description: entry.description,
+    author: entry.author || 'Raycast Community',
+    owner: entry.owner,
+    downloadCount: entry.downloadCount,
+    version: entry.version,
+    installedAt: entry.installedAt,
+    iconUrl: entry.iconUrl || entry.iconPath,
+    artwork: entry.artwork,
+    artworkBackground: entry.artworkBackground,
+    authorIconUrl: entry.authorIconUrl,
+    commands: entry.commands.map((command) => ({
+      name: command.name,
+      title: command.title,
+      description: command.description,
+    })),
+    runtime: entry.runtime,
+    nativeV2: entry.nativeV2,
+    platforms: entry.platforms,
+  }
+}
 
 export type CatalogMessage = { tone: 'success' | 'error'; text: string }
 

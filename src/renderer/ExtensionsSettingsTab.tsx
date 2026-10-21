@@ -1,3 +1,4 @@
+import { extensionImageSource } from './extensionImages'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, cx } from './ui/primitives'
 import HotkeyRecorder, { formatShortcutForDisplay } from './HotkeyRecorder'
@@ -185,8 +186,7 @@ function normalizeExtensionId(name: string): string {
 
 function iconPathToUrl(iconPath?: string): string | undefined {
   if (!iconPath) return undefined
-  if (/^(https?:|data:|file:)/i.test(iconPath)) return iconPath
-  return `file://${encodeURI(iconPath)}`
+  return extensionImageSource(iconPath)
 }
 
 function registryExtensionToSchema(ext: InstalledRegistryExtension): ExtensionSchema {
@@ -196,7 +196,7 @@ function registryExtensionToSchema(ext: InstalledRegistryExtension): ExtensionSc
     title: ext.name || extName,
     description: ext.description || '',
     owner: ext.owner || ext.author || '',
-    iconDataUrl: iconPathToUrl(ext.iconPath),
+    iconDataUrl: iconPathToUrl(ext.iconUrl || ext.iconPath),
     preferences: [],
     commands: ext.commands.map((cmd) => ({
       name: cmd.name,

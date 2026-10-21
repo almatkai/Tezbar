@@ -39,6 +39,8 @@ export type ExtensionManifest = {
   owner?: string
   icon?: string
   iconUrl?: string
+  artwork?: string
+  artworkBackground?: string
   authorIconUrl?: string
   screenshotUrls?: string[]
   categories?: string[]

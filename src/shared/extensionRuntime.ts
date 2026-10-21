@@ -27,6 +27,9 @@ export type InstalledRegistryExtension = {
   authorIconUrl?: string
   downloadCount?: number
   iconPath?: string | undefined
+  iconUrl?: string
+  artwork?: string
+  artworkBackground?: string
   packageJsonPath: string
   extensionPath: string
   commands: ExtensionRegistryCommand[]

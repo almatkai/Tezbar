@@ -5,7 +5,16 @@ import { parseGitHubRepositoryUrl } from '../shared/extensionRepository'
 import { Button, Hint, HintBar, Kbd, Message, ViewHeader, cx } from './ui/primitives'
 import { GlideList } from './ui/GlideList'
 import { ExtensionPreferencesEditor } from './ExtensionPreferencesEditor'
-import { extensionCatalogReducer, INITIAL_EXTENSION_CATALOG_STATE } from './extensionCatalogState'
+import {
+  extensionCatalogReducer,
+  INITIAL_EXTENSION_CATALOG_STATE,
+  normalizeInstalledExtension,
+} from './extensionCatalogState'
+import {
+  cachedExtensionImageSource,
+  extensionImageSource,
+  type ExtensionImageVariant,
+} from './extensionImages'
 import {
   checkedLines,
   canInstallExtension,
@@ -21,10 +30,6 @@ import {
 } from './extensionRuntimeStatus'
 
 type StoreExtension = ExtensionManifest
-type ImageVariant = 'icon' | 'avatar' | 'screenshot'
-const EXTENSION_IMAGE_CACHE = 'tezbar-extension-images-v1'
-
-const imageObjectUrls = new Map<string, string>()
 
 function formatCount(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 'unknown installs'
@@ -55,44 +60,6 @@ function authorHandle(ext: StoreExtension): string | null {
   return value
 }
 
-function imageSrcFromPathOrUrl(value: string): string {
-  if (/^(https?:|data:|file:)/i.test(value)) return value
-  if (value.startsWith('/')) return `file://${encodeURI(value)}`
-  return value
-}
-
-function imageCacheKey(src: string, variant: ImageVariant): string {
-  return `https://tezbar.local/extension-image-cache/${variant}/${encodeURIComponent(src)}.webp`
-}
-
-async function toWebpBlob(source: Blob, variant: ImageVariant): Promise<Blob> {
-  const bitmap = await createImageBitmap(source)
-  try {
-    const maxWidth = variant === 'screenshot' ? 980 : 128
-    const scale = Math.min(1, maxWidth / Math.max(bitmap.width, 1))
-    const width = Math.max(1, Math.round(bitmap.width * scale))
-    const height = Math.max(1, Math.round(bitmap.height * scale))
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('Canvas is unavailable')
-    context.imageSmoothingEnabled = true
-    context.imageSmoothingQuality = 'high'
-    context.drawImage(bitmap, 0, 0, width, height)
-
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (blob) => (blob ? resolve(blob) : reject(new Error('WebP encoding failed'))),
-        'image/webp',
-        variant === 'screenshot' ? 0.78 : 0.86,
-      )
-    })
-  } finally {
-    bitmap.close()
-  }
-}
-
 function CachedImage({
   src,
   alt = '',
@@ -103,56 +70,19 @@ function CachedImage({
   src: string
   alt?: string
   className?: string
-  variant: ImageVariant
+  variant: ExtensionImageVariant
   onError?: () => void
 }): ReactNode {
-  const normalized = imageSrcFromPathOrUrl(src)
+  const normalized = extensionImageSource(src)
   const [resolvedSrc, setResolvedSrc] = useState(normalized)
 
   useEffect(() => {
     let cancelled = false
     setResolvedSrc(normalized)
 
-    if (!normalized || normalized.startsWith('data:') || typeof window.caches === 'undefined') return
-
-    const key = imageCacheKey(normalized, variant)
-    const cachedObjectUrl = imageObjectUrls.get(key)
-    if (cachedObjectUrl) {
-      setResolvedSrc(cachedObjectUrl)
-      return
-    }
-
-    void (async () => {
-      try {
-        const cache = await window.caches.open(EXTENSION_IMAGE_CACHE)
-        const cached = await cache.match(key)
-        if (cached) {
-          const blob = await cached.blob()
-          const objectUrl = URL.createObjectURL(blob)
-          imageObjectUrls.set(key, objectUrl)
-          if (!cancelled) setResolvedSrc(objectUrl)
-          return
-        }
-
-        const response = await fetch(normalized)
-        if (!response.ok) throw new Error(`Image request failed: ${response.status}`)
-        const webp = await toWebpBlob(await response.blob(), variant)
-        await cache.put(
-          key,
-          new Response(webp, {
-            headers: {
-              'Content-Type': 'image/webp',
-              'Cache-Control': 'max-age=31536000, immutable',
-            },
-          }),
-        )
-        const objectUrl = URL.createObjectURL(webp)
-        imageObjectUrls.set(key, objectUrl)
-        if (!cancelled) setResolvedSrc(objectUrl)
-      } catch {
-        if (!cancelled) setResolvedSrc(normalized)
-      }
-    })()
+    void cachedExtensionImageSource(normalized, variant).then((source) => {
+      if (!cancelled) setResolvedSrc(source)
+    })
 
     return () => {
       cancelled = true
@@ -176,6 +106,7 @@ function ExtensionIconPlaceholder(): ReactNode {
   )
 }
 
+
 function installProgressLabel(progress: number): string {
   const percent = Math.round(progress)
   if (percent < 10) return `Preparing ${percent}%`
@@ -187,7 +118,7 @@ function installProgressLabel(progress: number): string {
 }
 
 function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 'small' | 'large' }): JSX.Element {
-  const iconUrl = typeof ext.iconUrl === 'string' && ext.iconUrl.trim() ? ext.iconUrl : ''
+  const iconUrl = ext.iconUrl?.trim() || ''
   const [failedIconUrl, setFailedIconUrl] = useState<string | null>(null)
   const hasIcon = Boolean(iconUrl) && failedIconUrl !== iconUrl
   const className = size === 'large'
@@ -301,26 +232,7 @@ export default function ExtensionsView({
         loadStorePage(0, 25),
       ])
       if (loadRequestIdRef.current !== requestId) return
-      const normalizedInstalled = installedList.map((entry) => ({
-        id: entry.id,
-        name: entry.name,
-        description: entry.description,
-        author: entry.author || 'Raycast Community',
-        owner: entry.owner,
-        downloadCount: entry.downloadCount,
-        version: entry.version,
-        installedAt: entry.installedAt,
-        iconUrl: entry.iconPath,
-        authorIconUrl: entry.authorIconUrl,
-        commands: entry.commands.map((command) => ({
-          name: command.name,
-          title: command.title,
-          description: command.description,
-        })),
-        runtime: entry.runtime,
-        nativeV2: entry.nativeV2,
-        platforms: entry.platforms,
-      }))
+      const normalizedInstalled = installedList.map(normalizeInstalledExtension)
       dispatchCatalog({
         type: 'load-succeeded',
         requestId,
@@ -789,7 +701,7 @@ export default function ExtensionsView({
                     ) : null}
                   </section>
 
-                  <section className="px-5 pb-5">
+                  <section aria-label="Screenshots" className="px-5 pb-5">
                     {screenshots.length > 0 ? (
                       <div className="extension-screenshots grid grid-cols-2 gap-3">
                         {screenshots.map((url, index) => (
