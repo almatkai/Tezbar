@@ -217,7 +217,7 @@ fn fallback<'a>(value: &'a Value, key: &str, default: &'a str) -> &'a str {
 
 fn icon_path(extension: &Installed) -> Option<String> {
     let name = fallback(&extension.manifest, "icon", "icon.png");
-    if name.starts_with("https://") || name.starts_with("http://") || name.starts_with("/extensions/") {
+    if name.starts_with("https://") || name.starts_with("http://") {
         return Some(name.into());
     }
     let relative = Path::new(name.strip_prefix("./").unwrap_or(name));
@@ -253,7 +253,7 @@ fn icon_data(extension: &Installed) -> Value {
     let Some(path) = icon_path(extension) else {
         return Value::Null;
     };
-    if path.starts_with("http") || path.starts_with("/extensions/") {
+    if path.starts_with("http") {
         return json!(path);
     }
     let Ok(bytes) = std::fs::read(&path) else {
@@ -279,23 +279,87 @@ fn icon_data(extension: &Installed) -> Value {
     ))
 }
 
+fn command_icon_path(extension: &Installed, cmd: &Value) -> Option<String> {
+    let name = cmd["icon"]
+        .as_str()
+        .or_else(|| cmd["iconPath"].as_str())?;
+    if name.starts_with("https://") || name.starts_with("http://") {
+        return Some(name.into());
+    }
+    let relative = Path::new(name.strip_prefix("./").unwrap_or(name));
+    if relative
+        .components()
+        .any(|c| !matches!(c, Component::Normal(_)))
+    {
+        return None;
+    }
+    let mut candidates = vec![
+        extension.path.join(relative),
+        extension.path.join("assets").join(relative),
+    ];
+    if extension.id.starts_with("com.tezbar.native.") {
+        if let Some(packages) = extension.path.parent() {
+            if let Some(extensions) = packages.parent() {
+                let legacy = extensions.join(&extension.slug);
+                candidates.push(legacy.join(relative));
+                candidates.push(legacy.join("assets").join(relative));
+            }
+            let legacy = packages.join(format!("raycast.{}", extension.slug));
+            candidates.push(legacy.join(relative));
+            candidates.push(legacy.join("assets").join(relative));
+        }
+    }
+    candidates
+        .into_iter()
+        .find(|p| p.is_file())
+        .map(|p| p.to_string_lossy().into())
+}
+
+fn command_icon_data(path_str: &str) -> Value {
+    let Ok(bytes) = std::fs::read(path_str) else {
+        return Value::Null;
+    };
+    if bytes.len() > 2_000_000 {
+        return Value::Null;
+    }
+    let mime = match Path::new(path_str)
+        .extension()
+        .and_then(|v| v.to_str())
+        .unwrap_or("")
+    {
+        "svg" => "image/svg+xml",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "image/png",
+    };
+    json!(format!(
+        "data:{mime};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
 fn command_values(extension: &Installed) -> Vec<Value> {
     if !compatible(&extension.manifest, false) {
         return vec![];
     }
     let pkg = &extension.manifest;
     let icon = icon_data(extension);
+    let ext_icon_path = icon_path(extension);
     let owner = person(pkg.get("owner").unwrap_or(&pkg["author"]));
     pkg["commands"].as_array().into_iter().flatten().filter(|c| c["name"].is_string()&&compatible(c,true) && (extension.id.starts_with("raycast.") || c["runtime"] == "rust")).map(|cmd| {
         let name=cmd["name"].as_str().unwrap_or("");
         let title=fallback(cmd,"title",name);
         let extension_title=fallback(pkg,"title",&extension.slug);
         let description=fallback(cmd,"description","");
+        let cmd_icon_path = command_icon_path(extension, cmd).or_else(|| ext_icon_path.clone());
+        let cmd_icon_data = cmd_icon_path.as_deref().map(command_icon_data).unwrap_or(Value::Null);
+        let icon_val = if !cmd_icon_data.is_null() { cmd_icon_data } else { icon.clone() };
         json!({"id":format!("ext-{}-{name}",extension.slug),"title":title,"extensionTitle":extension_title,
             "extName":extension.slug,"extensionId":extension.id,"cmdName":name,"owner":owner,"description":description,"mode":fallback(cmd,"mode","view"),
             "interval":cmd["interval"],"disabledByDefault":cmd["disabledByDefault"].as_bool().unwrap_or(false),
             "keywords":[extension.slug.to_lowercase(),extension_title.to_lowercase(),name.to_lowercase(),title.to_lowercase(),description.to_lowercase()],
-            "iconDataUrl":icon,"commandArgumentDefinitions":cmd["arguments"].as_array().cloned().unwrap_or_default()})
+            "iconPath":cmd_icon_path,"iconDataUrl":icon_val,"commandArgumentDefinitions":cmd["arguments"].as_array().cloned().unwrap_or_default()})
     }).collect()
 }
 

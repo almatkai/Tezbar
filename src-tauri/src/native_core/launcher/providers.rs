@@ -275,13 +275,19 @@ pub fn command_documents(native: &[Value]) -> Vec<Value> {
 }
 pub fn extension_documents(commands: &[Value], config: &Value) -> Vec<Value> {
     commands.iter().filter_map(|c|{
- let ext=c["extensionId"].as_str().map(str::to_owned).or_else(||c["extName"].as_str().map(|s|if s.starts_with("raycast."){s.to_owned()}else{format!("raycast.{s}")}))?;
- let name=c["commandName"].as_str().or_else(||c["cmdName"].as_str()).or_else(||c["name"].as_str())?;
- let title=c["title"].as_str().unwrap_or(name);let id=format!("extcmd:{ext}:{name}");if config["disabledCommands"][&id]==true{return None}
- let subtitle=c["extensionName"].as_str().or_else(||c["extensionTitle"].as_str()).unwrap_or(&ext);
- let keywords=c["keywords"].as_array().map(|a|a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")).unwrap_or_default();
- let mut d=document(&id,"extensions",title,subtitle,&format!("{title} {name} {ext} {subtitle} {} {keywords} {}",c["description"].as_str().unwrap_or(""),config["commandAliases"][&id].as_str().unwrap_or("")),json!({"type":"run-extension-command","extensionId":ext,"commandName":name,"title":title,"iconPath":c["iconPath"],"commandArgumentDefinitions":c.get("commandArgumentDefinitions").unwrap_or(&c["argumentDefinitions"])}),c["installedAt"].as_u64().unwrap_or(now_ms()));d["popularity"]=c["downloadCount"].clone();Some(d)
-}).collect()
+        let ext=c["extensionId"].as_str().map(str::to_owned).or_else(||c["extName"].as_str().map(|s|if s.starts_with("raycast."){s.to_owned()}else{format!("raycast.{s}")}))?;
+        let name=c["commandName"].as_str().or_else(||c["cmdName"].as_str()).or_else(||c["name"].as_str())?;
+        let title=c["title"].as_str().unwrap_or(name);let id=format!("extcmd:{ext}:{name}");if config["disabledCommands"][&id]==true{return None}
+        let subtitle=c["extensionName"].as_str().or_else(||c["extensionTitle"].as_str()).unwrap_or(&ext);
+        let keywords=c["keywords"].as_array().map(|a|a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")).unwrap_or_default();
+        let icon_path = c["iconPath"].as_str().or_else(|| c["icon"].as_str());
+        let mut d=document(&id,"extensions",title,subtitle,&format!("{title} {name} {ext} {subtitle} {} {keywords} {}",c["description"].as_str().unwrap_or(""),config["commandAliases"][&id].as_str().unwrap_or("")),json!({"type":"run-extension-command","extensionId":ext,"commandName":name,"title":title,"iconPath":icon_path,"commandArgumentDefinitions":c.get("commandArgumentDefinitions").unwrap_or(&c["argumentDefinitions"])}),c["installedAt"].as_u64().unwrap_or(now_ms()));
+        d["popularity"]=c["downloadCount"].clone();
+        if !c["iconDataUrl"].is_null() {
+            d["iconDataUrl"] = c["iconDataUrl"].clone();
+        }
+        Some(d)
+    }).collect()
 }
 const SKIP: &[&str] = &[
     "node_modules",

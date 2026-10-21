@@ -309,6 +309,7 @@ export type RaymesApi = {
   revealClipboardEntry: (id: string) => Promise<boolean>
   readClipboardImage: (id: string) => Promise<ClipboardImagePayload | null>
   clearClipboardHistory: () => Promise<void>
+  onClipboardChanged: (listener: () => void) => () => void
   listSnippets: () => Promise<SnippetListRow[]>
   copySnippet: (id: string) => Promise<{ ok: boolean; message: string }>
   addSnippet: (
@@ -341,6 +342,7 @@ export type RaymesApi = {
   terminalSessionsSync: () => Promise<void>
   terminalSessionsAction: (action: TerminalSessionsAction) => Promise<void>
   onTerminalSessionsAction: (listener: (action: TerminalSessionsAction) => void) => () => void
+  onTerminalSessionsChanged: (listener: () => void) => () => void
   onTerminalData: (listener: (event: TerminalDataEvent) => void) => () => void
   onTerminalExit: (listener: (event: TerminalExitEvent) => void) => () => void
   getStorageBreakdown: () => Promise<{
@@ -430,6 +432,8 @@ export type RaymesApi = {
   onExtensionInstallProgress: (
     listener: (payload: { id: string; progress: number }) => void
   ) => () => void
+  /** Fired when the background extension catalog download completes. */
+  onExtensionCatalogUpdated: (listener: () => void) => () => void
   /** Fired on every successful `setLlmConfig` write — views caching config should re-fetch. */
   onLlmConfigChanged: (listener: () => void) => () => void
   /** Chat session history (AI-mode multi-turn conversations). */

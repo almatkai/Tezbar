@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { compactTerminalPath, type TerminalSessionSummary } from '../shared/terminal'
 import { terminalSessionShortcutIndex } from './terminalSessionSelection'
+import { visibleEventRefresh } from './visibleEventRefresh'
 
 function sessionSubtitle(session: TerminalSessionSummary): string {
   const command = session.lastCommand ?? session.initialCommand
@@ -42,10 +43,10 @@ export default function TerminalSessionsWindow(): ReactNode {
       }
     }
 
-    void load()
-    const interval = window.setInterval(() => {
-      void load()
-    }, 2000)
+    const stopRefresh = visibleEventRefresh(
+      () => { void load() },
+      window.tezbar.onTerminalSessionsChanged,
+    )
 
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
@@ -68,7 +69,7 @@ export default function TerminalSessionsWindow(): ReactNode {
 
     return () => {
       cancelled = true
-      window.clearInterval(interval)
+      stopRefresh()
       window.removeEventListener('keydown', onKeyDown, true)
     }
   }, [])

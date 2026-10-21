@@ -50,6 +50,7 @@ import { getPreferredDefaultTarget } from './currency/currencyPreferences'
 import { useCurrencyConversion } from './hooks/useCurrencyConversion'
 import { ModelPicker } from './ModelPicker'
 import { moveTerminalSelectionDown, terminalSessionAtIndex } from './terminalSessionSelection'
+import { visibleEventRefresh } from './visibleEventRefresh'
 import {
   type AppUpdateStatus,
   computeEffectiveUpdateStatus,
@@ -86,7 +87,13 @@ import {
 import { aiChatBootForInput, commandBarInputMode } from './commandBarInputMode'
 import { readCachedChatHistory, writeCachedChatHistory } from './agentChat/historyCache'
 import { RELEASE_NOTES_COMMAND_ID, withReleaseNotesResult } from './releaseNotes'
-import { LauncherGlyph, Squircle, launcherIcon } from './launcherIcons'
+import {
+  KNOWN_EXTENSION_APP_MAP,
+  LauncherGlyph,
+  Squircle,
+  launcherIcon,
+  normalizeIconKind,
+} from './launcherIcons'
 import {
   MAX_PINNED_COMMANDS,
   type PinnedCommand,
@@ -668,6 +675,7 @@ type CommandIconKind =
   | 'git'
   | 'brew'
   | 'update'
+  | (string & {})
 
 type TezbarCommandId =
   | 'open-settings'
@@ -754,6 +762,13 @@ function commandIconForResult(item: SearchResult): CommandIconKind | undefined {
   }
   if (item.action.type === 'run-native-command') {
     return NATIVE_COMMAND_ICON_BY_ID[item.action.commandId as NativeCommandId]
+  }
+  if (item.category === 'extensions') {
+    const rawId =
+      item.action.type === 'run-extension-command'
+        ? item.action.extensionId
+        : item.id.replace(/^extcmd:/, '').split(':')[0]
+    return normalizeIconKind(rawId || '') as CommandIconKind
   }
   return undefined
 }
@@ -1117,10 +1132,15 @@ function ListItemIcon({
     key: string
     icon: string
   } | null>(null)
+  const [imgFailed, setImgFailed] = useState(false)
   const assetKey = assetKind && assetPath ? `${assetKind}:${assetPath}` : null
-  const resolvedIconDataUrl =
+  const rawIconUrl =
     (loadedAssetIcon && loadedAssetIcon.key === assetKey ? loadedAssetIcon.icon : undefined) ??
     iconDataUrl
+
+  useEffect(() => {
+    setImgFailed(false)
+  }, [rawIconUrl])
 
   useEffect(() => {
     if (!assetKind || !assetPath) return
@@ -1154,6 +1174,15 @@ function ListItemIcon({
     }
   }, [assetKind, assetPath])
 
+  const isImageSrc =
+    !imgFailed &&
+    rawIconUrl &&
+    (rawIconUrl.startsWith('http://') ||
+      rawIconUrl.startsWith('https://') ||
+      rawIconUrl.startsWith('data:image/') ||
+      rawIconUrl.startsWith('blob:') ||
+      rawIconUrl.startsWith('file://'))
+
   const icon = launcherIcon(commandIcon ?? kind)
 
   return (
@@ -1162,24 +1191,20 @@ function ListItemIcon({
       aria-hidden
       className={cx(
         'command-result-icon relative grid h-[22px] w-[22px] shrink-0 place-items-center',
-        resolvedIconDataUrl?.startsWith('/extensions/artwork/')
-          ? 'squircle overflow-hidden rounded-[6px] bg-transparent'
-          : resolvedIconDataUrl
+        isImageSrc
           ? 'overflow-visible bg-transparent'
           : 'squircle overflow-hidden rounded-[6px] text-white'
       )}
-      style={resolvedIconDataUrl ? undefined : { backgroundColor: icon.color }}
+      style={isImageSrc ? undefined : { backgroundColor: icon.color }}
     >
-      {!resolvedIconDataUrl ? <LauncherGlyph kind={commandIcon ?? kind} size={13} /> : null}
-      {resolvedIconDataUrl ? (
+      {!isImageSrc ? <LauncherGlyph kind={commandIcon ?? kind} size={13} /> : null}
+      {isImageSrc ? (
         <img
-          src={resolvedIconDataUrl}
+          src={rawIconUrl}
           alt=""
           className="absolute inset-0 h-full w-full object-contain"
           draggable={false}
-          onError={(event) => {
-            event.currentTarget.style.display = 'none'
-          }}
+          onError={() => setImgFailed(true)}
         />
       ) : null}
     </span>
@@ -1241,10 +1266,17 @@ function searchResultIconAsset(item: SearchResult): {
   }
   if (
     item.category === 'extensions' &&
-    item.action.type === 'run-extension-command' &&
-    item.action.iconPath
+    item.action.type === 'run-extension-command'
   ) {
-    return { kind: 'extension', path: item.action.iconPath }
+    const rawId = item.action.extensionId || ''
+    const extId = normalizeIconKind(rawId)
+    const appPath = KNOWN_EXTENSION_APP_MAP[extId]
+    if (appPath) {
+      return { kind: 'application', path: appPath }
+    }
+    if (item.action.iconPath) {
+      return { kind: 'extension', path: item.action.iconPath }
+    }
   }
   return null
 }
@@ -1661,7 +1693,6 @@ export default function CommandBar({
       return
     }
     let cancelled = false
-    let interval: number | null = null
     const load = async (): Promise<void> => {
       try {
         const sessions = await window.tezbar.terminalList()
@@ -1670,32 +1701,13 @@ export default function CommandBar({
         if (!cancelled) setTerminalSessions([])
       }
     }
-    const startPolling = (): void => {
-      if (interval !== null) return
-      interval = window.setInterval(() => {
-        void load()
-      }, 2500)
-    }
-    const stopPolling = (): void => {
-      if (interval !== null) window.clearInterval(interval)
-      interval = null
-    }
-    void load()
-    startPolling()
-    // Pause when the launcher is hidden — there's no status dot to update if
-    // nobody can see it.
-    const onVisibility = (): void => {
-      if (document.hidden) stopPolling()
-      else {
-        void load()
-        startPolling()
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibility)
+    const stopRefresh = visibleEventRefresh(
+      () => { void load() },
+      window.tezbar.onTerminalSessionsChanged,
+    )
     return () => {
       cancelled = true
-      stopPolling()
-      document.removeEventListener('visibilitychange', onVisibility)
+      stopRefresh()
     }
   }, [terminalMode])
 

@@ -9,6 +9,7 @@ import {
   terminalSessionShortcutIndex,
 } from './terminalSessionSelection'
 import { terminalOutputAfterSnapshot } from './terminalSessionHistory'
+import { visibleEventRefresh } from './visibleEventRefresh'
 import {
   commandFromTerminalLine,
   formatTerminalSessionName,
@@ -320,22 +321,10 @@ export default function TerminalView({
     [createSession],
   )
 
-  useEffect(() => {
-    // Poll sessions list periodically to keep the status dots updated — but
-    // only while the window is actually visible.
-    if (document.hidden) return
-    const interval = window.setInterval(() => {
-      void refreshSessions()
-    }, 3000)
-    const onVisibility = (): void => {
-      if (!document.hidden) void refreshSessions()
-    }
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [refreshSessions])
+  useEffect(() => visibleEventRefresh(
+    () => { void refreshSessions() },
+    window.tezbar.onTerminalSessionsChanged,
+  ), [refreshSessions])
 
   useEffect(() => {
     const host = hostRef.current

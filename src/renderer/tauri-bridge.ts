@@ -281,6 +281,8 @@ export function initTauriBridge(): void {
     revealClipboardEntry: (id: string) => callBackend('clipboard:reveal', id),
     readClipboardImage: (id: string) => callBackend('clipboard:image', id),
     clearClipboardHistory: () => callBackend('clipboard:clear'),
+    onClipboardChanged: (listener: () => void) =>
+      setupEventListener('clipboard:changed', listener),
 
     listSnippets: () => callBackend('snippets:list'),
     copySnippet: (id: string) => callBackend('snippets:copy', id),
@@ -330,6 +332,8 @@ export function initTauriBridge(): void {
       emitTo('main', 'terminal-sessions:action', action),
     onTerminalSessionsAction: (listener: (action: TerminalSessionsAction) => void) =>
       setupEventListener('terminal-sessions:action', listener),
+    onTerminalSessionsChanged: (listener: () => void) =>
+      setupEventListener('terminal:sessions-changed', listener),
 
     getStorageBreakdown: () => callBackend('storage:breakdown'),
     getClipboardStorageConfig: () => callBackend('storage:clipboard-config:get'),
@@ -463,6 +467,8 @@ export function initTauriBridge(): void {
     onAgentEvent: (listener: (event: any) => void) => setupEventListener('agent:event', listener),
     onExtensionInstallProgress: (listener: (payload: any) => void) =>
       setupEventListener('extension:install-progress', listener),
+    onExtensionCatalogUpdated: (listener: () => void) =>
+      setupEventListener('extensions-catalog-updated', listener),
     onLlmConfigChanged: (listener: () => void) =>
       setupEventListener('llm-config-changed', listener),
 

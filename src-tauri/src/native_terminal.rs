@@ -15,9 +15,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 const OUTPUT_REPLAY_LIMIT_BYTES: usize = 512 * 1024;
+const INPUT_QUEUE_LIMIT_BYTES: usize = 1024 * 1024;
 
 pub struct NativeTerminalState {
     sessions: Mutex<HashMap<String, NativeTerminalSession>>,
+    creating: Mutex<()>,
     next_id: AtomicU64,
     waiters: Mutex<Vec<std::thread::JoinHandle<()>>>,
     stopped: Condvar,
@@ -28,6 +30,7 @@ impl Default for NativeTerminalState {
     fn default() -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
+            creating: Mutex::new(()),
             next_id: AtomicU64::new(1),
             waiters: Mutex::new(Vec::new()),
             stopped: Condvar::new(),
@@ -52,6 +55,7 @@ impl NativeTerminalState {
 pub fn shutdown_all(app: &AppHandle) {
     if let Some(state) = app.try_state::<NativeTerminalState>() {
         state.closing.store(true, Ordering::Release);
+        let _creating = state.creating.lock().unwrap();
         if let Ok(mut sessions) = state.sessions.lock() {
             for session in sessions.values_mut() {
                 let _ = stop_session(session);
@@ -86,7 +90,8 @@ fn metadata(ctx: &CoreContext, channel: &str, payload: Value) -> Result<Value, S
 
 struct NativeTerminalSession {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    writer: std::sync::Arc<TerminalInput>,
+    metadata_gate: std::sync::Arc<Mutex<()>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     shell: String,
     cwd: String,
@@ -96,6 +101,77 @@ struct NativeTerminalSession {
     legacy_history_path: Option<PathBuf>,
     output_chunks: VecDeque<String>,
     output_bytes: usize,
+}
+
+// The writer owns the blocking PTY fd. Producers never wait for the terminal's
+// process to consume stdin; account for in-flight bytes as well as queued bytes.
+struct TerminalInput {
+    queue: Mutex<InputQueue>,
+    ready: Condvar,
+}
+
+#[derive(Default)]
+struct InputQueue {
+    chunks: VecDeque<Vec<u8>>,
+    bytes: usize,
+    closed: bool,
+}
+
+impl TerminalInput {
+    fn start(mut writer: Box<dyn Write + Send>) -> std::sync::Arc<Self> {
+        let input = std::sync::Arc::new(Self {
+            queue: Mutex::new(InputQueue::default()),
+            ready: Condvar::new(),
+        });
+        let worker = input.clone();
+        std::thread::spawn(move || loop {
+            let chunk = {
+                let mut queue = worker.queue.lock().unwrap();
+                while queue.chunks.is_empty() && !queue.closed {
+                    queue = worker.ready.wait(queue).unwrap();
+                }
+                if queue.closed {
+                    break;
+                }
+                queue.chunks.pop_front().unwrap()
+            };
+            let result = writer.write_all(&chunk).and_then(|_| writer.flush());
+            let mut queue = worker.queue.lock().unwrap();
+            queue.bytes -= chunk.len();
+            if let Err(error) = result {
+                log::warn!("Terminal input writer stopped: {error}");
+                queue.closed = true;
+                queue.chunks.clear();
+                queue.bytes = 0;
+                break;
+            }
+        });
+        input
+    }
+
+    fn send(&self, data: Vec<u8>) -> bool {
+        let mut queue = self.queue.lock().unwrap();
+        if queue.closed || data.len() > INPUT_QUEUE_LIMIT_BYTES.saturating_sub(queue.bytes) {
+            return false;
+        }
+        queue.bytes += data.len();
+        queue.chunks.push_back(data);
+        self.ready.notify_one();
+        true
+    }
+
+    fn close(&self) {
+        let mut queue = self.queue.lock().unwrap();
+        queue.closed = true;
+        queue.chunks.clear();
+        self.ready.notify_one();
+    }
+}
+
+impl Drop for NativeTerminalSession {
+    fn drop(&mut self) {
+        self.writer.close();
+    }
 }
 
 fn stop_session(session: &mut NativeTerminalSession) -> Result<(), String> {
@@ -281,11 +357,41 @@ fn process_working_directory(_pid: u32) -> Option<String> {
     None
 }
 
-fn refresh_session_working_directory(session: &mut NativeTerminalSession) -> String {
-    if let Some(cwd) = session.pid.and_then(process_working_directory) {
+// Look up the process cwd without holding the shared session map. A concurrent
+// refresh may discover the same path; only the winner persists the change.
+fn refreshed_cwd(state: &NativeTerminalState, session_id: &str) -> Option<(String, bool)> {
+    let (pid, generation) = {
+        let sessions = state.sessions.lock().unwrap();
+        let session = sessions.get(session_id)?;
+        (session.pid, session.exited.clone())
+    };
+    let discovered = pid.and_then(process_working_directory);
+    let mut sessions = state.sessions.lock().unwrap();
+    let session = sessions.get_mut(session_id)?;
+    if !std::sync::Arc::ptr_eq(&generation, &session.exited) {
+        return None;
+    }
+    let changed = discovered.as_ref().is_some_and(|cwd| *cwd != session.cwd);
+    if let Some(cwd) = discovered {
         session.cwd = cwd;
     }
-    session.cwd.clone()
+    Some((session.cwd.clone(), changed))
+}
+
+fn persist_cwd_if_changed(
+    app: &AppHandle,
+    session_id: &str,
+    cwd: &str,
+    changed: bool,
+) -> Result<(), String> {
+    if changed {
+        metadata(
+            &core_context(app)?,
+            "terminal:update",
+            json!({"sessionId":session_id,"cwd":cwd}),
+        )?;
+    }
+    Ok(())
 }
 
 fn login_shell() -> String {
@@ -453,8 +559,7 @@ impl TerminalUtf8Decoder {
     }
 }
 
-#[tauri::command]
-pub fn native_terminal_create(
+pub(crate) fn native_terminal_create_impl(
     app: AppHandle,
     state: State<'_, NativeTerminalState>,
     request: TerminalCreateRequest,
@@ -467,9 +572,10 @@ pub fn native_terminal_create(
     {
         return Err("Initial terminal command exceeds 16 KiB".into());
     }
-    // Serialize create/restore through summary publication, before any exit can
-    // run. Keep ids reserved until their old wait/output threads finish.
-    let mut sessions = state.sessions.lock().unwrap();
+    // Serialize creates without blocking reads/writes/kills while history, PTY
+    // startup and summary publication run. Existing ids remain reserved until
+    // their wait/output threads finish.
+    let _creating = state.creating.lock().unwrap();
     if state.closing.load(Ordering::Acquire) {
         return Err("Terminals are shutting down".into());
     }
@@ -485,7 +591,7 @@ pub fn native_terminal_create(
             state.next_id.fetch_add(1, Ordering::Relaxed)
         )
     });
-    if sessions.contains_key(&session_id) {
+    if state.sessions.lock().unwrap().contains_key(&session_id) {
         return Err("terminal session is already running".to_string());
     }
     if restore_session_id.is_some() {
@@ -581,11 +687,23 @@ pub fn native_terminal_create(
                 .unwrap_or_else(|| "Terminal summary to restore was not found".into()));
         }
     };
+    let mut sessions = state.sessions.lock().unwrap();
+    if state.closing.load(Ordering::Acquire) {
+        drop(sessions);
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err("Terminals are shutting down".into());
+    }
+    #[cfg(unix)]
+    let output_fd = pair.master.as_raw_fd();
+    let writer = TerminalInput::start(writer);
+    let metadata_gate = std::sync::Arc::new(Mutex::new(()));
     sessions.insert(
         session_id.clone(),
         NativeTerminalSession {
             master: pair.master,
             writer,
+            metadata_gate: metadata_gate.clone(),
             killer,
             shell: shell.clone(),
             cwd: cwd.to_string_lossy().into_owned(),
@@ -601,17 +719,10 @@ pub fn native_terminal_create(
         },
     );
 
-    let mut waiters = state.waiters.lock().unwrap();
     drop(sessions);
+    let mut waiters = state.waiters.lock().unwrap();
     #[cfg(unix)]
     let output_exited = exited.clone();
-    #[cfg(unix)]
-    let output_fd = state
-        .sessions
-        .lock()
-        .unwrap()
-        .get(&session_id)
-        .and_then(|s| s.master.as_raw_fd());
     let output_app = app.clone();
     let output_session_id = session_id.clone();
     let output_thread = std::thread::spawn(move || {
@@ -669,10 +780,7 @@ pub fn native_terminal_create(
                                 .unwrap()
                                 .get_mut(&output_session_id)
                             {
-                                let _ = session
-                                    .writer
-                                    .write_all(format!("{cmd}\r").as_bytes())
-                                    .and_then(|_| session.writer.flush());
+                                let _ = session.writer.send(format!("{cmd}\r").into_bytes());
                             }
                         }
                     }
@@ -735,7 +843,9 @@ pub fn native_terminal_create(
         // Drain the last output before publishing exit/removing the id.
         let _ = output_thread.join();
         let state = exit_app.state::<NativeTerminalState>();
-        let mut sessions = state.sessions.lock().unwrap();
+        // Serialize metadata for this session, not the shared sessions map.
+        // An in-flight attach must never overwrite the final exited status.
+        let _metadata = metadata_gate.lock().unwrap();
         if let Err(error) = metadata(
             &ctx,
             "core:terminal:exit",
@@ -743,7 +853,7 @@ pub fn native_terminal_create(
         ) {
             log::error!("Could not persist terminal exit: {error}");
         }
-        sessions.remove(&exit_session_id);
+        state.sessions.lock().unwrap().remove(&exit_session_id);
         state.stopped.notify_all();
         let _ = exit_app.emit(
             "terminal:exit",
@@ -765,71 +875,95 @@ pub fn native_terminal_create(
     })
 }
 
-#[tauri::command]
-pub fn native_terminal_attach(
+pub(crate) fn native_terminal_attach_impl(
     app: AppHandle,
     state: State<'_, NativeTerminalState>,
     request: TerminalAttachRequest,
 ) -> Result<Option<TerminalAttachResult>, String> {
-    let mut sessions = state.sessions.lock().unwrap();
-    let Some(session) = sessions.get_mut(&request.session_id) else {
+    let gate = {
+        let sessions = state.sessions.lock().unwrap();
+        let Some(session) = sessions.get(&request.session_id) else {
+            return Ok(None);
+        };
+        session.metadata_gate.clone()
+    };
+    let _metadata = gate.lock().unwrap();
+    let (shell, history_path, legacy_history_path, replay) = {
+        let sessions = state.sessions.lock().unwrap();
+        let Some(session) = sessions.get(&request.session_id) else {
+            return Ok(None);
+        };
+        if session.exited.load(Ordering::Acquire)
+            || !std::sync::Arc::ptr_eq(&gate, &session.metadata_gate)
+        {
+            return Ok(None);
+        }
+        session
+            .master
+            .resize(pty_size(request.cols, request.rows))
+            .map_err(|error| format!("failed to resize terminal: {error}"))?;
+        (
+            session.shell.clone(),
+            session.history_path.clone(),
+            session.legacy_history_path.clone(),
+            recent_output(session),
+        )
+    };
+    let Some((cwd, changed)) = refreshed_cwd(&state, &request.session_id) else {
         return Ok(None);
     };
-    if session.exited.load(Ordering::Acquire) {
-        return Ok(None);
-    }
-    session
-        .master
-        .resize(pty_size(request.cols, request.rows))
-        .map_err(|error| format!("failed to resize terminal: {error}"))?;
-    let cwd = refresh_session_working_directory(session);
-    metadata(
+    persist_cwd_if_changed(&app, &request.session_id, &cwd, changed)?;
+    let summary = metadata(
         &core_context(&app)?,
-        "terminal:update",
-        json!({"sessionId":request.session_id,"cwd":cwd}),
+        "terminal:native-attach",
+        json!({"sessionId":request.session_id}),
     )?;
+    let recent_output = read_persisted_history(&history_path, legacy_history_path.as_deref())
+        .unwrap_or(replay);
     Ok(Some(TerminalAttachResult {
-        session_id: request.session_id.clone(),
-        shell: session.shell.clone(),
+        session_id: request.session_id,
+        shell,
         cwd,
-        summary: metadata(
-            &core_context(&app)?,
-            "terminal:native-attach",
-            json!({"sessionId":request.session_id}),
-        )?,
-        recent_output: read_persisted_history(
-            &session.history_path,
-            session.legacy_history_path.as_deref(),
-        )
-        .unwrap_or_else(|| recent_output(session)),
+        summary,
+        recent_output,
     }))
 }
 
-#[tauri::command]
-pub fn native_terminal_cwd(
+pub(crate) fn native_terminal_cwd_impl(
     app: AppHandle,
     state: State<'_, NativeTerminalState>,
     session_id: String,
 ) -> Result<Option<String>, String> {
-    let mut sessions = state.sessions.lock().unwrap();
-    let Some(session) = sessions.get_mut(&session_id) else {
+    let gate = {
+        let sessions = state.sessions.lock().unwrap();
+        let Some(session) = sessions.get(&session_id) else {
+            return Ok(None);
+        };
+        session.metadata_gate.clone()
+    };
+    let _metadata = gate.lock().unwrap();
+    if !state
+        .sessions
+        .lock()
+        .unwrap()
+        .get(&session_id)
+        .is_some_and(|session| std::sync::Arc::ptr_eq(&gate, &session.metadata_gate))
+    {
+        return Ok(None);
+    }
+    let Some((cwd, changed)) = refreshed_cwd(&state, &session_id) else {
         return Ok(None);
     };
-    let cwd = refresh_session_working_directory(session);
-    metadata(
-        &core_context(&app)?,
-        "terminal:update",
-        json!({"sessionId":session_id,"cwd":cwd}),
-    )?;
+    persist_cwd_if_changed(&app, &session_id, &cwd, changed)?;
     Ok(Some(cwd))
 }
 
-#[tauri::command]
-pub fn native_terminal_delete_history(
+fn native_terminal_delete_history_impl(
     app: AppHandle,
     state: State<'_, NativeTerminalState>,
     session_id: String,
 ) -> Result<bool, String> {
+    let _creating = state.creating.lock().unwrap();
     if state.sessions.lock().unwrap().contains_key(&session_id) {
         return Ok(false);
     }
@@ -841,8 +975,7 @@ pub fn native_terminal_delete_history(
     }
 }
 
-#[tauri::command]
-pub fn native_terminal_prune_history(
+fn native_terminal_prune_history_impl(
     app: AppHandle,
     state: State<'_, NativeTerminalState>,
     session_ids: Vec<String>,
@@ -853,22 +986,32 @@ pub fn native_terminal_prune_history(
     Ok(0)
 }
 
-#[tauri::command]
-pub fn native_terminal_detach(
+pub(crate) fn native_terminal_detach_impl(
     app: AppHandle,
     state: State<'_, NativeTerminalState>,
     session_id: String,
 ) -> Result<bool, String> {
-    let mut sessions = state.sessions.lock().unwrap();
-    let Some(session) = sessions.get_mut(&session_id) else {
+    let gate = {
+        let sessions = state.sessions.lock().unwrap();
+        let Some(session) = sessions.get(&session_id) else {
+            return Ok(false);
+        };
+        session.metadata_gate.clone()
+    };
+    let _metadata = gate.lock().unwrap();
+    if !state
+        .sessions
+        .lock()
+        .unwrap()
+        .get(&session_id)
+        .is_some_and(|session| std::sync::Arc::ptr_eq(&gate, &session.metadata_gate))
+    {
+        return Ok(false);
+    }
+    let Some((cwd, changed)) = refreshed_cwd(&state, &session_id) else {
         return Ok(false);
     };
-    let cwd = refresh_session_working_directory(session);
-    metadata(
-        &core_context(&app)?,
-        "terminal:update",
-        json!({"sessionId":session_id,"cwd":cwd}),
-    )?;
+    persist_cwd_if_changed(&app, &session_id, &cwd, changed)?;
     metadata(
         &core_context(&app)?,
         "terminal:detach",
@@ -877,29 +1020,29 @@ pub fn native_terminal_detach(
     Ok(true)
 }
 
-#[tauri::command]
-pub fn native_terminal_write(
+fn write_session(state: &NativeTerminalState, session_id: &str, data: String) -> bool {
+    if data.is_empty() || data.len() > 64 * 1024 {
+        return false;
+    }
+    let input = {
+        let sessions = state.sessions.lock().unwrap();
+        let Some(session) = sessions.get(session_id) else {
+            return false;
+        };
+        session.writer.clone()
+    };
+    input.send(data.into_bytes())
+}
+
+pub(crate) fn native_terminal_write_impl(
     state: State<'_, NativeTerminalState>,
     session_id: String,
     data: String,
 ) -> Result<bool, String> {
-    if data.is_empty() || data.len() > 64 * 1024 {
-        return Ok(false);
-    }
-    let mut sessions = state.sessions.lock().unwrap();
-    let Some(session) = sessions.get_mut(&session_id) else {
-        return Ok(false);
-    };
-    session
-        .writer
-        .write_all(data.as_bytes())
-        .and_then(|_| session.writer.flush())
-        .map_err(|error| format!("failed to write to terminal: {error}"))?;
-    Ok(true)
+    Ok(write_session(&state, &session_id, data))
 }
 
-#[tauri::command]
-pub fn native_terminal_resize(
+pub(crate) fn native_terminal_resize_impl(
     state: State<'_, NativeTerminalState>,
     session_id: String,
     cols: u16,
@@ -916,8 +1059,7 @@ pub fn native_terminal_resize(
     Ok(true)
 }
 
-#[tauri::command]
-pub fn native_terminal_kill(
+pub(crate) fn native_terminal_kill_impl(
     state: State<'_, NativeTerminalState>,
     session_id: String,
 ) -> Result<bool, String> {
@@ -927,6 +1069,115 @@ pub fn native_terminal_kill(
     };
     stop_session(session)?;
     Ok(true)
+}
+
+// Tauri executes non-async commands on the UI thread. Keep the synchronous
+// entry points for the legacy bridge (which already uses spawn_blocking), and
+// run direct invoke calls on blocking workers as well. metadata() may block_on
+// the launcher here; it must never run on a Tokio async worker.
+#[tauri::command]
+pub async fn native_terminal_create(
+    app: AppHandle,
+    request: TerminalCreateRequest,
+) -> Result<TerminalCreateResult, String> {
+    tokio::task::spawn_blocking(move || {
+        native_terminal_create_impl(app.clone(), app.state(), request)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn native_terminal_attach(
+    app: AppHandle,
+    request: TerminalAttachRequest,
+) -> Result<Option<TerminalAttachResult>, String> {
+    tokio::task::spawn_blocking(move || {
+        native_terminal_attach_impl(app.clone(), app.state(), request)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn native_terminal_cwd(
+    app: AppHandle,
+    session_id: String,
+) -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(move || {
+        native_terminal_cwd_impl(app.clone(), app.state(), session_id)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn native_terminal_delete_history(
+    app: AppHandle,
+    session_id: String,
+) -> Result<bool, String> {
+    tokio::task::spawn_blocking(move || {
+        native_terminal_delete_history_impl(app.clone(), app.state(), session_id)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn native_terminal_prune_history(
+    app: AppHandle,
+    session_ids: Vec<String>,
+) -> Result<usize, String> {
+    tokio::task::spawn_blocking(move || {
+        native_terminal_prune_history_impl(app.clone(), app.state(), session_ids)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn native_terminal_detach(
+    app: AppHandle,
+    session_id: String,
+) -> Result<bool, String> {
+    tokio::task::spawn_blocking(move || {
+        native_terminal_detach_impl(app.clone(), app.state(), session_id)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+// Write and resize stay synchronous on purpose: the renderer fires writes
+// without awaiting them, and only the UI thread handles IPC in arrival order.
+// Async commands would race keystrokes on separate workers. Both are cheap now:
+// write only enqueues bytes for the session's writer thread.
+#[tauri::command]
+pub fn native_terminal_write(
+    state: State<'_, NativeTerminalState>,
+    session_id: String,
+    data: String,
+) -> Result<bool, String> {
+    native_terminal_write_impl(state, session_id, data)
+}
+
+#[tauri::command]
+pub fn native_terminal_resize(
+    state: State<'_, NativeTerminalState>,
+    session_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<bool, String> {
+    native_terminal_resize_impl(state, session_id, cols, rows)
+}
+
+#[tauri::command]
+pub async fn native_terminal_kill(
+    app: AppHandle,
+    session_id: String,
+) -> Result<bool, String> {
+    tokio::task::spawn_blocking(move || native_terminal_kill_impl(app.state(), session_id))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[cfg(test)]
@@ -947,7 +1198,8 @@ mod tests {
         drop(pair.slave);
         let mut session = NativeTerminalSession {
             master: pair.master,
-            writer,
+            writer: TerminalInput::start(writer),
+            metadata_gate: std::sync::Arc::new(Mutex::new(())),
             killer: child.clone_killer(),
             shell: "/bin/sh".into(),
             cwd: directory.path().to_string_lossy().into_owned(),
@@ -983,6 +1235,52 @@ mod tests {
         assert!(replay.len() <= OUTPUT_REPLAY_LIMIT_BYTES);
         assert!(replay.ends_with("🚀"));
         assert_eq!(replay.len(), session.output_bytes);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn terminal_input_does_not_wait_for_a_process_that_ignores_stdin() {
+        let pair = native_pty_system().openpty(pty_size(80, 24)).unwrap();
+        let writer = pair.master.take_writer().unwrap();
+        let mut command = CommandBuilder::new("/bin/sleep");
+        command.arg("5");
+        let mut child = pair.slave.spawn_command(command).unwrap();
+        drop(pair.slave);
+        let state = NativeTerminalState::default();
+        state.sessions.lock().unwrap().insert(
+            "blocked".into(),
+            NativeTerminalSession {
+                master: pair.master,
+                writer: TerminalInput::start(writer),
+                metadata_gate: std::sync::Arc::new(Mutex::new(())),
+                killer: child.clone_killer(),
+                shell: "/bin/sleep".into(),
+                cwd: "/tmp".into(),
+                pid: child.process_id(),
+                exited: std::sync::Arc::new(AtomicBool::new(false)),
+                history_path: PathBuf::new(),
+                legacy_history_path: None,
+                output_chunks: VecDeque::new(),
+                output_bytes: 0,
+            },
+        );
+        // With no PTY output reader, echo fills the PTY too. The writer will
+        // eventually block in write_all, but the session API remains responsive.
+        let started = std::time::Instant::now();
+        let mut accepted = 0;
+        for _ in 0..32 {
+            if write_session(&state, "blocked", "x".repeat(64 * 1024)) {
+                accepted += 1;
+            } else {
+                break;
+            }
+        }
+        assert!(accepted > 0);
+        assert!(started.elapsed() < std::time::Duration::from_millis(100));
+        assert!(!write_session(&state, "blocked", "x".repeat(64 * 1024)));
+        child.kill().unwrap();
+        child.wait().unwrap();
+        state.sessions.lock().unwrap().remove("blocked");
     }
 
     #[test]

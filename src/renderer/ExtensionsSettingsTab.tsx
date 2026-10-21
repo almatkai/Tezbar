@@ -1,6 +1,7 @@
 import { extensionImageSource } from './extensionImages'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, cx } from './ui/primitives'
+import { Squircle } from './launcherIcons'
 import HotkeyRecorder, { formatShortcutForDisplay } from './HotkeyRecorder'
 import { ExtensionPreferencesEditor } from './ExtensionPreferencesEditor'
 import type { InstalledRegistryExtension } from '../shared/extensionRuntime'
@@ -634,7 +635,7 @@ export default function ExtensionsSettingsTab({ onBrowseStore }: ExtensionsSetti
                       className="h-[18px] w-[18px] flex-shrink-0 rounded-[4px]"
                     />
                   ) : (
-                    <PuzzleIcon className="flex-shrink-0 text-ink-4" />
+                    <Squircle kind={schema.extName} size={18} className="rounded-[4px]" />
                   )}
                   <span className="flex-1 truncate text-[12.5px] font-medium">{schema.title}</span>
                   <span className="text-[10px] text-ink-4 tabular-nums">
@@ -850,9 +851,7 @@ export default function ExtensionsSettingsTab({ onBrowseStore }: ExtensionsSetti
                     className="h-10 w-10 rounded-lg"
                   />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/[0.08]">
-                    <PuzzleIcon className="text-ink-3" />
-                  </div>
+                  <Squircle kind={selectedSchema.extName} size={40} className="rounded-lg" />
                 )}
                 <div>
                   <h3 className="text-[15px] font-semibold text-ink-1">

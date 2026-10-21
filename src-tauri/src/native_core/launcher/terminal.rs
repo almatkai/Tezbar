@@ -77,7 +77,9 @@ impl TerminalCore {
     pub async fn initialize(&self) -> CoreResult {
         let ctx = self.ctx.clone();
         tokio::task::spawn_blocking(move || {
+            let mut changed = false;
             ctx.config.update(|config| {
+                let before = config["terminalSessions"].clone();
                 if let Some(sessions) = config["terminalSessions"].as_array_mut() {
                     sessions.retain(|s| {
                         s["sessionId"].is_string() && s["name"].is_string() && s["cwd"].is_string()
@@ -90,8 +92,12 @@ impl TerminalCore {
                         }
                     }
                 }
+                changed = config["terminalSessions"] != before;
                 Ok(())
             })?;
+            if changed {
+                ctx.emit("terminal:sessions-changed", json!({}));
+            }
             Ok(Value::Null)
         })
         .await
@@ -130,12 +136,14 @@ impl TerminalCore {
         let ctx = self.ctx.clone();
         tokio::task::spawn_blocking(move || {
             let mut expired = vec![];
+            let mut changed = false;
             ctx.config.update(|config| {
                 if let Some(items) = config["terminalSessions"].as_array_mut() {
                     items.retain(|s| {
                         let remove = s["status"] != "running"
                             && s["saveUntil"].as_u64().is_some_and(|n| n <= now_ms());
                         if remove {
+                            changed = true;
                             if let Some(id) = s["sessionId"].as_str() {
                                 expired.push(id.to_owned())
                             }
@@ -145,6 +153,9 @@ impl TerminalCore {
                 }
                 Ok(())
             })?;
+            if changed {
+                ctx.emit("terminal:sessions-changed", json!({}));
+            }
             for id in expired {
                 if valid_id(&id) {
                     for directory in history_dirs(&ctx) {
@@ -179,14 +190,15 @@ impl TerminalCore {
         let ctx = self.ctx.clone();
         tokio::task::spawn_blocking(move||{
  if c=="terminal:list"{let config=ctx.config.read()?;let mut rows=config["terminalSessions"].as_array().cloned().unwrap_or_default();rows.retain(|s|s["status"]=="running"||!s["saveUntil"].as_u64().is_some_and(|n|n<=now_ms()));rows.sort_by(|a,b|(a["status"]!="running").cmp(&(b["status"]!="running")).then_with(||b["updatedAt"].as_u64().cmp(&a["updatedAt"].as_u64())));return Ok(json!(rows))}
- let raw=args.first().cloned().unwrap_or(Value::Null);let id=raw["sessionId"].as_str().or_else(||raw.as_str()).ok_or("Terminal sessionId is required")?.to_owned();if !valid_id(&id){return Err("Invalid terminal sessionId".into())}let now=now_ms();let mut result=Value::Null;ctx.config.update(|config|{if config["terminalSessions"].is_null(){config["terminalSessions"]=json!([])}let rows=config["terminalSessions"].as_array_mut().ok_or("Invalid terminalSessions configuration")?;
- if c=="terminal:delete"{let before=rows.len();rows.retain(|s|s["sessionId"]!=id);result=json!(before!=rows.len());return Ok(())}
- if c=="terminal:native-create"{let shell=string(&raw,"shell")?;let cwd=resolve_cwd(&ctx,string(&raw,"cwd")?);let initial=raw["initialCommand"].as_str().unwrap_or("").trim();if initial.len()>16384{return Err("Initial terminal command exceeds 16 KiB".into())}let save=raw["saveFor"].as_str().filter(|s|valid(s,false)).unwrap_or("week");let keep=raw["keepAliveFor"].as_str().filter(|s|valid(s,true)).unwrap_or("3h");let mut summary=json!({"sessionId":id,"shell":shell,"cwd":cwd,"name":name(raw["name"].as_str(),&cwd,initial),"createdAt":now,"updatedAt":now,"lastActiveAt":now,"saveFor":save,"keepAliveFor":keep,"saveUntil":deadline(save,now,false),"status":"running"});if !initial.is_empty(){summary["initialCommand"]=json!(initial);summary["lastCommand"]=json!(command(initial))}strip_nulls(&mut summary);rows.retain(|s|s["sessionId"]!=id);rows.push(summary.clone());result=summary;return Ok(())}
+ let raw=args.first().cloned().unwrap_or(Value::Null);let id=raw["sessionId"].as_str().or_else(||raw.as_str()).ok_or("Terminal sessionId is required")?.to_owned();if !valid_id(&id){return Err("Invalid terminal sessionId".into())}let now=now_ms();let mut result=Value::Null;let mut changed=false;ctx.config.update(|config|{if config["terminalSessions"].is_null(){config["terminalSessions"]=json!([]);changed=true}let rows=config["terminalSessions"].as_array_mut().ok_or("Invalid terminalSessions configuration")?;
+ if c=="terminal:delete"{let before=rows.len();rows.retain(|s|s["sessionId"]!=id);let deleted=before!=rows.len();changed|=deleted;result=json!(deleted);return Ok(())}
+ if c=="terminal:native-create"{let shell=string(&raw,"shell")?;let cwd=resolve_cwd(&ctx,string(&raw,"cwd")?);let initial=raw["initialCommand"].as_str().unwrap_or("").trim();if initial.len()>16384{return Err("Initial terminal command exceeds 16 KiB".into())}let save=raw["saveFor"].as_str().filter(|s|valid(s,false)).unwrap_or("week");let keep=raw["keepAliveFor"].as_str().filter(|s|valid(s,true)).unwrap_or("3h");let mut summary=json!({"sessionId":id,"shell":shell,"cwd":cwd,"name":name(raw["name"].as_str(),&cwd,initial),"createdAt":now,"updatedAt":now,"lastActiveAt":now,"saveFor":save,"keepAliveFor":keep,"saveUntil":deadline(save,now,false),"status":"running"});if !initial.is_empty(){summary["initialCommand"]=json!(initial);summary["lastCommand"]=json!(command(initial))}strip_nulls(&mut summary);rows.retain(|s|s["sessionId"]!=id);rows.push(summary.clone());result=summary;changed=true;return Ok(())}
  let Some(summary)=rows.iter_mut().find(|s|s["sessionId"]==id)else{return Ok(())};let mut s=summary.clone();match c.as_str(){"terminal:native-attach"|"terminal:native-restore"=>{s["status"]=json!("running");for k in ["exitCode","signal","pid","keepAliveUntil"]{s.as_object_mut().unwrap().remove(k);}if c=="terminal:native-restore"{s["shell"]=json!(string(&raw,"shell")?);s["cwd"]=json!(resolve_cwd(&ctx,string(&raw,"cwd")?));s["saveUntil"]=deadline(s["saveFor"].as_str().unwrap_or("week"),now,false);}},
  "terminal:native-exit"|"core:terminal:exit"|"terminal:exit"=>{s["status"]=json!("exited");s["exitCode"]=json!(raw["exitCode"].as_i64().unwrap_or(1).max(0));s["signal"]=raw["signal"].clone();s["pid"]=Value::Null;s["keepAliveUntil"]=Value::Null;s["saveUntil"]=deadline(s["saveFor"].as_str().unwrap_or("week"),now,false);},
  "terminal:detach"=>s["keepAliveUntil"]=deadline(s["keepAliveFor"].as_str().unwrap_or("3h"),now,true),
  "terminal:update"=>{if let Some(n)=raw["name"].as_str(){s["name"]=json!(name(Some(n),s["cwd"].as_str().unwrap_or(""),s["initialCommand"].as_str().unwrap_or("")))}if let Some(cwd)=raw["cwd"].as_str(){let raw_path=std::path::PathBuf::from(cwd.trim());let path=if raw_path.is_absolute()&&raw_path.is_dir(){raw_path}else{super::providers::resolve(&ctx.paths.home_dir,cwd)};if path.is_dir(){s["cwd"]=json!(path.canonicalize().unwrap_or(path));}}if let Some(cmd)=raw["lastCommand"].as_str(){let cmd=command(cmd);s["lastCommand"]=if cmd.is_empty(){Value::Null}else{json!(cmd)}}if let Some(save)=raw["saveFor"].as_str(){if !valid(save,false){return Err("Invalid terminal saveFor".into())}s["saveFor"]=json!(save);s["saveUntil"]=deadline(save,now,false);}if let Some(keep)=raw["keepAliveFor"].as_str(){if !valid(keep,true){return Err("Invalid terminal keepAliveFor".into())}s["keepAliveFor"]=json!(keep);if s["keepAliveUntil"].is_number(){s["keepAliveUntil"]=deadline(keep,now,true);}}},_=>return Err(format!("Unknown terminal metadata channel: {c}"))}
- s["updatedAt"]=json!(now);s["lastActiveAt"]=json!(now);strip_nulls(&mut s);*summary=s.clone();result=s;Ok(())})?;
+ s["updatedAt"]=json!(now);s["lastActiveAt"]=json!(now);strip_nulls(&mut s);changed|=*summary!=s;*summary=s.clone();result=s;Ok(())})?;
+ if changed{ctx.emit("terminal:sessions-changed",json!({}));}
  if c=="terminal:delete"&&result==true{for directory in history_dirs(&ctx){let path=directory.join(format!("{id}.log"));if path.exists(){std::fs::remove_file(path).map_err(|e|e.to_string())?;}}}
  if c=="terminal:detach"{result=json!(!result.is_null());}
  Ok(result)
@@ -231,6 +243,47 @@ fn resolve_cwd(ctx: &CoreContext, s: &str) -> String {
 mod tests {
     use super::*;
     use crate::native_core::common::CorePaths;
+    #[tokio::test]
+    async fn session_mutations_emit_after_successful_update() {
+        let dir = tempfile::tempdir().unwrap();
+        let events = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = events.clone();
+        let ctx = CoreContext::headless(CorePaths {
+            data_dir: dir.path().into(),
+            config_dir: dir.path().join("config"),
+            resource_dir: dir.path().into(),
+            temp_dir: dir.path().into(),
+            home_dir: dir.path().into(),
+        })
+        .with_event_sink(std::sync::Arc::new(move |channel, payload| {
+            sink.lock().unwrap().push((channel.to_owned(), payload));
+        }));
+        let terminal = TerminalCore::new(ctx.clone());
+        terminal
+            .handle(
+                "terminal:native-create",
+                &[json!({"sessionId":"one","shell":"/bin/sh","cwd":dir.path()})],
+            )
+            .await
+            .unwrap();
+        terminal
+            .handle("core:terminal:exit", &[json!({"sessionId":"one","exitCode":0})])
+            .await
+            .unwrap();
+        terminal.handle("terminal:delete", &[json!("one")]).await.unwrap();
+        terminal.handle("terminal:delete", &[json!("missing")]).await.unwrap();
+        ctx.config.patch(&json!({"terminalSessions":[{"sessionId":"expired","status":"exited","saveUntil":1}]})).unwrap();
+        terminal.tick().await.unwrap();
+        assert_eq!(
+            *events.lock().unwrap(),
+            vec![
+                ("terminal:sessions-changed".to_owned(), json!({})),
+                ("terminal:sessions-changed".to_owned(), json!({})),
+                ("terminal:sessions-changed".to_owned(), json!({})),
+                ("terminal:sessions-changed".to_owned(), json!({})),
+            ]
+        );
+    }
     #[tokio::test]
     async fn restore_and_exit_retention() {
         let d = tempfile::tempdir().unwrap();

@@ -7,7 +7,7 @@
     "version": "1.1.1",
     "description": "Keep your computer awake with native Tezbar sessions",
     "author": "gstvds",
-    "icon": "/extensions/icons/amphetamine.png",
+    "icon": "icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.amphetamine"
@@ -169,7 +169,7 @@
     "version": "1.0.0",
     "description": "Switch the active audio device of your mac.",
     "author": "benvp",
-    "icon": "/extensions/icons/audio-device.png",
+    "icon": "command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.audio-device"
@@ -456,7 +456,7 @@
     "version": "1.0.0",
     "description": "Capture and record your screen!",
     "author": "Aayush9029",
-    "icon": "/extensions/icons/cleanshotx.png",
+    "icon": "command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.cleanshotx"
@@ -982,7 +982,7 @@
     "version": "1.0.0",
     "description": "Pick and organize colors, everywhere on your Mac",
     "author": "thomas",
-    "icon": "/extensions/icons/color-picker.png",
+    "icon": "icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.color-picker"
@@ -1254,7 +1254,7 @@
     "version": "1.0.0",
     "description": "Search the Internet for animated GIFs",
     "author": "josephschmitt",
-    "icon": "/extensions/icons/gif-search.png",
+    "icon": "command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.gif-search"
@@ -1587,7 +1587,7 @@
       {
         "name": "search",
         "title": "Search for GIFs",
-        "description": "Search for GIFs across multiple services…",
+        "description": "Search for GIFs across multiple services\u2026",
         "mode": "view",
         "platforms": [
           "macOS",
@@ -1640,7 +1640,7 @@
     "version": "1.4.4",
     "description": "Manage your Google calendar easily. Create events, search contacts, and check out your upcoming schedule.",
     "author": "thomas",
-    "icon": "/extensions/icons/google-calendar.png",
+    "icon": "icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.google-calendar"
@@ -1826,7 +1826,7 @@
     "version": "1.0.0",
     "description": "Google search with autosuggestions",
     "author": "mblode",
-    "icon": "/extensions/icons/google-search.png",
+    "icon": "command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.google-search"
@@ -1898,7 +1898,7 @@
     "version": "1.0.0",
     "description": "Query Perplexity from Tezbar",
     "author": "third774",
-    "icon": "/extensions/icons/perplexity.png",
+    "icon": "perplexity-logo.png",
     "runtime": "rust",
     "replaces": [
       "raycast.perplexity"
@@ -1959,7 +1959,7 @@
     "version": "1.0.0",
     "description": "Find open ports and close them",
     "author": "lucaschultz",
-    "icon": "/extensions/icons/port-manager.png",
+    "icon": "command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.port-manager"
@@ -2114,7 +2114,7 @@
     "version": "1.0.0",
     "description": "Test the performance and quality of your internet connection via speedtest.net",
     "author": "tonka3000",
-    "icon": "/extensions/icons/speedtest.png",
+    "icon": "speedtest.png",
     "runtime": "rust",
     "replaces": [
       "raycast.speedtest"
@@ -2157,7 +2157,7 @@
     "version": "1.0.0",
     "description": "Start, stop, and save countdown timers, directly in Tezbar, with no external dependencies.",
     "author": "ThatNerd",
-    "icon": "/extensions/icons/timers.png",
+    "icon": "command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.timers"

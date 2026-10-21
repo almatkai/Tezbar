@@ -67,6 +67,12 @@ pub(super) fn manifests() -> Vec<Value> {
 }
 
 pub(super) fn store_item(native: Value) -> Value {
+    let icon_val = native["icon"].as_str().unwrap_or("");
+    let icon_url = if icon_val.starts_with("http") {
+        json!(icon_val)
+    } else {
+        Value::Null
+    };
     json!({
         "id": native["id"],
         "name": native["name"],
@@ -76,7 +82,7 @@ pub(super) fn store_item(native: Value) -> Value {
         "owner": "Tezbar",
         "runtime": "rust",
         "icon": native["icon"],
-        "iconUrl": native["icon"],
+        "iconUrl": icon_url,
         "platforms": native["platforms"],
         "commands": native["commands"],
         "nativeV2": native

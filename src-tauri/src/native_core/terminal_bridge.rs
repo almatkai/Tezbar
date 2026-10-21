@@ -47,19 +47,19 @@ pub async fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> Handler
                 let mut request = raw.clone();
                 request["cols"] = json!(dimension("cols",500)?);
                 request["rows"] = json!(dimension("rows",300)?);
-                serde_json::to_value(native_terminal_create(app.clone(), state, serde_json::from_value(request).map_err(|e| e.to_string())?)?).map_err(|e| e.to_string())
+                serde_json::to_value(native_terminal_create_impl(app.clone(), state, serde_json::from_value(request).map_err(|e| e.to_string())?)?).map_err(|e| e.to_string())
             }
             "terminal:attach" => {
                 let request = json!({"sessionId":id,"cols":dimension("cols",500)?,"rows":dimension("rows",300)?});
-                serde_json::to_value(native_terminal_attach(app.clone(), state, serde_json::from_value(request).map_err(|e| e.to_string())?)?).map_err(|e| e.to_string())
+                serde_json::to_value(native_terminal_attach_impl(app.clone(), state, serde_json::from_value(request).map_err(|e| e.to_string())?)?).map_err(|e| e.to_string())
             }
-            "terminal:detach" => Ok(json!(native_terminal_detach(app.clone(),state,id)?)),
-            "terminal:write" => Ok(json!(native_terminal_write(state,id,raw["data"].as_str().ok_or("Terminal data is required")?.into())?)),
-            "terminal:resize" => Ok(json!(native_terminal_resize(state,id,dimension("cols",500)?,dimension("rows",300)?)?)),
-            "terminal:get-cwd" | "core:terminal:pty:cwd" => Ok(json!(native_terminal_cwd(app.clone(),state,id)?)),
-            "terminal:kill" | "core:terminal:pty:kill" => Ok(json!(native_terminal_kill(state,id)?)),
+            "terminal:detach" => Ok(json!(native_terminal_detach_impl(app.clone(),state,id)?)),
+            "terminal:write" => Ok(json!(native_terminal_write_impl(state,id,raw["data"].as_str().ok_or("Terminal data is required")?.into())?)),
+            "terminal:resize" => Ok(json!(native_terminal_resize_impl(state,id,dimension("cols",500)?,dimension("rows",300)?)?)),
+            "terminal:get-cwd" | "core:terminal:pty:cwd" => Ok(json!(native_terminal_cwd_impl(app.clone(),state,id)?)),
+            "terminal:kill" | "core:terminal:pty:kill" => Ok(json!(native_terminal_kill_impl(state,id)?)),
             "terminal:delete" => {
-                native_terminal_kill(app.state::<NativeTerminalState>(),id.clone())?;
+                native_terminal_kill_impl(app.state::<NativeTerminalState>(),id.clone())?;
                 if !state.wait_stopped(&id) { return Err("Terminal is still stopping".into()); }
                 tauri::async_runtime::block_on(ctx.request("core:terminal:metadata:delete", vec![json!({"sessionId":id})]))
             }
