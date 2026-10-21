@@ -217,7 +217,7 @@ fn fallback<'a>(value: &'a Value, key: &str, default: &'a str) -> &'a str {
 
 fn icon_path(extension: &Installed) -> Option<String> {
     let name = fallback(&extension.manifest, "icon", "icon.png");
-    if name.starts_with("https://") || name.starts_with("http://") || name.starts_with("/extensions/") {
+    if name.starts_with("https://") || name.starts_with("http://") {
         return Some(name.into());
     }
     let relative = Path::new(name.strip_prefix("./").unwrap_or(name));
@@ -253,7 +253,7 @@ fn icon_data(extension: &Installed) -> Value {
     let Some(path) = icon_path(extension) else {
         return Value::Null;
     };
-    if path.starts_with("http") || path.starts_with("/extensions/") {
+    if path.starts_with("http") {
         return json!(path);
     }
     let Ok(bytes) = std::fs::read(&path) else {

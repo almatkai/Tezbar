@@ -3,9 +3,6 @@ const EXTENSION_IMAGE_CACHE = 'tezbar-extension-images-v1'
 const imageObjectUrls = new Map<string, string>()
 
 export function extensionImageSource(value: string): string {
-  // Vite serves these files from public/ in development and bundles them with
-  // the app. They are renderer URLs, never user-profile filesystem paths.
-  if (/^\/extensions\/(icons|artwork)\/[a-z0-9-]+\.(png|webp|svg)$/.test(value)) return value
   if (/^(https?:|data:|file:|blob:)/i.test(value)) return value
   if (value.startsWith('/')) return `file://${encodeURI(value)}`
   return value

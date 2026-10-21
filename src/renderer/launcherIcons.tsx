@@ -7,7 +7,7 @@ import { cx } from './ui/primitives'
 
 const SLATE = '#64748b'
 const ZINC = '#71717a'
-const GRAPHITE = '#3f3f46'
+const GRAPHITE = '#27272a'
 const BLUE = '#3b82f6'
 const SKY = '#0ea5e9'
 const CYAN = '#06b6d4'
@@ -19,6 +19,30 @@ const ROSE = '#f43f5e'
 const PINK = '#ec4899'
 const VIOLET = '#8b5cf6'
 const INDIGO = '#6366f1'
+
+const COLOR_PALETTE = [
+  BLUE,
+  SKY,
+  CYAN,
+  TEAL,
+  GREEN,
+  AMBER,
+  ORANGE,
+  ROSE,
+  PINK,
+  VIOLET,
+  INDIGO,
+  SLATE,
+]
+
+function hashString(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
 
 const FOLDER =
   'M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'
@@ -83,10 +107,102 @@ const LINK = (
   </>
 )
 
+const CAMERA = (
+  <>
+    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+    <circle cx="12" cy="13" r="3" />
+  </>
+)
+
+const COFFEE = (
+  <>
+    <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
+    <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
+    <line x1="6" y1="2" x2="6" y2="4" />
+    <line x1="10" y1="2" x2="10" y2="4" />
+    <line x1="14" y1="2" x2="14" y2="4" />
+  </>
+)
+
+const HEADPHONES = (
+  <>
+    <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />
+  </>
+)
+
+const PIPETTE = (
+  <>
+    <path d="m14 7 3 3" />
+    <path d="M4 17 2 22l5-2" />
+    <path d="m19.5 8.5-5-5a2.12 2.12 0 0 0-3 0L3.5 11.5a2.12 2.12 0 0 0 0 3l5 5a2.12 2.12 0 0 0 3 0l8-8a2.12 2.12 0 0 0 0-3Z" />
+  </>
+)
+
+const CALENDAR = (
+  <>
+    <rect width="18" height="18" x="3" y="4" rx="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+    <rect width="2" height="2" x="8" y="14" rx="0.5" />
+    <rect width="2" height="2" x="14" y="14" rx="0.5" />
+  </>
+)
+
+const SEARCH = (
+  <>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </>
+)
+
+const SPARKLES = (
+  <>
+    <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" />
+  </>
+)
+
+const SPEEDOMETER = (
+  <>
+    <path d="M12 2v2M4.93 4.93l1.41 1.41M2 12h2M20 12h2M17.66 6.34l1.41-1.41" />
+    <path d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z" />
+    <path d="m14 10-3 3" />
+  </>
+)
+
+const STOPWATCH = (
+  <>
+    <line x1="10" y1="2" x2="14" y2="2" />
+    <line x1="12" y1="14" x2="12" y2="10" />
+    <circle cx="12" cy="14" r="8" />
+  </>
+)
+
+const PICTURE = (
+  <>
+    <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+  </>
+)
+
+const ETHERNET = (
+  <>
+    <rect width="18" height="14" x="3" y="5" rx="2" />
+    <path d="M7 15v4M11 15v4M15 15v4M7 9h10" />
+  </>
+)
+
+const PULSE = (
+  <>
+    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+  </>
+)
+
 const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
   // Tezbar and native commands
   settings: {
-    color: ZINC,
+    color: SLATE,
     glyph: (
       <>
         <path d="M20 7h-9M14 17H5" />
@@ -208,12 +324,7 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
   },
   awake: {
     color: AMBER,
-    glyph: (
-      <>
-        <circle cx="12" cy="12" r="4" />
-        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4" />
-      </>
-    ),
+    glyph: COFFEE,
   },
   sleep: { color: VIOLET, glyph: <path d="M4 5h6l-6 7h6M14 11h6l-6 8h6" /> },
   bluetooth: { color: BLUE, glyph: <path d="m7 7 10 10-5 5V2l5 5L7 17" /> },
@@ -304,14 +415,12 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
     ),
   },
   cpu: {
-    color: TEAL,
-    glyph: (
-      <>
-        <rect width="16" height="16" x="4" y="4" rx="2" />
-        <rect width="6" height="6" x="9" y="9" rx="1" />
-        <path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2" />
-      </>
-    ),
+    color: GRAPHITE,
+    glyph: PULSE,
+  },
+  'system-monitor': {
+    color: GRAPHITE,
+    glyph: PULSE,
   },
   memory: {
     color: TEAL,
@@ -339,12 +448,7 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
   },
   ports: {
     color: ORANGE,
-    glyph: (
-      <>
-        <path d="m15 20 3-3h2a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2l3 3Z" />
-        <path d="M6 8v1M10 8v1M14 8v1M18 8v1" />
-      </>
-    ),
+    glyph: ETHERNET,
   },
   git: {
     color: ORANGE,
@@ -365,6 +469,20 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
   update: { color: GREEN, glyph: <path d="M12 17V3M6 11l6 6 6-6M19 21H5" /> },
   chat: { color: VIOLET, glyph: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /> },
 
+  // Native and bundled extensions
+  amphetamine: { color: AMBER, glyph: COFFEE },
+  'audio-device': { color: PINK, glyph: HEADPHONES },
+  cleanshotx: { color: INDIGO, glyph: CAMERA },
+  'color-picker': { color: ROSE, glyph: PIPETTE },
+  'gif-search': { color: CYAN, glyph: PICTURE },
+  'google-calendar': { color: BLUE, glyph: CALENDAR },
+  'google-search': { color: BLUE, glyph: SEARCH },
+  perplexity: { color: TEAL, glyph: SPARKLES },
+  'port-manager': { color: ORANGE, glyph: ETHERNET },
+  speedtest: { color: GREEN, glyph: SPEEDOMETER },
+  timers: { color: AMBER, glyph: STOPWATCH },
+  timer: { color: AMBER, glyph: STOPWATCH },
+
   // Result categories and path completions
   directory: { color: SKY, glyph: <path d={FOLDER} /> },
   file: { color: BLUE, glyph: FILE },
@@ -379,10 +497,23 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
   'mac-cli': { color: GRAPHITE, glyph: TERMINAL },
 }
 
-const FALLBACK = { color: SLATE, glyph: FILE }
+export function normalizeIconKind(kind: string): string {
+  return kind
+    .toLowerCase()
+    .trim()
+    .replace(/^com\.tezbar\.native\./, '')
+    .replace(/^raycast\./, '')
+    .replace(/^com\.tezbar\./, '')
+}
 
 export function launcherIcon(kind: string): { color: string; glyph: ReactNode } {
-  return ICONS[kind] ?? FALLBACK
+  const normalized = normalizeIconKind(kind)
+  if (ICONS[normalized]) return ICONS[normalized]
+  if (ICONS[kind]) return ICONS[kind]
+
+  // Dynamic deterministic squircle for arbitrary extension slugs
+  const color = COLOR_PALETTE[hashString(normalized) % COLOR_PALETTE.length]
+  return { color, glyph: BLOCKS }
 }
 
 export function LauncherGlyph({
@@ -419,6 +550,7 @@ export function Squircle({
   size?: number
   className?: string
 }): JSX.Element {
+  const icon = launcherIcon(kind)
   return (
     <span
       aria-hidden
@@ -427,10 +559,10 @@ export function Squircle({
         width: size,
         height: size,
         borderRadius: Math.round(size * 0.27),
-        backgroundColor: launcherIcon(kind).color,
+        backgroundColor: icon.color,
       }}
     >
-      <LauncherGlyph kind={kind} size={Math.round(size * 0.6)} />
+      <LauncherGlyph kind={kind} size={Math.round(size * 0.58)} />
     </span>
   )
 }

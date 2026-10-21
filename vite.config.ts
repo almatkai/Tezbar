@@ -14,7 +14,6 @@ const appReleaseNotes = readFileSync(
 
 export default defineConfig({
   root: resolve(__dirname, 'src/renderer'),
-  publicDir: resolve(__dirname, 'src/renderer/public'),
   plugins: [react()],
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
@@ -28,5 +27,10 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, 'dist'),
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'src/renderer/index.html'),
+      },
+    },
   },
 })

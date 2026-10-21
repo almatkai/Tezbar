@@ -668,6 +668,7 @@ type CommandIconKind =
   | 'git'
   | 'brew'
   | 'update'
+  | (string & {})
 
 type TezbarCommandId =
   | 'open-settings'
@@ -754,6 +755,13 @@ function commandIconForResult(item: SearchResult): CommandIconKind | undefined {
   }
   if (item.action.type === 'run-native-command') {
     return NATIVE_COMMAND_ICON_BY_ID[item.action.commandId as NativeCommandId]
+  }
+  if (item.action.type === 'run-extension-command') {
+    const extId = item.action.extensionId
+    return extId
+      .replace(/^com\.tezbar\.native\./, '')
+      .replace(/^raycast\./, '')
+      .replace(/^com\.tezbar\./, '') as CommandIconKind
   }
   return undefined
 }
@@ -1117,10 +1125,15 @@ function ListItemIcon({
     key: string
     icon: string
   } | null>(null)
+  const [imgFailed, setImgFailed] = useState(false)
   const assetKey = assetKind && assetPath ? `${assetKind}:${assetPath}` : null
-  const resolvedIconDataUrl =
+  const rawIconUrl =
     (loadedAssetIcon && loadedAssetIcon.key === assetKey ? loadedAssetIcon.icon : undefined) ??
     iconDataUrl
+
+  useEffect(() => {
+    setImgFailed(false)
+  }, [rawIconUrl])
 
   useEffect(() => {
     if (!assetKind || !assetPath) return
@@ -1154,6 +1167,15 @@ function ListItemIcon({
     }
   }, [assetKind, assetPath])
 
+  const isImageSrc =
+    !imgFailed &&
+    rawIconUrl &&
+    (rawIconUrl.startsWith('http://') ||
+      rawIconUrl.startsWith('https://') ||
+      rawIconUrl.startsWith('data:image/') ||
+      rawIconUrl.startsWith('blob:') ||
+      rawIconUrl.startsWith('file://'))
+
   const icon = launcherIcon(commandIcon ?? kind)
 
   return (
@@ -1162,24 +1184,20 @@ function ListItemIcon({
       aria-hidden
       className={cx(
         'command-result-icon relative grid h-[22px] w-[22px] shrink-0 place-items-center',
-        resolvedIconDataUrl?.startsWith('/extensions/artwork/')
-          ? 'squircle overflow-hidden rounded-[6px] bg-transparent'
-          : resolvedIconDataUrl
+        isImageSrc
           ? 'overflow-visible bg-transparent'
           : 'squircle overflow-hidden rounded-[6px] text-white'
       )}
-      style={resolvedIconDataUrl ? undefined : { backgroundColor: icon.color }}
+      style={isImageSrc ? undefined : { backgroundColor: icon.color }}
     >
-      {!resolvedIconDataUrl ? <LauncherGlyph kind={commandIcon ?? kind} size={13} /> : null}
-      {resolvedIconDataUrl ? (
+      {!isImageSrc ? <LauncherGlyph kind={commandIcon ?? kind} size={13} /> : null}
+      {isImageSrc ? (
         <img
-          src={resolvedIconDataUrl}
+          src={rawIconUrl}
           alt=""
           className="absolute inset-0 h-full w-full object-contain"
           draggable={false}
-          onError={(event) => {
-            event.currentTarget.style.display = 'none'
-          }}
+          onError={() => setImgFailed(true)}
         />
       ) : null}
     </span>

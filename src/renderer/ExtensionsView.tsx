@@ -3,6 +3,7 @@ import type { ExtensionManifest, ExtensionPlatform } from '../shared/extensions'
 import type { ExtensionStorePage } from '../shared/desktop-api'
 import { parseGitHubRepositoryUrl } from '../shared/extensionRepository'
 import { Button, Hint, HintBar, Kbd, Message, ViewHeader, cx } from './ui/primitives'
+import { Squircle } from './launcherIcons'
 import { GlideList } from './ui/GlideList'
 import { ExtensionPreferencesEditor } from './ExtensionPreferencesEditor'
 import {
@@ -92,21 +93,6 @@ function CachedImage({
   return <img src={resolvedSrc} alt={alt} loading="lazy" decoding="async" className={className} onError={onError} />
 }
 
-function ExtensionIconPlaceholder(): ReactNode {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="h-[52%] w-[52%]">
-      <path
-        d="M9 4.75H6.75a2 2 0 0 0-2 2V9m10.25-4.25h2.25a2 2 0 0 1 2 2V9M4.75 15v2.25a2 2 0 0 0 2 2H9M19.25 15v2.25a2 2 0 0 1-2 2H15"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
-      <path d="M9.25 9.25h5.5v5.5h-5.5z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-
 function installProgressLabel(progress: number): string {
   const percent = Math.round(progress)
   if (percent < 10) return `Preparing ${percent}%`
@@ -120,23 +106,25 @@ function installProgressLabel(progress: number): string {
 function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 'small' | 'large' }): JSX.Element {
   const iconUrl = ext.iconUrl?.trim() || ''
   const [failedIconUrl, setFailedIconUrl] = useState<string | null>(null)
-  const hasIcon = Boolean(iconUrl) && failedIconUrl !== iconUrl
-  const className = size === 'large'
-    ? 'h-12 w-12 rounded-[12px] text-[20px]'
-    : 'h-7 w-7 rounded-[7px] text-[10px]'
-  return (
-    <span
-      role="img"
-      aria-label={`${ext.name} icon`}
-      className={cx(
-        'grid shrink-0 place-items-center overflow-hidden',
-        hasIcon
-          ? 'bg-transparent'
-          : 'border border-white/10 bg-white/[0.055] text-ink-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
-        className,
-      )}
-    >
-      {hasIcon ? (
+  const isImageSrc =
+    iconUrl &&
+    (iconUrl.startsWith('http://') ||
+      iconUrl.startsWith('https://') ||
+      iconUrl.startsWith('data:image/') ||
+      iconUrl.startsWith('blob:') ||
+      iconUrl.startsWith('file://'))
+  const hasIcon = Boolean(isImageSrc) && failedIconUrl !== iconUrl
+  const sizePx = size === 'large' ? 48 : 28
+  const roundedClass = size === 'large' ? 'rounded-[12px]' : 'rounded-[7px]'
+
+  if (hasIcon) {
+    return (
+      <span
+        role="img"
+        aria-label={`${ext.name} icon`}
+        className={cx('grid shrink-0 place-items-center overflow-hidden bg-transparent', roundedClass)}
+        style={{ width: sizePx, height: sizePx }}
+      >
         <CachedImage
           src={iconUrl}
           alt=""
@@ -144,10 +132,16 @@ function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 's
           className="h-full w-full object-cover"
           onError={() => setFailedIconUrl(iconUrl)}
         />
-      ) : (
-        <ExtensionIconPlaceholder />
-      )}
-    </span>
+      </span>
+    )
+  }
+
+  return (
+    <Squircle
+      kind={ext.slug || ext.id || 'extensions'}
+      size={sizePx}
+      className={roundedClass}
+    />
   )
 }
 
