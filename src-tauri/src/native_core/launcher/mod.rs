@@ -631,7 +631,7 @@ impl LauncherCore {
                     .record(action_id(action, &context)?, context, true)
                     .await
             }
-            "search:benchmark:history" => self.inner.db.call(benchmark_history).await,
+            "search:benchmark:history" => self.inner.db.read(benchmark_history).await,
             "search:benchmark:run" => {
                 let mut p5 = 0.;
                 let mut p10 = 0.;

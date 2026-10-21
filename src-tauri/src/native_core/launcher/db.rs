@@ -10,7 +10,8 @@ use std::{
 #[derive(Clone)]
 pub struct Database {
     tx: mpsc::Sender<Message>,
-    thread: Arc<Mutex<Option<std::thread::JoinHandle<()>>>>,
+    reader_tx: mpsc::Sender<Message>,
+    threads: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
 }
 enum Message {
     Run(Job),
@@ -20,38 +21,55 @@ type Job = Box<dyn FnOnce(Result<&mut Connection, String>) + Send>;
 impl Database {
     pub fn new(path: PathBuf) -> Self {
         let (tx, rx) = mpsc::channel::<Message>();
-        let thread = std::thread::Builder::new()
-            .name("launcher-sqlite".into())
+        let (reader_tx, reader_rx) = mpsc::channel::<Message>();
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let writer_path = path.clone();
+        let writer = std::thread::Builder::new()
+            .name("launcher-sqlite-writer".into())
             .spawn(move || {
-                let mut db = init(path.clone());
-                while let Ok(message) = rx.recv() {
-                    match message {
-                        Message::Run(job) => {
-                            if db.is_err() {
-                                db = init(path.clone());
-                            }
-                            job(db.as_mut().map_err(|e| e.clone()))
-                        }
-                        Message::Stop(reply) => {
-                            drop(db);
-                            let _ = reply.send(());
-                            break;
-                        }
-                    }
-                }
+                let db = init(writer_path.clone());
+                let _ = ready_tx.send(db.as_ref().map(|_| ()).map_err(Clone::clone));
+                run(rx, db, || init(writer_path.clone()));
             })
-            .expect("launcher database thread");
-        Self {
-            tx,
-            thread: Arc::new(Mutex::new(Some(thread))),
-        }
+            .expect("launcher database writer thread");
+        let writer_tx = tx.clone();
+        let reader = std::thread::Builder::new()
+            .name("launcher-sqlite-reader".into())
+            .spawn(move || {
+                // Schema migration belongs exclusively to the writer.
+                let db = ready_rx.recv().map_err(err)
+                    .and_then(|ready| ready).and_then(|_| open_reader(&path));
+                run(reader_rx, db, || {
+                    // A failed startup may need the writer to retry its migration.
+                    let (ready_tx, ready_rx) = mpsc::channel();
+                    writer_tx.send(Message::Run(Box::new(move |db| {
+                        let _ = ready_tx.send(db.map(|_| ()));
+                    }))).map_err(err)?;
+                    ready_rx.recv().map_err(err)??;
+                    open_reader(&path)
+                });
+            })
+            .expect("launcher database reader thread");
+        Self { tx, reader_tx, threads: Arc::new(Mutex::new(vec![writer, reader])) }
     }
     pub async fn call<F>(&self, f: F) -> CoreResult
     where
         F: FnOnce(&mut Connection) -> CoreResult + Send + 'static,
     {
+        Self::dispatch(&self.tx, f).await
+    }
+    pub async fn read<F>(&self, f: F) -> CoreResult
+    where
+        F: FnOnce(&mut Connection) -> CoreResult + Send + 'static,
+    {
+        Self::dispatch(&self.reader_tx, f).await
+    }
+    async fn dispatch<F>(sender: &mpsc::Sender<Message>, f: F) -> CoreResult
+    where
+        F: FnOnce(&mut Connection) -> CoreResult + Send + 'static,
+    {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        self.tx
+        sender
             .send(Message::Run(Box::new(move |db| {
                 let _ = tx.send(db.and_then(f));
             })))
@@ -59,18 +77,18 @@ impl Database {
         rx.await.map_err(|e| e.to_string())?
     }
     pub async fn shutdown(&self) -> Result<(), String> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        if self.tx.send(Message::Stop(tx)).is_ok() {
-            let _ = rx.await;
+        let mut replies = Vec::new();
+        for sender in [&self.reader_tx, &self.tx] {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            if sender.send(Message::Stop(tx)).is_ok() { replies.push(rx); }
         }
-        let thread = self.thread.lock().map_err(|e| e.to_string())?.take();
-        if let Some(thread) = thread {
-            tokio::task::spawn_blocking(move || thread.join())
-                .await
-                .map_err(|e| e.to_string())?
-                .map_err(|_| "Launcher database thread panicked")?;
-        }
-        Ok(())
+        for reply in replies { let _ = reply.await; }
+        let threads = std::mem::take(&mut *self.threads.lock().map_err(err)?);
+        tokio::task::spawn_blocking(move || {
+            let mut failed = false;
+            for thread in threads { failed |= thread.join().is_err(); }
+            if failed { Err("Launcher database thread panicked".to_owned()) } else { Ok(()) }
+        }).await.map_err(err)?
     }
     pub async fn upsert(&self, docs: Vec<Value>, replace: Vec<String>) -> CoreResult {
         self.call(move |db| {
@@ -95,7 +113,10 @@ impl Database {
         .await
     }
     pub async fn search(&self, q: String, candidates: bool) -> CoreResult {
-        self.call(move |db| search(db, &q, candidates)).await
+        self.read(move |db| {
+            let snapshot = db.transaction().map_err(err)?;
+            search(&snapshot, &q, candidates)
+        }).await
     }
     pub async fn record(&self, id: String, context: Value, success: bool) -> CoreResult {
         self.call(move|db|{let tx=db.transaction().map_err(err)?;let now=now_ms();tx.execute("INSERT INTO action_stats(action_id,frequency,success_count,total_count,last_used_at) VALUES(?1,1,?2,1,?3) ON CONFLICT(action_id) DO UPDATE SET frequency=frequency+1, success_count=success_count+excluded.success_count,total_count=total_count+1,last_used_at=excluded.last_used_at",params![id,success,now]).map_err(err)?;if success{tx.execute("INSERT INTO action_usage_events(action_id,created_at) VALUES(?,?)",params![id,now]).map_err(err)?;}
@@ -103,6 +124,27 @@ impl Database {
  if let Some(rank)=context["rank"].as_f64().filter(|n|n.is_finite()){tx.execute("INSERT INTO click_events(created_at,query,result_id,rank,success) VALUES(?,?,?,?,?)",params![now,q,id,rank.round() as i64,success]).map_err(err)?;}
  prune(&tx)?;tx.commit().map_err(err)?;Ok(Value::Null)}).await
     }
+}
+fn run(rx: mpsc::Receiver<Message>, mut db: Result<Connection, String>, reopen: impl Fn() -> Result<Connection, String>) {
+    while let Ok(message) = rx.recv() {
+        match message {
+            Message::Run(job) => {
+                if db.is_err() { db = reopen(); }
+                job(db.as_mut().map_err(|e| e.clone()));
+            }
+            Message::Stop(reply) => {
+                drop(db);
+                let _ = reply.send(());
+                break;
+            }
+        }
+    }
+}
+fn open_reader(path: &std::path::Path) -> Result<Connection, String> {
+    let db = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(err)?;
+    db.busy_timeout(std::time::Duration::from_secs(10)).map_err(err)?;
+    Ok(db)
 }
 pub fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
@@ -115,6 +157,7 @@ fn init(path: PathBuf) -> Result<Connection, String> {
     db.execute_batch("PRAGMA journal_mode=WAL;PRAGMA synchronous=NORMAL;
 CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY,category TEXT NOT NULL,title TEXT NOT NULL,subtitle TEXT NOT NULL,tokens TEXT NOT NULL,action_json TEXT NOT NULL,updated_at INTEGER NOT NULL,source_path TEXT,source_mtime INTEGER,popularity REAL NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
+CREATE INDEX IF NOT EXISTS idx_documents_nonfile_updated ON documents(updated_at DESC) WHERE category<>'files';
 CREATE TABLE IF NOT EXISTS action_stats(action_id TEXT PRIMARY KEY,frequency INTEGER NOT NULL DEFAULT 0,success_count INTEGER NOT NULL DEFAULT 0,total_count INTEGER NOT NULL DEFAULT 0,last_used_at INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS query_action_stats(query TEXT NOT NULL,action_id TEXT NOT NULL,frequency INTEGER NOT NULL DEFAULT 0,success_count INTEGER NOT NULL DEFAULT 0,total_count INTEGER NOT NULL DEFAULT 0,last_used_at INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(query,action_id));
 CREATE TABLE IF NOT EXISTS action_usage_events(id INTEGER PRIMARY KEY AUTOINCREMENT,action_id TEXT NOT NULL,created_at INTEGER NOT NULL);
@@ -200,7 +243,7 @@ const SELECT:&str="SELECT d.id,d.category,d.title,d.subtitle,d.tokens,d.action_j
 fn row(r: &rusqlite::Row) -> rusqlite::Result<Value> {
     let action: String = r.get(5)?;
     Ok(
-        json!({"id":r.get::<_,String>(0)?,"category":r.get::<_,String>(1)?,"title":r.get::<_,String>(2)?,"subtitle":r.get::<_,String>(3)?,"tokens":r.get::<_,String>(4)?,"action":serde_json::from_str::<Value>(&action).unwrap_or(Value::Null),"updatedAt":r.get::<_,i64>(6)?,"popularity":r.get::<_,f64>(7)?}),
+        json!({"id":r.get::<_,String>(0)?,"category":r.get::<_,String>(1)?,"title":r.get::<_,String>(2)?,"subtitle":r.get::<_,String>(3)?,"tokens":r.get::<_,String>(4)?,"_actionJson":action,"updatedAt":r.get::<_,i64>(6)?,"popularity":r.get::<_,f64>(7)?}),
     )
 }
 fn collect(db: &Connection, sql: &str, args: impl rusqlite::Params) -> Result<Vec<Value>, String> {
@@ -248,7 +291,7 @@ fn best_match(text: &str, variants: &[String]) -> (f64, String) {
         .max_by(|a, b| a.0.total_cmp(&b.0))
         .unwrap_or((0., String::new()))
 }
-pub fn search(db: &mut Connection, q: &str, candidates: bool) -> CoreResult {
+pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
     let now = now_ms();
     let variants = text::variants(q);
     let normalized = text::normalize(q);
@@ -291,7 +334,7 @@ pub fn search(db: &mut Connection, q: &str, candidates: bool) -> CoreResult {
             }
         }
         if docs.len() < 160 {
-            let rows=collect(db,&format!("{SELECT} ORDER BY CASE WHEN category='files' THEN 1 ELSE 0 END,updated_at DESC LIMIT 1600"),[])?;
+            let rows=collect(db,&format!("{SELECT} WHERE category<>'files' ORDER BY updated_at DESC LIMIT 1600"),[])?;
             let mut fuzzy = vec![];
             for mut d in rows {
                 let content = format!(
@@ -443,6 +486,8 @@ pub fn search(db: &mut Connection, q: &str, candidates: bool) -> CoreResult {
     });
     out.truncate(if candidates { 1000 } else { 80 });
     for d in &mut out {
+        let action = d.as_object_mut().unwrap().remove("_actionJson").unwrap_or(Value::Null);
+        d["action"] = serde_json::from_str::<Value>(action.as_str().unwrap_or("")).unwrap_or(Value::Null);
         d.as_object_mut().unwrap().remove("updatedAt");
     }
     Ok(json!(out))
@@ -525,5 +570,91 @@ mod refresh_tests {
             "app:keep"
         );
         db.shutdown().await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod performance_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "synthetic 100k-file search benchmark"]
+    fn search_benchmark() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = init(dir.path().join("bench.sqlite3")).unwrap();
+        let tx = db.transaction().unwrap();
+        for n in 0..100_400 {
+            let file = n < 100_000;
+            upsert(&tx, &json!({"id":format!("doc:{n}"),"category":if file {"files"} else {"applications"},"title":if file {format!("Project document {n}.txt")} else {format!("Calculator {n}")},"subtitle":if file {format!("/projects/archive/{n}/document.txt")} else {format!("/Applications/Calculator {n}.app")},"tokens":"project archive document","action":{"type":"open","path":format!("/fixture/{n}")},"updatedAt":n})).unwrap();
+        }
+        tx.commit().unwrap();
+        for query in ["calclator", ""] {
+            for _ in 0..3 { search(&mut db, query, false).unwrap(); }
+            let start = std::time::Instant::now();
+            for _ in 0..20 { search(&mut db, query, false).unwrap(); }
+            eprintln!("search benchmark query={query:?} mean_ms={:.3}", start.elapsed().as_secs_f64()*1000./20.);
+        }
+    }
+}
+
+#[cfg(test)]
+mod reader_tests {
+    use super::*;
+
+    #[test]
+    fn nonfile_queries_use_partial_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = init(dir.path().join("index.sqlite3")).unwrap();
+        for suffix in [
+            "WHERE d.category<>'files' ORDER BY updated_at DESC LIMIT 1600",
+            "LEFT JOIN action_stats a ON a.action_id=d.id WHERE d.category<>'files' ORDER BY coalesce(a.last_used_at,0) DESC,updated_at DESC LIMIT 1200",
+        ] {
+            let plan: Vec<String> = db.prepare(&format!("EXPLAIN QUERY PLAN {SELECT} {suffix}"))
+                .unwrap().query_map([], |r| r.get(3)).unwrap().collect::<Result<_, _>>().unwrap();
+            assert!(plan.iter().any(|line| line.contains("idx_documents_nonfile_updated")), "{plan:?}");
+            eprintln!("nonfile query plan: {plan:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn reader_search_does_not_wait_for_writer_and_shutdown_joins_both() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("index.sqlite3"));
+        db.upsert(vec![json!({"id":"app:calculator","category":"applications","title":"Calculator","action":{"type":"open-app"},"updatedAt":1})], vec![]).await.unwrap();
+        let (started, ready) = tokio::sync::oneshot::channel();
+        let (release, released) = mpsc::channel();
+        let writer_db = db.clone();
+        let writer = tokio::spawn(async move {
+            writer_db.call(move |c| {
+                let tx = c.transaction().map_err(err)?;
+                tx.execute("DELETE FROM documents", []).map_err(err)?;
+                let _ = started.send(());
+                released.recv().map_err(err)?;
+                tx.commit().map_err(err)?;
+                Ok(Value::Null)
+            }).await
+        });
+        ready.await.unwrap();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(2), db.search("calclator".into(), false)).await;
+        // Always release the writer, including when the regression times out.
+        release.send(()).unwrap();
+        let rows = result.expect("search queued behind writer").unwrap();
+        assert_eq!(rows[0]["id"], "app:calculator");
+        assert_eq!(rows[0]["action"]["type"], "open-app");
+        writer.await.unwrap().unwrap();
+        assert_eq!(db.search("".into(), false).await.unwrap(), json!([]));
+        db.shutdown().await.unwrap();
+        db.shutdown().await.unwrap();
+        assert!(db.threads.lock().unwrap().is_empty());
+        assert!(db.search("".into(), false).await.is_err());
+    }
+
+    #[test]
+    fn files_match_fts_but_are_not_fuzzy_candidates() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = init(dir.path().join("index.sqlite3")).unwrap();
+        upsert(&db, &json!({"id":"file:calculator","category":"files","title":"Calculator","action":{"type":"open-file"}})).unwrap();
+        assert_eq!(search(&db, "calculator", false).unwrap()[0]["id"], "file:calculator");
+        assert_eq!(search(&db, "calclator", false).unwrap(), json!([]));
     }
 }

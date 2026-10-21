@@ -405,7 +405,7 @@ pub async fn scan(ctx: CoreContext, db: Database, stop: Arc<AtomicBool>) -> Resu
         db.upsert(batch, vec![]).await?;
     }
     scanning.await.map_err(|e| e.to_string())?;
-    let candidates=db.call(|c|{let mut stmt=c.prepare("SELECT id,source_path FROM documents WHERE category='files' AND source_path IS NOT NULL LIMIT 75000").map_err(|e|e.to_string())?;let rows=stmt.query_map([],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?))).map_err(|e|e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e|e.to_string())?;Ok(json!(rows))}).await?;
+    let candidates=db.read(|c|{let mut stmt=c.prepare("SELECT id,source_path FROM documents WHERE category='files' AND source_path IS NOT NULL LIMIT 75000").map_err(|e|e.to_string())?;let rows=stmt.query_map([],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?))).map_err(|e|e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e|e.to_string())?;Ok(json!(rows))}).await?;
     let managed = roots(&ctx);
     let deleted = tokio::task::spawn_blocking(move || {
         candidates
