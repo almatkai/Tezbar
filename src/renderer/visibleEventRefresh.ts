@@ -15,13 +15,17 @@ export function visibleEventRefresh(
       if (!stopped && !document.hidden) refresh()
     }, 150)
   }
+  // Mounting or showing the window refreshes immediately so the view never
+  // flashes stale or empty data; only backend events are coalesced.
   const start = (): void => {
     if (stopped || document.hidden) return
     if (interval === null)
       interval = window.setInterval(() => {
         if (!document.hidden) refresh()
       }, 20_000)
-    queue()
+    if (pending !== null) window.clearTimeout(pending)
+    pending = null
+    refresh()
   }
   const onVisibility = (): void => {
     if (document.hidden) {
