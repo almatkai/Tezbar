@@ -1,0 +1,2593 @@
+[
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.amphetamine",
+    "slug": "amphetamine",
+    "name": "Amphetamine",
+    "version": "1.1.1",
+    "description": "Keep your computer awake with native Tezbar sessions",
+    "author": "gstvds",
+    "icon": "icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.amphetamine"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [],
+    "commands": [
+      {
+        "name": "amp-start",
+        "title": "Start New Session",
+        "description": "Start a new default session",
+        "mode": "no-view",
+        "keywords": [
+          "start",
+          "amp",
+          "amp start",
+          "amphetamine",
+          "ampstart"
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "quick-start",
+        "title": "Quick Start Session",
+        "description": "Start a keep-awake session by typing the duration inline; leave all fields empty for a session with no time limit",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "hours",
+            "type": "text",
+            "placeholder": "Hours (empty = no limit)",
+            "required": false
+          },
+          {
+            "name": "minutes",
+            "type": "text",
+            "placeholder": "Minutes",
+            "required": false
+          },
+          {
+            "name": "seconds",
+            "type": "text",
+            "placeholder": "Seconds",
+            "required": false
+          }
+        ],
+        "preferences": [
+          {
+            "name": "displaySleepAllowed",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "title": "Display Sleep",
+            "label": "Allow the display to sleep during the session",
+            "description": "When enabled, the session keeps the Mac awake but lets the display turn off."
+          }
+        ],
+        "keywords": [
+          "quick",
+          "amp",
+          "amp quick",
+          "amphetamine",
+          "start",
+          "duration"
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "amp-end",
+        "title": "End Current Session",
+        "description": "End the current session",
+        "mode": "no-view",
+        "keywords": [
+          "end",
+          "amp",
+          "amp end",
+          "amphetamine",
+          "ampend"
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "remaining",
+        "title": "Get Remaining Time",
+        "description": "Get current session remaining time",
+        "mode": "no-view",
+        "keywords": [
+          "remaining",
+          "amp",
+          "amp remaining",
+          "amphetamine"
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "amp-duration",
+        "title": "Configure New Session",
+        "description": "Start a new session with a duration or until a specific time",
+        "mode": "view",
+        "keywords": [
+          "interval",
+          "amp",
+          "amp interval",
+          "amphetamine",
+          "duration",
+          "time",
+          "until",
+          "amp duration",
+          "amp time",
+          "amp until"
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.audio-device",
+    "slug": "audio-device",
+    "name": "Set Audio Device",
+    "version": "1.0.0",
+    "description": "Switch the active audio device of your mac.",
+    "author": "benvp",
+    "icon": "command-icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.audio-device"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [
+      {
+        "name": "systemOutput",
+        "required": false,
+        "title": "Play sound effects through current output",
+        "description": "Play system sounds through current output.",
+        "label": "Update system sounds output",
+        "type": "checkbox",
+        "default": false
+      },
+      {
+        "name": "favourite",
+        "required": false,
+        "title": "Favourite Output Device",
+        "description": "The name, as found in the output device list, of the output device to use as the first favourite",
+        "type": "textfield",
+        "default": ""
+      },
+      {
+        "name": "favourite2",
+        "required": false,
+        "title": "Favourite Output Device 2",
+        "description": "The name, as found in the output device list, of the output device to use as the second favourite",
+        "type": "textfield",
+        "default": ""
+      }
+    ],
+    "commands": [
+      {
+        "name": "set-output-device",
+        "title": "Set Output Device",
+        "description": "Sets the active audio output device.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "set-input-device",
+        "title": "Set Input Device",
+        "description": "Sets the active audio input device.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "set-volume",
+        "title": "Set Output Volume",
+        "description": "Set the volume of an output device.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "set-input-volume",
+        "title": "Set Input Volume",
+        "description": "Set the volume of an input device.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "auto-switch-input",
+        "title": "Enforce Input Device",
+        "description": "Apply your default input device and pinned volumes now. Automatic periodic enforcement is not available in Native V2 yet.",
+        "mode": "no-view",
+        "interval": "1m",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "auto-switch-output",
+        "title": "Enforce Output Device",
+        "description": "Apply your default output device and pinned volumes now. Automatic periodic enforcement is not available in Native V2 yet.",
+        "mode": "no-view",
+        "interval": "1m",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "customize-order",
+        "title": "Customize Order (Replaced)",
+        "description": "This command has been replaced. Use Cmd+Shift+D in Set Output/Input Device to set a default device.",
+        "mode": "view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "favourite",
+        "title": "Set Output Device to Favourite",
+        "description": "Sets the active audio output device to the favourite specified in the preferences",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "toggle-favourites",
+        "title": "Toggle Favourites",
+        "description": "Toggle the active audio output device between the favourites specified in the preferences",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "use-combo1",
+        "title": "Use Combo 1",
+        "description": "Switch to the first input/output device combination",
+        "mode": "no-view",
+        "preferences": [
+          {
+            "name": "comboName",
+            "required": true,
+            "title": "Combo Name",
+            "description": "A friendly name for this device combination",
+            "type": "textfield",
+            "default": "Combo 1"
+          },
+          {
+            "name": "input",
+            "required": true,
+            "title": "Input Device",
+            "description": "The name of the input device for this combo",
+            "type": "textfield",
+            "default": ""
+          },
+          {
+            "name": "output",
+            "required": true,
+            "title": "Output Device",
+            "description": "The name of the output device for this combo",
+            "type": "textfield",
+            "default": ""
+          }
+        ],
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "use-combo2",
+        "title": "Use Combo 2",
+        "description": "Switch to the second input/output device combination",
+        "mode": "no-view",
+        "preferences": [
+          {
+            "name": "comboName",
+            "required": true,
+            "title": "Combo Name",
+            "description": "A friendly name for this device combination",
+            "type": "textfield",
+            "default": "Combo 2"
+          },
+          {
+            "name": "input",
+            "required": true,
+            "title": "Input Device",
+            "description": "The name of the input device for this combo",
+            "type": "textfield",
+            "default": ""
+          },
+          {
+            "name": "output",
+            "required": true,
+            "title": "Output Device",
+            "description": "The name of the output device for this combo",
+            "type": "textfield",
+            "default": ""
+          }
+        ],
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "use-combo3",
+        "title": "Use Combo 3",
+        "description": "Switch to the third input/output device combination",
+        "mode": "no-view",
+        "preferences": [
+          {
+            "name": "comboName",
+            "required": true,
+            "title": "Combo Name",
+            "description": "A friendly name for this device combination",
+            "type": "textfield",
+            "default": "Combo 3"
+          },
+          {
+            "name": "input",
+            "required": true,
+            "title": "Input Device",
+            "description": "The name of the input device for this combo",
+            "type": "textfield",
+            "default": ""
+          },
+          {
+            "name": "output",
+            "required": true,
+            "title": "Output Device",
+            "description": "The name of the output device for this combo",
+            "type": "textfield",
+            "default": ""
+          }
+        ],
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.cleanshotx",
+    "slug": "cleanshotx",
+    "name": "CleanShot X",
+    "version": "1.0.0",
+    "description": "Capture and record your screen!",
+    "author": "Aayush9029",
+    "icon": "command-icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.cleanshotx"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [],
+    "commands": [
+      {
+        "name": "open-history",
+        "title": "Open History",
+        "description": "Show Screenshots History",
+        "mode": "no-view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "open-settings",
+        "title": "Open Settings",
+        "description": "Open Settings",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "tab",
+            "type": "dropdown",
+            "placeholder": "Tab",
+            "required": false,
+            "data": [
+              {
+                "title": "General",
+                "value": "general"
+              },
+              {
+                "title": "Wallpaper",
+                "value": "wallpaper"
+              },
+              {
+                "title": "Shortcuts",
+                "value": "shortcuts"
+              },
+              {
+                "title": "Quick Access",
+                "value": "quickaccess"
+              },
+              {
+                "title": "Recording",
+                "value": "recording"
+              },
+              {
+                "title": "Screenshots",
+                "value": "screenshots"
+              },
+              {
+                "title": "Annotate",
+                "value": "annotate"
+              },
+              {
+                "title": "Cloud",
+                "value": "cloud"
+              },
+              {
+                "title": "Advanced",
+                "value": "advanced"
+              },
+              {
+                "title": "About",
+                "value": "about"
+              }
+            ]
+          }
+        ],
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "view-uploads",
+        "title": "View Uploads",
+        "description": "View Uploads in Cleanshot Cloud",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "all-in-one",
+        "title": "All in One",
+        "description": "Capture Record Crop All in One",
+        "mode": "no-view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "capture-fullscreen",
+        "title": "Capture Fullscreen",
+        "description": "Fullscreen Screenshot",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "action",
+            "type": "dropdown",
+            "placeholder": "Action",
+            "required": false,
+            "data": [
+              {
+                "title": "Copy",
+                "value": "copy"
+              },
+              {
+                "title": "Save",
+                "value": "save"
+              },
+              {
+                "title": "Annotate",
+                "value": "annotate"
+              },
+              {
+                "title": "Upload",
+                "value": "upload"
+              },
+              {
+                "title": "Pin",
+                "value": "pin"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "capture-area",
+        "title": "Capture Area",
+        "description": "Selection Tool Capture",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "action",
+            "type": "dropdown",
+            "placeholder": "Action",
+            "required": false,
+            "data": [
+              {
+                "title": "Copy",
+                "value": "copy"
+              },
+              {
+                "title": "Save",
+                "value": "save"
+              },
+              {
+                "title": "Annotate",
+                "value": "annotate"
+              },
+              {
+                "title": "Upload",
+                "value": "upload"
+              },
+              {
+                "title": "Pin",
+                "value": "pin"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "capture-previous-area",
+        "title": "Capture Previous Area",
+        "description": "Previously Selected Area",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "action",
+            "type": "dropdown",
+            "placeholder": "Action",
+            "required": false,
+            "data": [
+              {
+                "title": "Copy",
+                "value": "copy"
+              },
+              {
+                "title": "Save",
+                "value": "save"
+              },
+              {
+                "title": "Annotate",
+                "value": "annotate"
+              },
+              {
+                "title": "Upload",
+                "value": "upload"
+              },
+              {
+                "title": "Pin",
+                "value": "pin"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "capture-window",
+        "title": "Capture Window",
+        "description": "Window Capture",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "action",
+            "type": "dropdown",
+            "placeholder": "Action",
+            "required": false,
+            "data": [
+              {
+                "title": "Copy",
+                "value": "copy"
+              },
+              {
+                "title": "Save",
+                "value": "save"
+              },
+              {
+                "title": "Annotate",
+                "value": "annotate"
+              },
+              {
+                "title": "Upload",
+                "value": "upload"
+              },
+              {
+                "title": "Pin",
+                "value": "pin"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "self-timer",
+        "title": "Self Timer",
+        "description": "Timer Based Screen Capture",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "action",
+            "type": "dropdown",
+            "placeholder": "Action",
+            "required": false,
+            "data": [
+              {
+                "title": "Copy",
+                "value": "copy"
+              },
+              {
+                "title": "Save",
+                "value": "save"
+              },
+              {
+                "title": "Annotate",
+                "value": "annotate"
+              },
+              {
+                "title": "Upload",
+                "value": "upload"
+              },
+              {
+                "title": "Pin",
+                "value": "pin"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "scrolling-capture",
+        "title": "Scrolling Capture",
+        "description": "Scrolling Capture Mode",
+        "mode": "no-view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "record-screen",
+        "title": "Record Screen",
+        "description": "Record Entire Screen",
+        "mode": "no-view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "capture-text",
+        "title": "Capture Text (OCR)",
+        "description": "Capture text using OCR",
+        "mode": "no-view",
+        "keywords": [
+          "text recognition"
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "annotate",
+        "title": "Annotate",
+        "description": "Annotate Mode",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "filepath",
+            "placeholder": "File Path",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "open-from-clipboard",
+        "title": "Open from Clipboard",
+        "description": "Open Image From Clipboard",
+        "mode": "no-view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "toggle-desktop-icons",
+        "title": "Toggle Desktop Icons",
+        "description": "Toggle Desktop Icons Visibility",
+        "mode": "no-view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "hide-desktop-icons",
+        "title": "Hide Desktop Icons",
+        "description": "Hide Desktop Icons Visibility",
+        "mode": "no-view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "show-desktop-icons",
+        "title": "Show Desktop Icons",
+        "description": "Show Desktop Icons Visibility",
+        "mode": "no-view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "restore-recently-closed",
+        "title": "Restore Recently Closed",
+        "description": "Restore Recently Closed Overlay",
+        "mode": "no-view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "add-quick-access-overlay",
+        "title": "Add Quick Access Overlay",
+        "description": "Add Quick Access Overlay",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "filepath",
+            "placeholder": "File Path",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "pin",
+        "title": "Pin Screenshot",
+        "description": "Pin Screenshot to the Screen.",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "filepath",
+            "placeholder": "File Path",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "capture-area-raycast-aichat",
+        "title": "Send Captured Area to AI Chat",
+        "description": "Capture an area of the screen and send it to Raycast's AI Chat",
+        "mode": "no-view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "record-screen-preset",
+        "title": "Record Screen at Preset",
+        "description": "Start a screen recording at a chosen preset resolution",
+        "mode": "view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "manage-recording-presets",
+        "title": "Manage Recording Presets",
+        "description": "Add, edit, and delete custom recording resolution presets",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.color-picker",
+    "slug": "color-picker",
+    "name": "Color Picker",
+    "version": "1.0.0",
+    "description": "Pick and organize colors, everywhere on your Mac",
+    "author": "thomas",
+    "icon": "icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.color-picker"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [
+      {
+        "data": [
+          {
+            "title": "HEX - #FF6363",
+            "value": "hex"
+          },
+          {
+            "title": "HEX Lower Case - #ff6363",
+            "value": "hex-lower-case"
+          },
+          {
+            "title": "HEX No Prefix - FF6363",
+            "value": "hex-no-prefix"
+          },
+          {
+            "title": "RGB - rgb(255 99 99 / 100%)",
+            "value": "rgb"
+          },
+          {
+            "title": "RGB % - rgb(100% 38% 38% / 100%)",
+            "value": "rgb-percentage"
+          },
+          {
+            "title": "RGBA - rgba(255, 99, 99, 1)",
+            "value": "rgba"
+          },
+          {
+            "title": "RGBA % - rgba(100%, 39%, 39%, 1)",
+            "value": "rgba-percentage"
+          },
+          {
+            "title": "HSLA - hsla(0, 100%, 69%, 1)",
+            "value": "hsla"
+          },
+          {
+            "title": "HSVA - color(hsv 43.082 81.145 100)",
+            "value": "hsva"
+          },
+          {
+            "title": "OKLCH - oklch(0.6987 0.1902 23.468)",
+            "value": "oklch"
+          },
+          {
+            "title": "LCH - lch(63.127 68.676 28.723)",
+            "value": "lch"
+          },
+          {
+            "title": "P3 - color(display-p3 0.9248 0.428 0.4078)",
+            "value": "p3"
+          }
+        ],
+        "default": "hex",
+        "description": "The color format to use when copying/pasting colors",
+        "name": "colorFormat",
+        "required": false,
+        "title": "Color Format",
+        "type": "dropdown"
+      }
+    ],
+    "commands": [
+      {
+        "name": "pick-color",
+        "title": "Pick Color",
+        "description": "Pick a color on your desktop",
+        "mode": "no-view",
+        "preferences": [
+          {
+            "name": "showColorName",
+            "title": "Show color name after picking",
+            "description": "Show the name of the picked color after picking",
+            "type": "checkbox",
+            "label": "Show",
+            "default": false,
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "extract-color",
+        "title": "Extract Color from Selected Image",
+        "description": "Extract colors from the selected File Explorer image",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "menu-bar",
+        "title": "Menu Bar Color Picker",
+        "description": "Access your colors from the menu bar",
+        "mode": "menu-bar",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "organize-colors",
+        "title": "Organize Colors",
+        "description": "Organize your colors",
+        "mode": "view",
+        "preferences": [
+          {
+            "data": [
+              {
+                "title": "Paste to Active App",
+                "value": "paste"
+              },
+              {
+                "title": "Copy to Clipboard",
+                "value": "copy"
+              }
+            ],
+            "default": "copy",
+            "description": "The primary action to perform on a selected color",
+            "name": "primaryAction",
+            "required": false,
+            "title": "Primary Action",
+            "type": "dropdown"
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "favorite-colors",
+        "title": "Favorite Colors",
+        "description": "View and use your favorite colors",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "generate-colors",
+        "title": "Generate Colors",
+        "description": "Generate colors using AI",
+        "mode": "view",
+        "arguments": [
+          {
+            "name": "prompt",
+            "placeholder": "Prompt",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "color-names",
+        "title": "Color Names",
+        "description": "Get the name of a color",
+        "mode": "view",
+        "preferences": [
+          {
+            "type": "dropdown",
+            "name": "colorNamesPerGroup",
+            "required": false,
+            "title": "Color Names Per Group",
+            "description": "The number of color names to display per group",
+            "data": [
+              {
+                "title": "5",
+                "value": "5"
+              },
+              {
+                "title": "10",
+                "value": "10"
+              },
+              {
+                "title": "25",
+                "value": "25"
+              },
+              {
+                "title": "All",
+                "value": "Infinity"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "color-wheel",
+        "title": "Color Wheel",
+        "description": "Pick a color with color wheel",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "convert-color",
+        "title": "Convert Color",
+        "description": "Convert any color to a different format",
+        "mode": "view",
+        "arguments": [
+          {
+            "name": "text",
+            "type": "text",
+            "required": false,
+            "placeholder": "#FF6363"
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.gif-search",
+    "slug": "gif-search",
+    "name": "GIF Search",
+    "version": "1.0.0",
+    "description": "Search the Internet for animated GIFs",
+    "author": "josephschmitt",
+    "icon": "command-icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.gif-search"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [
+      {
+        "name": "gridItemSize",
+        "type": "dropdown",
+        "required": false,
+        "title": "Grid Item Size",
+        "description": "Control the size of individual grid cells",
+        "default": "medium",
+        "data": [
+          {
+            "title": "Small",
+            "value": "small"
+          },
+          {
+            "title": "Medium",
+            "value": "medium"
+          },
+          {
+            "title": "Large",
+            "value": "large"
+          }
+        ]
+      },
+      {
+        "name": "gridTrendingItemSize",
+        "type": "dropdown",
+        "required": false,
+        "title": "Grid Trending Item Size",
+        "description": "Control the size of individual grid cells in the Trending view",
+        "default": "medium",
+        "data": [
+          {
+            "title": "Small",
+            "value": "small"
+          },
+          {
+            "title": "Medium",
+            "value": "medium"
+          },
+          {
+            "title": "Large",
+            "value": "large"
+          }
+        ]
+      },
+      {
+        "name": "maxResults",
+        "type": "textfield",
+        "required": false,
+        "default": "20",
+        "title": "Max Results",
+        "description": "Max number of results to return for a search"
+      },
+      {
+        "name": "defaultAction",
+        "type": "dropdown",
+        "required": false,
+        "title": "Default Action",
+        "description": "Customize what happens when hitting ENTER on a Gif",
+        "default": "copyFile",
+        "data": [
+          {
+            "title": "Copy GIF",
+            "value": "copyFile"
+          },
+          {
+            "title": "Paste GIF",
+            "value": "pasteFile"
+          },
+          {
+            "title": "Copy GIF Link",
+            "value": "copyGifUrl"
+          },
+          {
+            "title": "Paste GIF Link",
+            "value": "pasteGifUrl"
+          },
+          {
+            "title": "Copy GIF Markdown",
+            "value": "copyGifMarkdown"
+          },
+          {
+            "title": "Paste GIF Markdown",
+            "value": "pasteGifMarkdown"
+          },
+          {
+            "title": "Add or Remove from Favorites",
+            "value": "toggleFav"
+          },
+          {
+            "title": "View GIF Details",
+            "value": "viewDetails"
+          },
+          {
+            "title": "Copy GIF Square",
+            "value": "copySquareGif"
+          },
+          {
+            "title": "Paste GIF Square",
+            "value": "pasteSquareGif"
+          },
+          {
+            "title": "Copy Page Link",
+            "value": "copyPageUrl"
+          },
+          {
+            "title": "Open in Browser",
+            "value": "openUrlInBrowser"
+          },
+          {
+            "title": "Download GIF",
+            "value": "downloadFile"
+          }
+        ]
+      },
+      {
+        "name": "downloadPath",
+        "title": "GIF Download Path",
+        "description": "Path to save downloaded GIFs",
+        "type": "directory",
+        "required": false
+      },
+      {
+        "name": "hideFilename",
+        "type": "checkbox",
+        "required": false,
+        "title": "Hide Filename on Copy or Download",
+        "description": "Hide the original filename when copying or downloading GIFs",
+        "default": false,
+        "label": "Hide Filename"
+      },
+      {
+        "name": "giphyLocale",
+        "type": "dropdown",
+        "required": false,
+        "title": "Giphy Locale",
+        "description": "Select the locale for the Giphy API",
+        "default": "en",
+        "data": [
+          {
+            "title": "English",
+            "value": "en"
+          },
+          {
+            "title": "Spanish",
+            "value": "es"
+          },
+          {
+            "title": "Portuguese",
+            "value": "pt"
+          },
+          {
+            "title": "Indonesian",
+            "value": "id"
+          },
+          {
+            "title": "French",
+            "value": "fr"
+          },
+          {
+            "title": "Arabic",
+            "value": "ar"
+          },
+          {
+            "title": "Turkish",
+            "value": "tr"
+          },
+          {
+            "title": "Thai",
+            "value": "th"
+          },
+          {
+            "title": "Vietnamese",
+            "value": "vi"
+          },
+          {
+            "title": "German",
+            "value": "de"
+          },
+          {
+            "title": "Italian",
+            "value": "it"
+          },
+          {
+            "title": "Japanese",
+            "value": "ja"
+          },
+          {
+            "title": "Chinese Simplified",
+            "value": "zh-CN"
+          },
+          {
+            "title": "Chinese Traditional",
+            "value": "zh-TW"
+          },
+          {
+            "title": "Russian",
+            "value": "ru"
+          },
+          {
+            "title": "Korean",
+            "value": "ko"
+          },
+          {
+            "title": "Polish",
+            "value": "pl"
+          },
+          {
+            "title": "Dutch",
+            "value": "nl"
+          },
+          {
+            "title": "Romanian",
+            "value": "ro"
+          },
+          {
+            "title": "Hungarian",
+            "value": "hu"
+          },
+          {
+            "title": "Swedish",
+            "value": "sv"
+          },
+          {
+            "title": "Czech",
+            "value": "cs"
+          },
+          {
+            "title": "Hindi",
+            "value": "hi"
+          },
+          {
+            "title": "Bengali",
+            "value": "bn"
+          },
+          {
+            "title": "Danish",
+            "value": "da"
+          },
+          {
+            "title": "Farsi",
+            "value": "fa"
+          },
+          {
+            "title": "Filipino",
+            "value": "tl"
+          },
+          {
+            "title": "Finnish",
+            "value": "fi"
+          },
+          {
+            "title": "Hebrew",
+            "value": "he"
+          },
+          {
+            "title": "Malay",
+            "value": "ms"
+          },
+          {
+            "title": "Norwegian",
+            "value": "no"
+          },
+          {
+            "title": "Ukrainian",
+            "value": "uk"
+          }
+        ]
+      },
+      {
+        "name": "klipyLocale",
+        "type": "dropdown",
+        "required": false,
+        "title": "Klipy Locale",
+        "description": "Select the locale for the Klipy API",
+        "default": "en",
+        "data": [
+          {
+            "title": "English",
+            "value": "en"
+          },
+          {
+            "title": "Spanish",
+            "value": "es"
+          },
+          {
+            "title": "French",
+            "value": "fr"
+          },
+          {
+            "title": "German",
+            "value": "de"
+          },
+          {
+            "title": "Italian",
+            "value": "it"
+          },
+          {
+            "title": "Portuguese",
+            "value": "pt"
+          },
+          {
+            "title": "Japanese",
+            "value": "ja"
+          },
+          {
+            "title": "Korean",
+            "value": "ko"
+          },
+          {
+            "title": "Chinese Simplified",
+            "value": "zh-CN"
+          },
+          {
+            "title": "Chinese Traditional",
+            "value": "zh-TW"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "name": "search",
+        "title": "Search for GIFs",
+        "description": "Search for GIFs across multiple services…",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "favorites",
+        "title": "Browse Favorite GIFs",
+        "description": "Browse and search your favorite GIFs across all services",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "recents",
+        "title": "Browse Recent GIFs",
+        "description": "Browse and search your recently used GIFs across all services",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.google-calendar",
+    "slug": "google-calendar",
+    "name": "Google Calendar",
+    "version": "1.4.4",
+    "description": "Manage your Google calendar easily. Create events, search contacts, and check out your upcoming schedule.",
+    "author": "thomas",
+    "icon": "icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.google-calendar"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [
+      {
+        "name": "addSignature",
+        "type": "checkbox",
+        "title": "Advanced",
+        "label": "Add Signature",
+        "description": "Add a signature that the event was created using Tezbar to the description of the event",
+        "default": true,
+        "required": false
+      },
+      {
+        "name": "defaultEventDuration",
+        "title": "Default Event Duration",
+        "description": "The default duration for new events",
+        "type": "dropdown",
+        "data": [
+          {
+            "title": "15 minutes",
+            "value": "15"
+          },
+          {
+            "title": "30 minutes",
+            "value": "30"
+          },
+          {
+            "title": "45 minutes",
+            "value": "45"
+          },
+          {
+            "title": "1 hour",
+            "value": "60"
+          },
+          {
+            "title": "1.5 hours",
+            "value": "90"
+          },
+          {
+            "title": "2 hours",
+            "value": "120"
+          }
+        ],
+        "default": "30",
+        "required": false
+      },
+      {
+        "name": "sendInvitations",
+        "title": "Send Invitations",
+        "description": "Whether to send email invitations (including meeting links) to guests when creating or editing events",
+        "type": "dropdown",
+        "data": [
+          {
+            "title": "All Guests",
+            "value": "all"
+          },
+          {
+            "title": "External Guests Only",
+            "value": "externalOnly"
+          },
+          {
+            "title": "None",
+            "value": "none"
+          }
+        ],
+        "default": "all",
+        "required": false
+      }
+    ],
+    "commands": [
+      {
+        "name": "create-event",
+        "title": "Create Event",
+        "description": "Creates an event in your Google Calendar",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "create-quick-event",
+        "title": "Create Quick Event",
+        "description": "Creates a quick event in your Google Calendar",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "search-contacts",
+        "title": "Search Contacts",
+        "description": "Search your Google Contacts",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "list-events",
+        "title": "List Events",
+        "description": "View your upcoming Google Calendar events",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "showLocation",
+            "type": "checkbox",
+            "title": "Display",
+            "label": "Show location",
+            "description": "Show the event's location as an accessory in the list",
+            "default": false,
+            "required": false
+          },
+          {
+            "name": "showBirthdays",
+            "type": "checkbox",
+            "title": "Display",
+            "label": "Show birthdays",
+            "description": "Include Google Contacts birthday events when listing the primary calendar. Off by default because birthdays often flood upcoming events.",
+            "default": false,
+            "required": false
+          },
+          {
+            "name": "openCommandJoinsMeeting",
+            "type": "checkbox",
+            "title": "Advanced",
+            "label": "Join meeting",
+            "description": "Change the default behavior when opening an event to directly join the meeting (if a meeting link is available)",
+            "default": false,
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "list-calendars",
+        "title": "List Calendars",
+        "description": "View your Google Calendars",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.google-search",
+    "slug": "google-search",
+    "name": "Google Search",
+    "version": "1.0.0",
+    "description": "Google search with autosuggestions",
+    "author": "mblode",
+    "icon": "command-icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.google-search"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [
+      {
+        "name": "rememberSearchHistory",
+        "type": "checkbox",
+        "required": false,
+        "default": true,
+        "label": "Remember Search History",
+        "description": "Enable this checkbox to locally store Google search history."
+      },
+      {
+        "name": "useClipboardFallback",
+        "type": "checkbox",
+        "required": false,
+        "default": false,
+        "label": "Use Clipboard Fallback",
+        "description": "When no text is selected, fall back to using clipboard content for search."
+      }
+    ],
+    "commands": [
+      {
+        "name": "index",
+        "title": "Google Search",
+        "description": "Google search with autosuggestions",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "searchSelectText",
+        "title": "Google Search Selected Text",
+        "description": "Google search with selected text",
+        "mode": "no-view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.perplexity",
+    "slug": "perplexity",
+    "name": "Perplexity",
+    "version": "1.0.0",
+    "description": "Query Perplexity from Tezbar",
+    "author": "third774",
+    "icon": "perplexity-logo.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.perplexity"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [],
+    "commands": [
+      {
+        "name": "ask-perplexity",
+        "title": "Ask Perplexity",
+        "description": "Search Perplexity with your query",
+        "mode": "view",
+        "arguments": [
+          {
+            "name": "query",
+            "type": "text",
+            "description": "The query to search for",
+            "placeholder": "Ask Anything..."
+          }
+        ],
+        "preferences": [
+          {
+            "label": "Use Perplexity App",
+            "description": "Open your query in Perplexity app, instead of the default Browser",
+            "default": false,
+            "type": "checkbox",
+            "name": "perplexityApp",
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.port-manager",
+    "slug": "port-manager",
+    "name": "Port Manager",
+    "version": "1.0.0",
+    "description": "Find open ports and close them",
+    "author": "lucaschultz",
+    "icon": "command-icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.port-manager"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [
+      {
+        "name": "killSignal",
+        "description": "The signal used to kill the process on macOS. Windows always terminates with taskkill.",
+        "type": "dropdown",
+        "required": false,
+        "default": "ask",
+        "title": "Kill Signal",
+        "data": [
+          {
+            "title": "Ask before each kill",
+            "value": "ask"
+          },
+          {
+            "title": "Always use SIGTERM",
+            "value": "15"
+          },
+          {
+            "title": "Always use SIGKILL",
+            "value": "9"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "name": "kill-listening-process",
+        "title": "Kill Process Listening on",
+        "description": "Kill the process listening on a given port",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "port",
+            "placeholder": "Port",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "named-ports",
+        "title": "Named Ports",
+        "description": "Name ports to make them easier to find in the open port list",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "open-ports",
+        "title": "Open Ports",
+        "description": "Show and Close Opened Ports",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "primaryPortAction",
+            "type": "dropdown",
+            "default": "kill",
+            "required": false,
+            "data": [
+              {
+                "title": "Kill",
+                "value": "kill"
+              },
+              {
+                "title": "Kill All",
+                "value": "killAll"
+              },
+              {
+                "title": "Kill Parent",
+                "value": "killParent"
+              },
+              {
+                "title": "Show Details",
+                "value": "showDetails"
+              },
+              {
+                "title": "Show in Finder",
+                "value": "showInFinder"
+              },
+              {
+                "title": "Copy Info",
+                "value": "copyInfo"
+              },
+              {
+                "title": "Copy Commands",
+                "value": "copyCommands"
+              },
+              {
+                "title": "Reload",
+                "value": "reload"
+              }
+            ],
+            "title": "Primary Port Action",
+            "description": "Choose which action to perform when selecting an port."
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "open-ports-menu-bar",
+        "title": "Open Ports in Menu Bar",
+        "description": "List open ports in menu bar",
+        "mode": "menu-bar",
+        "interval": "1m",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.speedtest",
+    "slug": "speedtest",
+    "name": "Speedtest",
+    "version": "1.0.0",
+    "description": "Test the performance and quality of your internet connection via speedtest.net",
+    "author": "tonka3000",
+    "icon": "speedtest.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.speedtest"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [],
+    "commands": [
+      {
+        "name": "index",
+        "title": "Test Internet Speed",
+        "description": "Test the performance and quality of your internet connection via speedtest.net",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "com.tezbar.native.timers",
+    "slug": "timers",
+    "name": "Timers",
+    "version": "1.0.0",
+    "description": "Start, stop, and save countdown timers, directly in Tezbar, with no external dependencies.",
+    "author": "ThatNerd",
+    "icon": "command-icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.timers"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [
+      {
+        "name": "selectedSound",
+        "type": "dropdown",
+        "required": true,
+        "title": "Selected Sound",
+        "description": "Sound played when a timer finishes.",
+        "default": "Submarine",
+        "data": [
+          {
+            "title": "Alarm Clock",
+            "value": "alarmClock.wav"
+          },
+          {
+            "title": "Dismembered Woodpecker",
+            "value": "dismemberedWoodpecker.wav"
+          },
+          {
+            "title": "Flute Riff",
+            "value": "fluteRiff.wav"
+          },
+          {
+            "title": "Level Up",
+            "value": "levelUp.wav"
+          },
+          {
+            "title": "Piano Chime",
+            "value": "pianoChime.wav"
+          },
+          {
+            "title": "Terminator",
+            "value": "terminator.wav"
+          },
+          {
+            "title": "Speak Timer Name",
+            "value": "speak_timer_name"
+          }
+        ]
+      },
+      {
+        "name": "volumeSetting",
+        "type": "textfield",
+        "required": false,
+        "title": "Timer Alert Volume",
+        "description": "Volume of the alert sound. Decimal between 0 and 1.",
+        "default": "1"
+      },
+      {
+        "name": "ringContinuously",
+        "type": "checkbox",
+        "required": false,
+        "title": "Timer Alert Type",
+        "description": "Whether or not to play the timer alert sound continuously until dismissed.",
+        "label": "Ring Continuously",
+        "default": true
+      },
+      {
+        "name": "showMenuBarIconWhen",
+        "type": "dropdown",
+        "required": false,
+        "title": "Show Menu Bar Icon When",
+        "description": "When to show icon in menubar.",
+        "default": "always",
+        "data": [
+          {
+            "title": "Always",
+            "value": "always"
+          },
+          {
+            "title": "Only When Not Running",
+            "value": "onlyWhenNotRunning"
+          },
+          {
+            "title": "Only When Running",
+            "value": "onlyWhenRunning"
+          },
+          {
+            "title": "Never",
+            "value": "never"
+          }
+        ]
+      },
+      {
+        "name": "showTitleInMenuBar",
+        "type": "checkbox",
+        "required": false,
+        "title": "Show Title in Menu Bar",
+        "description": "Whether or not to show the timer or stopwatch title in the menu bar.",
+        "label": "Show title",
+        "default": true
+      },
+      {
+        "name": "copyOnSwStop",
+        "type": "checkbox",
+        "required": false,
+        "title": "Copy on Stopwatch Stop",
+        "description": "Whether or not to copy the elapsed time on a stopwatch when it is stopped.",
+        "label": "Copy elapsed time",
+        "default": false
+      },
+      {
+        "name": "closeWindowOnTimerStart",
+        "type": "checkbox",
+        "required": false,
+        "title": "Close Window on Timer Start",
+        "description": "Whether or not to close the Tezbar window when a timer or stopwatch is started.",
+        "label": "Automatically close window on start",
+        "default": false
+      },
+      {
+        "name": "customTimerFormBypass",
+        "label": "Skip form if arguments are given",
+        "title": "Custom Timer Form Bypass",
+        "type": "checkbox",
+        "required": false,
+        "description": "For the 'Start Custom Timer' command, skip the timer add form if any hour, minute, or second arguments are given.",
+        "default": false
+      },
+      {
+        "name": "newTimerInputOrder",
+        "type": "dropdown",
+        "required": false,
+        "title": "New Timer Input Order",
+        "description": "Order for input fields in new timer form.",
+        "default": "Hours , Minutes, Seconds",
+        "data": [
+          {
+            "title": "Hours, Minutes, Seconds",
+            "value": "hhmmss"
+          },
+          {
+            "title": "Seconds, Minutes, Hours",
+            "value": "ssmmhh"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "name": "start2MinuteTimer",
+        "title": "Start 2 Minute Timer",
+        "description": "Set a countdown for 2 minutes.",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "start5MinuteTimer",
+        "title": "Start 5 Minute Timer",
+        "description": "Set a countdown for 5 minutes.",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "start10MinuteTimer",
+        "title": "Start 10 Minute Timer",
+        "description": "Set a countdown for 10 minutes.",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "start15MinuteTimer",
+        "title": "Start 15 Minute Timer",
+        "description": "Set a countdown for 15 minutes.",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "start25MinuteTimer",
+        "title": "Start 25 Minute Timer",
+        "description": "Set a countdown for 25 minutes.",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "start30MinuteTimer",
+        "title": "Start 30 Minute Timer",
+        "description": "Set a countdown for 30 minutes.",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "start45MinuteTimer",
+        "title": "Start 45 Minute Timer",
+        "description": "Set a countdown for 45 minutes.",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "start60MinuteTimer",
+        "title": "Start 60 Minute Timer",
+        "description": "Set a countdown for 60 minutes.",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "start90MinuteTimer",
+        "title": "Start 90 Minute Timer",
+        "description": "Set a countdown for 90 minutes.",
+        "mode": "no-view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "startCustomTimer",
+        "title": "Start Custom Timer",
+        "description": "Set a countdown for a custom amount of time.",
+        "mode": "view",
+        "arguments": [
+          {
+            "name": "hours",
+            "placeholder": "hours",
+            "required": false,
+            "type": "text"
+          },
+          {
+            "name": "minutes",
+            "placeholder": "minutes",
+            "required": false,
+            "type": "text"
+          },
+          {
+            "name": "seconds",
+            "placeholder": "seconds",
+            "required": false,
+            "type": "text"
+          }
+        ],
+        "keywords": [
+          "new"
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "manageTimers",
+        "title": "Manage Timers",
+        "description": "View, start, or stop existing countdown timers.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "timersMenuBar",
+        "title": "Timers Menu Bar",
+        "description": "View, start, or stop existing countdown timers from the Menu Bar.",
+        "mode": "menu-bar",
+        "interval": "10s",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "startStopwatch",
+        "title": "Start Stopwatch",
+        "description": "Start a stopwatch",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "name",
+            "placeholder": "stopwatch name",
+            "required": false,
+            "type": "text"
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "manageStopwatches",
+        "title": "Manage Stopwatches",
+        "description": "View, start, or stop existing stopwatches.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "dismissTimerAlert",
+        "title": "Dismiss Ringing Timer",
+        "description": "Stop a ringing alert from a finished timer.",
+        "mode": "no-view",
+        "keywords": [
+          "Dismiss Timer Alert",
+          "Alert"
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "stopwatchMenuBar",
+        "title": "Stopwatch Menu Bar",
+        "description": "View, start, or stop existing stopwatches from the Menu Bar.",
+        "mode": "menu-bar",
+        "interval": "10s",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "previewAlertSounds",
+        "title": "Preview Alert Sounds",
+        "description": "Play samples of different alert sound effects.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "stopRunningTimer",
+        "title": "Stop Running Timer",
+        "description": "Stop the running timer closest to completion.",
+        "mode": "no-view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      },
+      {
+        "name": "configureMenubarPresets",
+        "title": "Configure Presets in Menu Bar",
+        "description": "Configure which presets to show in the Timers Menu Bar.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "unavailable",
+        "gap": "Compiled native handler or platform support has not been verified yet."
+      }
+    ],
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run"
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run"
+      }
+    ]
+  }
+]

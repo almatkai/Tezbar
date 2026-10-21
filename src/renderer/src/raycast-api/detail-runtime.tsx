@@ -1,4 +1,4 @@
-import { useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
 import { buildColorFormatRows, type Rgba } from '../../colorConverter'
 import { Markdown } from '../../ui/Markdown'
@@ -205,6 +205,163 @@ function parseImageOnlyMarkdown(markdown: string, assetsPath: string): {
 
 const COLOR_WHEEL_BACKGROUND =
   'radial-gradient(circle at center, #ffffff 0%, rgba(255, 255, 255, 0) 70%), conic-gradient(from 0deg, #ff0000 0deg, #ffff00 60deg, #00ff00 120deg, #00ffff 180deg, #0000ff 240deg, #ff00ff 300deg, #ff0000 360deg)'
+
+export type NativeColorWheelData = {
+  hue: number
+  saturation: number
+  value: number
+  alpha: number
+  preview: string
+  formats: Array<{ key: string; title: string; value: string; actionId: string }>
+  changeActionId: string
+  saveActionId: string
+}
+
+export function parseNativeColorWheel(value: unknown): NativeColorWheelData | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Record<string, unknown>
+  const coordinates = [raw.hue, raw.saturation, raw.value, raw.alpha]
+  if (coordinates.some((entry) => typeof entry !== 'number' || !Number.isFinite(entry))) return null
+  if (typeof raw.preview !== 'string' || typeof raw.changeActionId !== 'string' || typeof raw.saveActionId !== 'string' || !Array.isArray(raw.formats)) return null
+  const formats = raw.formats.filter((entry): entry is NativeColorWheelData['formats'][number] => {
+    if (!entry || typeof entry !== 'object') return false
+    const row = entry as Record<string, unknown>
+    return ['key', 'title', 'value', 'actionId'].every((key) => typeof row[key] === 'string')
+  })
+  if (formats.length !== raw.formats.length) return null
+  return {
+    hue: raw.hue as number,
+    saturation: raw.saturation as number,
+    value: raw.value as number,
+    alpha: raw.alpha as number,
+    preview: raw.preview,
+    formats,
+    changeActionId: raw.changeActionId,
+    saveActionId: raw.saveActionId,
+  }
+}
+
+export type WheelCoordinates = Pick<NativeColorWheelData, 'hue' | 'saturation' | 'value' | 'alpha'>
+
+export function wheelCoordinatesFromPointer(x: number, y: number, size: number, previous: WheelCoordinates): WheelCoordinates | null {
+  const radius = Math.hypot(x, y)
+  if (size <= 0 || radius > size / 2) return null
+  return {
+    ...previous,
+    hue: ((Math.atan2(x, -y) * 180) / Math.PI + 360) % 360,
+    saturation: Math.min(100, radius / (size / 2) * 100),
+  }
+}
+
+export function NativeColorWheel({
+  data,
+  onInvokeAction,
+  onCoordinatesChange,
+}: {
+  data: NativeColorWheelData
+  onInvokeAction: (actionId: string, values?: Record<string, unknown>) => Promise<void> | void
+  onCoordinatesChange: (coordinates: WheelCoordinates) => void
+}): JSX.Element {
+  const [coordinates, setCoordinates] = useState<WheelCoordinates>(() => data)
+  const coordinatesRef = useRef<WheelCoordinates>(coordinates)
+  const latestData = useRef(data)
+  const pending = useRef<WheelCoordinates | null>(null)
+  const sending = useRef(false)
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dragging = useRef(false)
+  latestData.current = data
+
+  useEffect(() => {
+    if (dragging.current || pending.current || sending.current) return
+    const next = { hue: data.hue, saturation: data.saturation, value: data.value, alpha: data.alpha }
+    coordinatesRef.current = next
+    setCoordinates(next)
+  }, [data.hue, data.saturation, data.value, data.alpha])
+
+  useEffect(() => () => {
+    if (debounce.current) clearTimeout(debounce.current)
+  }, [])
+
+  const flush = async (): Promise<void> => {
+    if (sending.current || !pending.current) return
+    const next = pending.current
+    pending.current = null
+    sending.current = true
+    try {
+      await onInvokeAction(latestData.current.changeActionId, next)
+    } catch {
+      // The runtime reports action errors through its notice surface.
+    } finally {
+      sending.current = false
+      if (pending.current) void flush()
+    }
+  }
+
+  const updateFromPointer = (event: ReactPointerEvent<HTMLButtonElement>): void => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const size = Math.min(rect.width, rect.height)
+    const next = wheelCoordinatesFromPointer(
+      event.clientX - rect.left - rect.width / 2,
+      event.clientY - rect.top - rect.height / 2,
+      size,
+      coordinatesRef.current
+    )
+    if (!next) return
+    coordinatesRef.current = next
+    setCoordinates(next)
+    onCoordinatesChange(next)
+    pending.current = next
+    if (debounce.current) clearTimeout(debounce.current)
+    debounce.current = setTimeout(() => void flush(), 120)
+  }
+
+  const radians = coordinates.hue * Math.PI / 180
+  const radius = coordinates.saturation / 2
+  const marker = { left: `${50 + Math.sin(radians) * radius}%`, top: `${50 - Math.cos(radians) * radius}%` }
+
+  return (
+    <div className="grid min-h-[420px] grid-cols-[minmax(0,1fr)_320px] gap-4">
+      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10 p-5">
+        <button
+          type="button"
+          className="relative aspect-square max-h-full w-full max-w-[720px] cursor-crosshair rounded-full bg-center bg-contain bg-no-repeat outline-none"
+          style={{ backgroundImage: COLOR_WHEEL_BACKGROUND }}
+          aria-label="Color wheel"
+          onPointerDown={(event) => {
+            dragging.current = true
+            event.currentTarget.setPointerCapture(event.pointerId)
+            updateFromPointer(event)
+          }}
+          onPointerMove={(event) => { if (dragging.current) updateFromPointer(event) }}
+          onPointerUp={() => { dragging.current = false; if (debounce.current) clearTimeout(debounce.current); void flush() }}
+          onPointerCancel={() => { dragging.current = false; if (debounce.current) clearTimeout(debounce.current); void flush() }}
+        >
+          <span className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_4px_14px_rgba(0,0,0,0.35)]" style={{ ...marker, background: data.preview }} />
+        </button>
+      </div>
+      <aside className="flex min-h-0 flex-col overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10">
+        <div className="flex items-center gap-3 border-b border-white/8 px-4 py-3">
+          <span className="h-8 w-8 shrink-0 rounded-tezbar-chip border border-white/15" style={{ background: data.preview }} />
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-semibold text-ink-1">Color Formats</p>
+            <p className="truncate font-mono text-[11px] text-ink-3">{data.preview}</p>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {data.formats.map((format) => (
+            <button key={format.key} type="button" onClick={() => void onInvokeAction(format.actionId)} className="group flex w-full items-start justify-between gap-3 rounded-tezbar-row px-3 py-2.5 text-left transition hover:bg-white/10">
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold text-ink-4">{format.title}</span>
+                <span className="mt-1 block truncate font-mono text-[13px] text-ink-1">{format.value}</span>
+              </span>
+              <span className="mt-4 shrink-0 text-[10px] text-ink-4 opacity-0 transition group-hover:opacity-100">Copy</span>
+            </button>
+          ))}
+        </div>
+      </aside>
+    </div>
+  )
+}
 
 function hsvToRgb(h: number, s: number, v: number): Rgba {
   const c = v * s

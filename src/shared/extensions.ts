@@ -1,3 +1,33 @@
+export type ExtensionPlatform = 'macOS' | 'Windows'
+export type ExtensionRuntimeKind = 'rust' | 'mixed' | 'javascript'
+
+export type NativeV2Command = {
+  name: string
+  title?: string
+  runtime: 'rust' | 'javascript' | 'unavailable'
+  platforms: ExtensionPlatform[]
+  gap?: string
+}
+
+export type NativeV2Verification = {
+  platform: ExtensionPlatform
+  state: 'passed' | 'failed' | 'not-run'
+  checkedAt?: number
+  method?: 'automated' | 'manual'
+  note?: string
+}
+
+export type NativeV2Info = {
+  schemaVersion: 2
+  id: string
+  version: string
+  replaces: string[]
+  commands: NativeV2Command[]
+  totalCommands: number
+  status: 'complete' | 'partial' | 'unavailable'
+  verification: NativeV2Verification[]
+}
+
 export type ExtensionManifest = {
   id: string
   name: string
@@ -12,6 +42,9 @@ export type ExtensionManifest = {
   authorIconUrl?: string
   screenshotUrls?: string[]
   categories?: string[]
+  runtime?: ExtensionRuntimeKind
+  nativeV2?: NativeV2Info
+  platforms?: ExtensionPlatform[]
   commands?: Array<{
     name?: string
     title?: string

@@ -22,7 +22,8 @@
         "title": "Pick Color",
         "description": "Open the native screen sampler and inspect the selected color."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.asciimath-to-latex-converter",
@@ -42,7 +43,8 @@
         "title": "Convert AsciiMath to LaTeX",
         "description": "Convert AsciiMath input to LaTeX and preview the result."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.base64",
@@ -73,7 +75,8 @@
         "title": "Base64 Decode Clipboard",
         "description": "Decode Base64 clipboard text and copy the result."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.base64-to-file",
@@ -94,7 +97,8 @@
         "title": "Convert Base64 to File",
         "description": "Convert base64 text to file"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.bitly-url-shortener",
@@ -119,7 +123,8 @@
         "title": "List Links",
         "description": "List all the links you have shortened with Bitly"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.blurhash",
@@ -139,7 +144,8 @@
         "title": "BlurHash",
         "description": "Generate blurhash from clipboard content or Finder"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.change-case",
@@ -265,7 +271,8 @@
         "title": "Convert to Upper first",
         "description": "Convert selected text or clipboard to Upper first"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.clipboard-editor",
@@ -285,7 +292,8 @@
         "title": "Edit Clipboard Content",
         "description": "Edit your clipboard text"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.clipboard-formatter",
@@ -306,7 +314,8 @@
         "title": "Strip Clipboard Formatting",
         "description": "Removes formatting and html from the text stored in the clipboard, returning the unformatted text to the clipboard."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.clipboard-sequential-paste",
@@ -326,7 +335,8 @@
         "title": "Paste Next Item",
         "description": "Pastes the next item from your copied list."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.code-review-emojis",
@@ -347,7 +357,8 @@
         "title": "Show Review Emoji",
         "description": "Shows a list of emojis that can be used for code review, in line with the Code Review Emoji Guide."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.color-shades",
@@ -373,7 +384,8 @@
         "title": "View Color Shades",
         "description": "View your generated color shades palettes."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.convert",
@@ -395,7 +407,8 @@
         "title": "Convert Unit",
         "description": "Converts everything web related: rem, px, pt, hex, hex (with opacity), rgb, rgba, hsl, hsla, oklch and shows the closest Tailwind CSS color."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.convert-3d-models",
@@ -432,7 +445,8 @@
         "title": "Quick Convert to STP",
         "description": "Quickly convert selected models to STP"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.converter",
@@ -464,7 +478,8 @@
         "title": "Byte Converter",
         "description": "Convert among different byte unit: b, B, KB, MB, GB, etc."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.convert-px-to-vw-vh",
@@ -502,7 +517,8 @@
         "title": "Conversion History",
         "description": "History of your last conversions"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.convert-typescript-to-javascript",
@@ -527,7 +543,8 @@
         "title": "Copy TypeScript as JavaScript",
         "description": "Get selected text from the active application, transform it to JavaScript, and keep it in the clipboard"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.counter",
@@ -558,7 +575,8 @@
         "title": "Reset Counter",
         "description": "Resets the counter."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.count-numbers",
@@ -579,7 +597,8 @@
         "title": "Count Numbers",
         "description": "Count numbers."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.country-lookup",
@@ -600,7 +619,8 @@
         "title": "Search Countries",
         "description": "Search countries by name, capital, or language and browse rich details like flags, currencies, and regions."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.crypto-portfolio-tracker",
@@ -626,7 +646,8 @@
         "title": "View Portfolio",
         "description": "View the total value and breakdown of your crypto portfolio."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.crypto-price",
@@ -646,7 +667,8 @@
         "title": "Crypto Price",
         "description": "See cryptocurency prices and more"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.css-calculations",
@@ -672,7 +694,8 @@
         "title": "Calculate Clamp REM",
         "description": "Generate responsive clamp function based on rem values"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.csv-to-excel",
@@ -693,7 +716,8 @@
         "title": "Convert CSV to Excel",
         "description": "Convert CSV table to Excel compatible table"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.curl",
@@ -719,7 +743,8 @@
         "title": "Requests History",
         "description": "HTTP requests history"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.currency-exchange",
@@ -739,7 +764,8 @@
         "title": "Currency Exchange",
         "description": "Calculate with Exchange Rate"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.custom-wordle",
@@ -759,7 +785,8 @@
         "title": "Create Custom Wordle",
         "description": "Create a wordle with your own word and share it with your friends to have them guess your word."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.date-converter",
@@ -780,7 +807,8 @@
         "title": "Convert Date",
         "description": "Parse and convert a date"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.datetime-format-converter",
@@ -805,7 +833,8 @@
         "title": "Insert Natural Language Date",
         "description": "Convert a natural language prompt into a formatted date and insert it into the frontmost application"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.dictionary",
@@ -832,7 +861,8 @@
         "title": "Search From Cursor Selection",
         "description": "Search your current cursor-selected words."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.diff-checker",
@@ -858,7 +888,8 @@
         "title": "Compare JSON",
         "description": "Paste two JSON snippets to see the differences"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.emoji",
@@ -879,7 +910,8 @@
         "title": "Search Emoji",
         "description": "Finds emojis and inserts or copies them."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.emoji-kitchen",
@@ -900,7 +932,8 @@
         "title": "Search Emoji Kitchen",
         "description": "Search for emojis and see their mashups."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.epoch-to-timestamp",
@@ -920,7 +953,8 @@
         "title": "Epoch",
         "description": "Convert a Unix epoch in your clipboard, in seconds or milliseconds, to a human-readible timestamp."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.file-info",
@@ -947,7 +981,8 @@
         "title": "Clear File Metadata",
         "description": "Strip all embedded metadata (EXIF, GPS, IPTC, XMP, etc.) and system attributes from selected files."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.file-tree-generator",
@@ -968,7 +1003,8 @@
         "title": "Create File Tree",
         "description": "Generates file tree from text"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.find-website",
@@ -988,7 +1024,8 @@
         "title": "Find Website",
         "description": "Quickly find the website you are looking for."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.fontawesome",
@@ -1009,7 +1046,8 @@
         "title": "Search Font Awesome",
         "description": "Search Font Awesome icons"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.font-converter",
@@ -1040,7 +1078,8 @@
         "title": "Preview Font",
         "description": "Preview any installed or custom font."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.font-search",
@@ -1061,7 +1100,8 @@
         "title": "Search Fonts",
         "description": "Search locally installed fonts"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.format-graphql",
@@ -1082,7 +1122,8 @@
         "title": "Format GraphQL",
         "description": "Formats a GraphQL document"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.geohash-encode-decode",
@@ -1107,7 +1148,8 @@
         "title": "Decode Geohash",
         "description": "Enter a geohash and get insights such as the GeoJSON or WKT Polygon representation, centroid, neighbors, and more"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.hashrate-no",
@@ -1133,7 +1175,8 @@
         "title": "GPU Estimates",
         "description": "GPU Estimates according to Power Cost ($/kWh)"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.html-colors",
@@ -1154,7 +1197,8 @@
         "title": "Search HTML Colors",
         "description": "Quickly find HTML colors by name, hex, or RGB. Supports fuzzy search with typos and shows both basic and extended color sets."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.image-base64",
@@ -1179,7 +1223,8 @@
         "title": "Image to Base64",
         "description": "Convert image to base64"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.image-diff-checker",
@@ -1199,7 +1244,8 @@
         "title": "Image Diff Check",
         "description": "Compares two images to identify differences."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.image-host",
@@ -1219,7 +1265,8 @@
         "title": "Host Image",
         "description": "Host an image on imgBB"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.image-search",
@@ -1239,7 +1286,8 @@
         "title": "Search Web Images",
         "description": "Searches Images on the web"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.image-shield",
@@ -1265,7 +1313,8 @@
         "title": "Decrypt Images",
         "description": "Restore original images from the fragments"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.image-to-ascii",
@@ -1286,7 +1335,8 @@
         "title": "Convert Image to Ascii",
         "description": "Convert image to Ascii"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.ipapi-is",
@@ -1306,7 +1356,8 @@
         "title": "Lookup IP or ASN",
         "description": "Lookup IP or ASN"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.ipcheck-ing",
@@ -1336,7 +1387,8 @@
         "title": "IP in Menu Bar",
         "description": "Keep your current external IP in the menu bar"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.ip-finder",
@@ -1357,7 +1409,8 @@
         "title": "Scan Network",
         "description": "Scan local network for assigned IPs and get recommendations"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.ip-geolocation",
@@ -1388,7 +1441,8 @@
         "title": "Copy IP",
         "description": "Copy local/public IPv4/IPv6 address."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.ip-tools",
@@ -1449,7 +1503,8 @@
         "title": "Query IP Geolocation Information",
         "description": "Query IPv4 or Ipv6 Geolocation Information"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.json2ts",
@@ -1469,7 +1524,8 @@
         "title": "Json2ts",
         "description": "Generate TypeScript interfaces from JSON"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.json-editor",
@@ -1491,7 +1547,8 @@
         "title": "Edit JSON",
         "description": "Format, filter, minify, escape, and convert JSON."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.json-format",
@@ -1537,7 +1594,8 @@
         "title": "Format Text into Valid JSON Value",
         "description": "Formats text into a valid JSON value with double quotes and escapes"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.json-resume",
@@ -1563,7 +1621,8 @@
         "title": "View Saved Resumes",
         "description": "View and manage saved resumes"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.json-to-toon-converter",
@@ -1583,7 +1642,8 @@
         "title": "Convert JSON",
         "description": "Convert JSON to TOON format"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.kind-words",
@@ -1613,7 +1673,8 @@
         "title": "Gratitude Note",
         "description": "Browse gratitude prompts with usage notes and opener examples."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.language-tool",
@@ -1638,7 +1699,8 @@
         "title": "Check Text Instant",
         "description": "Check a text with LanguageTool using the clipboard content and paste the result instantly. The language is detected automatically."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.latex-math-symbols",
@@ -1658,7 +1720,8 @@
         "title": "Search LateX Symbols",
         "description": "Search through a library of latex math symbols from amsmath"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.list-randomizer",
@@ -1678,7 +1741,8 @@
         "title": "Randomize List",
         "description": "Add items to a list and randomize it"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.lorem-ipsum",
@@ -1716,7 +1780,8 @@
         "title": "Generate with AI",
         "description": "Use AI to generate some placeholder text"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.markdown-image-to-html",
@@ -1737,7 +1802,8 @@
         "title": "Markdown Image to HTML",
         "description": "Transform a Markdown Image to HTML. This allows us to fix image size in Markdown base files."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.markdown-preview",
@@ -1760,7 +1826,8 @@
         "title": "Preview Markdown",
         "description": "Write and preview Markdown content with real-time rendering"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.markdown-reference",
@@ -1780,7 +1847,8 @@
         "title": "Search Markdown Syntax",
         "description": "Quickly search up how to format with Markdown"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.markdown-styler",
@@ -1800,7 +1868,8 @@
         "title": "Style Markdown",
         "description": "Convert Markdown to styled HTML with inline CSS for content platforms"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.markdown-table-generator",
@@ -1820,7 +1889,8 @@
         "title": "Generate Markdown Table",
         "description": "Based on the inputted integer arguments, number of rows and number of columns, you will receive a markdown table."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.markdown-this",
@@ -1840,7 +1910,8 @@
         "title": "Convert to HTML",
         "description": "Convert markdown text in clipboard to HTML"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.markdown-to-jira",
@@ -1861,7 +1932,8 @@
         "title": "Markdown to Jira",
         "description": "Format a Markdown text into Jira markup."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.mastodon-search",
@@ -1882,7 +1954,8 @@
         "title": "Search Mastodon",
         "description": "Search Mastodon for people or hashtags."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.modify-hash",
@@ -1918,7 +1991,8 @@
         "title": "Zip Extract",
         "description": "Extract files from a portable zip archive."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.node-release-notes",
@@ -1938,7 +2012,8 @@
         "title": "Node Versions",
         "description": "Quickly browse and access detailed information of Node.js versions"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.oklch-color-converter",
@@ -1958,7 +2033,8 @@
         "title": "Convert Color",
         "description": "Convert colors between different color spaces and formats"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.onelook-thesaurus",
@@ -1978,7 +2054,8 @@
         "title": "Search",
         "description": "Enter a word, phrase, description, or pattern above to find synonyms, related words, and more."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.one-time-password",
@@ -2004,7 +2081,8 @@
         "title": "Paste Recent OTP",
         "description": "Paste the OTP code from the most recently used account into the active app"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.password-generator",
@@ -2036,7 +2114,8 @@
         "title": "Generate Memorable Password",
         "description": "Generate a passphrase from words, numbers, and symbols."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.password-strength",
@@ -2057,7 +2136,8 @@
         "title": "Check Password Strength",
         "description": "Check the strength of your password"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.paste-as-plain-text",
@@ -2079,7 +2159,8 @@
         "title": "Paste as",
         "description": "Paste text from the clipboard as any format."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.qrcode-generator",
@@ -2109,7 +2190,8 @@
         "title": "Generate QR Code from Selection",
         "description": "Generate a QR code from selection content"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.random-data-generator",
@@ -2135,7 +2217,8 @@
         "title": "Open Quicklink",
         "description": "Used internally to run quicklinks from the generate command."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.regex-tester",
@@ -2156,7 +2239,8 @@
         "title": "Test Regex",
         "description": "Preview and test regular expressions"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.text-differ",
@@ -2177,7 +2261,8 @@
         "title": "Compare Selected Files",
         "description": "Show a line-by-line diff for two files selected in Finder or File Explorer"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.text-rewrap",
@@ -2207,7 +2292,8 @@
         "title": "Text Rewrap from Selection",
         "description": "Rewraps text from currently highlighted selection at the chosen width"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.timezone-converter",
@@ -2227,7 +2313,8 @@
         "title": "Timezone Converter",
         "description": "Converts any time to any timezone"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.unicode-symbols",
@@ -2247,7 +2334,8 @@
         "title": "Search Unicode Symbol",
         "description": "Browse and copy-paste common Unicode symbols."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.uuid-generator",
@@ -2307,7 +2395,8 @@
         "title": "View History",
         "description": "View the UUID history"
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.word-count",
@@ -2337,7 +2426,8 @@
         "title": "Word Count in Overlay",
         "description": "Show word count in an overlay on top of other applications."
       }
-    ]
+    ],
+    "runtime": "javascript"
   },
   {
     "id": "raycast.world-clock",
@@ -2368,6 +2458,496 @@
         "title": "Query IP Time",
         "description": "Query the current time based on IP or domain."
       }
-    ]
+    ],
+    "runtime": "javascript"
+  },
+  {
+    "id": "com.tezbar.gif-search",
+    "name": "GIF Search",
+    "description": "Search the Internet for animated GIFs",
+    "author": "josephschmitt",
+    "owner": "almatkai",
+    "version": "0.1.0",
+    "repository": "https://github.com/almatkai/gif-search",
+    "icon": "command-icon.png",
+    "categories": [
+      "Media",
+      "Fun",
+      "Web"
+    ],
+    "commands": [
+      {
+        "name": "search",
+        "title": "Search for GIFs",
+        "description": "Search for GIFs across multiple services…",
+        "mode": "view"
+      },
+      {
+        "name": "favorites",
+        "title": "Browse Favorite GIFs",
+        "description": "Browse and search your favorite GIFs across all services",
+        "mode": "view"
+      },
+      {
+        "name": "recents",
+        "title": "Browse Recent GIFs",
+        "description": "Browse and search your recently used GIFs across all services",
+        "mode": "view"
+      }
+    ],
+    "runtime": "javascript",
+    "slug": "gif-search",
+    "schemaVersion": 1
+  },
+  {
+    "id": "com.tezbar.google-calendar",
+    "name": "Google Calendar",
+    "description": "Manage your Google calendar easily. Create events, search contacts, and check out your upcoming schedule.",
+    "author": "thomas",
+    "owner": "almatkai",
+    "version": "1.4.4",
+    "repository": "https://github.com/almatkai/google-calendar",
+    "icon": "icon.png",
+    "categories": [
+      "Productivity",
+      "Applications"
+    ],
+    "commands": [
+      {
+        "name": "create-event",
+        "title": "Create Event",
+        "description": "Creates an event in your Google Calendar",
+        "mode": "view"
+      },
+      {
+        "name": "create-quick-event",
+        "title": "Create Quick Event",
+        "description": "Creates a quick event in your Google Calendar",
+        "mode": "view"
+      },
+      {
+        "name": "search-contacts",
+        "title": "Search Contacts",
+        "description": "Search your Google Contacts",
+        "mode": "view"
+      },
+      {
+        "name": "list-events",
+        "title": "List Events",
+        "description": "View your upcoming Google Calendar events",
+        "mode": "view"
+      },
+      {
+        "name": "list-calendars",
+        "title": "List Calendars",
+        "description": "View your Google Calendars",
+        "mode": "view"
+      }
+    ],
+    "runtime": "javascript",
+    "slug": "google-calendar",
+    "schemaVersion": 1
+  },
+  {
+    "id": "com.tezbar.google-translate",
+    "name": "Google Translate",
+    "description": "Simple translation using Google Translate",
+    "author": "gebeto",
+    "owner": "almatkai",
+    "version": "0.1.0",
+    "repository": "https://github.com/almatkai/google-translate",
+    "icon": "google-translate.png",
+    "categories": [
+      "Web",
+      "Productivity"
+    ],
+    "commands": [
+      {
+        "name": "translate",
+        "title": "Translate",
+        "description": "Simple translation via Google Translate",
+        "mode": "view"
+      },
+      {
+        "name": "translate-form",
+        "title": "Translate Form",
+        "description": "Simple translation via Google Translate",
+        "mode": "view"
+      },
+      {
+        "name": "quick-translate",
+        "title": "Quick Translate",
+        "description": "Quickly translate to multiple languages",
+        "mode": "view"
+      },
+      {
+        "name": "instant-translate-copy",
+        "title": "Instant Translate Copy",
+        "description": "Instantly translate selected text and copy to clipboard",
+        "mode": "no-view"
+      },
+      {
+        "name": "instant-translate-paste",
+        "title": "Instant Translate Paste",
+        "description": "Instantly translate selected text and paste to active app",
+        "mode": "no-view"
+      },
+      {
+        "name": "instant-translate-view",
+        "title": "Instant Translate View",
+        "description": "Instantly translate selected text with HUD display",
+        "mode": "no-view"
+      }
+    ],
+    "runtime": "javascript",
+    "slug": "translate",
+    "schemaVersion": 1
+  },
+  {
+    "id": "com.tezbar.kill-process",
+    "name": "Kill Process",
+    "description": "Terminate processes sorted by CPU or memory usage",
+    "author": "rolandleth",
+    "owner": "almatkai",
+    "version": "0.1.0",
+    "repository": "https://github.com/almatkai/kill-process",
+    "icon": "icon.png",
+    "categories": [],
+    "commands": [
+      {
+        "name": "index",
+        "title": "Kill Process",
+        "description": "Lists all running processes, ordered by CPU or memory usage and allows (force) killing one",
+        "mode": "view"
+      }
+    ],
+    "runtime": "javascript",
+    "slug": "kill-process",
+    "schemaVersion": 1
+  },
+  {
+    "id": "com.tezbar.port-manager",
+    "name": "Port Manager",
+    "description": "Find open ports and close them",
+    "author": "lucaschultz",
+    "owner": "almatkai",
+    "version": "0.1.0",
+    "repository": "https://github.com/almatkai/port-manager",
+    "icon": "command-icon.png",
+    "categories": [
+      "Developer Tools",
+      "Productivity",
+      "System"
+    ],
+    "commands": [
+      {
+        "name": "kill-listening-process",
+        "title": "Kill Process Listening on",
+        "description": "Kill the process listening on a given port",
+        "mode": "no-view"
+      },
+      {
+        "name": "named-ports",
+        "title": "Named Ports",
+        "description": "Name ports to make them easier to find in the open port list",
+        "mode": "view"
+      },
+      {
+        "name": "open-ports",
+        "title": "Open Ports",
+        "description": "Show and Close Opened Ports",
+        "mode": "view"
+      },
+      {
+        "name": "open-ports-menu-bar",
+        "title": "Open Ports in Menu Bar",
+        "description": "List open ports in menu bar",
+        "mode": "menu-bar"
+      }
+    ],
+    "runtime": "javascript",
+    "slug": "port-manager",
+    "schemaVersion": 1
+  },
+  {
+    "id": "com.tezbar.spotify-player",
+    "name": "Spotify Player",
+    "description": "Spotify's most common features, now at your fingertips. Search for music and podcasts, browse your library, and control the playback. Glance at what's currently playing directly from the menu bar.",
+    "author": "mattisssa",
+    "owner": "almatkai",
+    "version": "0.1.0",
+    "repository": "https://github.com/almatkai/spotify-player",
+    "icon": "extension-icon.png",
+    "categories": [
+      "Media",
+      "Productivity"
+    ],
+    "commands": [
+      {
+        "name": "search",
+        "title": "Search",
+        "description": "A single unified search command. Search for artists, albums, songs, playlists, podcasts, and episodes. Use the dropdown menu to filter your search to a specific category. Each category offers contextual actions, so you can dive deeper into the search.",
+        "mode": "view"
+      },
+      {
+        "name": "yourLibrary",
+        "title": "Your Library",
+        "description": "See your saved artists, albums, songs, playlists, and podcasts. Similar to the \"Search\" command, it includes a category dropdown and contextual actions.",
+        "mode": "view"
+      },
+      {
+        "name": "nowPlaying",
+        "title": "Now Playing",
+        "description": "See what's currently playing. Use the actions (⌘ K) for further actions, such as Play/Pause, Like/Dislike, Skip, Start Radio, Add to Playlist, Connect Device and more.",
+        "mode": "view"
+      },
+      {
+        "name": "nowPlayingMenuBar",
+        "title": "Menu Bar Player",
+        "description": "See what's currently playing in your Menu Bar. Click for further actions, such as Play/Pause, Like/Dislike, Skip, Start Radio, Add to Playlist, Connect Device and more. Refreshes every 30 seconds.",
+        "mode": "menu-bar"
+      },
+      {
+        "name": "togglePlayPause",
+        "title": "Toggle Play/Pause",
+        "description": "Toggle the playback of the current song.",
+        "mode": "no-view"
+      },
+      {
+        "name": "addPlayingSongToPlaylist",
+        "title": "Add Playing Song to Playlist",
+        "description": "Adds the current song to a playlist of your choice.",
+        "mode": "view"
+      },
+      {
+        "name": "removeSongFromPlaylist",
+        "title": "Remove Playing Song from Playlist",
+        "description": "Remove the current song from a playlist of your choice.",
+        "mode": "no-view"
+      },
+      {
+        "name": "next",
+        "title": "Next",
+        "description": "Skip to the next song/episode.",
+        "mode": "no-view"
+      },
+      {
+        "name": "previous",
+        "title": "Previous",
+        "description": "Skip to the previous song/episode.",
+        "mode": "no-view"
+      },
+      {
+        "name": "like",
+        "title": "Like",
+        "description": "Like the current song.",
+        "mode": "no-view"
+      },
+      {
+        "name": "dislike",
+        "title": "Dislike",
+        "description": "Dislike the current song.",
+        "mode": "no-view"
+      },
+      {
+        "name": "devices",
+        "title": "Select Device",
+        "description": "Select a device to play music on.",
+        "mode": "view"
+      },
+      {
+        "name": "volume",
+        "title": "Set Volume",
+        "description": "Set the volume to an arbitrary percent.",
+        "mode": "no-view"
+      },
+      {
+        "name": "volume0",
+        "title": "Set Volume to 0%",
+        "description": "Mute the volume.",
+        "mode": "no-view"
+      },
+      {
+        "name": "volume25",
+        "title": "Set Volume to 25%",
+        "description": "Set the volume to 25%.",
+        "mode": "no-view"
+      },
+      {
+        "name": "volume50",
+        "title": "Set Volume to 50%",
+        "description": "Set the volume to 50%.",
+        "mode": "no-view"
+      },
+      {
+        "name": "volume75",
+        "title": "Set Volume to 75%",
+        "description": "Set the volume to 75%.",
+        "mode": "no-view"
+      },
+      {
+        "name": "volume100",
+        "title": "Set Volume to 100%",
+        "description": "Set the volume to 100%.",
+        "mode": "no-view"
+      },
+      {
+        "name": "volumeDown",
+        "title": "Turn Volume Down",
+        "description": "Turn the volume down by 10%.",
+        "mode": "no-view"
+      },
+      {
+        "name": "volumeUp",
+        "title": "Turn Volume up",
+        "description": "Turn the volume up by 10%.",
+        "mode": "no-view"
+      },
+      {
+        "name": "toggleShuffle",
+        "title": "Toggle Shuffle",
+        "description": "Toggle shuffle.",
+        "mode": "no-view"
+      },
+      {
+        "name": "cycleRepeat",
+        "title": "Cycle Repeat",
+        "description": "Cycle the repeat state between off, context (meaning the current playlist/album), and track.",
+        "mode": "no-view"
+      },
+      {
+        "name": "replay",
+        "title": "Replay",
+        "description": "Replay the current song/episode form the beginning.",
+        "mode": "no-view"
+      },
+      {
+        "name": "current-track",
+        "title": "Current Track",
+        "description": "Show the current song/episode state.",
+        "mode": "no-view"
+      },
+      {
+        "name": "startRadio",
+        "title": "Start Radio",
+        "description": "Start a radio station based on the current song.",
+        "mode": "no-view"
+      },
+      {
+        "name": "copyUrl",
+        "title": "Copy URL",
+        "description": "Copy the URL of the current song/episode.",
+        "mode": "no-view"
+      },
+      {
+        "name": "copyArtistAndTitle",
+        "title": "Copy Artist and Title",
+        "description": "Copy the artist and track title of the current song/episode",
+        "mode": "no-view"
+      },
+      {
+        "name": "justPlay",
+        "title": "Just Play",
+        "description": "Quickly start playing a song based on your query.",
+        "mode": "no-view"
+      },
+      {
+        "name": "queue",
+        "title": "Queue",
+        "description": "See your queue.",
+        "mode": "view"
+      },
+      {
+        "name": "generatePlaylist",
+        "title": "Generate Playlist",
+        "description": "Generate a Spotify playlist using Raycast AI.",
+        "mode": "view"
+      },
+      {
+        "name": "startDJ",
+        "title": "Start DJ",
+        "description": "Start the DJ.",
+        "mode": "no-view"
+      },
+      {
+        "name": "copyEmbed",
+        "title": "Copy Embed Code",
+        "description": "Copy the iframe embed code for the currently playing song or podcast episode.",
+        "mode": "no-view"
+      },
+      {
+        "name": "skip15",
+        "title": "Skip 15 Seconds",
+        "description": "Skip 15 seconds forward in an episode.",
+        "mode": "no-view"
+      },
+      {
+        "name": "back15",
+        "title": "Back 15 Seconds",
+        "description": "Back 15 seconds in an episode.",
+        "mode": "no-view"
+      },
+      {
+        "name": "findLyrics",
+        "title": "Find Lyrics",
+        "description": "Find and display lyrics for the currently playing song.",
+        "mode": "view"
+      }
+    ],
+    "runtime": "javascript",
+    "slug": "spotify-player",
+    "schemaVersion": 1
+  },
+  {
+    "id": "com.tezbar.visual-studio-code",
+    "name": "Visual Studio Code",
+    "description": "Control VS Code and compatible editors directly from Raycast",
+    "author": "thomas",
+    "owner": "almatkai",
+    "version": "0.1.0",
+    "repository": "https://github.com/almatkai/visual-studio-code-recent-projects",
+    "icon": "icon.png",
+    "categories": [],
+    "commands": [
+      {
+        "name": "index",
+        "title": "Search Recent Projects",
+        "description": "Search and open recent projects from VS Code",
+        "mode": "view"
+      },
+      {
+        "name": "open-with-vscode",
+        "title": "Open with Visual Studio Code",
+        "description": "Open the currently selected file manager item with VS Code",
+        "mode": "no-view"
+      },
+      {
+        "name": "open-new-window",
+        "title": "Open New Window",
+        "description": "Open a new VS Code window",
+        "mode": "no-view"
+      },
+      {
+        "name": "extensions",
+        "title": "Show Installed Extensions",
+        "description": "Manage installed extensions",
+        "mode": "view"
+      },
+      {
+        "name": "install-extension",
+        "title": "Install Extension",
+        "description": "Install extensions from Visual Studio Marketplace",
+        "mode": "view"
+      },
+      {
+        "name": "commandpalette",
+        "title": "Commands",
+        "description": "Show commands of the VS Code Command Palette",
+        "mode": "view"
+      }
+    ],
+    "runtime": "javascript",
+    "slug": "visual-studio-code",
+    "schemaVersion": 1
   }
 ]

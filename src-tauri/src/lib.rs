@@ -1,6 +1,8 @@
 // src-tauri/src/lib.rs
 mod backend_health;
 mod native_core;
+mod native_v2_cli;
+pub use native_v2_cli::dispatch as dispatch_native_v2_cli;
 mod native_input;
 mod window_layout;
 use backend_health::BackendStatus;

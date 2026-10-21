@@ -68,6 +68,7 @@ impl NativeCore {
         }
         let shortcuts = self.platform.initialize_shortcuts();
         let (launcher, ()) = tokio::join!(self.launcher.start(), self.ai.start());
+        self.extensions.start()?;
         // A legacy Knowledge database may need a large one-time FTS migration.
         // Resume it in the background without holding basic launcher IPC hostage.
         // Explicit Knowledge requests still await the service's serialized start.
@@ -124,7 +125,9 @@ impl NativeCore {
             self.ctx
                 .request("core:platform:visibility", vec![json!(true)])
                 .await?;
-            self.ctx.emit("run-extension-command-from-hotkey",json!({"extensionId":format!("raycast.{}",extension["extName"].as_str().unwrap_or("")),"commandName":extension["cmdName"]}));
+            let extension_id = extension["extensionId"].as_str().map(str::to_owned)
+                .unwrap_or_else(|| format!("raycast.{}", extension["extName"].as_str().unwrap_or("")));
+            self.ctx.emit("run-extension-command-from-hotkey",json!({"extensionId":extension_id,"commandName":extension["cmdName"]}));
             return Ok(json!({"ok":true}));
         }
         let id = command

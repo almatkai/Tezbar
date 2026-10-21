@@ -1,3 +1,5 @@
+import type { ExtensionPlatform, ExtensionRuntimeKind, NativeV2Info } from './extensions'
+
 export type ExtensionRegistryCommand = {
   name: string
   title: string
@@ -29,6 +31,9 @@ export type InstalledRegistryExtension = {
   extensionPath: string
   commands: ExtensionRegistryCommand[]
   installedAt: number
+  runtime?: ExtensionRuntimeKind
+  nativeV2?: NativeV2Info
+  platforms?: ExtensionPlatform[]
 }
 
 export type ExtensionRuntimeAction = {

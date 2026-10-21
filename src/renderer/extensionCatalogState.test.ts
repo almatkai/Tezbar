@@ -6,6 +6,27 @@ import {
 } from './extensionCatalogState'
 
 describe('extension catalog state', () => {
+  it('retains installed runtime, Native V2 and platform metadata on load', () => {
+    const started = extensionCatalogReducer(INITIAL_EXTENSION_CATALOG_STATE, {
+      type: 'load-started', requestId: 9,
+    })
+    const metadata = {
+      schemaVersion: 2 as const,
+      id: 'com.tezbar.native.foo', version: '2.0', replaces: ['raycast.foo'],
+      commands: [{ name: 'open', runtime: 'rust' as const, platforms: ['macOS' as const] }],
+      totalCommands: 1, status: 'complete' as const, verification: [],
+    }
+    const loaded = extensionCatalogReducer(started, {
+      type: 'load-succeeded', requestId: 9, store: [], installed: [{
+        id: 'raycast.foo', name: 'Foo', description: '', author: 'Tezbar', version: '2.0',
+        installedAt: 1, runtime: 'rust', nativeV2: metadata, platforms: ['macOS'],
+      }],
+    })
+    expect(loaded.installed[0]).toMatchObject({
+      runtime: 'rust', nativeV2: metadata, platforms: ['macOS'],
+    })
+  })
+
   it('commits load results and clears loading atomically', () => {
     const loading = extensionCatalogReducer(INITIAL_EXTENSION_CATALOG_STATE, {
       type: 'load-started',

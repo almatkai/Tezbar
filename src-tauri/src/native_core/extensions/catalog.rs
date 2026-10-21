@@ -97,17 +97,19 @@ impl Catalog {
             .to_lowercase();
         let offset = options["offset"].as_u64().unwrap_or(0).min(1_000_000) as usize;
         let limit = options["limit"].as_u64().unwrap_or(25).clamp(1, 1000) as usize;
-        let entries = if cfg!(target_os = "windows") {
-            let values: Vec<Value> = serde_json::from_str(include_str!("loved_extensions.json"))
-                .map_err(|e| e.to_string())?;
-            values
+        let loved: Vec<Value> = serde_json::from_str(include_str!("loved_extensions.json"))
+            .map_err(|e| e.to_string())?;
+        let mut entries = if cfg!(target_os = "windows") {
+            loved
+                .clone()
                 .into_iter()
                 .filter(|v| query.is_empty() || v.to_string().to_lowercase().contains(&query))
                 .collect::<Vec<_>>()
         } else {
             let mut scored: Vec<_> = self
                 .entries()
-                .await?
+                .await
+                .unwrap_or_default()
                 .into_iter()
                 .map(|v| {
                     let score = score(&v, &query);
@@ -122,6 +124,10 @@ impl Catalog {
             });
             scored.into_iter().map(|(v, _)| manifest(&v)).collect()
         };
+        if !cfg!(target_os = "windows") {
+            entries = merge_own(loved, entries, &query);
+        }
+        let entries = merge_native(entries, &query);
         if channel == "extensions:searchStore" {
             return Ok(json!(entries));
         }
@@ -131,6 +137,94 @@ impl Catalog {
             json!({"hasMore":offset + items.len() < total,"items":items,"total":total,"offset":offset,"limit":limit}),
         )
     }
+}
+
+// Keep curated repositories and command metadata, enriched with live store data.
+fn merge_own(loved: Vec<Value>, mut entries: Vec<Value>, query: &str) -> Vec<Value> {
+    let live: std::collections::HashMap<String, &Value> = entries
+        .iter()
+        .filter_map(|item| item["id"].as_str().map(|id| (id.to_owned(), item)))
+        .collect();
+    let mut own: Vec<Value> = loved
+        .into_iter()
+        .filter(|item| query.is_empty() || score_native(item, query) > 0.)
+        .map(|mut item| {
+            if let Some(source) = item["id"].as_str().and_then(|id| live.get(id)) {
+                for field in [
+                    "downloadCount",
+                    "iconUrl",
+                    "authorIconUrl",
+                    "screenshotUrls",
+                ] {
+                    if !source[field].is_null() {
+                        item[field] = source[field].clone();
+                    }
+                }
+            }
+            item
+        })
+        .collect();
+    let ids: std::collections::HashSet<String> = own
+        .iter()
+        .filter_map(|item| item["id"].as_str().map(str::to_owned))
+        .collect();
+    entries.retain(|item| !ids.contains(item["id"].as_str().unwrap_or("")));
+    own.extend(entries);
+    own
+}
+
+// Merge before pagination; a complete replacement takes precedence, while a
+// partial replacement leaves the V1 entry reachable for remaining commands.
+fn merge_native(mut entries: Vec<Value>, query: &str) -> Vec<Value> {
+    let mut native: Vec<_> = super::v2_catalog::manifests()
+        .into_iter()
+        .filter(|v| v["status"] != "unavailable")
+        .filter(|v| query.is_empty() || score_native(v, &query) > 0.)
+        .collect();
+    native.sort_by(|a, b| {
+        score_native(b, &query)
+            .total_cmp(&score_native(a, &query))
+            .then_with(|| a["name"].as_str().cmp(&b["name"].as_str()))
+    });
+    let replaced: std::collections::HashSet<String> = native
+        .iter()
+        .filter(|v| v["status"] == "complete")
+        .flat_map(|v| {
+            let mut ids: Vec<String> = v["replaces"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect();
+            if let Some(slug) = v["slug"].as_str() {
+                ids.push(format!("com.tezbar.{slug}"));
+            }
+            ids
+        })
+        .collect();
+    entries.retain(|v| !replaced.contains(v["id"].as_str().unwrap_or("")));
+    let mut native: Vec<Value> = native
+        .into_iter()
+        .map(super::v2_catalog::store_item)
+        .collect();
+    native.extend(entries);
+    let mut seen = std::collections::HashSet::new();
+    native.retain(|item| {
+        item["id"]
+            .as_str()
+            .is_some_and(|id| seen.insert(id.to_owned()))
+    });
+    native
+}
+
+fn score_native(v: &Value, query: &str) -> f64 {
+    if query.is_empty() {
+        return 1.;
+    }
+    let mut value = v.clone();
+    value["title"] = v["name"].clone();
+    score(&value, query)
 }
 
 fn normalize(value: &Value) -> Vec<Value> {
@@ -248,6 +342,26 @@ fn score(v: &Value, query: &str) -> f64 {
 mod tests {
     use super::*;
     #[test]
+    fn curated_replacements_keep_live_counts_and_artwork() {
+        let items = merge_own(
+            vec![
+                json!({"id":"raycast.example","repository":"https://github.com/tezbar/example","commands":[{"name":"own"}]}),
+                json!({"id":"com.tezbar.translate","repository":"https://github.com/tezbar/translate"}),
+            ],
+            vec![
+                json!({"id":"raycast.example","repository":"upstream","downloadCount":42000,"iconUrl":"https://cdn/icon.png","commands":[{"name":"upstream"}]}),
+                json!({"id":"raycast.other"}),
+            ],
+            "",
+        );
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0]["downloadCount"], 42000);
+        assert_eq!(items[0]["iconUrl"], "https://cdn/icon.png");
+        assert_eq!(items[0]["repository"], "https://github.com/tezbar/example");
+        assert_eq!(items[0]["commands"][0]["name"], "own");
+        assert_eq!(items[1]["id"], "com.tezbar.translate");
+    }
+    #[test]
     fn short_queries_do_not_match_unrelated_substrings() {
         assert_eq!(
             score(
@@ -257,5 +371,83 @@ mod tests {
             0.
         );
         assert!(score(&json!({"name":"arc","title":"Arc"}), "arc") > 10000.);
+    }
+    #[test]
+    fn own_v1_catalog_keeps_declared_ids_and_command_count() {
+        let loved: Vec<Value> =
+            serde_json::from_str(include_str!("loved_extensions.json")).unwrap();
+        assert_eq!(loved.len(), 98);
+        assert_eq!(
+            loved
+                .iter()
+                .map(|v| v["commands"].as_array().unwrap().len())
+                .sum::<usize>(),
+            247
+        );
+        let ids: std::collections::HashSet<_> =
+            loved.iter().filter_map(|v| v["id"].as_str()).collect();
+        assert_eq!(ids.len(), loved.len());
+        assert!(ids.contains("com.tezbar.google-translate"));
+        assert!(ids.contains("com.tezbar.visual-studio-code"));
+        assert_eq!(
+            loved
+                .iter()
+                .find(|v| v["id"] == "com.tezbar.google-translate")
+                .unwrap()["slug"],
+            "translate"
+        );
+    }
+    #[test]
+    fn missing_raycast_catalog_still_offers_installable_native_item() {
+        let items = merge_native(vec![], "perplexity");
+        let native = items
+            .iter()
+            .find(|v| v["id"] == "com.tezbar.native.perplexity")
+            .unwrap();
+        assert_eq!(native["author"], "Tezbar");
+        assert_eq!(native["runtime"], "rust");
+        assert_eq!(native["nativeV2"]["schemaVersion"], 2);
+        assert_eq!(native["nativeV2"]["commands"][0]["runtime"], "rust");
+        assert_eq!(native["platforms"], json!(["macOS", "Windows"]));
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = CoreContext::headless(crate::native_core::common::CorePaths {
+            data_dir: temp.path().into(),
+            config_dir: temp.path().join("config"),
+            resource_dir: temp.path().join("resources"),
+            temp_dir: temp.path().join("tmp"),
+            home_dir: temp.path().into(),
+        });
+        let installed = super::super::v2_catalog::install(&ctx, native["id"].as_str().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(installed["nativeV2"]["id"], native["id"]);
+        assert!(super::super::v2_catalog::installed(
+            &ctx,
+            native["id"].as_str().unwrap()
+        ));
+    }
+    #[test]
+    fn complete_native_item_deduplicates_legacy_before_pagination() {
+        let entries = merge_native(
+            vec![
+                json!({"id":"raycast.perplexity","name":"Perplexity"}),
+                json!({"id":"raycast.perplexity","name":"Duplicate"}),
+            ],
+            "perplexity",
+        );
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|v| v["id"] == "com.tezbar.native.perplexity")
+                .count(),
+            1
+        );
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|v| v["id"] == "raycast.perplexity")
+                .count(),
+            0
+        );
     }
 }

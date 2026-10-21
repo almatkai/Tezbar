@@ -13,6 +13,7 @@ import {
   mkdirSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { getLoadablePath } from 'sqlite-vec'
 
 function replaceGeneratedFile(source: string, destination: string): void {
@@ -47,6 +48,9 @@ function copyRuntimePackage(source: string, destination: string, label: string):
 
 async function runBuild(): Promise<void> {
   const root = join(__dirname, '..')
+  execFileSync(process.execPath, [join(root, 'scripts/prepare-native-v2-audio.mjs')], {
+    stdio: 'inherit',
+  })
   const outputDirectory = join(root, 'dist-backend')
 
   console.log('Building isolated Extension Worker...')

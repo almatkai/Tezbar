@@ -29,6 +29,9 @@ pub const CHANNELS: &[&str] = &[
     "path:resolve-directory",
     "directory-visit:record",
     "open-ports:list",
+    // Internal V2 safety probe; do not add this to the renderer bridge allowlist.
+    "core:ports:list-fresh",
+    "core:ports:terminate-verified",
     "port-manager:named:list",
     "port-manager:named:add",
     "port-manager:named:remove",
@@ -656,6 +659,17 @@ impl LauncherCore {
                 self.inner.db.call(move|c|{let click:f64=c.query_row("SELECT coalesce(avg(rank),0) FROM click_events WHERE success=1",[],|r|r.get(0)).map_err(|e|e.to_string())?;c.execute("INSERT INTO benchmark_snapshots(created_at,precision_at_5,precision_at_10,avg_click_rank,benchmark_size) VALUES(?,?,?,?,6)",rusqlite::params![now_ms(),p5,p10,click]).map_err(|e|e.to_string())?;Ok(Value::Null)}).await
             }
             "open-ports:list" => self.cached_ports().await,
+            "core:ports:list-fresh" => ports::list_fresh().await,
+            "core:ports:terminate-verified" => {
+                let pid = a.first().and_then(Value::as_u64)
+                    .and_then(|pid| u32::try_from(pid).ok())
+                    .filter(|pid| *pid > 4).ok_or("Invalid process ID")?;
+                let signal = a.get(1).and_then(Value::as_str).ok_or("Invalid signal")?;
+                let identity = a.get(2).and_then(Value::as_str)
+                    .filter(|value| !value.is_empty()).ok_or("Missing process identity")?;
+                ports::terminate_verified(pid, signal, identity).await?;
+                Ok(json!(true))
+            }
             _ => Err(format!("Unhandled launcher channel: {c}")),
         }
     }

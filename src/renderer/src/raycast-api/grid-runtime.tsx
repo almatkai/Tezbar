@@ -96,6 +96,18 @@ function collectGridItems(root: ExtensionRuntimeNode): GridItem[] {
   return out
 }
 
+export function gridEmptyState(root: ExtensionRuntimeNode, query: string): { title: string; description?: string; loading: boolean } {
+  const loading = root.props?.isLoading === true
+  const emptyView = root.children?.find((child) => child.type === 'Grid.EmptyView')
+  const title = typeof emptyView?.props?.title === 'string' ? emptyView.props.title : undefined
+  const description = typeof emptyView?.props?.description === 'string' ? emptyView.props.description : undefined
+  return {
+    title: title || (loading ? 'Loading…' : query.trim() ? 'No matching grid items' : 'No grid items'),
+    description,
+    loading,
+  }
+}
+
 function gridItemMatches(item: GridItem, query: string): boolean {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   if (terms.length === 0) return true
@@ -148,6 +160,8 @@ export function GridRuntime({
     () => (usesServerFiltering ? items : items.filter((item) => gridItemMatches(item, query))),
     [items, query, usesServerFiltering]
   )
+  const emptyState = gridEmptyState(root, query)
+  const gridError = typeof root.props?.error === 'string' ? root.props.error : null
   const selectedItem = filteredItems[selected]
   const selectedActionIds = useMemo(() => new Set(selectedItem?.actionIds ?? []), [selectedItem])
   const favoriteAction = actions.find(
@@ -308,9 +322,13 @@ export function GridRuntime({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2">
+        {gridError && filteredItems.length > 0 ? (
+          <div role="alert" className="px-3 py-2 text-[12px] text-rose-300">{gridError}</div>
+        ) : null}
         {filteredItems.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-[12px] text-ink-3">
-            {query.trim() ? 'No matching grid items' : 'No grid items'}
+          <div className="flex h-full flex-col items-center justify-center text-[12px] text-ink-3" role="status" aria-live="polite" aria-busy={emptyState.loading}>
+            <span>{emptyState.title}</span>
+            {emptyState.description ? <span className="mt-1">{emptyState.description}</span> : null}
           </div>
         ) : (
           <div

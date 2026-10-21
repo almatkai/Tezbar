@@ -389,3 +389,263 @@ async fn native_perplexity_concurrent_submission_and_cancelled_immediate_open() 
     );
     f.assert_no_worker();
 }
+
+#[tokio::test]
+async fn v2_stale_native_ids_never_fall_through_even_on_launch() {
+    let f = Fixture::new();
+    for channel in [
+        "extension:run-command",
+        "extension:invoke-action",
+        "extension:refresh-session",
+        "extension:load-more",
+    ] {
+        let value = f.call(channel, json!({"sessionId":"native-extension:missing","extensionId":"raycast.other","commandName":"unknown"})).await;
+        assert_eq!(value["ok"], false);
+    }
+    f.assert_no_worker();
+}
+#[test]
+fn v2_aliases_and_canonical_coverage_share_the_same_dispatch() {
+    for id in [
+        "perplexity",
+        "raycast.perplexity",
+        "com.tezbar.native.perplexity",
+    ] {
+        assert_eq!(v2_runtime::slug(id), Some("perplexity"));
+        assert!(v2_runtime::supports(id, "ask-perplexity"));
+        assert!(!v2_runtime::supports(id, "unported-command"));
+    }
+    assert_eq!(
+        v2_runtime::canonical_id("perplexity"),
+        "com.tezbar.native.perplexity"
+    );
+    assert!(!v2_runtime::supports(
+        "com.tezbar.native.unknown",
+        "unknown"
+    ));
+}
+#[tokio::test]
+async fn v2_shutdown_cancels_pending_action_without_waiting_for_external_router() {
+    let mut f = Fixture::new();
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let ctx = CoreContext::headless(f.core.ctx.paths.clone());
+    let started = entered.clone();
+    ctx.set_router(Arc::new(move |_, _| {
+        let started = started.clone();
+        Box::pin(async move {
+            started.notify_one();
+            std::future::pending::<CoreResult>().await
+        })
+    }))
+    .unwrap();
+    f.core.ctx = ctx;
+    let form = f.form().await;
+    let core = f.core.clone();
+    let body = json!({"sessionId":form["sessionId"],"actionId":perplexity::SUBMIT,"formValues":{"query":"pending"}});
+    let action = tokio::spawn(async move { core.handle("extension:invoke-action", &[body]).await });
+    entered.notified().await;
+    tokio::time::timeout(std::time::Duration::from_secs(2), f.core.shutdown())
+        .await
+        .unwrap();
+    assert_eq!(action.await.unwrap().unwrap().unwrap()["ok"], false);
+    assert_eq!(
+        f.action(&form["sessionId"], json!("stale")).await["ok"],
+        false
+    );
+    f.assert_no_worker();
+}
+
+// This adapter exists only in this test module; it never reaches an OS service.
+fn lifecycle_adapter<'a>(
+    operation: &str,
+    body: &Value,
+    state: &'a mut Value,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = CoreResult> + Send + 'a>> {
+    let block = body["block"].as_bool().unwrap_or(false);
+    let operation = operation.to_owned();
+    let text = body["searchText"].as_str().unwrap_or("").to_owned();
+    Box::pin(async move {
+        if block {
+            std::future::pending::<()>().await;
+        }
+        if operation == "extension:search-text-changed" {
+            state["query"] = json!(text);
+            if text == "pending" {
+                std::future::pending::<()>().await;
+            }
+        }
+        state["calls"] = json!(state["calls"].as_u64().unwrap_or(0) + 1);
+        Ok(super::super::v2_sdk::view(
+            "Fixture",
+            json!({"type":"List", "props":state.clone()}),
+            vec![],
+        ))
+    })
+}
+async fn lifecycle_session(f: &Fixture) -> (Value, Arc<Entry>) {
+    let form = f.form().await;
+    let id = form["sessionId"].clone();
+    let mut sessions = f.core.native.0.lock().unwrap();
+    let old = sessions.sessions.get(id.as_str().unwrap()).unwrap();
+    let entry = Arc::new(Entry {
+        ctx: old.ctx.clone(),
+        slug: "google-search".into(),
+        extension_id: old.extension_id.clone(),
+        command: old.command.clone(),
+        preferences: old.preferences.clone(),
+        state: AsyncMutex::new(json!({})),
+        active: AtomicBool::new(true),
+        cancel: watch::channel(false).0,
+        search: Mutex::new(watch::channel(()).0),
+        adapter: Mutex::new(Some(lifecycle_adapter)),
+    });
+    sessions
+        .sessions
+        .insert(id.as_str().unwrap().into(), entry.clone());
+    (id, entry)
+}
+async fn wait_for_adapter(entry: &Entry) {
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            if entry.state.try_lock().is_err() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+}
+fn search_task(f: &Fixture, id: &Value, text: &str) -> tokio::task::JoinHandle<Value> {
+    let core = f.core.clone();
+    let body = json!({"sessionId":id,"searchText":text});
+    tokio::spawn(async move {
+        core.handle("extension:search-text-changed", &[body])
+            .await
+            .unwrap()
+            .unwrap()
+    })
+}
+async fn completed(task: tokio::task::JoinHandle<Value>) -> Value {
+    tokio::time::timeout(std::time::Duration::from_secs(2), task)
+        .await
+        .unwrap()
+        .unwrap()
+}
+#[tokio::test]
+async fn v2_refresh_calls_adapter_annotates_view_and_skips_manifest_io() {
+    let f = Fixture::new();
+    let (id, entry) = lifecycle_session(&f).await;
+    std::fs::remove_file(f.package.join("package.json")).unwrap();
+    for calls in 1..=2 {
+        let value = f
+            .call("extension:refresh-session", json!({"sessionId":id}))
+            .await;
+        assert_eq!(value["mode"], "view");
+        assert_eq!(value["sessionId"], id);
+        assert_eq!(value["extensionId"], perplexity::EXTENSION);
+        assert_eq!(value["commandName"], perplexity::COMMAND);
+        assert_eq!(value["root"]["props"]["calls"], calls);
+    }
+    let _busy = entry.state.lock().await;
+    assert_eq!(
+        f.call("extension:refresh-session", json!({"sessionId":id}))
+            .await,
+        json!({"ok":true,"mode":"unchanged"})
+    );
+    f.assert_no_worker();
+}
+#[tokio::test]
+async fn v2_new_search_drops_pending_adapter_and_commits_only_latest_state() {
+    let f = Fixture::new();
+    let (id, entry) = lifecycle_session(&f).await;
+    let old = search_task(&f, &id, "pending");
+    wait_for_adapter(&entry).await;
+    // Heartbeats neither wait for nor supersede a search.
+    assert_eq!(
+        f.call("extension:refresh-session", json!({"sessionId":id}))
+            .await["mode"],
+        "unchanged"
+    );
+    assert!(!old.is_finished());
+    let newest = completed(search_task(&f, &id, "latest")).await;
+    assert_eq!(newest["ok"], true);
+    assert_eq!(newest["sessionId"], id);
+    let cancelled = completed(old).await;
+    assert_eq!(cancelled["ok"], false);
+    assert!(cancelled["message"]
+        .as_str()
+        .unwrap()
+        .contains("superseded"));
+    assert_eq!(
+        *entry.state.lock().await,
+        json!({"query":"latest","calls":1})
+    );
+    f.assert_no_worker();
+}
+#[tokio::test]
+async fn v2_search_supersedes_lock_waiter_without_cancelling_other_operations() {
+    let f = Fixture::new();
+    let (id, entry) = lifecycle_session(&f).await;
+    let held = entry.state.lock().await;
+    let old = search_task(&f, &id, "old");
+    // Wait until registration, while deliberately holding the state lock.
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while entry.search.lock().unwrap().receiver_count() == 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let new = search_task(&f, &id, "latest");
+    assert_eq!(completed(old).await["ok"], false);
+    assert!(!new.is_finished());
+    drop(held);
+    assert_eq!(completed(new).await["ok"], true);
+    assert_eq!(entry.state.lock().await["query"], "latest");
+    f.assert_no_worker();
+}
+#[tokio::test]
+async fn v2_clear_cancels_search_and_discards_partial_state() {
+    let f = Fixture::new();
+    let (id, entry) = lifecycle_session(&f).await;
+    let pending = search_task(&f, &id, "pending");
+    wait_for_adapter(&entry).await;
+    tokio::time::timeout(std::time::Duration::from_secs(2), f.core.shutdown())
+        .await
+        .unwrap();
+    assert_eq!(completed(pending).await["ok"], false);
+    assert!(entry.state.lock().await.get("query").is_none());
+    assert_eq!(
+        f.call("extension:refresh-session", json!({"sessionId":id}))
+            .await["ok"],
+        false
+    );
+    f.assert_no_worker();
+}
+
+#[tokio::test]
+async fn v2_dispose_cancels_inflight_refresh() {
+    let f = Fixture::new();
+    let (id, entry) = lifecycle_session(&f).await;
+    let core = f.core.clone();
+    let body = json!({"sessionId":id,"block":true});
+    let refresh = tokio::spawn(async move {
+        core.handle("extension:refresh-session", &[body])
+            .await
+            .unwrap()
+            .unwrap()
+    });
+    wait_for_adapter(&entry).await;
+    assert_eq!(
+        tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            f.call("extension:dispose-session", json!({"sessionId":id}))
+        )
+        .await
+        .unwrap(),
+        true
+    );
+    assert_eq!(completed(refresh).await["ok"], false);
+    f.assert_no_worker();
+}

@@ -42,6 +42,12 @@ function rootKind(root: ExtensionRuntimeNode): 'list' | 'form' | 'grid' | 'detai
   return 'list'
 }
 
+export function backActionId(root: ExtensionRuntimeNode): string | null {
+  return typeof root.props?.backActionId === 'string' && root.props.backActionId.trim()
+    ? root.props.backActionId
+    : null
+}
+
 export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): ReactNode {
   const {
     title,
@@ -64,13 +70,19 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
   }, [commandName, extensionId])
 
   const primaryAction = actions[0]
+  const onSurfaceBack = useCallback(() => {
+    const actionId = backActionId(root)
+    if (actionId) void onInvokeAction(actionId)
+    else onBack()
+  }, [onBack, onInvokeAction, root])
   const kind = rootKind(root)
   const submitAction = useMemo(
     () =>
       kind === 'form'
-        ? actions.find((action) => action.kind === 'submit-form') || primaryAction
+        ? actions.find((action) => action.id === (root.props?.nativeColorWheel as { saveActionId?: unknown } | undefined)?.saveActionId)
+          || actions.find((action) => action.kind === 'submit-form') || primaryAction
         : undefined,
-    [actions, kind, primaryAction]
+    [actions, kind, primaryAction, root.props?.nativeColorWheel]
   )
   const actionRegistry = useMemo(() => ({ actions }), [actions])
   const overlayActions = useMemo(() => {
@@ -144,9 +156,10 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
               ref={formRuntimeRef}
               root={root}
               title={title}
-              onBack={onBack}
+              onBack={onSurfaceBack}
               onSubmitForm={onSubmitForm}
               onChangeField={(actionId, value) => onInvokeAction(actionId, { value })}
+              onInvokeAction={onInvokeAction}
               onOpenActions={openActions}
               actionNotice={actionNotice}
             />
@@ -156,7 +169,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
               title={title}
               actions={actions}
               actionNotice={actionNotice}
-              onBack={onBack}
+              onBack={onSurfaceBack}
               onRunPrimaryAction={onRunPrimaryAction}
               onOpenActions={openActions}
               onSearchTextChanged={onSearchTextChanged}
@@ -165,7 +178,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
             <DetailRuntime
               root={root}
               title={title}
-              onBack={onBack}
+              onBack={onSurfaceBack}
               onRunPrimaryAction={onRunPrimaryAction}
               onOpenActions={openActions}
             />
@@ -174,7 +187,7 @@ export function ExtensionRuntimeSurface(props: ExtensionRuntimeSurfaceProps): Re
               root={root}
               title={title}
               commandName={commandName}
-              onBack={onBack}
+              onBack={onSurfaceBack}
               onRunPrimaryAction={onRunPrimaryAction}
               actions={actions}
               onOpenActions={openActions}

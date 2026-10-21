@@ -17,6 +17,7 @@ SuperCmd-main
 /extensions/
 
 # Native build artifacts
+/native/audio-device/
 native/**/target/
 native/**/*.node
 native/**/axhelper

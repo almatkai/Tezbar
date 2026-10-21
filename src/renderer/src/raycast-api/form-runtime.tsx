@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type { ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
 import { Hint, HintBar, Kbd, ViewHeader } from '../../ui/primitives'
+import { NativeColorWheel, parseNativeColorWheel } from './detail-runtime'
 
 type FormField = {
   key: string
@@ -130,17 +131,32 @@ function collectFormItems(root: ExtensionRuntimeNode): FormItem[] {
   return out
 }
 
-function initialValues(
+function sameFormValue(left: unknown, right: unknown): boolean {
+  return Object.is(left, right) || (
+    Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+    left.every((value, index) => Object.is(value, right[index]))
+  )
+}
+
+export function reconcileFormValues(
   fields: FormField[],
-  previous?: Record<string, unknown>
+  previous?: Record<string, unknown>,
+  previousFields: FormField[] = []
 ): Record<string, unknown> {
   const next: Record<string, unknown> = {}
+  const previousByKey = new Map(previousFields.map((field) => [field.key, field]))
 
   for (const field of fields) {
-    if (field.value !== undefined) {
-      next[field.id] = field.value
-    } else if (previous && Object.prototype.hasOwnProperty.call(previous, field.id)) {
+    const previousField = previousByKey.get(field.key)
+    // Submit-only fields keep their draft when a heartbeat repeats defaults.
+    // Controlled fields still accept every server response, including rejection.
+    const keepDraft = previousField && (
+      field.value === undefined || (!field.actionId && sameFormValue(previousField.value, field.value))
+    )
+    if (keepDraft && previous && Object.prototype.hasOwnProperty.call(previous, field.id)) {
       next[field.id] = previous[field.id]
+    } else if (field.value !== undefined) {
+      next[field.id] = field.value
     } else if (field.type === 'Form.Checkbox') {
       next[field.id] = false
     } else if (field.type === 'Form.FilePicker' || field.type === 'Form.TagPicker') {
@@ -151,6 +167,20 @@ function initialValues(
   }
 
   return next
+}
+
+type FormWheelCoordinates = { hue: number; saturation: number; value: number; alpha: number }
+
+export function reconcileFormWheelDraft(
+  fields: FormField[],
+  local: FormWheelCoordinates | null
+): FormWheelCoordinates | null {
+  if (!local) return null
+  const fromServer = reconcileFormValues(fields)
+  const serverMatches = (['hue', 'saturation', 'value', 'alpha'] as const).every(
+    (key) => Math.abs(Number(fromServer[key]) - local[key]) < 0.0001
+  )
+  return serverMatches ? null : local
 }
 
 function displayFileName(path: string): string {
@@ -180,12 +210,13 @@ type FormRuntimeProps = {
   onBack: () => void
   onSubmitForm: (values: Record<string, unknown>) => void
   onChangeField: (actionId: string, value: unknown) => Promise<void> | void
+  onInvokeAction: (actionId: string, values?: Record<string, unknown>) => Promise<void> | void
   onOpenActions: () => void
   actionNotice?: { message: string; tone: 'success' | 'error' } | null
 }
 
 export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(function FormRuntime(
-  { root, title, onBack, onSubmitForm, onChangeField, onOpenActions, actionNotice },
+  { root, title, onBack, onSubmitForm, onChangeField, onInvokeAction, onOpenActions, actionNotice },
   ref
 ) {
   const items = useMemo(() => collectFormItems(root), [root])
@@ -193,12 +224,25 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
     () => items.flatMap((item) => (item.type === 'field' ? [item.field] : [])),
     [items]
   )
-  const [values, setValues] = useState<Record<string, unknown>>(() => initialValues(fields))
+  const [values, setValues] = useState<Record<string, unknown>>(() => reconcileFormValues(fields))
+  const nativeColorWheel = useMemo(() => parseNativeColorWheel(root.props?.nativeColorWheel), [root.props?.nativeColorWheel])
+  const localWheelCoordinates = useRef<FormWheelCoordinates | null>(null)
   const filePickerOpenRef = useRef(false)
+  const previousServerForm = useRef({ title, fields })
 
   useEffect(() => {
-    setValues((previous) => initialValues(fields, previous))
-  }, [fields])
+    if (nativeColorWheel) {
+      localWheelCoordinates.current = reconcileFormWheelDraft(fields, localWheelCoordinates.current)
+    }
+    const previousFields = previousServerForm.current.title === title
+      ? previousServerForm.current.fields : undefined
+    const wheelDraft = nativeColorWheel ? localWheelCoordinates.current : null
+    previousServerForm.current = { title, fields }
+    setValues((previous) => ({
+      ...reconcileFormValues(fields, previousFields ? previous : undefined, previousFields),
+      ...wheelDraft,
+    }))
+  }, [fields, nativeColorWheel, title])
 
   useImperativeHandle(ref, () => ({ getValues: () => values }), [values])
 
@@ -263,6 +307,16 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
 
       <div className="glass-card min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
         <div className="mx-auto max-w-[900px] space-y-4">
+          {nativeColorWheel ? (
+            <NativeColorWheel
+              data={nativeColorWheel}
+              onInvokeAction={onInvokeAction}
+              onCoordinatesChange={(coordinates) => {
+                localWheelCoordinates.current = coordinates
+                setValues((previous) => ({ ...previous, ...coordinates }))
+              }}
+            />
+          ) : null}
           {items.map((item) => {
             if (item.type === 'separator') {
               return <div key={item.key} className="-mx-8 border-t border-white/[0.065]" />
@@ -279,7 +333,7 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
 
             const field = item.field
             const rawValue = values[field.id]
-            const current = typeof rawValue === 'string' ? rawValue : ''
+            const current = typeof rawValue === 'string' || typeof rawValue === 'number' ? String(rawValue) : ''
             const controlId = `runtime-form-${field.key.replace(/[^a-z0-9_-]/gi, '-')}`
 
             if (field.type === 'Form.TextArea') {

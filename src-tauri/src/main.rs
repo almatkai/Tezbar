@@ -10,5 +10,8 @@ fn main() {
     if let Some(code) = child_supervisor::dispatch() {
         std::process::exit(code);
     }
+    if let Some(code) = app_lib::dispatch_native_v2_cli() {
+        std::process::exit(code);
+    }
     app_lib::run();
 }

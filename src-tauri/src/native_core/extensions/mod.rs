@@ -2,11 +2,33 @@ mod catalog;
 mod native;
 mod perplexity;
 mod registry;
+mod v2_amphetamine;
+mod v2_audio_device;
+mod v2_catalog;
+mod v2_cleanshotx;
+mod v2_color_picker;
+mod v2_gif_search;
+mod v2_google_calendar;
+mod v2_google_search;
+mod v2_perplexity;
+mod v2_port_manager;
+mod v2_runtime;
+mod v2_sdk;
+mod v2_speedtest;
+mod v2_timers;
 
 use super::common::{CoreContext, HandlerResult};
 use super::extension_worker::{ExtensionWorker, CHANNELS as WORKER_CHANNELS};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
+
+pub(crate) fn v2_cli_list(ctx: &CoreContext) -> super::common::CoreResult {
+    v2_catalog::cli_list(ctx)
+}
+
+pub(crate) fn v2_cli_install(ctx: &CoreContext, id: &str) -> super::common::CoreResult {
+    v2_catalog::cli_install(ctx, id)
+}
 
 pub const CHANNELS: &[&str] = &[
     "get-extensions",
@@ -38,6 +60,15 @@ pub struct ExtensionsCore {
 }
 
 impl ExtensionsCore {
+    pub fn start(&self) -> Result<(), String> {
+        // Restore durable timers without starting a polling worker for profiles
+        // that have never used the native extension.
+        if self.ctx.paths.data_dir.join("native-extensions-v2/timers/storage.json").is_file() {
+            v2_timers::start(&self.ctx)?;
+        }
+        Ok(())
+    }
+
     pub fn new(ctx: CoreContext) -> Self {
         Self {
             worker: ExtensionWorker::new(ctx.clone()),
@@ -57,6 +88,31 @@ impl ExtensionsCore {
             .await
         {
             return Some(result);
+        }
+        if matches!(channel, "extension:install" | "extensions:install") {
+            if let Some(id) = args.first().and_then(Value::as_str) {
+                let (ctx, files, id) = (self.ctx.clone(), self.files.clone(), id.to_owned());
+                let native_install = tokio::task::spawn_blocking(move || {
+                    let _guard = files.lock().map_err(|e| e.to_string())?;
+                    Ok::<_, String>(v2_catalog::install(&ctx, &id))
+                })
+                .await;
+                match native_install {
+                    Ok(Ok(Some(result))) => {
+                        if result.is_ok() {
+                            self.ctx.emit("extensions-changed", json!({}));
+                            let _ = self
+                                .ctx
+                                .request("core:launcher:reindex-extensions", vec![])
+                                .await;
+                        }
+                        return Some(result);
+                    }
+                    Ok(Ok(None)) => {}
+                    Ok(Err(error)) => return Some(Err(error)),
+                    Err(error) => return Some(Err(error.to_string())),
+                }
+            }
         }
         if WORKER_CHANNELS.contains(&channel) {
             #[cfg(test)]
@@ -84,11 +140,14 @@ impl ExtensionsCore {
         let channel = channel.to_string();
         let args = args.to_vec();
         let uninstall = channel == "extension:uninstall" || channel == "extensions:uninstall";
-        let uninstall_native = uninstall
-            && matches!(
-                args.first().and_then(Value::as_str).map(str::trim),
-                Some("raycast.perplexity" | "perplexity")
-            );
+        let uninstall_slug = if uninstall {
+            args.first()
+                .and_then(Value::as_str)
+                .and_then(|id| v2_runtime::slug(id.trim()))
+                .map(str::to_owned)
+        } else {
+            None
+        };
         let result = tokio::task::spawn_blocking(move || {
             let _guard = this.files.lock().map_err(|e| e.to_string())?;
             registry::handle(&this.ctx, &channel, &args)
@@ -97,8 +156,8 @@ impl ExtensionsCore {
         .map_err(|e| e.to_string())
         .and_then(|v| v);
         if uninstall && result.is_ok() {
-            if uninstall_native {
-                self.native.clear();
+            if let Some(slug) = uninstall_slug {
+                self.native.clear_slug(&slug).await;
             }
             let _ = self
                 .ctx
@@ -109,11 +168,13 @@ impl ExtensionsCore {
     }
 
     pub async fn shutdown(&self) {
-        self.native.clear();
+        self.native.clear().await;
+        v2_timers::shutdown(&self.ctx).await;
+        tokio::task::spawn_blocking(v2_amphetamine::shutdown).await.ok();
         self.worker.shutdown().await;
     }
     pub async fn restart_worker(&self) {
-        self.native.clear();
+        self.native.clear().await;
         self.worker.shutdown().await;
     }
 
