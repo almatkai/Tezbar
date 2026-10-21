@@ -36,16 +36,13 @@ use core_graphics::window::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
-use std::fs;
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 #[cfg(target_os = "macos")]
 use tauri::LogicalPosition;
 #[cfg(not(target_os = "macos"))]
@@ -482,166 +479,6 @@ fn bun_in_user_profile() -> Option<PathBuf> {
         .map(|home| home.join(".bun").join("bin").join(bun_executable_name()))
 }
 
-const BUN_VERSION: &str = "1.2.5";
-
-fn bun_download_url() -> Result<String, String> {
-    let platform = if cfg!(target_os = "windows") {
-        "windows"
-    } else if cfg!(target_os = "macos") {
-        "darwin"
-    } else if cfg!(target_os = "linux") {
-        "linux"
-    } else {
-        return Err(format!(
-            "Bun does not provide a supported build for {}",
-            std::env::consts::OS
-        ));
-    };
-    let architecture = match std::env::consts::ARCH {
-        "x86_64" => "x64",
-        "aarch64" => "aarch64",
-        other => {
-            return Err(format!(
-                "Bun does not provide a supported {platform} build for {other}"
-            ))
-        }
-    };
-    Ok(format!(
-        "https://github.com/oven-sh/bun/releases/download/bun-v{BUN_VERSION}/bun-{platform}-{architecture}.zip"
-    ))
-}
-
-#[cfg(unix)]
-fn find_bun_binary(root: &Path) -> Option<PathBuf> {
-    let mut pending = vec![root.to_path_buf()];
-    while let Some(directory) = pending.pop() {
-        let entries = fs::read_dir(directory).ok()?;
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                pending.push(path);
-            } else if path.file_name().is_some_and(|name| name == "bun") {
-                return Some(path);
-            }
-        }
-    }
-    None
-}
-
-#[cfg(unix)]
-fn install_unix_bun(app_local_data: &Path) -> Result<PathBuf, String> {
-    let url = bun_download_url()?;
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or_default();
-    let temporary_dir =
-        std::env::temp_dir().join(format!("tezbar-bun-{}-{stamp}", std::process::id()));
-    let archive_path = temporary_dir.join("bun.zip");
-    let extract_dir = temporary_dir.join("extract");
-    let destination_dir = app_local_data.join("bun");
-    let destination = destination_dir.join(bun_executable_name());
-    let temporary_destination = destination_dir.join("bun.download");
-
-    let result = (|| {
-        fs::create_dir_all(&temporary_dir)
-            .map_err(|error| format!("failed to create Bun download directory: {error}"))?;
-        fs::create_dir_all(&extract_dir)
-            .map_err(|error| format!("failed to create Bun extraction directory: {error}"))?;
-        fs::create_dir_all(&destination_dir)
-            .map_err(|error| format!("failed to create Bun runtime directory: {error}"))?;
-
-        let download_status = Command::new("/usr/bin/curl")
-            .args([
-                "--fail",
-                "--location",
-                "--silent",
-                "--show-error",
-                "--retry",
-                "3",
-                "--connect-timeout",
-                "15",
-                "--max-time",
-                "180",
-                "--retry-max-time",
-                "240",
-                "--output",
-            ])
-            .arg(&archive_path)
-            .arg(&url)
-            .status()
-            .map_err(|error| format!("failed to start the Bun download: {error}"))?;
-        if !download_status.success() {
-            return Err(format!("failed to download the Bun runtime from {url}"));
-        }
-
-        let extract_status = Command::new("/usr/bin/unzip")
-            .args(["-oq"])
-            .arg(&archive_path)
-            .args(["-d"])
-            .arg(&extract_dir)
-            .status()
-            .map_err(|error| format!("failed to extract the Bun runtime: {error}"))?;
-        if !extract_status.success() {
-            return Err("failed to extract the downloaded Bun runtime".to_string());
-        }
-
-        let extracted_bun = find_bun_binary(&extract_dir)
-            .ok_or_else(|| "the downloaded Bun archive did not contain a bun binary".to_string())?;
-        fs::copy(&extracted_bun, &temporary_destination)
-            .map_err(|error| format!("failed to stage the Bun runtime: {error}"))?;
-        fs::set_permissions(&temporary_destination, fs::Permissions::from_mode(0o755))
-            .map_err(|error| format!("failed to make the Bun runtime executable: {error}"))?;
-        fs::rename(&temporary_destination, &destination)
-            .map_err(|error| format!("failed to install the Bun runtime: {error}"))?;
-
-        let version = Command::new(&destination)
-            .arg("--version")
-            .output()
-            .map_err(|error| format!("failed to verify the Bun runtime: {error}"))?;
-        let version = String::from_utf8_lossy(&version.stdout).trim().to_string();
-        if version != BUN_VERSION {
-            return Err(format!(
-                "downloaded Bun version {version:?}, expected {BUN_VERSION}"
-            ));
-        }
-        Ok(destination)
-    })();
-
-    let _ = fs::remove_file(&temporary_destination);
-    let _ = fs::remove_dir_all(&temporary_dir);
-    result
-}
-
-#[cfg(target_os = "windows")]
-fn install_windows_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
-    let destination_dir = app_local_data.join("bun");
-    let destination = destination_dir.join("bun.exe");
-    fs::create_dir_all(&destination_dir)
-        .map_err(|error| format!("failed to create Bun runtime directory: {error}"))?;
-    let url = bun_download_url()?;
-    let script = r#"$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP ('tezbar-bun-'+[guid]::NewGuid().ToString()+'.zip'); $extract=Join-Path $env:TEMP ('tezbar-bun-'+[guid]::NewGuid().ToString()); try { Invoke-WebRequest -UseBasicParsing -Uri $env:TEZBAR_BUN_URL -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force; $bun=Get-ChildItem -LiteralPath $extract -Filter bun.exe -Recurse | Select-Object -First 1; if (-not $bun) { throw 'bun.exe was not present in the downloaded archive' }; Copy-Item -LiteralPath $bun.FullName -Destination $env:TEZBAR_BUN_DEST -Force } finally { Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue }"#;
-    let status = Command::new("powershell.exe")
-        .args([
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            script,
-        ])
-        .env("TEZBAR_BUN_URL", url)
-        .env("TEZBAR_BUN_DEST", &destination)
-        .status()
-        .map_err(|error| format!("failed to start the Windows Bun installer: {error}"))?;
-    if status.success() && destination.is_file() {
-        Ok(destination)
-    } else {
-        Err("failed to download the Bun runtime required by Tezbar".to_string())
-    }
-}
-
 fn locate_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
     let cached = app_local_data.join("bun").join(bun_executable_name());
     if cached.is_file() {
@@ -659,14 +496,7 @@ fn locate_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
     {
         return Ok(PathBuf::from(bun_executable_name()));
     }
-    #[cfg(target_os = "windows")]
-    return install_windows_bun(app_local_data);
-
-    #[cfg(unix)]
-    return install_unix_bun(app_local_data);
-
-    #[allow(unreachable_code)]
-    Err("Bun is required for JavaScript extensions, and automatic installation is not supported on this platform.".to_string())
+    Err("Bun runtime is not installed on this system. Tezbar core features and Native V2 extensions run natively in Rust without Bun.".to_string())
 }
 
 fn read_openray_config() -> serde_json::Value {
@@ -3294,17 +3124,15 @@ mod backend_timeout_tests {
     use super::*;
 
     #[test]
-    fn bun_download_url_is_pinned_to_the_current_platform_archive() {
-        let url = bun_download_url().expect("current test platform should support Bun");
-        assert!(url.contains("/bun-v1.2.5/bun-"));
-        assert!(url.ends_with(".zip"));
-        assert!(url.contains(if cfg!(target_os = "macos") {
-            "bun-darwin-"
-        } else if cfg!(target_os = "windows") {
-            "bun-windows-"
-        } else {
-            "bun-linux-"
-        }));
+    fn locate_bun_detects_cached_or_fails_cleanly() {
+        let temp = std::env::temp_dir().join(format!("tezbar-test-bun-locate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp);
+        let fake_bun_dir = temp.join("bun");
+        let _ = std::fs::create_dir_all(&fake_bun_dir);
+        let fake_bin = fake_bun_dir.join(bun_executable_name());
+        let _ = std::fs::write(&fake_bin, b"fake");
+        assert_eq!(locate_bun(&temp).unwrap(), fake_bin);
+        let _ = std::fs::remove_dir_all(&temp);
     }
 
     #[test]
