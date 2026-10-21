@@ -444,6 +444,7 @@ fn quit_app_now(app: &AppHandle) {
         if let Some(core) = app.try_state::<Arc<native_core::NativeCore>>() {
             let _ = tokio::time::timeout(Duration::from_secs(8), core.shutdown()).await;
         }
+        let _ = tauri::async_runtime::spawn_blocking(|| flush_window_positions(None)).await;
         app.exit(0);
     });
 }
@@ -553,7 +554,76 @@ struct StoredWindowPosition {
     needs_reset: bool,
 }
 
+#[derive(Default)]
+struct PendingWindowPositions {
+    positions: BTreeMap<String, PersistedWindowPosition>,
+    generation: u64,
+    dirty: bool,
+}
+
+static WINDOW_POSITIONS: std::sync::LazyLock<Mutex<PendingWindowPositions>> =
+    std::sync::LazyLock::new(|| Mutex::new(PendingWindowPositions::default()));
+
+impl PendingWindowPositions {
+    fn should_flush(&self, generation: Option<u64>) -> bool {
+        self.dirty && generation.is_none_or(|generation| generation == self.generation)
+    }
+
+    fn remember(&mut self, monitor_id: String, position: PersistedWindowPosition) -> u64 {
+        self.positions.insert(monitor_id, position);
+        self.generation = self.generation.wrapping_add(1);
+        self.dirty = true;
+        self.generation
+    }
+}
+
+// Only background writers hold this lock; UI updates never wait for disk I/O.
+static WINDOW_POSITION_WRITER: Mutex<()> = Mutex::new(());
+
+fn flush_window_positions(generation: Option<u64>) {
+    let _writer = WINDOW_POSITION_WRITER.lock().unwrap();
+    let (positions, snapshot_generation) = {
+        let pending = WINDOW_POSITIONS.lock().unwrap();
+        if !pending.should_flush(generation) {
+            return;
+        }
+        (pending.positions.clone(), pending.generation)
+    };
+    let result = (|| -> Result<(), String> {
+        let path = openray_config_path().ok_or("Configuration path unavailable")?;
+        let fallback = Arc::new(native_core::common::ConfigStore::new(path));
+        PROFILE_STORE.get().unwrap_or(&fallback).update(|value| {
+            for (monitor_id, position) in &positions {
+                update_window_position_config(value, monitor_id, *position);
+            }
+            Ok(())
+        })?;
+        Ok(())
+    })();
+    match result {
+        Ok(()) => {
+            let mut pending = WINDOW_POSITIONS.lock().unwrap();
+            if pending.generation == snapshot_generation {
+                pending.dirty = false;
+            }
+        }
+        Err(error) => log::warn!("Could not save window position: {error}"),
+    }
+}
+
 fn stored_window_position_for_monitor(monitor_id: &str) -> StoredWindowPosition {
+    if let Some(position) = WINDOW_POSITIONS
+        .lock()
+        .unwrap()
+        .positions
+        .get(monitor_id)
+        .copied()
+    {
+        return StoredWindowPosition {
+            position: Some(position),
+            needs_reset: false,
+        };
+    }
     let config = read_openray_config();
     StoredWindowPosition {
         position: monitor_positions_from_config(&config)
@@ -590,20 +660,23 @@ fn set_persisted_window_position_for_monitor(
     monitor: &Monitor,
     position: PersistedWindowPosition,
 ) {
-    let Some(path) = openray_config_path() else {
-        return;
-    };
     let Some(monitor_id) = monitor_id(window, monitor) else {
         return;
     };
-    let fallback = Arc::new(native_core::common::ConfigStore::new(path));
-    let config = PROFILE_STORE.get().unwrap_or(&fallback);
-    if let Err(error) = config.update(|value| {
-        update_window_position_config(value, &monitor_id, position);
-        Ok(())
-    }) {
-        log::warn!("Could not save window position: {error}");
-    }
+    let generation = WINDOW_POSITIONS
+        .lock()
+        .unwrap()
+        .remember(monitor_id, position);
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        let should_flush = WINDOW_POSITIONS.lock().unwrap().should_flush(Some(generation));
+        if should_flush {
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                flush_window_positions(Some(generation))
+            })
+            .await;
+        }
+    });
 }
 
 #[cfg(any(not(target_os = "macos"), test))]
@@ -2126,15 +2199,7 @@ mod window_placement_tests {
 }
 
 fn schedule_drag_position_persistence(window: WebviewWindow) {
-    tauri::async_runtime::spawn(async move {
-        for _ in 0..12 {
-            tokio::time::sleep(Duration::from_millis(250)).await;
-            if !window.is_visible().unwrap_or(false) {
-                break;
-            }
-            persist_current_window_position(&window);
-        }
-    });
+    persist_current_window_position(&window);
 }
 
 #[cfg(target_os = "windows")]
@@ -2759,8 +2824,8 @@ pub fn run() {
                     // into the main terminal view hides both windows because the
                     // sidebar loses focus a few ms before main gains it.
                     let app = window.app_handle().clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(80));
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(80)).await;
                         if let Some(main_window) = app.get_webview_window("main") {
                             let main_focused = main_window.is_focused().unwrap_or(false);
                             let sidebar_focused = app
@@ -2867,8 +2932,8 @@ pub fn run() {
                     // turns a successful tray activation into a flash-and-close
                     // window. Re-check after the activation settles.
                     let app = window.app_handle().clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(120));
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(120)).await;
                         let Some(main_window) = app.get_webview_window("main") else {
                             return;
                         };
@@ -3122,6 +3187,23 @@ pub fn run() {
 #[cfg(test)]
 mod backend_timeout_tests {
     use super::*;
+
+    #[test]
+    fn position_updates_coalesce_into_latest_snapshot() {
+        let mut pending = PendingWindowPositions::default();
+        let first = pending.remember("monitor".into(), PersistedWindowPosition { x: 1.0, y: 2.0 });
+        let last = pending.remember("monitor".into(), PersistedWindowPosition { x: 3.0, y: 4.0 });
+        let writes = [first, last]
+            .into_iter()
+            .filter(|generation| pending.should_flush(Some(*generation)))
+            .count();
+        assert_eq!(writes, 1);
+        assert_ne!(first, pending.generation);
+        assert_eq!(last, pending.generation);
+        assert_eq!(pending.positions.len(), 1);
+        assert_eq!(pending.positions["monitor"].x, 3.0);
+        assert!(pending.dirty);
+    }
 
     #[test]
     fn locate_bun_detects_cached_or_fails_cleanly() {

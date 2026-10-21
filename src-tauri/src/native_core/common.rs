@@ -95,14 +95,14 @@ impl CoreContext {
 /// One writer for the legacy profile, preserving keys owned by other modules.
 pub struct ConfigStore {
     path: PathBuf,
-    transaction: Mutex<()>,
+    transaction: Mutex<Option<(Option<(SystemTime, u64)>, Value)>>,
 }
 
 impl ConfigStore {
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,
-            transaction: Mutex::new(()),
+            transaction: Mutex::new(None),
         }
     }
 
@@ -130,9 +130,37 @@ impl ConfigStore {
         }
     }
 
+    fn metadata(&self) -> Result<Option<(SystemTime, u64)>, String> {
+        match std::fs::metadata(&self.path) {
+            Ok(metadata) => Ok(Some((
+                metadata.modified().map_err(|e| e.to_string())?,
+                metadata.len(),
+            ))),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.to_string()),
+        }
+    }
+
+    fn read_cached(&self, cache: &mut Option<(Option<(SystemTime, u64)>, Value)>) -> CoreResult {
+        let metadata = self.metadata()?;
+        if let Some((cached_metadata, value)) = cache {
+            if *cached_metadata == metadata {
+                return Ok(value.clone());
+            }
+        }
+        let value = self.read_unlocked()?;
+        // Do not cache a read raced by an external writer.
+        if self.metadata()? == metadata {
+            *cache = Some((metadata, value.clone()));
+        } else {
+            *cache = None;
+        }
+        Ok(value)
+    }
+
     pub fn read(&self) -> CoreResult {
-        let _guard = self.transaction.lock().map_err(|e| e.to_string())?;
-        self.read_unlocked()
+        let mut cache = self.transaction.lock().map_err(|e| e.to_string())?;
+        self.read_cached(&mut cache)
     }
 
     pub fn patch(&self, patch: &Value) -> CoreResult {
@@ -154,13 +182,15 @@ impl ConfigStore {
     where
         F: FnOnce(&mut Value) -> Result<(), String>,
     {
-        let _guard = self.transaction.lock().map_err(|e| e.to_string())?;
-        let mut current = self.read_unlocked()?;
+        let mut cache = self.transaction.lock().map_err(|e| e.to_string())?;
+        let mut current = self.read_cached(&mut cache)?;
         update(&mut current)?;
         if !current.is_object() {
             return Err("Configuration must remain an object".to_string());
         }
         write_json_atomic(&self.path, &current)?;
+        *cache = None;
+        *cache = Some((self.metadata()?, current.clone()));
         Ok(current)
     }
 }
@@ -192,6 +222,22 @@ pub fn write_json_atomic(path: &Path, value: &Value) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn config_cache_detects_external_changes() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.json");
+        let store = ConfigStore::new(path.clone());
+        assert_eq!(store.read().unwrap(), json!({}));
+        std::fs::write(&path, r#"{"external":1}"#).unwrap();
+        assert_eq!(store.read().unwrap(), json!({"external": 1}));
+        std::fs::write(&path, r#"{"external":12345}"#).unwrap();
+        assert_eq!(store.read().unwrap(), json!({"external": 12345}));
+        std::fs::write(&path, "broken").unwrap();
+        assert!(store.read().is_err());
+        assert!(store.patch(&json!({"safe": true})).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "broken");
+    }
 
     #[test]
     fn config_preserves_unknown_keys_and_serializes_concurrent_updates() {
