@@ -1,11 +1,14 @@
 use crate::native_core::common::{now_ms, read_json, write_json_atomic, CoreContext, CoreResult};
 use serde_json::{json, Value};
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 #[derive(Clone)]
 pub struct Catalog {
     ctx: CoreContext,
-    cache: Arc<tokio::sync::Mutex<Option<(u64, Vec<Value>)>>>,
+    cache: Arc<tokio::sync::Mutex<Option<(u64, Arc<Vec<Entry>>)>>>,
 }
 
 impl Catalog {
@@ -16,7 +19,7 @@ impl Catalog {
         }
     }
 
-    async fn entries(&self) -> Result<Vec<Value>, String> {
+    async fn entries(&self) -> Result<Arc<Vec<Entry>>, String> {
         let mut cache = self.cache.lock().await;
         if let Some((time, entries)) = cache
             .as_ref()
@@ -34,7 +37,7 @@ impl Catalog {
             v["version"].as_u64().unwrap_or(0) >= 6
                 && now_ms().saturating_sub(v["fetchedAt"].as_u64().unwrap_or(0)) < 3_600_000
         }) {
-            let entries = normalize(&value["entries"]);
+            let entries = prepare(normalize(&value["entries"]));
             if !entries.is_empty() {
                 *cache = Some((now_ms(), entries.clone()));
                 return Ok(entries);
@@ -78,6 +81,7 @@ impl Catalog {
                 entries
             }
         };
+        let entries = prepare(entries);
         *cache = Some((now_ms(), entries.clone()));
         Ok(entries)
     }
@@ -97,37 +101,51 @@ impl Catalog {
             .to_lowercase();
         let offset = options["offset"].as_u64().unwrap_or(0).min(1_000_000) as usize;
         let limit = options["limit"].as_u64().unwrap_or(25).clamp(1, 1000) as usize;
-        let loved: Vec<Value> = serde_json::from_str(include_str!("loved_extensions.json"))
-            .map_err(|e| e.to_string())?;
-        let mut entries = if cfg!(target_os = "windows") {
-            loved
-                .clone()
-                .into_iter()
-                .filter(|v| query.is_empty() || v.to_string().to_lowercase().contains(&query))
-                .collect::<Vec<_>>()
+        let catalog = if cfg!(target_os = "windows") {
+            Arc::default()
         } else {
-            let mut scored: Vec<_> = self
-                .entries()
-                .await
-                .unwrap_or_default()
-                .into_iter()
-                .map(|v| {
-                    let score = score(&v, &query);
-                    (v, score)
-                })
-                .filter(|(_, score)| *score > 0.)
-                .collect();
-            scored.sort_by(|(a, sa), (b, sb)| {
-                sb.total_cmp(sa)
-                    .then_with(|| b["installCount"].as_u64().cmp(&a["installCount"].as_u64()))
-                    .then_with(|| a["title"].as_str().cmp(&b["title"].as_str()))
-            });
-            scored.into_iter().map(|(v, _)| manifest(&v)).collect()
+            self.entries().await.unwrap_or_default()
         };
-        if !cfg!(target_os = "windows") {
-            entries = merge_own(loved, entries, &query);
-        }
-        let entries = merge_native(entries, &query);
+        let entries = tokio::task::spawn_blocking(move || {
+            static LOVED: OnceLock<Vec<Value>> = OnceLock::new();
+            let loved = LOVED.get_or_init(|| {
+                serde_json::from_str(include_str!("loved_extensions.json"))
+                    .expect("bundled extension catalog")
+            });
+            let entries = if cfg!(target_os = "windows") {
+                loved
+                    .iter()
+                    .filter(|v| query.is_empty() || v.to_string().to_lowercase().contains(&query))
+                    .cloned()
+                    .collect()
+            } else {
+                let mut scored: Vec<_> = catalog
+                    .iter()
+                    .map(|entry| (entry, entry.keys.score(&entry.value, &query)))
+                    .filter(|(_, score)| *score > 0.)
+                    .collect();
+                scored.sort_by(|(a, sa), (b, sb)| {
+                    sb.total_cmp(sa)
+                        .then_with(|| {
+                            b.value["installCount"]
+                                .as_u64()
+                                .cmp(&a.value["installCount"].as_u64())
+                        })
+                        .then_with(|| a.value["title"].as_str().cmp(&b.value["title"].as_str()))
+                });
+                merge_own(
+                    loved.clone(),
+                    scored
+                        .into_iter()
+                        .map(|(entry, _)| manifest(&entry.value))
+                        .collect(),
+                    &query,
+                )
+            };
+            merge_native(entries, &query)
+        })
+        .await
+        .map_err(|e| e.to_string())?;
         if channel == "extensions:searchStore" {
             return Ok(json!(entries));
         }
@@ -278,69 +296,145 @@ fn token_score(value: &str, query: &str, exact: f64, prefix: f64) -> f64 {
     }
 }
 
+struct Entry {
+    value: Value,
+    keys: SearchKeys,
+}
+
+fn prepare(values: Vec<Value>) -> Arc<Vec<Entry>> {
+    Arc::new(
+        values
+            .into_iter()
+            .map(|value| Entry {
+                keys: SearchKeys::new(&value),
+                value,
+            })
+            .collect(),
+    )
+}
+
+struct SearchKeys {
+    name: String,
+    title: String,
+    fields: [String; 6],
+}
+
+impl SearchKeys {
+    fn new(v: &Value) -> Self {
+        let name = v["name"].as_str().unwrap_or("").to_lowercase();
+        let title = v["title"].as_str().unwrap_or("").to_lowercase();
+        Self {
+            fields: [
+                name.clone(),
+                title.clone(),
+                v["categories"].to_string().to_lowercase(),
+                v["author"].as_str().unwrap_or("").to_lowercase(),
+                v["commands"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|c| {
+                        format!(
+                            "{} {}",
+                            c["name"].as_str().unwrap_or(""),
+                            c["title"].as_str().unwrap_or("")
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .to_lowercase(),
+                v["description"].as_str().unwrap_or("").to_lowercase(),
+            ],
+            name,
+            title,
+        }
+    }
+
+    fn score(&self, v: &Value, query: &str) -> f64 {
+        if query.is_empty() {
+            return 1.;
+        }
+        let mut score = 0.;
+        if self.name == query || self.title == query {
+            score += 10000.;
+        }
+        if self.name.starts_with(query) || self.title.starts_with(query) {
+            score += 9000.;
+        }
+        for (text, (exact, prefix)) in self.fields.iter().zip([
+            (8200., 7200.),
+            (8000., 7000.),
+            (3000., 2200.),
+            (2200., 1600.),
+            (1800., 1200.),
+            (900., 550.),
+        ]) {
+            score += token_score(text, query, exact, prefix);
+        }
+        if query.len() >= 4 {
+            if self.name.contains(query) || self.title.contains(query) {
+                score += 1400.;
+            }
+            if self.fields[5].contains(query) {
+                score += 350.;
+            }
+        }
+        let installs = v["installCount"].as_f64().unwrap_or(0.);
+        if score > 0. && installs > 0. {
+            score += (installs.log10() * 80.).min(500.);
+        }
+        score
+    }
+}
+
 fn score(v: &Value, query: &str) -> f64 {
-    if query.is_empty() {
-        return 1.;
-    }
-    let name = v["name"].as_str().unwrap_or("").to_lowercase();
-    let title = v["title"].as_str().unwrap_or("").to_lowercase();
-    let description = v["description"].as_str().unwrap_or("").to_lowercase();
-    let mut score = 0.;
-    if name == query || title == query {
-        score += 10000.;
-    }
-    if name.starts_with(query) || title.starts_with(query) {
-        score += 9000.;
-    }
-    for (text, exact, prefix) in [
-        (name.clone(), 8200., 7200.),
-        (title.clone(), 8000., 7000.),
-        (v["categories"].to_string().to_lowercase(), 3000., 2200.),
-        (
-            v["author"].as_str().unwrap_or("").to_lowercase(),
-            2200.,
-            1600.,
-        ),
-        (
-            v["commands"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .map(|c| {
-                    format!(
-                        "{} {}",
-                        c["name"].as_str().unwrap_or(""),
-                        c["title"].as_str().unwrap_or("")
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(" ")
-                .to_lowercase(),
-            1800.,
-            1200.,
-        ),
-        (description.clone(), 900., 550.),
-    ] {
-        score += token_score(&text, query, exact, prefix);
-    }
-    if query.len() >= 4 {
-        if name.contains(query) || title.contains(query) {
-            score += 1400.;
-        }
-        if description.contains(query) {
-            score += 350.;
-        }
-    }
-    let installs = v["installCount"].as_f64().unwrap_or(0.);
-    if score > 0. && installs > 0. {
-        score += (installs.log10() * 80.).min(500.);
-    }
-    score
+    SearchKeys::new(v).score(v, query)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn cached_catalog_shares_entries_and_preserves_channel_pagination() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = CoreContext::headless(crate::native_core::common::CorePaths {
+            data_dir: dir.path().into(),
+            config_dir: dir.path().join("config"),
+            resource_dir: dir.path().join("resources"),
+            temp_dir: dir.path().join("tmp"),
+            home_dir: dir.path().into(),
+        });
+        let catalog = Catalog::new(ctx);
+        let entries = prepare(vec![
+            json!({"name":"zzfixture-one","title":"ZZFixture One","installCount":10}),
+            json!({"name":"zzfixture-two","title":"ZZFixture Two","installCount":20}),
+        ]);
+        *catalog.cache.lock().await = Some((now_ms(), entries.clone()));
+        assert!(Arc::ptr_eq(&entries, &catalog.entries().await.unwrap()));
+        assert!(Arc::ptr_eq(&entries, &catalog.entries().await.unwrap()));
+        if !cfg!(target_os = "windows") {
+            let all = catalog
+                .search("extensions:searchStore", &[json!("zzfixture")])
+                .await
+                .unwrap();
+            let page = catalog
+                .search(
+                    "extension:search-store",
+                    &[json!({"query":"zzfixture","offset":1,"limit":1})],
+                )
+                .await
+                .unwrap();
+            assert_eq!(all.as_array().unwrap().len(), 2);
+            assert_eq!(all[0]["id"], "raycast.zzfixture-two");
+            assert_eq!(page["items"], json!([all[1].clone()]));
+            assert_eq!(page["total"], 2);
+            assert_eq!(page["hasMore"], false);
+        }
+        assert_eq!(
+            SearchKeys::new(&json!({"name":"arc","title":"Arc"})).score(&Value::Null, "arc"),
+            35200.
+        );
+    }
     #[test]
     fn curated_replacements_keep_live_counts_and_artwork() {
         let items = merge_own(
