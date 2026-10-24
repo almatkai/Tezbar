@@ -18,6 +18,307 @@ fn profile(dir: &Path) -> CoreContext {
         home_dir: dir.join("home"),
     })
 }
+
+#[tokio::test]
+async fn source_search_route_keeps_files_when_gemma_is_unavailable() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(profile(dir.path()));
+    let docs = dir.path().join("docs");
+    std::fs::create_dir(&docs).unwrap();
+    core.database().await.unwrap().call(move |s| {
+        s.root_add(&docs)?;
+        let root = s.roots()?[0]["id"].as_str().unwrap().to_owned();
+        let mut settings = s.settings()?;
+        settings["embeddingModel"] = json!("embeddinggemma-2");
+        s.set_meta("settings", &settings)?;
+        for i in 0..4 {
+            let id = format!("source-{i}");
+            let pages = if i == 0 {
+                (1..=100).map(|n| json!({"pageNumber":n,"ocr":{"text":"Материалы учителя"}})).collect::<Vec<_>>()
+            } else {
+                vec![json!({"pageNumber":1,"ocr":{"text":format!("Материалы учителя. {}", "Описание учебного занятия. ".repeat(20))}})]
+            };
+            s.pending(&id, &root, &docs.join(format!("{i}.png")).to_string_lossy(), &json!({"contentHash":id,"byteSize":100,"modifiedAt":0}), "smart")?;
+            s.save_result(&id, &json!({"chunks":text::chunks(&id,&pages,true),"pages":pages,"images":[]}))?;
+        }
+        Ok(())
+    }).await.unwrap();
+    let args = [json!("Материалы учителя"), json!(3)];
+    let chunks = core
+        .handle("core:knowledge:search", &args)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(chunks.as_array().unwrap().len(), 3);
+    assert!(chunks
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|h| h["sourceId"] == "source-0"));
+    let files = core
+        .handle("core:knowledge:search-sources", &args)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(files.as_array().unwrap().len(), 3);
+    assert_eq!(
+        files
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|h| string(h, "sourceId"))
+            .collect::<HashSet<_>>()
+            .len(),
+        3
+    );
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn native_dispatch_uses_builtin_hybrid_without_learned_runtime() {
+    for have_learned in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let core = KnowledgeCore::new(profile(dir.path()));
+        let docs = dir.path().join("docs");
+        std::fs::create_dir(&docs).unwrap();
+        core.database().await.unwrap().call(move |s| {
+            s.root_add(&docs)?;
+            let root = s.roots()?[0]["id"].as_str().unwrap().to_owned();
+            let mut settings = s.settings()?;
+            settings["embeddingModel"] = json!("embeddinggemma-2");
+            s.set_meta("settings", &settings)?;
+            let pages = vec![json!({"pageNumber":1,"extractedText":"archived unrelated record"})];
+            s.pending("semantic", &root, &docs.join("semantic.txt").to_string_lossy(), &json!({"contentHash":"x","byteSize":1,"modifiedAt":0}), "smart")?;
+            s.save_result("semantic", &json!({"chunks":text::chunks("semantic", &pages, true),"pages":pages,"images":[]}))?;
+            s.db.execute("UPDATE knowledge_chunks SET embedding_json=?", [text::encode(&text::embed("espresso calibration"))]).map_err(|e|e.to_string())?;
+            if have_learned {
+                let chunks = s.gemma_pending(&[root], 10)?;
+                s.gemma_save(&chunks, &vec![vec![1.;256]; chunks.len()])?;
+            }
+            Ok(())
+        }).await.unwrap();
+        for channel in ["core:knowledge:search-sources", "core:knowledge:search"] {
+            let hits = core
+                .handle(channel, &[json!("espresso calibration"), json!(16)])
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                hits[0]["sourceId"], "semantic",
+                "learned={have_learned}, {channel}"
+            );
+            assert!(hits[0]["semanticScore"].as_f64().unwrap() > 0.99);
+        }
+        core.shutdown().await.unwrap();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn database_queue_supersession_and_chunk_isolation() {
+    use std::future::Future;
+    use std::task::Poll;
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(profile(dir.path())).await.unwrap();
+    let (entered, started) = tokio::sync::oneshot::channel();
+    let (release, blocked) = std::sync::mpsc::channel();
+    let worker = db.clone();
+    let blocker = tokio::spawn(async move {
+        worker
+            .call(move |_| {
+                let _ = entered.send(());
+                blocked.recv().unwrap();
+                Ok(())
+            })
+            .await
+    });
+    started.await.unwrap();
+    let source_epoch = Arc::new(AtomicU64::new(0));
+    let chunk_epoch = Arc::new(AtomicU64::new(0));
+    let old = db::SearchGuard::new(source_epoch.clone());
+    let runs = Arc::new(AtomicU64::new(0));
+    let count = runs.clone();
+    let mut stale = Box::pin(db.call_search(old.0.clone(), move |_| {
+        count.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }));
+    std::future::poll_fn(|cx| {
+        assert!(stale.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    let dropped = db::SearchGuard::new(chunk_epoch.clone());
+    let count = runs.clone();
+    let mut no_receiver = Box::pin(db.call_search(dropped.0.clone(), move |_| {
+        count.fetch_add(100, Ordering::SeqCst);
+        Ok(())
+    }));
+    std::future::poll_fn(|cx| {
+        assert!(no_receiver.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    drop(no_receiver);
+    let chunk = db::SearchGuard::new(chunk_epoch);
+    let mut independent = Box::pin(db.call_search(chunk.0.clone(), |_| Ok("chunk")));
+    std::future::poll_fn(|cx| {
+        assert!(independent.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    let latest = db::SearchGuard::new(source_epoch);
+    let mut newest = Box::pin(db.call_search(latest.0.clone(), |_| Ok("latest")));
+    std::future::poll_fn(|cx| {
+        assert!(newest.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    release.send(()).unwrap();
+    blocker.await.unwrap().unwrap();
+    assert!(stale.await.is_err());
+    assert_eq!(independent.await.unwrap(), "chunk");
+    assert_eq!(newest.await.unwrap(), "latest");
+    assert_eq!(
+        runs.load(Ordering::SeqCst),
+        0,
+        "superseded and dropped jobs must never run"
+    );
+    db.close().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn service_search_domains_supersede_only_their_own_callers() {
+    use std::future::Future;
+    use std::task::Poll;
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(profile(dir.path()));
+    core.start().await.unwrap();
+    let db = core.database().await.unwrap();
+    let (entered, started) = tokio::sync::oneshot::channel();
+    let (release, blocked) = std::sync::mpsc::channel();
+    let blocker = tokio::spawn(async move {
+        db.call(move |_| {
+            let _ = entered.send(());
+            blocked.recv().unwrap();
+            Ok(())
+        })
+        .await
+    });
+    started.await.unwrap();
+    let mut old = Box::pin(core.search("old".into(), 16, true));
+    std::future::poll_fn(|cx| {
+        assert!(old.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    let mut chunks = Box::pin(core.search("chunks".into(), 16, false));
+    std::future::poll_fn(|cx| {
+        assert!(chunks.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    let mut latest = Box::pin(core.search("latest".into(), 16, true));
+    std::future::poll_fn(|cx| {
+        assert!(latest.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    release.send(()).unwrap();
+    blocker.await.unwrap().unwrap();
+    assert!(old.await.is_err());
+    assert!(chunks.await.is_ok());
+    assert!(latest.await.is_ok());
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dropped_database_reply_cancels_running_search_without_mutation_cancel() {
+    use std::future::Future;
+    use std::task::Poll;
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(profile(dir.path())).await.unwrap();
+    let request = db::SearchGuard::new(Arc::default());
+    let (entered, started) = tokio::sync::oneshot::channel();
+    let (release, blocked) = std::sync::mpsc::channel();
+    let mut query = Box::pin(db.call_search(request.0.clone(), move |s| {
+        let _ = entered.send(());
+        blocked.recv().unwrap();
+        s.search_sources("espresso", 16, &["r".into()], false, None)
+    }));
+    std::future::poll_fn(|cx| {
+        assert!(query.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    started.await.unwrap();
+    drop(query);
+    release.send(()).unwrap();
+    db.call(|s| {
+        s.search_checkpoint()?;
+        s.set_meta("mutation-survived", &json!(true))
+    })
+    .await
+    .unwrap();
+    assert!(db
+        .call(|s| s.meta("mutation-survived", json!(false)))
+        .await
+        .unwrap()
+        .as_bool()
+        .unwrap());
+    db.close().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sqlite_search_cancellation_is_scoped_and_does_not_interrupt_next_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(profile(dir.path())).await.unwrap();
+    db.call(|s| {
+        s.db.execute_batch("CREATE TABLE cancellation_commit_test(id INTEGER PRIMARY KEY)")
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .unwrap();
+    let epoch = Arc::new(AtomicU64::new(0));
+    let old = db::SearchGuard::new(epoch.clone());
+    let token = old.0.clone();
+    let (entered, started) = tokio::sync::oneshot::channel();
+    let worker = db.clone();
+    let query = tokio::spawn(async move {
+        worker.call_search(token, move |s| {
+        let _ = entered.send(());
+        s.db.query_row("WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<1000000000) SELECT SUM(x) FROM n", [], |r|r.get::<_,i64>(0)).map_err(|e|e.to_string())
+    }).await
+    });
+    started.await.unwrap();
+    let _latest = db::SearchGuard::new(epoch);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(2), query)
+            .await
+            .unwrap()
+            .unwrap()
+            .is_err()
+    );
+    // This commit executes many VM steps with the old token still superseded.
+    // A leaked callback or connection-wide interrupt would abort the mutation.
+    db.call(|s| {
+        let tx=s.db.transaction().map_err(|e|e.to_string())?;
+        tx.execute_batch("WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<10000) INSERT INTO cancellation_commit_test SELECT x FROM n").map_err(|e|e.to_string())?;
+        tx.commit().map_err(|e|e.to_string())
+    }).await.unwrap();
+    assert_eq!(
+        db.call(|s| s
+            .db
+            .query_row("SELECT COUNT(*) FROM cancellation_commit_test", [], |r| r
+                .get::<_, i64>(
+                0
+            ))
+            .map_err(|e| e.to_string()))
+            .await
+            .unwrap(),
+        10000
+    );
+    db.close().await.unwrap();
+}
+
 #[test]
 fn utf16_feature_and_chunk_parity() {
     assert_eq!(text::embed(""), vec![0.; 384]);
@@ -439,7 +740,17 @@ async fn native_watcher_reindexes_changed_files_and_removes_deleted_sources() {
         }
     })
     .await
-    .unwrap();
+    .unwrap_or_else(|error| {
+        panic!(
+            "{error}: snapshot={} dirty={} now={} requested={} run_free={} watcher={}",
+            core.snapshot(),
+            core.inner.dirty.load(Ordering::SeqCst),
+            now_ms(),
+            core.inner.requested.load(Ordering::SeqCst),
+            core.inner.run.try_lock().is_ok(),
+            core.inner.watcher.lock().unwrap().is_some()
+        )
+    });
     std::fs::remove_file(&path).unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(18), async {
         loop {
@@ -556,4 +867,564 @@ async fn additive_legacy_migration_and_failed_chunk_replacement_preserve_content
         Ok(())
     }).await.unwrap();
     database.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn q4_service_snapshot_defaults_and_unknown_ipc_are_strict() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(profile(dir.path()));
+    let snapshot = core
+        .handle("knowledge:snapshot", &[])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(snapshot["settings"]["embeddingVariant"], "q8_0");
+    assert_eq!(snapshot["semanticSearch"]["variants"][0]["id"], "q8_0");
+    assert_eq!(snapshot["semanticSearch"]["variants"][1]["id"], "q4_k_m");
+    for channel in [
+        "knowledge:embedding:set",
+        "knowledge:embedding:download",
+        "knowledge:embedding:cancel-download",
+        "knowledge:embedding:remove",
+    ] {
+        let before = core.inner.generation.load(Ordering::SeqCst);
+        let args = if channel.ends_with(":set") {
+            vec![json!("built-in"), json!("unknown")]
+        } else {
+            vec![json!("unknown")]
+        };
+        assert!(
+            core.handle(channel, &args).await.unwrap().is_err(),
+            "{channel}"
+        );
+        assert_eq!(core.inner.generation.load(Ordering::SeqCst), before);
+    }
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn q4_store_keeps_composite_rows_in_fresh_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(profile(dir.path())).await.unwrap();
+    db.call(|s| {
+        s.db.execute("INSERT INTO knowledge_roots VALUES('r','/fixture','smart','local',1,0,0)",[]).unwrap();
+        s.db.execute("INSERT INTO knowledge_sources(id,root_id,path,content_hash,byte_size,modified_at,status) VALUES('s','r','/fixture/a','hash',1,0,'indexed')",[]).unwrap();
+        s.db.execute("INSERT INTO knowledge_chunks(id,source_id,text,embedding_json) VALUES('c','s','OCR сохранён','[1]')",[]).unwrap();
+        for key in [runtime::MODEL_KEY, "unknown-retained-key"] {
+            s.db.execute("INSERT OR REPLACE INTO knowledge_gemma_embeddings VALUES('c',?,X'00010203')",[key]).unwrap();
+        }
+        assert_eq!(s.db.query_row("SELECT COUNT(*) FROM knowledge_gemma_embeddings",[],|r|r.get::<_,i64>(0)).unwrap(),2);
+        Ok(())
+    }).await.unwrap();
+    db.close().await.unwrap();
+}
+
+async fn variant_fixture(core: &KnowledgeCore) -> Vec<String> {
+    let docs = core.inner.ctx.paths.data_dir.join("docs");
+    std::fs::create_dir_all(&docs).unwrap();
+    core.database().await.unwrap().call(move |s| {
+        s.root_add(&docs)?;
+        let root = string(&s.roots()?[0],"id").to_owned();
+        for i in 0..3 {
+            let id = format!("variant-{i}");
+            let pages = vec![json!({"pageNumber":1,"extractedText":format!("архив документа {i}"),"ocr":{"text":"Материалы учителя. План урока","blocks":[{"text":"план","confidence":0.9}],"averageConfidence":0.9}})];
+            s.pending(&id,&root,&docs.join(format!("{i}.txt")).to_string_lossy(),&json!({"contentHash":id,"byteSize":10,"modifiedAt":1}),"smart")?;
+            s.save_result(&id,&json!({"pages":pages,"chunks":text::chunks(&id,&pages,true),"images":[]}))?;
+        }
+        s.save_queue(&[(root.clone(),docs.join("next.txt").to_string_lossy().into_owned())])?;
+        Ok(vec![root])
+    }).await.unwrap()
+}
+
+#[tokio::test]
+async fn q4_multimodel_pending_counts_remove_and_vec0_identity() {
+    for accelerated in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ctx = profile(dir.path());
+        if accelerated {
+            ctx.paths.resource_dir = source_root();
+        }
+        let core = KnowledgeCore::new(ctx);
+        let roots = variant_fixture(&core).await;
+        core.database().await.unwrap().call(move |s| {
+            assert_eq!(s.vector,accelerated);
+            let q8 = runtime::MODEL_KEY;
+            let q4 = EmbeddingVariantId::Q4KM.descriptor().model_key;
+            let chunks = s.gemma_pending_for_model(&roots,100,q8)?;
+            assert_eq!(chunks.len(),3);
+            let mut a=vec![0.;256]; a[0]=1.;
+            let mut b=vec![0.;256]; b[1]=1.;
+            let before:Vec<(String,Vec<u8>)> = s.db.prepare("SELECT id,CAST(text AS BLOB) FROM knowledge_chunks ORDER BY id").unwrap().query_map([],|r|Ok((r.get(0)?,r.get(1)?))).unwrap().collect::<Result<_,_>>().unwrap();
+            s.gemma_save_for_model(&chunks,&[a.clone(),b.clone(),b.clone()],q8)?;
+            assert!(s.gemma_pending_for_model(&roots,100,q8)?.is_empty());
+            assert_eq!(s.gemma_pending_for_model(&roots,100,q4)?.len(),3);
+            s.gemma_save_for_model(&chunks,&[b.clone(),a.clone(),b.clone()],q4)?;
+            // Unknown keys survive recognized-model writes/removal too.
+            s.gemma_save_for_model(&chunks[..1],&[a.clone()],"retained-unknown")?;
+            assert_eq!(s.gemma_counts_for_model(&roots,q8)?,(3,3));
+            assert_eq!(s.gemma_counts_for_model(&roots,q4)?,(3,3));
+            assert!(s.gemma_has_for_model(&roots,q4)?);
+            assert!(s.gemma_pending_for_model(&roots,100,q4)?.is_empty());
+            for (key,winner) in [(q8,&chunks[0]),(q4,&chunks[1]),(q8,&chunks[0])] {
+                let hits=s.search_with_model("no-lexical-match",3,&roots,false,Some((&a,&roots,key)))?;
+                assert_eq!(hits[0]["chunkId"],winner["id"]);
+                assert!(hits[0]["semanticScore"].as_f64().unwrap()>0.99);
+                let cold=s.search_sources_with_model("no-lexical-match",3,&roots,false,Some((&a,&roots,key)))?;
+                s.prewarm_source_cache(&roots,&roots,Some(key),256)?;
+                while s.search_cache_maintenance()? {}
+                let warm=s.search_sources_with_model("no-lexical-match",3,&roots,false,Some((&a,&roots,key)))?;
+                assert_eq!(cold,warm);
+            }
+            if accelerated {
+                assert_eq!(s.db.query_row("SELECT COUNT(*) FROM knowledge_gemma_vectors",[],|r|r.get::<_,i64>(0)).unwrap(),3);
+                assert_eq!(s.db.query_row("SELECT COUNT(*) FROM knowledge_gemma_vectors_q4",[],|r|r.get::<_,i64>(0)).unwrap(),3);
+                s.db.execute_batch("DELETE FROM knowledge_gemma_vectors_q4; DELETE FROM knowledge_metadata WHERE key LIKE 'rust-gemma-vector-cursor-v2:%'").unwrap();
+                while s.vector_backfill_for_model(q4)? {}
+                assert_eq!(s.search_with_model("no-lexical-match",3,&roots,false,Some((&a,&roots,q4)))?[0]["chunkId"],chunks[1]["id"]);
+            }
+            s.gemma_clear_for_model(q4)?;
+            assert_eq!(s.gemma_counts_for_model(&roots,q4)?,(0,3));
+            assert_eq!(s.gemma_counts_for_model(&roots,q8)?,(3,3));
+            assert_eq!(s.gemma_counts_for_model(&roots,"retained-unknown")?,(1,3));
+            let after:Vec<(String,Vec<u8>)> = s.db.prepare("SELECT id,CAST(text AS BLOB) FROM knowledge_chunks ORDER BY id").unwrap().query_map([],|r|Ok((r.get(0)?,r.get(1)?))).unwrap().collect::<Result<_,_>>().unwrap();
+            assert_eq!(before,after);
+            assert!(s.checkpoint()?.is_some());
+            // Chunk deletion removes both model-specific derived rows.
+            s.gemma_save_for_model(&chunks,&[b.clone(),a.clone(),b],q4)?;
+            s.root_remove(&roots[0])?;
+            assert_eq!(s.db.query_row("SELECT COUNT(*) FROM knowledge_gemma_embeddings",[],|r|r.get::<_,i64>(0)).unwrap(),0);
+            if accelerated {
+                for table in ["knowledge_gemma_vectors","knowledge_gemma_vectors_q4"] {
+                    assert_eq!(s.db.query_row(&format!("SELECT COUNT(*) FROM {table}"),[],|r|r.get::<_,i64>(0)).unwrap(),0);
+                }
+            }
+            Ok(())
+        }).await.unwrap();
+        core.shutdown().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn q4_actual_store_open_migrates_legacy_q8_without_text_or_checkpoint_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = profile(dir.path());
+    let path = ctx.paths.data_dir.join("knowledge/knowledge.sqlite3");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let db = rusqlite::Connection::open(&path).unwrap();
+    let legacy=include_str!("schema.sql").replace("chunk_id TEXT NOT NULL REFERENCES knowledge_chunks(id) ON DELETE CASCADE,\n        model_key TEXT NOT NULL,\n        vector BLOB NOT NULL,\n        PRIMARY KEY(chunk_id, model_key)","chunk_id TEXT PRIMARY KEY,\n        model_key TEXT NOT NULL,\n        vector BLOB NOT NULL");
+    db.execute_batch(&legacy).unwrap();
+    db.execute_batch("INSERT INTO knowledge_roots VALUES('r','/legacy','smart','local',1,0,0); INSERT INTO knowledge_sources(id,root_id,path,content_hash,byte_size,modified_at,status) VALUES('s','r','/legacy/a','h',1,0,'indexed'); INSERT INTO knowledge_chunks(id,source_id,text,embedding_json) VALUES('c','s','OCR legacy','[1,2]'); INSERT INTO knowledge_pages(source_id,page_number,extracted_text,ocr_text,ocr_blocks_json) VALUES('s',1,'text','OCR','[]'); INSERT INTO knowledge_indexing_jobs VALUES(1,'job',2,1,0,0); INSERT INTO knowledge_indexing_queue VALUES('job',1,'r','/legacy/next');").unwrap();
+    db.execute(
+        "INSERT INTO knowledge_gemma_embeddings VALUES('c',?,X'0001FF00')",
+        [runtime::MODEL_KEY],
+    )
+    .unwrap();
+    db.execute_batch("INSERT INTO knowledge_chunks(id,source_id,text) VALUES('u','s','unknown'); INSERT INTO knowledge_gemma_embeddings VALUES('u','unknown-key',X'040506');").unwrap();
+    drop(db);
+    let database = Database::open(ctx).await.unwrap();
+    database
+        .call(|s| {
+            assert_eq!(
+                s.db.query_row("PRAGMA foreign_keys", [], |r| r.get::<_, i64>(0))
+                    .unwrap(),
+                1
+            );
+            assert_eq!(
+                s.db.query_row(
+                    "SELECT vector FROM knowledge_gemma_embeddings WHERE chunk_id='c'",
+                    [],
+                    |r| r.get::<_, Vec<u8>>(0)
+                )
+                .unwrap(),
+                vec![0, 1, 255, 0]
+            );
+            s.db.execute(
+                "INSERT INTO knowledge_gemma_embeddings VALUES('c',?,X'0809')",
+                [EmbeddingVariantId::Q4KM.descriptor().model_key],
+            )
+            .unwrap();
+            assert_eq!(
+                s.db.query_row("SELECT COUNT(*) FROM knowledge_gemma_embeddings", [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                3
+            );
+            assert_eq!(s.checkpoint()?.unwrap()["processedSources"], 1);
+            assert_eq!(
+                s.db.query_row(
+                    "SELECT text,embedding_json FROM knowledge_chunks WHERE id='c'",
+                    [],
+                    |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                )
+                .unwrap(),
+                ("OCR legacy".into(), "[1,2]".into())
+            );
+            assert_eq!(
+                s.db.query_row(
+                    "SELECT extracted_text,ocr_text,ocr_blocks_json FROM knowledge_pages",
+                    [],
+                    |r| Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?
+                    ))
+                )
+                .unwrap(),
+                ("text".into(), "OCR".into(), "[]".into())
+            );
+            Ok(())
+        })
+        .await
+        .unwrap();
+    database.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn q4_ipc_omission_targets_q8_and_switch_keeps_extraction_checkpoint() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(profile(dir.path()));
+    let roots = variant_fixture(&core).await;
+    core.start().await.unwrap();
+    // Hold extraction ownership: a semantic choice must not await or cancel it.
+    let _extraction = core.inner.run.lock().await;
+    let extraction = core.cancel();
+    let before = core
+        .database()
+        .await
+        .unwrap()
+        .call(|s| s.checkpoint())
+        .await
+        .unwrap();
+    let snap = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        core.handle(
+            "knowledge:embedding:set",
+            &[json!("built-in"), json!("q4_k_m")],
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap();
+    assert_eq!(snap["settings"]["embeddingVariant"], "q4_k_m");
+    extraction.check().unwrap();
+    let epoch = core.inner.semantic_generation.load(Ordering::SeqCst);
+    core.handle(
+        "knowledge:embedding:set",
+        &[json!("built-in"), json!("q4_k_m")],
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(epoch, core.inner.semantic_generation.load(Ordering::SeqCst));
+    // Distinct state sentinels prove omitted download/cancel do not route to Q4.
+    core.runtime(EmbeddingVariantId::Q8_0)
+        .patch(json!({"modelState":"ready","error":null}));
+    core.runtime(EmbeddingVariantId::Q4KM)
+        .patch(json!({"modelState":"error","errorSource":"runtime","error":"q4 sentinel"}));
+    let snap = core
+        .handle("knowledge:embedding:download", &[])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        snap["semanticSearch"]["variants"][1]["failure"]["message"],
+        "q4 sentinel"
+    );
+    let snap = core
+        .handle("knowledge:embedding:cancel-download", &[])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(snap["settings"]["embeddingVariant"], "q4_k_m");
+    let learned_roots = roots.clone();
+    core.database()
+        .await
+        .unwrap()
+        .call(move |s| {
+            let chunks = s.gemma_pending(&learned_roots, 100)?;
+            s.gemma_save(&chunks, &vec![vec![1.; 256]; chunks.len()])?;
+            s.gemma_save_for_model(
+                &chunks,
+                &vec![vec![2.; 256]; chunks.len()],
+                EmbeddingVariantId::Q4KM.descriptor().model_key,
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    // Removing omitted Q8 keeps the selected Q4 engine and vectors.
+    core.inner.cache.lock().unwrap().settings["embeddingModel"] = json!("embeddinggemma-2");
+    core.database()
+        .await
+        .unwrap()
+        .call(|s| {
+            let mut settings = s.settings()?;
+            settings["embeddingModel"] = json!("embeddinggemma-2");
+            s.set_meta("settings", &settings)
+        })
+        .await
+        .unwrap();
+    let snap = core
+        .handle("knowledge:embedding:remove", &[])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(snap["settings"]["embeddingModel"], "embeddinggemma-2");
+    assert_eq!(snap["settings"]["embeddingVariant"], "q4_k_m");
+    assert_eq!(snap["semanticSearch"]["indexedChunks"], 3);
+    let snap = core
+        .handle("knowledge:embedding:remove", &[json!("q4_k_m")])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(snap["settings"]["embeddingModel"], "built-in");
+    let snap = core
+        .handle("knowledge:embedding:set", &[json!("built-in")])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(snap["settings"]["embeddingVariant"], "q8_0");
+    assert_eq!(
+        core.database()
+            .await
+            .unwrap()
+            .call(|s| s.checkpoint())
+            .await
+            .unwrap(),
+        before
+    );
+    extraction.check().unwrap();
+    drop(_extraction);
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn q4_switch_fences_queued_search_and_learned_save_without_cancelling_extraction() {
+    use std::{future::Future, task::Poll};
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(profile(dir.path()));
+    variant_fixture(&core).await;
+    core.start().await.unwrap();
+    let extraction = core.cancel();
+    let semantic = core.semantic_cancel();
+    let db = core.database().await.unwrap();
+    let (entered, started) = tokio::sync::oneshot::channel();
+    let (release, blocked) = std::sync::mpsc::channel();
+    let worker = db.clone();
+    let blocker = tokio::spawn(async move {
+        worker
+            .call(move |_| {
+                let _ = entered.send(());
+                blocked.recv().unwrap();
+                Ok(())
+            })
+            .await
+    });
+    started.await.unwrap();
+    let mut search = Box::pin(core.search("план урока".into(), 4, true));
+    std::future::poll_fn(|cx| {
+        assert!(search.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    let condition = semantic.clone();
+    let mut obsolete = Box::pin(db.call(move |s| {
+        condition.check()?;
+        s.set_meta("obsolete-save", &json!(true))
+    }));
+    std::future::poll_fn(|cx| {
+        assert!(obsolete.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    let switch_args = [json!("built-in"), json!("q4_k_m")];
+    let mut switch = Box::pin(core.handle("knowledge:embedding:set", &switch_args));
+    std::future::poll_fn(|cx| {
+        assert!(switch.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    assert!(semantic.check().is_err());
+    extraction.check().unwrap();
+    release.send(()).unwrap();
+    blocker.await.unwrap().unwrap();
+    assert!(search.await.is_err());
+    assert!(obsolete.await.is_err());
+    switch.await.unwrap().unwrap();
+    assert_eq!(
+        db.call(|s| s.meta("obsolete-save", Value::Null))
+            .await
+            .unwrap(),
+        Value::Null
+    );
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn q4_actual_learned_batch_is_cancelled_before_obsolete_model_publication() {
+    use std::{future::Future, task::Poll};
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(profile(dir.path()));
+    variant_fixture(&core).await;
+    core.start().await.unwrap();
+    core.inner.cache.lock().unwrap().settings["embeddingModel"] = json!("embeddinggemma-2");
+    let db = core.database().await.unwrap();
+    let (entered, started) = tokio::sync::oneshot::channel();
+    let (release, blocked) = std::sync::mpsc::channel();
+    let worker = db.clone();
+    let blocker = tokio::spawn(async move {
+        worker
+            .call(move |_| {
+                let _ = entered.send(());
+                blocked.recv().unwrap();
+                Ok(())
+            })
+            .await
+    });
+    started.await.unwrap();
+    let semantic = core.semantic_cancel();
+    let mut batch = Box::pin(core.learned_batch(&semantic));
+    std::future::poll_fn(|cx| {
+        assert!(batch.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    let extraction = core.cancel();
+    let args = [json!("built-in"), json!("q4_k_m")];
+    let mut switch = Box::pin(core.handle("knowledge:embedding:set", &args));
+    std::future::poll_fn(|cx| {
+        assert!(switch.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    release.send(()).unwrap();
+    blocker.await.unwrap().unwrap();
+    assert!(batch.await.is_err());
+    switch.await.unwrap().unwrap();
+    extraction.check().unwrap();
+    assert_eq!(
+        db.call(|s| Ok(s
+            .db
+            .query_row("SELECT COUNT(*) FROM knowledge_gemma_embeddings", [], |r| r
+                .get::<_, i64>(0))
+            .unwrap()))
+            .await
+            .unwrap(),
+        0
+    );
+    assert!(core.runtime(EmbeddingVariantId::Q4KM).snapshot()["error"].is_null());
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn q4_selected_runtime_failure_stays_visible_and_search_uses_builtin_hybrid() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(profile(dir.path()));
+    let roots = variant_fixture(&core).await;
+    core.start().await.unwrap();
+    let learned_roots = roots.clone();
+    core.database()
+        .await
+        .unwrap()
+        .call(move |s| {
+            s.db.execute(
+                "UPDATE knowledge_chunks SET embedding_json=?",
+                [text::encode(&text::embed("espresso calibration"))],
+            )
+            .unwrap();
+            let chunks = s.gemma_pending_for_model(
+                &learned_roots,
+                100,
+                EmbeddingVariantId::Q4KM.descriptor().model_key,
+            )?;
+            s.gemma_save_for_model(
+                &chunks,
+                &vec![vec![1.; 256]; chunks.len()],
+                EmbeddingVariantId::Q4KM.descriptor().model_key,
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    {
+        let mut c = core.inner.cache.lock().unwrap();
+        c.settings["embeddingModel"] = json!("embeddinggemma-2");
+        c.settings["embeddingVariant"] = json!("q4_k_m");
+    }
+    core.runtime(EmbeddingVariantId::Q4KM).patch(json!({"modelState":"ready","integrityState":"verified","runtimeState":"error","errorSource":"runtime","error":"fixture startup failure"}));
+    for channel in ["core:knowledge:search", "core:knowledge:search-sources"] {
+        let began = std::time::Instant::now();
+        let hits = core
+            .handle(channel, &[json!("espresso calibration"), json!(6)])
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(began.elapsed() < std::time::Duration::from_secs(2));
+        assert!(hits[0]["semanticScore"].as_f64().unwrap() > 0.99);
+    }
+    let snap = core.snapshot();
+    assert_eq!(snap["semanticSearch"]["errorSource"], "runtime");
+    assert_eq!(snap["semanticSearch"]["runtimeState"], "error");
+    assert_eq!(
+        snap["semanticSearch"]["variants"][1]["failure"]["stage"],
+        "startup"
+    );
+    assert!(snap["semanticSearch"]["variants"][0]
+        .get("failure")
+        .is_none());
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn q4_old_snapshot_refresh_cannot_restore_previous_selection() {
+    use std::{future::Future, task::Poll, time::Duration};
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(profile(dir.path()));
+    core.start().await.unwrap();
+    // Complete the old DB read but intentionally delay its service continuation.
+    let mut old = Box::pin(core.refresh());
+    std::future::poll_fn(|cx| {
+        assert!(old.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    core.database()
+        .await
+        .unwrap()
+        .call(|_| Ok(()))
+        .await
+        .unwrap();
+    let switching = core.clone();
+    let mut switch = tokio::spawn(async move {
+        switching
+            .handle(
+                "knowledge:embedding:set",
+                &[json!("built-in"), json!("q4_k_m")],
+            )
+            .await
+            .unwrap()
+    });
+    // With serialized refresh the switch waits for the old continuation. Before
+    // the fix it completes and then the delayed read overwrites its cache.
+    let early = tokio::time::timeout(Duration::from_millis(100), &mut switch).await;
+    old.await.unwrap();
+    match early {
+        Ok(result) => {
+            result.unwrap().unwrap();
+        }
+        Err(_) => {
+            switch.await.unwrap().unwrap();
+        }
+    }
+    assert_eq!(core.settings()["embeddingVariant"], "q4_k_m");
+    let persisted = core
+        .database()
+        .await
+        .unwrap()
+        .call(|s| s.settings())
+        .await
+        .unwrap();
+    assert_eq!(core.settings(), persisted);
+    core.shutdown().await.unwrap();
 }

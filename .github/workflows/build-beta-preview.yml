@@ -1,0 +1,61 @@
+name: Beta 14 Windows preview artifact
+
+on:
+  push:
+    branches: [fix/deep-search-state]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Read the pnpm version from package.json's packageManager field.
+      - uses: pnpm/action-setup@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm release:test
+      - run: pnpm test
+      # Rust tests need the real Windows vec0.dll and Tauri resource paths.
+      - run: pnpm build:native
+      - run: pnpm build:backend
+      - run: pnpm build:frontend
+      - name: Native Windows portability tests
+        run: cargo test --lib --locked
+        working-directory: src-tauri
+      # build-release builds native helpers; Tauri's beforeBuildCommand rebuilds
+      # the backend and frontend. Updater signing happens locally after download.
+      - name: Build unsigned beta installer
+        run: node scripts/build-release.mjs --channel beta --version 0.2.9-beta.14 --allow-unsigned --output build/release-beta14-windows-ci
+      - name: Verify unsigned artifact provenance
+        shell: pwsh
+        run: |
+          $receipt = Get-Content build/release-beta14-windows-ci/receipt-windows-x86_64-nsis.json -Raw | ConvertFrom-Json
+          if ($receipt.sourceCommit -cne $env:GITHUB_SHA -or
+              $receipt.channel -cne 'beta' -or
+              $receipt.version -cne '0.2.9-beta.14' -or
+              $receipt.platform -cne 'windows-x86_64-nsis' -or
+              $receipt.distribution -cne 'testing-preview' -or
+              $receipt.platformVerified -cne $false) {
+            throw 'Expected an unsigned beta 14 Windows artifact from this exact commit'
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beta-0.2.9-beta.14-windows-x64-${{ github.sha }}
+          path: build/release-beta14-windows-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

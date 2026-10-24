@@ -10,6 +10,7 @@ mod manual_releases;
 mod native_terminal;
 mod qr_download;
 mod release_channels;
+mod resource_directory;
 #[cfg(target_os = "macos")]
 mod timer_notifications;
 mod updater;
@@ -3026,6 +3027,11 @@ pub fn run() {
                 let _ = PROFILE_CONFIG_PATH.set(path.clone());
             }
             let home_dir = handle.path().home_dir()?;
+            let executable = if cfg!(debug_assertions) {
+                std::env::current_exe()?
+            } else {
+                PathBuf::new()
+            };
             let paths = native_core::common::CorePaths {
                 data_dir: app_local_data,
                 config_dir: config_path
@@ -3033,11 +3039,13 @@ pub fn run() {
                     .and_then(|p| p.parent())
                     .map(Path::to_path_buf)
                     .unwrap_or_else(|| home_dir.join(".openray")),
-                resource_dir: if cfg!(debug_assertions) {
-                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
-                } else {
-                    handle.path().resource_dir()?
-                },
+                resource_dir: resource_directory::resolve(
+                    cfg!(debug_assertions),
+                    tauri::is_dev(),
+                    &executable,
+                    &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                    || handle.path().resource_dir(),
+                )?,
                 temp_dir: handle.path().temp_dir()?,
                 home_dir,
             };

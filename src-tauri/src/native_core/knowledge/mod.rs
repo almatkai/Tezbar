@@ -1,6 +1,7 @@
 //! Native, profile-scoped knowledge service. SQLite is confined to one bounded
 //! dedicated thread; extraction and inference never execute JavaScript workers.
 mod db;
+mod embedding_schema;
 mod extract;
 mod runtime;
 #[cfg(test)]
@@ -10,6 +11,7 @@ use crate::native_core::common::{now_ms, CoreContext, CoreResult, HandlerResult}
 use db::{number, string, Database};
 use extract::Cancellation;
 use notify::{RecursiveMode, Watcher};
+use runtime::{EmbeddingVariantId, ForegroundEmbedding, Runtime};
 use serde_json::{json, Value};
 use std::{
     collections::HashSet,
@@ -40,6 +42,7 @@ pub const CHANNELS: &[&str] = &[
     "knowledge:index:pause",
     "knowledge:index:resume",
     "core:knowledge:search",
+    "core:knowledge:search-sources",
     "core:knowledge:search-metadata",
     "core:knowledge:read",
     "core:knowledge:background",
@@ -53,17 +56,34 @@ struct Inner {
     ctx: CoreContext,
     database: OnceCell<Database>,
     cache: Mutex<Cache>,
-    runtime: runtime::Runtime,
+    runtimes: [Runtime; 2],
+    semantic_generation: Arc<AtomicU64>,
+    semantic_changing: AtomicBool,
     generation: Arc<AtomicU64>,
+    search_generations: [Arc<AtomicU64>; 2],
     closed: AtomicBool,
     paused: AtomicBool,
     requested: AtomicBool,
     dirty: Arc<AtomicU64>,
     wake: Notify,
     task: AsyncMutex<Option<tokio::task::JoinHandle<()>>>,
+    prewarm_task: AsyncMutex<Option<tokio::task::JoinHandle<()>>>,
     run: AsyncMutex<()>,
     mutation: AsyncMutex<()>,
+    refresh_lock: AsyncMutex<()>,
     watcher: Mutex<Option<notify::RecommendedWatcher>>,
+}
+// Fence requests that begin during a selection's asynchronous persistence.
+// Drop also fences the error path and futures dropped by an IPC caller.
+struct SemanticChange<'a> {
+    generation: &'a AtomicU64,
+    changing: &'a AtomicBool,
+}
+impl Drop for SemanticChange<'_> {
+    fn drop(&mut self) {
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        self.changing.store(false, Ordering::SeqCst);
+    }
 }
 struct Cache {
     settings: Value,
@@ -73,7 +93,7 @@ struct Cache {
 }
 impl KnowledgeCore {
     pub fn new(ctx: CoreContext) -> Self {
-        let runtime = runtime::Runtime::new(ctx.clone());
+        let runtimes = EmbeddingVariantId::ALL.map(|v| Runtime::new_for_variant(ctx.clone(), v));
         Self {
             inner: Arc::new(Inner {
                 ctx,
@@ -84,16 +104,21 @@ impl KnowledgeCore {
                     roots: vec![],
                     storage: 0,
                 }),
-                runtime,
+                runtimes,
+                semantic_generation: Arc::default(),
+                semantic_changing: AtomicBool::new(false),
                 generation: Arc::new(AtomicU64::new(0)),
+                search_generations: [Arc::default(), Arc::default()],
                 closed: AtomicBool::new(false),
                 paused: AtomicBool::new(false),
                 requested: AtomicBool::new(false),
                 dirty: Arc::new(AtomicU64::new(0)),
                 wake: Notify::new(),
                 task: AsyncMutex::new(None),
+                prewarm_task: AsyncMutex::new(None),
                 run: AsyncMutex::new(()),
                 mutation: AsyncMutex::new(()),
+                refresh_lock: AsyncMutex::new(()),
                 watcher: Mutex::new(None),
             }),
         }
@@ -135,6 +160,7 @@ impl KnowledgeCore {
         status = merged;
         let paused = status["state"] == "paused";
         self.inner.paused.store(paused, Ordering::SeqCst);
+        db.pause_search_cache(paused);
         {
             let mut cache = self.inner.cache.lock().unwrap();
             cache.settings = settings;
@@ -158,8 +184,16 @@ impl KnowledgeCore {
             self.status(json!({"state":"idle","progress":0,"detail":null}));
         }
         self.refresh_counts().await?;
-        self.inner.runtime.initialize().await?;
+        for runtime in &self.inner.runtimes {
+            runtime.initialize().await?;
+        }
+        self.refresh_semantic_counts().await?;
+        self.prewarm_sources().await;
         self.sync_watchers().await?;
+        let this = self.clone();
+        *self.inner.prewarm_task.lock().await = Some(tokio::spawn(async move {
+            this.prewarm_loop().await;
+        }));
         let this = self.clone();
         *task = Some(tokio::spawn(async move {
             this.background_loop().await;
@@ -171,9 +205,23 @@ impl KnowledgeCore {
             return Ok(());
         }
         self.inner.generation.fetch_add(1, Ordering::SeqCst);
+        self.inner
+            .semantic_generation
+            .fetch_add(1, Ordering::SeqCst);
+        for generation in &self.inner.search_generations {
+            generation.fetch_add(1, Ordering::SeqCst);
+        }
+        if let Some(db) = self.inner.database.get() {
+            db.pause_search_cache(true);
+        }
         self.inner.wake.notify_waiters();
         self.inner.watcher.lock().unwrap().take();
-        self.inner.runtime.shutdown().await;
+        for runtime in &self.inner.runtimes {
+            runtime.shutdown().await;
+        }
+        if let Some(task) = self.inner.prewarm_task.lock().await.take() {
+            task.await.map_err(|e| e.to_string())?;
+        }
         if let Some(task) = self.inner.task.lock().await.take() {
             task.await.map_err(|e| e.to_string())?;
         }
@@ -215,13 +263,68 @@ impl KnowledgeCore {
             .map(|r| string(r, "id").into())
             .collect()
     }
+    fn selected_variant(&self) -> EmbeddingVariantId {
+        serde_json::from_value(self.settings()["embeddingVariant"].clone()).unwrap_or_default()
+    }
+    fn runtime(&self, variant: EmbeddingVariantId) -> &Runtime {
+        &self.inner.runtimes[match variant {
+            EmbeddingVariantId::Q8_0 => 0,
+            EmbeddingVariantId::Q4KM => 1,
+        }]
+    }
+    fn selected_runtime(&self) -> &Runtime {
+        self.runtime(self.selected_variant())
+    }
+    fn semantic_change(&self) -> SemanticChange<'_> {
+        self.inner.semantic_changing.store(true, Ordering::SeqCst);
+        self.inner
+            .semantic_generation
+            .fetch_add(1, Ordering::SeqCst);
+        SemanticChange {
+            generation: &self.inner.semantic_generation,
+            changing: &self.inner.semantic_changing,
+        }
+    }
+    fn semantic_cancel(&self) -> Cancellation {
+        Cancellation {
+            generation: self.inner.semantic_generation.clone(),
+            expected: self.inner.semantic_generation.load(Ordering::SeqCst),
+        }
+    }
+    fn semantic_snapshot(&self, settings: &Value) -> Value {
+        let variant =
+            serde_json::from_value(settings["embeddingVariant"].clone()).unwrap_or_default();
+        let mut status = self.runtime(variant).snapshot();
+        status["variants"] =
+            json!(EmbeddingVariantId::ALL.map(|v| self.runtime(v).snapshot_variant()));
+        status["indexVariant"] = json!(variant);
+        status
+    }
     fn background(&self) -> Value {
         let cache = self.inner.cache.lock().unwrap();
-        json!({"status":cache.status,"settings":{"embeddingModel":cache.settings["embeddingModel"]},"semanticSearch":self.inner.runtime.snapshot()})
+        json!({"status":cache.status,"settings":{"embeddingModel":cache.settings["embeddingModel"],"embeddingVariant":cache.settings["embeddingVariant"]},"semanticSearch":self.semantic_snapshot(&cache.settings)})
     }
     fn snapshot(&self) -> Value {
         let c = self.inner.cache.lock().unwrap();
-        json!({"roots":c.roots,"status":c.status,"localBackendAvailable":true,"cloudBackendAvailable":false,"settings":c.settings,"storageBytes":c.storage,"semanticSearch":self.inner.runtime.snapshot()})
+        json!({"roots":c.roots,"status":c.status,"localBackendAvailable":true,"cloudBackendAvailable":false,"settings":c.settings,"storageBytes":c.storage,"semanticSearch":self.semantic_snapshot(&c.settings)})
+    }
+    async fn refresh_semantic_counts(&self) -> Result<(), String> {
+        let ids = self.learned_root_ids();
+        let counts = self
+            .database()
+            .await?
+            .call(move |s| {
+                EmbeddingVariantId::ALL
+                    .map(|v| s.gemma_counts_for_model(&ids, v.descriptor().model_key))
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .await?;
+        for (v, (indexed, total)) in EmbeddingVariantId::ALL.into_iter().zip(counts) {
+            self.runtime(v)
+                .patch(json!({"indexedChunks":indexed,"totalChunks":total}));
+        }
+        Ok(())
     }
     fn status(&self, patch: Value) {
         let status = {
@@ -251,6 +354,9 @@ impl KnowledgeCore {
         Ok(())
     }
     async fn refresh(&self) -> Result<(), String> {
+        // Serialize the DB read AND cache publication. A delayed old snapshot
+        // must finish before a mutation's authoritative refresh can complete.
+        let _refresh = self.inner.refresh_lock.lock().await;
         let (roots, settings, storage) = self
             .database()
             .await?
@@ -263,6 +369,7 @@ impl KnowledgeCore {
             c.storage = storage;
         }
         self.refresh_counts().await?;
+        self.refresh_semantic_counts().await?;
         Ok(())
     }
     fn request_index(&self) {
@@ -307,6 +414,36 @@ impl KnowledgeCore {
         }
         cancel.check()
     }
+    // Verification may finish while the extraction loop is processing a long
+    // source queue. One service-owned observer warms the selected installation
+    // independently; query supersession never owns or restarts this task.
+    async fn prewarm_loop(&self) {
+        let mut prewarmed = None;
+        while !self.inner.closed.load(Ordering::SeqCst) {
+            let settings = self.settings();
+            let variant =
+                serde_json::from_value(settings["embeddingVariant"].clone()).unwrap_or_default();
+            let runtime = self.runtime(variant);
+            let state = runtime.snapshot();
+            if settings["embeddingModel"] == "embeddinggemma-2"
+                && state["modelState"] == "ready"
+                && state["integrityState"] == "verified"
+                && !self.inner.paused.load(Ordering::SeqCst)
+            {
+                if prewarmed != Some(variant)
+                    && state["error"].is_null()
+                    && !self.inner.semantic_changing.load(Ordering::SeqCst)
+                {
+                    let _ = runtime.prewarm(string(&settings, "indexingSpeed")).await;
+                    self.prewarm_sources().await;
+                    prewarmed = Some(variant);
+                }
+            } else {
+                prewarmed = None;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        }
+    }
     async fn background_loop(&self) {
         let startup = now_ms() + 8000;
         let mut started = false;
@@ -316,7 +453,22 @@ impl KnowledgeCore {
         let mut last_rescan = now_ms();
         let mut last_semantic = Value::Null;
         let mut retry_learned_after = 0;
+        let mut last_variant = self.selected_variant();
+        let mut last_semantic_epoch = self.inner.semantic_generation.load(Ordering::SeqCst);
         while !self.inner.closed.load(Ordering::SeqCst) {
+            let variant = self.selected_variant();
+            let epoch = self.inner.semantic_generation.load(Ordering::SeqCst);
+            if epoch != last_semantic_epoch {
+                retry_learned_after = 0;
+                last_semantic_epoch = epoch;
+            }
+            if variant != last_variant {
+                last_variant = variant;
+                retry_learned_after = 0;
+                last_counts = 0;
+                backfill = true;
+            }
+            let runtime = self.runtime(variant);
             if !started && now_ms() >= startup {
                 started = true;
                 if !self.inner.paused.load(Ordering::SeqCst) {
@@ -356,7 +508,8 @@ impl KnowledgeCore {
                 if backfill && now_ms().saturating_sub(last_vector) > 250 && now_ms() >= startup {
                     last_vector = now_ms();
                     if let Ok(db) = self.database().await {
-                        match db.call(|s| s.vector_backfill()).await {
+                        let key = runtime.model_key();
+                        match db.call(move |s| s.vector_backfill_for_model(key)).await {
                             Ok(more) => backfill = more,
                             Err(e) => {
                                 log::warn!("Knowledge vector backfill: {e}");
@@ -366,36 +519,29 @@ impl KnowledgeCore {
                     }
                 }
                 if self.settings()["embeddingModel"] == "embeddinggemma-2"
-                    && self.inner.runtime.snapshot()["modelState"] == "ready"
+                    && runtime.snapshot()["modelState"] == "ready"
+                    && runtime.snapshot()["error"].is_null()
+                    && !self.inner.semantic_changing.load(Ordering::SeqCst)
                     && now_ms() >= retry_learned_after
                 {
                     let _run = self.inner.run.lock().await;
-                    let cancel = self.cancel();
+                    let cancel = self.semantic_cancel();
                     if let Err(error) = self.learned_batch(&cancel).await {
                         if cancel.check().is_ok() {
                             retry_learned_after = now_ms() + 30000;
-                            self.inner
-                                .runtime
-                                .patch(json!({"error":error,"indexing":false}));
-                        }
-                    }
-                    if now_ms().saturating_sub(last_counts) > 10000 {
-                        last_counts = now_ms();
-                        let ids = self.learned_root_ids();
-                        if let Ok(db) = self.database().await {
-                            if let Ok((indexed, total)) =
-                                db.call(move |s| s.gemma_counts(&ids)).await
-                            {
-                                self.inner
-                                    .runtime
-                                    .patch(json!({"indexedChunks":indexed,"totalChunks":total}));
-                            }
+                            log::warn!("Knowledge semantic indexing: {error}");
                         }
                     }
                 }
             }
-            self.inner.runtime.stop_idle().await;
-            let semantic = self.inner.runtime.snapshot();
+            if now_ms().saturating_sub(last_counts) > 10000 {
+                last_counts = now_ms();
+                let _ = self.refresh_semantic_counts().await;
+            }
+            for runtime in &self.inner.runtimes {
+                runtime.stop_idle().await;
+            }
+            let semantic = self.semantic_snapshot(&self.settings());
             if semantic != last_semantic {
                 last_semantic = semantic;
                 self.status(json!({}));
@@ -404,7 +550,20 @@ impl KnowledgeCore {
         }
     }
     async fn learned_batch(&self, cancel: &Cancellation) -> Result<(), String> {
+        // Capture identity and service epoch before the first await. A switch
+        // cancels only this domain; extracted-source jobs keep their checkpoint.
+        cancel.check()?;
+        if self.inner.semantic_changing.load(Ordering::SeqCst) {
+            return Err("Knowledge model selection is changing".into());
+        }
         let settings = self.settings();
+        let variant =
+            serde_json::from_value(settings["embeddingVariant"].clone()).unwrap_or_default();
+        let runtime = self.runtime(variant);
+        let key = runtime.model_key();
+        if settings["embeddingModel"] != "embeddinggemma-2" {
+            return Ok(());
+        }
         let speed = string(&settings, "indexingSpeed");
         let count = match speed {
             "slow" => 4,
@@ -412,16 +571,21 @@ impl KnowledgeCore {
             _ => 8,
         };
         let ids = self.learned_root_ids();
+        let condition = cancel.clone();
         let chunks = self
             .database()
             .await?
-            .call(move |s| s.gemma_pending(&ids, count))
+            .call(move |s| {
+                condition.check()?;
+                s.gemma_pending_for_model(&ids, count, key)
+            })
             .await?;
+        cancel.check()?;
         if chunks.is_empty() {
-            self.inner.runtime.patch(json!({"indexing":false}));
+            runtime.patch(json!({"indexing":false}));
             return Ok(());
         }
-        self.inner.runtime.patch(json!({"indexing":true}));
+        runtime.patch(json!({"indexing":true}));
         let inputs = chunks
             .iter()
             .map(|c| {
@@ -432,23 +596,48 @@ impl KnowledgeCore {
                 )
             })
             .collect();
-        let vectors = self.inner.runtime.embed(inputs, speed, cancel).await?;
-        cancel.check()?;
-        let condition = cancel.clone();
-        self.database()
-            .await?
-            .call(move |s| {
-                condition.check()?;
-                s.gemma_save(&chunks, &vectors)
-            })
-            .await?;
+        // Runtime owns runtime-generation/error attribution (including Repair).
+        // Do not republish a late inference error over a newer install/retry.
+        let vectors = match runtime.embed(inputs, speed, cancel).await {
+            Ok(vectors) => vectors,
+            Err(error) => {
+                if cancel.check().is_ok() {
+                    runtime.patch(json!({"indexing":false}));
+                }
+                return Err(error);
+            }
+        };
+        let result = async {
+            cancel.check()?;
+            let condition = cancel.clone();
+            self.database()
+                .await?
+                .call(move |s| {
+                    condition.check()?;
+                    s.gemma_save_for_model(&chunks, &vectors, key)
+                })
+                .await?;
+            cancel.check()?;
+            self.refresh_semantic_counts().await?;
+            Ok::<_, String>(())
+        }
+        .await;
+        // Never publish an obsolete completion after a selection change.
+        if cancel.check().is_ok() {
+            if let Err(error) = &result {
+                runtime.patch(json!({"indexing":false,"error":error,"errorSource":"runtime"}));
+            } else {
+                runtime.patch(json!({"indexing":false}));
+            }
+        }
+        result?;
         let delay = match speed {
             "slow" => 350,
             "fast" => 0,
             _ => 75,
         };
         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
-        Ok(())
+        cancel.check()
     }
     async fn run_index(&self, cancel: &Cancellation) -> Result<(), String> {
         let db = self.database().await?;
@@ -717,47 +906,219 @@ impl KnowledgeCore {
             })
             .await
     }
-    async fn search(&self, query: String, limit: usize) -> CoreResult {
+    async fn prewarm_sources(&self) {
+        // Queue context only, including on scope/model changes. Never allocate
+        // a dense lane or scan authoritative vectors on the async/service task.
+        if self.inner.paused.load(Ordering::SeqCst) {
+            return;
+        }
+        let roots = self.root_ids();
+        let learned = self.learned_root_ids();
+        let condition = self.semantic_cancel();
+        if self.inner.semantic_changing.load(Ordering::SeqCst) {
+            return;
+        }
+        let settings = self.settings();
+        let variant =
+            serde_json::from_value(settings["embeddingVariant"].clone()).unwrap_or_default();
+        let runtime = self.runtime(variant);
+        let key = runtime.model_key();
+        let state = runtime.snapshot();
+        let use_learned = settings["embeddingModel"] == "embeddinggemma-2"
+            && state["modelState"] == "ready"
+            && state["integrityState"] == "verified"
+            && state["error"].is_null();
+        if let Some(db) = self.inner.database.get() {
+            if let Err(error) = db
+                .call(move |s| {
+                    condition.check()?;
+                    if use_learned && s.gemma_has_for_model(&learned, key)? {
+                        s.prewarm_source_cache(&roots, &learned, Some(key), 256)
+                    } else {
+                        s.prewarm_source_cache(&roots, &roots, None, 384)
+                    }
+                })
+                .await
+            {
+                log::debug!("Knowledge prewarm context: {error}");
+            }
+        }
+    }
+    async fn search(&self, query: String, limit: usize, sources: bool) -> CoreResult {
+        let request =
+            db::SearchGuard::new(self.inner.search_generations[usize::from(sources)].clone());
+        let lifecycle = self.cancel();
+        let semantic = self.semantic_cancel();
+        if self.inner.semantic_changing.load(Ordering::SeqCst) {
+            return Err("Knowledge model selection is changing".into());
+        }
+        let settings = self.settings();
+        let variant =
+            serde_json::from_value(settings["embeddingVariant"].clone()).unwrap_or_default();
+        let runtime = self.runtime(variant);
+        let key = runtime.model_key();
         self.inner.ctx.note_foreground();
         let ids = self.root_ids();
         let db = self.database().await?;
-        if self.settings()["embeddingModel"] == "embeddinggemma-2" {
-            let learned_ids = self.learned_root_ids();
-            let have = learned_ids.clone();
-            let have = db.call(move |s| s.gemma_has(&have)).await?;
+        if settings["embeddingModel"] == "embeddinggemma-2" {
+            let learned = self.learned_root_ids();
+            let have = learned.clone();
+            let have = db
+                .call_search(request.0.clone(), move |s| {
+                    s.gemma_has_for_model(&have, key)
+                })
+                .await?;
+            request.0.check()?;
+            lifecycle.check()?;
+            semantic.check()?;
             if have {
-                let settings = self.settings();
-                let cancel = self.cancel();
-                let vector = self
-                    .inner
-                    .runtime
-                    .embed(
+                let cancel = request.0.cancellation();
+                let vector = runtime
+                    .foreground_embed(
                         vec![format!("task: search result | query: {}", query.trim())],
                         string(&settings, "indexingSpeed"),
                         &cancel,
                     )
                     .await;
-                if let Ok(mut vector) = vector {
-                    if self.settings()["embeddingModel"] == "embeddinggemma-2" {
-                        let current = self.root_ids();
-                        let learned = self.learned_root_ids();
-                        let vector = vector.remove(0);
+                request.0.check()?;
+                lifecycle.check()?;
+                semantic.check()?;
+                if let Ok(ForegroundEmbedding::Ready(mut vectors)) = vector {
+                    if let Some(vector) = vectors.pop() {
                         let q = query.clone();
+                        let current = ids.clone();
+                        let condition = semantic.clone();
                         let hits = db
-                            .call(move |s| {
-                                s.search(&q, limit, &current, false, Some((&vector, &learned)))
+                            .call_search(request.0.clone(), move |s| {
+                                condition.check()?;
+                                if sources {
+                                    s.search_sources_with_model(
+                                        &q,
+                                        limit,
+                                        &current,
+                                        false,
+                                        Some((&vector, &learned, key)),
+                                    )
+                                } else {
+                                    s.search_with_model(
+                                        &q,
+                                        limit,
+                                        &current,
+                                        false,
+                                        Some((&vector, &learned, key)),
+                                    )
+                                }
                             })
                             .await?;
+                        request.0.check()?;
+                        lifecycle.check()?;
+                        semantic.check()?;
                         return Ok(json!(hits));
                     }
                 }
             }
-            return db
-                .call(move |s| Ok(json!(s.search(&query, limit, &ids, true, None)?)))
-                .await;
+            // Warming, Busy, absent vectors and visible runtime failures all
+            // retain the independent built-in hybrid lane.
         }
-        db.call(move |s| Ok(json!(s.search(&query, limit, &ids, false, None)?)))
-            .await
+        request.0.check()?;
+        lifecycle.check()?;
+        semantic.check()?;
+        let condition = semantic.clone();
+        let hits = db
+            .call_search(request.0.clone(), move |s| {
+                condition.check()?;
+                Ok(json!(if sources {
+                    s.search_sources(&query, limit, &ids, false, None)?
+                } else {
+                    s.search(&query, limit, &ids, false, None)?
+                }))
+            })
+            .await?;
+        request.0.check()?;
+        lifecycle.check()?;
+        semantic.check()?;
+        Ok(hits)
+    }
+    async fn change_embedding(
+        &self,
+        channel: &str,
+        args: &[Value],
+        variant: EmbeddingVariantId,
+    ) -> CoreResult {
+        let _mutation = self.inner.mutation.lock().await;
+        let settings = self.settings();
+        let previous = self.selected_variant();
+        let runtime = self.runtime(variant);
+        let removing = channel == "knowledge:embedding:remove";
+        let model = if removing {
+            "built-in"
+        } else {
+            choice(
+                args.first(),
+                &["built-in", "embeddinggemma-2"],
+                "Invalid embedding model",
+            )?
+        };
+        if !removing && model == "embeddinggemma-2" && runtime.snapshot()["modelState"] != "ready" {
+            return Err("Download EmbeddingGemma before enabling it".into());
+        }
+        let active_remove =
+            removing && previous == variant && settings["embeddingModel"] == "embeddinggemma-2";
+        let same = !removing && settings["embeddingModel"] == model && previous == variant;
+        if same {
+            // Retry start is explicit; healthy prewarm is itself idempotent.
+            let _retry = (model == "embeddinggemma-2" && runtime.snapshot()["error"].is_string())
+                .then(|| self.semantic_change());
+            if model == "embeddinggemma-2" {
+                runtime.prewarm(string(&settings, "indexingSpeed")).await?;
+            }
+            self.refresh_semantic_counts().await?;
+            self.inner.wake.notify_one();
+            return Ok(self.snapshot());
+        }
+        let _change = (!removing || active_remove).then(|| self.semantic_change());
+        if !removing || active_remove {
+            for g in &self.inner.search_generations {
+                g.fetch_add(1, Ordering::SeqCst);
+            }
+            self.runtime(previous).patch(json!({"indexing":false}));
+            self.runtime(previous).stop().await;
+        }
+        let key = runtime.model_key();
+        let model = model.to_owned();
+        self.database()
+            .await?
+            .call(move |s| {
+                if !removing || active_remove {
+                    let mut settings = s.settings()?;
+                    settings["embeddingModel"] = json!(model);
+                    if !removing {
+                        settings["embeddingVariant"] = json!(variant);
+                    }
+                    s.set_meta("settings", &settings)?;
+                }
+                if removing {
+                    s.gemma_clear_for_model(key)?;
+                }
+                Ok(())
+            })
+            .await?;
+        if removing {
+            runtime.remove().await?;
+        }
+        self.refresh().await?;
+        if !removing
+            && self.settings()["embeddingModel"] == "embeddinggemma-2"
+            && !self.inner.paused.load(Ordering::SeqCst)
+        {
+            runtime
+                .prewarm(string(&self.settings(), "indexingSpeed"))
+                .await?;
+        }
+        drop(_change);
+        self.prewarm_sources().await;
+        self.inner.wake.notify_one();
+        Ok(self.snapshot())
     }
     pub async fn handle(&self, channel: &str, args: &[Value]) -> HandlerResult {
         if !CHANNELS.contains(&channel) {
@@ -773,7 +1134,28 @@ impl KnowledgeCore {
             self.shutdown().await?;
             return Ok(Value::Null);
         }
+        // Reject invalid/unknown optional variants before startup or cancellation.
+        let variant = match channel {
+            "knowledge:embedding:set" => {
+                choice(
+                    args.first(),
+                    &["built-in", "embeddinggemma-2"],
+                    "Invalid embedding model",
+                )?;
+                Some(ipc_variant(args.get(1))?)
+            }
+            "knowledge:embedding:download"
+            | "knowledge:embedding:cancel-download"
+            | "knowledge:embedding:remove" => Some(ipc_variant(args.first())?),
+            _ => None,
+        };
         self.start().await?;
+        if matches!(
+            channel,
+            "knowledge:embedding:set" | "knowledge:embedding:remove"
+        ) {
+            return self.change_embedding(channel, args, variant.unwrap()).await;
+        }
         match channel {
             "knowledge:snapshot" => {
                 self.refresh().await?;
@@ -801,10 +1183,12 @@ impl KnowledgeCore {
                     .call(move |s| s.search_metadata(&query, limit, &roots))
                     .await;
             }
-            "core:knowledge:search" => {
+            "core:knowledge:search" | "core:knowledge:search-sources" => {
                 let query = required(args, 0, "A knowledge search query is required")?.to_owned();
                 let limit = integer(args.get(1), 12, 0, 500)?;
-                return self.search(query, limit).await;
+                return self
+                    .search(query, limit, channel == "core:knowledge:search-sources")
+                    .await;
             }
             "core:knowledge:read" => {
                 self.inner.ctx.note_foreground();
@@ -834,11 +1218,11 @@ impl KnowledgeCore {
                     .unwrap_or(Value::Null));
             }
             "knowledge:embedding:download" => {
-                self.inner.runtime.download().await?;
+                self.runtime(variant.unwrap()).download().await?;
                 return Ok(self.snapshot());
             }
             "knowledge:embedding:cancel-download" => {
-                self.inner.runtime.cancel_download().await?;
+                self.runtime(variant.unwrap()).cancel_download().await?;
                 return Ok(self.snapshot());
             }
             _ => {}
@@ -866,18 +1250,6 @@ impl KnowledgeCore {
                     "Invalid indexing speed",
                 )?;
             }
-            "knowledge:embedding:set" => {
-                let model = choice(
-                    args.first(),
-                    &["built-in", "embeddinggemma-2"],
-                    "Invalid embedding model",
-                )?;
-                if model == "embeddinggemma-2"
-                    && self.inner.runtime.snapshot()["modelState"] != "ready"
-                {
-                    return Err("Download EmbeddingGemma before enabling it".into());
-                }
-            }
             "knowledge:root:set-enabled" => {
                 let p = args.first().ok_or("Invalid knowledge folder update")?;
                 if p["rootId"].as_str().is_none() || p["enabled"].as_bool().is_none() {
@@ -902,19 +1274,34 @@ impl KnowledgeCore {
             Some("scanning" | "indexing")
         );
         self.inner.generation.fetch_add(1, Ordering::SeqCst);
+        self.inner
+            .semantic_generation
+            .fetch_add(1, Ordering::SeqCst);
+        for generation in &self.inner.search_generations {
+            generation.fetch_add(1, Ordering::SeqCst);
+        }
         let _run = self.inner.run.lock().await;
+        // The obsolete semantic batch has now exited. Source mutations keep
+        // their existing lifecycle while its old progress flag is cleared.
+        for runtime in &self.inner.runtimes {
+            runtime.patch(json!({"indexing":false}));
+        }
         let db = self.database().await?;
         let mut rescan = was_active;
         let mut watchers = false;
         match channel {
             "knowledge:index:pause" => {
                 self.inner.paused.store(true, Ordering::SeqCst);
+                self.database().await?.pause_search_cache(true);
                 self.status(json!({"state":"paused","detail":"Knowledge indexing paused"}));
-                self.inner.runtime.patch(json!({"indexing":false}));
-                self.inner.runtime.stop().await;
+                for runtime in &self.inner.runtimes {
+                    runtime.patch(json!({"indexing":false}));
+                    runtime.stop().await;
+                }
             }
             "knowledge:index:start" | "knowledge:index:resume" => {
                 self.inner.paused.store(false, Ordering::SeqCst);
+                self.database().await?.pause_search_cache(false);
                 rescan = true;
             }
             "knowledge:root:add" => {
@@ -986,11 +1373,11 @@ impl KnowledgeCore {
                 rescan = true;
                 watchers = true;
             }
-            "knowledge:depth:set" | "knowledge:speed:set" | "knowledge:embedding:set" => {
+            "knowledge:depth:set" | "knowledge:speed:set" => {
                 let key = match channel {
                     "knowledge:depth:set" => "depth",
                     "knowledge:speed:set" => "indexingSpeed",
-                    _ => "embeddingModel",
+                    _ => "indexingSpeed",
                 };
                 let value = args[0].clone();
                 db.call(move |s| {
@@ -1006,22 +1393,13 @@ impl KnowledgeCore {
                 rescan |= key == "depth";
                 watchers = key == "depth";
                 if key != "depth" {
-                    self.inner.runtime.stop().await;
+                    self.selected_runtime().stop().await;
                 }
-            }
-            "knowledge:embedding:remove" => {
-                db.call(|s| {
-                    let mut settings = s.settings()?;
-                    settings["embeddingModel"] = json!("built-in");
-                    s.set_meta("settings", &settings)?;
-                    s.gemma_clear()
-                })
-                .await?;
-                self.inner.runtime.remove().await?;
             }
             _ => return Err(format!("Unhandled owned knowledge channel: {channel}")),
         }
         self.refresh().await?;
+        self.prewarm_sources().await;
         if watchers {
             self.sync_watchers().await?;
         }
@@ -1030,6 +1408,14 @@ impl KnowledgeCore {
         }
         self.persist().await?;
         Ok(self.snapshot())
+    }
+}
+fn ipc_variant(value: Option<&Value>) -> Result<EmbeddingVariantId, String> {
+    match value {
+        None => Ok(EmbeddingVariantId::Q8_0),
+        Some(v) => {
+            serde_json::from_value(v.clone()).map_err(|_| "Invalid embedding variant".into())
+        }
     }
 }
 fn depth<'a>(root: &'a Value, settings: &'a Value) -> &'a str {

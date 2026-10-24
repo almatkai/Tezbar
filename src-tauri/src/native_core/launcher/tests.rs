@@ -485,7 +485,7 @@ async fn deep_search_merges_knowledge_metadata_and_content_without_duplicate_pat
     let ctx = profile(dir.path());
     let count = Arc::new(AtomicUsize::new(0));
     let captured = count.clone();
-    ctx.set_router(Arc::new(move|channel,args|{let count=captured.clone();Box::pin(async move{count.fetch_add(1,Ordering::SeqCst);assert_eq!(args[0],"invoice");match channel.as_str(){"core:knowledge:search"=>Ok(json!([{"chunkId":"chunk","sourceId":"source","title":"Invoice","path":"/external/invoice.pdf","text":"Payment details","pageNumber":2,"score":0.9}])),"core:knowledge:search-metadata"=>Ok(json!([{"path":"/external/invoice.pdf","title":"Invoice","score":1.},{"path":"/external/invoice-index.txt","title":"Invoice index","score":0.8}])),_=>Err(format!("unexpected {channel}"))}})})).unwrap();
+    ctx.set_router(Arc::new(move|channel,args|{let count=captured.clone();Box::pin(async move{count.fetch_add(1,Ordering::SeqCst);assert_eq!(args[0],"invoice");match channel.as_str(){"core:knowledge:search-sources"=>{assert_eq!(args[1],16);Ok(json!([{"chunkId":"chunk","sourceId":"source","title":"Invoice","path":"/external/invoice.pdf","text":"Payment details","pageNumber":2,"score":0.9}]))},"core:knowledge:search-metadata"=>Ok(json!([{"path":"/external/invoice.pdf","title":"Invoice","score":1.},{"path":"/external/invoice-index.txt","title":"Invoice index","score":0.8}])),_=>Err(format!("unexpected {channel}"))}})})).unwrap();
     let core = LauncherCore::new(ctx);
     let rows = core.search("invoice").await.unwrap();
     assert_eq!(count.load(Ordering::SeqCst), 0);

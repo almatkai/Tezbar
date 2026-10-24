@@ -698,7 +698,7 @@ impl LauncherCore {
             let hits = self
                 .inner
                 .ctx
-                .request("core:knowledge:search", vec![json!(q), json!(16)])
+                .request("core:knowledge:search-sources", vec![json!(q), json!(16)])
                 .await?;
             rows.retain(|r| r["category"] == "files");
             match self

@@ -144,9 +144,10 @@
 
 
       CREATE TABLE IF NOT EXISTS knowledge_gemma_embeddings (
-        chunk_id TEXT PRIMARY KEY,
+        chunk_id TEXT NOT NULL REFERENCES knowledge_chunks(id) ON DELETE CASCADE,
         model_key TEXT NOT NULL,
-        vector BLOB NOT NULL
+        vector BLOB NOT NULL,
+        PRIMARY KEY(chunk_id, model_key)
       );
       CREATE INDEX IF NOT EXISTS knowledge_gemma_ready_chunks_idx
         ON knowledge_chunks(source_id, id) WHERE embedding_json IS NOT NULL;

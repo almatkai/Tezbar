@@ -30,8 +30,9 @@ import {
   type ProviderId,
 } from '../shared/llmConfig'
 import type { VoiceModel, VoiceModelId } from '../shared/voice'
-import type { KnowledgeDepth, KnowledgeRootDepth, KnowledgeSnapshot } from '../shared/knowledge'
+import type { KnowledgeDepth, KnowledgeRootDepth } from '../shared/knowledge'
 import { KnowledgeEmbeddingSettings } from './KnowledgeEmbeddingSettings'
+import { useKnowledgeSettings } from './useKnowledgeSettings'
 import { LauncherAppearanceSettings } from './LauncherAppearance'
 import type { PiExtensionItem } from '../shared/desktop-api'
 import {
@@ -685,7 +686,16 @@ export default function SettingsView({
   const [clipboardWatchEnabled, setClipboardWatchEnabled] = useState(true)
   const [clipboardCaptureImages, setClipboardCaptureImages] = useState(false)
   const [clipboardMaxImageMegapixels, setClipboardMaxImageMegapixels] = useState('2')
-  const [knowledge, setKnowledge] = useState<KnowledgeSnapshot | null>(null)
+  const {
+    knowledge,
+    setKnowledge,
+    loading: knowledgeLoading,
+    error: knowledgeLoadError,
+    refresh: loadKnowledge,
+    snapshotSeq: knowledgeSnapshotSeq,
+    snapshotSeqRef: knowledgeSnapshotSeqRef,
+  } = useKnowledgeSettings(activeTab === 'knowledge')
+  // Mutation busy state must not lock out snapshot recovery.
   const [knowledgeBusy, setKnowledgeBusy] = useState(false)
   const [knowledgeMessage, setKnowledgeMessage] = useState<string | null>(null)
   const [piExtensions, setPiExtensions] = useState<PiExtensionItem[]>([])
@@ -806,20 +816,6 @@ export default function SettingsView({
     }
   }, [])
 
-  const loadKnowledge = useCallback(async () => {
-    setKnowledgeBusy(true)
-    try {
-      setKnowledge(await window.tezbar.getKnowledgeSnapshot())
-      setKnowledgeMessage(null)
-    } catch (error) {
-      setKnowledgeMessage(
-        error instanceof Error ? error.message : 'Could not load Knowledge settings.'
-      )
-    } finally {
-      setKnowledgeBusy(false)
-    }
-  }, [])
-
   const reload = useCallback(async () => {
     const c = (await window.tezbar.getLlmConfig()) as LlmConfigRecord
     setRunOnboardingNextLaunch(c.hasCompletedOnboarding === false)
@@ -935,43 +931,6 @@ export default function SettingsView({
     if (activeTab !== 'storage') return
     void loadStorage()
   }, [activeTab, loadStorage])
-
-  useEffect(() => {
-    if (activeTab !== 'knowledge') return
-    let cancelled = false
-    let inFlight = true
-    void loadKnowledge().finally(() => {
-      inFlight = false
-    })
-    const timer = window.setInterval(() => {
-      if (inFlight) return
-      inFlight = true
-      void window.tezbar
-        .getKnowledgeSnapshot()
-        .then((snapshot) => {
-          if (!cancelled) setKnowledge(snapshot)
-        })
-        .catch((error: unknown) => {
-          if (!cancelled)
-            setKnowledgeMessage(
-              error instanceof Error ? error.message : 'Could not refresh Knowledge status.'
-            )
-        })
-        .finally(() => {
-          inFlight = false
-        })
-    }, 1500)
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-    }
-  }, [activeTab, loadKnowledge])
-
-  useEffect(() => {
-    return window.tezbar.onKnowledgeStatus((status) => {
-      setKnowledge((current) => (current ? { ...current, status } : current))
-    })
-  }, [])
 
   useEffect(() => {
     if (!aiBaseURL.trim()) return
@@ -1534,6 +1493,9 @@ export default function SettingsView({
       }
       if (e.key === 'Enter') {
         const target = e.target as HTMLElement | null
+        // Let native controls handle Enter; preventing it also prevents button
+        // activation and select interaction in the Knowledge settings.
+        if (target?.closest('button, select, [role="button"], [role="radio"], [role="switch"]')) return
         if (target && target.tagName === 'TEXTAREA') return
         if (target && target.getAttribute('placeholder') === 'Add model id') return
         // The add-provider dialog handles its own Enter (adds the provider).
@@ -2705,6 +2667,22 @@ export default function SettingsView({
                 </div>
               </div>
 
+              {knowledgeLoading || (!knowledge && !knowledgeLoadError) ? (
+                <p role="status" className="mb-3 text-xs text-ink-3">
+                  {knowledge
+                    ? 'Refreshing Knowledge settings… Showing the last loaded settings.'
+                    : 'Loading Knowledge settings…'}
+                </p>
+              ) : null}
+              {knowledgeLoadError ? (
+                <p role="alert" className="mb-3 text-xs text-red-300">
+                  {knowledgeLoadError}{' '}
+                  {knowledge
+                    ? 'Showing the last loaded settings; status may be out of date.'
+                    : 'Knowledge settings are unavailable; folders and search engine are not loaded.'}
+                </p>
+              ) : null}
+
               <SettingsRow
                 label="Knowledge Depth"
                 detail="The global default for folders set to Use global. Deeper modes trade more background work and storage for better recall."
@@ -2778,7 +2756,15 @@ export default function SettingsView({
                 label="Semantic search"
                 detail="Optional on-device search by meaning. Download the model once, then choose it as your search engine."
               >
-                <KnowledgeEmbeddingSettings knowledge={knowledge} onChange={setKnowledge} />
+                <KnowledgeEmbeddingSettings
+                  knowledge={knowledge}
+                  onChange={setKnowledge}
+                  onRefresh={loadKnowledge}
+                  loading={knowledgeLoading}
+                  loadError={knowledgeLoadError}
+                  snapshotSeq={knowledgeSnapshotSeq}
+                  snapshotSeqRef={knowledgeSnapshotSeqRef}
+                />
               </SettingsRow>
               <Divider />
 
@@ -2882,7 +2868,11 @@ export default function SettingsView({
                   ) : (
                     <div className="rounded-tezbar-row border border-dashed border-white/[0.12] px-4 py-5 text-center">
                       <p className="text-[12px] text-ink-3">
-                        No folders are being content-indexed.
+                        {knowledge
+                          ? 'No folders are being content-indexed.'
+                          : knowledgeLoadError
+                            ? 'Folders are not loaded.'
+                            : 'Loading folders…'}
                       </p>
                       <p className="mt-1 text-[10.5px] text-ink-4">Nothing leaves this computer.</p>
                     </div>
@@ -2890,7 +2880,7 @@ export default function SettingsView({
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       variant="primary"
-                      disabled={knowledgeBusy}
+                      disabled={knowledgeBusy || !knowledge}
                       onClick={() => {
                         setKnowledgeBusy(true)
                         setKnowledgeMessage(null)
@@ -2909,7 +2899,7 @@ export default function SettingsView({
                     </Button>
                     <Button
                       variant="ghost"
-                      disabled={knowledgeBusy}
+                      disabled={knowledgeBusy || !knowledge}
                       onClick={() => {
                         setKnowledgeBusy(true)
                         setKnowledgeMessage(null)
@@ -2940,59 +2930,71 @@ export default function SettingsView({
 
               <SettingsRow label="Index status">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3 text-[11.5px]">
-                    <span className="flex items-center gap-2 capitalize text-ink-2">
-                      <span
-                        className={cx(
-                          'h-1.5 w-1.5 rounded-full',
-                          knowledge?.status.state === 'indexing' ||
-                            knowledge?.status.state === 'scanning'
-                            ? 'animate-pulse bg-cyan-300'
-                            : knowledge?.status.state === 'failed'
-                              ? 'bg-red-300'
-                              : knowledge?.status.state === 'paused'
-                                ? 'bg-amber-300'
-                                : 'bg-emerald-300'
-                        )}
-                      />
-                      {knowledge?.status.state ?? 'Loading'}
-                    </span>
-                    <span className="font-mono text-ink-4">
-                      {knowledge?.status.sourceCount ?? 0} files ·{' '}
-                      {knowledge?.status.chunkCount ?? 0} chunks
-                      {(knowledge?.status.totalPageCount ?? 0) > 0
-                        ? ` · ${knowledge?.status.indexedPageCount ?? 0}/${knowledge?.status.totalPageCount ?? 0} pages`
-                        : ''}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-                      <div
-                        className="h-full rounded-full bg-[linear-gradient(90deg,#5ea7ff,#6de1c2)] transition-[width] duration-300"
-                        style={{ width: `${Math.round((knowledge?.status.progress ?? 0) * 100)}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between gap-3 font-mono text-[10px] text-ink-4">
-                      <span>
-                        {knowledge?.status.processedSources ?? 0} processed ·{' '}
-                        {knowledge?.status.queuedSources ?? 0} remaining
-                        {(knowledge?.status.failedSources ?? 0) > 0
-                          ? ` · ${knowledge?.status.failedSources ?? 0} failed`
-                          : ''}
-                      </span>
-                      <span>{Math.round((knowledge?.status.progress ?? 0) * 100)}%</span>
-                    </div>
-                  </div>
-                  <p className="min-h-4 truncate text-[10.5px] text-ink-4">
-                    {knowledge?.status.detail ?? 'Ready to index approved folders.'}
-                  </p>
-                  {(knowledge?.status.partialSourceCount ?? 0) > 0 ? (
-                    <p className="text-[10.5px] text-amber-200/80">
-                      {knowledge?.status.partialSourceCount} large document
-                      {knowledge?.status.partialSourceCount === 1 ? '' : 's'} partially indexed at
-                      the selected depth.
+                  {knowledge ? (
+                    <>
+                      <div className="flex items-center justify-between gap-3 text-[11.5px]">
+                        <span className="flex items-center gap-2 capitalize text-ink-2">
+                          <span
+                            className={cx(
+                              'h-1.5 w-1.5 rounded-full',
+                              knowledge?.status.state === 'indexing' ||
+                                knowledge?.status.state === 'scanning'
+                                ? 'animate-pulse bg-cyan-300'
+                                : knowledge?.status.state === 'failed'
+                                  ? 'bg-red-300'
+                                  : knowledge?.status.state === 'paused'
+                                    ? 'bg-amber-300'
+                                    : 'bg-emerald-300'
+                            )}
+                          />
+                          {knowledge?.status.state ?? 'Loading'}
+                        </span>
+                        <span className="font-mono text-ink-4">
+                          {knowledge?.status.sourceCount ?? 0} files ·{' '}
+                          {knowledge?.status.chunkCount ?? 0} chunks
+                          {(knowledge?.status.totalPageCount ?? 0) > 0
+                            ? ` · ${knowledge?.status.indexedPageCount ?? 0}/${knowledge?.status.totalPageCount ?? 0} pages`
+                            : ''}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                          <div
+                            className="h-full rounded-full bg-[linear-gradient(90deg,#5ea7ff,#6de1c2)] transition-[width] duration-300"
+                            style={{
+                              width: `${Math.round((knowledge?.status.progress ?? 0) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-3 font-mono text-[10px] text-ink-4">
+                          <span>
+                            {knowledge?.status.processedSources ?? 0} processed ·{' '}
+                            {knowledge?.status.queuedSources ?? 0} remaining
+                            {(knowledge?.status.failedSources ?? 0) > 0
+                              ? ` · ${knowledge?.status.failedSources ?? 0} failed`
+                              : ''}
+                          </span>
+                          <span>{Math.round((knowledge?.status.progress ?? 0) * 100)}%</span>
+                        </div>
+                      </div>
+                      <p className="min-h-4 truncate text-[10.5px] text-ink-4">
+                        {knowledge?.status.detail ?? 'Ready to index approved folders.'}
+                      </p>
+                      {(knowledge?.status.partialSourceCount ?? 0) > 0 ? (
+                        <p className="text-[10.5px] text-amber-200/80">
+                          {knowledge?.status.partialSourceCount} large document
+                          {knowledge?.status.partialSourceCount === 1 ? '' : 's'} partially indexed
+                          at the selected depth.
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="text-xs text-ink-3">
+                      {knowledgeLoadError
+                        ? 'Index status is unavailable.'
+                        : 'Loading index status…'}
                     </p>
-                  ) : null}
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {knowledge?.status.state === 'indexing' ||
                     knowledge?.status.state === 'scanning' ? (
@@ -3074,12 +3076,8 @@ export default function SettingsView({
                               : 'Start indexing'}
                       </Button>
                     )}
-                    <Button
-                      variant="quiet"
-                      disabled={knowledgeBusy}
-                      onClick={() => void loadKnowledge()}
-                    >
-                      Refresh
+                    <Button variant="quiet" onClick={loadKnowledge}>
+                      {knowledgeLoadError ? 'Retry' : 'Refresh'}
                     </Button>
                   </div>
                   <p className="text-[10.5px] leading-relaxed text-ink-4">

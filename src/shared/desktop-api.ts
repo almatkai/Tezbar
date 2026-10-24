@@ -27,6 +27,7 @@ import type {
 } from './extensionRuntime'
 import type { LlmConfigRecord, ProviderId } from './llmConfig'
 import type {
+  EmbeddingVariantId,
   KnowledgeDepth,
   KnowledgeIndexingSpeed,
   KnowledgeRootDepth,
@@ -369,10 +370,13 @@ export type RaymesApi = {
   clearChromiumCache: () => Promise<{ ok: boolean }>
   listBackgroundTasks: () => Promise<BackgroundTask[]>
   getKnowledgeSnapshot: () => Promise<KnowledgeSnapshot>
-  setKnowledgeEmbeddingModel: (model: 'built-in' | 'embeddinggemma-2') => Promise<KnowledgeSnapshot>
-  downloadKnowledgeEmbeddingModel: () => Promise<KnowledgeSnapshot>
-  cancelKnowledgeEmbeddingDownload: () => Promise<KnowledgeSnapshot>
-  removeKnowledgeEmbeddingModel: () => Promise<KnowledgeSnapshot>
+  setKnowledgeEmbeddingModel: (
+    model: 'built-in' | 'embeddinggemma-2',
+    variant?: EmbeddingVariantId
+  ) => Promise<KnowledgeSnapshot>
+  downloadKnowledgeEmbeddingModel: (variant?: EmbeddingVariantId) => Promise<KnowledgeSnapshot>
+  cancelKnowledgeEmbeddingDownload: (variant?: EmbeddingVariantId) => Promise<KnowledgeSnapshot>
+  removeKnowledgeEmbeddingModel: (variant?: EmbeddingVariantId) => Promise<KnowledgeSnapshot>
   listKnowledgeSources: (input?: {
     query?: string
     offset?: number

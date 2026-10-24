@@ -2689,6 +2689,10 @@ export default function CommandBar({
   }
 
   const precomputeHomeResults = useCallback(() => {
+    // Native close/hide keeps this renderer mounted. Leave Deep Search's query,
+    // request effect, results and selection intact until the user exits the mode.
+    if (parseSearchQuery(valueRef.current).mode === 'deep') return
+
     setValue('')
     setSelectedSearch(0)
     setSearchResultNavigationActive(false)
@@ -2699,6 +2703,8 @@ export default function CommandBar({
     setActiveCheckSessionId(null)
 
     setTimeout(() => {
+      // The user may reopen and start a new search before this warmup runs.
+      if (valueRef.current) return
       void window.tezbar
         .searchAll('')
         .then((items) => {
@@ -2708,7 +2714,8 @@ export default function CommandBar({
               searchCandidatesRef.current,
               items
             )
-            setSearchResults(items)
+            // Cache a completed warmup, but never replace a newer live query.
+            if (!valueRef.current) setSearchResults(items)
             writeCachedHomeSearchResults(items)
           }
         })

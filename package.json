@@ -1,6 +1,6 @@
 {
   "name": "tezbar",
-  "version": "0.2.9-beta.11",
+  "version": "0.2.9-beta.14",
   "private": true,
   "description": "Tezbar",
   "license": "Apache-2.0",
@@ -67,6 +67,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "highlight.js": "^11.11.1",
+    "jsdom": "^26.1.0",
     "marked": "^18.0.2",
     "marked-highlight": "^2.2.4",
     "postcss": "^8.5.3",

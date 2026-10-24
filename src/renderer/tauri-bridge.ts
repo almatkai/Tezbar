@@ -343,10 +343,22 @@ export function initTauriBridge(): void {
     clearChromiumCache: () => callBackend('storage:clear-chromium-cache'),
     listBackgroundTasks: () => callBackend('background-tasks:list'),
     getKnowledgeSnapshot: () => callBackend('knowledge:snapshot'),
-    setKnowledgeEmbeddingModel: (model) => callBackend('knowledge:embedding:set', model),
-    downloadKnowledgeEmbeddingModel: () => callBackend('knowledge:embedding:download'),
-    cancelKnowledgeEmbeddingDownload: () => callBackend('knowledge:embedding:cancel-download'),
-    removeKnowledgeEmbeddingModel: () => callBackend('knowledge:embedding:remove'),
+    setKnowledgeEmbeddingModel: (model, variant) =>
+      variant === undefined
+        ? callBackend('knowledge:embedding:set', model)
+        : callBackend('knowledge:embedding:set', model, variant),
+    downloadKnowledgeEmbeddingModel: (variant) =>
+      variant === undefined
+        ? callBackend('knowledge:embedding:download')
+        : callBackend('knowledge:embedding:download', variant),
+    cancelKnowledgeEmbeddingDownload: (variant) =>
+      variant === undefined
+        ? callBackend('knowledge:embedding:cancel-download')
+        : callBackend('knowledge:embedding:cancel-download', variant),
+    removeKnowledgeEmbeddingModel: (variant) =>
+      variant === undefined
+        ? callBackend('knowledge:embedding:remove')
+        : callBackend('knowledge:embedding:remove', variant),
     listKnowledgeSources: (input) => callBackend('knowledge:sources:list', input ?? {}),
     chooseKnowledgeFolder: () => callBackend('knowledge:choose-folder'),
     addKnowledgeRoot: (path: string) => callBackend('knowledge:root:add', path),
