@@ -497,12 +497,23 @@ mod tests {
     const Q4: &str = "ngquocvinh/EmbeddingGemma-2-GGUF:8e83fab7c71a90d8f97ae7cacf6a488f654cb5b6:ea25550b050fa8826707c5e44659a7c18259606dcc6ba449f771e3c75cf4e663:q4_k_m:256:search-v1";
 
     fn fixture() -> Connection {
+        fixture_from_schema(include_str!("schema.sql"))
+    }
+
+    fn fixture_from_schema(schema: &str) -> Connection {
         let db = Connection::open_in_memory().unwrap();
         db.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
         // Keep the real pre-Q4 learned layout explicit as fresh schema evolves;
         // all parent tables, FTS and compatibility triggers remain production SQL.
-        let legacy = include_str!("schema.sql").replace(
-            "chunk_id TEXT NOT NULL REFERENCES knowledge_chunks(id) ON DELETE CASCADE,\n        model_key TEXT NOT NULL,\n        vector BLOB NOT NULL,\n        PRIMARY KEY(chunk_id, model_key)",
+        let schema = schema.replace("\r\n", "\n");
+        let current = "chunk_id TEXT NOT NULL REFERENCES knowledge_chunks(id) ON DELETE CASCADE,\n        model_key TEXT NOT NULL,\n        vector BLOB NOT NULL,\n        PRIMARY KEY(chunk_id, model_key)";
+        assert_eq!(
+            schema.matches(current).count(),
+            1,
+            "legacy fixture must replace exactly one current embedding table"
+        );
+        let legacy = schema.replace(
+            current,
             "chunk_id TEXT PRIMARY KEY,\n        model_key TEXT NOT NULL,\n        vector BLOB NOT NULL");
         db.execute_batch(&legacy).unwrap();
         db.execute_batch(
@@ -591,6 +602,32 @@ mod tests {
             embeddings(&db),
             vec![("c".into(), Q4.into(), vec![4, 5, 6])]
         );
+    }
+
+    #[test]
+    fn legacy_fixture_accepts_lf_and_crlf_schema() {
+        let lf = include_str!("schema.sql").replace("\r\n", "\n");
+        for schema in [&lf, &lf.replace("\n", "\r\n")] {
+            let db = fixture_from_schema(schema);
+            save(&db, "c", Q8, &[1, 2, 3]);
+            save(&db, "c", Q4, &[4, 5, 6]);
+            assert_eq!(
+                embeddings(&db),
+                vec![("c".into(), Q4.into(), vec![4, 5, 6])]
+            );
+            assert_eq!(
+                ensure_embedding_schema(&db).unwrap(),
+                EmbeddingSchemaChange::Migrated
+            );
+            save(&db, "c", Q8, &[1, 2, 3]);
+            assert_eq!(
+                embeddings(&db),
+                vec![
+                    ("c".into(), Q8.into(), vec![1, 2, 3]),
+                    ("c".into(), Q4.into(), vec![4, 5, 6]),
+                ]
+            );
+        }
     }
 
     #[test]
