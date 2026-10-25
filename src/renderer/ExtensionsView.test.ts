@@ -152,7 +152,7 @@ const cleanShot: ExtensionManifest = {
   description: '',
   author: 'test',
   version: '1',
-  iconUrl: '/extensions/icons/cleanshotx.png',
+  iconUrl: 'file:///extensions/icons/cleanshotx.png',
 }
 const jsonResume: ExtensionManifest = {
   id: 'raycast.json-resume',
@@ -160,7 +160,7 @@ const jsonResume: ExtensionManifest = {
   description: '',
   author: 'test',
   version: '1',
-  iconUrl: 'https://example.com/json-resume.png',
+  iconUrl: 'blob:json-resume-original',
 }
 
 async function catalog(items = [cleanShot, jsonResume]) {
@@ -172,6 +172,7 @@ async function catalog(items = [cleanShot, jsonResume]) {
         .fn()
         .mockResolvedValue({ items, total: items.length, hasMore: false }),
       onExtensionInstallProgress: vi.fn(() => () => {}),
+      onExtensionCatalogUpdated: vi.fn(() => () => {}),
     },
     setTimeout,
     clearTimeout,
@@ -216,7 +217,7 @@ afterEach(() => {
 })
 
 describe('extension catalog icons (live components)', () => {
-  it('renders HTTPS icons in both catalog rows and selected details, then uses the cache', async () => {
+  it('renders supported icons in both catalog rows and selected details, then uses the cache', async () => {
     const view = await catalog([jsonResume])
     images.cached.mockResolvedValue('blob:json-resume')
     for (const size of ['small', undefined]) {
@@ -232,7 +233,7 @@ describe('extension catalog icons (live components)', () => {
     expect(images.cached).toHaveBeenCalledWith(jsonResume.iconUrl, 'icon')
   })
 
-  it('never renders the previous extension image while a newly selected HTTPS icon loads', async () => {
+  it('never renders the previous extension image while a newly selected supported icon loads', async () => {
     const view = await catalog()
     const iconHooks = mount()
     const imageHooks = mount()
