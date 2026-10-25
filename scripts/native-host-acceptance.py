@@ -380,16 +380,17 @@ class WindowsJob:
         from ctypes import wintypes as w
         class BasicLimits(ctypes.Structure):
             _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
-                        ("LimitFlags", w.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
-                        ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", w.DWORD),
-                        ("Affinity", ctypes.c_size_t), ("PriorityClass", w.DWORD), ("SchedulingClass", w.DWORD)]
+                        ("LimitFlags", ctypes.c_uint32), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                        ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", ctypes.c_uint32),
+                        ("Affinity", ctypes.c_size_t), ("PriorityClass", ctypes.c_uint32), ("SchedulingClass", ctypes.c_uint32)]
         class IO(ctypes.Structure):
             _fields_ = [(name, ctypes.c_uint64) for name in ("ReadOperationCount", "WriteOperationCount", "OtherOperationCount", "ReadTransferCount", "WriteTransferCount", "OtherTransferCount")]
         class Extended(ctypes.Structure):
             _fields_ = [("BasicLimitInformation", BasicLimits), ("IoInfo", IO), ("ProcessMemoryLimit", ctypes.c_size_t),
                         ("JobMemoryLimit", ctypes.c_size_t), ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
         class Accounting(ctypes.Structure):
-            _fields_ = [(n, ctypes.c_int64) for n in ("TotalUserTime", "TotalKernelTime", "ThisPeriodTotalUserTime", "ThisPeriodTotalKernelTime")] + [(n, w.DWORD) for n in ("TotalPageFaultCount", "TotalProcesses", "ActiveProcesses", "TotalTerminatedProcesses")]
+            # Win32 DWORD is always 32 bits, including in non-Windows ABI fakes.
+            _fields_ = [(n, ctypes.c_int64) for n in ("TotalUserTime", "TotalKernelTime", "ThisPeriodTotalUserTime", "ThisPeriodTotalKernelTime")] + [(n, ctypes.c_uint32) for n in ("TotalPageFaultCount", "TotalProcesses", "ActiveProcesses", "TotalTerminatedProcesses")]
         self.accounting = Accounting
         self.k = ctypes.WinDLL("kernel32", use_last_error=True)
         self.k.CreateJobObjectW.argtypes = [ctypes.c_void_p, w.LPCWSTR]
@@ -420,10 +421,15 @@ class WindowsJob:
         ntdll.NtResumeProcess.restype = ctypes.c_long
         require(ntdll.NtResumeProcess(int(process._handle)) == 0, "NtResumeProcess failed")
 
-    def total(self):
+    def counts(self):
         data = self.accounting()
-        require(self.k.QueryInformationJobObject(self.handle, 1, ctypes.byref(data), ctypes.sizeof(data), None), "Job accounting failed")
-        return data.TotalProcesses
+        size = ctypes.sizeof(data)
+        require(size == 48, f"Job accounting ABI size mismatch: {size}")
+        returned = ctypes.c_uint32()
+        require(self.k.QueryInformationJobObject(self.handle, 1, ctypes.byref(data), size, ctypes.byref(returned)),
+                "Job accounting query failed")
+        require(returned.value == size, f"Job accounting size mismatch: returned={returned.value}, expected={size}")
+        return {name: getattr(data, name) for name in ("TotalProcesses", "ActiveProcesses", "TotalTerminatedProcesses")}
 
     def close(self):
         if self.handle:
@@ -441,7 +447,7 @@ def cli_environment(profile):
     return env
 
 
-def guarded_run(argv, profile, env, out, label, expected=0):
+def guarded_run(argv, profile, env, out, label, expected=0, *, _guard_selfcheck=False):
     job, process = None, None
     start = time.monotonic()
     stdout, stderr = out / (label + ".stdout.json"), out / (label + ".stderr.log")
@@ -458,10 +464,28 @@ def guarded_run(argv, profile, env, out, label, expected=0):
             if job:
                 job.attach_resume(process)
             process.wait(timeout=30)
-        total = job.total() if job else 1
-        require(total == 1, "CLI spawned additional Job processes")
-        require(process.returncode == expected, f"CLI {label}: expected {expected}, got {process.returncode}; see local logs")
-        result = load(stdout)
+        counts = job.counts() if job else None
+        diagnostic = f"; Job accounting: {json.dumps(counts, sort_keys=True)}" if counts is not None else ""
+        if job:
+            # Print before checking output/exit status so failed native probes retain evidence.
+            print(f"Windows Job {label}{diagnostic}", flush=True)
+            total, active, terminated = (counts[n] for n in ("TotalProcesses", "ActiveProcesses", "TotalTerminatedProcesses"))
+            require(total >= 1 and active <= total and terminated <= total, "Invalid Job accounting" + diagnostic)
+            if not _guard_selfcheck:
+                require(total == 1, "CLI spawned additional Job processes" + diagnostic)
+                require(terminated == 0, "Invalid Job accounting: CLI limit termination" + diagnostic)
+        require(process.returncode == expected, f"CLI {label}: expected {expected}, got {process.returncode}; see local logs" + diagnostic)
+        try:
+            result = load(stdout)
+        except ValueError as error:
+            raise ValueError(f"CLI {label}: invalid JSON output" + diagnostic) from error
+        if job and _guard_selfcheck:
+            require(isinstance(result, dict) and result.get("childDenied") is True, "Child guard ineffective" + diagnostic)
+            # TotalProcesses includes failed associations. This owned probe makes exactly
+            # one attempt; require its denial in BOTH output and limit accounting.
+            # ActiveProcesses can transiently include a rejected process until refs close.
+            require(total == 2 and terminated == 1, "Self-check Job accounting: expected one denied child" + diagnostic)
+            result["jobAccounting"] = counts
         print(f"CLI {label}: exit={process.returncode}, child creation prohibited, {time.monotonic()-start:.3f}s", flush=True)
         return result
     finally:
@@ -487,8 +511,8 @@ if sys.platform=="darwin":
   network=True
 print(json.dumps({"childDenied":child,"networkDenied":network}))
 '''
-    proof = guarded_run([sys.executable, "-c", code], profile, env, out, "guard-selfcheck")
-    require(proof["childDenied"] is True, "Child guard ineffective")
+    proof = guarded_run([sys.executable, "-c", code], profile, env, out, "guard-selfcheck", _guard_selfcheck=True)
+    require(isinstance(proof, dict) and proof.get("childDenied") is True, "Child guard ineffective")
     if os.name != "nt":
         require(proof["networkDenied"] is True, "Mac network sandbox ineffective")
     return proof

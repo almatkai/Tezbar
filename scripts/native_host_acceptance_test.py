@@ -1,5 +1,7 @@
 """Acceptance boundaries using inert, tiny archives; no network, Cargo, or domain execution."""
 import copy
+import contextlib
+import ctypes
 import hashlib
 import importlib.util
 import io
@@ -287,10 +289,10 @@ class WindowsCleanup(unittest.TestCase):
                 process = mock.Mock(returncode=0)
                 process.poll.return_value = 0
                 if isinstance(accounting, Exception):
-                    job.total.side_effect = accounting
+                    job.counts.side_effect = accounting
                     expected = (OSError, "Job accounting failed")
                 else:
-                    job.total.return_value = accounting
+                    job.counts.return_value = {"TotalProcesses": accounting, "ActiveProcesses": 0, "TotalTerminatedProcesses": 0}
                     expected = (ValueError, "CLI spawned additional Job processes")
                 with mock.patch.object(a, "os", SimpleNamespace(name="nt")), \
                         mock.patch.object(a, "WindowsJob", return_value=job), \
@@ -310,6 +312,9 @@ class WindowsCleanup(unittest.TestCase):
 
                 def set_information(handle, kind, pointer, size):
                     basic = pointer._obj.BasicLimitInformation
+                    self.assertEqual(size, 144)  # Win64 JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+                    self.assertEqual(type(basic).LimitFlags.offset, 16)
+                    self.assertEqual(type(basic).ActiveProcessLimit.offset, 40)
                     limits.append((handle, kind, basic.LimitFlags, basic.ActiveProcessLimit))
                     return 1
 
@@ -319,6 +324,126 @@ class WindowsCleanup(unittest.TestCase):
                     job.close()
                 self.assertEqual(limits, [(7, 9, 0x2008 if single else 0x2000, 1 if single else 0)])
                 kernel.CloseHandle.assert_called_once_with(7)
+
+
+class WindowsGuardAccounting(unittest.TestCase):
+    """Exercise the real Job query, runner and probe with Win32 ABI byte fixtures."""
+    def exercise(self, counts=(2, 0, 1), *, selfcheck=True, denied=True,
+                 query_ok=True, returned_size=48, payload=None, returncode=0):
+        self.events, self.diagnostics = [], io.StringIO()
+        kernel, ntdll = mock.Mock(), mock.Mock()
+        kernel.CreateJobObjectW.return_value = 7
+        kernel.SetInformationJobObject.return_value = 1
+        kernel.CloseHandle.side_effect = lambda handle: self.events.append("close-job") or 1
+        kernel.AssignProcessToJobObject.side_effect = lambda *args: self.events.append("assign") or 1
+        ntdll.NtResumeProcess.side_effect = lambda *args: self.events.append("resume") or 0
+
+        def query(handle, kind, pointer, size, returned):
+            self.events.append("query")
+            self.assertEqual((handle, kind, size), (7, 1, 48))
+            self.assertIsNotNone(returned)
+            # SDK layout: four LARGE_INTEGERs followed by four 32-bit DWORDs.
+            ctypes.memmove(pointer, struct.pack("<4q4I", 0, 0, 0, 0, 0, *counts), 48)
+            returned._obj.value = returned_size
+            return int(query_ok)
+
+        kernel.QueryInformationJobObject.side_effect = query
+        process = mock.Mock(pid=123, _handle=456, returncode=returncode)
+        process.poll.return_value = returncode
+        process.wait.side_effect = lambda timeout: self.events.append(("wait", timeout)) or returncode
+
+        def popen(argv, **kwargs):
+            self.assertEqual(kwargs["creationflags"], 0x4 | 0x08000000)
+            self.assertEqual(kwargs["stdin"], a.subprocess.DEVNULL)
+            self.events.append("popen-suspended")
+            if selfcheck:
+                output = io.StringIO()
+                # Execute the actual inert probe, replacing only its child syscall.
+                with mock.patch.object(a.sys, "platform", "win32"), \
+                        mock.patch.object(a.subprocess, "run", side_effect=OSError("quota") if denied else None) as run, \
+                        contextlib.redirect_stdout(output):
+                    exec(argv[2], {})
+                run.assert_called_once_with([a.sys.executable, "-c", "pass"], check=True, timeout=5)
+                data = output.getvalue()
+            else:
+                data = json.dumps({"ok": True})
+            kwargs["stdout"].write((data if payload is None else payload).encode())
+            kwargs["stdout"].flush()
+            return process
+
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                with mock.patch.object(a, "os", SimpleNamespace(name="nt")), \
+                        mock.patch.object(a.ctypes, "WinDLL", side_effect=lambda name, **kw: kernel if name == "kernel32" else ntdll, create=True), \
+                        mock.patch.object(a.subprocess, "Popen", side_effect=popen), \
+                        contextlib.redirect_stdout(self.diagnostics):
+                    if selfcheck:
+                        return a.guard_selfcheck(root, {}, root)
+                    # A label must never opt a real CLI call into probe accounting.
+                    return a.guarded_run(["inert-cli"], root, {}, root, "guard-selfcheck")
+        finally:
+            self.assertEqual(self.events[:4], ["popen-suspended", "assign", "resume", ("wait", 30)])
+            self.assertEqual(self.events[-2:], ["close-job", ("wait", 5)])
+            kernel.TerminateJobObject.assert_not_called()
+            process.kill.assert_not_called()
+
+    def test_documented_denied_attempt_passes_only_selfcheck_with_counters(self):
+        for active in (0, 1, 2):
+            with self.subTest(active=active):
+                proof = self.exercise((2, active, 1))
+                self.assertIs(proof["childDenied"], True)
+                self.assertEqual(proof["jobAccounting"], {"TotalProcesses": 2, "ActiveProcesses": active,
+                                                          "TotalTerminatedProcesses": 1})
+
+    def test_successful_child_creation_cannot_pass_even_with_denial_counters(self):
+        for counts in ((2, 0, 0), (2, 0, 1)):
+            with self.subTest(counts=counts), self.assertRaisesRegex(ValueError, "Child guard ineffective.*TotalProcesses"):
+                self.exercise(counts, denied=False)
+
+    def test_cli_keeps_strict_total_one_even_for_limit_terminated_processes(self):
+        self.assertEqual(self.exercise((1, 0, 0), selfcheck=False), {"ok": True})
+        for counts in ((2, 0, 0), (2, 1, 1), (3, 0, 2)):
+            with self.subTest(counts=counts), self.assertRaisesRegex(ValueError, "CLI spawned additional Job processes.*TotalProcesses"):
+                self.exercise(counts, selfcheck=False)
+
+    def test_probe_requires_exactly_one_limit_denial_and_no_unaccounted_attempt(self):
+        for counts in ((1, 0, 0), (2, 0, 0), (3, 0, 1), (3, 0, 2)):
+            with self.subTest(counts=counts), self.assertRaisesRegex(ValueError, "Self-check Job accounting.*TotalProcesses"):
+                self.exercise(counts)
+
+    def test_invalid_accounting_and_query_failures_fail_closed_and_cleanup(self):
+        for counts in ((0, 0, 0), (2, 3, 1), (2, 0, 3)):
+            with self.subTest(counts=counts), self.assertRaisesRegex(ValueError, "Invalid Job accounting.*TotalProcesses"):
+                self.exercise(counts)
+        with self.assertRaisesRegex(ValueError, "Invalid Job accounting.*TotalTerminatedProcesses"):
+            self.exercise((1, 0, 1), selfcheck=False)
+        for kwargs in ({"query_ok": False}, {"returned_size": 0}, {"returned_size": 47}, {"returned_size": 64}):
+            with self.subTest(kwargs=kwargs), self.assertRaisesRegex(ValueError, "Job accounting"):
+                self.exercise(**kwargs)
+
+    def test_bad_probe_output_cannot_hide_counts_or_skip_cleanup(self):
+        for payload in ('{}', '[]', '{"childDenied": 1}', 'not-json'):
+            with self.subTest(payload=payload), self.assertRaisesRegex(ValueError, "TotalProcesses"):
+                self.exercise(payload=payload)
+            self.assertIn('"TotalProcesses": 2', self.diagnostics.getvalue())
+
+    def test_failed_probe_exit_retains_counts_and_cleanup(self):
+        with self.assertRaisesRegex(ValueError, "expected 0, got 1.*TotalProcesses"):
+            self.exercise(returncode=1)
+
+
+@unittest.skipUnless(a.os.name == "nt", "Native Windows Job Object probe")
+class NativeWindowsGuard(unittest.TestCase):
+    def test_inert_guard_before_release_build(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("data", "config", "tmp"):
+                (root / name).mkdir()
+            proof = a.guard_selfcheck(root, a.cli_environment(root), root)
+            self.assertIs(proof["childDenied"], True)
+            self.assertEqual(proof["jobAccounting"]["TotalProcesses"], 2)
+            self.assertEqual(proof["jobAccounting"]["TotalTerminatedProcesses"], 1)
 
 
 if __name__ == "__main__":

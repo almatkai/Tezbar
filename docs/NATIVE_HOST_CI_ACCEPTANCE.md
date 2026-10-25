@@ -67,7 +67,19 @@ Mac uses a process-scoped sandbox denying network and process creation. An inert
 owned Python self-check must prove both denials. Windows starts each owned CLI
 suspended, assigns it to a kill-on-close Job Object with active-process limit one,
 then resumes it; total Job process accounting must remain one. Its self-check
-must prove child creation fails. Job setup/accounting failures fail acceptance.
+intentionally attempts exactly one inert child and must prove creation fails.
+Only that probe requires `childDenied: true`, `TotalProcesses == 2`, and
+`TotalTerminatedProcesses == 1`: Microsoft documents that
+[`TotalProcesses` includes failed associations due to a limit violation](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_basic_accounting_information)
+and that the [active-process limit terminates and rejects an excessive association](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_basic_limit_information).
+`ActiveProcesses` is recorded and checked against the total, without requiring
+zero: rejected processes can remain counted until termination and reference
+release. Real CLI calls retain strict `TotalProcesses == 1` and zero limit
+terminations; no terminations are subtracted or child allowance inferred from a
+command label. The query checks the 48-byte Win32 accounting ABI and returned
+length. All three counters appear in native logs before output validation, in
+accounting/exit/output failure messages, and in successful self-check proof JSON.
+Job setup/accounting failures fail acceptance.
 Both command runners close their owned job and reap their own `Popen` on every
 exit path. If job assignment/resume or job termination fails, cleanup still kills
 the owned process handle, including a suspended process that never joined the
@@ -75,7 +87,11 @@ job. Job closure cleans assigned descendants even if the leader already exited.
 Reaping has a five-second cleanup bound; cleanup errors are reported without
 replacing the original failure. A partially configured job is closed on setup
 failure or cancellation. Deterministic WinAPI fakes exercise both runners on
-non-Windows machines; they do not establish native Windows behavior.
+non-Windows machines, including raw SDK-layout accounting bytes, denied/successful
+probe attempts, strict CLI accounting, malformed output and cleanup; they do not
+establish native Windows behavior. A Windows-only inert self-check also runs in
+the existing helper-test step before SDK preparation and the production release
+build, so guard regressions fail early without any workflow change.
 Windows has process-scoped unreachable proxies only: **no hard offline network
 block is claimed**. The existing source/synthetic library tests independently
 assert private remote refusal before HTTP. No global firewall, security policy
