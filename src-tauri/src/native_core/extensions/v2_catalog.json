@@ -2589,50 +2589,5 @@
         "state": "not-run"
       }
     ]
-  },
-  {
-    "schemaVersion": 2,
-    "id": "com.tezbar.native.latex-math-symbols",
-    "slug": "latex-math-symbols",
-    "name": "LateX Math Symbols",
-    "version": "0.1.0",
-    "description": "Search and copy LateX Math Symbols. Original extension by JeffersonDing; native port includes MIT and Apache-2.0 notices.",
-    "icon": "/extensions/icons/latex-math-symbols.png",
-    "runtime": "rust",
-    "replaces": [
-      "raycast.latex-math-symbols"
-    ],
-    "platforms": [
-      "macOS",
-      "Windows"
-    ],
-    "preferences": [],
-    "commands": [
-      {
-        "name": "index",
-        "title": "Search LateX Symbols",
-        "description": "Search through a library of latex math symbols from amsmath",
-        "mode": "view",
-        "arguments": [],
-        "preferences": [],
-        "platforms": [
-          "macOS",
-          "Windows"
-        ],
-        "runtime": "rust"
-      }
-    ],
-    "verification": [
-      {
-        "platform": "macOS",
-        "state": "not-run",
-        "note": "Real macOS desktop QA not run; host checks are recorded separately in PROVENANCE.md."
-      },
-      {
-        "platform": "Windows",
-        "state": "not-run",
-        "note": "Windows build and real desktop QA not run."
-      }
-    ]
   }
 ]
