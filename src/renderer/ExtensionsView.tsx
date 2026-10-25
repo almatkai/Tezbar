@@ -75,14 +75,18 @@ function CachedImage({
   onError?: () => void
 }): ReactNode {
   const normalized = extensionImageSource(src)
-  const [resolvedSrc, setResolvedSrc] = useState(normalized)
+  const [resolvedImage, setResolvedImage] = useState({ src: normalized, variant, source: normalized })
+  // A prop change renders before its effect runs; never paint the previous
+  // extension's cached image during that render.
+  const resolvedSrc = resolvedImage.src === normalized && resolvedImage.variant === variant
+    ? resolvedImage.source
+    : normalized
 
   useEffect(() => {
     let cancelled = false
-    setResolvedSrc(normalized)
 
     void cachedExtensionImageSource(normalized, variant).then((source) => {
-      if (!cancelled) setResolvedSrc(source)
+      if (!cancelled) setResolvedImage({ src: normalized, variant, source })
     })
 
     return () => {
