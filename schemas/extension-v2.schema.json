@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tezbar.app/schemas/extension-v2.schema.json",
-  "title": "Tezbar bundled Native V2 extension",
+  "title": "Tezbar legacy schema-2 metadata (not an executable installation)",
   "type": "object",
   "required": ["schemaVersion", "id", "slug", "name", "version", "runtime", "replaces", "commands", "verification"],
   "properties": {

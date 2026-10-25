@@ -1,0 +1,325 @@
+"""Acceptance boundaries using inert, tiny archives; no network, Cargo, or domain execution."""
+import copy
+import hashlib
+import importlib.util
+import io
+import json
+from pathlib import Path
+import struct
+import tempfile
+from types import SimpleNamespace
+import unittest
+from unittest import mock
+import zipfile
+
+spec = importlib.util.spec_from_file_location("native_host_acceptance", Path(__file__).with_name("native-host-acceptance.py"))
+a = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(a)
+ARM, WIN = "aarch64-apple-darwin", "x86_64-pc-windows-msvc"
+
+
+class PackageBoundary(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / "tiny.zip"
+        self.binary = b"\xcf\xfa\xed\xfe" + struct.pack("<I", 0x100000c) + b"\0" * 24
+        self.trusted = {"schemaVersion": 3, "runtime": "rust", "execution": "process", "protocolVersion": 1,
+                        "id": "com.tezbar.native.test", "slug": "test", "version": "1.0.0",
+                        "commands": [{"name": "inert"}], "capabilities": [], "files": {}, "artifacts": {}}
+
+    def archive(self, mutate=None, extra=None, executable=None):
+        binary = self.binary if executable is None else executable
+        packaged = copy.deepcopy(self.trusted)
+        packaged["files"] = {"bin/test": hashlib.sha256(binary).hexdigest()}
+        if mutate:
+            mutate(packaged)
+        with zipfile.ZipFile(self.path, "w") as z:
+            z.writestr("extension.json", json.dumps(packaged))
+            z.writestr("bin/test", binary)
+            if extra:
+                z.writestr(extra, b"unexpected")
+        trusted = copy.deepcopy(self.trusted)
+        trusted["artifacts"][ARM] = {"url": "https://github.com/owner/test/releases/download/v1.0.0/test.zip",
+                                     "sha256": a.sha(self.path), "executable": "bin/test",
+                                     "executableSha256": hashlib.sha256(binary).hexdigest()}
+        return trusted
+
+    def test_valid_closed_fixture_then_corruption_is_rejected(self):
+        trusted = self.archive()
+        self.assertEqual(set(a.verify_package(trusted, self.path, ARM)), {"bin/test"})
+        with self.path.open("ab") as f:
+            f.write(b"corrupted")
+        with self.assertRaisesRegex(ValueError, "Archive SHA256"):
+            a.verify_package(trusted, self.path, ARM)
+
+    def test_authentic_archive_cannot_widen_grants_or_change_identity(self):
+        for field, value in (("capabilities", ["shell.open"]), ("id", "com.tezbar.native.other"),
+                             ("commands", [{"name": "inert", "timeoutMs": 300000}])):
+            with self.subTest(field=field):
+                trusted = self.archive(lambda m: m.update({field: value}))
+                with self.assertRaisesRegex(ValueError, "identity/policy"):
+                    a.verify_package(trusted, self.path, ARM)
+
+    def test_header_and_target_are_independent_of_trusted_hash(self):
+        trusted = self.archive(executable=b"MZ" + b"\0" * 64)
+        with self.assertRaisesRegex(ValueError, "ARM64"):
+            a.verify_package(trusted, self.path, ARM)
+        trusted = self.archive()
+        with self.assertRaisesRegex(ValueError, "No pinned target"):
+            a.verify_package(trusted, self.path, WIN)
+        wrong_arch = b"\xcf\xfa\xed\xfe" + struct.pack("<I", 0x1000007) + b"\0" * 24
+        trusted = self.archive(executable=wrong_arch)
+        with self.assertRaisesRegex(ValueError, "ARM64"):
+            a.verify_package(trusted, self.path, ARM)
+        pe = bytearray(90)
+        pe[:2], pe[60:64], pe[64:68], pe[68:70] = b"MZ", struct.pack("<I", 64), b"PE\0\0", b"\x64\x86"
+        a.binary_header(pe, WIN)
+        pe[68:70] = b"\x64\xaa"
+        with self.assertRaisesRegex(ValueError, "x64 PE"):
+            a.binary_header(pe, WIN)
+
+    def test_closed_inventory_rejects_unlisted_and_unsafe_paths(self):
+        for name in ("resources/extra", "../escape", "C:/escape", "bin/TEST"):
+            with self.subTest(name=name):
+                trusted = self.archive(extra=name)
+                with self.assertRaises(ValueError):
+                    a.verify_package(trusted, self.path, ARM)
+
+    def test_inventory_digest_and_trusted_nonempty_inventory_are_authoritative(self):
+        trusted = self.archive(lambda m: m["files"].update({"bin/test": "0" * 64}))
+        with self.assertRaisesRegex(ValueError, "Executable inventory"):
+            a.verify_package(trusted, self.path, ARM)
+        trusted = self.archive()
+        trusted["files"] = {"bin/test": "0" * 64}
+        with self.assertRaisesRegex(ValueError, "Trusted inventory"):
+            a.verify_package(trusted, self.path, ARM)
+        trusted["files"] = None
+        with self.assertRaisesRegex(ValueError, "Trusted inventory"):
+            a.verify_package(trusted, self.path, ARM)
+
+    def test_link_and_oversized_archive_rejected_before_use(self):
+        trusted = self.archive()
+        info = zipfile.ZipInfo("link")
+        info.create_system = 3
+        info.external_attr = 0o120777 << 16
+        with zipfile.ZipFile(self.path, "a") as z:
+            z.writestr(info, "bin/test")
+        trusted["artifacts"][ARM]["sha256"] = a.sha(self.path)
+        with self.assertRaisesRegex(ValueError, "link/special"):
+            a.verify_package(trusted, self.path, ARM)
+        original = a.MAX_ZIP
+        try:
+            a.MAX_ZIP = 1
+            with self.assertRaisesRegex(ValueError, "Archive SHA256"):
+                a.verify_package(trusted, self.path, ARM)
+        finally:
+            a.MAX_ZIP = original
+
+    def test_raw_reference_omission_does_not_authorize_remote_policy(self):
+        trusted = self.archive()
+        raw = copy.deepcopy(trusted)
+        del raw["files"]
+        a.reference_matches(raw, trusted)
+        raw["capabilities"] = ["shell.open"]
+        with self.assertRaisesRegex(ValueError, "differs from trusted"):
+            a.reference_matches(raw, trusted)
+
+    def test_download_origin_policy_rejects_private_or_credentialed_transport(self):
+        for url in ("http://github.com/o/r", "https://token@github.com/o/r", "https://evil.example/r",
+                    "https://github.com:444/o/r", "https://github.com.evil.example/r"):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                a.validate_url(url)
+        a.validate_url("https://github.com/o/r/releases/download/v1/pkg.zip")
+
+
+class RequiredBranchProof(unittest.TestCase):
+    def test_early_return_or_missing_real_branch_cannot_pass(self):
+        names = ("actual_sdk_package_launcher_index_fences_and_uninstall", "optional_index_activation_failure_keeps_command_sessions_available",
+                 "installed_package_round_trip", "published_combined_reference_omitted_files_installs_and_mismatch_rolls_back")
+        good = "\n".join("test native::" + n + " ... ok" for n in names)
+        good += "\nHost vertical slice: real packaged SDK executable from pinned\nPublished omitted-files reference: pinned\ntest result: ok."
+        a.check_rust_proof(good)
+        for bad in (good.replace("real packaged SDK executable", "synthetic executable"),
+                    good + "\nSDK fixture not provided", good.replace(names[1], "not_the_required_test")):
+            with self.subTest(log=bad), self.assertRaises(ValueError):
+                a.check_rust_proof(bad)
+
+
+class WindowsCleanup(unittest.TestCase):
+    """Run both real runners and attach_resume with inert, deterministic WinAPI fakes."""
+    def exercise(self, runner, stage, termination="false", close_fails=False, kill_fails=False):
+        events = []
+        process = mock.Mock(pid=123, _handle=456, returncode=None)
+        alive = [True]
+        assigned = [False]
+        process.poll.side_effect = lambda: None if alive[0] else 1
+
+        def kill():
+            events.append("kill-owned")
+            if kill_fails:
+                raise OSError("owned kill failed")
+            alive[0], process.returncode = False, 1
+
+        def wait(timeout):
+            events.append(("wait", timeout))
+            if alive[0]:
+                raise a.subprocess.TimeoutExpired("owned-inert-process", timeout)
+            return process.returncode
+
+        process.kill.side_effect, process.wait.side_effect = kill, wait
+        job = a.WindowsJob.__new__(a.WindowsJob)
+        job.handle, job.k = 7, mock.Mock()
+
+        def assign(*args):
+            assigned[0] = stage != "assign"
+            return int(assigned[0])
+
+        def terminate(*args):
+            events.append("terminate-job")
+            if termination == "raise":
+                raise OSError("job termination failed")
+            if termination == "success" and assigned[0]:
+                alive[0], process.returncode = False, 1
+            return int(termination == "success")
+
+        def close(*args):
+            events.append("close-job")
+            if close_fails:
+                raise OSError("job close failed")
+            if assigned[0]:
+                alive[0], process.returncode = False, 1
+            return 1
+
+        job.k.AssignProcessToJobObject.side_effect = assign
+        job.k.TerminateJobObject.side_effect = terminate
+        job.k.CloseHandle.side_effect = close
+        ntdll = mock.Mock()
+        ntdll.NtResumeProcess.return_value = -1 if stage == "resume" else 0
+        dll = mock.Mock(return_value=ntdll)
+        if stage == "resume-setup":
+            dll.side_effect = OSError("resume setup failed")
+        expected = {"assign": (ValueError, "AssignProcessToJobObject failed"),
+                    "resume": (ValueError, "NtResumeProcess failed"),
+                    "resume-setup": (OSError, "resume setup failed"),
+                    "wait": (a.subprocess.TimeoutExpired, "owned-inert-process")}[stage]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            diagnostics = io.StringIO()
+            with mock.patch.object(a, "os", SimpleNamespace(name="nt")), \
+                    mock.patch.object(a, "WindowsJob", return_value=job), \
+                    mock.patch.object(a.subprocess, "Popen", return_value=process) as popen, \
+                    mock.patch.object(a.ctypes, "WinDLL", dll, create=True), \
+                    mock.patch.object(a.sys, "stderr", diagnostics):
+                with self.assertRaisesRegex(*expected) as raised:
+                    if runner == "bounded":
+                        a.bounded(["owned-inert-process"], root, {}, root / "command.log", 17)
+                    else:
+                        a.guarded_run(["owned-inert-process"], root, {}, root, "command")
+                self.assertEqual(popen.call_args.kwargs["creationflags"], 0x4 | 0x08000000)
+                self.assertIn("close-job", events)
+                self.assertIn(("wait", 5), events)
+                if kill_fails:
+                    self.assertIn("Owned process cleanup:", diagnostics.getvalue())
+                else:
+                    self.assertFalse(alive[0], events)
+                if stage == "assign" or close_fails:
+                    process.kill.assert_called_once_with()
+                if stage == "wait":
+                    self.assertEqual(events[0], ("wait", 17 if runner == "bounded" else 30))
+        return events
+
+    def test_assignment_failure_reaps_owned_unassigned_process_in_both_runners(self):
+        for runner in ("bounded", "guarded_run"):
+            for termination in ("success", "false", "raise"):
+                with self.subTest(runner=runner, termination=termination):
+                    self.exercise(runner, "assign", termination)
+
+    def test_resume_failure_closes_job_and_reaps_in_both_runners(self):
+        for runner in ("bounded", "guarded_run"):
+            for termination in ("false", "raise"):
+                with self.subTest(runner=runner, termination=termination):
+                    self.exercise(runner, "resume", termination)
+
+    def test_resume_setup_failure_preserves_original_error_in_both_runners(self):
+        for runner in ("bounded", "guarded_run"):
+            with self.subTest(runner=runner):
+                self.exercise(runner, "resume-setup")
+
+    def test_termination_and_close_failure_still_kills_owned_process(self):
+        for runner in ("bounded", "guarded_run"):
+            with self.subTest(runner=runner):
+                self.exercise(runner, "wait", "raise", close_fails=True)
+
+    def test_unreapable_process_is_bounded_and_cannot_mask_original_error(self):
+        for runner in ("bounded", "guarded_run"):
+            with self.subTest(runner=runner):
+                self.exercise(runner, "assign", "raise", close_fails=True, kill_fails=True)
+
+    def test_constructor_failure_closes_partially_created_job_even_on_cancellation(self):
+        kernel = mock.Mock()
+        kernel.CreateJobObjectW.return_value = 7
+        kernel.SetInformationJobObject.side_effect = KeyboardInterrupt("cancel setup")
+        with mock.patch.object(a.ctypes, "WinDLL", return_value=kernel, create=True):
+            with self.assertRaisesRegex(KeyboardInterrupt, "cancel setup"):
+                a.WindowsJob()
+        kernel.CloseHandle.assert_called_once_with(7)
+
+    def test_popen_failure_closes_empty_job_in_both_runners(self):
+        for runner in ("bounded", "guarded_run"):
+            with self.subTest(runner=runner), tempfile.TemporaryDirectory() as directory:
+                root, job = Path(directory), mock.Mock()
+                with mock.patch.object(a, "os", SimpleNamespace(name="nt")), \
+                        mock.patch.object(a, "WindowsJob", return_value=job), \
+                        mock.patch.object(a.subprocess, "Popen", side_effect=OSError("create failed")):
+                    with self.assertRaisesRegex(OSError, "create failed"):
+                        if runner == "bounded":
+                            a.bounded(["inert"], root, {}, root / "command.log", 17)
+                        else:
+                            a.guarded_run(["inert"], root, {}, root, "command")
+                job.close.assert_called_once_with()
+                job.attach_resume.assert_not_called()
+
+    def test_cli_accounting_rejects_extra_process_and_query_failure(self):
+        for accounting in (2, OSError("Job accounting failed")):
+            with self.subTest(accounting=accounting), tempfile.TemporaryDirectory() as directory:
+                root, job = Path(directory), mock.Mock()
+                process = mock.Mock(returncode=0)
+                process.poll.return_value = 0
+                if isinstance(accounting, Exception):
+                    job.total.side_effect = accounting
+                    expected = (OSError, "Job accounting failed")
+                else:
+                    job.total.return_value = accounting
+                    expected = (ValueError, "CLI spawned additional Job processes")
+                with mock.patch.object(a, "os", SimpleNamespace(name="nt")), \
+                        mock.patch.object(a, "WindowsJob", return_value=job), \
+                        mock.patch.object(a.subprocess, "Popen", return_value=process):
+                    with self.assertRaisesRegex(*expected):
+                        a.guarded_run(["inert"], root, {}, root, "command")
+                job.close.assert_called_once_with()
+                self.assertEqual(process.wait.call_args_list, [mock.call(timeout=30), mock.call(timeout=5)])
+                process.kill.assert_not_called()
+
+    def test_job_limits_keep_kill_on_close_and_cli_active_process_limit(self):
+        for single in (True, False):
+            with self.subTest(single_process=single):
+                kernel = mock.Mock()
+                kernel.CreateJobObjectW.return_value = 7
+                limits = []
+
+                def set_information(handle, kind, pointer, size):
+                    basic = pointer._obj.BasicLimitInformation
+                    limits.append((handle, kind, basic.LimitFlags, basic.ActiveProcessLimit))
+                    return 1
+
+                kernel.SetInformationJobObject.side_effect = set_information
+                with mock.patch.object(a.ctypes, "WinDLL", return_value=kernel, create=True):
+                    job = a.WindowsJob(single_process=single)
+                    job.close()
+                self.assertEqual(limits, [(7, 9, 0x2008 if single else 0x2000, 1 if single else 0)])
+                kernel.CloseHandle.assert_called_once_with(7)
+
+
+if __name__ == "__main__":
+    unittest.main()

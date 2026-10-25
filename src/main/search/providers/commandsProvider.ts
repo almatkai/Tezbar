@@ -9,7 +9,6 @@ function buildNativeCommandDocuments(): IndexedDocument[] {
   return listNativeCommands()
     .filter(
       (descriptor) =>
-        descriptor.id !== 'list-listening-ports' &&
         descriptor.id !== 'open-emoji-picker' &&
         descriptor.id !== 'open-quick-notes'
     )

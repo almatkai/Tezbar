@@ -15,10 +15,12 @@ describe('extension catalog state', () => {
       description: '', author: 'Tezbar', version: '2', installedAt: 42,
       packageJsonPath: '/fixture/package.json', extensionPath: '/fixture', commands: [],
       iconPath: '/old/icon.png', iconUrl: artwork, artwork, artworkBackground: '#6B2C30',
+      acquisition: { type: 'local-import-only' },
     })
     const rows = mergeCatalog([], [installed], 'macOS')
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ iconUrl: artwork, artwork, artworkBackground: '#6B2C30' })
+    expect(rows[0]?.acquisition?.type).toBe('local-import-only')
   })
 
   it('keeps legacy installed filesystem icons when artwork is absent', () => {

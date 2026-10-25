@@ -363,9 +363,6 @@ pub fn recommendation(id: &str) -> f64 {
         "native:open-clipboard-history" => 900.,
         "native:open-snippets" => 880.,
         "extcmd:raycast.kill-process:index" => 860.,
-        "extcmd:raycast.port-manager:kill-listening-process" => 760.,
-        "extcmd:raycast.port-manager:open-ports" => 720.,
-        "extcmd:raycast.port-manager:open-ports-menu-bar" => 700.,
         _ => 0.,
     }
 }

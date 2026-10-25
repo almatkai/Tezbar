@@ -1364,6 +1364,7 @@ function normalizeRegistryCommand(command: ExtensionCommandInfo): ExtensionRegis
     description: command.description,
     mode: command.mode,
     argumentDefinitions: command.commandArgumentDefinitions,
+    ...(command.launcher ? { launcher: command.launcher } : {}),
   };
 }
 

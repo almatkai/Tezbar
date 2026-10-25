@@ -3016,8 +3016,6 @@ pub fn run() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
-            #[cfg(target_os = "macos")]
-            timer_notifications::setup(&handle);
             let app_local_data = std::env::var_os("TEZBAR_DATA_DIR")
                 .filter(|path| !path.is_empty())
                 .map(PathBuf::from)

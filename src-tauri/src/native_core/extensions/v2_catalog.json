@@ -1,13 +1,13 @@
 [
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.amphetamine",
     "slug": "amphetamine",
     "name": "Amphetamine",
     "version": "1.1.1",
     "description": "Keep your computer awake with native Tezbar sessions",
     "author": "gstvds",
-    "icon": "icon.png",
+    "icon": "resources/assets/icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.amphetamine"
@@ -34,8 +34,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "quick-start",
@@ -85,8 +86,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "amp-end",
@@ -104,8 +106,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "remaining",
@@ -122,8 +125,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "amp-duration",
@@ -146,8 +150,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       }
     ],
     "verification": [
@@ -159,17 +164,41 @@
         "platform": "Windows",
         "state": "not-run"
       }
-    ]
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/amphetamine",
+    "artifacts": {
+      "x86_64-pc-windows-msvc": {
+        "sha256": "21ffdc19be3dd445a8ed6c8d28f3711025b0f1b0dd8afb72ba22f937de287ed4",
+        "executable": "bin/tezbar-amphetamine.exe",
+        "executableSha256": "1f24f2154f9d88116db23b9a30348c1c68b79b54d228382a272e3dbb7136349a",
+        "url": "https://github.com/almatkai/amphetamine/releases/download/v1.1.1/amphetamine-x86_64-pc-windows-msvc.zip"
+      },
+      "aarch64-apple-darwin": {
+        "sha256": "2811d7728e36f40ad28be1c893e385ab668b3e299d090700dde9cd536e582fdf",
+        "executable": "bin/tezbar-amphetamine",
+        "executableSha256": "bcf8ab120b02df02b3dc10ad86ed8eb2a565ea2042e86c5f00bffcec7bf51ef0",
+        "url": "https://github.com/almatkai/amphetamine/releases/download/v1.1.1/amphetamine-aarch64-apple-darwin.zip"
+      }
+    },
+    "capabilities": [
+      "background"
+    ],
+    "migrationPaths": {
+      "nativeStore": "native-extensions-v2/amphetamine/storage.json"
+    },
+    "files": {}
   },
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.audio-device",
     "slug": "audio-device",
     "name": "Set Audio Device",
     "version": "1.0.0",
-    "description": "Switch the active audio device of your mac.",
+    "description": "Switch audio devices, volume, favorites and defaults. Auto-switch commands apply once per invocation.",
     "author": "benvp",
-    "icon": "command-icon.png",
+    "icon": "resources/assets/command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.audio-device"
@@ -215,8 +244,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 2000
       },
       {
         "name": "set-input-device",
@@ -227,8 +257,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 2000
       },
       {
         "name": "set-volume",
@@ -239,8 +270,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 2000
       },
       {
         "name": "set-input-volume",
@@ -251,8 +283,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 2000
       },
       {
         "name": "auto-switch-input",
@@ -264,8 +297,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "auto-switch-output",
@@ -277,8 +311,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "customize-order",
@@ -290,8 +325,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 2000
       },
       {
         "name": "favourite",
@@ -303,8 +339,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "toggle-favourites",
@@ -316,8 +353,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "use-combo1",
@@ -355,8 +393,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "use-combo2",
@@ -394,8 +433,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "use-combo3",
@@ -433,8 +473,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       }
     ],
     "verification": [
@@ -446,17 +487,43 @@
         "platform": "Windows",
         "state": "not-run"
       }
-    ]
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/audio-device",
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "sha256": "27bf0a54a6967448190ff9a620ad814754fd27394f8b4a2ab4d1c75a67bbf5c3",
+        "executable": "bin/tezbar-audio-device",
+        "executableSha256": "66a154f2176c7c319e02529d0c47e23f61935ffed3e4edad2c005fd33dd1025d",
+        "url": "https://github.com/almatkai/audio-device/releases/download/v1.0.0/audio-device-aarch64-apple-darwin.zip"
+      },
+      "x86_64-pc-windows-msvc": {
+        "sha256": "0e21e0853c4d5892d958b346a6a9b616edf91d74db12985eff299e832f7ac0c5",
+        "executable": "bin/tezbar-audio-device.exe",
+        "executableSha256": "f09a0c4c4f00b2c542e782d2f9666f62b20313a8fad07da6191625e1b038ee9d",
+        "url": "https://github.com/almatkai/audio-device/releases/download/v1.0.0/audio-device-x86_64-pc-windows-msvc.zip"
+      }
+    },
+    "capabilities": [
+      "clipboard.write"
+    ],
+    "migrationPaths": {
+      "nativeStore": "native-extensions-v2/audio-device/storage.json",
+      "legacyLocalStorage": "extensions/audio-device/.tezbar-local-storage.json",
+      "legacyPackageStorage": "extensions/packages/raycast.audio-device/.tezbar-local-storage.json"
+    },
+    "files": {}
   },
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.cleanshotx",
     "slug": "cleanshotx",
     "name": "CleanShot X",
     "version": "1.0.0",
     "description": "Capture and record your screen!",
     "author": "Aayush9029",
-    "icon": "command-icon.png",
+    "icon": "resources/assets/command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.cleanshotx"
@@ -476,8 +543,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "open-settings",
@@ -538,8 +606,9 @@
         "platforms": [
           "macOS"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "view-uploads",
@@ -551,8 +620,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "all-in-one",
@@ -563,8 +633,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "capture-fullscreen",
@@ -605,8 +676,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "capture-area",
@@ -647,8 +719,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "capture-previous-area",
@@ -688,8 +761,9 @@
         "platforms": [
           "macOS"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "capture-window",
@@ -730,8 +804,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "self-timer",
@@ -772,8 +847,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "scrolling-capture",
@@ -783,8 +859,9 @@
         "platforms": [
           "macOS"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "record-screen",
@@ -794,8 +871,9 @@
         "platforms": [
           "macOS"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "capture-text",
@@ -808,8 +886,9 @@
         "platforms": [
           "macOS"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "annotate",
@@ -828,8 +907,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "open-from-clipboard",
@@ -840,8 +920,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "toggle-desktop-icons",
@@ -852,8 +933,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "hide-desktop-icons",
@@ -864,8 +946,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "show-desktop-icons",
@@ -876,8 +959,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "restore-recently-closed",
@@ -887,8 +971,9 @@
         "platforms": [
           "macOS"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "add-quick-access-overlay",
@@ -906,8 +991,9 @@
         "platforms": [
           "macOS"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "pin",
@@ -925,8 +1011,9 @@
         "platforms": [
           "macOS"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "capture-area-raycast-aichat",
@@ -937,7 +1024,9 @@
           "macOS"
         ],
         "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "gap": "Raycast AI Chat capture integration is not available in this standalone extension.",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "record-screen-preset",
@@ -947,8 +1036,9 @@
         "platforms": [
           "macOS"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "manage-recording-presets",
@@ -959,8 +1049,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       }
     ],
     "verification": [
@@ -972,17 +1063,49 @@
         "platform": "Windows",
         "state": "not-run"
       }
-    ]
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/cleanshotx",
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "sha256": "366d0386a897495b22c5bea3ae56fbd50a6a01a8d9f5d5d221ec237117ce3709",
+        "executable": "bin/tezbar-cleanshotx",
+        "executableSha256": "70d34f5cadccc18fc2b5f1245f66ceae2ef068f19a47e1b115ae49f3bff2db29",
+        "url": "https://github.com/almatkai/cleanshotx/releases/download/v1.0.0/cleanshotx-aarch64-apple-darwin.zip"
+      },
+      "x86_64-pc-windows-msvc": {
+        "sha256": "8b90220edf2ae9ba3326533fa140816d0ed8c26edfa831e2ed85eeb05a35e2f8",
+        "executable": "bin/tezbar-cleanshotx.exe",
+        "executableSha256": "dfbc5d5775e6acb5b76a0d594ee380420323f4b8cdaffc1919fbd664272d0884",
+        "url": "https://github.com/almatkai/cleanshotx/releases/download/v1.0.0/cleanshotx-x86_64-pc-windows-msvc.zip"
+      }
+    },
+    "capabilities": [
+      "shell.open",
+      "shell.openWithApp",
+      "shell.reveal",
+      "window.visibility",
+      "screen.capture",
+      "clipboard.read",
+      "clipboard.writeImage",
+      "apps.list"
+    ],
+    "migrationPaths": {
+      "nativeStore": "native-extensions-v2/cleanshotx/storage.json",
+      "captures": "native-v2-cleanshotx/captures"
+    },
+    "files": {}
   },
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.color-picker",
     "slug": "color-picker",
     "name": "Color Picker",
     "version": "1.0.0",
     "description": "Pick and organize colors, everywhere on your Mac",
     "author": "thomas",
-    "icon": "icon.png",
+    "icon": "resources/icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.color-picker"
@@ -1072,8 +1195,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "extract-color",
@@ -1084,8 +1209,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "menu-bar",
@@ -1096,8 +1223,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "organize-colors",
@@ -1128,8 +1257,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "favorite-colors",
@@ -1140,8 +1271,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "generate-colors",
@@ -1160,8 +1293,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "color-names",
@@ -1199,8 +1334,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "color-wheel",
@@ -1211,8 +1348,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "convert-color",
@@ -1231,30 +1370,77 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       }
     ],
     "verification": [
       {
         "platform": "macOS",
-        "state": "not-run"
+        "state": "headless-tested",
+        "target": "aarch64-apple-darwin",
+        "detail": "Native Rust tests and release build; fixture-host stdio/package validation. Live desktop UI not tested."
       },
       {
         "platform": "Windows",
-        "state": "not-run"
+        "state": "not-run",
+        "target": "x86_64-pc-windows-msvc"
       }
-    ]
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/tezbar-color-picker-extension",
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/tezbar-color-picker-extension/releases/download/v1.0.0/color-picker-aarch64-apple-darwin.zip",
+        "sha256": "2fb25d543740d174c02a2c203001cc225ffd460115c26a63e26bf8fae7ff381b",
+        "executable": "bin/tezbar-color-picker",
+        "executableSha256": "658f3a95cd06d92bb6371385d2a23db8f2bfaa6a86d9274eeb2f25f839917ea3"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/tezbar-color-picker-extension/releases/download/v1.0.0/color-picker-x86_64-pc-windows-msvc.zip",
+        "sha256": "2e1c5ac8f6589600d5068ba82069cb5f36e1b933fa18bccf8ba30eae4c682e94",
+        "executable": "bin/tezbar-color-picker.exe",
+        "executableSha256": "630de387f354705796102c6856fa9d16188d4ae20e7f4c15794a55bd36eae2a0"
+      }
+    },
+    "capabilities": [
+      "clipboard",
+      "selection",
+      "screen",
+      "ai",
+      "window",
+      "shell",
+      "settings",
+      "background",
+      "tray"
+    ],
+    "migrationPaths": {
+      "native-v2-store": "native-extensions-v2/color-picker/storage.json",
+      "legacy-0-0": "extensions/color-picker/.tezbar-support/cache/shared.json",
+      "legacy-0-1": "extensions/color-picker/.tezbar-local-storage.json",
+      "legacy-1-0": "extensions/packages/color-picker/.tezbar-support/cache/shared.json",
+      "legacy-1-1": "extensions/packages/color-picker/.tezbar-local-storage.json",
+      "legacy-2-0": "extensions/packages/raycast.color-picker/.tezbar-support/cache/shared.json",
+      "legacy-2-1": "extensions/packages/raycast.color-picker/.tezbar-local-storage.json",
+      "legacy-3-0": "extension-registry/packages/color-picker/.tezbar-support/cache/shared.json",
+      "legacy-3-1": "extension-registry/packages/color-picker/.tezbar-local-storage.json",
+      "legacy-4-0": "extension-registry/packages/raycast.color-picker/.tezbar-support/cache/shared.json",
+      "legacy-4-1": "extension-registry/packages/raycast.color-picker/.tezbar-local-storage.json"
+    },
+    "files": {}
   },
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.gif-search",
     "slug": "gif-search",
     "name": "GIF Search",
     "version": "1.0.0",
     "description": "Search the Internet for animated GIFs",
     "author": "josephschmitt",
-    "icon": "command-icon.png",
+    "icon": "resources/assets/command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.gif-search"
@@ -1587,14 +1773,16 @@
       {
         "name": "search",
         "title": "Search for GIFs",
-        "description": "Search for GIFs across multiple services\u2026",
+        "description": "Search for GIFs across multiple services…",
         "mode": "view",
         "platforms": [
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "timeoutMs": 120000,
+        "concurrency": "serialize",
+        "refreshMs": 500
       },
       {
         "name": "favorites",
@@ -1605,8 +1793,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "timeoutMs": 120000,
+        "concurrency": "serialize",
+        "refreshMs": 500
       },
       {
         "name": "recents",
@@ -1617,8 +1807,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "timeoutMs": 120000,
+        "concurrency": "serialize",
+        "refreshMs": 500
       }
     ],
     "verification": [
@@ -1630,17 +1822,49 @@
         "platform": "Windows",
         "state": "not-run"
       }
-    ]
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/gif-search",
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/gif-search/releases/download/v1.0.0/gif-search-aarch64-apple-darwin.zip",
+        "sha256": "cd6b7720b353e6c3dc3b1ceab2e4522e7a42e884bb0dd016daf3e5f2a845cbc4",
+        "executable": "bin/tezbar-gif-search",
+        "executableSha256": "92e4e52b2d35a1610d42f7b45c03622e8819509714b336ac0ac164fb78325e38"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/gif-search/releases/download/v1.0.0/gif-search-x86_64-pc-windows-msvc.zip",
+        "sha256": "5fb427e666a2ed2cda93254f30ed388470e455bf00534385478456f69665dd93",
+        "executable": "bin/tezbar-gif-search.exe",
+        "executableSha256": "b660dec222285e175b2e9b5f6d18c9914a91c9936e351920cefe0e8367cc64db"
+      }
+    },
+    "capabilities": [
+      "host.clipboard.write",
+      "host.clipboard.writeFiles",
+      "host.clipboard.paste",
+      "host.clipboard.pasteText",
+      "host.shell.open",
+      "host.shell.reveal",
+      "host.window.visibility"
+    ],
+    "migrationPaths": {
+      "gif-search.legacy-storage": "extensions/gif-search/.tezbar-local-storage.json",
+      "gif-search.legacy-package-storage": "extensions/packages/raycast.gif-search/.tezbar-local-storage.json",
+      "gif-search.native-v2-store": "native-extensions-v2/gif-search/storage.json"
+    },
+    "files": {}
   },
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.google-calendar",
     "slug": "google-calendar",
     "name": "Google Calendar",
     "version": "1.4.4",
     "description": "Manage your Google calendar easily. Create events, search contacts, and check out your upcoming schedule.",
     "author": "thomas",
-    "icon": "icon.png",
+    "icon": "resources/icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.google-calendar"
@@ -1726,8 +1950,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "timeoutMs": 240000,
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "create-quick-event",
@@ -1738,8 +1964,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "timeoutMs": 240000,
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "search-contacts",
@@ -1750,8 +1978,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "timeoutMs": 240000,
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "list-events",
@@ -1791,8 +2021,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "timeoutMs": 240000,
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "list-calendars",
@@ -1803,8 +2035,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "timeoutMs": 240000,
+        "concurrency": "serialize",
+        "refreshMs": null
       }
     ],
     "verification": [
@@ -1816,17 +2050,42 @@
         "platform": "Windows",
         "state": "not-run"
       }
-    ]
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/google-calendar",
+    "capabilities": [
+      "shell.open",
+      "clipboard.write"
+    ],
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/google-calendar/releases/download/v1.4.4/google-calendar-aarch64-apple-darwin.zip",
+        "sha256": "fdd294c7449f271b98ec06e7df25da80aab64dae49652d93eda6fffabf09f670",
+        "executable": "bin/tezbar-google-calendar",
+        "executableSha256": "eeb1400316d7ea1512d4b3a0c12b582f3270ec7dc438c66b45f653e512d7c172"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/google-calendar/releases/download/v1.4.4/google-calendar-x86_64-pc-windows-msvc.zip",
+        "sha256": "0dc469508fe94a795fb37fc0954271c7ed17b83f3abf72e62d144b6c2008356e",
+        "executable": "bin/tezbar-google-calendar.exe",
+        "executableSha256": "38a66ff690e3472ba58901639b4bac697cf3ee3b04df94b94c885fcd47eb90d3"
+      }
+    },
+    "migrationPaths": {
+      "nativeGoogleOAuth": "native-google-oauth/tokens.json"
+    },
+    "files": {}
   },
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.google-search",
     "slug": "google-search",
     "name": "Google Search",
     "version": "1.0.0",
     "description": "Google search with autosuggestions",
     "author": "mblode",
-    "icon": "command-icon.png",
+    "icon": "resources/assets/command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.google-search"
@@ -1863,8 +2122,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       },
       {
         "name": "searchSelectText",
@@ -1875,8 +2135,9 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
       }
     ],
     "verification": [
@@ -1888,17 +2149,46 @@
         "platform": "Windows",
         "state": "not-run"
       }
-    ]
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/google-search",
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "sha256": "2921a8a0e7092578e3b1cdcd7002cb7ab8595b286e2b80808cb7e266c0219b6e",
+        "executable": "bin/tezbar-google-search",
+        "executableSha256": "7a6fd027b4061fcc012b6614fba88257186658593293f57ecb42f4027acc2789",
+        "url": "https://github.com/almatkai/google-search/releases/download/v1.0.0/google-search-aarch64-apple-darwin.zip"
+      },
+      "x86_64-pc-windows-msvc": {
+        "sha256": "256f34f64cc5c4b2e26ce65869a04051efd0eb6a0becb10baa10b4fb8cc35ed5",
+        "executable": "bin/tezbar-google-search.exe",
+        "executableSha256": "886c47d6a84643976ec5f72aef6a8095be70ee60f4165f8a67408fe533f27762",
+        "url": "https://github.com/almatkai/google-search/releases/download/v1.0.0/google-search-x86_64-pc-windows-msvc.zip"
+      }
+    },
+    "capabilities": [
+      "selection.read",
+      "clipboard.read",
+      "clipboard.write",
+      "shell.open",
+      "window.visibility"
+    ],
+    "migrationPaths": {
+      "nativeStore": "native-extensions-v2/google-search/storage.json",
+      "legacyLocalStorage": "extensions/google-search/.tezbar-local-storage.json"
+    },
+    "files": {}
   },
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.perplexity",
     "slug": "perplexity",
     "name": "Perplexity",
     "version": "1.0.0",
     "description": "Query Perplexity from Tezbar",
     "author": "third774",
-    "icon": "perplexity-logo.png",
+    "icon": "resources/perplexity-logo.png",
     "runtime": "rust",
     "replaces": [
       "raycast.perplexity"
@@ -1936,8 +2226,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 120000,
+        "refreshMs": null
       }
     ],
     "verification": [
@@ -1949,20 +2241,42 @@
         "platform": "Windows",
         "state": "not-run"
       }
-    ]
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/perplexity",
+    "capabilities": [
+      "shell.open"
+    ],
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/perplexity/releases/download/v1.0.0/perplexity-aarch64-apple-darwin.zip",
+        "sha256": "82a706eee600dc98309bd19056a2496ee7e3cdca2a36785de50511a90601f855",
+        "executable": "bin/tezbar-perplexity",
+        "executableSha256": "95002401870ba84de894389ff31035743b6396e8798de5b79f38d73bd046b6db"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/perplexity/releases/download/v1.0.0/perplexity-x86_64-pc-windows-msvc.zip",
+        "sha256": "ea503b2780dac7dc703fa0da132c82b58b607bb555dedd274fcb2bb5ef5be4d4",
+        "executable": "bin/tezbar-perplexity.exe",
+        "executableSha256": "6db26b1cc27915fe311575e6dbdbb2c3426efff6b2d20ab9e1917659d9e49745"
+      }
+    },
+    "files": {}
   },
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.port-manager",
     "slug": "port-manager",
     "name": "Port Manager",
     "version": "1.0.0",
     "description": "Find open ports and close them",
     "author": "lucaschultz",
-    "icon": "command-icon.png",
+    "icon": "resources/command-icon.png",
     "runtime": "rust",
     "replaces": [
-      "raycast.port-manager"
+      "raycast.port-manager",
+      "com.tezbar.port-manager"
     ],
     "platforms": [
       "macOS",
@@ -2003,15 +2317,33 @@
             "name": "port",
             "placeholder": "Port",
             "type": "text",
-            "required": true
+            "required": true,
+            "title": "Port"
           }
         ],
         "platforms": [
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "launcher": {
+          "recommendation": 760,
+          "inlineArgument": {
+            "name": "port",
+            "title": "Port",
+            "prompt": "Type a port, then press Enter",
+            "validation": {
+              "kind": "integer",
+              "min": 1,
+              "max": 65535,
+              "maxLength": 5,
+              "message": "Enter a valid TCP port"
+            }
+          },
+          "id": "extcmd:raycast.port-manager:kill-listening-process"
+        }
       },
       {
         "name": "named-ports",
@@ -2022,8 +2354,13 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "launcher": {
+          "recommendation": 0,
+          "id": "extcmd:raycast.port-manager:named-ports"
+        }
       },
       {
         "name": "open-ports",
@@ -2078,8 +2415,13 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 3000,
+        "launcher": {
+          "recommendation": 720,
+          "id": "extcmd:raycast.port-manager:open-ports"
+        }
       },
       {
         "name": "open-ports-menu-bar",
@@ -2091,8 +2433,13 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 3000,
+        "launcher": {
+          "recommendation": 700,
+          "id": "extcmd:raycast.port-manager:open-ports-menu-bar"
+        }
       }
     ],
     "verification": [
@@ -2104,17 +2451,74 @@
         "platform": "Windows",
         "state": "not-run"
       }
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/port-manager",
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/port-manager/releases/download/v1.0.0/port-manager-aarch64-apple-darwin.zip",
+        "sha256": "9f5fd622d68bc3c655d9eb71a1cf8de6a7411960e6922d907073bd74dedc6fdc",
+        "executable": "bin/tezbar-port-manager",
+        "executableSha256": "f36515ab14e7df39c0194b76798c9f7bc884319539ed5bf8b368bd2a7dcd3e72"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/port-manager/releases/download/v1.0.0/port-manager-x86_64-pc-windows-msvc.zip",
+        "sha256": "38eef2282a3ecc88d715e97a1d8d0daedcf3adeaaf31d44c41f090e1fa93e5ca",
+        "executable": "bin/tezbar-port-manager.exe",
+        "executableSha256": "826738b064cf4f2edd12c4cea952f09dfef7535fd54cce67896ac5cc84fbbdd8"
+      }
+    },
+    "capabilities": [
+      "clipboard.write",
+      "dialog.confirm",
+      "safety.authorize",
+      "safety.record",
+      "launcher.publish"
+    ],
+    "migrationPaths": {
+      "namedPorts": "named-ports.json"
+    },
+    "files": {},
+    "launcherContributions": [
+      {
+        "id": "listeners",
+        "commandName": "kill-listening-process",
+        "argumentName": "port",
+        "surfaces": [
+          "query",
+          "argument"
+        ],
+        "limit": 12,
+        "timeoutMs": 1500,
+        "selectors": {
+          "terms": [
+            "port",
+            "open",
+            "listen",
+            "kill"
+          ],
+          "digitRun": {
+            "min": 2,
+            "max": 5
+          }
+        },
+        "index": true,
+        "bootstrapMigrationPaths": [
+          "namedPorts"
+        ]
+      }
     ]
   },
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.speedtest",
     "slug": "speedtest",
     "name": "Speedtest",
     "version": "1.0.0",
     "description": "Test the performance and quality of your internet connection via speedtest.net",
     "author": "tonka3000",
-    "icon": "speedtest.png",
+    "icon": "resources/assets/speedtest.png",
     "runtime": "rust",
     "replaces": [
       "raycast.speedtest"
@@ -2134,8 +2538,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "timeoutMs": 300000
       }
     ],
     "verification": [
@@ -2147,17 +2553,43 @@
         "platform": "Windows",
         "state": "not-run"
       }
-    ]
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/speedtest",
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "sha256": "03a4d556fe26ae8766dfde3f9d6fa3ffd45675451c29652bb895a55b06a677ea",
+        "executable": "bin/tezbar-speedtest",
+        "executableSha256": "c3866576b26c62d0a24ce4b0d146968655cdb7c28382ce0dd0b3c605f834f9f5",
+        "url": "https://github.com/almatkai/speedtest/releases/download/v1.0.0/speedtest-aarch64-apple-darwin.zip"
+      },
+      "x86_64-pc-windows-msvc": {
+        "sha256": "0c162a9ec30749f1429f065e8705e0cc0b30503b91bf0da7d40d13448066dd54",
+        "executable": "bin/tezbar-speedtest.exe",
+        "executableSha256": "f2970a9fae8ff3a9dc5f6b23d25a3a99f55d3d73aca5d5dd9410ebcc26bc2033",
+        "url": "https://github.com/almatkai/speedtest/releases/download/v1.0.0/speedtest-x86_64-pc-windows-msvc.zip"
+      }
+    },
+    "capabilities": [
+      "clipboard.write",
+      "shell.open"
+    ],
+    "migrationPaths": {
+      "nativeStore": "native-extensions-v2/speedtest/storage.json",
+      "cli": "native-extensions-v2/speedtest/cli"
+    },
+    "files": {}
   },
   {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "id": "com.tezbar.native.timers",
     "slug": "timers",
     "name": "Timers",
     "version": "1.0.0",
     "description": "Start, stop, and save countdown timers, directly in Tezbar, with no external dependencies.",
     "author": "ThatNerd",
-    "icon": "command-icon.png",
+    "icon": "resources/command-icon.png",
     "runtime": "rust",
     "replaces": [
       "raycast.timers"
@@ -2314,8 +2746,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "start5MinuteTimer",
@@ -2327,8 +2761,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "start10MinuteTimer",
@@ -2340,8 +2776,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "start15MinuteTimer",
@@ -2353,8 +2791,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "start25MinuteTimer",
@@ -2366,8 +2806,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "start30MinuteTimer",
@@ -2379,8 +2821,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "start45MinuteTimer",
@@ -2392,8 +2836,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "start60MinuteTimer",
@@ -2405,8 +2851,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "start90MinuteTimer",
@@ -2418,8 +2866,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "startCustomTimer",
@@ -2453,8 +2903,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": 1000
       },
       {
         "name": "manageTimers",
@@ -2465,8 +2917,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": 1000
       },
       {
         "name": "timersMenuBar",
@@ -2478,8 +2932,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": 1000
       },
       {
         "name": "startStopwatch",
@@ -2498,8 +2954,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "manageStopwatches",
@@ -2510,8 +2968,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": 1000
       },
       {
         "name": "dismissTimerAlert",
@@ -2526,8 +2986,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "stopwatchMenuBar",
@@ -2539,8 +3001,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": 1000
       },
       {
         "name": "previewAlertSounds",
@@ -2551,8 +3015,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": 1000
       },
       {
         "name": "stopRunningTimer",
@@ -2563,8 +3029,10 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": null
       },
       {
         "name": "configureMenubarPresets",
@@ -2575,19 +3043,57 @@
           "macOS",
           "Windows"
         ],
-        "runtime": "unavailable",
-        "gap": "Compiled native handler or platform support has not been verified yet."
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "timeoutMs": 120000,
+        "refreshMs": 1000
       }
     ],
     "verification": [
       {
         "platform": "macOS",
-        "state": "not-run"
+        "state": "headless-tested",
+        "target": "aarch64-apple-darwin",
+        "detail": "Native Rust tests and release build; fixture-host stdio/package validation. Live desktop UI not tested."
       },
       {
         "platform": "Windows",
-        "state": "not-run"
+        "state": "not-run",
+        "target": "x86_64-pc-windows-msvc"
       }
-    ]
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/timers",
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/timers/releases/download/v1.0.0/timers-aarch64-apple-darwin.zip",
+        "sha256": "f73252786b3fe40e4ab0c879b141958384e4a455b85467b12a5569332830b1eb",
+        "executable": "bin/tezbar-timers",
+        "executableSha256": "e3291d6362c2566fc124c896d958ccb791f4dfd98f54b79bb327812958e45820"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/timers/releases/download/v1.0.0/timers-x86_64-pc-windows-msvc.zip",
+        "sha256": "a5d42844a78323ba6930939478be190bf41209bb35d85fd550a7db6935272b57",
+        "executable": "bin/tezbar-timers.exe",
+        "executableSha256": "43d2d32973a940b72c2bb44bec2ad989bb2314e309b9ed5e728183a43cc51e92"
+      }
+    },
+    "capabilities": [
+      "clipboard",
+      "window",
+      "background",
+      "notifications"
+    ],
+    "startupProbe": {
+      "key": "timers",
+      "migrationPaths": [
+        "native-v2-store"
+      ]
+    },
+    "migrationPaths": {
+      "native-v2-store": "native-extensions-v2/timers/storage.json"
+    },
+    "files": {}
   }
 ]

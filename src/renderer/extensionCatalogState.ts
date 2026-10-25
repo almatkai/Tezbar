@@ -22,6 +22,7 @@ export function normalizeInstalledExtension(entry: InstalledRegistryExtension): 
     })),
     runtime: entry.runtime,
     nativeV2: entry.nativeV2,
+    acquisition: entry.acquisition,
     platforms: entry.platforms,
   }
 }

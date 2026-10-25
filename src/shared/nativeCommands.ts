@@ -59,7 +59,6 @@ export type NativeCommandId =
   | 'show-memory-info'
   | 'show-disk-usage'
   | 'show-battery-status'
-  | 'list-listening-ports'
   | 'git-root'
   | 'brew-outdated'
   | 'brew-update'

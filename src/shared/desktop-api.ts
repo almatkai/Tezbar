@@ -40,11 +40,9 @@ import type { AppUpdateStatus, ReleaseChannel, UpdateChannelInfo } from './updat
 import type { SystemStatsSnapshot } from './systemStats'
 import type { PermissionId, PermissionStatus, PermissionsSnapshot } from './permissions'
 import type { SafetyDescriptor, SafetyLogEntry } from './safety'
-import type { NamedPortEntry } from './portManager'
 import type { QuickNoteEntry } from './quickNotes'
 import type { SnippetListRow, SnippetWritePayload } from './snippets'
 import type {
-  OpenPortProcess,
   PathCompletionItem,
   SearchAction,
   SearchBenchmarkReport,
@@ -157,6 +155,9 @@ export type RaymesApi = {
   extensionRefreshSession: (
     payload: ExtensionRefreshSessionRequest
   ) => Promise<ExtensionRefreshSessionResult>
+  onExtensionSessionInvalidated?: (
+    listener: (event: import('./extensionRuntime').ExtensionSessionInvalidation) => void
+  ) => () => void
   extensionDisposeSession: (payload: ExtensionDisposeSessionRequest) => Promise<boolean>
   extensionLoadMore: (
     payload: ExtensionLoadMoreSessionRequest
@@ -198,6 +199,16 @@ export type RaymesApi = {
     commandName?: string
     values: Record<string, unknown>
   }) => Promise<Record<string, unknown>>
+  extensionLauncherSearch?: (payload: {
+    text: string
+    surface: 'argument'
+    extensionId: string
+    commandName: string
+    argumentName: string
+  }) => Promise<SearchResult[]>
+  onLauncherInvalidated?: (
+    listener: (event: { text?: string; queryId?: string }) => void
+  ) => () => void
   searchAll: (query: string) => Promise<SearchResult[]>
   listSearchCandidates: () => Promise<SearchResult[]>
   completePath: (query: string) => Promise<PathCompletionItem[]>
@@ -205,10 +216,6 @@ export type RaymesApi = {
   recordDirectoryVisit: (path: string) => Promise<void>
   runSearchBenchmark: () => Promise<SearchBenchmarkReport>
   getSearchBenchmarkHistory: () => Promise<SearchBenchmarkReport[]>
-  listOpenPorts: () => Promise<OpenPortProcess[]>
-  listNamedPorts: () => Promise<NamedPortEntry[]>
-  addNamedPort: (payload: { name: string; port: number }) => Promise<NamedPortEntry | null>
-  removeNamedPort: (id: string) => Promise<boolean>
   quickLookFiles: (paths: string[]) => Promise<SearchExecuteResult>
   executeSearchAction: (
     action: SearchAction,
@@ -415,7 +422,6 @@ export type RaymesApi = {
         | 'snippets'
         | 'notes'
         | 'emoji-picker'
-        | 'open-ports'
         | 'system-monitor'
         | 'onboarding'
     ) => void

@@ -5,6 +5,7 @@ import type {
   ExtensionRuntimeEffect,
   ExtensionRuntimeNode,
 } from '../shared/extensionRuntime'
+import { startSessionRefresh } from './extensionSessionRefresh'
 import { Button, Message } from './ui/primitives'
 import { ExtensionRuntimeSurface } from './src/raycast-api'
 
@@ -20,6 +21,8 @@ type PreferenceField = {
 }
 
 type RuntimeViewState = {
+  refreshMs?: number | null
+  generation?: string
   sessionId: string
   extensionId: string
   commandName: string
@@ -74,6 +77,8 @@ function fromRunResult(
   result: Extract<ExtensionRunCommandResult, { ok: true; mode: 'view' }>
 ): RuntimeViewState {
   return {
+    refreshMs: result.refreshMs,
+    generation: result.generation,
     sessionId: result.sessionId,
     extensionId: result.extensionId,
     commandName: result.commandName,
@@ -194,9 +199,7 @@ function PreferenceSetupView({
             <span className="min-w-0">
               {pref.description || `Enable ${label.toLowerCase()}`}
               {pref.required ? (
-                <span className="ml-2 text-[11px] text-accent-strong">
-                  Required
-                </span>
+                <span className="ml-2 text-[11px] text-accent-strong">Required</span>
               ) : null}
             </span>
           </label>
@@ -332,9 +335,7 @@ function PreferenceSetupView({
               )}
             </span>
             <div className="min-w-0 flex-1 pt-0.5">
-              <p className="text-[11px] font-semibold text-accent-strong">
-                One-time setup
-              </p>
+              <p className="text-[11px] font-semibold text-accent-strong">One-time setup</p>
               <h1 className="mt-1 font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink-1">
                 Welcome to {title}
               </h1>
@@ -426,7 +427,17 @@ export default function ExtensionRuntimeView({
   const [error, setError] = useState<string | null>(null)
   const [actionNotice, setActionNotice] = useState<ActionNotice | null>(null)
   const searchRequestSeq = useRef(0)
-  const disposeTimerRef = useRef<number | null>(null)
+  const currentSession = useRef<string | null>(null)
+  const sessionOwner = `${state.sessionId}:${state.generation ?? ''}`
+  currentSession.current = sessionOwner
+  useEffect(
+    () => () => {
+      currentSession.current = null
+      searchRequestSeq.current += 1
+    },
+    []
+  )
+  const disposeTimerRef = useRef<{ sessionId: string; timer: number } | null>(null)
   const actionNoticeTimerRef = useRef<number | null>(null)
 
   const showActionNotice = useCallback((message: string, persist = false): void => {
@@ -454,6 +465,8 @@ export default function ExtensionRuntimeView({
   )
 
   useEffect(() => {
+    currentSession.current = `${initial.sessionId}:${initial.generation ?? ''}`
+    searchRequestSeq.current += 1
     setState(fromRunResult(initial))
     setError(null)
   }, [initial])
@@ -467,65 +480,56 @@ export default function ExtensionRuntimeView({
     []
   )
 
+  // Cancel only the same-session StrictMode remount; a new session must still
+  // dispose its predecessor even when both effects run in the same render.
   useEffect(() => {
-    let cancelled = false
-    let timer: number | null = null
-    if (disposeTimerRef.current !== null) {
-      window.clearTimeout(disposeTimerRef.current)
+    const pending = disposeTimerRef.current
+    if (pending?.sessionId === state.sessionId) {
+      window.clearTimeout(pending.timer)
       disposeTimerRef.current = null
     }
-
-    const poll = async (): Promise<void> => {
-      const startedAt = performance.now()
-      console.log(`[RuntimeView] Refresh start session=${state.sessionId}`)
-      try {
-        const result = await window.tezbar.extensionRefreshSession({ sessionId: state.sessionId })
-        console.log(
-          `[RuntimeView] Refresh complete session=${state.sessionId} after ${Math.round(performance.now() - startedAt)}ms; mode=${
-            result.ok ? result.mode : 'error'
-          }`
-        )
-        if (cancelled || (result.ok && result.mode === 'unchanged')) return
-        if (!result.ok) {
-          setError(result.message)
-          return
-        }
-        if (result.mode === 'no-view') {
-          setState((prev) => ({ ...prev, message: result.message }))
-          return
-        }
-        setState({
-          sessionId: result.sessionId,
-          extensionId: result.extensionId,
-          commandName: result.commandName,
-          title: result.title,
-          root: result.root,
-          actions: result.actions,
-          message: result.message,
-        })
-      } catch (error) {
-        console.error(
-          `[RuntimeView] Refresh failed session=${state.sessionId} after ${Math.round(performance.now() - startedAt)}ms`,
-          error
-        )
-        if (!cancelled) setError(error instanceof Error ? error.message : String(error))
-      } finally {
-        if (!cancelled) timer = window.setTimeout(() => void poll(), 500)
-      }
-    }
-
-    timer = window.setTimeout(() => void poll(), 100)
-
     return () => {
-      cancelled = true
-      if (timer !== null) window.clearTimeout(timer)
       const sessionId = state.sessionId
-      disposeTimerRef.current = window.setTimeout(() => {
-        disposeTimerRef.current = null
+      const timer = window.setTimeout(() => {
+        if (disposeTimerRef.current?.timer === timer) disposeTimerRef.current = null
         void window.tezbar.extensionDisposeSession({ sessionId })
       }, 0)
+      disposeTimerRef.current = { sessionId, timer }
     }
   }, [state.sessionId])
+
+  useEffect(() => {
+    let cancelled = false
+    const stop = startSessionRefresh({
+      sessionId: state.sessionId,
+      generation: state.generation,
+      refreshMs: state.refreshMs,
+      subscribe: window.tezbar.onExtensionSessionInvalidated,
+      subscribeVisibility: window.tezbar.onWindowVisibility,
+      refresh: async () => {
+        try {
+          const result = await window.tezbar.extensionRefreshSession({ sessionId: state.sessionId })
+          if (cancelled || (result.ok && result.mode === 'unchanged')) return
+          if (!result.ok) {
+            setError(result.message)
+            return
+          }
+          if (result.mode === 'no-view') {
+            setState((prev) => ({ ...prev, message: result.message }))
+            return
+          }
+          if (result.sessionId !== state.sessionId || result.generation !== state.generation) return
+          setState(fromRunResult(result))
+        } catch (error) {
+          if (!cancelled) setError(error instanceof Error ? error.message : String(error))
+        }
+      },
+    })
+    return () => {
+      cancelled = true
+      stop()
+    }
+  }, [state.sessionId, state.generation, state.refreshMs])
 
   const handleSearchTextChanged = useCallback(
     async (searchText: string) => {
@@ -536,7 +540,7 @@ export default function ExtensionRuntimeView({
         sessionId: state.sessionId,
         searchText,
       })
-      if (requestSeq !== searchRequestSeq.current) return
+      if (requestSeq !== searchRequestSeq.current || currentSession.current !== sessionOwner) return
 
       if (!result.ok) {
         console.error('[RuntimeView] Search failed:', result.message)
@@ -554,6 +558,8 @@ export default function ExtensionRuntimeView({
         `[RuntimeView] Search returned view with root type="${result.root.type}", ${result.root.children?.length ?? 0} children`
       )
       setState({
+        refreshMs: result.refreshMs,
+        generation: result.generation,
         sessionId: result.sessionId,
         extensionId: result.extensionId,
         commandName: result.commandName,
@@ -563,11 +569,12 @@ export default function ExtensionRuntimeView({
         message: result.message,
       })
     },
-    [state.sessionId]
+    [state.sessionId, sessionOwner]
   )
 
   const handleLoadMore = useCallback(async () => {
     const result = await window.tezbar.extensionLoadMore({ sessionId: state.sessionId })
+    if (currentSession.current !== sessionOwner) return
     if (result.ok && result.mode === 'unchanged') return
     if (!result.ok) {
       setError(result.message)
@@ -578,6 +585,8 @@ export default function ExtensionRuntimeView({
       return
     }
     setState({
+      refreshMs: result.refreshMs,
+      generation: result.generation,
       sessionId: result.sessionId,
       extensionId: result.extensionId,
       commandName: result.commandName,
@@ -586,7 +595,7 @@ export default function ExtensionRuntimeView({
       actions: result.actions,
       message: result.message,
     })
-  }, [state.sessionId])
+  }, [state.sessionId, sessionOwner])
 
   return (
     <div
@@ -628,6 +637,7 @@ export default function ExtensionRuntimeView({
                 formValues,
               })
 
+              if (currentSession.current !== sessionOwner) return
               if (!result.ok) {
                 setError(result.message)
                 showActionFailure(result.message)
@@ -656,6 +666,8 @@ export default function ExtensionRuntimeView({
               }
 
               setState({
+                refreshMs: result.refreshMs,
+                generation: result.generation,
                 sessionId: result.sessionId,
                 extensionId: result.extensionId,
                 commandName: result.commandName,

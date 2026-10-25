@@ -3,6 +3,7 @@ import type { ExtensionManifest, InstalledExtension, NativeV2Info } from '../sha
 import {
   checkedLines,
   canInstallExtension,
+  acquisitionGuidance,
   commandStatus,
   describeRuntime,
   effectiveRuntime,
@@ -104,6 +105,21 @@ describe('extension runtime status', () => {
     expect(canInstallExtension(ext, 'macOS')).toBe(false)
     expect(replacementReason(ext)).toBe('Tezbar replacement for raycast.foo')
     expect(canInstallExtension(item('raycast.foo'), 'macOS')).toBe(true)
+  })
+
+  it('keeps installed local-only coverage while disabling remote install and repair', () => {
+    const ext = item('com.tezbar.native.foo', { nativeV2: native(), acquisition: { type: 'local-import-only' } })
+    expect(effectiveRuntime(ext, 'macOS')).toBe('rust')
+    expect(canInstallExtension(ext, 'macOS')).toBe(false)
+    expect(acquisitionGuidance(ext)).toContain('--extensions-v3-import')
+    expect(acquisitionGuidance(ext)).toContain('close and reopen')
+    expect(acquisitionGuidance(ext)).toContain('update or repair')
+    expect(canInstallExtension({ ...ext, acquisition: { type: 'remote' } }, 'macOS')).toBe(true)
+    for (const acquisition of [null, {}, { type: 'unknown' }, []]) {
+      const malformed = { ...ext, acquisition } as unknown as ExtensionManifest
+      expect(canInstallExtension(malformed, 'macOS')).toBe(false)
+      expect(acquisitionGuidance(malformed)).toContain('unsupported acquisition')
+    }
   })
 
   it('appends commands present only in Native V2 metadata', () => {

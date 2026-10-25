@@ -25,6 +25,17 @@ export type ExtensionCommandArgument = {
 
 export type IconAssetKind = 'application' | 'extension' | 'file'
 
+export type LauncherCommandMetadata = {
+  id?: string
+  recommendation?: number
+  inlineArgument?: {
+    name: string
+    title: string
+    prompt: string
+    validation?: { kind: 'integer'; min: number; max: number; maxLength: number; message: string }
+  }
+}
+
 export type SearchAction =
   | { type: 'open-app'; appName: string; appPath?: string }
   | { type: 'open-file'; path: string }
@@ -40,6 +51,7 @@ export type SearchAction =
       commandName: string
       title: string
       iconPath?: string
+      launcher?: LauncherCommandMetadata
       argumentName?: string
       argumentValue?: string
       commandArgumentDefinitions?: ExtensionCommandArgument[]
@@ -54,6 +66,8 @@ export type SearchAction =
   | { type: 'run-native-command'; commandId: string }
 
 export type SearchResult = {
+  /** Package/profile scoped contributions must not enter persistent renderer caches. */
+  ephemeral?: boolean
   id: string
   title: string
   subtitle: string
@@ -90,14 +104,6 @@ export type SearchExecuteContext = {
   query?: string
   rank?: number
   resultId?: string
-}
-
-export type OpenPortProcess = {
-  process: string
-  user: string
-  pid: string
-  ports: number[]
-  iconDataUrl?: string
 }
 
 export type SearchBenchmarkReport = {

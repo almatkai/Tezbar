@@ -23,9 +23,9 @@ fn main() {
  let args: Vec<_> = std::env::args_os().collect();
  let mode = args[1].to_str().unwrap();
  let dir = Path::new(&args[2]);
- if mode == "parent" {
+ if mode == "parent" || mode == "parent-extension" {
   let mut child = Command::new(std::env::current_exe().unwrap())
-   .arg(child_supervisor::MODE).arg(std::env::current_exe().unwrap())
+   .arg(if mode == "parent-extension" {child_supervisor::EXTENSION_MODE} else {child_supervisor::MODE}).arg(std::env::current_exe().unwrap())
    .arg("tree").arg(dir).stdin(Stdio::piped()).spawn().unwrap();
   std::fs::write(dir.join("supervisor"), child.id().to_string()).unwrap();
   loop { std::thread::sleep(Duration::from_secs(1)); let _ = &mut child; }
@@ -42,7 +42,7 @@ fn main() {
 }
 "#);
         fs::write(directory.path().join("src/main.rs"), source).unwrap();
-        let output = Command::new("cargo").args(["build", "--offline", "--quiet", "--manifest-path"])
+        let output = Command::new("cargo").args(["build", "--offline", "--quiet", "-j2", "--manifest-path"])
             .arg(directory.path().join("Cargo.toml")).output().unwrap();
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         let binary = directory.path().join("target/debug").join(format!("tezbar-supervisor-fixture{}", std::env::consts::EXE_SUFFIX));
@@ -170,4 +170,24 @@ fn missing_child_fails_without_waiting_for_open_lease() {
         .spawn()
         .unwrap();
     assert!(!wait_exit(&mut child).success());
+}
+
+#[test]
+fn abrupt_host_death_closes_extension_protocol_and_kills_tree() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut parent = Command::new(fixture_executable())
+        .arg("parent-extension")
+        .arg(dir.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let root = pid(dir.path(), "root");
+    let leaf = pid(dir.path(), "leaf");
+    assert!(alive(root));
+    assert!(alive(leaf));
+    parent.kill().unwrap();
+    parent.wait().unwrap();
+    wait_until(|| !alive(root) && !alive(leaf));
 }

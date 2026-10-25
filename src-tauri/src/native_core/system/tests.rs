@@ -19,7 +19,9 @@ fn catalogs_match_all_ids() {
         .iter()
         .map(|d| d["id"].as_str().unwrap())
         .collect();
-    assert_eq!(ids.len(), 43);
+    // Open ports is owned by the external Port Manager package.
+    assert_eq!(ids.len(), 42);
+    assert!(!ids.contains("list-listening-ports"));
     for id in [
         "brew-update",
         "toggle-bluetooth",

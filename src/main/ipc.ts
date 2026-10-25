@@ -95,7 +95,6 @@ import {
   recordSearchActionUsage,
   getSearchBenchmarkHistory,
   listSearchCandidates,
-  listOpenPorts,
   reindexExtensions,
   reindexQuickNotes,
   reindexSnippets,
@@ -110,7 +109,6 @@ import {
   updateQuickNote,
 } from './search/providers/notesProvider'
 import { fetchFrankfurterLatest } from './currency/frankfurter'
-import { addNamedPort, listNamedPorts, removeNamedPort } from './portManager/namedPortsStore'
 import { runAiActionMode } from './llm/actionMode'
 import type { VoiceModelId } from '../shared/voice'
 import type {
@@ -1921,25 +1919,6 @@ export function registerIpcHandlers(
       throw new Error('Frankfurter: currency code required')
     }
     return fetchFrankfurterLatest(from.trim())
-  })
-
-  handleIpc('open-ports:list', async () => {
-    return listOpenPorts()
-  })
-
-  handleIpc('port-manager:named:list', async () => listNamedPorts())
-
-  handleIpc('port-manager:named:add', async (_event, raw: unknown) => {
-    if (!raw || typeof raw !== 'object') return null
-    const o = raw as Record<string, unknown>
-    const name = typeof o.name === 'string' ? o.name : ''
-    const port = typeof o.port === 'number' ? o.port : Number(o.port)
-    return addNamedPort(name, port)
-  })
-
-  handleIpc('port-manager:named:remove', async (_event, id: unknown) => {
-    if (typeof id !== 'string' || !id.trim()) return false
-    return removeNamedPort(id.trim())
   })
 
   handleIpc(IPC_CHANNELS.SEARCH_EXECUTE, async (_event, payload: unknown) => {

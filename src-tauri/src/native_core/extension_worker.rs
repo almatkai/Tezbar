@@ -306,6 +306,9 @@ impl ExtensionWorker {
                         if let (Some(name), Some(path)) =
                             (message["name"].as_str(), message["timerFile"].as_str())
                         {
+                            // Legacy JS notification compatibility initializes only
+                            // when actually used; external processes use generic APIs.
+                            if let Some(app)=ctx.app.as_ref(){crate::timer_notifications::setup(app);}
                             crate::timer_notifications::deliver(name, path);
                         }
                     }

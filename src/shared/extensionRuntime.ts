@@ -1,4 +1,4 @@
-import type { ExtensionPlatform, ExtensionRuntimeKind, NativeV2Info } from './extensions'
+import type { ExtensionManifest, ExtensionPlatform, ExtensionRuntimeKind, NativeV2Info } from './extensions'
 
 export type ExtensionRegistryCommand = {
   name: string
@@ -14,9 +14,13 @@ export type ExtensionRegistryCommand = {
     title?: string
     data?: Array<{ title?: string; value?: string }>
   }>
+  launcher?: import('./search').LauncherCommandMetadata
 }
 
 export type InstalledRegistryExtension = {
+  acquisition?: ExtensionManifest['acquisition']
+  installationStatus?: import('./extensions').ExtensionInstallationStatus
+  healthError?: string
   id: string
   slug: string
   name: string
@@ -89,6 +93,9 @@ export type ExtensionRunCommandResult =
       ok: true
       mode: 'view'
       message?: string
+      /** Absent for legacy V1; null means event-driven/static (no polling). */
+      refreshMs?: number | null
+      generation?: string
       sessionId: string
       extensionId: string
       commandName: string
@@ -119,6 +126,9 @@ export type ExtensionInvokeActionResult =
       ok: true
       mode: 'view'
       message?: string
+      /** Absent for legacy V1; null means event-driven/static (no polling). */
+      refreshMs?: number | null
+      generation?: string
       sessionId: string
       extensionId: string
       commandName: string
@@ -167,6 +177,9 @@ export type ExtensionSearchTextChangedResult =
       ok: true
       mode: 'view'
       message?: string
+      /** Absent for legacy V1; null means event-driven/static (no polling). */
+      refreshMs?: number | null
+      generation?: string
       sessionId: string
       extensionId: string
       commandName: string
@@ -183,4 +196,10 @@ export type ExtensionSearchTextChangedResult =
 export type ExtensionRuntimePreferencesRequest = {
   extensionId: string
   commandName?: string
+}
+
+export type ExtensionSessionInvalidation = {
+  sessionId: string
+  revision: number
+  generation: string
 }

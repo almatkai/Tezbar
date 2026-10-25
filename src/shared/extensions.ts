@@ -7,6 +7,10 @@ export type NativeV2Command = {
   runtime: 'rust' | 'javascript' | 'unavailable'
   platforms: ExtensionPlatform[]
   gap?: string
+  timeoutMs?: number
+  concurrency?: 'serialize' | 'reject-while-busy'
+  launcher?: import('./search').LauncherCommandMetadata
+  refreshMs?: number | null
 }
 
 export type NativeV2Verification = {
@@ -18,7 +22,26 @@ export type NativeV2Verification = {
 }
 
 export type NativeV2Info = {
-  schemaVersion: 2
+  schemaVersion: 2 | 3
+  execution?: 'process'
+  protocolVersion?: 1
+  repository?: string
+  artifacts?: Record<
+    string,
+    { url: string; sha256: string; executable: string; executableSha256: string }
+  >
+  launcherContributions?: Array<{
+    id: string
+    commandName: string
+    argumentName?: string
+    surfaces: Array<'query' | 'argument'>
+    selectors: { terms?: string[]; digitRun?: { min: number; max: number } }
+    limit: number
+    timeoutMs: number
+    index?: boolean
+    bootstrapMigrationPaths?: string[]
+  }>
+  capabilities?: string[]
   id: string
   version: string
   replaces: string[]
@@ -28,7 +51,13 @@ export type NativeV2Info = {
   verification: NativeV2Verification[]
 }
 
+export type ExtensionInstallationStatus = 'installed' | 'not-installed' | 'needs-upgrade-or-repair'
+
 export type ExtensionManifest = {
+  /** Host catalog routing, outside the authenticated release manifest. */
+  acquisition?: { type: 'remote' | 'local-import-only' | 'unsupported'; guidance?: string }
+  installationStatus?: ExtensionInstallationStatus
+  healthError?: string
   id: string
   name: string
   description: string

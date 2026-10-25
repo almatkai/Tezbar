@@ -161,6 +161,8 @@ export function initTauriBridge(): void {
     extensionInvokeAction: (payload: any) => callBackend('extension:invoke-action', payload),
     extensionSearchTextChanged: (payload: any) =>
       callBackend('extension:search-text-changed', payload),
+    onExtensionSessionInvalidated: (listener) =>
+      setupEventListener('extension:session-invalidated', listener),
     extensionRefreshSession: (payload: any) => callBackend('extension:refresh-session', payload),
     extensionDisposeSession: (payload: any) => callBackend('extension:dispose-session', payload),
     extensionLoadMore: (payload: any) => callBackend('extension:load-more', payload),
@@ -188,6 +190,8 @@ export function initTauriBridge(): void {
     getExtensionPreferences: (payload: any) => callBackend('preferences:get', payload),
     getExtensionPreferenceSetup: (payload: any) => callBackend('preferences:setup', payload),
     saveExtensionPreferences: (payload: any) => callBackend('preferences:set', payload),
+    extensionLauncherSearch: (payload) => callBackend('extension:launcher-search', payload),
+    onLauncherInvalidated: (listener) => setupEventListener('launcher:invalidated', listener),
     searchAll: (query: string) => callBackend('search:all', query),
     listSearchCandidates: () => callBackend('search:candidates'),
     completePath: (query: string) => callBackend('path:complete', query),
@@ -195,10 +199,6 @@ export function initTauriBridge(): void {
     recordDirectoryVisit: (path: string) => callBackend('directory-visit:record', path),
     runSearchBenchmark: () => callBackend('search:benchmark:run'),
     getSearchBenchmarkHistory: () => callBackend('search:benchmark:history'),
-    listOpenPorts: () => callBackend('open-ports:list'),
-    listNamedPorts: () => callBackend('port-manager:named:list'),
-    addNamedPort: (payload: any) => callBackend('port-manager:named:add', payload),
-    removeNamedPort: (id: string) => callBackend('port-manager:named:remove', id),
     quickLookFiles: async (paths: string[]) => {
       await setBlurHideSuppressed(true)
       try {
@@ -281,8 +281,7 @@ export function initTauriBridge(): void {
     revealClipboardEntry: (id: string) => callBackend('clipboard:reveal', id),
     readClipboardImage: (id: string) => callBackend('clipboard:image', id),
     clearClipboardHistory: () => callBackend('clipboard:clear'),
-    onClipboardChanged: (listener: () => void) =>
-      setupEventListener('clipboard:changed', listener),
+    onClipboardChanged: (listener: () => void) => setupEventListener('clipboard:changed', listener),
 
     listSnippets: () => callBackend('snippets:list'),
     copySnippet: (id: string) => callBackend('snippets:copy', id),
@@ -471,7 +470,6 @@ export function initTauriBridge(): void {
           | 'snippets'
           | 'notes'
           | 'emoji-picker'
-          | 'open-ports'
           | 'system-monitor'
           | 'onboarding'
       ) => void

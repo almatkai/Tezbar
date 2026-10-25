@@ -525,23 +525,6 @@
     "macOnly": false
   },
   {
-    "id": "list-listening-ports",
-    "title": "List Listening Ports",
-    "subtitle": "Open Port Manager with a structured list (same as Open Ports).",
-    "category": "dev",
-    "strategy": "shell",
-    "keywords": [
-      "ports",
-      "lsof",
-      "listen",
-      "listening",
-      "tcp",
-      "dev",
-      "port manager"
-    ],
-    "macOnly": false
-  },
-  {
     "id": "git-root",
     "title": "Git: Copy Repo Root",
     "subtitle": "Copy the root of the git repo open in Finder.",

@@ -13,7 +13,7 @@ export const extensionsProvider: SearchProvider = {
     const out: IndexedDocument[] = []
     for (const ext of installed.slice(0, 100)) {
       for (const cmd of ext.commands) {
-        const commandId = `extcmd:${ext.id}:${cmd.name}`
+        const commandId = cmd.launcher?.id ?? `extcmd:${ext.id}:${cmd.name}`
         if (disabled[commandId]) continue
 
         let tokens = `${cmd.title} ${cmd.name} ${ext.name} ${ext.slug} ${ext.id} ${ext.description || ''}`
@@ -30,6 +30,7 @@ export const extensionsProvider: SearchProvider = {
             type: 'run-extension-command',
             extensionId: ext.id,
             commandName: cmd.name,
+            launcher: cmd.launcher,
             title: cmd.title,
             iconPath: ext.iconPath,
             commandArgumentDefinitions: cmd.argumentDefinitions,

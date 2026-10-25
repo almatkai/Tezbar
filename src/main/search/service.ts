@@ -5,7 +5,6 @@ import { homedir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type {
-  OpenPortProcess,
   PathCompletionItem,
   SearchAction,
   SearchBenchmarkReport,
@@ -30,7 +29,6 @@ import { confirmSafetyAction } from '../safety/confirm'
 import { recordSafetyEntry } from '../safety/log'
 import { getSafetyDescriptor } from '../safety/registry'
 import { fileIconDataUrl, folderIconDataUrl } from '../pathIcons'
-import { appIconDataUrl } from '../appIcon'
 import { getKnowledgeService, notifyKnowledgeInteractiveActivity } from '../knowledge/service'
 import { commandBus } from './commandBus'
 // Fix imports from indexDb
@@ -65,15 +63,6 @@ const PROVIDER_REFRESH_MIN_AGE_MS = 10_000
 const FILE_INDEX_LIMIT = 75_000
 const FILE_INDEX_WRITE_BATCH_SIZE = 400
 const BACKGROUND_FILE_INDEX_START_DELAY_MS = 5_000
-
-type ProcessIdentity = {
-  name: string
-  appPath?: string
-}
-
-type ParsedOpenPortProcess = OpenPortProcess & {
-  appPath?: string
-}
 
 const SHELL_METACHAR_RE = /[;|&`$(){}[\]\n\r<>\\]/
 
@@ -718,9 +707,6 @@ function recommendationBoost(id: string): number {
   if (id === 'native:open-clipboard-history') return 900
   if (id === 'native:open-snippets') return 880
   if (id === 'extcmd:raycast.kill-process:index') return 860
-  if (id === 'extcmd:raycast.port-manager:kill-listening-process') return 760
-  if (id === 'extcmd:raycast.port-manager:open-ports') return 720
-  if (id === 'extcmd:raycast.port-manager:open-ports-menu-bar') return 700
   return 0
 }
 
@@ -757,10 +743,7 @@ function buildRecommendations(): SearchResult[] {
   const pinnedOrder = [
     'native:open-clipboard-history',
     'native:open-snippets',
-    'extcmd:raycast.port-manager:kill-listening-process',
     'extcmd:raycast.kill-process:index',
-    'extcmd:raycast.port-manager:open-ports',
-    'extcmd:raycast.port-manager:open-ports-menu-bar',
   ]
   const pinnedRows = indexDb.getDocumentsByIds(pinnedOrder)
   const existingIds = new Set(seeds.map((seed) => seed.id))
@@ -799,7 +782,7 @@ function buildRecommendations(): SearchResult[] {
           now,
         }) +
         computeHotUsageBoost(seed.recentUseCount) +
-        recommendationBoost(seed.id)
+        recommendationBoost(seed.id) + (seed.action.type === 'run-extension-command' ? Math.min(2000, Math.max(0, seed.action.launcher?.recommendation ?? 0)) : 0)
 
       return {
         result: {
@@ -821,134 +804,6 @@ function buildRecommendations(): SearchResult[] {
     })
     .map((item) => item.result)
     .slice(0, MAX_RESULTS)
-}
-
-function decodeLsofCommandName(value: string): string {
-  return value.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex: string) =>
-    String.fromCharCode(Number.parseInt(hex, 16))
-  )
-}
-
-function displayProcessNameFromCommand(command: string): string {
-  const trimmed = command.trim()
-  if (!trimmed) return ''
-
-  const parts = trimmed.split('/').filter(Boolean)
-  return decodeLsofCommandName(parts.at(-1) ?? trimmed)
-}
-
-function appPathFromCommand(command: string): string | undefined {
-  const decoded = decodeLsofCommandName(command)
-  const match = decoded.match(/(\/.*?\.app)(?:\/|$)/)
-  return match?.[1]
-}
-
-function parseProcessNameMap(stdout: string): Map<string, ProcessIdentity> {
-  const names = new Map<string, ProcessIdentity>()
-
-  for (const line of stdout.split('\n')) {
-    const match = line.match(/^\s*(\d+)\s+(.+?)\s*$/)
-    if (!match) continue
-
-    const name = displayProcessNameFromCommand(match[2])
-    if (name) names.set(match[1], { name, appPath: appPathFromCommand(match[2]) })
-  }
-
-  return names
-}
-
-async function readProcessNameMap(): Promise<Map<string, ProcessIdentity>> {
-  try {
-    const { stdout } = await execFileAsync('/bin/ps', ['-axo', 'pid=,comm='])
-    return parseProcessNameMap(stdout)
-  } catch {
-    return new Map<string, ProcessIdentity>()
-  }
-}
-
-function parseOpenPortProcesses(
-  stdout: string,
-  processNames: Map<string, ProcessIdentity> = new Map()
-): ParsedOpenPortProcess[] {
-  const lines = stdout
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-
-  if (lines.length <= 1) return []
-
-  const grouped = new Map<
-    string,
-    {
-      process: string
-      user: string
-      pid: string
-      ports: Set<number>
-      appPath?: string
-    }
-  >()
-
-  for (const line of lines) {
-    const parts = line.split(/\s+/)
-    if (parts.length < 3) continue
-
-    const match = line.match(/:(\d+)\s+\(LISTEN\)$/)
-    if (!match) continue
-
-    const port = Number(match[1])
-    if (!Number.isFinite(port)) continue
-
-    const pid = parts[1] ?? '?'
-    const identity = processNames.get(pid)
-    const process = identity?.name ?? decodeLsofCommandName(parts[0] ?? 'unknown')
-    const user = parts[2] ?? 'unknown'
-    const key = `${process}:${pid}:${user}`
-
-    const existing = grouped.get(key)
-    if (existing) {
-      existing.ports.add(port)
-      continue
-    }
-
-    grouped.set(key, {
-      process,
-      user,
-      pid,
-      ports: new Set<number>([port]),
-      appPath: identity?.appPath,
-    })
-  }
-
-  return Array.from(grouped.values())
-    .map((entry) => ({
-      process: entry.process,
-      user: entry.user,
-      pid: entry.pid,
-      ports: Array.from(entry.ports).sort((a, b) => a - b),
-      appPath: entry.appPath,
-    }))
-    .sort((a, b) => a.process.localeCompare(b.process) || a.pid.localeCompare(b.pid))
-}
-
-async function attachOpenPortProcessIcons(
-  rows: ParsedOpenPortProcess[]
-): Promise<OpenPortProcess[]> {
-  const uniqueAppPaths = Array.from(
-    new Set(rows.map((row) => row.appPath).filter((path): path is string => Boolean(path)))
-  )
-  const icons = new Map<string, string>()
-
-  await Promise.all(
-    uniqueAppPaths.map(async (appPath) => {
-      const icon = await appIconDataUrl(appPath)
-      if (icon) icons.set(appPath, icon)
-    })
-  )
-
-  return rows.map(({ appPath, ...row }) => {
-    const iconDataUrl = appPath ? icons.get(appPath) : undefined
-    return iconDataUrl ? { ...row, iconDataUrl } : row
-  })
 }
 
 export async function searchEverything(query: string): Promise<SearchResult[]> {
@@ -1042,7 +897,6 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
   )
   const allFileResults = uniqById([...fileResults, ...indexedSourceResults])
 
-  const openPortResults = isDeepSearch ? [] : await searchPortManagerOpenPorts(trimmed)
   const knowledgeHits = knowledgeService ? await knowledgeService.search(trimmed, 16) : []
   const seenKnowledgeSources = new Set<string>()
   const knowledgeResults = knowledgeHits.flatMap((hit): SearchResult[] => {
@@ -1091,7 +945,7 @@ export async function searchEverything(query: string): Promise<SearchResult[]> {
   const metadataFileResults = allFileResults.filter(
     (result) => result.action.type !== 'open-file' || !deepMatchedPaths.has(result.action.path)
   )
-  const basicCandidates = [...resultsWithoutFiles, ...allFileResults, ...openPortResults]
+  const basicCandidates = [...resultsWithoutFiles, ...allFileResults]
   const deepSearchRecommendation = isDeepSearch
     ? null
     : buildDeepSearchRecommendation(trimmed, basicCandidates)
@@ -1675,136 +1529,6 @@ export async function completePath(query: string, limit = 50): Promise<PathCompl
     return [...recommended, ...regular]
   } catch {
     return []
-  }
-}
-
-async function searchPortManagerOpenPorts(query: string): Promise<SearchResult[]> {
-  const normalizedQuery = query.trim().toLowerCase()
-  if (!normalizedQuery) return []
-  const mentionsPort = /(port|ports|open|listen|listening)/.test(normalizedQuery)
-  const mentionsKill = /(kill|stop|terminate|process)/.test(normalizedQuery)
-
-  if (!/(port|ports|open|listen|kill|\d{2,5})/.test(normalizedQuery)) {
-    return []
-  }
-
-  const processes = await listOpenPorts()
-  if (processes.length === 0) return []
-
-  return processes
-    .flatMap<SearchResult | null>((entry) =>
-      entry.ports.map((port) => {
-        let score = -1
-        const processName = entry.process.toLowerCase()
-        const userName = entry.user.toLowerCase()
-
-        if (normalizedQuery.includes(String(port))) {
-          score = 430
-        } else if (mentionsPort || mentionsKill) {
-          score = 280
-        } else if (processName.includes(normalizedQuery) || userName.includes(normalizedQuery)) {
-          score = 220
-        }
-
-        if (score < 0) return null
-        return {
-          id: `port-listener:${entry.pid}:${port}`,
-          title: `Open Port ${port}`,
-          subtitle: `${entry.process} (PID ${entry.pid}) · ${entry.user} · Enter to kill listener`,
-          category: 'extensions' as const,
-          score,
-          action: {
-            type: 'run-extension-command',
-            extensionId: 'raycast.port-manager',
-            commandName: 'kill-listening-process',
-            title: 'Kill Process Listening On',
-            argumentValues: { port: String(port) },
-          },
-        }
-      })
-    )
-    .filter(isPresent)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 12)
-}
-
-export async function listOpenPorts(): Promise<OpenPortProcess[]> {
-  if (process.platform === 'win32') {
-    try {
-      const { stdout } = await execFileAsync('netstat.exe', ['-ano', '-p', 'tcp'])
-      const pids = Array.from(
-        new Set(
-          stdout
-            .split(/\r?\n/)
-            .map((line) => line.trim().split(/\s+/).at(-1) ?? '')
-            .filter((pid) => /^\d+$/.test(pid))
-        )
-      )
-      const names = new Map<string, string>()
-      await Promise.all(
-        pids.map(async (pid) => {
-          try {
-            const { stdout: task } = await execFileAsync('tasklist.exe', [
-              '/fi',
-              `PID eq ${pid}`,
-              '/fo',
-              'csv',
-              '/nh',
-            ])
-            const match = task.match(/^"([^"]+)"/)
-            if (match) names.set(pid, match[1])
-          } catch {
-            /* Best-effort process names only. */
-          }
-        })
-      )
-      const grouped = new Map<string, { process: string; pid: string; ports: Set<number> }>()
-      for (const line of stdout.split(/\r?\n/)) {
-        const parts = line.trim().split(/\s+/)
-        if (
-          parts.length < 5 ||
-          parts[0]?.toUpperCase() !== 'TCP' ||
-          parts[3]?.toUpperCase() !== 'LISTENING'
-        )
-          continue
-        const port = Number(parts[1]?.match(/:(\d+)$/)?.[1])
-        const pid = parts[4]
-        if (!Number.isFinite(port) || !pid) continue
-        const key = `${pid}:${names.get(pid) ?? 'unknown'}`
-        const row = grouped.get(key) ?? {
-          process: names.get(pid) ?? 'unknown',
-          pid,
-          ports: new Set<number>(),
-        }
-        row.ports.add(port)
-        grouped.set(key, row)
-      }
-      return Array.from(grouped.values())
-        .map((row) => ({
-          process: row.process,
-          user: 'current user',
-          pid: row.pid,
-          ports: Array.from(row.ports).sort((a, b) => a - b),
-        }))
-        .sort((a, b) => a.process.localeCompare(b.process) || a.pid.localeCompare(b.pid))
-    } catch (error) {
-      console.error('[OpenPorts] Failed to list Windows listening ports:', error)
-      return []
-    }
-  }
-  try {
-    const { stdout } = await execFileAsync('/usr/sbin/lsof', ['-nP', '-iTCP', '-sTCP:LISTEN'])
-    const processNames = await readProcessNameMap()
-    return attachOpenPortProcessIcons(parseOpenPortProcesses(stdout, processNames))
-  } catch (error) {
-    console.error('[OpenPorts] Failed to list listening ports:', error)
-    try {
-      const { stdout } = await execFileAsync('/usr/sbin/lsof', ['-nP', '-iTCP', '-sTCP:LISTEN'])
-      return attachOpenPortProcessIcons(parseOpenPortProcesses(stdout))
-    } catch (fallbackError) {
-      console.error('[OpenPorts] Fallback listing failed:', fallbackError)
-      return []
-    }
   }
 }
 
