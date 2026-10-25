@@ -1,4 +1,9 @@
-# Native V2 first batch — 2026-10-21
+# Historical Native V2 first batch — 2026-10-21
+
+> Historical evidence for the former bundled schema-2 adapters. Those sources and
+> audio/timer assets were later extracted and removed. The checks below are not
+> acceptance evidence for the current schema-3 external packages or host. See
+> [EXTERNAL_RUST_EXTENSIONS.md](EXTERNAL_RUST_EXTENSIONS.md) for current behavior.
 
 Native V2 is extension manifest schema 2. The application version remains unchanged. This batch adds bundled Rust replacements for all eleven packages installed in the active profile. It does **not** port the complete collection of 98 own V1 packages (247 commands); those entries remain marked JavaScript in the catalog.
 

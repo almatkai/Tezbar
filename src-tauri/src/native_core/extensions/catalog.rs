@@ -157,6 +157,7 @@ impl Catalog {
         } else {
             self.entries().await.unwrap_or_default()
         };
+        let ctx = self.ctx.clone();
         let entries = tokio::task::spawn_blocking(move || {
             static LOVED: OnceLock<Vec<Value>> = OnceLock::new();
             let loved = LOVED.get_or_init(|| {
@@ -193,7 +194,7 @@ impl Catalog {
                     &query,
                 )
             };
-            merge_native(entries, &query)
+            merge_native(entries, &query, super::v2_catalog::manifests(&ctx))
         })
         .await
         .map_err(|e| e.to_string())?;
@@ -244,10 +245,15 @@ fn merge_own(loved: Vec<Value>, mut entries: Vec<Value>, query: &str) -> Vec<Val
 
 // Merge before pagination; a complete replacement takes precedence, while a
 // partial replacement leaves the V1 entry reachable for remaining commands.
-fn merge_native(mut entries: Vec<Value>, query: &str) -> Vec<Value> {
-    let mut native: Vec<_> = super::v2_catalog::manifests()
+fn merge_native(mut entries: Vec<Value>, query: &str, manifests: Vec<Value>) -> Vec<Value> {
+    for entry in &mut entries {
+        let rule = super::acquisition::for_id(entry["id"].as_str().unwrap_or(""));
+        if rule != Ok(super::acquisition::Rule::Remote) {
+            entry["acquisition"] = super::acquisition::metadata(rule);
+        }
+    }
+    let mut native: Vec<_> = manifests
         .into_iter()
-        .filter(|v| v["status"] != "unavailable")
         .filter(|v| query.is_empty() || score_native(v, &query) > 0.)
         .collect();
     native.sort_by(|a, b| {
@@ -572,17 +578,34 @@ mod tests {
             "translate"
         );
     }
-    #[test]
-    fn missing_raycast_catalog_still_offers_installable_native_item() {
-        let items = merge_native(vec![], "perplexity");
-        let native = items
-            .iter()
-            .find(|v| v["id"] == "com.tezbar.native.perplexity")
-            .unwrap();
+    fn native_fixture(pinned: bool, partial: bool) -> Value {
+        let mut m = json!({"schemaVersion":3,"runtime":"rust","execution":"process","protocolVersion":1,
+            "id":"com.tezbar.native.synthetic","slug":"synthetic","name":"Synthetic","version":"1.0.0",
+            "capabilities":[],"commands":[{"name":"run","runtime":"rust","platforms":["macOS","Windows"]}],
+            "replaces":["raycast.synthetic"],"platforms":["macOS","Windows"],"artifacts":{}});
+        if pinned {
+            m["artifacts"][super::super::process_install::target()] = json!({"sha256":"0".repeat(64),"executable":"bin/synthetic","executableSha256":"1".repeat(64)});
+        }
+        if partial {
+            m["commands"].as_array_mut().unwrap().push(
+                json!({"name":"legacy","runtime":"unavailable","platforms":["macOS","Windows"]}),
+            );
+        }
+        m
+    }
+    #[tokio::test]
+    async fn missing_raycast_catalog_reports_unpublished_native_item() {
+        let unpinned = native_fixture(false, false);
+        let items = merge_native(
+            vec![],
+            "synthetic",
+            vec![super::super::v2_catalog::describe(unpinned.clone())],
+        );
+        let native = &items[0];
         assert_eq!(native["author"], "Tezbar");
         assert_eq!(native["runtime"], "rust");
-        assert_eq!(native["nativeV2"]["schemaVersion"], 2);
-        assert_eq!(native["nativeV2"]["commands"][0]["runtime"], "rust");
+        assert_eq!(native["nativeV2"]["schemaVersion"], 3);
+        assert_eq!(native["nativeV2"]["commands"][0]["runtime"], "unavailable");
         assert_eq!(native["platforms"], json!(["macOS", "Windows"]));
         let temp = tempfile::tempdir().unwrap();
         let ctx = CoreContext::headless(crate::native_core::common::CorePaths {
@@ -592,37 +615,82 @@ mod tests {
             temp_dir: temp.path().join("tmp"),
             home_dir: temp.path().into(),
         });
-        let installed = super::super::v2_catalog::install(&ctx, native["id"].as_str().unwrap())
-            .unwrap()
-            .unwrap();
-        assert_eq!(installed["nativeV2"]["id"], native["id"]);
-        assert!(super::super::v2_catalog::installed(
+        let result = super::super::process_install::install(&ctx, unpinned, None).await;
+        assert!(result.unwrap_err().contains("artifact"));
+        assert!(!super::super::v2_catalog::installed(
             &ctx,
-            native["id"].as_str().unwrap()
+            "com.tezbar.native.synthetic"
         ));
     }
     #[test]
-    fn complete_native_item_deduplicates_legacy_before_pagination() {
-        let entries = merge_native(
-            vec![
-                json!({"id":"raycast.perplexity","name":"Perplexity"}),
-                json!({"id":"raycast.perplexity","name":"Duplicate"}),
-            ],
-            "perplexity",
+    fn synthetic_native_coverage_preserves_legacy_before_pagination() {
+        for (pinned, partial, keep_legacy) in [
+            (false, false, true),
+            (true, false, false),
+            (true, true, true),
+        ] {
+            let entries = merge_native(
+                vec![
+                    json!({"id":"raycast.synthetic","name":"Synthetic"}),
+                    json!({"id":"raycast.synthetic","name":"Duplicate"}),
+                ],
+                "synthetic",
+                vec![super::super::v2_catalog::describe(native_fixture(
+                    pinned, partial,
+                ))],
+            );
+            assert_eq!(
+                entries
+                    .iter()
+                    .filter(|v| v["id"] == "com.tezbar.native.synthetic")
+                    .count(),
+                1
+            );
+            assert_eq!(
+                entries
+                    .iter()
+                    .filter(|v| v["id"] == "raycast.synthetic")
+                    .count(),
+                usize::from(keep_legacy)
+            );
+            assert_eq!(
+                entries.iter().take(1).next().unwrap()["id"],
+                "com.tezbar.native.synthetic"
+            );
+            assert_eq!(
+                entries.iter().skip(1).take(1).count(),
+                usize::from(keep_legacy)
+            );
+        }
+    }
+    #[test]
+    fn local_only_catalog_preserves_legacy_until_installed() {
+        use super::super::{acquisition::Rule, v2_catalog::describe_with_route};
+        for installed in [false, true] {
+            let native = describe_with_route(
+                native_fixture(true, false),
+                installed,
+                Ok(Rule::LocalImportOnly),
+            );
+            assert_eq!(
+                native["commands"][0]["runtime"],
+                if installed { "rust" } else { "unavailable" }
+            );
+            let entries = merge_native(
+                vec![json!({"id":"raycast.synthetic","name":"Synthetic"})],
+                "synthetic",
+                vec![native],
+            );
+            assert_eq!(
+                entries.iter().any(|v| v["id"] == "raycast.synthetic"),
+                !installed
+            );
+        }
+        let invalid = describe_with_route(
+            native_fixture(true, false),
+            false,
+            Err("bad acquisition".into()),
         );
-        assert_eq!(
-            entries
-                .iter()
-                .filter(|v| v["id"] == "com.tezbar.native.perplexity")
-                .count(),
-            1
-        );
-        assert_eq!(
-            entries
-                .iter()
-                .filter(|v| v["id"] == "raycast.perplexity")
-                .count(),
-            0
-        );
+        assert_eq!(invalid["status"], "unavailable");
     }
 }

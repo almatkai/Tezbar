@@ -18,6 +18,7 @@ import {
 } from './extensionImages'
 import {
   checkedLines,
+  acquisitionGuidance,
   canInstallExtension,
   commandStatus,
   describeRuntime,
@@ -907,11 +908,11 @@ export default function ExtensionsView({
 
                 <footer className="extension-detail-footer flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] px-4 py-3">
                   <span className="text-[11px] text-ink-4">
-                    {selectedInstalled
+                    {acquisitionGuidance(selected) ?? (selectedInstalled
                       ? 'Installed extension'
                       : canInstallExtension(selected, platform)
                         ? 'Available to install'
-                        : 'Install not available yet'}
+                        : 'Install not available yet')}
                   </span>
                   <Button
                     variant={selectedInstalled ? 'danger' : 'primary'}

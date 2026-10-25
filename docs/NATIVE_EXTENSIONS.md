@@ -1,3 +1,8 @@
+> Historical compiled pilot documentation. The current branch uses schema-3
+> external Rust executables; see [the process host](EXTERNAL_RUST_EXTENSIONS.md)
+> and [installer CLI](NATIVE_V2_CLI.md). The sources described below remain on disk
+> for extraction and are excluded from the application module graph.
+
 # Native extension pilot
 
 The first native port is the installed **Perplexity** extension's

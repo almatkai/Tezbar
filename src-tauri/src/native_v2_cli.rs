@@ -1,4 +1,4 @@
-//! Headless entry point for bundled Rust extension discovery and installation.
+//! Headless entry point for external Rust extension discovery and installation.
 use crate::native_core::common::{CoreContext, CorePaths};
 use crate::native_core::extensions::{v2_cli_install, v2_cli_list};
 use serde_json::{json, Value};
@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 enum Action {
     List { json: bool },
     Install { id: String },
+    Import { manifest: PathBuf, zip: PathBuf },
     Invalid(String),
 }
 
@@ -27,6 +28,15 @@ fn parse(args: &[String]) -> Option<Action> {
             }
             _ => Some(Action::Invalid(
                 "Usage: --extensions-v2-install <canonical-id|--all>".into(),
+            )),
+        },
+        "--extensions-v3-import" => match &args[1..] {
+            [manifest, zip] => Some(Action::Import {
+                manifest: manifest.into(),
+                zip: zip.into(),
+            }),
+            _ => Some(Action::Invalid(
+                "Usage: --extensions-v3-import <trusted-manifest.json> <package.zip>".into(),
             )),
         },
         _ => None,
@@ -98,50 +108,13 @@ fn cli_context() -> Result<CoreContext, String> {
     Ok(CoreContext::new(paths, None))
 }
 
-// The core's installed flag is intentionally lightweight. The CLI reports an
-// installation only after both files prove ownership of this canonical ID.
-fn installation_status(data_dir: &Path, item: &Value) -> &'static str {
-    let Some(id) = item["id"].as_str() else {
-        return "invalid";
-    };
-    let root = data_dir.join("extensions/packages").join(id);
-    let package_path = root.join("package.json");
-    let marker_path = root.join("native-v2.json");
-    if !package_path.exists() && !marker_path.exists() {
-        return "not-installed";
-    }
-    let valid = [package_path, marker_path].iter().all(|path| {
-        std::fs::read(path)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-            .is_some_and(|value| {
-                value["id"] == id
-                    && value["schemaVersion"] == 2
-                    && value["runtime"] == "rust"
-                    && value["version"] == item["version"]
-            })
-    });
-    if valid {
-        "installed"
-    } else {
-        "invalid"
-    }
-}
-
+// Same offline file/manifest/asset verification used by UI and launch. This
+// path never constructs a Tokio runtime, starts a child or performs networking.
 fn list(ctx: &CoreContext) -> Result<Value, String> {
-    let mut items = v2_cli_list(ctx)?;
-    let items_array = items
-        .as_array_mut()
-        .ok_or("Native V2 catalog is not an array")?;
-    for item in items_array {
-        let state = installation_status(&ctx.paths.data_dir, item);
-        item["installed"] = json!(state == "installed");
-        item["installationStatus"] = json!(state);
-    }
-    Ok(items)
+    v2_cli_list(ctx)
 }
 
-fn install(ctx: &CoreContext, id: &str) -> (Value, bool) {
+async fn install(ctx: &CoreContext, id: &str) -> (Value, bool) {
     let ids: Vec<String> = if id == "--all" {
         match list(ctx) {
             Ok(items) => items
@@ -161,16 +134,16 @@ fn install(ctx: &CoreContext, id: &str) -> (Value, bool) {
         vec![id.to_owned()]
     };
     let mut all_ok = true;
-    let results: Vec<Value> = ids
-        .into_iter()
-        .map(|id| match v2_cli_install(ctx, &id) {
+    let mut results = Vec::new();
+    for id in ids {
+        results.push(match v2_cli_install(ctx, &id).await {
             Ok(value) => json!({"id":id,"ok":true,"result":value}),
             Err(error) => {
                 all_ok = false;
                 json!({"id":id,"ok":false,"error":error})
             }
-        })
-        .collect();
+        });
+    }
     (json!({"operation":"install","results":results}), all_ok)
 }
 
@@ -242,12 +215,48 @@ fn run(action: Action, ctx: Result<CoreContext, String>) -> i32 {
             }
         },
         Action::Install { id } => {
-            let (result, ok) = install(&ctx, &id);
+            let runtime = match tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    println!("{}", json!({"error":e.to_string()}));
+                    return 1;
+                }
+            };
+            let (result, ok) = runtime.block_on(install(&ctx, &id));
             println!("{result}");
             if ok {
                 0
             } else {
                 1
+            }
+        }
+        Action::Import { manifest, zip } => {
+            let runtime = match tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    println!("{}", json!({"error":e.to_string()}));
+                    return 1;
+                }
+            };
+            match runtime.block_on(crate::native_core::extensions::v3_cli_import(
+                &ctx, manifest, zip,
+            )) {
+                Ok(value) => {
+                    println!("{}", json!({"ok":true,"result":value}));
+                    0
+                }
+                Err(error) => {
+                    println!("{}", json!({"ok":false,"error":error}));
+                    1
+                }
             }
         }
         Action::Invalid(_) => unreachable!(),
@@ -267,6 +276,89 @@ pub fn dispatch() -> Option<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn published_private_zip_cli_import_and_remote_reinstall_refusal() {
+        let Some(manifest) = std::env::var_os("TEZBAR_HOST_TEST_PRIVATE_MANIFEST") else {
+            eprintln!("Published private CLI fixture not supplied");
+            return;
+        };
+        let zip = std::env::var_os("TEZBAR_HOST_TEST_PRIVATE_ZIP")
+            .expect("Published private ZIP required");
+        let trusted = crate::native_core::common::read_json(Path::new(&manifest)).unwrap();
+        let id = trusted["id"].as_str().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = CoreContext::headless(CorePaths {
+            data_dir: temp.path().join("data"),
+            config_dir: temp.path().join("config"),
+            resource_dir: temp.path().join("resources"),
+            temp_dir: temp.path().join("tmp"),
+            home_dir: temp.path().into(),
+        });
+        let before = list(&ctx).unwrap();
+        let item = before
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["id"] == id)
+            .unwrap();
+        assert_eq!(item["acquisition"]["type"], "local-import-only");
+        assert_eq!(item["status"], "unavailable");
+        assert_eq!(
+            run(
+                Action::Import {
+                    manifest: manifest.clone().into(),
+                    zip: zip.into()
+                },
+                Ok(ctx.clone())
+            ),
+            0
+        );
+        let items = list(&ctx).unwrap();
+        let item = items
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["id"] == id)
+            .unwrap();
+        assert_eq!(item["installationStatus"], "installed");
+        assert_eq!(item["status"], "complete");
+        assert!(item["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c["runtime"] == "rust"));
+        assert_eq!(item["acquisition"]["type"], "local-import-only");
+        let package = ctx.paths.data_dir.join("extensions/packages").join(id);
+        let pointer = std::fs::read(package.join("active.json")).unwrap();
+        assert_eq!(run(Action::Install { id: id.into() }, Ok(ctx.clone())), 1);
+        let core = crate::native_core::extensions::ExtensionsCore::new(ctx);
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let mut references = vec![id, trusted["repository"].as_str().unwrap()];
+                references.extend(
+                    trusted["replaces"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.as_str().unwrap()),
+                );
+                for reference in references {
+                    let error = core
+                        .handle("extensions:reinstall", &[json!(reference)])
+                        .await
+                        .unwrap()
+                        .unwrap_err();
+                    assert!(error.contains("--extensions-v3-import"));
+                }
+                assert!(!core.worker_running().await);
+            });
+        assert_eq!(std::fs::read(package.join("active.json")).unwrap(), pointer);
+        eprintln!("CLI acceptance: final published private ZIP imported, discovered with full coverage, and remote reinstall refused; reference {}",Path::new(&manifest).display());
+    }
 
     #[test]
     fn parser_claims_only_native_cli_arguments() {
@@ -320,23 +412,39 @@ mod tests {
     }
 
     #[test]
-    fn installed_metadata_requires_matching_package_and_marker() {
+    fn legacy_matching_markers_are_not_executable_installations() {
         let root = std::env::temp_dir().join(format!(
             "tezbar-v2-cli-test-{}-{}",
             std::process::id(),
             crate::native_core::common::now_ms()
         ));
-        let id = "com.tezbar.native.test";
+        let id = "com.tezbar.native.perplexity";
         let package = root.join("extensions/packages").join(id);
         std::fs::create_dir_all(&package).unwrap();
-        let item = json!({"id":id,"version":"1.0"});
-        assert_eq!(installation_status(&root, &item), "not-installed");
+        let ctx = CoreContext::headless(CorePaths {
+            data_dir: root.clone(),
+            config_dir: root.join("config"),
+            resource_dir: root.join("resources"),
+            temp_dir: root.join("tmp"),
+            home_dir: root.clone(),
+        });
+        let status = || {
+            list(&ctx)
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["id"] == id)
+                .unwrap()["installed"]
+                .clone()
+        };
+        assert_eq!(status(), false);
         let metadata =
             json!({"id":id,"schemaVersion":2,"runtime":"rust","version":"1.0"}).to_string();
         std::fs::write(package.join("package.json"), &metadata).unwrap();
-        assert_eq!(installation_status(&root, &item), "invalid");
+        assert_eq!(status(), false);
         std::fs::write(package.join("native-v2.json"), &metadata).unwrap();
-        assert_eq!(installation_status(&root, &item), "installed");
+        assert_eq!(status(), false);
         std::fs::remove_dir_all(root).unwrap();
     }
 }

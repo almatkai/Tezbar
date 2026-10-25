@@ -215,11 +215,6 @@ async function executeWindowsCommand(id: NativeCommandId): Promise<NativeCommand
       )
       return { ok: true, message: out || 'No battery detected' }
     }
-    case 'list-listening-ports':
-      return {
-        ok: true,
-        message: 'Use Port Manager → Open Ports in Tezbar for a structured, filterable list.',
-      }
     case 'git-root': {
       const path = await runPowerShell(
         "$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path } | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $window.Document.Folder.Self.Path"
@@ -603,17 +598,6 @@ export async function executeNativeCommandRaw(
       case 'show-battery-status': {
         const out = await runShell('pmset -g batt | tail -n +2')
         return { ok: true, message: out || 'No battery detected' }
-      }
-
-      case 'list-listening-ports': {
-        // Primary UX is the Port Manager surface in the renderer; this path
-        // only runs if something invokes the native command without going
-        // through the launcher interception.
-        return {
-          ok: true,
-          message:
-            'Use Port Manager → Open Ports in Tezbar for a structured, filterable list. (Raw lsof output is intentionally not shown here.)',
-        }
       }
 
       case 'git-root': {

@@ -8,7 +8,8 @@ fn every_pre_migration_ipc_channel_has_a_native_owner() {
     // from the new dispatcher. Includes legacy consumers outside the renderer.
     let legacy: Vec<String> =
         serde_json::from_str(include_str!("fixtures/legacy_channels.json")).unwrap();
-    assert_eq!(legacy.len(), 155);
+    // Four former Port Manager channels moved to the external package.
+    assert_eq!(legacy.len(), 151);
     let routes: HashSet<&str> = [
         ai::CHANNELS,
         knowledge::CHANNELS,

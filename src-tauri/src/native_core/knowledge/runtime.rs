@@ -1243,6 +1243,8 @@ impl Runtime {
         } else {
             None
         };
+        #[cfg(test)]
+        let mut last_health_probe = String::from("not attempted");
         let ready = tokio::time::timeout(self.inner.ready_timeout, async {
             loop {
                 self.check_runtime(cancel, expected)?;
@@ -1253,15 +1255,22 @@ impl Runtime {
                         String::from_utf8_lossy(&error)
                     ));
                 }
-                if let Ok(response) = self
+                let health = self
                     .inner
                     .client
                     .get(format!("{endpoint}/health"))
                     .bearer_auth(&token)
                     .timeout(std::time::Duration::from_secs(1))
                     .send()
-                    .await
+                    .await;
+                #[cfg(test)]
                 {
+                    last_health_probe = match &health {
+                        Ok(response) => format!("HTTP {}", response.status()),
+                        Err(error) => format!("{error:?}"),
+                    };
+                }
+                if let Ok(response) = health {
                     if response.status().is_success() {
                         return Ok(());
                     }
@@ -1275,6 +1284,13 @@ impl Runtime {
             if let Err(cleanup) = self.close_child(&mut child).await {
                 return Err(format!("{error}; {cleanup}"));
             }
+            // Keep native CI failures actionable without changing runtime errors,
+            // readiness deadlines, or lease cleanup. No auth headers are printed.
+            #[cfg(test)]
+            eprintln!(
+                "[embedding-protocol-fixture] {error}; last health probe: {last_health_probe}; child stderr: {}",
+                String::from_utf8_lossy(&stderr.lock().unwrap().iter().copied().collect::<Vec<_>>())
+            );
             return Err(error);
         }
         Ok(Process {
@@ -2209,13 +2225,22 @@ mod tests {
     }
     #[cfg(unix)]
     const PROTOCOL_SERVER: &str = r#"#!/usr/bin/env python3
-import sys,json,os,subprocess,time
+import sys,faulthandler
+# Bound diagnostics independently of the host's existing readiness deadline.
+# A stalled import, subprocess launch, or hostname lookup leaves a Python stack.
+faulthandler.dump_traceback_later(2)
+def startup(stage): print('[embedding-protocol-fixture] '+stage,file=sys.stderr,flush=True)
+startup('python '+sys.version.split()[0])
+import json,os,subprocess,time
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler,HTTPServer
+from socketserver import TCPServer
+startup('imports complete')
 args=sys.argv[1:];port=int(args[args.index('--port')+1]);token=args[args.index('--api-key')+1]
 assert '--embedding' in args and args[args.index('--pooling')+1]=='mean'
 directory=Path(args[args.index('--model')+1]).parent
 leaf=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'])
+startup('leaf spawned')
 (directory/'pids').write_text(str(os.getpid())+' '+str(leaf.pid))
 with (directory/'launches').open('a') as f: f.write(str(os.getpid())+'\n')
 mode=(directory/'mode').read_text() if (directory/'mode').exists() else 'ok'
@@ -2244,7 +2269,16 @@ class Handler(BaseHTTPRequestHandler):
   if value=='nan': data[0]['embedding']=[float('nan')]*768
   if value=='overflow': data[0]['embedding']=[1e308]*768
   self.send_response(200);self.send_header('Content-Type','application/json');self.end_headers();self.wfile.write(json.dumps({'data':list(reversed(data))}).encode())
-HTTPServer(('127.0.0.1',port),Handler).serve_forever()
+class LoopbackHTTPServer(HTTPServer):
+ def server_bind(self):
+  # HTTPServer resolves getfqdn here; this numeric-loopback fixture needs no DNS.
+  TCPServer.server_bind(self)
+  self.server_name,self.server_port=self.server_address
+startup('binding HTTPServer')
+server=LoopbackHTTPServer(('127.0.0.1',port),Handler)
+startup('HTTPServer ready')
+faulthandler.cancel_dump_traceback_later()
+server.serve_forever()
 "#;
     #[cfg(unix)]
     fn pids(runtime: &Runtime) -> Vec<u32> {
@@ -2268,6 +2302,80 @@ HTTPServer(('127.0.0.1',port),Handler).serve_forever()
         runtime
             .embed(vec![text.into()], "slow", &cancellation())
             .await
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn protocol_fixture_serves_authenticated_inference_without_hostname_resolution() {
+        let (_temp, runtime) = protocol_fixture("ok");
+        // Inject only into this owned child, before running the actual shared
+        // fixture. No process-global environment or host DNS state is changed.
+        let guarded = [
+            r#"#!/usr/bin/env python3
+import socket
+from pathlib import Path
+guard_directory=Path(__file__).parent.parent
+(guard_directory/'dns-guard-armed').write_text('ready')
+def reject_hostname_resolution(*args,**kwargs):
+ (guard_directory/'dns-lookup-attempted').write_text('getfqdn')
+ raise RuntimeError('loopback protocol fixture must not resolve hostnames')
+socket.getfqdn=reject_hostname_resolution
+"#,
+            PROTOCOL_SERVER,
+        ]
+        .concat();
+        std::fs::write(
+            runtime.inner.directory.join("runtime/llama-server"),
+            guarded,
+        )
+        .unwrap();
+        initialized(&runtime).await;
+        let inference = infer(&runtime, "fixture").await;
+        // Also reap both descendants on the pre-fix red path, before asserting.
+        if inference.is_err() {
+            runtime.shutdown().await;
+            wait_dead(pids(&runtime)).await;
+        }
+        assert_eq!(inference.unwrap()[0], vec![0.0625; 256]);
+        let endpoint = runtime
+            .inner
+            .process
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .endpoint
+            .clone();
+        let mut forbidden = Vec::new();
+        for (method, path) in [
+            (reqwest::Method::GET, "/health"),
+            (reqwest::Method::POST, "/v1/embeddings"),
+        ] {
+            for authorization in [None, Some("Bearer wrong-token")] {
+                let mut request = runtime
+                    .inner
+                    .client
+                    .request(method.clone(), format!("{endpoint}{path}"))
+                    .json(&json!({"input":["fixture"]}))
+                    .timeout(runtime.inner.request_timeout);
+                if let Some(value) = authorization {
+                    request = request.header(reqwest::header::AUTHORIZATION, value);
+                }
+                forbidden.push(request.send().await.map(|response| response.status()));
+            }
+        }
+        let owned = pids(&runtime);
+        runtime.shutdown().await;
+        wait_dead(owned).await;
+        assert!(runtime.inner.process.lock().await.is_none());
+        assert!(runtime.inner.directory.join("dns-guard-armed").is_file());
+        assert!(!runtime
+            .inner
+            .directory
+            .join("dns-lookup-attempted")
+            .exists());
+        for response in forbidden {
+            assert_eq!(response.unwrap(), reqwest::StatusCode::FORBIDDEN);
+        }
     }
     #[cfg(unix)]
     #[tokio::test]

@@ -37,20 +37,29 @@ impl Database {
             .name("launcher-sqlite-reader".into())
             .spawn(move || {
                 // Schema migration belongs exclusively to the writer.
-                let db = ready_rx.recv().map_err(err)
-                    .and_then(|ready| ready).and_then(|_| open_reader(&path));
+                let db = ready_rx
+                    .recv()
+                    .map_err(err)
+                    .and_then(|ready| ready)
+                    .and_then(|_| open_reader(&path));
                 run(reader_rx, db, || {
                     // A failed startup may need the writer to retry its migration.
                     let (ready_tx, ready_rx) = mpsc::channel();
-                    writer_tx.send(Message::Run(Box::new(move |db| {
-                        let _ = ready_tx.send(db.map(|_| ()));
-                    }))).map_err(err)?;
+                    writer_tx
+                        .send(Message::Run(Box::new(move |db| {
+                            let _ = ready_tx.send(db.map(|_| ()));
+                        })))
+                        .map_err(err)?;
                     ready_rx.recv().map_err(err)??;
                     open_reader(&path)
                 });
             })
             .expect("launcher database reader thread");
-        Self { tx, reader_tx, threads: Arc::new(Mutex::new(vec![writer, reader])) }
+        Self {
+            tx,
+            reader_tx,
+            threads: Arc::new(Mutex::new(vec![writer, reader])),
+        }
     }
     pub async fn call<F>(&self, f: F) -> CoreResult
     where
@@ -80,15 +89,27 @@ impl Database {
         let mut replies = Vec::new();
         for sender in [&self.reader_tx, &self.tx] {
             let (tx, rx) = tokio::sync::oneshot::channel();
-            if sender.send(Message::Stop(tx)).is_ok() { replies.push(rx); }
+            if sender.send(Message::Stop(tx)).is_ok() {
+                replies.push(rx);
+            }
         }
-        for reply in replies { let _ = reply.await; }
+        for reply in replies {
+            let _ = reply.await;
+        }
         let threads = std::mem::take(&mut *self.threads.lock().map_err(err)?);
         tokio::task::spawn_blocking(move || {
             let mut failed = false;
-            for thread in threads { failed |= thread.join().is_err(); }
-            if failed { Err("Launcher database thread panicked".to_owned()) } else { Ok(()) }
-        }).await.map_err(err)?
+            for thread in threads {
+                failed |= thread.join().is_err();
+            }
+            if failed {
+                Err("Launcher database thread panicked".to_owned())
+            } else {
+                Ok(())
+            }
+        })
+        .await
+        .map_err(err)?
     }
     pub async fn upsert(&self, docs: Vec<Value>, replace: Vec<String>) -> CoreResult {
         self.call(move |db| {
@@ -116,7 +137,8 @@ impl Database {
         self.read(move |db| {
             let snapshot = db.transaction().map_err(err)?;
             search(&snapshot, &q, candidates)
-        }).await
+        })
+        .await
     }
     pub async fn record(&self, id: String, context: Value, success: bool) -> CoreResult {
         self.call(move|db|{let tx=db.transaction().map_err(err)?;let now=now_ms();tx.execute("INSERT INTO action_stats(action_id,frequency,success_count,total_count,last_used_at) VALUES(?1,1,?2,1,?3) ON CONFLICT(action_id) DO UPDATE SET frequency=frequency+1, success_count=success_count+excluded.success_count,total_count=total_count+1,last_used_at=excluded.last_used_at",params![id,success,now]).map_err(err)?;if success{tx.execute("INSERT INTO action_usage_events(action_id,created_at) VALUES(?,?)",params![id,now]).map_err(err)?;}
@@ -125,11 +147,17 @@ impl Database {
  prune(&tx)?;tx.commit().map_err(err)?;Ok(Value::Null)}).await
     }
 }
-fn run(rx: mpsc::Receiver<Message>, mut db: Result<Connection, String>, reopen: impl Fn() -> Result<Connection, String>) {
+fn run(
+    rx: mpsc::Receiver<Message>,
+    mut db: Result<Connection, String>,
+    reopen: impl Fn() -> Result<Connection, String>,
+) {
     while let Ok(message) = rx.recv() {
         match message {
             Message::Run(job) => {
-                if db.is_err() { db = reopen(); }
+                if db.is_err() {
+                    db = reopen();
+                }
                 job(db.as_mut().map_err(|e| e.clone()));
             }
             Message::Stop(reply) => {
@@ -143,7 +171,8 @@ fn run(rx: mpsc::Receiver<Message>, mut db: Result<Connection, String>, reopen: 
 fn open_reader(path: &std::path::Path) -> Result<Connection, String> {
     let db = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(err)?;
-    db.busy_timeout(std::time::Duration::from_secs(10)).map_err(err)?;
+    db.busy_timeout(std::time::Duration::from_secs(10))
+        .map_err(err)?;
     Ok(db)
 }
 pub fn err(e: impl std::fmt::Display) -> String {
@@ -334,7 +363,11 @@ pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
             }
         }
         if docs.len() < 160 {
-            let rows=collect(db,&format!("{SELECT} WHERE category<>'files' ORDER BY updated_at DESC LIMIT 1600"),[])?;
+            let rows = collect(
+                db,
+                &format!("{SELECT} WHERE category<>'files' ORDER BY updated_at DESC LIMIT 1600"),
+                [],
+            )?;
             let mut fuzzy = vec![];
             for mut d in rows {
                 let content = format!(
@@ -434,6 +467,16 @@ pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
                 "quick-links",
             ]
             .contains(&category);
+            let recommendation = if category == "extensions" {
+                d["_actionJson"]
+                    .as_str()
+                    .and_then(|s| serde_json::from_str::<Value>(s).ok())
+                    .and_then(|a| a["launcher"]["recommendation"].as_f64())
+                    .unwrap_or(0.)
+                    .clamp(0., 2000.)
+            } else {
+                0.
+            };
             score = text::weighted(0.92, now.saturating_sub(activity), category, 0.)
                 + if freq > 0. {
                     ((freq + 1.).log10() / 2.).min(1.) * 100.
@@ -447,7 +490,8 @@ pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
                     0.
                 }
                 + text::hot(recent)
-                + text::recommendation(id);
+                + text::recommendation(id)
+                + recommendation;
         } else {
             if let Some(distance) = d["_distance"].as_u64() {
                 score += match distance {
@@ -486,8 +530,13 @@ pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
     });
     out.truncate(if candidates { 1000 } else { 80 });
     for d in &mut out {
-        let action = d.as_object_mut().unwrap().remove("_actionJson").unwrap_or(Value::Null);
-        d["action"] = serde_json::from_str::<Value>(action.as_str().unwrap_or("")).unwrap_or(Value::Null);
+        let action = d
+            .as_object_mut()
+            .unwrap()
+            .remove("_actionJson")
+            .unwrap_or(Value::Null);
+        d["action"] =
+            serde_json::from_str::<Value>(action.as_str().unwrap_or("")).unwrap_or(Value::Null);
         d.as_object_mut().unwrap().remove("updatedAt");
     }
     Ok(json!(out))
@@ -589,10 +638,17 @@ mod performance_tests {
         }
         tx.commit().unwrap();
         for query in ["calclator", ""] {
-            for _ in 0..3 { search(&mut db, query, false).unwrap(); }
+            for _ in 0..3 {
+                search(&mut db, query, false).unwrap();
+            }
             let start = std::time::Instant::now();
-            for _ in 0..20 { search(&mut db, query, false).unwrap(); }
-            eprintln!("search benchmark query={query:?} mean_ms={:.3}", start.elapsed().as_secs_f64()*1000./20.);
+            for _ in 0..20 {
+                search(&mut db, query, false).unwrap();
+            }
+            eprintln!(
+                "search benchmark query={query:?} mean_ms={:.3}",
+                start.elapsed().as_secs_f64() * 1000. / 20.
+            );
         }
     }
 }
@@ -625,17 +681,23 @@ mod reader_tests {
         let (release, released) = mpsc::channel();
         let writer_db = db.clone();
         let writer = tokio::spawn(async move {
-            writer_db.call(move |c| {
-                let tx = c.transaction().map_err(err)?;
-                tx.execute("DELETE FROM documents", []).map_err(err)?;
-                let _ = started.send(());
-                released.recv().map_err(err)?;
-                tx.commit().map_err(err)?;
-                Ok(Value::Null)
-            }).await
+            writer_db
+                .call(move |c| {
+                    let tx = c.transaction().map_err(err)?;
+                    tx.execute("DELETE FROM documents", []).map_err(err)?;
+                    let _ = started.send(());
+                    released.recv().map_err(err)?;
+                    tx.commit().map_err(err)?;
+                    Ok(Value::Null)
+                })
+                .await
         });
         ready.await.unwrap();
-        let result = tokio::time::timeout(std::time::Duration::from_secs(2), db.search("calclator".into(), false)).await;
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            db.search("calclator".into(), false),
+        )
+        .await;
         // Always release the writer, including when the regression times out.
         release.send(()).unwrap();
         let rows = result.expect("search queued behind writer").unwrap();
@@ -654,7 +716,10 @@ mod reader_tests {
         let dir = tempfile::tempdir().unwrap();
         let db = init(dir.path().join("index.sqlite3")).unwrap();
         upsert(&db, &json!({"id":"file:calculator","category":"files","title":"Calculator","action":{"type":"open-file"}})).unwrap();
-        assert_eq!(search(&db, "calculator", false).unwrap()[0]["id"], "file:calculator");
+        assert_eq!(
+            search(&db, "calculator", false).unwrap()[0]["id"],
+            "file:calculator"
+        );
         assert_eq!(search(&db, "calclator", false).unwrap(), json!([]));
     }
 }

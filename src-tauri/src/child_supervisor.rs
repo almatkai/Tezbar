@@ -2,21 +2,25 @@
 //! plus Unix libc. The executable dispatches it before initializing Tauri or app state.
 use std::{
     ffi::OsString,
-    io::{self, Read},
+    io::{self, Read, Write},
     process::{Child, Command, Stdio},
     sync::mpsc,
     time::Duration,
 };
+
+pub const EXTENSION_MODE: &str = "--tezbar-private-extension-supervisor-v1";
 
 pub const MODE: &str = "--tezbar-private-child-supervisor-v1";
 
 /// None means ordinary application startup; malformed helper requests fail closed.
 pub fn dispatch() -> Option<i32> {
     let mut args = std::env::args_os().skip(1);
-    if args.next().as_deref() != Some(std::ffi::OsStr::new(MODE)) {
+    let mode = args.next()?;
+    let relay = mode == std::ffi::OsStr::new(EXTENSION_MODE);
+    if !relay && mode != std::ffi::OsStr::new(MODE) {
         return None;
     }
-    Some(match supervise(args.collect()) {
+    Some(match supervise(args.collect(), relay) {
         Ok(code) => code,
         Err(error) => {
             eprintln!("Native child supervisor: {error}");
@@ -25,28 +29,33 @@ pub fn dispatch() -> Option<i32> {
     })
 }
 
-fn supervise(args: Vec<OsString>) -> io::Result<i32> {
+fn supervise(args: Vec<OsString>, relay: bool) -> io::Result<i32> {
     let executable = args
         .first()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing child executable"))?;
     // A dedicated reader observes host death even while the model is starting.
     // The server never inherits this pipe, so it cannot keep its own lease alive.
     let (closed, lease) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut block = [0; 256];
-        let mut stdin = io::stdin().lock();
-        loop {
-            match stdin.read(&mut block) {
-                Ok(0) => break,
-                Ok(_) => continue,
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(_) => break,
+    let relay_closed = closed.clone();
+    if !relay {
+        std::thread::spawn(move || {
+            let mut block = [0; 256];
+            let mut stdin = io::stdin().lock();
+            loop {
+                match stdin.read(&mut block) {
+                    Ok(0) => break,
+                    Ok(_) => continue,
+                    Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(_) => break,
+                }
             }
-        }
-        let _ = closed.send(());
-    });
+            let _ = closed.send(());
+        });
+    }
     let mut command = Command::new(executable);
-    command.args(&args[1..]).stdin(Stdio::null());
+    command
+        .args(&args[1..])
+        .stdin(if relay { Stdio::piped() } else { Stdio::null() });
     // stdout/stderr inherit the host's null/drained handles, never its lifetime pipe.
     #[cfg(unix)]
     {
@@ -63,7 +72,10 @@ fn supervise(args: Vec<OsString>) -> io::Result<i32> {
     let job = windows::Job::new()?;
     let mut child = command.spawn()?;
     #[cfg(unix)]
-    let tree = Tree(child.id());
+    let tree = Tree {
+        group: child.id(),
+        graceful: relay,
+    };
     #[cfg(windows)]
     let tree = match job.attach(&child) {
         Ok(()) => job,
@@ -73,6 +85,39 @@ fn supervise(args: Vec<OsString>) -> io::Result<i32> {
             return Err(error);
         }
     };
+    if relay {
+        // Protocol relay and lifetime detection are independent: a child blocked
+        // reading stdin cannot prevent the host-death EOF from being observed.
+        let mut input = child
+            .stdin
+            .take()
+            .ok_or_else(|| io::Error::other("Missing extension stdin"))?;
+        let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(64);
+        std::thread::spawn(move || {
+            let mut stdin = io::stdin().lock();
+            let mut block = [0u8; 16384];
+            loop {
+                match stdin.read(&mut block) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if tx.try_send(block[..n].to_vec()).is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(_) => break,
+                }
+            }
+            let _ = relay_closed.send(());
+        });
+        std::thread::spawn(move || {
+            for bytes in rx {
+                if input.write_all(&bytes).and_then(|_| input.flush()).is_err() {
+                    break;
+                }
+            }
+        });
+    }
     let result = monitor(&mut child, lease);
     // Cleanup also runs on normal server exit (including any surviving descendants).
     drop(tree);
@@ -96,12 +141,21 @@ fn monitor(child: &mut Child, lease: mpsc::Receiver<()>) -> io::Result<i32> {
 }
 
 #[cfg(unix)]
-struct Tree(u32);
+struct Tree {
+    group: u32,
+    graceful: bool,
+}
 #[cfg(unix)]
 impl Drop for Tree {
     fn drop(&mut self) {
         unsafe {
-            kill(-(self.0 as i32), 9);
+            if self.graceful {
+                kill(-(self.group as i32), 15);
+                // SDK protocol cleanup already had its grace; this small final
+                // TERM window lets native helpers release OS-owned resources.
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            kill(-(self.group as i32), 9);
         }
     }
 }

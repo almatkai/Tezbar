@@ -31,7 +31,6 @@ const SettingsView = React.lazy(() => import('./SettingsView'))
 const ReleaseNotesView = React.lazy(() => import('./ReleaseNotesView'))
 const ExtensionsView = React.lazy(() => import('./ExtensionsView'))
 const ExtensionRuntimeView = React.lazy(() => import('./ExtensionRuntimeView'))
-const OpenPortsView = React.lazy(() => import('./OpenPortsView'))
 const SystemMonitorView = React.lazy(() => import('./SystemMonitorView'))
 const IndexingView = React.lazy(() => import('./IndexingView'))
 const PermissionsView = React.lazy(() => import('./PermissionsView'))
@@ -55,7 +54,6 @@ type Surface =
   | 'settings'
   | 'extensions'
   | 'extension-runtime'
-  | 'open-ports'
   | 'system-monitor'
   | 'indexing'
   | 'permissions'
@@ -73,7 +71,6 @@ const SHEET_SURFACES: ReadonlySet<Surface> = new Set<Surface>([
   'ai-chat',
   'extensions',
   'extension-runtime',
-  'open-ports',
   'system-monitor',
   'indexing',
   'permissions',
@@ -126,7 +123,6 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
   settings: '[aria-label="Settings"]',
   extensions: '[aria-label="Extensions"]',
   'extension-runtime': '[aria-label="Extension Runtime"]',
-  'open-ports': '[aria-label="Open Ports"]',
   'system-monitor': '[aria-label="System Monitor"]',
   indexing: '[aria-label="Indexing Status"]',
   permissions: '[aria-label="Permissions"]',
@@ -326,7 +322,6 @@ function LauncherApp(): JSX.Element {
   const [hasUnreadReleaseNotes, setHasUnreadReleaseNotes] = useState(false)
   const markReleaseNotesRead = useCallback(() => setHasUnreadReleaseNotes(false), [])
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
-  const [openPortsInitialTab, setOpenPortsInitialTab] = useState<'listen' | 'named'>('listen')
   const [notesInitialSelectedId, setNotesInitialSelectedId] = useState<number | null>(null)
   const [commandInitialValue, setCommandInitialValue] = useState('')
   const [commandInitialSelectedChatId, setCommandInitialSelectedChatId] = useState<string | null>(
@@ -694,14 +689,6 @@ function LauncherApp(): JSX.Element {
             <ExtensionsView key={extensionsKey} onBack={returnToLauncher} />
           ) : surface === 'extension-runtime' && extensionRuntimeInitial ? (
             <ExtensionRuntimeView initial={extensionRuntimeInitial} onBack={returnToLauncher} />
-          ) : surface === 'open-ports' ? (
-            <OpenPortsView
-              initialTab={openPortsInitialTab}
-              onBack={() => {
-                setOpenPortsInitialTab('listen')
-                returnToLauncher()
-              }}
-            />
           ) : surface === 'system-monitor' ? (
             <SystemMonitorView onBack={returnToLauncher} />
           ) : surface === 'indexing' ? (
@@ -796,10 +783,6 @@ function LauncherApp(): JSX.Element {
                 setCommandInitialValue('')
                 setExtensionRuntimeInitial(initial)
                 setSurface('extension-runtime')
-              }}
-              onOpenPortsPage={(opts) => {
-                setOpenPortsInitialTab(opts?.tab ?? 'listen')
-                setSurface('open-ports')
               }}
               onOpenSystemMonitor={() => {
                 setCommandInitialValue('')

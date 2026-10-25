@@ -1,202 +1,158 @@
-//! Bundled manifests describe source commands; compiled dispatch decides coverage.
-use super::v2_runtime;
-use crate::native_core::common::{now_ms, read_json, write_json_atomic, CoreContext, CoreResult};
+//! Bundled trusted release references. Metadata is never proof of installation.
+use super::{acquisition, process_install};
+use crate::native_core::common::{CoreContext, CoreResult};
 use serde_json::{json, Value};
-use std::path::PathBuf;
 
-fn source() -> Vec<Value> {
-    serde_json::from_str(include_str!("v2_catalog.json")).expect("bundled Native V2 catalog")
+pub(super) fn source() -> Vec<Value> {
+    serde_json::from_str(include_str!("v2_catalog.json")).expect("bundled extension catalog")
 }
-
 pub(super) fn slug(id: &str) -> Option<&str> {
     let slug = id.strip_prefix("com.tezbar.native.")?;
-    source()
-        .iter()
-        .any(|item| item["slug"] == slug)
-        .then_some(slug)
+    source().iter().any(|m| m["slug"] == slug).then_some(slug)
 }
-
 pub(super) fn manifest(slug: &str) -> Option<Value> {
-    let mut item = source().into_iter().find(|item| item["slug"] == slug)?;
-    let compiled = v2_runtime::commands(slug);
-    let platform = if cfg!(target_os = "windows") {
-        "Windows"
-    } else if cfg!(target_os = "macos") {
+    Some(describe_for(
+        source().into_iter().find(|m| m["slug"] == slug)?,
+        false,
+    ))
+}
+// Installed local packages retain their normal coverage. Uninstalled local-only
+// references must not suppress a working legacy package before import.
+fn describe_for(item: Value, installed: bool) -> Value {
+    let rule = acquisition::for_id(item["id"].as_str().unwrap_or(""));
+    describe_with_route(item, installed, rule)
+}
+pub(super) fn describe_with_route(
+    mut item: Value,
+    installed: bool,
+    rule: Result<acquisition::Rule, String>,
+) -> Value {
+    if !installed {
+        if let Err(guidance) = acquisition::require_remote(rule) {
+            if let Some(commands) = item["commands"].as_array_mut() {
+                for command in commands {
+                    command["runtime"] = json!("unavailable");
+                    command["gap"] = json!(guidance);
+                }
+            }
+        }
+    }
+    describe(item)
+}
+pub(super) fn describe(mut item: Value) -> Value {
+    // Old source metadata stays visible, but cannot authorize process execution
+    // until the publisher provides real schema-3 release references.
+    let available = process_install::artifact(&item).is_ok();
+    let platform = if cfg!(target_os = "macos") {
         "macOS"
+    } else if cfg!(target_os = "windows") {
+        "Windows"
     } else {
         "Linux"
     };
-    let commands = item["commands"].as_array_mut()?;
+    if !item["commands"].is_array() {
+        item["commands"] = json!([]);
+    }
+    let commands = item["commands"]
+        .as_array_mut()
+        .expect("normalized commands");
     let mut covered = 0;
     for command in commands.iter_mut() {
-        let name = command["name"].as_str().unwrap_or("");
-        let platform_ok = command["platforms"]
+        let supported = command["platforms"]
             .as_array()
-            .is_some_and(|p| p.iter().any(|v| v == platform));
-        if compiled.contains(&name) && platform_ok {
-            command["runtime"] = json!("rust");
-            command.as_object_mut().unwrap().remove("gap");
+            .is_none_or(|a| a.iter().any(|v| v == platform));
+        if available && supported && command["runtime"] == "rust" {
             covered += 1;
         } else {
             command["runtime"] = json!("unavailable");
-            command["gap"] = json!(if !platform_ok {
-                format!("No declared {platform} replacement for this command")
-            } else {
-                "No compiled Rust handler for this command".into()
-            });
-        }
-    }
-    let total = commands.len();
-    item["totalCommands"] = json!(total);
-    item["title"] = item["name"].clone();
-    item["status"] = json!(if covered == total {
-        "complete"
-    } else if covered > 0 {
-        "partial"
-    } else {
-        "unavailable"
-    });
-    Some(item)
-}
-
-pub(super) fn manifests() -> Vec<Value> {
-    source()
-        .iter()
-        .filter_map(|item| manifest(item["slug"].as_str()?))
-        .collect()
-}
-
-pub(super) fn store_item(native: Value) -> Value {
-    let icon_val = native["icon"].as_str().unwrap_or("");
-    let icon_url = if icon_val.starts_with("http") {
-        json!(icon_val)
-    } else {
-        Value::Null
-    };
-    json!({
-        "id": native["id"],
-        "name": native["name"],
-        "description": native["description"],
-        "version": native["version"],
-        "author": "Tezbar",
-        "owner": "Tezbar",
-        "runtime": "rust",
-        "icon": native["icon"],
-        "iconUrl": icon_url,
-        "platforms": native["platforms"],
-        "commands": native["commands"],
-        "nativeV2": native
-    })
-}
-
-fn package_root(ctx: &CoreContext, id: &str) -> PathBuf {
-    ctx.paths.data_dir.join("extensions/packages").join(id)
-}
-
-pub(super) fn installed(ctx: &CoreContext, id: &str) -> bool {
-    let Some(slug) = slug(id) else { return false };
-    if manifest(slug).is_none_or(|v| v["status"] == "unavailable") {
-        return false;
-    }
-    let root = package_root(ctx, id);
-    read_json(&root.join("native-v2.json"))
-        .is_ok_and(|v| v["id"] == id && v["schemaVersion"] == 2 && v["runtime"] == "rust")
-        && read_json(&root.join("package.json"))
-            .is_ok_and(|v| v["id"] == id && v["schemaVersion"] == 2)
-}
-
-/// Installs only a compiled-in adapter. Existing Raycast packages remain intact.
-pub(super) fn install(ctx: &CoreContext, id: &str) -> Option<CoreResult> {
-    let slug = slug(id)?;
-    let item = manifest(slug)?;
-    if item["status"] == "unavailable" {
-        return Some(Err(format!(
-            "No compiled native commands are available for {id} on this platform"
-        )));
-    }
-    let id = item["id"].as_str()?;
-    let root = package_root(ctx, id);
-    let marker = json!({"schemaVersion":2,"id":id,"runtime":"rust","version":item["version"]});
-    let result = (|| {
-        if root.exists() && !root.is_dir() {
-            return Err("Native extension install path is not a directory".into());
-        }
-        if root.join("package.json").is_file() {
-            let existing = read_json(&root.join("package.json"))?;
-            if existing["id"] != id || existing["schemaVersion"] != 2 {
-                return Err("Native extension install path contains another package".into());
+            if !supported {
+                command["gap"] = json!("No declared platform support");
+            } else if !available {
+                command["gap"] = json!("Verified executable artifact not published/pinned");
+            } else if !command["gap"].is_string() {
+                command["gap"] = json!("Command is not implemented by this executable");
             }
         }
-        write_json_atomic(&root.join("package.json"), &item)?;
-        write_json_atomic(&root.join("native-v2.json"), &marker)?;
-        let db_path = ctx.paths.data_dir.join("extensions/installed.json");
-        let mut db = if db_path.is_file() {
-            read_json(&db_path)?
-        } else {
-            json!({"installed":[]})
-        };
-        let entries = db["installed"]
-            .as_array_mut()
-            .ok_or("Invalid installed extensions database")?;
-        let installed_at = entries
-            .iter()
-            .find(|v| v["id"] == id)
-            .and_then(|v| v["installedAt"].as_u64())
-            .unwrap_or_else(now_ms);
-        let mut entry = store_item(item.clone());
-        entry["installedAt"] = json!(installed_at);
-        entries.retain(|v| v["id"] != id);
-        entries.push(entry.clone());
-        write_json_atomic(&db_path, &db)?;
-        ctx.emit("extensions-changed", json!({}));
-        Ok(entry)
-    })();
-    Some(result)
+    }
+    item["totalCommands"] = json!(commands.len());
+    item["title"] = item["name"].clone();
+    item["status"] = json!(if covered == 0 {
+        "unavailable"
+    } else if covered == item["totalCommands"].as_u64().unwrap_or(0) {
+        "complete"
+    } else {
+        "partial"
+    });
+    item
 }
-
-pub(crate) fn cli_list(ctx: &CoreContext) -> CoreResult {
-    Ok(json!(manifests()
+pub(super) fn manifests(ctx: &CoreContext) -> Vec<Value> {
+    source()
         .into_iter()
-        .map(|mut item| {
-            let id = item["id"].as_str().unwrap_or("").to_string();
-            item["installed"] = json!(installed(ctx, &id));
-            item
+        .map(|m| {
+            let id = m["id"].as_str().unwrap_or("");
+            let rule = acquisition::for_id(id);
+            let installed = rule != Ok(acquisition::Rule::Remote) && installed(ctx, id);
+            describe_with_route(m, installed, rule)
+        })
+        .collect()
+}
+pub(super) fn store_item(native: Value) -> Value {
+    let native = describe(native);
+    let acquisition =
+        acquisition::metadata(acquisition::for_id(native["id"].as_str().unwrap_or("")));
+    json!({"id":native["id"],"name":native["name"],"description":native["description"],"version":native["version"],"author":"Tezbar","owner":"Tezbar","runtime":"rust","icon":native["icon"],"iconUrl":native["icon"].as_str().filter(|s|s.starts_with("https://")),"platforms":native["platforms"],"commands":native["commands"],"nativeV2":native,"acquisition":acquisition})
+}
+pub(super) fn installed(ctx: &CoreContext, id: &str) -> bool {
+    process_install::resolve(ctx, id).is_ok()
+}
+pub(super) async fn install(ctx: &CoreContext, id: &str) -> Option<CoreResult> {
+    let slug = slug(id)?;
+    let item = source().into_iter().find(|m| m["slug"] == slug)?;
+    Some(process_install::install(ctx, item, None).await)
+}
+pub(crate) fn cli_list(ctx: &CoreContext) -> CoreResult {
+    Ok(json!(manifests(ctx)
+        .into_iter()
+        .map(|mut m| {
+            let id = m["id"].as_str().unwrap_or("");
+            let root = process_install::root(ctx, id).ok();
+            let status = match process_install::resolve(ctx, id) {
+                Ok(_) => "installed",
+                Err(_) => {
+                    if root.is_some_and(|p| p.exists()) {
+                        "needs-upgrade-or-repair"
+                    } else {
+                        "not-installed"
+                    }
+                }
+            };
+            m["installed"] = json!(status == "installed");
+            m["installationStatus"] = json!(status);
+            m["acquisition"] =
+                acquisition::metadata(acquisition::for_id(m["id"].as_str().unwrap_or("")));
+            m
         })
         .collect::<Vec<_>>()))
 }
-
-pub(crate) fn cli_install(ctx: &CoreContext, id: &str) -> CoreResult {
-    install(ctx, id).ok_or_else(|| format!("Unknown Native V2 extension: {id}"))?
+pub(crate) async fn cli_install(ctx: &CoreContext, id: &str) -> CoreResult {
+    install(ctx, id)
+        .await
+        .ok_or_else(|| format!("Unknown Rust extension: {id}"))?
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn bundled_ids_and_coverage_are_consistent() {
-        let items = manifests();
-        assert_eq!(items.len(), 11);
-        for item in items {
-            let slug = item["slug"].as_str().unwrap();
-            assert_eq!(item["id"], v2_runtime::canonical_id(slug));
-            assert_eq!(item["replaces"][0], format!("raycast.{slug}"));
-            assert_eq!(
-                item["totalCommands"],
-                item["commands"].as_array().unwrap().len()
-            );
-            for command in item["commands"].as_array().unwrap() {
-                if command["runtime"] == "rust" {
-                    assert!(v2_runtime::supports(
-                        item["id"].as_str().unwrap(),
-                        command["name"].as_str().unwrap()
-                    ));
-                }
+    fn catalog_without_pins_never_claims_installability() {
+        for m in source().into_iter().map(describe) {
+            if process_install::artifact(&m).is_err() {
+                assert_eq!(m["status"], "unavailable");
+                assert!(m["commands"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|c| c["runtime"] != "rust"));
             }
-            assert!(item["verification"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .all(|v| v["state"] == "not-run"));
         }
     }
 }

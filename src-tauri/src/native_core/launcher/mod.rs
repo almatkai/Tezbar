@@ -2,7 +2,6 @@
 mod clipboard;
 mod clipboard_native;
 mod db;
-mod ports;
 mod providers;
 mod storage;
 mod stores;
@@ -13,7 +12,7 @@ use serde_json::{json, Value};
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
 };
@@ -28,13 +27,6 @@ pub const CHANNELS: &[&str] = &[
     "path:complete",
     "path:resolve-directory",
     "directory-visit:record",
-    "open-ports:list",
-    // Internal V2 safety probe; do not add this to the renderer bridge allowlist.
-    "core:ports:list-fresh",
-    "core:ports:terminate-verified",
-    "port-manager:named:list",
-    "port-manager:named:add",
-    "port-manager:named:remove",
     "clipboard:list",
     "clipboard:restore",
     "clipboard:delete",
@@ -97,9 +89,6 @@ struct Inner {
     clipboard: clipboard::ClipboardCore,
     terminal: terminal::TerminalCore,
     apps: tokio::sync::RwLock<Vec<Value>>,
-    ports: tokio::sync::Mutex<(u64, Vec<Value>)>,
-    ports_refreshing: Arc<AtomicBool>,
-    ports_attempted: AtomicU64,
     started: AtomicBool,
     lifecycle: tokio::sync::Mutex<()>,
     stop: Arc<AtomicBool>,
@@ -120,9 +109,6 @@ impl LauncherCore {
                 terminal: terminal::TerminalCore::new(ctx.clone()),
                 ctx,
                 apps: tokio::sync::RwLock::new(vec![]),
-                ports: tokio::sync::Mutex::new((0, vec![])),
-                ports_refreshing: Arc::new(AtomicBool::new(false)),
-                ports_attempted: AtomicU64::new(0),
                 started: AtomicBool::new(false),
                 lifecycle: tokio::sync::Mutex::new(()),
                 stop: Arc::new(AtomicBool::new(false)),
@@ -403,7 +389,6 @@ impl LauncherCore {
     async fn dispatch(&self, c: &str, a: &[Value]) -> CoreResult {
         if c.starts_with("notes:")
             || c.starts_with("snippets:") && c != "snippets:copy"
-            || c.starts_with("port-manager:named:")
             || c == "directory-visit:record"
         {
             let result = self.inner.stores.handle(c, a).await?;
@@ -641,7 +626,6 @@ impl LauncherCore {
                     ("quick note", "quick-notes", ""),
                     ("clipboard history", "clipboard", ""),
                     ("snippet date", "snippets", ""),
-                    ("port manager", "extensions", ""),
                 ] {
                     let r = self.search(q).await?;
                     let r = r.as_array().ok_or("Invalid benchmark search")?;
@@ -658,18 +642,6 @@ impl LauncherCore {
                 }
                 self.inner.db.call(move|c|{let click:f64=c.query_row("SELECT coalesce(avg(rank),0) FROM click_events WHERE success=1",[],|r|r.get(0)).map_err(|e|e.to_string())?;c.execute("INSERT INTO benchmark_snapshots(created_at,precision_at_5,precision_at_10,avg_click_rank,benchmark_size) VALUES(?,?,?,?,6)",rusqlite::params![now_ms(),p5,p10,click]).map_err(|e|e.to_string())?;Ok(Value::Null)}).await
             }
-            "open-ports:list" => self.cached_ports().await,
-            "core:ports:list-fresh" => ports::list_fresh().await,
-            "core:ports:terminate-verified" => {
-                let pid = a.first().and_then(Value::as_u64)
-                    .and_then(|pid| u32::try_from(pid).ok())
-                    .filter(|pid| *pid > 4).ok_or("Invalid process ID")?;
-                let signal = a.get(1).and_then(Value::as_str).ok_or("Invalid signal")?;
-                let identity = a.get(2).and_then(Value::as_str)
-                    .filter(|value| !value.is_empty()).ok_or("Missing process identity")?;
-                ports::terminate_verified(pid, signal, identity).await?;
-                Ok(json!(true))
-            }
             _ => Err(format!("Unhandled launcher channel: {c}")),
         }
     }
@@ -680,6 +652,21 @@ impl LauncherCore {
             input[1..].trim()
         } else {
             input.trim()
+        };
+        let contributions = match self
+            .inner
+            .ctx
+            .request(
+                "core:extensions:launcher-search",
+                vec![json!({"text":q,"surface":"query","deep":deep})],
+            )
+            .await
+        {
+            Ok(rows) => rows.as_array().cloned().unwrap_or_default(),
+            Err(error) => {
+                log::debug!("Launcher contributions unavailable: {error}");
+                vec![]
+            }
         };
         if deep && q.chars().count() < 3 {
             return Ok(
@@ -754,31 +741,7 @@ impl LauncherCore {
                         .is_some_and(|p| matched_paths.contains(p))
             });
         } else if !q.is_empty() {
-            if regex::Regex::new(r"(?i)port|open|listen|kill|\d{2,5}")
-                .unwrap()
-                .is_match(q)
-                && self.inner.ctx.app.is_some()
-            {
-                let this = self.clone();
-                let data = self.search_ports(async move { this.cached_ports().await });
-                let mentions =
-                    regex::Regex::new(r"(?i)port|open|listen|kill|stop|terminate|process")
-                        .unwrap()
-                        .is_match(q);
-                for entry in data.as_array().into_iter().flatten() {
-                    for port in entry["ports"].as_array().into_iter().flatten() {
-                        let number = port.as_u64().unwrap_or(0);
-                        let score = if q.contains(&number.to_string()) {
-                            430
-                        } else if mentions {
-                            280
-                        } else {
-                            continue;
-                        };
-                        rows.push(json!({"id":format!("port-listener:{}:{number}",entry["pid"].as_str().unwrap_or("")),"title":format!("Open Port {number}"),"subtitle":format!("{} (PID {}) · {} · Enter to kill listener",entry["process"].as_str().unwrap_or(""),entry["pid"].as_str().unwrap_or(""),entry["user"].as_str().unwrap_or("")),"category":"extensions","score":score,"action":{"type":"run-extension-command","extensionId":"raycast.port-manager","commandName":"kill-listening-process","title":"Kill Process Listening On","argumentValues":{"port":number.to_string()}}}));
-                    }
-                }
-            }
+            rows.extend(contributions);
             if q.chars().count() >= 3 && !good_match(q, &rows) {
                 let max = rows
                     .iter()
@@ -794,6 +757,10 @@ impl LauncherCore {
                 .unwrap_or(0.)
                 .total_cmp(&a["score"].as_f64().unwrap_or(0.))
         });
+        // Contributions may intentionally strengthen an existing command ID.
+        // Keep the highest-ranked row once, preserving normal ranking order.
+        let mut ids = std::collections::HashSet::new();
+        rows.retain(|row| ids.insert(row["id"].to_string()));
         rows.truncate(80);
         Ok(json!(rows))
     }
@@ -981,59 +948,6 @@ impl LauncherCore {
             }
             _ => Err(format!("Unknown search action type: {kind}")),
         }
-    }
-    // Keystroke search uses a snapshot; OS process enumeration may take seconds
-    // or fail. Refresh once in the background without delaying application results.
-    fn search_ports<F>(&self, fetch: F) -> Value
-    where
-        F: std::future::Future<Output = CoreResult> + Send + 'static,
-    {
-        let snapshot = self.inner.ports.try_lock().ok().map(|v| v.clone());
-        let rows = snapshot
-            .as_ref()
-            .map(|(_, rows)| rows.clone())
-            .unwrap_or_default();
-        let now = now_ms();
-        let fresh = snapshot
-            .as_ref()
-            .is_some_and(|(at, _)| *at > 0 && now.saturating_sub(*at) <= 3000);
-        if fresh || now.saturating_sub(self.inner.ports_attempted.load(Ordering::Relaxed)) < 3000 {
-            return json!(rows);
-        }
-        let mut tasks = match self.inner.tasks.lock() {
-            Ok(tasks) => tasks,
-            Err(_) => return json!(rows),
-        };
-        if self.inner.stop.load(Ordering::Acquire)
-            || self.inner.ports_refreshing.swap(true, Ordering::AcqRel)
-        {
-            return json!(rows);
-        }
-        self.inner.ports_attempted.store(now, Ordering::Relaxed);
-        struct Reset(Arc<AtomicBool>);
-        impl Drop for Reset {
-            fn drop(&mut self) {
-                self.0.store(false, Ordering::Release);
-            }
-        }
-        let reset = Reset(self.inner.ports_refreshing.clone());
-        tasks.retain(|task| !task.is_finished());
-        tasks.push(tokio::spawn(async move {
-            let _reset = reset;
-            if let Err(error) = fetch.await {
-                log::debug!("Open-port search refresh: {error}");
-            }
-        }));
-        json!(rows)
-    }
-    async fn cached_ports(&self) -> CoreResult {
-        let mut cache = self.inner.ports.lock().await;
-        if cache.0 == 0 || now_ms().saturating_sub(cache.0) > 3000 {
-            let rows = ports::list().await?;
-            cache.1 = rows.as_array().cloned().ok_or("Invalid open port list")?;
-            cache.0 = now_ms();
-        }
-        Ok(json!(cache.1))
     }
     async fn copy_snippet(&self, id: &str) -> CoreResult {
         let id = id.to_owned();

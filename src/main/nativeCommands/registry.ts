@@ -357,15 +357,6 @@ const DESCRIPTORS: Record<NativeCommandId, NativeCommandDescriptor> = {
     keywords: ['battery', 'charge', 'power', 'percent'],
     macOnly: false,
   },
-  'list-listening-ports': {
-    id: 'list-listening-ports',
-    title: 'List Listening Ports',
-    subtitle: 'Open Port Manager with a structured list (same as Open Ports).',
-    category: 'dev',
-    strategy: 'shell',
-    keywords: ['ports', 'lsof', 'listen', 'listening', 'tcp', 'dev', 'port manager'],
-    macOnly: false,
-  },
   'git-root': {
     id: 'git-root',
     title: 'Git: Copy Repo Root',
@@ -478,7 +469,6 @@ const RESULT_KIND_BY_ID: Partial<Record<NativeCommandId, NativeCommandResultKind
   'show-memory-info': 'info',
   'show-disk-usage': 'info',
   'show-battery-status': 'info',
-  'list-listening-ports': 'info',
   'show-system-monitor': 'info',
   'copy-current-path': 'copied',
   'git-root': 'copied',

@@ -84,6 +84,9 @@ async fn action_dispatch_is_in_process_and_query_learning_is_specific() {
     ctx.set_router(Arc::new(move |c, a| {
         let sink = sink.clone();
         Box::pin(async move {
+            if c == "core:extensions:launcher-search" {
+                return Ok(json!([]));
+            }
             sink.lock().unwrap().push((c, a));
             Ok(json!({"ok":true,"message":"Opened"}))
         })
@@ -485,7 +488,7 @@ async fn deep_search_merges_knowledge_metadata_and_content_without_duplicate_pat
     let ctx = profile(dir.path());
     let count = Arc::new(AtomicUsize::new(0));
     let captured = count.clone();
-    ctx.set_router(Arc::new(move|channel,args|{let count=captured.clone();Box::pin(async move{count.fetch_add(1,Ordering::SeqCst);assert_eq!(args[0],"invoice");match channel.as_str(){"core:knowledge:search-sources"=>{assert_eq!(args[1],16);Ok(json!([{"chunkId":"chunk","sourceId":"source","title":"Invoice","path":"/external/invoice.pdf","text":"Payment details","pageNumber":2,"score":0.9}]))},"core:knowledge:search-metadata"=>Ok(json!([{"path":"/external/invoice.pdf","title":"Invoice","score":1.},{"path":"/external/invoice-index.txt","title":"Invoice index","score":0.8}])),_=>Err(format!("unexpected {channel}"))}})})).unwrap();
+    ctx.set_router(Arc::new(move|channel,args|{let count=captured.clone();Box::pin(async move{if channel=="core:extensions:launcher-search"{assert_eq!(args[0]["text"],"invoice");return Ok(json!([]));}count.fetch_add(1,Ordering::SeqCst);assert_eq!(args[0],"invoice");match channel.as_str(){"core:knowledge:search-sources"=>{assert_eq!(args[1],16);Ok(json!([{"chunkId":"chunk","sourceId":"source","title":"Invoice","path":"/external/invoice.pdf","text":"Payment details","pageNumber":2,"score":0.9}]))},"core:knowledge:search-metadata"=>Ok(json!([{"path":"/external/invoice.pdf","title":"Invoice","score":1.},{"path":"/external/invoice-index.txt","title":"Invoice index","score":0.8}])),_=>Err(format!("unexpected {channel}"))}})})).unwrap();
     let core = LauncherCore::new(ctx);
     let rows = core.search("invoice").await.unwrap();
     assert_eq!(count.load(Ordering::SeqCst), 0);
@@ -725,25 +728,63 @@ async fn cancelling_shortcut_ipc_still_persists_the_registered_binding() {
     core.shutdown().await.unwrap();
 }
 
+// port_search_returns_cached_rows_during_slow_or_failed_refresh moved to the
+// standalone extension launcher cache tests with its injected system seam.
+
 #[tokio::test]
-async fn port_search_returns_cached_rows_during_slow_or_failed_refresh() {
+async fn extension_command_recommendations_are_declarative_and_keep_ids() {
     let dir = tempfile::tempdir().unwrap();
     let core = LauncherCore::new(profile(dir.path()));
-    let fixture = json!({"pid":"123","process":"fixture","ports":[3000]});
-    *core.inner.ports.lock().await = (1, vec![fixture.clone()]);
-    let (started, ready) = tokio::sync::oneshot::channel();
-    let (finish, done) = tokio::sync::oneshot::channel::<()>();
-    let rows = core.search_ports(async move {
-        let _ = started.send(());
-        let _ = done.await;
-        Err("fixture process enumeration failure".into())
-    });
-    assert_eq!(rows, json!([fixture.clone()]));
-    ready.await.unwrap();
+    let commands = vec![
+        json!({"extensionId":"com.tezbar.native.fixture","cmdName":"first","title":"First","extensionTitle":"Fixture","launcher":{"id":"extcmd:raycast.fixture:first","recommendation":760}}),
+        json!({"extensionId":"com.tezbar.native.fixture","cmdName":"second","title":"Second","extensionTitle":"Fixture","launcher":{"recommendation":0}}),
+    ];
+    let docs = providers::extension_documents(&commands, &json!({}));
+    assert_eq!(docs[0]["id"], "extcmd:raycast.fixture:first");
     assert_eq!(
-        core.search_ports(async { panic!("duplicate refresh must not run") }),
-        json!([fixture])
+        docs[0]["action"]["extensionId"],
+        "com.tezbar.native.fixture"
     );
-    finish.send(()).unwrap();
+    core.inner
+        .db
+        .upsert(docs, vec!["extensions".into()])
+        .await
+        .unwrap();
+    let rows = core.inner.db.search(String::new(), false).await.unwrap();
+    let rows = rows.as_array().unwrap();
+    let first = rows
+        .iter()
+        .find(|r| r["id"] == "extcmd:raycast.fixture:first")
+        .unwrap();
+    let second = rows
+        .iter()
+        .find(|r| r["id"] == "extcmd:com.tezbar.native.fixture:second")
+        .unwrap();
+    assert_eq!(
+        first["score"].as_f64().unwrap() - second["score"].as_f64().unwrap(),
+        760.
+    );
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn contribution_command_row_replaces_the_same_indexed_id_by_score() {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = profile(dir.path());
+    ctx.set_router(Arc::new(|channel,_|Box::pin(async move {
+        assert_eq!(channel,"core:extensions:launcher-search");
+        Ok(json!([{"id":"fixture:lookup","title":"Lookup","subtitle":"Fixture","category":"extensions","score":20000,"action":{"type":"run-extension-command","extensionId":"com.tezbar.native.fixture","commandName":"lookup","title":"Lookup","argumentValues":{}}}]))
+    }))).unwrap();
+    let core = LauncherCore::new(ctx);
+    core.inner.db.upsert(vec![stores::document("fixture:lookup","extensions","Lookup","Fixture","lookup",json!({"type":"run-extension-command","extensionId":"com.tezbar.native.fixture","commandName":"lookup","title":"Lookup"}),1)],vec![]).await.unwrap();
+    let rows = core.search("lookup").await.unwrap();
+    let matched: Vec<_> = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["id"] == "fixture:lookup")
+        .collect();
+    assert_eq!(matched.len(), 1);
+    assert_eq!(matched[0]["score"], 20000);
     core.shutdown().await.unwrap();
 }

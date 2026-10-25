@@ -59,9 +59,6 @@
     ],
     "resources": {
       "../licenses/raycast-extensions-MIT.txt": "licenses/raycast-extensions-MIT.txt",
-      "src/native_core/extensions/v2_color_picker_LICENSE.txt": "licenses/color-namer-MIT.txt",
-      "../native/audio-device": "native/audio-device",
-      "../resources/native-timers": "resources/native-timers",
       "../dist-backend/vec0": "dist-backend/vec0",
       "../dist-backend/node_modules": "dist-backend/node_modules",
       "../resources/icons": "dist-backend/resources/icons",

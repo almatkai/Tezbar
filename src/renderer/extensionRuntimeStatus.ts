@@ -183,10 +183,19 @@ export function replacementReason(ext: ExtensionManifest): string | null {
 }
 
 export function canInstallExtension(ext: ExtensionManifest, platform: ExtensionPlatform): boolean {
+  if (ext.acquisition !== undefined && ext.acquisition?.type !== 'remote') return false
   if (ext.id !== ext.nativeV2?.id) return true
   return ext.nativeV2.status !== 'unavailable' && ext.nativeV2.commands.some(
     (command) => command.runtime !== 'unavailable' && command.platforms.includes(platform),
   )
+}
+
+export function acquisitionGuidance(ext: ExtensionManifest): string | null {
+  if (ext.acquisition === undefined || ext.acquisition?.type === 'remote') return null
+  if (ext.acquisition?.type === 'local-import-only') {
+    return 'Import the trusted release manifest and ZIP with --extensions-v3-import, then close and reopen Tezbar. Use local import again to update or repair.'
+  }
+  return 'Remote installation is unavailable: unsupported acquisition rule.'
 }
 
 export function installTarget(ext: ExtensionManifest): string {
@@ -205,6 +214,7 @@ export function mergeCatalog(
     return local ? {
       ...extension,
       runtime: local.runtime ?? extension.runtime,
+      acquisition: local.acquisition ?? extension.acquisition,
       nativeV2: local.runtime === 'javascript' && !local.nativeV2
         ? undefined
         : local.nativeV2 ?? extension.nativeV2,

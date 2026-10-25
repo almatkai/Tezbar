@@ -23,8 +23,7 @@ fn kind(id: &str) -> Option<&'static str> {
         | "show-system-monitor"
         | "show-memory-info"
         | "show-disk-usage"
-        | "show-battery-status"
-        | "list-listening-ports" => Some("info"),
+        | "show-battery-status" => Some("info"),
         "copy-current-path" | "git-root" => Some("copied"),
         "generate-password" => Some("password"),
         "start-keep-awake" | "stop-keep-awake" => Some("toggle"),
@@ -244,12 +243,6 @@ impl SystemCore {
                 return Ok(result(
                     true,
                     "Open System Monitor from the launcher to view live hardware information.",
-                ))
-            }
-            "list-listening-ports" => {
-                return Ok(result(
-                    true,
-                    "Use Port Manager → Open Ports in Tezbar for a structured, filterable list.",
                 ))
             }
             "open-clipboard-history"

@@ -141,7 +141,6 @@ impl NativeCore {
             "open-notes" | "open-quick-notes" => Some("notes"),
             "open-clipboard-history" => Some("clipboard"),
             "open-emoji-picker" => Some("emoji-picker"),
-            "list-listening-ports" => Some("open-ports"),
             "show-system-monitor" => Some("system-monitor"),
             "start-onboarding" => Some("onboarding"),
             "open-settings" | "check-for-updates" => Some("settings"),

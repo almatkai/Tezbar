@@ -1,3 +1,4 @@
+import { sanitizeLauncherArgument, validateLauncherArgument } from './launcherArgument'
 import {
   lazy,
   Suspense,
@@ -14,16 +15,21 @@ import {
 import { createPortal } from 'react-dom'
 import { StringCache } from '../shared/stringCache'
 import { useBackendGeneration } from './backendGeneration'
-import {
-  defaultModels,
-  normalizeProviderModelList,
-  recommendedModel,
-} from '../shared/aiProviders'
+import { defaultModels, normalizeProviderModelList, recommendedModel } from '../shared/aiProviders'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { IconAssetKind, PathCompletionItem, SearchResult } from '../shared/search'
 import type { NativeCommandId } from '../shared/nativeCommands'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
-import { Hint, Kbd, ListRow, ListRowTag, Message, SelectField, TextField, cx } from './ui/primitives'
+import {
+  Hint,
+  Kbd,
+  ListRow,
+  ListRowTag,
+  Message,
+  SelectField,
+  TextField,
+  cx,
+} from './ui/primitives'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { GlideList } from './ui/GlideList'
 import { RollingText } from './ui/RollingText'
@@ -60,7 +66,11 @@ import {
   recordUpdateCheck,
   shouldPromoteUpdateCommand,
 } from '../shared/updater'
-import { CommandSurfaceBadge, CommandSurfaceFooter, CommandSurfaceHeader } from './ui/CommandSurface'
+import {
+  CommandSurfaceBadge,
+  CommandSurfaceFooter,
+  CommandSurfaceHeader,
+} from './ui/CommandSurface'
 import { LauncherAppearanceButton } from './LauncherAppearance'
 import {
   addLauncherQueryHistoryEntry,
@@ -110,8 +120,8 @@ import {
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
 const LAUNCHER_QUERY_HISTORY_KEY = 'tezbar:launcher-query-history:v1'
-const HOME_SEARCH_RESULTS_CACHE_KEY = 'tezbar:home-search-results:v1'
-const SEARCH_CANDIDATES_CACHE_KEY = 'tezbar:search-candidates:v1'
+const HOME_SEARCH_RESULTS_CACHE_KEY = 'tezbar:home-search-results:v2'
+const SEARCH_CANDIDATES_CACHE_KEY = 'tezbar:search-candidates:v2'
 const MAX_CACHED_HOME_RESULTS = 40
 const MAX_OPTIMISTIC_SEARCH_CANDIDATES = 1_000
 const QUERY_RESULTS_CACHE_TTL_MS = 5_000
@@ -288,6 +298,7 @@ function writeCachedHomeSearchResults(results: SearchResult[]): void {
     // Icons are resolved lazily and can be large data URLs, so only cache the
     // lightweight, immediately renderable command metadata.
     const cacheable = results
+      .filter((item) => !item.ephemeral)
       .slice(0, MAX_CACHED_HOME_RESULTS)
       .map((item) => ({ ...item, iconDataUrl: undefined }))
     window.localStorage.setItem(HOME_SEARCH_RESULTS_CACHE_KEY, JSON.stringify(cacheable))
@@ -330,6 +341,7 @@ function readCachedSearchCandidates(): SearchResult[] {
 function writeCachedSearchCandidates(results: SearchResult[]): void {
   try {
     const cacheable = results
+      .filter((item) => !item.ephemeral)
       .slice(0, MAX_OPTIMISTIC_SEARCH_CANDIDATES)
       .map((item) => ({ ...item, iconDataUrl: undefined }))
     window.localStorage.setItem(SEARCH_CANDIDATES_CACHE_KEY, JSON.stringify(cacheable))
@@ -354,9 +366,9 @@ function readInitialSearchResults(): SearchResult[] {
 
 function mergeSearchCandidates(current: SearchResult[], incoming: SearchResult[]): SearchResult[] {
   const byId = new Map<string, SearchResult>()
-  for (const item of incoming) byId.set(item.id, item)
+  for (const item of incoming) if (!item.ephemeral) byId.set(item.id, item)
   for (const item of current) {
-    if (!byId.has(item.id)) byId.set(item.id, item)
+    if (!item.ephemeral && !byId.has(item.id)) byId.set(item.id, item)
   }
   return Array.from(byId.values()).slice(0, MAX_OPTIMISTIC_SEARCH_CANDIDATES)
 }
@@ -513,23 +525,6 @@ function ApplicationGrid({
         )
       })}
     </div>
-  )
-}
-
-function PortArgumentChip(): ReactNode {
-  return (
-    <span
-      aria-hidden
-      className="launcher-arg-chip inline-flex h-6 shrink-0 items-center gap-1.5 rounded-[6px] pl-1 pr-2 text-[12.5px] font-medium text-ink-1"
-    >
-      <span
-        className="squircle grid h-4 w-4 place-items-center rounded-[4px] text-white"
-        style={{ backgroundColor: launcherIcon('ports').color }}
-      >
-        <LauncherGlyph kind="ports" size={10} />
-      </span>
-      Port
-    </span>
   )
 }
 
@@ -745,7 +740,6 @@ const NATIVE_COMMAND_ICON_BY_ID: Record<NativeCommandId, CommandIconKind> = {
   'show-memory-info': 'memory',
   'show-disk-usage': 'disk',
   'show-battery-status': 'battery',
-  'list-listening-ports': 'ports',
   'git-root': 'git',
   'brew-outdated': 'brew',
   'brew-update': 'brew',
@@ -1264,10 +1258,7 @@ function searchResultIconAsset(item: SearchResult): {
   ) {
     return { kind: 'file', path: item.action.path }
   }
-  if (
-    item.category === 'extensions' &&
-    item.action.type === 'run-extension-command'
-  ) {
+  if (item.category === 'extensions' && item.action.type === 'run-extension-command') {
     const rawId = item.action.extensionId || ''
     const extId = normalizeIconKind(rawId)
     const appPath = KNOWN_EXTENSION_APP_MAP[extId]
@@ -1292,7 +1283,6 @@ export default function CommandBar({
   onConfigureAi,
   onOpenExtensions,
   onOpenExtensionRuntime,
-  onOpenPortsPage,
   onOpenSystemMonitor,
   onOpenIndexingPage,
   onOpenClipboardPage,
@@ -1313,7 +1303,6 @@ export default function CommandBar({
   onConfigureAi: () => void
   onOpenExtensions: () => void
   onOpenExtensionRuntime: (initial: ExtensionRuntimeViewPayload) => void
-  onOpenPortsPage: (opts?: { tab?: 'listen' | 'named' }) => void
   onOpenSystemMonitor: () => void
   onOpenIndexingPage: () => void
   onOpenClipboardPage: () => void
@@ -1330,10 +1319,7 @@ export default function CommandBar({
   ) => void
 }): JSX.Element {
   const normalizedInitialValue = initialValue.startsWith('>') ? initialValue.slice(1) : initialValue
-  const initialInputMode = commandBarInputMode(
-    normalizedInitialValue,
-    initialValue.startsWith('>')
-  )
+  const initialInputMode = commandBarInputMode(normalizedInitialValue, initialValue.startsWith('>'))
   const [value, setValue] = useState(normalizedInitialValue)
   const [prevInitialValue, setPrevInitialValue] = useState(initialValue)
   const [error, setError] = useState<string | null>(null)
@@ -1371,9 +1357,7 @@ export default function CommandBar({
   const [chatHistory, setChatHistory] = useState<ChatSessionSummary[]>(
     () => readCachedChatHistory() ?? []
   )
-  const [chatHistoryLoaded, setChatHistoryLoaded] = useState(
-    () => readCachedChatHistory() !== null
-  )
+  const [chatHistoryLoaded, setChatHistoryLoaded] = useState(() => readCachedChatHistory() !== null)
   const [draggingPinId, setDraggingPinId] = useState<string | null>(null)
   const [draggingSearchResultId, setDraggingSearchResultId] = useState<string | null>(null)
   const [pinDropIndex, setPinDropIndex] = useState<number | null>(null)
@@ -1451,10 +1435,7 @@ export default function CommandBar({
 
   const handleRowMouseMove = useCallback(
     (e: React.MouseEvent, index: number) => {
-      if (
-        lastMousePosRef.current.x === e.clientX &&
-        lastMousePosRef.current.y === e.clientY
-      ) {
+      if (lastMousePosRef.current.x === e.clientX && lastMousePosRef.current.y === e.clientY) {
         return
       }
       lastMousePosRef.current = { x: e.clientX, y: e.clientY }
@@ -1467,10 +1448,7 @@ export default function CommandBar({
   )
 
   const handleSuggestionMouseMove = useCallback((e: React.MouseEvent, index: number) => {
-    if (
-      lastMousePosRef.current.x === e.clientX &&
-      lastMousePosRef.current.y === e.clientY
-    ) {
+    if (lastMousePosRef.current.x === e.clientX && lastMousePosRef.current.y === e.clientY) {
       return
     }
     lastMousePosRef.current = { x: e.clientX, y: e.clientY }
@@ -1503,7 +1481,9 @@ export default function CommandBar({
       ? pendingAction.commandArgumentDefinitions[0]
       : null
   const pendingActionUsesAi = pendingAction ? isAiPoweredExtensionAction(pendingAction) : false
-  const actionProvider = (cfg.taskProviderOverrides?.action ?? cfg.provider ?? 'ollama') as ProviderId
+  const actionProvider = (cfg.taskProviderOverrides?.action ??
+    cfg.provider ??
+    'ollama') as ProviderId
   const actionModel =
     cfg.taskModelOverrides?.action ??
     cfg.providerSelectedModels?.[actionProvider] ??
@@ -1518,9 +1498,12 @@ export default function CommandBar({
       [actionProvider]: actionModel,
     },
   }
-  const [killPortMode, setKillPortMode] = useState(false)
-  const [killPortQuery, setKillPortQuery] = useState('')
-  const [killPortValue, setKillPortValue] = useState('')
+  const [argumentCommand, setArgumentCommand] = useState<SearchResult | null>(null)
+  const [launcherRevision, setLauncherRevision] = useState(0)
+  const [launcherArgumentRows, setLauncherArgumentRows] = useState<SearchResult[]>([])
+  const [launcherArgumentMode, setLauncherArgumentMode] = useState(false)
+  const [launcherArgumentQuery, setLauncherArgumentQuery] = useState('')
+  const [launcherArgumentValue, setLauncherArgumentValue] = useState('')
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>({ kind: 'idle' })
   const [windowSessionId, setWindowSessionId] = useState(1)
   const [activeCheckSessionId, setActiveCheckSessionId] = useState<number | null>(null)
@@ -1576,7 +1559,7 @@ export default function CommandBar({
   const effectiveUpdateStatus = useMemo<AppUpdateStatus>(() => {
     return computeEffectiveUpdateStatus(updateStatus, lastCheckTimestamp)
   }, [updateStatus, lastCheckTimestamp])
-  const [killPortArgumentDismissed, setKillPortArgumentDismissed] = useState(false)
+  const [launcherArgumentDismissed, setLauncherArgumentDismissed] = useState(false)
   const [terminalPrompt, setTerminalPrompt] = useState('')
   const [terminalSessions, setTerminalSessions] = useState<TerminalSessionSummary[]>([])
   const [pinnedTerminalSessionIds, setPinnedTerminalSessionIds] = useState<string[]>([])
@@ -1591,8 +1574,8 @@ export default function CommandBar({
   const modelSelectionSaveRef = useRef<Promise<void> | null>(null)
   const modelMenuOpenRef = useRef(false)
   const valueRef = useRef(value)
-  const killPortModeRef = useRef(killPortMode)
-  const killPortValueRef = useRef(killPortValue)
+  const launcherArgumentModeRef = useRef(launcherArgumentMode)
+  const launcherArgumentValueRef = useRef(launcherArgumentValue)
   const terminalModeRef = useRef(terminalMode)
   // A terminal row is only eligible for Enter after keyboard navigation has
   // explicitly selected the session. Hovering a row (or a stale search index)
@@ -1621,35 +1604,35 @@ export default function CommandBar({
   }, [value])
 
   useEffect(() => {
-    killPortModeRef.current = killPortMode
-  }, [killPortMode])
+    launcherArgumentModeRef.current = launcherArgumentMode
+  }, [launcherArgumentMode])
 
   useEffect(() => {
-    killPortValueRef.current = killPortValue
-  }, [killPortValue])
+    launcherArgumentValueRef.current = launcherArgumentValue
+  }, [launcherArgumentValue])
 
   useEffect(() => {
-    const handleKillPortEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || !killPortModeRef.current) return
+    const handleLauncherArgumentEscape = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || !launcherArgumentModeRef.current) return
 
       event.preventDefault()
       event.stopImmediatePropagation()
 
-      if (killPortValueRef.current) {
-        killPortValueRef.current = ''
-        setKillPortValue('')
+      if (launcherArgumentValueRef.current) {
+        launcherArgumentValueRef.current = ''
+        setLauncherArgumentValue('')
       } else {
-        setKillPortArgumentDismissed(true)
-        killPortModeRef.current = false
-        setKillPortMode(false)
+        setLauncherArgumentDismissed(true)
+        launcherArgumentModeRef.current = false
+        setLauncherArgumentMode(false)
       }
 
       showActionMsg(null)
       requestAnimationFrame(() => document.getElementById('command-input')?.focus())
     }
 
-    window.addEventListener('keydown', handleKillPortEscape, true)
-    return () => window.removeEventListener('keydown', handleKillPortEscape, true)
+    window.addEventListener('keydown', handleLauncherArgumentEscape, true)
+    return () => window.removeEventListener('keydown', handleLauncherArgumentEscape, true)
   }, [])
 
   useEffect(() => {
@@ -1702,10 +1685,9 @@ export default function CommandBar({
         if (!cancelled) setTerminalSessions([])
       }
     }
-    const stopRefresh = visibleEventRefresh(
-      () => { void load() },
-      window.tezbar.onTerminalSessionsChanged,
-    )
+    const stopRefresh = visibleEventRefresh(() => {
+      void load()
+    }, window.tezbar.onTerminalSessionsChanged)
     return () => {
       cancelled = true
       stopRefresh()
@@ -1760,7 +1742,10 @@ export default function CommandBar({
   }, [])
 
   useEffect(() => {
-    void window.tezbar.getLlmConfig().then((c) => setCfg(c as LlmConfigRecord)).catch(() => undefined)
+    void window.tezbar
+      .getLlmConfig()
+      .then((c) => setCfg(c as LlmConfigRecord))
+      .catch(() => undefined)
   }, [backendGeneration])
 
   // Keep the model picker in sync: another view (Settings) writing the config
@@ -1923,50 +1908,28 @@ export default function CommandBar({
     }
   }, [argumentValues, pendingAction, pendingInlineArgument])
 
-  const shouldOfferKillPortCommand = useMemo(() => {
-    const q = value.trim().toLowerCase()
-    if (killPortMode) return true
-    if (!/\bkill\b/.test(q) || !/\bport\b/.test(q)) return false
-    return true
-  }, [killPortMode, value])
-
-  const killPortCommandResult = useMemo<SearchResult | null>(() => {
-    if (!shouldOfferKillPortCommand) return null
-    const port = killPortValue.trim()
-    const indexedResult = searchResults.find(
-      (item) => item.id === 'extcmd:raycast.port-manager:kill-listening-process'
-    )
-    const indexedAction =
-      indexedResult?.action.type === 'run-extension-command' ? indexedResult.action : null
+  const argumentSource = launcherArgumentMode ? argumentCommand : null
+  const launcherArgumentCommandResult = useMemo<SearchResult | null>(() => {
+    if (!argumentSource || argumentSource.action.type !== 'run-extension-command') return null
+    const name = argumentSource.action.launcher?.inlineArgument?.name
+    if (!name) return null
     return {
-      ...indexedResult,
-      id: 'extcmd:raycast.port-manager:kill-listening-process',
-      title: 'Kill Process Listening On',
-      subtitle: 'Port Manager',
-      category: 'extensions',
+      ...argumentSource,
       score: 20_000,
       action: {
-        ...indexedAction,
-        type: 'run-extension-command',
-        extensionId: 'raycast.port-manager',
-        commandName: 'kill-listening-process',
-        title: 'Kill Process Listening On',
-        argumentValues: port ? { port } : undefined,
-        commandArgumentDefinitions: indexedAction?.commandArgumentDefinitions ?? [
-          { name: 'port', title: 'Port', placeholder: 'Port', required: true, type: 'text' },
-        ],
+        ...argumentSource.action,
+        argumentValues: launcherArgumentValue.trim()
+          ? { [name]: launcherArgumentValue.trim() }
+          : {},
       },
     }
-  }, [killPortValue, searchResults, shouldOfferKillPortCommand])
+  }, [argumentSource, launcherArgumentValue])
 
   const visibleSearchResults = useMemo(() => {
-    if (killPortMode) {
-      const killProcessResult = searchResults.find(
-        (item) => item.id === 'extcmd:raycast.kill-process:index'
-      )
+    if (launcherArgumentMode) {
       return [
-        ...(killPortCommandResult ? [killPortCommandResult] : []),
-        ...(killProcessResult ? [killProcessResult] : []),
+        ...(launcherArgumentCommandResult ? [launcherArgumentCommandResult] : []),
+        ...launcherArgumentRows.filter((row) => row.id !== launcherArgumentCommandResult?.id),
       ]
     }
     if (pendingAction) {
@@ -1996,17 +1959,15 @@ export default function CommandBar({
             right.score - (pinnedIds.has(right.id) ? PINNED_HOME_RESULT_SCORE_PENALTY : 0)
           return rightScore - leftScore
         })
-    const withoutDuplicatePort = killPortCommandResult
-      ? searchRows.filter(
-          (item) => item.id !== 'extcmd:raycast.port-manager:kill-listening-process'
-        )
+    const withoutDuplicateArgument = launcherArgumentCommandResult
+      ? searchRows.filter((item) => item.id !== launcherArgumentCommandResult.id)
       : homeRankedResults
     const withoutDuplicateColorRows =
       colorConversionRows.length > 0
-        ? withoutDuplicatePort.filter((item) => item.category !== 'color-converter')
-        : withoutDuplicatePort
+        ? withoutDuplicateArgument.filter((item) => item.category !== 'color-converter')
+        : withoutDuplicateArgument
     const base = [
-      ...(killPortCommandResult ? [killPortCommandResult] : []),
+      ...(launcherArgumentCommandResult ? [launcherArgumentCommandResult] : []),
       ...colorConversionRows,
       ...withoutDuplicateColorRows,
     ]
@@ -2071,10 +2032,15 @@ export default function CommandBar({
       if (effectiveUpdateStatus.kind === 'downloading') {
         const pct =
           effectiveUpdateStatus.total && effectiveUpdateStatus.total > 0
-            ? Math.min(100, Math.round((effectiveUpdateStatus.downloaded / effectiveUpdateStatus.total) * 100))
+            ? Math.min(
+                100,
+                Math.round((effectiveUpdateStatus.downloaded / effectiveUpdateStatus.total) * 100)
+              )
             : 0
         const downloadedMB = (effectiveUpdateStatus.downloaded / 1024 / 1024).toFixed(1)
-        const totalMB = effectiveUpdateStatus.total ? (effectiveUpdateStatus.total / 1024 / 1024).toFixed(1) : '?'
+        const totalMB = effectiveUpdateStatus.total
+          ? (effectiveUpdateStatus.total / 1024 / 1024).toFixed(1)
+          : '?'
         return {
           ...(base ?? fallback),
           id: 'command:check-for-updates',
@@ -2157,8 +2123,9 @@ export default function CommandBar({
     effectiveUpdateStatus,
     hasUnreadReleaseNotes,
     isDeepSearchMode,
-    killPortCommandResult,
-    killPortMode,
+    launcherArgumentCommandResult,
+    launcherArgumentRows,
+    launcherArgumentMode,
     pendingAction,
     pendingColorConversionRows,
     pendingInlineActionResult,
@@ -2176,17 +2143,20 @@ export default function CommandBar({
     [selectedSearch, visibleSearchResults]
   )
   const selectedQuickLookPath = selectedQuickLookPaths[0] ?? null
-  const isKillPortCommandActive =
-    activeSearchResult?.id === 'extcmd:raycast.port-manager:kill-listening-process'
+  const activeLauncherArgument =
+    activeSearchResult?.action.type === 'run-extension-command'
+      ? activeSearchResult.action.launcher?.inlineArgument
+      : undefined
+  const isLauncherArgumentCommandActive = Boolean(activeLauncherArgument)
   const densePinRail = pinnedCommands.length >= 10
-  const canEnterKillPortMode =
-    !killPortMode &&
+  const canEnterLauncherArgumentMode =
+    !launcherArgumentMode &&
     !pendingAction &&
     !isCompletionInput &&
     !isAiMode &&
     !terminalMode &&
-    !killPortArgumentDismissed &&
-    isKillPortCommandActive
+    !launcherArgumentDismissed &&
+    isLauncherArgumentCommandActive
   const inlineExtensionResult =
     activeSearchResult?.action.type === 'run-extension-command' &&
     activeSearchResult.action.commandArgumentDefinitions?.length === 1 &&
@@ -2199,13 +2169,13 @@ export default function CommandBar({
       : null
   const canEnterInlineArgumentMode = Boolean(
     inlineExtensionResult &&
-      inlineExtensionArgument &&
-      !isKillPortCommandActive &&
-      !killPortMode &&
-      !pendingAction &&
-      !isCompletionInput &&
-      !isAiMode &&
-      !terminalMode
+    inlineExtensionArgument &&
+    !isLauncherArgumentCommandActive &&
+    !launcherArgumentMode &&
+    !pendingAction &&
+    !isCompletionInput &&
+    !isAiMode &&
+    !terminalMode
   )
   const pinnedMetaById = useMemo(() => {
     const out = new Map<string, { slot: number }>()
@@ -2258,7 +2228,53 @@ export default function CommandBar({
 
   useEffect(() => {
     let cancelled = false
+    const action = argumentCommand?.action
+    const name =
+      action?.type === 'run-extension-command' ? action.launcher?.inlineArgument?.name : undefined
+    if (
+      !launcherArgumentMode ||
+      action?.type !== 'run-extension-command' ||
+      !name ||
+      !window.tezbar.extensionLauncherSearch
+    ) {
+      setLauncherArgumentRows([])
+      return
+    }
+    setLauncherArgumentRows([])
+    void window.tezbar
+      .extensionLauncherSearch({
+        text: launcherArgumentValue,
+        surface: 'argument',
+        extensionId: action.extensionId,
+        commandName: action.commandName,
+        argumentName: name,
+      })
+      .then((rows) => {
+        if (!cancelled) setLauncherArgumentRows(rows)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [argumentCommand, launcherArgumentMode, launcherArgumentValue, launcherRevision])
+
+  useEffect(
+    () =>
+      window.tezbar.onLauncherInvalidated?.((event) => {
+        const query = launcherArgumentModeRef.current
+          ? launcherArgumentValueRef.current
+          : searchRequestInput(valueRef.current)
+        if (event.text !== undefined && event.text !== query) return
+        if (parseSearchQuery(query).mode === 'deep') return
+        setLauncherRevision((revision) => revision + 1)
+      }),
+    []
+  )
+
+  useEffect(() => {
+    let cancelled = false
     const requestId = ++lastSearchRequestId.current
+    if (launcherArgumentMode) return
     // The local candidate cache already renders useful one-character matches.
     // Avoid launching a broad SQLite prefix query for a value that is almost
     // always replaced by the next keystroke a few milliseconds later.
@@ -2281,7 +2297,7 @@ export default function CommandBar({
             if (!cancelled && requestId === lastSearchRequestId.current) {
               const isHome = !normalizedSearchValue
               if (isHome && items.length > 0) {
-                homeSearchResultsRef.current = items
+                homeSearchResultsRef.current = items.filter((item) => !item.ephemeral)
                 searchCandidatesRef.current = mergeSearchCandidates(
                   searchCandidatesRef.current,
                   items
@@ -2296,10 +2312,11 @@ export default function CommandBar({
                   }
                   cache.delete(normalizedSearchValue.toLowerCase())
                   queryResultsCacheRef.current.set(normalizedSearchValue.toLowerCase(), {
-                    items,
+                    items: items.filter((item) => !item.ephemeral),
                     cachedAt: Date.now(),
                   })
-                  while (cache.size > QUERY_RESULTS_CACHE_LIMIT) cache.delete(cache.keys().next().value!)
+                  while (cache.size > QUERY_RESULTS_CACHE_LIMIT)
+                    cache.delete(cache.keys().next().value!)
                   if (!isDeepSearchMode) {
                     searchCandidatesRef.current = mergeSearchCandidates(
                       searchCandidatesRef.current,
@@ -2329,6 +2346,8 @@ export default function CommandBar({
       clearTimeout(t)
     }
   }, [
+    launcherArgumentMode,
+    launcherRevision,
     backendGeneration,
     deepSearchQuery,
     isAiMode,
@@ -2337,8 +2356,6 @@ export default function CommandBar({
     normalizedSearchValue,
     terminalMode,
   ])
-
-
 
   // Keep the selection inside the rendered range whenever the result set
   // changes (e.g. user starts typing a narrower query).
@@ -2698,9 +2715,9 @@ export default function CommandBar({
     setSelectedSearch(0)
     setSearchResultNavigationActive(false)
     clearPendingAction()
-    setKillPortMode(false)
-    setKillPortValue('')
-    setKillPortQuery('')
+    setLauncherArgumentMode(false)
+    setLauncherArgumentValue('')
+    setLauncherArgumentQuery('')
     setActiveCheckSessionId(null)
 
     setTimeout(() => {
@@ -2710,11 +2727,8 @@ export default function CommandBar({
         .searchAll('')
         .then((items) => {
           if (items && items.length > 0) {
-            homeSearchResultsRef.current = items
-            searchCandidatesRef.current = mergeSearchCandidates(
-              searchCandidatesRef.current,
-              items
-            )
+            homeSearchResultsRef.current = items.filter((item) => !item.ephemeral)
+            searchCandidatesRef.current = mergeSearchCandidates(searchCandidatesRef.current, items)
             // Cache a completed warmup, but never replace a newer live query.
             if (!valueRef.current) setSearchResults(items)
             writeCachedHomeSearchResults(items)
@@ -2754,71 +2768,64 @@ export default function CommandBar({
     requestAnimationFrame(() => focusCommandInput())
   }
 
-  const enterKillPortMode = (): void => {
-    setKillPortArgumentDismissed(false)
-    setKillPortQuery(value.trim() || 'kill process')
-    killPortValueRef.current = ''
-    setKillPortValue('')
-    killPortModeRef.current = true
-    setKillPortMode(true)
+  const enterLauncherArgumentMode = (): void => {
+    setLauncherArgumentDismissed(false)
+    setArgumentCommand(activeSearchResult ?? null)
+    setLauncherArgumentQuery(value.trim() || activeSearchResult?.title || '')
+    launcherArgumentValueRef.current = ''
+    setLauncherArgumentValue('')
+    launcherArgumentModeRef.current = true
+    setLauncherArgumentMode(true)
     setSelectedSearch(0)
     setFollowSearchSelection(true)
-    showActionMsg('Type a port, then press Enter')
+    showActionMsg(activeLauncherArgument?.prompt ?? null)
     requestAnimationFrame(() => focusCommandInput())
   }
 
-  const exitKillPortMode = (): void => {
-    setKillPortArgumentDismissed(true)
-    killPortModeRef.current = false
-    setKillPortMode(false)
-    killPortValueRef.current = ''
-    setKillPortValue('')
+  const exitLauncherArgumentMode = (): void => {
+    setLauncherArgumentDismissed(true)
+    launcherArgumentModeRef.current = false
+    setLauncherArgumentMode(false)
+    launcherArgumentValueRef.current = ''
+    setLauncherArgumentValue('')
     showActionMsg(null)
     requestAnimationFrame(() => focusCommandInput())
   }
 
-  const ensureExtensionInstalled = async (extensionId: string): Promise<void> => {
-    const installed = await window.tezbar.extensionList()
-    if (installed.some((extension) => extension.id === extensionId)) return
-    showActionMsg(`Installing ${extensionId.replace(/^raycast\./, '')}…`)
-    await window.tezbar.extensionInstall(extensionId)
-  }
-
-  const runKillPortCommand = async (): Promise<void> => {
-    const port = killPortValue.trim()
-    if (!/^\d{1,5}$/.test(port) || Number(port) <= 0 || Number(port) > 65535) {
-      showActionMsg('Enter a valid TCP port')
+  const runLauncherArgumentCommand = async (): Promise<void> => {
+    if (!argumentCommand || argumentCommand.action.type !== 'run-extension-command') return
+    const action = argumentCommand.action
+    const metadata = action.launcher?.inlineArgument
+    if (!metadata) return
+    const selected = launcherArgumentRows.find((row) => row.id === activeSearchResult?.id)
+    const selectedValue =
+      selected?.action.type === 'run-extension-command'
+        ? selected.action.argumentValues?.[metadata.name]
+        : undefined
+    const text = (selectedValue ?? launcherArgumentValue).trim()
+    const error = validateLauncherArgument(text, metadata.validation)
+    if (error) {
+      showActionMsg(error)
       return
     }
-
-    await ensureExtensionInstalled('raycast.port-manager')
-
     void window.tezbar
-      .recordSearchActionUsage(
-        {
-          type: 'run-extension-command',
-          extensionId: 'raycast.port-manager',
-          commandName: 'kill-listening-process',
-          title: 'Kill Process Listening On',
-        },
-        {
-          query: killPortQuery || 'kill port',
-          resultId: 'extcmd:raycast.port-manager:kill-listening-process',
-        }
-      )
+      .recordSearchActionUsage(action, {
+        query: launcherArgumentQuery,
+        resultId: argumentCommand.id,
+      })
       .catch(() => undefined)
-
     const ok = await executeExtensionCommandViaRuntime({
-      extensionId: 'raycast.port-manager',
-      commandName: 'kill-listening-process',
-      argumentValues: { port },
+      extensionId: action.extensionId,
+      commandName: action.commandName,
+      argumentValues: { [metadata.name]: text },
     })
     if (ok) {
-      killPortModeRef.current = false
-      setKillPortMode(false)
-      killPortValueRef.current = ''
-      setKillPortValue('')
-      setKillPortQuery('')
+      launcherArgumentModeRef.current = false
+      setLauncherArgumentMode(false)
+      launcherArgumentValueRef.current = ''
+      setLauncherArgumentValue('')
+      setLauncherArgumentQuery('')
+      setArgumentCommand(null)
     }
   }
 
@@ -2834,9 +2841,6 @@ export default function CommandBar({
     argumentValues?: Record<string, string>
   }): Promise<boolean> {
     try {
-      if (payload.extensionId === 'raycast.port-manager') {
-        await ensureExtensionInstalled('raycast.port-manager')
-      }
       const result = await window.tezbar.extensionRunCommand(payload)
       if (!result.ok) {
         showActionMsg(result.message)
@@ -2995,14 +2999,20 @@ export default function CommandBar({
         }
         if (effectiveUpdateStatus.kind === 'available') {
           void window.tezbar.downloadAndInstallUpdate().catch((err: unknown) => {
-            showActionMsg(`Update download failed: ${err instanceof Error ? err.message : String(err)}`)
+            showActionMsg(
+              `Update download failed: ${err instanceof Error ? err.message : String(err)}`
+            )
           })
           return
         }
         if (effectiveUpdateStatus.kind === 'manualAvailable') {
-          void window.tezbar.openReleasePage(effectiveUpdateStatus.installerUrl).catch((err: unknown) => {
-            showActionMsg(`Could not open installer: ${err instanceof Error ? err.message : String(err)}`)
-          })
+          void window.tezbar
+            .openReleasePage(effectiveUpdateStatus.installerUrl)
+            .catch((err: unknown) => {
+              showActionMsg(
+                `Could not open installer: ${err instanceof Error ? err.message : String(err)}`
+              )
+            })
           return
         }
         if (effectiveUpdateStatus.kind === 'downloading') {
@@ -3091,45 +3101,6 @@ export default function CommandBar({
     }
 
     if (
-      result.action.type === 'run-extension-command' &&
-      result.action.extensionId === 'raycast.port-manager' &&
-      (result.action.commandName === 'open-ports' ||
-        result.action.commandName === 'open-ports-menu-bar')
-    ) {
-      clearPendingAction()
-      showActionMsg(null)
-      setValue('')
-      await recordHandledSearchUsage()
-      onOpenPortsPage()
-      return
-    }
-
-    if (
-      result.action.type === 'run-extension-command' &&
-      result.action.extensionId === 'raycast.port-manager' &&
-      result.action.commandName === 'named-ports'
-    ) {
-      clearPendingAction()
-      showActionMsg(null)
-      setValue('')
-      await recordHandledSearchUsage()
-      onOpenPortsPage({ tab: 'named' })
-      return
-    }
-
-    if (
-      result.action.type === 'run-native-command' &&
-      result.action.commandId === 'list-listening-ports'
-    ) {
-      clearPendingAction()
-      showActionMsg(null)
-      setValue('')
-      await recordHandledSearchUsage()
-      onOpenPortsPage()
-      return
-    }
-
-    if (
       result.action.type === 'run-native-command' &&
       result.action.commandId === 'show-system-monitor'
     ) {
@@ -3201,26 +3172,30 @@ export default function CommandBar({
 
     if (result.action.type === 'run-extension-command') {
       await recordHandledSearchUsage()
-      if (
-        result.action.extensionId === 'raycast.port-manager' &&
-        result.action.commandName === 'kill-listening-process'
-      ) {
-        const port = result.action.argumentValues?.port || ''
-        if (port) {
+      const inline = result.action.launcher?.inlineArgument
+      if (inline) {
+        const supplied = result.action.argumentValues?.[inline.name]
+        if (supplied) {
+          const error = validateLauncherArgument(supplied, inline.validation)
+          if (error) {
+            showActionMsg(error)
+            return
+          }
           await executeExtensionCommandViaRuntime({
             extensionId: result.action.extensionId,
             commandName: result.action.commandName,
-            argumentValues: { port },
+            argumentValues: result.action.argumentValues,
           })
           return
         }
         clearPendingAction()
-        setKillPortQuery(value.trim() || 'kill port')
-        killPortValueRef.current = ''
-        setKillPortValue('')
-        killPortModeRef.current = true
-        setKillPortMode(true)
-        showActionMsg('Type a port, then press Enter')
+        setArgumentCommand(result)
+        setLauncherArgumentQuery(value.trim() || result.title)
+        launcherArgumentValueRef.current = ''
+        setLauncherArgumentValue('')
+        launcherArgumentModeRef.current = true
+        setLauncherArgumentMode(true)
+        showActionMsg(inline.prompt)
         requestAnimationFrame(() => focusCommandInput())
         return
       }
@@ -3264,8 +3239,7 @@ export default function CommandBar({
         setArgumentValues(initialValues)
         setSelectedSearch(0)
         setFollowSearchSelection(true)
-        const usesInlineArgument =
-          defs.length === 1 && defs[0]?.type !== 'dropdown'
+        const usesInlineArgument = defs.length === 1 && defs[0]?.type !== 'dropdown'
         showActionMsg(usesInlineArgument ? null : 'Fill arguments · Enter to run · Esc to cancel')
         if (usesInlineArgument) requestAnimationFrame(() => focusCommandInput())
         return
@@ -3295,7 +3269,8 @@ export default function CommandBar({
               iconKind:
                 result.action.type === 'run-native-command'
                   ? NATIVE_COMMAND_ICON_BY_ID[
-                      (result.action as { commandId?: NativeCommandId }).commandId as NativeCommandId
+                      (result.action as { commandId?: NativeCommandId })
+                        .commandId as NativeCommandId
                     ]
                   : undefined,
             }
@@ -3443,23 +3418,20 @@ export default function CommandBar({
         focusCommandInput()
         return true
       }
-      if (killPortModeRef.current) {
-        if (killPortValueRef.current) {
-          killPortValueRef.current = ''
-          setKillPortValue('')
+      if (launcherArgumentModeRef.current) {
+        if (launcherArgumentValueRef.current) {
+          launcherArgumentValueRef.current = ''
+          setLauncherArgumentValue('')
         } else {
-          setKillPortArgumentDismissed(true)
-          killPortModeRef.current = false
-          setKillPortMode(false)
+          setLauncherArgumentDismissed(true)
+          launcherArgumentModeRef.current = false
+          setLauncherArgumentMode(false)
         }
         showActionMsg(null)
         focusCommandInput()
         return true
       }
-      const currentInputMode = commandBarInputMode(
-        valueRef.current,
-        terminalModeRef.current
-      )
+      const currentInputMode = commandBarInputMode(valueRef.current, terminalModeRef.current)
       if (currentInputMode.isAiMode) {
         // Escape first clears the AI prompt. For directory-rooted AI mode, a
         // second Escape removes the double-Space switch but preserves the path.
@@ -3606,8 +3578,8 @@ export default function CommandBar({
     setIsStreaming(false)
     setEmptyAnswer(false)
     gotAnyTokenRef.current = false
-    if (killPortMode) {
-      await runKillPortCommand()
+    if (launcherArgumentMode) {
+      await runLauncherArgumentCommand()
       return
     }
     if (pendingAction) {
@@ -3744,11 +3716,6 @@ export default function CommandBar({
         onOpenExtensions()
         return
       }
-      if (intent.type === 'extension' && intent.name === 'open-ports') {
-        setValue('')
-        onOpenPortsPage()
-        return
-      }
     } catch (err) {
       setIsStreaming(false)
       setError(err instanceof Error ? err.message : 'Query failed')
@@ -3786,9 +3753,15 @@ export default function CommandBar({
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLElement>): void => {
     if (
       e.key === 'Enter' &&
-      !e.metaKey && !e.ctrlKey && !e.altKey &&
-      !isAiMode && !terminalMode && !isDeepSearchMode && !isCompletionInput &&
-      !killPortMode && !pendingAction &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      !isAiMode &&
+      !terminalMode &&
+      !isDeepSearchMode &&
+      !isCompletionInput &&
+      !launcherArgumentMode &&
+      !pendingAction &&
       activeSearchResult?.id === `command:${RELEASE_NOTES_COMMAND_ID}`
     ) {
       e.preventDefault()
@@ -3833,7 +3806,7 @@ export default function CommandBar({
       !isAiMode &&
       !isDeepSearchMode &&
       !terminalMode &&
-      !killPortMode &&
+      !launcherArgumentMode &&
       !pendingAction &&
       !isCompletionInput
     ) {
@@ -3842,21 +3815,21 @@ export default function CommandBar({
       return
     }
 
-    if (killPortMode) {
+    if (launcherArgumentMode) {
       if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
-        if (killPortValue) {
-          killPortValueRef.current = ''
-          setKillPortValue('')
+        if (launcherArgumentValue) {
+          launcherArgumentValueRef.current = ''
+          setLauncherArgumentValue('')
         } else {
-          exitKillPortMode()
+          exitLauncherArgumentMode()
         }
         return
       }
       if (e.key === 'Tab') {
         e.preventDefault()
-        if (e.shiftKey) exitKillPortMode()
+        if (e.shiftKey) exitLauncherArgumentMode()
         return
       }
       return
@@ -3875,7 +3848,7 @@ export default function CommandBar({
       e.preventDefault()
       setValue('')
       const homeResults = homeSearchResultsRef.current
-      if (homeResults.length > 0) setSearchResults(homeResults)
+      setSearchResults(homeResults)
       setSelectedSearch(0)
       return
     }
@@ -3910,7 +3883,7 @@ export default function CommandBar({
       !terminalMode &&
       (!value || isSlashInput) &&
       !isAiMode &&
-      !killPortMode &&
+      !launcherArgumentMode &&
       !pendingAction
     ) {
       e.preventDefault()
@@ -4095,9 +4068,9 @@ export default function CommandBar({
         )
         return
       }
-      if (canEnterKillPortMode) {
+      if (canEnterLauncherArgumentMode) {
         e.preventDefault()
-        enterKillPortMode()
+        enterLauncherArgumentMode()
         return
       }
       if (canEnterInlineArgumentMode && inlineExtensionResult) {
@@ -4163,274 +4136,294 @@ export default function CommandBar({
     <div className="tezbar-launcher flex h-full min-h-0 w-full flex-col">
       {/* Search row: icon + input, separated from the list by a hairline */}
       <CommandSurfaceHeader onSubmit={(ev) => void onSubmit(ev)}>
-            <CommandSurfaceBadge
-              label={isAiMode ? 'AI mode' : undefined}
-              tone={isAiMode ? 'ai' : terminalMode ? 'terminal' : isApplicationInput ? 'application' : isDeepSearchMode ? 'deep' : 'search'}
-            >
-              {isAiMode ? (
-                <span aria-hidden className="text-[11px] font-semibold leading-none">
-                  AI
-                </span>
-              ) : terminalMode ? (
-                <TerminalIcon />
-              ) : isApplicationInput ? (
-                <AppStoreIcon />
-              ) : (
-                <SearchIcon />
-              )}
-            </CommandSurfaceBadge>
-            {!isAiMode && isDeepSearchMode ? (
-              <span
-                aria-label="Deep Search mode"
-                className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-cyan-400/15 px-1.5 text-[11px] font-semibold text-cyan-200"
-              >
-                <span className="h-1 w-1 rounded-full bg-cyan-300" />
-                Deep
+        <CommandSurfaceBadge
+          label={isAiMode ? 'AI mode' : undefined}
+          tone={
+            isAiMode
+              ? 'ai'
+              : terminalMode
+                ? 'terminal'
+                : isApplicationInput
+                  ? 'application'
+                  : isDeepSearchMode
+                    ? 'deep'
+                    : 'search'
+          }
+        >
+          {isAiMode ? (
+            <span aria-hidden className="text-[11px] font-semibold leading-none">
+              AI
+            </span>
+          ) : terminalMode ? (
+            <TerminalIcon />
+          ) : isApplicationInput ? (
+            <AppStoreIcon />
+          ) : (
+            <SearchIcon />
+          )}
+        </CommandSurfaceBadge>
+        {!isAiMode && isDeepSearchMode ? (
+          <span
+            aria-label="Deep Search mode"
+            className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-cyan-400/15 px-1.5 text-[11px] font-semibold text-cyan-200"
+          >
+            <span className="h-1 w-1 rounded-full bg-cyan-300" />
+            Deep
+          </span>
+        ) : null}
+        {launcherArgumentMode ? (
+          <>
+            <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1 select-none">
+              {launcherArgumentQuery}
+            </span>
+            <InlineArgumentChip
+              label={
+                argumentCommand?.action.type === 'run-extension-command'
+                  ? (argumentCommand.action.launcher?.inlineArgument?.title ?? '')
+                  : ''
+              }
+            />
+          </>
+        ) : null}
+        {pendingInlineArgument ? (
+          <>
+            <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1 select-none">
+              {value.trim() || pendingAction?.title}
+            </span>
+            <InlineArgumentChip label={pendingInlineArgument.title || pendingInlineArgument.name} />
+          </>
+        ) : null}
+        <div
+          className="relative min-w-0 flex-1 flex items-center select-none"
+          style={inputTextWidth ? { flexBasis: inputTextWidth } : undefined}
+        >
+          {terminalMode ? (
+            <span className="command-terminal-prompt shrink-0 font-mono text-[13px] text-emerald-300/80 mr-1 select-none pointer-events-none">
+              {terminalPrompt}
+            </span>
+          ) : null}
+          {!launcherArgumentMode &&
+          !pendingInlineArgument &&
+          !isAiMode &&
+          !terminalMode &&
+          !value ? (
+            <RollingText items={COMMAND_HINTS} />
+          ) : null}
+          {isSlashInput && !isAiMode ? (
+            <span className="path-command-hint select-none" aria-hidden>
+              <span className="path-command-hint__value select-none">{value}</span>
+              <span className="rolling-command-hint__shortcut select-none">
+                {COMMAND_HINT.shortcut}
               </span>
-            ) : null}
-            {killPortMode ? (
-              <>
-                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1 select-none">
-                  {killPortQuery}
-                </span>
-                <PortArgumentChip />
-              </>
-            ) : null}
-            {pendingInlineArgument ? (
-              <>
-                <span className="max-w-[220px] truncate font-display text-[15px] text-ink-1 select-none">
-                  {value.trim() || pendingAction?.title}
-                </span>
-                <InlineArgumentChip
-                  label={pendingInlineArgument.title || pendingInlineArgument.name}
-                />
-              </>
-            ) : null}
-            <div
-              className="relative min-w-0 flex-1 flex items-center select-none"
-              style={inputTextWidth ? { flexBasis: inputTextWidth } : undefined}
-            >
-              {terminalMode ? (
-                <span className="command-terminal-prompt shrink-0 font-mono text-[13px] text-emerald-300/80 mr-1 select-none pointer-events-none">
-                  {terminalPrompt}
-                </span>
-              ) : null}
-              {!killPortMode && !pendingInlineArgument && !isAiMode && !terminalMode && !value ? (
-                <RollingText items={COMMAND_HINTS} />
-              ) : null}
-              {isSlashInput && !isAiMode ? (
-                <span className="path-command-hint select-none" aria-hidden>
-                  <span className="path-command-hint__value select-none">{value}</span>
-                  <span className="rolling-command-hint__shortcut select-none">{COMMAND_HINT.shortcut}</span>
-                  <span className="rolling-command-hint__label select-none">{COMMAND_HINT.label}</span>
-                </span>
-              ) : null}
-              <input
-                id="command-input"
-                type="text"
-                value={
-                  pendingInlineArgument
-                    ? argumentValues[pendingInlineArgument.name] ?? ''
-                    : killPortMode
-                    ? killPortValue
-                    : isApplicationInput
-                      ? slashQuery.slice(1)
-                      : isDeepSearchMode
-                        ? value.slice(1)
-                        : value
-                }
-                onChange={(e) => {
-                  if (pendingInlineArgument) {
-                    setArgumentValues((current) => ({
-                      ...current,
-                      [pendingInlineArgument.name]: e.target.value,
-                    }))
-                    setSelectedSearch(0)
-                    return
-                  }
-                  if (killPortMode) {
-                    const nextPort = e.target.value.replace(/[^\d]/g, '').slice(0, 5)
-                    killPortValueRef.current = nextPort
-                    setKillPortValue(nextPort)
-                    return
-                  }
-                  if (pendingAction) {
-                    clearPendingAction()
-                    showActionMsg(null)
-                  }
-                  setSearchResultNavigationActive(false)
-                  const currentSearchValue = searchRequestInput(value)
-                  // Keep mode sentinels in state for the search backends, but
-                  // never render them beside the visible mode badge.
-                  let newValue = isApplicationInput
-                    ? `\`${e.target.value}`
+              <span className="rolling-command-hint__label select-none">{COMMAND_HINT.label}</span>
+            </span>
+          ) : null}
+          <input
+            id="command-input"
+            type="text"
+            value={
+              pendingInlineArgument
+                ? (argumentValues[pendingInlineArgument.name] ?? '')
+                : launcherArgumentMode
+                  ? launcherArgumentValue
+                  : isApplicationInput
+                    ? slashQuery.slice(1)
                     : isDeepSearchMode
-                      ? deepSearchDraftInput(e.target.value)
-                      : e.target.value
-                  let nextTerminalMode = terminalMode
-                  if (!terminalMode) {
-                    const separator = newValue.indexOf('>')
-                    const pathPrefix = separator > 0 ? newValue.slice(0, separator).trim() : ''
-                    if (separator === 0 || (separator > 0 && isAbsoluteTerminalPath(pathPrefix))) {
-                      terminalWorkingDirectoryRef.current = pathPrefix || undefined
-                      terminalSessionSelectionActiveRef.current = false
-                      setTerminalMode(true)
-                      nextTerminalMode = true
-                      newValue = newValue.slice(separator + 1)
-                    }
-                  }
-                  const nextSearchQuery = parseSearchQuery(newValue)
-                  const nextSearchValue = searchRequestInput(newValue)
-                  const searchMeaningChanged = currentSearchValue !== nextSearchValue
-                  if (searchMeaningChanged) {
-                    if (
-                      !nextTerminalMode &&
-                      nextSearchQuery.mode === 'deep' &&
-                      nextSearchQuery.query.length >= 3
-                    ) {
-                      setDeepSearchLoadingQuery(nextSearchQuery.query)
-                      setError(null)
-                    } else {
-                      setDeepSearchLoadingQuery(null)
-                    }
-                  }
-                  setKillPortArgumentDismissed(false)
-                  if (searchMeaningChanged) {
-                    if (!nextTerminalMode && newValue.length === 0) {
-                      const homeResults = homeSearchResultsRef.current
-                      if (homeResults.length > 0) setSearchResults(homeResults)
-                    } else if (
-                      !nextTerminalMode &&
-                      nextSearchQuery.mode === 'deep' &&
-                      nextSearchQuery.query
-                    ) {
-                      setSearchResults([])
-                    } else if (
-                      !nextTerminalMode &&
-                      nextSearchValue &&
-                      !newValue.trimStart().startsWith('!') &&
-                      !commandBarInputMode(newValue, nextTerminalMode).isAiMode &&
-                      !newValue.startsWith('/') &&
-                      !newValue.startsWith('`')
-                    ) {
-                      const normalizedQuery = nextSearchValue.toLowerCase()
-                      const cachedEntry = queryResultsCacheRef.current.get(normalizedQuery)
-                      const cachedResults =
-                        cachedEntry &&
-                        Date.now() - cachedEntry.cachedAt <= QUERY_RESULTS_CACHE_TTL_MS
-                          ? cachedEntry.items
-                          : undefined
-                      if (cachedEntry && !cachedResults) {
-                        queryResultsCacheRef.current.delete(normalizedQuery)
-                      }
-                      const immediateResults =
-                        cachedResults ??
-                        optimisticSearchResults(searchCandidatesRef.current, normalizedQuery)
-                      setSearchResults(immediateResults)
-                    }
-                  }
-                  setValue(newValue)
-                  const nextIsAiMode = commandBarInputMode(
-                    newValue,
-                    nextTerminalMode
-                  ).isAiMode
-                  if (
-                    searchMeaningChanged ||
-                    nextTerminalMode !== terminalMode ||
-                    nextIsAiMode !== isAiMode
-                  ) {
-                    userNavigatedRef.current = false
-                    setFollowSuggestionSelection(true)
-                    setSelectedSuggestion(0)
-                    const nextDeepSearchMode = nextSearchQuery.mode === 'deep'
-                    setSearchResultNavigationActive(false)
-                    setFollowSearchSelection(!nextDeepSearchMode)
-                    setSelectedSearch(
-                      nextTerminalMode || nextIsAiMode || nextDeepSearchMode ? -1 : 0
-                    )
-                  }
-                }}
-                onKeyDown={handleInputKeyDown}
-                aria-label="Search Tezbar or use a shortcut"
-                placeholder={
-                  pendingInlineArgument
-                    ? pendingInlineArgument.placeholder ||
-                      pendingInlineArgument.title ||
-                      pendingInlineArgument.name
-                    : killPortMode
-                    ? 'Port'
-                    : isAiMode
-                      ? 'Ask or command the agent…'
-                      : terminalMode
-                        ? ''
-                        : ''
+                      ? value.slice(1)
+                      : value
+            }
+            onChange={(e) => {
+              if (pendingInlineArgument) {
+                setArgumentValues((current) => ({
+                  ...current,
+                  [pendingInlineArgument.name]: e.target.value,
+                }))
+                setSelectedSearch(0)
+                return
+              }
+              if (launcherArgumentMode) {
+                const validation =
+                  argumentCommand?.action.type === 'run-extension-command'
+                    ? argumentCommand.action.launcher?.inlineArgument?.validation
+                    : undefined
+                const nextArgument = sanitizeLauncherArgument(e.target.value, validation)
+                launcherArgumentValueRef.current = nextArgument
+                setLauncherArgumentValue(nextArgument)
+                return
+              }
+              if (pendingAction) {
+                clearPendingAction()
+                showActionMsg(null)
+              }
+              setSearchResultNavigationActive(false)
+              const currentSearchValue = searchRequestInput(value)
+              // Keep mode sentinels in state for the search backends, but
+              // never render them beside the visible mode badge.
+              let newValue = isApplicationInput
+                ? `\`${e.target.value}`
+                : isDeepSearchMode
+                  ? deepSearchDraftInput(e.target.value)
+                  : e.target.value
+              let nextTerminalMode = terminalMode
+              if (!terminalMode) {
+                const separator = newValue.indexOf('>')
+                const pathPrefix = separator > 0 ? newValue.slice(0, separator).trim() : ''
+                if (separator === 0 || (separator > 0 && isAbsoluteTerminalPath(pathPrefix))) {
+                  terminalWorkingDirectoryRef.current = pathPrefix || undefined
+                  terminalSessionSelectionActiveRef.current = false
+                  setTerminalMode(true)
+                  nextTerminalMode = true
+                  newValue = newValue.slice(separator + 1)
                 }
-                autoComplete="off"
-                spellCheck={false}
-                className="w-full min-w-0 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0 select-text"
-              />
-            </div>
-            {canEnterKillPortMode ? (
-              <button
-                type="button"
-                aria-label="Enter port number"
-                className="group inline-flex h-7 shrink-0 items-center gap-2 rounded-tezbar-chip px-1 text-left transition hover:bg-white/[0.035]"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={enterKillPortMode}
-              >
-                <PortArgumentChip />
-                <span className="min-w-[42px] font-display text-[15px] text-ink-4 transition group-hover:text-ink-3">
-                  Port
-                </span>
-              </button>
-            ) : null}
-            {canEnterInlineArgumentMode && inlineExtensionResult && inlineExtensionArgument ? (
-              <button
-                type="button"
-                aria-label={`Enter ${inlineExtensionArgument.title || inlineExtensionArgument.name}`}
-                className="group inline-flex h-7 shrink-0 items-center gap-2 rounded-tezbar-chip px-1 text-left transition hover:bg-white/[0.035]"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  void runSelectedSearchResult(inlineExtensionResult, selectedSearch + 1)
-                }}
-              >
-                <InlineArgumentChip
-                  label={inlineExtensionArgument.title || inlineExtensionArgument.name}
-                />
-                <span className="min-w-[52px] font-display text-[15px] text-ink-4 transition group-hover:text-ink-3">
-                  {inlineExtensionArgument.title || inlineExtensionArgument.name}
-                </span>
-              </button>
-            ) : null}
-            {!isAiMode &&
-            !terminalMode &&
-            !isDeepSearchMode &&
-            !isCompletionInput &&
-            !killPortMode &&
-            !canEnterKillPortMode &&
-            !pendingInlineArgument ? (
-              // Reversed wrapping row: as the query grows the chips nearest
-              // the text wrap onto a hidden second line, one at a time.
-              <span className="launcher-mode-chips" aria-hidden>
-                <span className="launcher-mode-chip">Space AI</span>
-                <span className="launcher-mode-chip">
-                  <span className="font-mono">&gt;</span> Terminal
-                </span>
-                <span className="launcher-mode-chip">
-                  <span className="font-mono">!</span> Deep
-                </span>
-              </span>
-            ) : null}
-            {isAiMode || pendingActionUsesAi ? (
-              <ModelPicker
-                config={pendingActionUsesAi ? actionModelConfig : cfg}
-                open={modelMenuOpen}
-                onOpenChange={setModelMenuOpen}
-                onSelect={pendingActionUsesAi ? selectExtensionAiModel : selectAiModel}
-                onConfigure={onConfigureAi}
-                triggerClassName="font-mono leading-none tabular-nums tracking-normal"
-              />
-            ) : null}
+              }
+              const nextSearchQuery = parseSearchQuery(newValue)
+              const nextSearchValue = searchRequestInput(newValue)
+              const searchMeaningChanged = currentSearchValue !== nextSearchValue
+              if (searchMeaningChanged) {
+                if (
+                  !nextTerminalMode &&
+                  nextSearchQuery.mode === 'deep' &&
+                  nextSearchQuery.query.length >= 3
+                ) {
+                  setDeepSearchLoadingQuery(nextSearchQuery.query)
+                  setError(null)
+                } else {
+                  setDeepSearchLoadingQuery(null)
+                }
+              }
+              setLauncherArgumentDismissed(false)
+              if (searchMeaningChanged) {
+                if (!nextTerminalMode && newValue.length === 0) {
+                  const homeResults = homeSearchResultsRef.current
+                  setSearchResults(homeResults)
+                } else if (
+                  !nextTerminalMode &&
+                  nextSearchQuery.mode === 'deep' &&
+                  nextSearchQuery.query
+                ) {
+                  setSearchResults([])
+                } else if (
+                  !nextTerminalMode &&
+                  nextSearchValue &&
+                  !newValue.trimStart().startsWith('!') &&
+                  !commandBarInputMode(newValue, nextTerminalMode).isAiMode &&
+                  !newValue.startsWith('/') &&
+                  !newValue.startsWith('`')
+                ) {
+                  const normalizedQuery = nextSearchValue.toLowerCase()
+                  const cachedEntry = queryResultsCacheRef.current.get(normalizedQuery)
+                  const cachedResults =
+                    cachedEntry && Date.now() - cachedEntry.cachedAt <= QUERY_RESULTS_CACHE_TTL_MS
+                      ? cachedEntry.items
+                      : undefined
+                  if (cachedEntry && !cachedResults) {
+                    queryResultsCacheRef.current.delete(normalizedQuery)
+                  }
+                  const immediateResults =
+                    cachedResults ??
+                    optimisticSearchResults(searchCandidatesRef.current, normalizedQuery)
+                  setSearchResults(immediateResults)
+                }
+              }
+              setValue(newValue)
+              const nextIsAiMode = commandBarInputMode(newValue, nextTerminalMode).isAiMode
+              if (
+                searchMeaningChanged ||
+                nextTerminalMode !== terminalMode ||
+                nextIsAiMode !== isAiMode
+              ) {
+                userNavigatedRef.current = false
+                setFollowSuggestionSelection(true)
+                setSelectedSuggestion(0)
+                const nextDeepSearchMode = nextSearchQuery.mode === 'deep'
+                setSearchResultNavigationActive(false)
+                setFollowSearchSelection(!nextDeepSearchMode)
+                setSelectedSearch(nextTerminalMode || nextIsAiMode || nextDeepSearchMode ? -1 : 0)
+              }
+            }}
+            onKeyDown={handleInputKeyDown}
+            aria-label="Search Tezbar or use a shortcut"
+            placeholder={
+              pendingInlineArgument
+                ? pendingInlineArgument.placeholder ||
+                  pendingInlineArgument.title ||
+                  pendingInlineArgument.name
+                : launcherArgumentMode
+                  ? argumentCommand?.action.type === 'run-extension-command'
+                    ? argumentCommand.action.launcher?.inlineArgument?.title
+                    : ''
+                  : isAiMode
+                    ? 'Ask or command the agent…'
+                    : terminalMode
+                      ? ''
+                      : ''
+            }
+            autoComplete="off"
+            spellCheck={false}
+            className="w-full min-w-0 border-0 bg-transparent p-0 font-display text-[15px] font-normal text-ink-1 outline-none ring-0 placeholder:text-ink-4 focus:ring-0 select-text"
+          />
+        </div>
+        {canEnterLauncherArgumentMode ? (
+          <button
+            type="button"
+            aria-label={`Enter ${activeLauncherArgument?.title ?? 'argument'}`}
+            className="group inline-flex h-7 shrink-0 items-center gap-2 rounded-tezbar-chip px-1 text-left transition hover:bg-white/[0.035]"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={enterLauncherArgumentMode}
+          >
+            <InlineArgumentChip label={activeLauncherArgument?.title ?? ''} />
+            <span className="min-w-[42px] font-display text-[15px] text-ink-4 transition group-hover:text-ink-3">
+              {activeLauncherArgument?.title}
+            </span>
+          </button>
+        ) : null}
+        {canEnterInlineArgumentMode && inlineExtensionResult && inlineExtensionArgument ? (
+          <button
+            type="button"
+            aria-label={`Enter ${inlineExtensionArgument.title || inlineExtensionArgument.name}`}
+            className="group inline-flex h-7 shrink-0 items-center gap-2 rounded-tezbar-chip px-1 text-left transition hover:bg-white/[0.035]"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              void runSelectedSearchResult(inlineExtensionResult, selectedSearch + 1)
+            }}
+          >
+            <InlineArgumentChip
+              label={inlineExtensionArgument.title || inlineExtensionArgument.name}
+            />
+            <span className="min-w-[52px] font-display text-[15px] text-ink-4 transition group-hover:text-ink-3">
+              {inlineExtensionArgument.title || inlineExtensionArgument.name}
+            </span>
+          </button>
+        ) : null}
+        {!isAiMode &&
+        !terminalMode &&
+        !isDeepSearchMode &&
+        !isCompletionInput &&
+        !launcherArgumentMode &&
+        !canEnterLauncherArgumentMode &&
+        !pendingInlineArgument ? (
+          // Reversed wrapping row: as the query grows the chips nearest
+          // the text wrap onto a hidden second line, one at a time.
+          <span className="launcher-mode-chips" aria-hidden>
+            <span className="launcher-mode-chip">Space AI</span>
+            <span className="launcher-mode-chip">
+              <span className="font-mono">&gt;</span> Terminal
+            </span>
+            <span className="launcher-mode-chip">
+              <span className="font-mono">!</span> Deep
+            </span>
+          </span>
+        ) : null}
+        {isAiMode || pendingActionUsesAi ? (
+          <ModelPicker
+            config={pendingActionUsesAi ? actionModelConfig : cfg}
+            open={modelMenuOpen}
+            onOpenChange={setModelMenuOpen}
+            onSelect={pendingActionUsesAi ? selectExtensionAiModel : selectAiModel}
+            onConfigure={onConfigureAi}
+            triggerClassName="font-mono leading-none tabular-nums tracking-normal"
+          />
+        ) : null}
       </CommandSurfaceHeader>
 
       {/* Middle column: the pin rail sits on the left; inner panels scroll
@@ -4985,9 +4978,7 @@ export default function CommandBar({
                                   ★
                                 </span>
                               ) : null}
-                              {running ? (
-                                <ListRowTag tone="success">Running</ListRowTag>
-                              ) : null}
+                              {running ? <ListRowTag tone="success">Running</ListRowTag> : null}
                               <span className="tabular-nums">
                                 {terminalSessionAge(session.updatedAt)}
                               </span>
@@ -5184,25 +5175,58 @@ export default function CommandBar({
                                       aria-hidden="true"
                                     >
                                       <circle cx="8" cy="8" r="5.5" strokeOpacity="0.18" />
-                                      <path d="M8 2.5a5.5 5.5 0 0 1 5.5 5.5" strokeLinecap="round" />
+                                      <path
+                                        d="M8 2.5a5.5 5.5 0 0 1 5.5 5.5"
+                                        strokeLinecap="round"
+                                      />
                                     </svg>
                                   </span>
                                 ) : effectiveUpdateStatus.kind === 'downloading' ? (
                                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-emerald-300/25 bg-emerald-300/10 text-emerald-200">
-                                    <svg className="animate-bounce h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                      <path d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" strokeLinecap="round" strokeLinejoin="round" />
+                                    <svg
+                                      className="animate-bounce h-4 w-4"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2.5"
+                                    >
+                                      <path
+                                        d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
                                     </svg>
                                   </span>
                                 ) : effectiveUpdateStatus.kind === 'ready' ? (
                                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-emerald-300/30 bg-emerald-300/20 text-emerald-200 shadow-[0_0_12px_rgba(52,211,153,0.25)]">
-                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" strokeLinecap="round" strokeLinejoin="round" />
+                                    <svg
+                                      className="h-4 w-4"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2.5"
+                                    >
+                                      <path
+                                        d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
                                     </svg>
                                   </span>
                                 ) : effectiveUpdateStatus.kind === 'upToDate' ? (
                                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-emerald-300/20 bg-emerald-300/10 text-emerald-300">
-                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                      <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
+                                    <svg
+                                      className="h-4 w-4"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2.5"
+                                    >
+                                      <polyline
+                                        points="20 6 9 17 4 12"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
                                     </svg>
                                   </span>
                                 ) : (
@@ -5215,10 +5239,14 @@ export default function CommandBar({
                                   />
                                 )}
                                 <span className="min-w-0 flex-1">
-                                  <span className={cx(
-                                    'block truncate text-[13px] font-medium',
-                                    effectiveUpdateStatus.kind === 'ready' ? 'text-emerald-200 font-semibold' : 'text-ink-1'
-                                  )}>
+                                  <span
+                                    className={cx(
+                                      'block truncate text-[13px] font-medium',
+                                      effectiveUpdateStatus.kind === 'ready'
+                                        ? 'text-emerald-200 font-semibold'
+                                        : 'text-ink-1'
+                                    )}
+                                  >
                                     {item.title}
                                   </span>
                                   {effectiveUpdateStatus.kind === 'downloading' ? (
@@ -5228,16 +5256,30 @@ export default function CommandBar({
                                           className="h-full bg-emerald-400 rounded-full transition-all duration-150"
                                           style={{
                                             width: `${
-                                              effectiveUpdateStatus.total && effectiveUpdateStatus.total > 0
-                                                ? Math.min(100, Math.round((effectiveUpdateStatus.downloaded / effectiveUpdateStatus.total) * 100))
+                                              effectiveUpdateStatus.total &&
+                                              effectiveUpdateStatus.total > 0
+                                                ? Math.min(
+                                                    100,
+                                                    Math.round(
+                                                      (effectiveUpdateStatus.downloaded /
+                                                        effectiveUpdateStatus.total) *
+                                                        100
+                                                    )
+                                                  )
                                                 : 0
                                             }%`,
                                           }}
                                         />
                                       </div>
                                       <span className="text-[11px] font-mono text-ink-3 tabular-nums">
-                                        {(effectiveUpdateStatus.downloaded / 1024 / 1024).toFixed(1)} /{' '}
-                                        {effectiveUpdateStatus.total ? (effectiveUpdateStatus.total / 1024 / 1024).toFixed(1) : '?'} MB
+                                        {(effectiveUpdateStatus.downloaded / 1024 / 1024).toFixed(
+                                          1
+                                        )}{' '}
+                                        /{' '}
+                                        {effectiveUpdateStatus.total
+                                          ? (effectiveUpdateStatus.total / 1024 / 1024).toFixed(1)
+                                          : '?'}{' '}
+                                        MB
                                       </span>
                                     </div>
                                   ) : (
@@ -5270,13 +5312,11 @@ export default function CommandBar({
                                   <span className="rounded-full bg-white/[0.05] border border-white/10 px-2 py-0.5 text-[10px] text-ink-3">
                                     Up to date
                                   </span>
-                                ) : (
-                                  i === selectedSearch ? (
-                                    <span className="text-[10px] font-mono text-ink-3">
-                                      <Kbd>↵</Kbd>
-                                    </span>
-                                  ) : null
-                                )}
+                                ) : i === selectedSearch ? (
+                                  <span className="text-[10px] font-mono text-ink-3">
+                                    <Kbd>↵</Kbd>
+                                  </span>
+                                ) : null}
                               </span>
                             </>
                           ) : (
@@ -5386,7 +5426,10 @@ export default function CommandBar({
                     // gets a slightly taller, top-aligned card; single-line
                     // secrets/paths stay compact and centered.
                     const multiline = actionMsg.includes('\n')
-                    const mono = actionMsgCard.kind === 'password' || actionMsgCard.kind === 'copied' || actionMsgCard.kind === 'info'
+                    const mono =
+                      actionMsgCard.kind === 'password' ||
+                      actionMsgCard.kind === 'copied' ||
+                      actionMsgCard.kind === 'info'
                     return (
                       <div
                         className={`flex ${multiline ? 'items-start' : 'items-center'} gap-2.5 rounded-lg border px-3 py-2.5 ${tone.card}`}
@@ -5447,26 +5490,97 @@ export default function CommandBar({
           onOpenKnowledgeSettings,
         }}
       >
-            {terminalMode ? (
+        {terminalMode ? (
+          <>
+            <Hint
+              label="Stop"
+              keys={
+                <>
+                  <Kbd>⌘</Kbd>
+                  <Kbd>X</Kbd>
+                </>
+              }
+            />
+            <Hint
+              label="Delete"
+              keys={
+                <>
+                  <Kbd>⌘</Kbd>
+                  <Kbd>D</Kbd>
+                </>
+              }
+            />
+            <Hint
+              label="Pin / Unpin"
+              keys={
+                <>
+                  <Kbd>⌘</Kbd>
+                  <Kbd>P</Kbd>
+                </>
+              }
+            />
+            <Hint
+              label="Settings"
+              keys={
+                <>
+                  <Kbd>⌘</Kbd>
+                  <Kbd>K</Kbd>
+                </>
+              }
+            />
+          </>
+        ) : isAiMode ? (
+          <>
+            <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
+            <Hint
+              label="Attach screen"
+              keys={
+                <>
+                  <Kbd>⌘</Kbd>
+                  <Kbd>⇧</Kbd>
+                  <Kbd>S</Kbd>
+                </>
+              }
+            />
+            <Hint label="Open chat" keys={<Kbd>↵</Kbd>} />
+            <Hint
+              label="New chat"
+              keys={
+                <>
+                  <Kbd>⌘</Kbd>
+                  <Kbd>N</Kbd>
+                </>
+              }
+            />
+            <Hint
+              label="Close window"
+              keys={
+                <>
+                  <Kbd>Esc</Kbd>
+                  <Kbd>⌘</Kbd>
+                </>
+              }
+            />
+          </>
+        ) : (
+          <>
+            {isApplicationInput ? (
+              <Hint label="Open" keys={<Kbd>↵</Kbd>} />
+            ) : isSlashInput ? (
               <>
+                <Hint label="Complete" keys={<Kbd>↵</Kbd>} />
                 <Hint
-                  label="Stop"
+                  label="Open"
                   keys={
                     <>
                       <Kbd>⌘</Kbd>
-                      <Kbd>X</Kbd>
+                      <Kbd>↵</Kbd>
                     </>
                   }
                 />
-                <Hint
-                  label="Delete"
-                  keys={
-                    <>
-                      <Kbd>⌘</Kbd>
-                      <Kbd>D</Kbd>
-                    </>
-                  }
-                />
+              </>
+            ) : (
+              <>
                 <Hint
                   label="Pin / Unpin"
                   keys={
@@ -5477,31 +5591,7 @@ export default function CommandBar({
                   }
                 />
                 <Hint
-                  label="Settings"
-                  keys={
-                    <>
-                      <Kbd>⌘</Kbd>
-                      <Kbd>K</Kbd>
-                    </>
-                  }
-                />
-              </>
-            ) : isAiMode ? (
-              <>
-                <Hint label="Providers" keys={<Kbd>⌘,</Kbd>} />
-                <Hint
-                  label="Attach screen"
-                  keys={
-                    <>
-                      <Kbd>⌘</Kbd>
-                      <Kbd>⇧</Kbd>
-                      <Kbd>S</Kbd>
-                    </>
-                  }
-                />
-                <Hint label="Open chat" keys={<Kbd>↵</Kbd>} />
-                <Hint
-                  label="New chat"
+                  label="Save note"
                   keys={
                     <>
                       <Kbd>⌘</Kbd>
@@ -5509,86 +5599,39 @@ export default function CommandBar({
                     </>
                   }
                 />
-                <Hint
-                  label="Close window"
-                  keys={
-                    <>
-                      <Kbd>Esc</Kbd>
-                      <Kbd>⌘</Kbd>
-                    </>
-                  }
-                />
-              </>
-            ) : (
-              <>
-                {isApplicationInput ? (
-                  <Hint label="Open" keys={<Kbd>↵</Kbd>} />
-                ) : isSlashInput ? (
-                  <>
-                    <Hint label="Complete" keys={<Kbd>↵</Kbd>} />
-                    <Hint
-                      label="Open"
-                      keys={
-                        <>
-                          <Kbd>⌘</Kbd>
-                          <Kbd>↵</Kbd>
-                        </>
-                      }
-                    />
-                  </>
-                ) : (
-                  <>
-                    <Hint
-                      label="Pin / Unpin"
-                      keys={
-                        <>
-                          <Kbd>⌘</Kbd>
-                          <Kbd>P</Kbd>
-                        </>
-                      }
-                    />
-                    <Hint
-                      label="Save note"
-                      keys={
-                        <>
-                          <Kbd>⌘</Kbd>
-                          <Kbd>N</Kbd>
-                        </>
-                      }
-                    />
-                    {isDeepSearchMode && showSearchResults ? (
-                      <Hint
-                        label={searchResultNavigationActive ? 'Search input' : 'Results'}
-                        keys={<Kbd>Tab</Kbd>}
-                      />
-                    ) : null}
-                    {canQuickLookSelectedResult ? (
-                      <Hint label="Quick Look" keys={<Kbd>Space</Kbd>} />
-                    ) : null}
-                  </>
-                )}
-                {!isCompletionInput ? (
-                  <button
-                    type="button"
-                    aria-label="Use Deep Search"
-                    aria-pressed={isDeepSearchMode}
-                    className={cx(
-                      'launcher-action no-drag -mr-1.5 inline-flex h-[22px] shrink-0 items-center gap-1.5 px-1.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
-                      isDeepSearchMode ? 'text-cyan-300' : 'text-ink-3 hover:text-ink-1'
-                    )}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={activateDeepSearch}
-                    title="Use Deep Search (Command + Enter)"
-                  >
-                    <span>Deep Search</span>
-                    <span className="kbd-group">
-                      <Kbd>⌘</Kbd>
-                      <Kbd>↵</Kbd>
-                    </span>
-                  </button>
+                {isDeepSearchMode && showSearchResults ? (
+                  <Hint
+                    label={searchResultNavigationActive ? 'Search input' : 'Results'}
+                    keys={<Kbd>Tab</Kbd>}
+                  />
+                ) : null}
+                {canQuickLookSelectedResult ? (
+                  <Hint label="Quick Look" keys={<Kbd>Space</Kbd>} />
                 ) : null}
               </>
             )}
+            {!isCompletionInput ? (
+              <button
+                type="button"
+                aria-label="Use Deep Search"
+                aria-pressed={isDeepSearchMode}
+                className={cx(
+                  'launcher-action no-drag -mr-1.5 inline-flex h-[22px] shrink-0 items-center gap-1.5 px-1.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/50',
+                  isDeepSearchMode ? 'text-cyan-300' : 'text-ink-3 hover:text-ink-1'
+                )}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={activateDeepSearch}
+                title="Use Deep Search (Command + Enter)"
+              >
+                <span>Deep Search</span>
+                <span className="kbd-group">
+                  <Kbd>⌘</Kbd>
+                  <Kbd>↵</Kbd>
+                </span>
+              </button>
+            ) : null}
+          </>
+        )}
       </CommandSurfaceFooter>
 
       {pinnedCommandTooltip

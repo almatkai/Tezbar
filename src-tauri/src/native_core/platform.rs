@@ -314,7 +314,6 @@ impl PlatformCore {
                     "snippets",
                     "notes",
                     "emoji-picker",
-                    "open-ports",
                     "system-monitor",
                     "onboarding",
                 ]

@@ -113,6 +113,7 @@ export interface ExtensionCommandInfo {
   disabledByDefault?: boolean
   keywords: string[]
   iconDataUrl?: string
+  launcher?: import('../shared/search').LauncherCommandMetadata
   commandArgumentDefinitions?: Array<{
     name: string
     required?: boolean
@@ -335,6 +336,7 @@ export function discoverInstalledExtensionCommands(): ExtensionCommandInfo[] {
           mode: cmd.mode || 'view',
           interval: typeof cmd.interval === 'string' ? cmd.interval : undefined,
           disabledByDefault: Boolean(cmd.disabledByDefault),
+          ...(cmd.launcher ? { launcher: cmd.launcher } : {}),
           commandArgumentDefinitions: Array.isArray(cmd.arguments)
             ? cmd.arguments
                 .filter((arg: any) => arg && arg.name)

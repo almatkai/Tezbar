@@ -306,67 +306,6 @@ fn handle(root: &Path, c: &str, a: &[Value]) -> CoreResult {
             json!({"ok":true,"message":"Snippet updated"})
         });
     }
-    if c.starts_with("port-manager:named:") {
-        let path = root.join("named-ports.json");
-        let mut db = read_or(&path, json!([]))?;
-        let items = db.as_array_mut().ok_or("Invalid named ports store")?;
-        items.retain_mut(|i| {
-            let Some(id) = i["id"].as_str() else {
-                return false;
-            };
-            let Some(name) = i["name"].as_str() else {
-                return false;
-            };
-            let name = name.trim().to_owned();
-            let port = i["port"]
-                .as_f64()
-                .or_else(|| i["port"].as_str()?.parse().ok());
-            let Some(port) = port.filter(|p| p.is_finite() && *p >= 1. && *p <= 65535.) else {
-                return false;
-            };
-            if id.is_empty() || name.is_empty() {
-                return false;
-            }
-            i["name"] = json!(name);
-            i["port"] = json!(port.floor() as u64);
-            true
-        });
-        match c {
-            "port-manager:named:list" => {
-                let mut items = items.clone();
-                items.sort_by(|a, b| {
-                    a["name"]
-                        .as_str()
-                        .cmp(&b["name"].as_str())
-                        .then_with(|| a["port"].as_u64().cmp(&b["port"].as_u64()))
-                });
-                return Ok(json!(items));
-            }
-            "port-manager:named:add" => {
-                let name = string(&v, "name")?.trim();
-                let port = v["port"]
-                    .as_u64()
-                    .or_else(|| v["port"].as_str()?.parse().ok())
-                    .ok_or("Port must be 1–65535")?;
-                if name.is_empty() || !(1..=65535).contains(&port) {
-                    return Ok(Value::Null);
-                }
-                let e = json!({"id":uuid::Uuid::new_v4().to_string(),"name":name,"port":port});
-                items.push(e.clone());
-                write_json_atomic(&path, &db)?;
-                return Ok(e);
-            }
-            "port-manager:named:remove" => {
-                let id = text_arg(a, 0)?.trim();
-                let n = items.len();
-                items.retain(|i| i["id"] != id);
-                let changed = n != items.len();
-                write_json_atomic(&path, &db)?;
-                return Ok(json!(changed));
-            }
-            _ => {}
-        }
-    }
     if c == "directory-visit:record" {
         let path = PathBuf::from(text_arg(a, 0)?);
         if !path.is_absolute() || !path.is_dir() {

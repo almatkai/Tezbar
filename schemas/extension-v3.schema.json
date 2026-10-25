@@ -1,0 +1,536 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tezbar.app/schemas/extension-v3.schema.json",
+  "title": "Tezbar external Rust executable package",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "slug",
+    "name",
+    "version",
+    "runtime",
+    "execution",
+    "protocolVersion",
+    "repository",
+    "commands",
+    "preferences",
+    "replaces",
+    "capabilities",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 3
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^com\\.tezbar\\.native\\.[a-z0-9][a-z0-9-]*$"
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "runtime": {
+      "const": "rust"
+    },
+    "replaces": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(?:raycast\\.|com\\.tezbar\\.)"
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/platform"
+      }
+    },
+    "preferences": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "platforms",
+          "runtime"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string"
+          },
+          "platforms": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/platform"
+            }
+          },
+          "runtime": {
+            "enum": [
+              "rust",
+              "javascript",
+              "unavailable"
+            ]
+          },
+          "gap": {
+            "type": "string"
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300000
+          },
+          "refreshMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 500
+          },
+          "concurrency": {
+            "enum": [
+              "serialize",
+              "reject-while-busy"
+            ]
+          },
+          "launcher": {
+            "type": "object",
+            "required": [
+              "recommendation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "recommendation": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2000
+              },
+              "inlineArgument": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "title",
+                  "prompt"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "validation": {
+                    "type": "object",
+                    "required": [
+                      "kind",
+                      "min",
+                      "max",
+                      "maxLength",
+                      "message"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "integer"
+                      },
+                      "min": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "max": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "maxLength": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 16
+                      },
+                      "message": {
+                        "type": "string",
+                        "maxLength": 256
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "verification": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": [
+          "platform",
+          "state"
+        ],
+        "properties": {
+          "platform": {
+            "$ref": "#/$defs/platform"
+          },
+          "state": {
+            "enum": [
+              "passed",
+              "failed",
+              "not-run"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "verifiedAt": {
+            "type": "string"
+          },
+          "verifiedCommit": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "execution": {
+      "const": "process"
+    },
+    "protocolVersion": {
+      "const": 1
+    },
+    "repository": {
+      "type": "string",
+      "format": "uri"
+    },
+    "minHostVersion": {
+      "type": "string"
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "clipboard",
+          "shell",
+          "selection",
+          "window",
+          "dialog",
+          "screen",
+          "apps",
+          "settings",
+          "ai",
+          "storage",
+          "background",
+          "tray",
+          "notifications",
+          "safety",
+          "clipboard.read",
+          "clipboard.write",
+          "clipboard.writeImage",
+          "clipboard.writeFiles",
+          "clipboard.paste",
+          "clipboard.pasteText",
+          "shell.open",
+          "shell.openWithApp",
+          "shell.reveal",
+          "selection.read",
+          "window.visibility",
+          "window.suppressBlur",
+          "dialog.confirm",
+          "screen.capture",
+          "apps.list",
+          "settings.open",
+          "ai.ask",
+          "background.retain",
+          "background.release",
+          "tray.set",
+          "tray.remove",
+          "notifications.show",
+          "notifications.remove",
+          "safety.authorize",
+          "safety.record",
+          "host.clipboard.read",
+          "host.clipboard.write",
+          "host.clipboard.writeImage",
+          "host.clipboard.writeFiles",
+          "host.clipboard.paste",
+          "host.clipboard.pasteText",
+          "host.shell.open",
+          "host.shell.openWithApp",
+          "host.shell.reveal",
+          "host.selection.read",
+          "host.window.visibility",
+          "host.window.suppressBlur",
+          "host.dialog.confirm",
+          "host.screen.capture",
+          "host.apps.list",
+          "host.settings.open",
+          "host.ai.ask",
+          "host.background.retain",
+          "host.background.release",
+          "host.tray.set",
+          "host.tray.remove",
+          "host.notifications.show",
+          "host.notifications.remove",
+          "host.safety.authorize",
+          "host.safety.record",
+          "launcher",
+          "launcher.publish",
+          "host.launcher.publish"
+        ]
+      }
+    },
+    "files": {
+      "description": "Combined trusted release references may omit files or use an empty object. Only after archive SHA256 verification does the installer derive the exact closed per-target inventory; packaged and active manifests require a complete inventory.",
+      "type": "object",
+      "maxProperties": 4096,
+      "propertyNames": {
+        "$ref": "#/$defs/relativePath"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/sha256"
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "aarch64-apple-darwin",
+          "x86_64-pc-windows-msvc"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "url",
+          "sha256",
+          "executable",
+          "executableSha256"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "pattern": "^https://[^@]+$"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "executableSha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "executable": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/relativePath"
+              },
+              {
+                "pattern": "^bin/"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "migrationPaths": {
+      "type": "object",
+      "maxProperties": 32,
+      "additionalProperties": {
+        "$ref": "#/$defs/relativePath"
+      }
+    },
+    "startupProbe": {
+      "type": "object",
+      "required": [
+        "key",
+        "migrationPaths"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$"
+        },
+        "migrationPaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "data": {}
+      },
+      "additionalProperties": false
+    },
+    "author": {
+      "type": "string"
+    },
+    "launcherContributions": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "commandName",
+          "surfaces",
+          "selectors",
+          "limit",
+          "timeoutMs"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "commandName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "argumentName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "surfaces": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "query",
+                "argument"
+              ]
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 3000
+          },
+          "index": {
+            "type": "boolean"
+          },
+          "bootstrapMigrationPaths": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "selectors": {
+            "type": "object",
+            "properties": {
+              "terms": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "digitRun": {
+                "type": "object",
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 16
+                  },
+                  "max": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 16
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "platform": {
+      "enum": [
+        "macOS",
+        "Windows",
+        "Linux"
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+$"
+    }
+  }
+}

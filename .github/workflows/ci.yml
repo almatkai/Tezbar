@@ -17,7 +17,10 @@ jobs:
       matrix:
         os: [windows-2022, macos-15-intel, macos-15]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: 1
+      RUST_TEST_THREADS: 1
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,7 +36,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm release:test
-      - run: pnpm test
+      - run: pnpm test --maxWorkers=2 --no-file-parallelism
       - name: Install loadable SQLite for macOS packaging
         if: runner.os == 'macOS'
         run: brew list sqlite >/dev/null 2>&1 || brew install sqlite
@@ -45,8 +48,30 @@ jobs:
       - name: Check isolated extension worker protocol
         run: pnpm exec tsx scripts/test-extension-worker.ts
       - run: pnpm build:frontend
-      - run: cargo test --lib --locked
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test native acceptance fixture validation
+        run: python -m unittest discover -s scripts -p 'native_host_acceptance_test.py' -v
+      - name: Prepare pinned native SDK and public packages
+        timeout-minutes: 20
+        if: matrix.os != 'macos-15-intel'
+        run: python scripts/native-host-acceptance.py prepare --out "${{ runner.temp }}/native-host-acceptance"
+      - name: Full Rust library with required native fixture branches
+        if: matrix.os != 'macos-15-intel'
+        run: python scripts/native-host-acceptance.py rust-tests --out "${{ runner.temp }}/native-host-acceptance"
+      - name: Full Rust library (Intel has no published native package)
+        if: matrix.os == 'macos-15-intel'
+        run: python scripts/native-host-acceptance.py rust-tests-intel --out "${{ runner.temp }}/native-host-acceptance"
+      - name: Build current production CLI (no installer or release)
+        timeout-minutes: 25
+        if: matrix.os != 'macos-15-intel'
+        run: cargo build --locked --release --bin tezbar -j1
         working-directory: src-tauri
+      - name: Native production CLI public-package acceptance
+        timeout-minutes: 8
+        if: matrix.os != 'macos-15-intel'
+        run: python scripts/native-host-acceptance.py cli --out "${{ runner.temp }}/native-host-acceptance" --binary "src-tauri/target/release/tezbar${{ runner.os == 'Windows' && '.exe' || '' }}"
       - name: Check real Rust host and extension worker lifecycle
         run: cargo test --lib --locked native_core::extension_worker::integration_tests::real_rust_host_bun_roundtrip_and_termination -- --ignored --exact
         working-directory: src-tauri

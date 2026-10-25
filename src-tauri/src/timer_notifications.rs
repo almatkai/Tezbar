@@ -144,7 +144,7 @@ fn stop_timer(timer_file: &str) {
 }
 
 pub fn setup(app: &AppHandle) {
-    let _ = APP_HANDLE.set(app.clone());
+    if APP_HANDLE.set(app.clone()).is_err(){return;}
 
     // UserNotifications raises an Objective-C exception when a development
     // executable is launched directly from target/debug instead of a .app bundle.
