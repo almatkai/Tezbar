@@ -10,7 +10,7 @@ pub(super) fn slug(id: &str) -> Option<&str> {
     match value {
         "amphetamine" | "audio-device" | "cleanshotx" | "color-picker" | "gif-search"
         | "google-calendar" | "google-search" | "port-manager" | "speedtest" | "timers"
-        | "perplexity" | "latex-math-symbols" => Some(value),
+        | "perplexity" => Some(value),
         _ => None,
     }
 }
@@ -19,7 +19,6 @@ pub(super) fn canonical_id(slug: &str) -> String {
 }
 pub(super) fn commands(slug: &str) -> &'static [&'static str] {
     match slug {
-        "latex-math-symbols" => super::v2_latex_math_symbols::commands(),
         "amphetamine" => super::v2_amphetamine::commands(),
         "audio-device" => super::v2_audio_device::commands(),
         "cleanshotx" => super::v2_cleanshotx::commands(),
@@ -46,9 +45,6 @@ pub(super) async fn handle(
     state: &mut Value,
 ) -> CoreResult {
     match slug {
-        "latex-math-symbols" => {
-            super::v2_latex_math_symbols::handle(ctx, command, operation, payload, state).await
-        }
         "amphetamine" => {
             super::v2_amphetamine::handle(ctx, command, operation, payload, state).await
         }

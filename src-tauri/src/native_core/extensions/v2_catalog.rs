@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn bundled_ids_and_coverage_are_consistent() {
         let items = manifests();
-        assert_eq!(items.len(), 12);
+        assert_eq!(items.len(), 11);
         for item in items {
             let slug = item["slug"].as_str().unwrap();
             assert_eq!(item["id"], v2_runtime::canonical_id(slug));

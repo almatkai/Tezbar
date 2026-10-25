@@ -21,7 +21,6 @@ serde_json = "1.0"
 semver = "1.0"
 
 [dependencies]
-latex-math-symbols-native = { path = "native-extensions/latex-math-symbols" }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 semver = "1.0"
