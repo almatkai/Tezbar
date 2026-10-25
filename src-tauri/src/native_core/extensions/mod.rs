@@ -10,6 +10,10 @@ mod v2_color_picker;
 mod v2_gif_search;
 mod v2_google_calendar;
 mod v2_google_search;
+#[path = "../../../native-extensions/latex-math-symbols/adapter/v2_latex_math_symbols.rs"]
+mod v2_latex_math_symbols;
+#[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
+mod v2_latex_math_symbols_tests;
 mod v2_perplexity;
 mod v2_port_manager;
 mod v2_runtime;

@@ -602,6 +602,35 @@ mod tests {
         ));
     }
     #[test]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn latex_native_catalog_replacement_keeps_compatibility_source() {
+        let loved: Vec<Value> =
+            serde_json::from_str(include_str!("loved_extensions.json")).unwrap();
+        let legacy = loved
+            .iter()
+            .find(|v| v["id"] == "raycast.latex-math-symbols")
+            .unwrap();
+        assert_eq!(legacy["commands"][0]["name"], "index");
+        let entries = merge_native(
+            vec![legacy.clone(), json!({"id":"raycast.unrelated"})],
+            "latex",
+        );
+        let native = entries
+            .iter()
+            .find(|v| v["id"] == "com.tezbar.native.latex-math-symbols")
+            .unwrap();
+        assert_eq!(native["runtime"], "rust");
+        assert_eq!(native["icon"], "/extensions/icons/latex-math-symbols.png");
+        assert_eq!(native["nativeV2"]["status"], "complete");
+        assert_eq!(native["commands"][0]["name"], "index");
+        assert_eq!(
+            entries.iter().filter(|v| v["id"] == native["id"]).count(),
+            1
+        );
+        assert!(!entries.iter().any(|v| v["id"] == legacy["id"]));
+        assert!(entries.iter().any(|v| v["id"] == "raycast.unrelated"));
+    }
+    #[test]
     fn complete_native_item_deduplicates_legacy_before_pagination() {
         let entries = merge_native(
             vec![
