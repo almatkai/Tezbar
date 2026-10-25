@@ -88,6 +88,55 @@ async fn no_child_on_listing_and_canonical_damage_never_falls_back() {
     assert!(sessions.0.lock().unwrap().sessions.is_empty());
 }
 #[tokio::test]
+async fn exe_named_fixture_keeps_open_and_call_crashes_distinct() {
+    use tokio::io::AsyncWriteExt;
+    let temp = tempfile::tempdir().unwrap();
+    let ctx = context(temp.path());
+    process_install::test_install(&ctx, "normal");
+    let package = process_install::resolve(&ctx, "com.tezbar.native.perplexity").unwrap();
+    for (mode, code) in [("crash", 17), ("crashcall", 19)] {
+        // Exercise Windows spelling with the real executable on every host.
+        let executable = temp.path().join(format!("fixture-{mode}.exe"));
+        std::fs::copy(&package.executable, &executable).unwrap();
+        let mut child = tokio::process::Command::new(executable)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        let packets = [
+            json!({"type":"request","id":"init","method":"initialize","params":{"dataDir":temp.path()}}),
+            json!({"type":"request","id":"open","method":"session.open"}),
+            json!({"type":"request","id":"call","method":"session.call"}),
+        ];
+        let mut input = child.stdin.take().unwrap();
+        let payload: String = packets
+            .into_iter()
+            .map(|packet| format!("{packet}\n"))
+            .collect();
+        input.write_all(payload.as_bytes()).await.unwrap();
+        drop(input);
+        let output = tokio::time::timeout(Duration::from_secs(10), child.wait_with_output())
+            .await
+            .unwrap()
+            .unwrap();
+        let frames: Vec<Value> = String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(output.status.code(), Some(code), "{mode}: {frames:?}");
+        assert_eq!(
+            frames
+                .iter()
+                .any(|frame| frame["id"] == "open" && frame["result"]["ok"] == true),
+            mode == "crashcall",
+            "{mode}: {frames:?}"
+        );
+    }
+}
+#[tokio::test]
 async fn crash_malformed_and_bad_identity_drain_pending_launches() {
     for mode in ["crash", "malformed", "badhello"] {
         let temp = tempfile::tempdir().unwrap();

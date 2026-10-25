@@ -140,12 +140,14 @@ pub(super) fn metadata_lock(ctx: &CoreContext) -> Result<std::fs::File, String> 
 }
 
 pub(super) fn target() -> &'static str {
-    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        "aarch64-apple-darwin"
-    } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-        "x86_64-pc-windows-msvc"
-    } else {
-        "unsupported"
+    target_for(std::env::consts::OS, std::env::consts::ARCH)
+}
+fn target_for(os: &str, arch: &str) -> &'static str {
+    match (os, arch) {
+        ("macos", "aarch64") => "aarch64-apple-darwin",
+        ("macos", "x86_64") => "x86_64-apple-darwin",
+        ("windows", "x86_64") => "x86_64-pc-windows-msvc",
+        _ => "unsupported",
     }
 }
 pub(super) fn component(s: &str) -> Result<(), String> {
@@ -817,6 +819,51 @@ pub(super) fn test_import_target(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn host_target_mapping_includes_intel_mac_without_aliasing_architectures() {
+        for (os, arch, expected) in [
+            ("macos", "aarch64", "aarch64-apple-darwin"),
+            ("macos", "x86_64", "x86_64-apple-darwin"),
+            ("windows", "x86_64", "x86_64-pc-windows-msvc"),
+            ("windows", "aarch64", "unsupported"),
+            ("linux", "x86_64", "unsupported"),
+        ] {
+            assert_eq!(target_for(os, arch), expected, "{os}/{arch}");
+        }
+        assert_eq!(
+            target(),
+            target_for(std::env::consts::OS, std::env::consts::ARCH)
+        );
+    }
+    #[test]
+    fn intel_mac_requires_its_own_artifact_and_has_no_public_catalog_pins() {
+        let intel = "x86_64-apple-darwin";
+        for manifest in super::super::v2_catalog::source() {
+            assert!(manifest["artifacts"].get(intel).is_none());
+            assert!(artifact_for(&manifest, intel)
+                .unwrap_err()
+                .contains("publication/pins required"));
+            if target() == intel {
+                let described = super::super::v2_catalog::describe(manifest);
+                assert_eq!(described["status"], "unavailable");
+                assert!(described["commands"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|c| c["runtime"] == "unavailable"));
+            }
+        }
+        let local = json!({"schemaVersion":3,"runtime":"rust","execution":"process","protocolVersion":1,
+            "id":"com.tezbar.native.synthetic","slug":"synthetic","version":"1.0.0",
+            "capabilities":[],"commands":[{"name":"run"}],
+            "artifacts":{intel:{"sha256":"0".repeat(64),"executable":"bin/synthetic","executableSha256":"1".repeat(64)}}});
+        validate(&local).unwrap();
+        assert!(artifact_for(&local, intel).is_ok());
+        assert!(artifact_for(&local, "aarch64-apple-darwin").is_err());
+        if target() == intel {
+            assert!(artifact(&local).is_ok());
+        }
+    }
     #[test]
     fn rejects_cross_platform_paths() {
         for p in [

@@ -11,7 +11,8 @@ fn main(){
     if std::env::args().any(|arg|arg=="--helper"){
         #[cfg(unix)] unsafe { extern "C" {fn signal(sig:i32,handler:usize)->usize;} signal(15,1); }
         loop{std::thread::sleep(std::time::Duration::from_secs(60));}}
-    let exe=std::env::current_exe().unwrap();let mode=exe.file_name().unwrap().to_string_lossy();
+    let exe=std::env::current_exe().unwrap();let filename=exe.file_name().unwrap().to_string_lossy();
+    let mode=filename.strip_suffix(".exe").unwrap_or(&filename);
     let launcher=mode.contains("launcher");
     if launcher {emit("{\"type\":\"hello\",\"protocol\":1,\"id\":\"com.tezbar.native.perplexity\",\"version\":\"1.0.0\",\"sdkVersion\":\"0.1.1\",\"features\":[\"launcher.v1\"]}");}
     else if mode.contains("eofhello"){return;}
