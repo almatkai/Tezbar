@@ -329,12 +329,21 @@ class WindowsCleanup(unittest.TestCase):
 class WindowsGuardAccounting(unittest.TestCase):
     """Exercise the real Job query, runner and probe with Win32 ABI byte fixtures."""
     def exercise(self, counts=(2, 0, 1), *, selfcheck=True, denied=True,
-                 query_ok=True, returned_size=48, payload=None, returncode=0):
+                 query_ok=True, returned_size=48, payload=None, returncode=0,
+                 proof_changes=None, missing=(), marker_when=None, cleanup_failure=None, child_error=None):
         self.events, self.diagnostics = [], io.StringIO()
         kernel, ntdll = mock.Mock(), mock.Mock()
         kernel.CreateJobObjectW.return_value = 7
         kernel.SetInformationJobObject.return_value = 1
-        kernel.CloseHandle.side_effect = lambda handle: self.events.append("close-job") or 1
+        marker = None
+
+        def close(handle):
+            self.events.append("close-job")
+            if marker_when == "close":
+                marker.write_bytes(b"late child execution")
+            return int(cleanup_failure != "close")
+
+        kernel.CloseHandle.side_effect = close
         kernel.AssignProcessToJobObject.side_effect = lambda *args: self.events.append("assign") or 1
         ntdll.NtResumeProcess.side_effect = lambda *args: self.events.append("resume") or 0
 
@@ -350,21 +359,58 @@ class WindowsGuardAccounting(unittest.TestCase):
         kernel.QueryInformationJobObject.side_effect = query
         process = mock.Mock(pid=123, _handle=456, returncode=returncode)
         process.poll.return_value = returncode
-        process.wait.side_effect = lambda timeout: self.events.append(("wait", timeout)) or returncode
+
+        def wait(timeout):
+            self.events.append(("wait", timeout))
+            if timeout == 5:
+                if marker_when == "reap":
+                    marker.write_bytes(b"late child execution")
+                if marker_when == "remove-directory":
+                    marker.parent.rmdir()
+                if cleanup_failure == "reap":
+                    raise OSError("owned reap failed")
+            return returncode
+
+        process.wait.side_effect = wait
 
         def popen(argv, **kwargs):
+            nonlocal marker
             self.assertEqual(kwargs["creationflags"], 0x4 | 0x08000000)
             self.assertEqual(kwargs["stdin"], a.subprocess.DEVNULL)
             self.events.append("popen-suspended")
             if selfcheck:
+                marker = Path(argv[3])
+                self.assertFalse(marker.exists())
+                self.assertTrue(marker.parent.is_dir())
                 output = io.StringIO()
+                denial = child_error if child_error is not None else OSError(13, "fixture denial; not a native Windows errno claim")
+
+                def run_child(child_argv, *, check, timeout):
+                    self.assertEqual(child_argv, [a.sys.executable, "-c",
+                                                "import sys; f=open(sys.argv[1], 'xb'); f.write(b'child executed'); f.close()", str(marker)])
+                    self.assertIs(check, True)
+                    self.assertEqual(timeout, 5)
+                    if marker_when == "attempt":
+                        # Real child payload, without spawning any OS process.
+                        with mock.patch.object(a.sys, "argv", ["-c", str(marker)]):
+                            exec(child_argv[2], {})
+                    if denied:
+                        raise denial
+
                 # Execute the actual inert probe, replacing only its child syscall.
                 with mock.patch.object(a.sys, "platform", "win32"), \
-                        mock.patch.object(a.subprocess, "run", side_effect=OSError("quota") if denied else None) as run, \
+                        mock.patch.object(a.sys, "argv", ["-c", str(marker)]), \
+                        mock.patch.object(a.subprocess, "run", side_effect=run_child) as run, \
                         contextlib.redirect_stdout(output):
                     exec(argv[2], {})
-                run.assert_called_once_with([a.sys.executable, "-c", "pass"], check=True, timeout=5)
+                self.assertEqual(run.call_count, 1)
                 data = output.getvalue()
+                proof = json.loads(data)
+                self.assertEqual(proof["childError"], {"errno": denial.errno, "winerror": getattr(denial, "winerror", None)} if denied else None)
+                proof.update(proof_changes or {})
+                for key in missing:
+                    del proof[key]
+                data = json.dumps(proof)
             else:
                 data = json.dumps({"ok": True})
             kwargs["stdout"].write((data if payload is None else payload).encode())
@@ -379,7 +425,9 @@ class WindowsGuardAccounting(unittest.TestCase):
                         mock.patch.object(a.subprocess, "Popen", side_effect=popen), \
                         contextlib.redirect_stdout(self.diagnostics):
                     if selfcheck:
-                        return a.guard_selfcheck(root, {}, root)
+                        proof = a.guard_selfcheck(root, {}, root)
+                        self.assertFalse(marker.parent.exists())
+                        return proof
                     # A label must never opt a real CLI call into probe accounting.
                     return a.guarded_run(["inert-cli"], root, {}, root, "guard-selfcheck")
         finally:
@@ -388,13 +436,22 @@ class WindowsGuardAccounting(unittest.TestCase):
             kernel.TerminateJobObject.assert_not_called()
             process.kill.assert_not_called()
 
+    def test_observed_native_denial_with_zero_limit_terminations(self):
+        proof = self.exercise((2, 1, 0))
+        self.assertIs(proof["childDenied"], True)
+        self.assertEqual(proof["jobAccounting"], {"TotalProcesses": 2, "ActiveProcesses": 1,
+                                                  "TotalTerminatedProcesses": 0})
+
     def test_documented_denied_attempt_passes_only_selfcheck_with_counters(self):
         for active in (0, 1, 2):
-            with self.subTest(active=active):
-                proof = self.exercise((2, active, 1))
-                self.assertIs(proof["childDenied"], True)
-                self.assertEqual(proof["jobAccounting"], {"TotalProcesses": 2, "ActiveProcesses": active,
-                                                          "TotalTerminatedProcesses": 1})
+            for terminated in (0, 1):
+                with self.subTest(active=active, terminated=terminated):
+                    proof = self.exercise((2, active, terminated))
+                    self.assertIs(proof["childDenied"], True)
+                    self.assertIs(proof["childExecutionAbsent"], True)
+                    self.assertEqual(proof["childAttempts"], 1)
+                    self.assertEqual(proof["jobAccounting"], {"TotalProcesses": 2, "ActiveProcesses": active,
+                                                              "TotalTerminatedProcesses": terminated})
 
     def test_successful_child_creation_cannot_pass_even_with_denial_counters(self):
         for counts in ((2, 0, 0), (2, 0, 1)):
@@ -407,10 +464,49 @@ class WindowsGuardAccounting(unittest.TestCase):
             with self.subTest(counts=counts), self.assertRaisesRegex(ValueError, "CLI spawned additional Job processes.*TotalProcesses"):
                 self.exercise(counts, selfcheck=False)
 
-    def test_probe_requires_exactly_one_limit_denial_and_no_unaccounted_attempt(self):
-        for counts in ((1, 0, 0), (2, 0, 0), (3, 0, 1), (3, 0, 2)):
+    def test_probe_requires_exactly_one_attempt_and_no_extra_termination(self):
+        for counts in ((1, 0, 0), (2, 0, 2), (3, 0, 1), (3, 0, 2)):
             with self.subTest(counts=counts), self.assertRaisesRegex(ValueError, "Self-check Job accounting.*TotalProcesses"):
                 self.exercise(counts)
+
+    def test_marker_execution_before_or_during_cleanup_cannot_pass_forged_denial(self):
+        for counts in ((2, 1, 0), (2, 0, 1)):
+            for marker_when in ("attempt", "close", "reap"):
+                with self.subTest(counts=counts, marker_when=marker_when), \
+                        self.assertRaisesRegex(ValueError, "Child execution marker found after cleanup.*TotalProcesses"):
+                    self.exercise(counts, marker_when=marker_when)
+        with self.assertRaisesRegex(ValueError, "Child execution marker found after cleanup"):
+            self.exercise(denied=False, marker_when="attempt",
+                          proof_changes={"childDenied": True, "childError": {"errno": 13, "winerror": None}})
+        with self.assertRaisesRegex(ValueError, "Child marker directory missing after cleanup"):
+            self.exercise(marker_when="remove-directory")
+
+    def test_missing_or_malformed_required_proof_cannot_pass(self):
+        for key in ("childDenied", "childAttempts", "childMarker", "childError"):
+            with self.subTest(missing=key), self.assertRaisesRegex(ValueError, "TotalProcesses"):
+                self.exercise(missing=(key,))
+        for changes in ({"childAttempts": 0}, {"childAttempts": 2}, {"childAttempts": True},
+                        {"childMarker": "/wrong/marker"}, {"childMarker": None},
+                        {"childError": None}, {"childError": {}}, {"childError": "OSError"},
+                        {"childError": {"errno": True, "winerror": None}},
+                        {"childError": {"errno": 13, "winerror": "guessed"}}):
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, "Invalid child.*proof.*TotalProcesses"):
+                self.exercise(proof_changes=changes)
+
+    def test_successful_probe_cannot_hide_cleanup_failure(self):
+        for failure in ("close", "reap"):
+            with self.subTest(failure=failure), self.assertRaisesRegex(RuntimeError, "Owned process cleanup"):
+                self.exercise(cleanup_failure=failure)
+
+    def test_oserror_codes_are_captured_without_assuming_native_values(self):
+        for errno, winerror in ((13, None), (22, 12345), (None, None)):
+            with self.subTest(errno=errno, winerror=winerror):
+                error = OSError(errno, "fixture message must not be logged")
+                error.winerror = winerror  # Synthetic values, not native Windows evidence.
+                proof = self.exercise(child_error=error)
+                self.assertEqual(proof["childError"], {"errno": errno, "winerror": winerror})
+                self.assertIn("Guard child OSError: " + json.dumps(proof["childError"], sort_keys=True), self.diagnostics.getvalue())
+                self.assertNotIn("fixture message", self.diagnostics.getvalue())
 
     def test_invalid_accounting_and_query_failures_fail_closed_and_cleanup(self):
         for counts in ((0, 0, 0), (2, 3, 1), (2, 0, 3)):
@@ -442,8 +538,11 @@ class NativeWindowsGuard(unittest.TestCase):
                 (root / name).mkdir()
             proof = a.guard_selfcheck(root, a.cli_environment(root), root)
             self.assertIs(proof["childDenied"], True)
+            self.assertIs(proof["childExecutionAbsent"], True)
+            self.assertEqual(proof["childAttempts"], 1)
+            self.assertEqual(set(proof["childError"]), {"errno", "winerror"})
             self.assertEqual(proof["jobAccounting"]["TotalProcesses"], 2)
-            self.assertEqual(proof["jobAccounting"]["TotalTerminatedProcesses"], 1)
+            self.assertIn(proof["jobAccounting"]["TotalTerminatedProcesses"], (0, 1))
 
 
 if __name__ == "__main__":

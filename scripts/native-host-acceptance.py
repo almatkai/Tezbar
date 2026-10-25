@@ -13,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -447,7 +448,7 @@ def cli_environment(profile):
     return env
 
 
-def guarded_run(argv, profile, env, out, label, expected=0, *, _guard_selfcheck=False):
+def guarded_run(argv, profile, env, out, label, expected=0, *, _guard_selfcheck_marker=None):
     job, process = None, None
     start = time.monotonic()
     stdout, stderr = out / (label + ".stdout.json"), out / (label + ".stderr.log")
@@ -471,7 +472,7 @@ def guarded_run(argv, profile, env, out, label, expected=0, *, _guard_selfcheck=
             print(f"Windows Job {label}{diagnostic}", flush=True)
             total, active, terminated = (counts[n] for n in ("TotalProcesses", "ActiveProcesses", "TotalTerminatedProcesses"))
             require(total >= 1 and active <= total and terminated <= total, "Invalid Job accounting" + diagnostic)
-            if not _guard_selfcheck:
+            if _guard_selfcheck_marker is None:
                 require(total == 1, "CLI spawned additional Job processes" + diagnostic)
                 require(terminated == 0, "Invalid Job accounting: CLI limit termination" + diagnostic)
         require(process.returncode == expected, f"CLI {label}: expected {expected}, got {process.returncode}; see local logs" + diagnostic)
@@ -479,27 +480,47 @@ def guarded_run(argv, profile, env, out, label, expected=0, *, _guard_selfcheck=
             result = load(stdout)
         except ValueError as error:
             raise ValueError(f"CLI {label}: invalid JSON output" + diagnostic) from error
-        if job and _guard_selfcheck:
+        if _guard_selfcheck_marker is not None:
             require(isinstance(result, dict) and result.get("childDenied") is True, "Child guard ineffective" + diagnostic)
-            # TotalProcesses includes failed associations. This owned probe makes exactly
-            # one attempt; require its denial in BOTH output and limit accounting.
-            # ActiveProcesses can transiently include a rejected process until refs close.
-            require(total == 2 and terminated == 1, "Self-check Job accounting: expected one denied child" + diagnostic)
-            result["jobAccounting"] = counts
-        print(f"CLI {label}: exit={process.returncode}, child creation prohibited, {time.monotonic()-start:.3f}s", flush=True)
-        return result
+            require(type(result.get("childAttempts")) is int and result["childAttempts"] == 1
+                    and result.get("childMarker") == str(_guard_selfcheck_marker), "Invalid child attempt proof" + diagnostic)
+            error = result.get("childError")
+            require(isinstance(error, dict) and set(error) == {"errno", "winerror"}
+                    and all(value is None or type(value) is int for value in error.values()),
+                    "Invalid child OSError proof" + diagnostic)
+            print(f"Guard child OSError: {json.dumps(error, sort_keys=True)}", flush=True)
+            if job:
+                # Native Windows observed total=2, active=1, terminated=0 after OSError.
+                # Termination accounting alone cannot prove CreateProcess rejection.
+                # Require one association attempt plus denial AND post-cleanup nonexecution.
+                require(total == 2 and terminated in (0, 1), "Self-check Job accounting: expected one denied child" + diagnostic)
+                result["jobAccounting"] = counts
     finally:
         cleanup_owned_process(process, job)
+    if _guard_selfcheck_marker is not None:
+        # Check only AFTER Job closure/reap, while the parent-owned directory still
+        # exists: even partial/late child execution must leave persistent evidence.
+        require(_guard_selfcheck_marker.parent.is_dir(), "Child marker directory missing after cleanup" + diagnostic)
+        require(not _guard_selfcheck_marker.exists() and not _guard_selfcheck_marker.is_symlink(),
+                "Child execution marker found after cleanup" + diagnostic)
+        result["childExecutionAbsent"] = True
+    print(f"CLI {label}: exit={process.returncode}, child creation prohibited, {time.monotonic()-start:.3f}s", flush=True)
+    return result
 
 
 def guard_selfcheck(profile, env, out):
     # Owned inert Python process must fail both attempted child creation and (Mac only) networking.
-    code = '''import json,os,subprocess,sys,socket
+    code = '''import json,subprocess,sys,socket
+marker=sys.argv[1]
+attempts=0
+error=None
 try:
- subprocess.run([sys.executable,"-c","pass"],check=True,timeout=5)
+ attempts+=1
+ subprocess.run([sys.executable,"-c","import sys; f=open(sys.argv[1], 'xb'); f.write(b'child executed'); f.close()",marker],check=True,timeout=5)
  child=False
-except OSError:
+except OSError as exc:
  child=True
+ error={"errno":exc.errno,"winerror":getattr(exc,"winerror",None)}
 network=None
 if sys.platform=="darwin":
  try:
@@ -509,9 +530,12 @@ if sys.platform=="darwin":
   network=False
  except PermissionError:
   network=True
-print(json.dumps({"childDenied":child,"networkDenied":network}))
+print(json.dumps({"childDenied":child,"childAttempts":attempts,"childMarker":marker,"childError":error,"networkDenied":network}))
 '''
-    proof = guarded_run([sys.executable, "-c", code], profile, env, out, "guard-selfcheck", _guard_selfcheck=True)
+    with tempfile.TemporaryDirectory(prefix="guard-child-", dir=out.resolve()) as directory:
+        marker = Path(directory) / "executed"
+        proof = guarded_run([sys.executable, "-c", code, str(marker)], profile, env, out, "guard-selfcheck",
+                            _guard_selfcheck_marker=marker)
     require(isinstance(proof, dict) and proof.get("childDenied") is True, "Child guard ineffective")
     if os.name != "nt":
         require(proof["networkDenied"] is True, "Mac network sandbox ineffective")

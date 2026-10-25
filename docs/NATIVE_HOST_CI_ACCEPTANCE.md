@@ -68,13 +68,32 @@ owned Python self-check must prove both denials. Windows starts each owned CLI
 suspended, assigns it to a kill-on-close Job Object with active-process limit one,
 then resumes it; total Job process accounting must remain one. Its self-check
 intentionally attempts exactly one inert child and must prove creation fails.
-Only that probe requires `childDenied: true`, `TotalProcesses == 2`, and
-`TotalTerminatedProcesses == 1`: Microsoft documents that
+Only that probe requires `childDenied: true` (an actual JSON boolean), exactly one
+attempt, and `TotalProcesses == 2`. Microsoft documents that
 [`TotalProcesses` includes failed associations due to a limit violation](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_basic_accounting_information)
 and that the [active-process limit terminates and rejects an excessive association](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_basic_limit_information).
-`ActiveProcesses` is recorded and checked against the total, without requiring
-zero: rejected processes can remain counted until termination and reference
-release. Real CLI calls retain strict `TotalProcesses == 1` and zero limit
+Native Windows Python 3.12.10 at `6071fb4` (PR6 run 40208846318, job
+121215534339) returned denial JSON and exit zero with total=2, active=1,
+terminated=0. r47 incorrectly required exactly one limit termination. The probe
+now permits termination counts zero or one **only with direct denial and
+nonexecution proof**; the counter alone cannot prove or disprove creation
+rejection. No exact Windows `errno` or `winerror` was recorded in that run.
+
+The attempted child creates/writes an exclusive marker as its first payload
+action. The parent owns a fresh temporary marker directory, passes the exact
+path, and requires it echoed with integer `childAttempts: 1` and an OSError
+record containing `errno`/`winerror` integers or null. The probe catches only
+`OSError` from its single `subprocess.run`; those numeric fields are logged
+without assuming specific native codes or printing error text. After successful
+Job closure and owned-process reap, while that directory still exists, the
+parent rejects any marker (including one created during cleanup) and adds
+`childExecutionAbsent: true`. Successful creation, forged denial with a marker,
+wrong/missing proof and cleanup failure cannot pass. Success requires the marker
+directory to survive cleanup; it is then removed. The Mac fork/network probe
+uses the same child proof.
+
+`ActiveProcesses` is recorded and bounded by the total without requiring settled
+zero. Real CLI calls retain strict `TotalProcesses == 1` and zero limit
 terminations; no terminations are subtracted or child allowance inferred from a
 command label. The query checks the 48-byte Win32 accounting ABI and returned
 length. All three counters appear in native logs before output validation, in
