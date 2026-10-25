@@ -1310,7 +1310,8 @@ export default function CommandBar({
   const [isStreaming, setIsStreaming] = useState(false)
   const [cfg, setCfg] = useState<LlmConfigRecord>({})
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
-  // Width of the typed query, so the mode chips on the right give way to it.
+  // Prefer the query's width so mode chips give way, but allow the input to
+  // shrink within the header and scroll rather than pushing controls outside it.
   const [inputTextWidth, setInputTextWidth] = useState(0)
   useLayoutEffect(() => {
     const input = document.getElementById('command-input') as HTMLInputElement | null
@@ -4188,7 +4189,7 @@ export default function CommandBar({
             ) : null}
             <div
               className="relative min-w-0 flex-1 flex items-center select-none"
-              style={inputTextWidth ? { minWidth: inputTextWidth } : undefined}
+              style={inputTextWidth ? { flexBasis: inputTextWidth } : undefined}
             >
               {terminalMode ? (
                 <span className="command-terminal-prompt shrink-0 font-mono text-[13px] text-emerald-300/80 mr-1 select-none pointer-events-none">
