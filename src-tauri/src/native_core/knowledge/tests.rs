@@ -1352,6 +1352,19 @@ async fn q4_selected_runtime_failure_stays_visible_and_search_uses_builtin_hybri
         c.settings["embeddingModel"] = json!("embeddinggemma-2");
         c.settings["embeddingVariant"] = json!("q4_k_m");
     }
+    // start() deliberately does not await model verification or full counts.
+    // Inject a post-verification runtime failure, rather than racing the missing
+    // fixture installation's verification completion (which clears errors).
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while EmbeddingVariantId::ALL
+            .iter()
+            .any(|v| core.runtime(*v).snapshot()["integrityState"] == "verifying")
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+    })
+    .await
+    .unwrap();
     core.runtime(EmbeddingVariantId::Q4KM).patch(json!({"modelState":"ready","integrityState":"verified","runtimeState":"error","errorSource":"runtime","error":"fixture startup failure"}));
     for channel in ["core:knowledge:search", "core:knowledge:search-sources"] {
         let began = std::time::Instant::now();
@@ -1427,4 +1440,131 @@ async fn q4_old_snapshot_refresh_cannot_restore_previous_selection() {
         .unwrap();
     assert_eq!(core.settings(), persisted);
     core.shutdown().await.unwrap();
+}
+
+// A snapshot must not queue behind a full semantic count/backfill. On the live
+// ~1M-chunk profile, one queued count plus the old snapshot count exceeds the
+// renderer's 10s deadline. Hold the real worker instead of timing a large fixture.
+#[tokio::test]
+async fn settings_snapshot_does_not_wait_for_busy_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(profile(dir.path()));
+    let docs = dir.path().join("docs");
+    std::fs::create_dir(&docs).unwrap();
+    core.database()
+        .await
+        .unwrap()
+        .call(move |s| {
+            s.root_add(&docs)?;
+            let mut settings = s.settings()?;
+            settings["indexingSpeed"] = json!("slow");
+            settings["embeddingVariant"] = json!("q4_k_m");
+            s.set_meta("settings", &settings)
+        })
+        .await
+        .unwrap();
+    core.start().await.unwrap();
+    core.status(json!({"state":"indexing","processedSources":17}));
+    let expected = core.snapshot();
+    assert_eq!(expected["settings"]["indexingSpeed"], "slow");
+    assert_eq!(expected["roots"].as_array().unwrap().len(), 1);
+    let db = core.database().await.unwrap();
+    let (entered, entered_rx) = tokio::sync::oneshot::channel();
+    let (release, release_rx) = std::sync::mpsc::channel();
+    let busy = tokio::spawn(async move {
+        db.call(move |_| {
+            let _ = entered.send(());
+            release_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        })
+        .await
+    });
+    entered_rx.await.unwrap();
+    // Once initialized, this read must complete in one poll. This catches
+    // queueing deterministically, without a machine-speed-dependent deadline.
+    let result = futures_util::FutureExt::now_or_never(core.handle("knowledge:snapshot", &[]));
+    // Always release the worker before asserting, including on the red run.
+    release.send(()).unwrap();
+    busy.await.unwrap().unwrap();
+    core.shutdown().await.unwrap();
+    let actual = result
+        .expect("Settings snapshot queued behind background SQLite work")
+        .unwrap()
+        .unwrap();
+    assert_eq!(actual["settings"], expected["settings"]);
+    assert_eq!(actual["roots"], expected["roots"]);
+    assert_eq!(actual["status"]["processedSources"], 17);
+    assert_eq!(actual["settings"]["embeddingVariant"], "q4_k_m");
+}
+
+#[tokio::test]
+async fn settings_snapshot_receives_background_progress_and_completed_mutations() {
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(profile(dir.path()));
+    let docs = dir.path().join("docs");
+    std::fs::create_dir(&docs).unwrap();
+    core.database()
+        .await
+        .unwrap()
+        .call(move |s| {
+            s.root_add(&docs)?;
+            let root = s.roots()?[0]["id"].as_str().unwrap().to_owned();
+            s.pending(
+                "source",
+                &root,
+                &docs.join("a.txt").to_string_lossy(),
+                &json!({"contentHash":"x","byteSize":1,"modifiedAt":0}),
+                "smart",
+            )?;
+            let pages = vec![json!({"pageNumber":1,"extractedText":"fixture content"})];
+            s.save_result(
+                "source",
+                &json!({"pages":pages,"chunks":text::chunks("source", &pages, true)}),
+            )?;
+            let chunks = s.gemma_pending(&[root], 10)?;
+            s.gemma_save(&chunks, &vec![vec![1.; 256]; chunks.len()])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    // The first route must hydrate persisted settings even though counts now
+    // finish in the background. Polling observes that progress without DB reads.
+    let first = core
+        .handle("knowledge:snapshot", &[])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(first["roots"].as_array().unwrap().len(), 1);
+    let counts = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let snapshot = core
+                .handle("knowledge:snapshot", &[])
+                .await
+                .unwrap()
+                .unwrap();
+            if snapshot["semanticSearch"]["indexedChunks"] == 1 {
+                break snapshot;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    let changed = core
+        .handle("knowledge:speed:set", &[json!("slow")])
+        .await
+        .unwrap()
+        .unwrap();
+    let after = core
+        .handle("knowledge:snapshot", &[])
+        .await
+        .unwrap()
+        .unwrap();
+    core.shutdown().await.unwrap();
+    let counts = counts.expect("background semantic counts never reached Settings");
+    assert_eq!(counts["semanticSearch"]["totalChunks"], 1);
+    assert_eq!(after["settings"], changed["settings"]);
+    assert_eq!(after["settings"]["indexingSpeed"], "slow");
 }

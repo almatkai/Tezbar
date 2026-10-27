@@ -187,7 +187,8 @@ impl KnowledgeCore {
         for runtime in &self.inner.runtimes {
             runtime.initialize().await?;
         }
-        self.refresh_semantic_counts().await?;
+        // Large learned-index counts belong to the background loop. Settings
+        // must become readable before a million-chunk scan finishes.
         self.prewarm_sources().await;
         self.sync_watchers().await?;
         let this = self.clone();
@@ -310,16 +311,20 @@ impl KnowledgeCore {
     }
     async fn refresh_semantic_counts(&self) -> Result<(), String> {
         let ids = self.learned_root_ids();
-        let counts = self
+        let (counts, storage) = self
             .database()
             .await?
             .call(move |s| {
-                EmbeddingVariantId::ALL
+                let counts = EmbeddingVariantId::ALL
                     .map(|v| s.gemma_counts_for_model(&ids, v.descriptor().model_key))
                     .into_iter()
-                    .collect::<Result<Vec<_>, _>>()
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok((counts, s.storage()))
             })
             .await?;
+        // Snapshot polling no longer reads SQLite. Keep disk usage current as
+        // background extraction and embedding add data to the profile.
+        self.inner.cache.lock().unwrap().storage = storage;
         for (v, (indexed, total)) in EmbeddingVariantId::ALL.into_iter().zip(counts) {
             self.runtime(v)
                 .patch(json!({"indexedChunks":indexed,"totalChunks":total}));
@@ -1158,7 +1163,9 @@ impl KnowledgeCore {
         }
         match channel {
             "knowledge:snapshot" => {
-                self.refresh().await?;
+                // start() hydrated persisted settings/roots and mutations publish
+                // their authoritative refresh before returning. Never queue UI
+                // polling behind indexing or repeat full learned-index counts.
                 return Ok(self.snapshot());
             }
             "knowledge:sources:list" => {
