@@ -53,6 +53,16 @@ impl Drop for ReceiverGuard {
     }
 }
 impl SearchToken {
+    /// Background read tied to the existing semantic selection/lifecycle epoch.
+    /// Does not supersede searches or consume/increment their generations.
+    pub fn background(cancel: super::super::extract::Cancellation) -> Self {
+        Self {
+            generation: cancel.generation,
+            expected: cancel.expected,
+            alive: Arc::new(AtomicBool::new(true)),
+            receiver: None,
+        }
+    }
     pub fn with_receiver(mut self, alive: Arc<AtomicBool>) -> Self {
         self.receiver = Some(alive);
         self

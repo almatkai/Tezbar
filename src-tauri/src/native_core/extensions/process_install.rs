@@ -319,7 +319,39 @@ pub(super) fn root(ctx: &CoreContext, id: &str) -> Result<PathBuf, String> {
     }
     Ok(root)
 }
+#[cfg(test)]
+pub(super) mod hash_work {
+    use std::{
+        cell::RefCell,
+        sync::{atomic::{AtomicU64, Ordering}, Arc},
+    };
+    #[derive(Default)]
+    pub struct Work {
+        pub calls: AtomicU64,
+        pub bytes: AtomicU64,
+    }
+    thread_local! { static CURRENT: RefCell<Option<Arc<Work>>> = const { RefCell::new(None) }; }
+    pub struct Measurement(Option<Arc<Work>>);
+    pub fn measure(work: Arc<Work>) -> Measurement {
+        Measurement(CURRENT.with(|current| current.replace(Some(work))))
+    }
+    impl Drop for Measurement {
+        fn drop(&mut self) {
+            CURRENT.with(|current| current.replace(self.0.take()));
+        }
+    }
+    pub fn record(bytes: u64, call: bool) {
+        CURRENT.with(|current| {
+            if let Some(work) = current.borrow().as_ref() {
+                work.bytes.fetch_add(bytes, Ordering::Relaxed);
+                work.calls.fetch_add(u64::from(call), Ordering::Relaxed);
+            }
+        });
+    }
+}
 fn hash_file(path: &Path) -> Result<String, String> {
+    #[cfg(test)]
+    hash_work::record(0, true);
     let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut h = Sha256::new();
     let mut b = [0u8; 65536];
@@ -328,6 +360,8 @@ fn hash_file(path: &Path) -> Result<String, String> {
         if n == 0 {
             break;
         }
+        #[cfg(test)]
+        hash_work::record(n as u64, false);
         h.update(&b[..n]);
     }
     Ok(format!("{:x}", h.finalize()))

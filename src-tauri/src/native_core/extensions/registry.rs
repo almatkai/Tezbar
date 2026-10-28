@@ -10,6 +10,10 @@ use std::{
     time::UNIX_EPOCH,
 };
 
+#[path = "command_inputs.rs"]
+mod inputs;
+pub(super) use inputs::command_inputs;
+
 pub(super) struct Installed {
     id: String,
     slug: String,
@@ -52,9 +56,8 @@ fn roots(ctx: &CoreContext) -> Vec<PathBuf> {
     result
 }
 
-fn collect(ctx: &CoreContext) -> Vec<Installed> {
-    let mut found = Vec::new();
-    let mut seen = HashSet::new();
+fn discovery_paths(ctx: &CoreContext) -> Vec<PathBuf> {
+    let mut result = Vec::new();
     for root in roots(ctx) {
         let mut paths = if root.join("package.json").is_file() {
             vec![root]
@@ -67,51 +70,58 @@ fn collect(ctx: &CoreContext) -> Vec<Installed> {
                 .collect()
         };
         paths.sort();
-        for path in paths {
-            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-                continue;
-            };
-            let Ok(slug) = slug(name) else { continue };
-            let native = name.starts_with("com.tezbar.native.");
-            let mut manifest = if native {
-                match super::process_install::resolve(ctx, name) {
-                    Ok(package) => package.manifest,
-                    Err(error) => {
-                        // A damaged canonical directory is NEVER a Raycast package.
-                        let mut value = read_json(&path.join("package.json"))
-                            .ok()
-                            .filter(Value::is_object)
-                            .unwrap_or(json!({"id":name,"title":slug}));
-                        value["healthError"] = json!(error);
-                        value["commands"] = json!([]);
-                        value
-                    }
+        result.extend(paths);
+    }
+    result
+}
+
+fn collect(ctx: &CoreContext) -> Vec<Installed> {
+    let mut found = Vec::new();
+    let mut seen = HashSet::new();
+    for path in discovery_paths(ctx) {
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Ok(slug) = slug(name) else { continue };
+        let native = name.starts_with("com.tezbar.native.");
+        let mut manifest = if native {
+            match super::process_install::resolve(ctx, name) {
+                Ok(package) => package.manifest,
+                Err(error) => {
+                    // A damaged canonical directory is NEVER a Raycast package.
+                    let mut value = read_json(&path.join("package.json"))
+                        .ok()
+                        .filter(Value::is_object)
+                        .unwrap_or(json!({"id":name,"title":slug}));
+                    value["healthError"] = json!(error);
+                    value["commands"] = json!([]);
+                    value
                 }
-            } else {
-                let Ok(value) = read_json(&path.join("package.json")) else {
-                    continue;
-                };
-                value
-            };
-            if native {
-                manifest["id"] = json!(name);
             }
-            let id = if native {
-                name.to_string()
-            } else {
-                format!("raycast.{slug}")
-            };
-            if !manifest.is_object() || !seen.insert(id.to_lowercase()) {
+        } else {
+            let Ok(value) = read_json(&path.join("package.json")) else {
                 continue;
-            }
-            found.push(Installed {
-                id,
-                slug,
-                path,
-                manifest,
-                data_dir: ctx.paths.data_dir.clone(),
-            });
+            };
+            value
+        };
+        if native {
+            manifest["id"] = json!(name);
         }
+        let id = if native {
+            name.to_string()
+        } else {
+            format!("raycast.{slug}")
+        };
+        if !manifest.is_object() || !seen.insert(id.to_lowercase()) {
+            continue;
+        }
+        found.push(Installed {
+            id,
+            slug,
+            path,
+            manifest,
+            data_dir: ctx.paths.data_dir.clone(),
+        });
     }
     found
 }
@@ -244,6 +254,13 @@ fn icon_path(extension: &Installed) -> Option<String> {
     {
         return None;
     }
+    icon_candidates(extension, relative)
+        .into_iter()
+        .find(|p| p.is_file())
+        .map(|p| p.to_string_lossy().into())
+}
+
+fn icon_candidates(extension: &Installed, relative: &Path) -> Vec<PathBuf> {
     let mut candidates = vec![
         extension.path.join(relative),
         extension.path.join("assets").join(relative),
@@ -261,9 +278,6 @@ fn icon_path(extension: &Installed) -> Option<String> {
         }
     }
     candidates
-        .into_iter()
-        .find(|p| p.is_file())
-        .map(|p| p.to_string_lossy().into())
 }
 
 fn icon_data(extension: &Installed) -> Value {
@@ -308,23 +322,7 @@ fn command_icon_path(extension: &Installed, cmd: &Value) -> Option<String> {
     {
         return None;
     }
-    let mut candidates = vec![
-        extension.path.join(relative),
-        extension.path.join("assets").join(relative),
-    ];
-    if extension.id.starts_with("com.tezbar.native.") {
-        if let Some(packages) = extension.path.parent() {
-            if let Some(extensions) = packages.parent() {
-                let legacy = extensions.join(&extension.slug);
-                candidates.push(legacy.join(relative));
-                candidates.push(legacy.join("assets").join(relative));
-            }
-            let legacy = packages.join(format!("raycast.{}", extension.slug));
-            candidates.push(legacy.join(relative));
-            candidates.push(legacy.join("assets").join(relative));
-        }
-    }
-    candidates
+    icon_candidates(extension, relative)
         .into_iter()
         .find(|p| p.is_file())
         .map(|p| p.to_string_lossy().into())

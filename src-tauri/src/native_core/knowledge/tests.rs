@@ -1172,7 +1172,14 @@ async fn q4_ipc_omission_targets_q8_and_switch_keeps_extraction_checkpoint() {
         .unwrap();
     assert_eq!(snap["settings"]["embeddingModel"], "embeddinggemma-2");
     assert_eq!(snap["settings"]["embeddingVariant"], "q4_k_m");
-    assert_eq!(snap["semanticSearch"]["indexedChunks"], 3);
+    assert_eq!(snap["semanticSearch"]["countsStale"], true);
+    // Mutations now return the cached snapshot without enqueueing COUNT.
+    // Restore the Q4 availability sentinel before driving the background seam;
+    // a model still in the earlier error state must not advertise fresh counts.
+    core.runtime(EmbeddingVariantId::Q4KM)
+        .patch(json!({"modelState":"ready","integrityState":"verified"}));
+    core.refresh_semantic_counts().await.unwrap();
+    assert_eq!(core.snapshot()["semanticSearch"]["indexedChunks"], 3);
     let snap = core
         .handle("knowledge:embedding:remove", &[json!("q4_k_m")])
         .await
@@ -1526,6 +1533,9 @@ async fn settings_snapshot_receives_background_progress_and_completed_mutations(
             )?;
             let chunks = s.gemma_pending(&[root], 10)?;
             s.gemma_save(&chunks, &vec![vec![1.; 256]; chunks.len()])?;
+            let mut settings = s.settings()?;
+            settings["embeddingModel"] = json!("embeddinggemma-2");
+            s.set_meta("settings", &settings)?;
             Ok(())
         })
         .await
@@ -1538,6 +1548,16 @@ async fn settings_snapshot_receives_background_progress_and_completed_mutations(
         .unwrap()
         .unwrap();
     assert_eq!(first["roots"].as_array().unwrap().len(), 1);
+    // This fixture exercises Settings/DB progress, not an installed model.
+    // Let absent-file verification finish, then inject availability explicitly.
+    // A runtime error prevents process prewarm while persisted vectors remain
+    // countable; actual install verification is covered by runtime fixtures.
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while core.selected_runtime().snapshot()["integrityState"] == "verifying" {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }).await.unwrap();
+    core.selected_runtime().patch(json!({"modelState":"ready","integrityState":"verified","error":"DB-only fixture"}));
     let counts = tokio::time::timeout(Duration::from_secs(2), async {
         loop {
             let snapshot = core

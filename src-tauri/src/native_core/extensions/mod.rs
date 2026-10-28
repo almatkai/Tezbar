@@ -1,5 +1,8 @@
 mod acquisition;
 mod catalog;
+mod command_list;
+#[cfg(test)]
+mod command_list_tests;
 mod launcher;
 mod native;
 mod process;
@@ -59,8 +62,11 @@ pub struct ExtensionsCore {
     catalog: catalog::Catalog,
     native: native::NativeSessions,
     installs: Arc<tokio::sync::Mutex<()>>,
+    commands: Arc<command_list::CommandList>,
     #[cfg(test)]
     worker_override: Option<super::common::CoreRouter>,
+    #[cfg(test)]
+    hash_work: Arc<process_install::hash_work::Work>,
 }
 
 impl ExtensionsCore {
@@ -76,12 +82,35 @@ impl ExtensionsCore {
             files: Arc::new(Mutex::new(())),
             native: native::NativeSessions::default(),
             installs: Arc::new(tokio::sync::Mutex::new(())),
+            commands: Arc::default(),
             #[cfg(test)]
             worker_override: None,
+            #[cfg(test)]
+            hash_work: Arc::default(),
         }
     }
 
     pub async fn handle(&self, channel: &str, args: &[Value]) -> HandlerResult {
+        if channel == "core:extensions:commands" {
+            return Some(
+                self.commands
+                    .commands(
+                        &self.ctx,
+                        #[cfg(test)]
+                        self.hash_work.clone(),
+                    )
+                    .await,
+            );
+        }
+        // Fence the whole operation (including worker installs, failure and
+        // cancellation), not just its final event. CLI imports are discovered
+        // independently by the cheap input probe.
+        let mut command_mutation = matches!(
+            channel,
+            "extension:install" | "extensions:install" | "extensions:reinstall"
+                | "extension:uninstall" | "extensions:uninstall"
+        )
+        .then(|| self.commands.mutation());
         if let Some(result) = self
             .native
             .handle(&self.ctx, &self.files, channel, args)
@@ -105,6 +134,7 @@ impl ExtensionsCore {
                 }
                 match v2_catalog::install(&self.ctx, id).await {
                     Some(result) => {
+                        drop(command_mutation.take());
                         // Resume only this package's durable ownership after an
                         // update (or failed update retaining its old activation).
                         if let Err(error)=self.native.restore_id(&self.ctx,id){log::warn!("Background restoration after install failed: {error}");}
@@ -128,6 +158,7 @@ impl ExtensionsCore {
                 return Some(router(channel.to_string(), args.to_vec()).await);
             }
             let result = self.worker.request(channel, args.to_vec()).await;
+            drop(command_mutation.take());
             if result.is_ok() && channel.ends_with("install") {
                 self.ctx.emit("extensions-changed", json!({}));
                 // The launcher refreshes its native extension documents on this request.
@@ -164,13 +195,18 @@ impl ExtensionsCore {
         if let Some(slug) = &uninstall_slug {
             self.native.clear_slug(slug).await;
         }
+        let blocking_mutation = command_mutation.take();
         let result = tokio::task::spawn_blocking(move || {
+            // A cancelled async request must not release the uninstall fence
+            // while its blocking filesystem operation is still in flight.
+            let _command_mutation = blocking_mutation;
             let _guard = this.files.lock().map_err(|e| e.to_string())?;
             registry::handle(&this.ctx, &channel, &args)
         })
         .await
         .map_err(|e| e.to_string())
         .and_then(|v| v);
+        drop(command_mutation.take());
         if uninstall && result.is_ok() {
             if let Some(slug) = uninstall_slug {
                 self.native.clear_slug(&slug).await;
@@ -184,6 +220,7 @@ impl ExtensionsCore {
     }
 
     pub async fn shutdown(&self) {
+        self.commands.clear();
         self.native.clear().await;
         self.worker.shutdown().await;
     }

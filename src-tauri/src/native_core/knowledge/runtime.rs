@@ -102,6 +102,7 @@ struct RuntimeOwner {
     download_gen: Arc<AtomicU64>,
     runtime_gen: Arc<AtomicU64>,
     startup_task: Arc<Mutex<Option<OwnedTask<()>>>>,
+    idle_task: Arc<Mutex<Option<OwnedTask<()>>>>,
 }
 impl Drop for RuntimeOwner {
     fn drop(&mut self) {
@@ -110,6 +111,7 @@ impl Drop for RuntimeOwner {
         self.runtime_gen.fetch_add(1, Ordering::SeqCst);
         // Abort closes an unpublished supervisor lease as well as an idle one.
         self.startup_task.lock().unwrap().take();
+        self.idle_task.lock().unwrap().take();
     }
 }
 struct Inner {
@@ -123,6 +125,7 @@ struct Inner {
     download: AsyncMutex<Option<tokio::task::JoinHandle<()>>>,
     process: AsyncMutex<Option<Process>>,
     startup_task: Arc<Mutex<Option<OwnedTask<()>>>>,
+    idle_task: Arc<Mutex<Option<OwnedTask<()>>>>,
     runtime_gen: Arc<AtomicU64>,
     stopping: AtomicBool,
     foreground_timeout: std::time::Duration,
@@ -215,11 +218,13 @@ impl Runtime {
         let download_gen = Arc::new(AtomicU64::new(0));
         let runtime_gen = Arc::new(AtomicU64::new(0));
         let startup_task = Arc::new(Mutex::new(None));
+        let idle_task = Arc::new(Mutex::new(None));
         let owner = RuntimeOwner {
             closed: closed.clone(),
             download_gen: download_gen.clone(),
             runtime_gen: runtime_gen.clone(),
             startup_task: startup_task.clone(),
+            idle_task: idle_task.clone(),
         };
         Self {
             _owner: Some(Arc::new(owner)),
@@ -236,6 +241,7 @@ impl Runtime {
                 download: AsyncMutex::new(None),
                 process: AsyncMutex::new(None),
                 startup_task,
+                idle_task,
                 runtime_gen,
                 stopping: AtomicBool::new(false),
                 foreground_timeout: std::time::Duration::from_secs(1),
@@ -955,8 +961,32 @@ impl Runtime {
     pub async fn stop(&self) {
         let _ = self.stop_process().await;
     }
+    pub fn start_idle_supervisor(&self) {
+        let mut task = self.inner.idle_task.lock().unwrap();
+        if self.inner.closed.load(Ordering::SeqCst) || task.is_some() {
+            return;
+        }
+        // No external-owner lease: last-owner drop aborts this task. Shutdown
+        // also aborts and joins it, including while child cleanup is awaited.
+        let this = self.worker();
+        *task = Some(OwnedTask(Some(tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                if this.inner.closed.load(Ordering::SeqCst) {
+                    break;
+                }
+                this.stop_idle().await;
+            }
+        }))));
+    }
     pub async fn stop_idle(&self) {
-        let mut process = self.inner.process.lock().await;
+        // Startup and inference own this mutex, with the process unpublished
+        // during requests. Never queue an idle decision behind that activity.
+        let Ok(mut process) = self.inner.process.try_lock() else {
+            return;
+        };
         if process
             .as_ref()
             .map(|p| now_ms().saturating_sub(p.last_used) > 120000)
@@ -971,11 +1001,18 @@ impl Runtime {
     }
     pub async fn shutdown(&self) {
         self.inner.closed.store(true, Ordering::SeqCst);
+        let idle_task = self.inner.idle_task.lock().unwrap().take();
+        // Abort synchronously, but do not yield to join before closing the
+        // cached process lease: this shutdown future itself may be dropped.
+        let idle_join = idle_task.map(OwnedTask::abort);
         self.inner.download_gen.fetch_add(1, Ordering::SeqCst);
         // Release an idle lease before waiting for any installer. If this future
         // is aborted, active inference/verification sees closed and releases its
         // own lease; an already-taken Process drops its closed pipe on abort.
         self.stop().await;
+        if let Some(task) = idle_join {
+            let _ = task.await;
+        }
         let _ = self.cancel_download().await;
     }
     pub async fn embed(
@@ -3013,6 +3050,163 @@ socket.getfqdn=reject_hostname_resolution
             .unwrap();
             assert!(runtime.inner.process.lock().await.is_none());
         }
+    }
+
+    #[tokio::test]
+    async fn service_start_owns_one_idle_supervisor_per_runtime_and_shutdown_joins() {
+        let temp = tempfile::tempdir().unwrap();
+        let core = super::super::KnowledgeCore::new(context(temp.path()));
+        core.start().await.unwrap();
+        let ids: Vec<_> = core
+            .inner
+            .runtimes
+            .iter()
+            .map(|runtime| {
+                runtime
+                    .inner
+                    .idle_task
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .unwrap()
+                    .0
+                    .as_ref()
+                    .unwrap()
+                    .id()
+            })
+            .collect();
+        core.start().await.unwrap();
+        for (runtime, id) in core.inner.runtimes.iter().zip(ids) {
+            assert_eq!(
+                runtime
+                    .inner
+                    .idle_task
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .unwrap()
+                    .0
+                    .as_ref()
+                    .unwrap()
+                    .id(),
+                id
+            );
+        }
+        core.shutdown().await.unwrap();
+        for runtime in &core.inner.runtimes {
+            assert!(runtime.inner.idle_task.lock().unwrap().is_none());
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn idle_supervisor_does_not_retain_last_runtime_owner() {
+        let (_temp, runtime) = protocol_fixture("ok");
+        initialized(&runtime).await;
+        infer(&runtime, "fixture").await.unwrap();
+        runtime.start_idle_supervisor();
+        let owned = pids(&runtime);
+        let inner = Arc::downgrade(&runtime.inner);
+        drop(runtime);
+        wait_dead(owned).await;
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            while inner.upgrade().is_some() {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("idle supervisor must not retain the last owner");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn idle_supervisor_is_independent_owned_and_protects_active_leases() {
+        let (_temp, runtime) = protocol_fixture("warming");
+        let core = super::super::KnowledgeCore::new(context(_temp.path()));
+        let indexing_owner = core.inner.run.lock().await;
+        initialized(&runtime).await;
+        runtime.start_idle_supervisor();
+        let task_id = runtime
+            .inner
+            .idle_task
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .0
+            .as_ref()
+            .unwrap()
+            .id();
+        runtime.start_idle_supervisor();
+        assert_eq!(
+            runtime
+                .inner
+                .idle_task
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .0
+                .as_ref()
+                .unwrap()
+                .id(),
+            task_id
+        );
+        runtime.prewarm("slow").await.unwrap();
+        wait_for_file(&runtime, "pids").await;
+        let owned = pids(&runtime);
+        // The startup owns the mutex. An idle check must return without
+        // waiting for startup or taking/closing its unpublished process.
+        tokio::time::timeout(std::time::Duration::from_millis(100), runtime.stop_idle())
+            .await
+            .unwrap();
+        assert!(owned.iter().all(|pid| child_supervisor::tests::alive(*pid)));
+        wait_warm(&runtime).await;
+        let this = runtime.clone();
+        let cancel = cancellation();
+        let generation = cancel.generation.clone();
+        let request =
+            tokio::spawn(async move { this.embed(vec!["hold".into()], "slow", &cancel).await });
+        wait_for_file(&runtime, "holding").await;
+        tokio::time::timeout(std::time::Duration::from_millis(100), runtime.stop_idle())
+            .await
+            .unwrap();
+        assert!(!request.is_finished());
+        assert!(owned.iter().all(|pid| child_supervisor::tests::alive(*pid)));
+        generation.fetch_add(1, Ordering::SeqCst);
+        assert!(request.await.unwrap().is_err());
+        wait_dead(owned).await;
+        infer(&runtime, "fixture").await.unwrap();
+        let owned = pids(&runtime);
+        // A fresh last-used timestamp survives a check; expiry is injected
+        // rather than waiting two minutes or changing the idle policy.
+        runtime.stop_idle().await;
+        assert!(runtime.inner.process.lock().await.is_some());
+        runtime
+            .inner
+            .process
+            .lock()
+            .await
+            .as_mut()
+            .unwrap()
+            .last_used = now_ms().saturating_sub(120001);
+        let stopped = tokio::time::timeout(std::time::Duration::from_secs(4), async {
+            loop {
+                if runtime.inner.process.lock().await.is_none() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        // Always clean fixture children before asserting the red verdict.
+        runtime.shutdown().await;
+        wait_dead(owned).await;
+        assert!(runtime.inner.idle_task.lock().unwrap().is_none());
+        runtime.start_idle_supervisor();
+        assert!(runtime.inner.idle_task.lock().unwrap().is_none());
+        drop(indexing_owner);
+        stopped.expect("idle termination must run while source indexing owns run");
     }
 
     #[cfg(unix)]

@@ -6,9 +6,14 @@ mod extract;
 mod runtime;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod performance_tests;
+#[cfg(test)]
+mod lifecycle_tests;
 mod text;
 use crate::native_core::common::{now_ms, CoreContext, CoreResult, HandlerResult};
 use db::{number, string, Database};
+use db::semantic_work::{CountObservation, Scope};
 use extract::Cancellation;
 use notify::{RecursiveMode, Watcher};
 use runtime::{EmbeddingVariantId, ForegroundEmbedding, Runtime};
@@ -54,6 +59,10 @@ pub struct KnowledgeCore {
 }
 struct Inner {
     ctx: CoreContext,
+    #[cfg(test)]
+    progress_events: AtomicU64,
+    #[cfg(test)]
+    pacing_delays: AtomicU64,
     database: OnceCell<Database>,
     cache: Mutex<Cache>,
     runtimes: [Runtime; 2],
@@ -85,11 +94,26 @@ impl Drop for SemanticChange<'_> {
         self.changing.store(false, Ordering::SeqCst);
     }
 }
+#[derive(Debug, PartialEq, Eq)]
+enum IndexOutcome {
+    Unchanged,
+    Indexed,
+}
 struct Cache {
     settings: Value,
     status: Value,
     roots: Vec<Value>,
     storage: u64,
+    semantic_counts: Option<PublishedCounts>,
+}
+struct PublishedCounts {
+    scope: Scope,
+    observation: CountObservation,
+}
+fn semantic_counts_ready(settings: &Value, runtime: &Value) -> bool {
+    settings["embeddingModel"] == "embeddinggemma-2"
+        && runtime["modelState"] == "ready"
+        && runtime["integrityState"] == "verified"
 }
 impl KnowledgeCore {
     pub fn new(ctx: CoreContext) -> Self {
@@ -97,12 +121,17 @@ impl KnowledgeCore {
         Self {
             inner: Arc::new(Inner {
                 ctx,
+                #[cfg(test)]
+                progress_events: AtomicU64::new(0),
+                #[cfg(test)]
+                pacing_delays: AtomicU64::new(0),
                 database: OnceCell::new(),
                 cache: Mutex::new(Cache {
                     settings: db::default_settings(),
                     status: db::default_status(),
                     roots: vec![],
                     storage: 0,
+                    semantic_counts: None,
                 }),
                 runtimes,
                 semantic_generation: Arc::default(),
@@ -186,6 +215,7 @@ impl KnowledgeCore {
         self.refresh_counts().await?;
         for runtime in &self.inner.runtimes {
             runtime.initialize().await?;
+            runtime.start_idle_supervisor();
         }
         // Large learned-index counts belong to the background loop. Settings
         // must become readable before a million-chunk scan finishes.
@@ -292,46 +322,118 @@ impl KnowledgeCore {
             expected: self.inner.semantic_generation.load(Ordering::SeqCst),
         }
     }
-    fn semantic_snapshot(&self, settings: &Value) -> Value {
+    // Accept borrowed inputs so callers already holding cache never relock it.
+    fn semantic_scope_for(&self, settings: &Value, roots: &[Value]) -> (EmbeddingVariantId, Scope) {
         let variant =
             serde_json::from_value(settings["embeddingVariant"].clone()).unwrap_or_default();
+        (variant, Scope::new(settings, roots, self.runtime(variant).model_key()))
+    }
+    fn semantic_snapshot(&self, cache: &Cache) -> Value {
+        let settings = &cache.settings;
+        let (variant, scope) = self.semantic_scope_for(settings, &cache.roots);
         let mut status = self.runtime(variant).snapshot();
-        status["variants"] =
-            json!(EmbeddingVariantId::ALL.map(|v| self.runtime(v).snapshot_variant()));
-        status["indexVariant"] = json!(variant);
+        let published = cache.semantic_counts.as_ref().filter(|c| c.scope == scope);
+        let counts = published
+            .and_then(|c| c.observation.value)
+            .unwrap_or((0, 0));
+        let fresh = published.is_some_and(|c| c.observation.fresh)
+            && semantic_counts_ready(settings, &status)
+            && !self.inner.semantic_changing.load(Ordering::SeqCst)
+            && !self.inner.paused.load(Ordering::SeqCst)
+            && !self.inner.closed.load(Ordering::SeqCst);
+        status["indexedChunks"] = json!(counts.0);
+        status["totalChunks"] = json!(counts.1);
+        status["countsStale"] = json!(!fresh);
+        // Existing renderer checks indexVariant for count identity. Do not
+        // imply completion for an unknown/stale scope; keep numeric API fields.
+        if fresh {
+            status["indexVariant"] = json!(variant);
+        } else if let Some(fields) = status.as_object_mut() {
+            fields.remove("indexVariant");
+        }
+        status["variants"] = json!(EmbeddingVariantId::ALL.map(|v| {
+            let mut snapshot = self.runtime(v).snapshot_variant();
+            snapshot["countsStale"] = json!(v != variant || !fresh);
+            snapshot
+        }));
         status
     }
     fn background(&self) -> Value {
         let cache = self.inner.cache.lock().unwrap();
-        json!({"status":cache.status,"settings":{"embeddingModel":cache.settings["embeddingModel"],"embeddingVariant":cache.settings["embeddingVariant"]},"semanticSearch":self.semantic_snapshot(&cache.settings)})
+        json!({"status":cache.status,"settings":{"embeddingModel":cache.settings["embeddingModel"],"embeddingVariant":cache.settings["embeddingVariant"]},"semanticSearch":self.semantic_snapshot(&cache)})
     }
     fn snapshot(&self) -> Value {
         let c = self.inner.cache.lock().unwrap();
-        json!({"roots":c.roots,"status":c.status,"localBackendAvailable":true,"cloudBackendAvailable":false,"settings":c.settings,"storageBytes":c.storage,"semanticSearch":self.semantic_snapshot(&c.settings)})
+        json!({"roots":c.roots,"status":c.status,"localBackendAvailable":true,"cloudBackendAvailable":false,"settings":c.settings,"storageBytes":c.storage,"semanticSearch":self.semantic_snapshot(&c)})
+    }
+    fn semantic_scope(&self) -> Scope {
+        let cache = self.inner.cache.lock().unwrap();
+        self.semantic_scope_for(&cache.settings, &cache.roots).1
     }
     async fn refresh_semantic_counts(&self) -> Result<(), String> {
-        let ids = self.learned_root_ids();
-        let (counts, storage) = self
+        // Only the background owner calls this. UI/settings refreshes hydrate
+        // small snapshots, never enqueue COUNT. One selected scope at a time.
+        if self.inner.paused.load(Ordering::SeqCst)
+            || self.inner.closed.load(Ordering::SeqCst)
+            || self.inner.semantic_changing.load(Ordering::SeqCst)
+            || self.inner.ctx.foreground_active()
+        {
+            return Ok(());
+        }
+        let cancel = self.semantic_cancel();
+        let scope = {
+            let cache = self.inner.cache.lock().unwrap();
+            let (variant, scope) = self.semantic_scope_for(&cache.settings, &cache.roots);
+            let runtime = self.runtime(variant);
+            if !semantic_counts_ready(&cache.settings, &runtime.snapshot()) {
+                return Ok(());
+            }
+            scope
+        };
+        let requested = scope.clone();
+        if let Some(c) = self.inner.cache.lock().unwrap().semantic_counts.as_mut() {
+            c.observation.fresh = false;
+        }
+        let result = self
             .database()
             .await?
-            .call(move |s| {
-                let counts = EmbeddingVariantId::ALL
-                    .map(|v| s.gemma_counts_for_model(&ids, v.descriptor().model_key))
-                    .into_iter()
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok((counts, s.storage()))
+            .call_search(db::SearchToken::background(cancel.clone()), move |s| {
+                let observation = s.semantic_counts_if_due(&requested, std::time::Instant::now())?;
+                let storage = observation.reconciled.then(|| s.storage());
+                Ok((observation, storage))
             })
-            .await?;
-        // Snapshot polling no longer reads SQLite. Keep disk usage current as
-        // background extraction and embedding add data to the profile.
-        self.inner.cache.lock().unwrap().storage = storage;
-        for (v, (indexed, total)) in EmbeddingVariantId::ALL.into_iter().zip(counts) {
-            self.runtime(v)
-                .patch(json!({"indexedChunks":indexed,"totalChunks":total}));
+            .await;
+        cancel.check()?;
+        let (observation, storage) = match result {
+            // External root/settings writes require rehydrating the cheap cache.
+            Err(e) if e == "Knowledge semantic scope changed" => {
+                self.refresh().await?;
+                return Err(e);
+            }
+            result => result?,
+        };
+        if self.inner.paused.load(Ordering::SeqCst)
+            || self.inner.closed.load(Ordering::SeqCst)
+            || self.inner.semantic_changing.load(Ordering::SeqCst)
+        {
+            return Ok(());
+        }
+        let mut cache = self.inner.cache.lock().unwrap();
+        cancel.check()?;
+        let (variant, current_scope) = self.semantic_scope_for(&cache.settings, &cache.roots);
+        if current_scope == scope
+            && semantic_counts_ready(&cache.settings, &self.runtime(variant).snapshot())
+        {
+            if let Some(storage) = storage {
+                cache.storage = storage;
+            }
+            cache.semantic_counts = Some(PublishedCounts { scope, observation });
         }
         Ok(())
     }
     fn status(&self, patch: Value) {
+        #[cfg(test)]
+        self.inner.progress_events.fetch_add(1, Ordering::SeqCst);
         let status = {
             let mut c = self.inner.cache.lock().unwrap();
             if let Some(fields) = patch.as_object() {
@@ -369,12 +471,22 @@ impl KnowledgeCore {
             .await?;
         {
             let mut c = self.inner.cache.lock().unwrap();
+            if self.semantic_scope_for(&c.settings, &c.roots).1
+                != self.semantic_scope_for(&settings, &roots).1
+                && !self.inner.semantic_changing.load(Ordering::SeqCst)
+            {
+                // External scope changes also wake/reset learned-work retries.
+                self.inner
+                    .semantic_generation
+                    .fetch_add(1, Ordering::SeqCst);
+            }
             c.roots = roots;
             c.settings = settings;
             c.storage = storage;
         }
         self.refresh_counts().await?;
-        self.refresh_semantic_counts().await?;
+        // Counts are coalesced by the background owner, not settings polling.
+        self.inner.wake.notify_one();
         Ok(())
     }
     fn request_index(&self) {
@@ -384,17 +496,16 @@ impl KnowledgeCore {
     async fn sync_watchers(&self) -> Result<(), String> {
         let roots = self.roots();
         let dirty = self.inner.dirty.clone();
+        let watched_paths: Vec<_> = roots.iter().map(|r| PathBuf::from(string(r, "path"))).collect();
         let watcher = tokio::task::spawn_blocking(move || {
             let mut watcher = notify::recommended_watcher(
-                move |event: notify::Result<notify::Event>| match event {
-                    Ok(event) if !matches!(event.kind, notify::EventKind::Access(_)) => {
+                move |event: notify::Result<notify::Event>| {
+                    if let Err(error) = &event {
+                        log::warn!("Knowledge watcher: {error}");
+                    }
+                    if watcher_requests_reconcile(&event, &watched_paths) {
                         dirty.store(now_ms(), Ordering::SeqCst);
                     }
-                    Err(e) => {
-                        log::warn!("Knowledge watcher: {e}");
-                        dirty.store(now_ms(), Ordering::SeqCst);
-                    }
-                    _ => {}
                 },
             )
             .map_err(|e| e.to_string())?;
@@ -454,10 +565,10 @@ impl KnowledgeCore {
         let mut started = false;
         let mut backfill = true;
         let mut last_vector = 0;
-        let mut last_counts = 0;
         let mut last_rescan = now_ms();
         let mut last_semantic = Value::Null;
         let mut retry_learned_after = 0;
+        let mut retry_counts_after = 0;
         let mut last_variant = self.selected_variant();
         let mut last_semantic_epoch = self.inner.semantic_generation.load(Ordering::SeqCst);
         while !self.inner.closed.load(Ordering::SeqCst) {
@@ -465,12 +576,13 @@ impl KnowledgeCore {
             let epoch = self.inner.semantic_generation.load(Ordering::SeqCst);
             if epoch != last_semantic_epoch {
                 retry_learned_after = 0;
+                retry_counts_after = 0;
                 last_semantic_epoch = epoch;
             }
             if variant != last_variant {
                 last_variant = variant;
                 retry_learned_after = 0;
-                last_counts = 0;
+                retry_counts_after = 0;
                 backfill = true;
             }
             let runtime = self.runtime(variant);
@@ -487,7 +599,6 @@ impl KnowledgeCore {
             }
             // Periodic reconciliation also recovers from OS watcher overflow/missing permissions.
             if now_ms().saturating_sub(last_rescan) > 300000 {
-                last_rescan = now_ms();
                 self.request_index();
             }
             if !self.inner.paused.load(Ordering::SeqCst)
@@ -504,6 +615,9 @@ impl KnowledgeCore {
                             let _ = self.persist().await;
                         }
                     }
+                    // Missing watcher/overflow recovery remains periodic, but
+                    // a long pass must not make another pass immediately due.
+                    last_rescan = now_ms();
                 }
             }
             if self.inner.closed.load(Ordering::SeqCst) {
@@ -539,14 +653,14 @@ impl KnowledgeCore {
                     }
                 }
             }
-            if now_ms().saturating_sub(last_counts) > 10000 {
-                last_counts = now_ms();
-                let _ = self.refresh_semantic_counts().await;
+            // This is a cheap generation/scope probe on unchanged ticks. The
+            // worker coalesces dirty generations for 10s since COUNT completion.
+            if now_ms() >= retry_counts_after && self.refresh_semantic_counts().await.is_err() {
+                // Keep the scope dirty on failure without repeatedly running a
+                // failing large query. Selection/root/pause epochs reset this.
+                retry_counts_after = now_ms() + 30000;
             }
-            for runtime in &self.inner.runtimes {
-                runtime.stop_idle().await;
-            }
-            let semantic = self.semantic_snapshot(&self.settings());
+            let semantic = self.semantic_snapshot(&self.inner.cache.lock().unwrap());
             if semantic != last_semantic {
                 last_semantic = semantic;
                 self.status(json!({}));
@@ -575,14 +689,12 @@ impl KnowledgeCore {
             "fast" => 16,
             _ => 8,
         };
-        let ids = self.learned_root_ids();
-        let condition = cancel.clone();
+        let scope = self.semantic_scope();
         let chunks = self
             .database()
             .await?
-            .call(move |s| {
-                condition.check()?;
-                s.gemma_pending_for_model(&ids, count, key)
+            .call_search(db::SearchToken::background(cancel.clone()), move |s| {
+                s.semantic_pending(&scope, count, std::time::Instant::now())
             })
             .await?;
         cancel.check()?;
@@ -623,7 +735,9 @@ impl KnowledgeCore {
                 })
                 .await?;
             cancel.check()?;
-            self.refresh_semantic_counts().await?;
+            if let Some(c) = self.inner.cache.lock().unwrap().semantic_counts.as_mut() {
+                c.observation.fresh = false;
+            }
             Ok::<_, String>(())
         }
         .await;
@@ -703,6 +817,7 @@ impl KnowledgeCore {
                 .unwrap_or(1)
                 .clamp(1, 4) as usize,
         ));
+        let mut unpublished = 0usize;
         loop {
             self.idle(cancel).await?;
             let jobs = db.call(move |s| s.next_batch(concurrency)).await?;
@@ -721,13 +836,14 @@ impl KnowledgeCore {
                     let result = if let Some(root) = root {
                         self.index_one(&root, &path, cancel, ocr).await
                     } else {
-                        Ok(())
+                        Ok(IndexOutcome::Unchanged)
                     };
                     (job, position, path, result)
                 });
             }
             while let Some((job, position, path, result)) = futures.next().await {
                 cancel.check()?;
+                let paced = result != Ok(IndexOutcome::Unchanged);
                 let failed = if let Err(error) = result {
                     let id = text::hash(&path);
                     let condition = cancel.clone();
@@ -741,29 +857,46 @@ impl KnowledgeCore {
                     false
                 };
                 let condition = cancel.clone();
+                unpublished += 1;
+                let publish = paced || unpublished >= 32;
                 let checkpoint = db
                     .call(move |s| {
                         condition.check()?;
                         s.complete(&job, position, failed)?;
-                        s.checkpoint()
+                        if publish {
+                            s.checkpoint()
+                        } else {
+                            Ok(None)
+                        }
                     })
-                    .await?
-                    .ok_or("Knowledge queue checkpoint disappeared")?;
-                self.refresh_counts().await?;
-                let processed = number(&checkpoint, "processedSources");
-                let total = number(&checkpoint, "totalSources");
-                self.status(json!({"state":"indexing","jobId":checkpoint["jobId"],"processedSources":processed,"failedSources":checkpoint["failedSources"],"queuedSources":(total-processed).max(0),"progress":if total>0{processed as f64/total as f64}else{1.},"detail":format!("Processed {}",db::title(&path))}));
-                self.persist().await?;
-                let settings = self.settings();
-                let delay = match string(&settings, "indexingSpeed") {
-                    "slow" => 120,
-                    "fast" => 0,
-                    _ => 40,
-                };
-                tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                    .await?;
+                if let Some(checkpoint) = checkpoint {
+                    unpublished = 0;
+                    self.refresh_counts().await?;
+                    let processed = number(&checkpoint, "processedSources");
+                    let total = number(&checkpoint, "totalSources");
+                    self.status(json!({"state":"indexing","jobId":checkpoint["jobId"],"processedSources":processed,"failedSources":checkpoint["failedSources"],"queuedSources":(total-processed).max(0),"progress":if total>0{processed as f64/total as f64}else{1.},"detail":format!("Processed {}",db::title(&path))}));
+                    self.persist().await?;
+                }
+                if paced {
+                    let settings = self.settings();
+                    let delay = match string(&settings, "indexingSpeed") {
+                        "slow" => 120,
+                        "fast" => 0,
+                        _ => 40,
+                    };
+                    #[cfg(test)]
+                    self.inner.pacing_delays.fetch_add(1, Ordering::SeqCst);
+                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                }
             }
         }
         cancel.check()?;
+        // Publish the durable tail before deleting the checkpoint. On cancellation
+        // the checkpoint remains authoritative and resume reads its exact counts.
+        if let Some(checkpoint) = db.call(|s| s.checkpoint()).await? {
+            self.status(json!({"processedSources":checkpoint["processedSources"],"failedSources":checkpoint["failedSources"]}));
+        }
         let condition = cancel.clone();
         db.call(move |s| {
             condition.check()?;
@@ -780,11 +913,11 @@ impl KnowledgeCore {
         path: &str,
         cancel: &Cancellation,
         ocr: Arc<tokio::sync::Semaphore>,
-    ) -> Result<(), String> {
+    ) -> Result<IndexOutcome, String> {
         let settings = self.settings();
         let selected_depth = depth(root, &settings);
         if selected_depth == "off" {
-            return Ok(());
+            return Ok(IndexOutcome::Unchanged);
         }
         let profile = text::profile(selected_depth);
         let path_owned = path.to_owned();
@@ -801,7 +934,7 @@ impl KnowledgeCore {
                 && existing["modifiedAt"].as_f64().unwrap_or(0.).round() == modified.round()
                 && existing["indexingProfile"] == profile
             {
-                return Ok(());
+                return Ok(IndexOutcome::Unchanged);
             }
         }
         self.idle(cancel).await?;
@@ -909,7 +1042,8 @@ impl KnowledgeCore {
                 condition.check()?;
                 s.save_result(&id, &result)
             })
-            .await
+            .await?;
+        Ok(IndexOutcome::Indexed)
     }
     async fn prewarm_sources(&self) {
         // Queue context only, including on scope/model changes. Never allocate
@@ -1077,7 +1211,6 @@ impl KnowledgeCore {
             if model == "embeddinggemma-2" {
                 runtime.prewarm(string(&settings, "indexingSpeed")).await?;
             }
-            self.refresh_semantic_counts().await?;
             self.inner.wake.notify_one();
             return Ok(self.snapshot());
         }
@@ -1281,9 +1414,9 @@ impl KnowledgeCore {
             Some("scanning" | "indexing")
         );
         self.inner.generation.fetch_add(1, Ordering::SeqCst);
-        self.inner
-            .semantic_generation
-            .fetch_add(1, Ordering::SeqCst);
+        // Fence counts/pending reads throughout asynchronous scope mutations,
+        // not just at admission. Drop fences errors and dropped IPC futures too.
+        let _change = self.semantic_change();
         for generation in &self.inner.search_generations {
             generation.fetch_add(1, Ordering::SeqCst);
         }
@@ -1300,6 +1433,14 @@ impl KnowledgeCore {
             "knowledge:index:pause" => {
                 self.inner.paused.store(true, Ordering::SeqCst);
                 self.database().await?.pause_search_cache(true);
+                // Coalesced UI updates may trail durable completion. A pause
+                // publishes the authoritative tail after the indexing owner exits.
+                let checkpoint = db.call(|s| s.checkpoint()).await?;
+                if let Some(checkpoint) = checkpoint {
+                    let processed = number(&checkpoint, "processedSources");
+                    let total = number(&checkpoint, "totalSources");
+                    self.status(json!({"processedSources":processed,"failedSources":checkpoint["failedSources"],"queuedSources":(total-processed).max(0),"progress":if total>0{processed as f64/total as f64}else{1.}}));
+                }
                 self.status(json!({"state":"paused","detail":"Knowledge indexing paused"}));
                 for runtime in &self.inner.runtimes {
                     runtime.patch(json!({"indexing":false}));
@@ -1406,6 +1547,7 @@ impl KnowledgeCore {
             _ => return Err(format!("Unhandled owned knowledge channel: {channel}")),
         }
         self.refresh().await?;
+        drop(_change);
         self.prewarm_sources().await;
         if watchers {
             self.sync_watchers().await?;
@@ -1525,4 +1667,60 @@ fn scan(
         }
     }
     Ok((paths, complete))
+}
+
+// Filter only paths certainly hidden by the scanner's subtree rules. No stat or
+// extension test: removed/renamed directories must still reconcile their children.
+fn watcher_reconcile(event: &notify::Event, roots: &[PathBuf]) -> bool {
+    if event.need_rescan() {
+        return true;
+    }
+    if matches!(event.kind, notify::EventKind::Access(_)) {
+        return false;
+    }
+    if matches!(
+        event.kind,
+        notify::EventKind::Any | notify::EventKind::Other
+    ) || event.paths.is_empty()
+    {
+        return true;
+    }
+    event.paths.iter().any(|path| {
+        let containing: Vec<_> = roots
+            .iter()
+            .filter_map(|root| path.strip_prefix(root).ok())
+            .collect();
+        if containing.is_empty() {
+            return true;
+        }
+        // A nested explicit root overrides the parent's exclusion (scanner depth 0).
+        containing.iter().any(|relative| {
+            let components: Vec<_> = relative.components().collect();
+            if components
+                .iter()
+                .any(|c| !matches!(c, std::path::Component::Normal(_)))
+            {
+                return true;
+            }
+            !components.iter().enumerate().any(|(i, component)| {
+                match component {
+                    std::path::Component::Normal(name) => {
+                        // Ancestors are directories even after deletion. For the
+                        // event leaf, only use rules shared by files/directories.
+                        let name = name.to_string_lossy();
+                        extract::skip(&name, true)
+                            && (i + 1 < components.len() || extract::skip(&name, false))
+                    }
+                    _ => false,
+                }
+            })
+        })
+    })
+}
+
+fn watcher_requests_reconcile(event: &notify::Result<notify::Event>, roots: &[PathBuf]) -> bool {
+    match event {
+        Ok(event) => watcher_reconcile(event, roots),
+        Err(_) => true,
+    }
 }

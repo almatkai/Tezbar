@@ -28,32 +28,33 @@ pub async fn output(program: &str, args: &[&str], timeout: u64) -> Result<String
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
+#[cfg(target_os = "macos")]
+#[path = "bundle_metadata.rs"]
+mod bundle_metadata;
+
 pub async fn bundle_id(path: &str) -> Value {
     #[cfg(target_os = "macos")]
     {
         let path = Path::new(path).join("Contents/Info.plist");
-        if let Ok(s) = output(
-            "/usr/bin/plutil",
-            &[
-                "-extract",
-                "CFBundleIdentifier",
-                "raw",
-                "-o",
-                "-",
-                &path.to_string_lossy(),
-            ],
-            2,
-        )
+        return tokio::task::spawn_blocking(move || {
+            let path = if path.is_absolute() {
+                path
+            } else {
+                std::env::current_dir().ok()?.join(path)
+            };
+            bundle_metadata::read(&path)
+        })
         .await
-        {
-            let s = s.trim();
-            if !s.is_empty() {
-                return json!(s);
-            }
-        }
+        .ok()
+        .flatten()
+        .map(Value::String)
+        .unwrap_or(Value::Null);
     }
-    let _ = path;
-    Value::Null
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        Value::Null
+    }
 }
 pub async fn applications(ctx: &CoreContext) -> CoreResult {
     let home = ctx.paths.home_dir.clone();
@@ -143,6 +144,10 @@ pub async fn applications(ctx: &CoreContext) -> CoreResult {
     Ok(json!(apps))
 }
 pub fn app_documents(apps: &[Value]) -> Vec<Value> {
+    app_documents_at(apps, now_ms())
+}
+// Refresh time is used only when the indexed payload actually changes.
+pub(super) fn app_documents_at(apps: &[Value], now: u64) -> Vec<Value> {
     apps.iter()
         .filter_map(|a| {
             let name = a["name"].as_str()?;
@@ -154,14 +159,18 @@ pub fn app_documents(apps: &[Value]) -> Vec<Value> {
                 path,
                 &format!("{name} {path} {}", text::aliases(name).join(" ")),
                 json!({"type":"open-app","appName":name,"appPath":path}),
-                now_ms(),
+                now,
             );
             d["sourcePath"] = json!(path);
+            d["_syntheticUpdatedAt"] = json!(true);
             Some(d)
         })
         .collect()
 }
 pub fn command_documents(native: &[Value]) -> Vec<Value> {
+    command_documents_at(native, now_ms())
+}
+pub(super) fn command_documents_at(native: &[Value], now: u64) -> Vec<Value> {
     let mut out = vec![];
     for d in native {
         let Some(id) = d["id"].as_str() else { continue };
@@ -188,7 +197,7 @@ pub fn command_documents(native: &[Value]) -> Vec<Value> {
                     .unwrap_or_default()
             ),
             json!({"type":"run-native-command","commandId":id}),
-            now_ms(),
+            now,
         ));
     }
     for (id, title, subtitle, keywords) in [
@@ -262,8 +271,11 @@ pub fn command_documents(native: &[Value]) -> Vec<Value> {
             subtitle,
             &format!("{title} {subtitle} {keywords}"),
             json!({"type":"invoke-command","commandId":id}),
-            now_ms(),
+            now,
         ));
+    }
+    for d in &mut out {
+        d["_syntheticUpdatedAt"] = json!(true);
     }
     out
 }
@@ -539,13 +551,29 @@ pub async fn watch(
             .call(move |c| {
                 let tx = c.transaction().map_err(|e| e.to_string())?;
                 for id in deleted {
-                    tx.execute("DELETE FROM documents WHERE id=?1 OR (category='files' AND source_path>=?2 AND source_path<?3)",rusqlite::params![id,format!("{}{}",id.trim_start_matches("file:"),std::path::MAIN_SEPARATOR),format!("{}{}",id.trim_start_matches("file:"),char::from_u32(std::path::MAIN_SEPARATOR as u32+1).unwrap())]).map_err(|e|e.to_string())?;
+                    delete_watched_path(&tx, &id)?;
                 }
                 tx.commit().map_err(|e| e.to_string())?;
                 Ok(Value::Null)
             })
             .await;
     }
+}
+// Keep the exact-id arm and file-only subtree arm together, backed by the
+// (category, source_path) index. Deleted directories cannot be checked by allowed().
+pub(super) const WATCHER_DELETE_SQL: &str = "DELETE FROM documents WHERE id=?1 OR (category='files' AND source_path>=?2 AND source_path<?3)";
+pub(super) fn delete_watched_path(db: &rusqlite::Connection, id: &str) -> Result<usize, String> {
+    let path = id.trim_start_matches("file:");
+    let separator = std::path::MAIN_SEPARATOR;
+    db.execute(
+        WATCHER_DELETE_SQL,
+        rusqlite::params![
+            id,
+            format!("{path}{separator}"),
+            format!("{path}{}", char::from_u32(separator as u32 + 1).unwrap()),
+        ],
+    )
+    .map_err(|e| e.to_string())
 }
 pub fn resolve(home: &Path, input: &str) -> PathBuf {
     let input = input

@@ -74,14 +74,15 @@ pub fn distance(a: &str, b: &str) -> usize {
     let a: Vec<_> = a.to_lowercase().encode_utf16().collect();
     let b: Vec<_> = b.to_lowercase().encode_utf16().collect();
     let mut prev: Vec<_> = (0..=b.len()).collect();
+    let mut cur = vec![0; b.len() + 1];
     for (i, x) in a.iter().enumerate() {
-        let mut cur = vec![i + 1; b.len() + 1];
+        cur[0] = i + 1;
         for (j, y) in b.iter().enumerate() {
             cur[j + 1] = (prev[j + 1] + 1)
                 .min(cur[j] + 1)
                 .min(prev[j] + usize::from(x != y));
         }
-        prev = cur;
+        std::mem::swap(&mut prev, &mut cur);
     }
     prev[b.len()]
 }
@@ -263,6 +264,53 @@ pub fn app_match(name: &str, q: &str) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn distance_matches_reference() {
+        fn reference(a: &str, b: &str) -> usize {
+            let a: Vec<_> = a.to_lowercase().encode_utf16().collect();
+            let b: Vec<_> = b.to_lowercase().encode_utf16().collect();
+            let mut matrix = vec![vec![0; b.len() + 1]; a.len() + 1];
+            for i in 0..=a.len() {
+                matrix[i][0] = i;
+            }
+            for j in 0..=b.len() {
+                matrix[0][j] = j;
+            }
+            for i in 1..=a.len() {
+                for j in 1..=b.len() {
+                    matrix[i][j] = (matrix[i - 1][j] + 1)
+                        .min(matrix[i][j - 1] + 1)
+                        .min(matrix[i - 1][j - 1] + usize::from(a[i - 1] != b[j - 1]));
+                }
+            }
+            matrix[a.len()][b.len()]
+        }
+        let mut inputs = vec![
+            String::new(),
+            "İΣҚазақ".into(),
+            "😀𐐀".into(),
+            "A".repeat(90),
+            format!("{}b", "a".repeat(89)),
+            "é e\u{301}".into(),
+        ];
+        let alphabet = ['A', 'b', 'İ', 'Σ', 'қ', '😀', '𐐀', '\u{301}'];
+        let mut seed = 17u64;
+        for n in 0..48 {
+            inputs.push(
+                (0..n % 17)
+                    .map(|_| {
+                        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                        alphabet[(seed >> 32) as usize % alphabet.len()]
+                    })
+                    .collect(),
+            );
+        }
+        for a in &inputs {
+            for b in &inputs {
+                assert_eq!(distance(a, b), reference(a, b), "{a:?} / {b:?}");
+            }
+        }
+    }
     #[test]
     fn multilingual() {
         assert!(variants("сркщьу").contains(&"chrome".into()));

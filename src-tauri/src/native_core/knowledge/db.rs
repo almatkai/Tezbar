@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use tokio::sync::{mpsc, oneshot};
 #[path = "search_cache.rs"]
 mod search_cache;
+#[path = "semantic_work.rs"]
+pub(super) mod semantic_work;
 pub(crate) use search_cache::{SearchGuard, SearchToken};
 use std::{
     cell::RefCell,
@@ -146,9 +148,14 @@ fn run_worker(
 pub struct Store {
     search_cache: RefCell<search_cache::Cache>,
     search_cancel: Option<SearchToken>,
+    semantic_work: RefCell<semantic_work::Work>,
     pub db: Connection,
     pub vector: bool,
     pub path: PathBuf,
+    // Drop after db: trace callbacks may run until the connection closes, even
+    // when a regression test panics before its explicit asynchronous close.
+    #[cfg(test)]
+    pub(super) trace_owner: Option<Arc<dyn Send + Sync>>,
 }
 fn err(e: rusqlite::Error) -> String {
     e.to_string()
@@ -220,6 +227,9 @@ impl Store {
             path,
             search_cache: RefCell::default(),
             search_cancel: None,
+            semantic_work: RefCell::default(),
+            #[cfg(test)]
+            trace_owner: None,
         };
         // Install TEMP transactional tracking outside cancellable search
         // savepoints. Optional-cache setup failure cannot disable streaming.
@@ -519,7 +529,7 @@ impl Store {
         tx.commit().map_err(err)
     }
     pub fn next_batch(&self, limit: usize) -> Result<Vec<(String, i64, String, String)>, String> {
-        let mut q=self.db.prepare("SELECT job_id,position,root_id,path FROM knowledge_indexing_queue ORDER BY position LIMIT ?").map_err(err)?;
+        let mut q=self.db.prepare("SELECT job_id,position,root_id,path FROM knowledge_indexing_queue WHERE job_id=(SELECT job_id FROM knowledge_indexing_jobs WHERE id=1) ORDER BY position LIMIT ?").map_err(err)?;
         let rows = q
             .query_map([limit as i64], |r| {
                 Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))

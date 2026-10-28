@@ -211,7 +211,8 @@ CREATE TABLE IF NOT EXISTS click_events(id INTEGER PRIMARY KEY AUTOINCREMENT,cre
         }
     }
     db.execute_batch(
-        "CREATE INDEX IF NOT EXISTS idx_documents_source_path ON documents(source_path)",
+        "CREATE INDEX IF NOT EXISTS idx_documents_source_path ON documents(source_path);
+         CREATE INDEX IF NOT EXISTS idx_documents_category_source_path ON documents(category, source_path);",
     )
     .map_err(err)?;
     let sql: String = db
@@ -265,7 +266,10 @@ fn prune(db: &Connection) -> Result<(), String> {
 pub fn upsert(db: &Connection, d: &Value) -> Result<(), String> {
     let id = d["id"].as_str().ok_or("Document id required")?;
     let category = d["category"].as_str().ok_or("Document category required")?;
-    db.execute("INSERT INTO documents(id,category,title,subtitle,tokens,action_json,updated_at,source_path,source_mtime,popularity) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(id) DO UPDATE SET category=excluded.category,title=excluded.title,subtitle=excluded.subtitle,tokens=excluded.tokens,action_json=excluded.action_json,updated_at=excluded.updated_at,source_path=excluded.source_path,source_mtime=excluded.source_mtime,popularity=excluded.popularity WHERE title<>excluded.title OR subtitle<>excluded.subtitle OR tokens<>excluded.tokens OR action_json<>excluded.action_json OR updated_at<>excluded.updated_at OR popularity<>excluded.popularity OR source_path IS NOT excluded.source_path OR source_mtime IS NOT excluded.source_mtime",params![id,category,d["title"].as_str().unwrap_or(""),d["subtitle"].as_str().unwrap_or(""),d["tokens"].as_str().unwrap_or(""),serde_json::to_string(&d["action"]).map_err(err)?,d["updatedAt"].as_u64().unwrap_or(0),d["sourcePath"].as_str(),d["sourceMtime"].as_u64(),d["popularity"].as_f64().unwrap_or(0.)]).map_err(err)?;
+    // Only builders without a source modification time opt in. Their refresh
+    // clock must not refresh ranking or rewrite FTS for an unchanged payload.
+    let synthetic_time = d["_syntheticUpdatedAt"].as_bool().unwrap_or(false);
+    db.execute("INSERT INTO documents(id,category,title,subtitle,tokens,action_json,updated_at,source_path,source_mtime,popularity) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(id) DO UPDATE SET category=excluded.category,title=excluded.title,subtitle=excluded.subtitle,tokens=excluded.tokens,action_json=excluded.action_json,updated_at=excluded.updated_at,source_path=excluded.source_path,source_mtime=excluded.source_mtime,popularity=excluded.popularity WHERE category<>excluded.category OR title<>excluded.title OR subtitle<>excluded.subtitle OR tokens<>excluded.tokens OR action_json<>excluded.action_json OR (NOT ?11 AND updated_at<>excluded.updated_at) OR popularity<>excluded.popularity OR source_path IS NOT excluded.source_path OR source_mtime IS NOT excluded.source_mtime",params![id,category,d["title"].as_str().unwrap_or(""),d["subtitle"].as_str().unwrap_or(""),d["tokens"].as_str().unwrap_or(""),serde_json::to_string(&d["action"]).map_err(err)?,d["updatedAt"].as_u64().unwrap_or(0),d["sourcePath"].as_str(),d["sourceMtime"].as_u64(),d["popularity"].as_f64().unwrap_or(0.),synthetic_time]).map_err(err)?;
     Ok(())
 }
 const SELECT:&str="SELECT d.id,d.category,d.title,d.subtitle,d.tokens,d.action_json,d.updated_at,d.popularity FROM documents d ";
@@ -721,5 +725,341 @@ mod reader_tests {
             "file:calculator"
         );
         assert_eq!(search(&db, "calclator", false).unwrap(), json!([]));
+    }
+}
+
+#[cfg(test)]
+mod performance_regression_tests {
+    use super::super::providers::{
+        app_documents_at, command_documents_at, delete_watched_path, WATCHER_DELETE_SQL,
+    };
+    use super::*;
+
+    fn observed_db() -> (tempfile::TempDir, Connection) {
+        let dir = tempfile::tempdir().unwrap();
+        let db = init(dir.path().join("launcher.sqlite3")).unwrap();
+        db.execute_batch("CREATE TABLE observed_updates(id TEXT); CREATE TRIGGER observed_update AFTER UPDATE ON documents BEGIN INSERT INTO observed_updates VALUES(new.id); END;").unwrap();
+        (dir, db)
+    }
+    fn stamp(db: &Connection, id: &str) -> u64 {
+        db.query_row("SELECT updated_at FROM documents WHERE id=?", [id], |r| {
+            r.get(0)
+        })
+        .unwrap()
+    }
+    fn integrity(db: &Connection) {
+        // rank=1 compares the external-content FTS index with the documents table.
+        db.execute_batch(
+            "INSERT INTO documents_fts(documents_fts,rank) VALUES('integrity-check',1);",
+        )
+        .unwrap();
+    }
+    fn refresh_docs(now: u64) -> Vec<Value> {
+        let mut docs = app_documents_at(
+            &[json!({"name":"Alpha","path":"/Applications/Alpha.app"})],
+            now,
+        );
+        docs.extend(command_documents_at(
+            &[json!({"id":"alpha","title":"Alpha native","subtitle":"Fixed","keywords":["alpha"]})],
+            now,
+        ));
+        docs
+    }
+    #[test]
+    fn real_builders_do_not_update_or_rewrite_fts_on_clock_only_refresh() {
+        let (_dir, db) = observed_db();
+        let initial = refresh_docs(1000);
+        assert!(initial.iter().any(|d| d["category"] == "applications"));
+        assert!(initial.iter().any(|d| d["category"] == "native-command"));
+        assert!(initial.iter().any(|d| d["category"] == "commands"));
+        for d in &initial {
+            upsert(&db, d).unwrap();
+        }
+        let before = db.total_changes();
+        for now in [11000, 61000, 121000] {
+            for d in refresh_docs(now) {
+                upsert(&db, &d).unwrap();
+            }
+        }
+        let delta = db.total_changes() - before;
+        let updates: u64 = db
+            .query_row("SELECT count(*) FROM observed_updates", [], |r| r.get(0))
+            .unwrap();
+        println!("clock-only refresh: {} documents x 3 refreshes, {updates} UPDATEs, {delta} total_changes (includes FTS internals and observer)", initial.len());
+        assert_eq!(
+            delta, 0,
+            "clock-only refresh must perform no document or FTS writes"
+        );
+        assert_eq!(updates, 0);
+        for d in initial {
+            assert_eq!(stamp(&db, d["id"].as_str().unwrap()), 1000);
+        }
+        integrity(&db);
+    }
+    #[test]
+    fn real_builder_payload_changes_get_change_time_and_ranking_recency() {
+        let (_dir, db) = observed_db();
+        let apps = [json!({"name":"Alpha","path":"/Applications/Alpha.app"})];
+        let id = "app:/Applications/Alpha.app";
+        upsert(&db, &app_documents_at(&apps, 1000)[0]).unwrap();
+        // Same category and score: timestamp is the actual ranking tie-breaker.
+        let peer = json!({"id":"app:peer","category":"applications","title":"Peer","subtitle":"Application","tokens":"peer","action":{},"updatedAt":2000});
+        upsert(&db, &peer).unwrap();
+        assert_eq!(search(&db, "", true).unwrap()[0]["id"], "app:peer");
+        upsert(&db, &app_documents_at(&apps, 3000)[0]).unwrap();
+        assert_eq!(search(&db, "", true).unwrap()[0]["id"], "app:peer");
+        let renamed = [json!({"name":"Beta","path":"/Applications/Alpha.app"})];
+        let mut changed = app_documents_at(&renamed, 4000).remove(0);
+        upsert(&db, &changed).unwrap();
+        assert_eq!(stamp(&db, id), 4000);
+        assert_eq!(search(&db, "", true).unwrap()[0]["id"], id);
+        assert_eq!(
+            db.query_row("SELECT title FROM documents WHERE id=?", [id], |r| r
+                .get::<_, String>(0))
+                .unwrap(),
+            "Beta"
+        );
+        assert_eq!(
+            db.query_row(
+                "SELECT count(*) FROM documents_fts WHERE documents_fts MATCH 'beta'",
+                [],
+                |r| r.get::<_, u64>(0)
+            )
+            .unwrap(),
+            1
+        );
+        // Exercise every guard field independently, including action-only and category-only.
+        for (i, (key, value)) in [
+            (
+                "action",
+                json!({"type":"open-app","appName":"Beta","appPath":"/new-target"}),
+            ),
+            ("popularity", json!(123.0)),
+            ("category", json!("commands")),
+            ("subtitle", json!("New subtitle")),
+            ("tokens", json!("beta newtoken")),
+            ("sourcePath", json!("/new-source")),
+            ("sourceMtime", json!(900)),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let now = 5000 + i as u64;
+            changed[key] = value.clone();
+            changed["updatedAt"] = json!(now);
+            let before = db.total_changes();
+            upsert(&db, &changed).unwrap();
+            assert!(db.total_changes() > before, "{key} must update");
+            assert_eq!(stamp(&db, id), now);
+            let before = db.total_changes();
+            changed["updatedAt"] = json!(now + 10000);
+            upsert(&db, &changed).unwrap();
+            assert_eq!(db.total_changes(), before, "{key} must then become stable");
+        }
+        let (category, action, popularity): (String, String, f64) = db
+            .query_row(
+                "SELECT category,action_json,popularity FROM documents WHERE id=?",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(category, "commands");
+        assert_eq!(
+            serde_json::from_str::<Value>(&action).unwrap(),
+            changed["action"]
+        );
+        assert_eq!(popularity, 123.0);
+        // Native title changes also travel through the real command builder.
+        for (title, now) in [("Before", 1000), ("After", 9000)] {
+            for d in command_documents_at(&[json!({"id":"changing","title":title})], now) {
+                upsert(&db, &d).unwrap();
+            }
+        }
+        assert_eq!(stamp(&db, "native:changing"), 9000);
+        integrity(&db);
+    }
+    #[test]
+    fn source_timestamps_still_update_and_category_only_changes_are_not_lost() {
+        let (_dir, db) = observed_db();
+        for category in ["quick-notes", "snippets", "files", "extensions"] {
+            let mut d = super::super::stores::document(
+                category,
+                category,
+                "Real",
+                "",
+                "real",
+                json!({}),
+                1000,
+            );
+            upsert(&db, &d).unwrap();
+            d["updatedAt"] = json!(2000);
+            upsert(&db, &d).unwrap();
+            assert_eq!(stamp(&db, category), 2000);
+            d["category"] = json!("quick-links");
+            upsert(&db, &d).unwrap();
+            assert_eq!(
+                db.query_row(
+                    "SELECT category FROM documents WHERE id=?",
+                    [category],
+                    |r| r.get::<_, String>(0)
+                )
+                .unwrap(),
+                "quick-links"
+            );
+            d["updatedAt"] = json!(1500);
+            upsert(&db, &d).unwrap();
+            assert_eq!(
+                stamp(&db, category),
+                1500,
+                "source time remains authoritative even when restored backwards"
+            );
+            let before = db.total_changes();
+            upsert(&db, &d).unwrap();
+            assert_eq!(db.total_changes(), before);
+        }
+        integrity(&db);
+    }
+    fn file_doc(path: &str) -> Value {
+        json!({"id":format!("file:{path}"),"category":"files","title":"Fixture","tokens":"fixture","action":{"path":path},"sourcePath":path,"updatedAt":1})
+    }
+    #[test]
+    fn watcher_delete_keeps_exact_subtree_app_prefix_unicode_and_fts_semantics() {
+        let (_dir, db) = observed_db();
+        let sep = std::path::MAIN_SEPARATOR;
+        let path = |parts: &[&str]| format!("{sep}{}", parts.join(&sep.to_string()));
+        let foo = path(&["fixture", "foo"]);
+        let child = path(&["fixture", "foo", "nested", "one.pdf"]);
+        let sibling = path(&["fixture", "foobar", "keep.pdf"]);
+        let unicode_dir = path(&["fixture", "Қазақ 日本"]);
+        let unicode_child = format!("{unicode_dir}{sep}файл.txt");
+        let app = json!({"id":"app:guard","category":"applications","title":"Application","tokens":"application","action":{},"sourcePath":child,"updatedAt":1});
+        for p in [&foo, &child, &sibling, &unicode_child] {
+            upsert(&db, &file_doc(p)).unwrap();
+        }
+        upsert(&db, &app).unwrap();
+        let before = db.total_changes();
+        assert_eq!(
+            delete_watched_path(
+                &db,
+                &format!("file:{}", path(&["fixture", "missing.crdownload"]))
+            )
+            .unwrap(),
+            0
+        );
+        assert_eq!(db.total_changes(), before);
+        // Exact id still works even for legacy rows without source_path.
+        let mut legacy = file_doc(&path(&["fixture", "legacy.pdf"]));
+        legacy.as_object_mut().unwrap().remove("sourcePath");
+        upsert(&db, &legacy).unwrap();
+        assert_eq!(
+            delete_watched_path(&db, legacy["id"].as_str().unwrap()).unwrap(),
+            1
+        );
+        assert_eq!(delete_watched_path(&db, &format!("file:{foo}")).unwrap(), 2);
+        assert_eq!(delete_watched_path(&db, &format!("file:{foo}")).unwrap(), 0);
+        assert_eq!(stamp(&db, "app:guard"), 1);
+        assert_eq!(stamp(&db, &format!("file:{sibling}")), 1);
+        assert_eq!(
+            delete_watched_path(&db, &format!("file:{unicode_dir}")).unwrap(),
+            1
+        );
+        integrity(&db);
+        // Rename replay: new path indexed, old path removed by the same watcher helper.
+        let new = path(&["fixture", "renamed", "keep.pdf"]);
+        upsert(&db, &file_doc(&new)).unwrap();
+        assert_eq!(
+            delete_watched_path(&db, &format!("file:{sibling}")).unwrap(),
+            1
+        );
+        assert_eq!(stamp(&db, &format!("file:{new}")), 1);
+        assert_eq!(delete_watched_path(&db, &format!("file:{new}")).unwrap(), 1);
+        integrity(&db);
+        assert_eq!(
+            db.query_row(
+                "SELECT count(*) FROM documents_fts WHERE documents_fts MATCH 'fixture'",
+                [],
+                |r| r.get::<_, u64>(0)
+            )
+            .unwrap(),
+            0
+        );
+        assert_eq!(
+            db.query_row(
+                "SELECT count(*) FROM documents_fts WHERE documents_fts MATCH 'application'",
+                [],
+                |r| r.get::<_, u64>(0)
+            )
+            .unwrap(),
+            1
+        );
+    }
+    #[test]
+    fn watcher_composite_index_is_migrated_after_legacy_columns_and_is_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.sqlite3");
+        let old = Connection::open(&path).unwrap();
+        old.execute_batch("CREATE TABLE documents(id TEXT PRIMARY KEY,category TEXT NOT NULL,title TEXT NOT NULL,subtitle TEXT NOT NULL,tokens TEXT NOT NULL,action_json TEXT NOT NULL,updated_at INTEGER NOT NULL);").unwrap();
+        drop(old);
+        for _ in 0..2 {
+            let db = init(path.clone()).unwrap();
+            let names = db
+                .prepare("PRAGMA index_info(idx_documents_category_source_path)")
+                .unwrap()
+                .query_map([], |r| r.get::<_, String>(2))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            assert_eq!(names, ["category", "source_path"]);
+        }
+    }
+    #[test]
+    fn watcher_plan_uses_bounded_composite_range_on_bundled_sqlite() {
+        let (_dir, mut db) = observed_db();
+        let tx = db.transaction().unwrap();
+        for n in 0..3000 {
+            upsert(&tx, &file_doc(&format!("/fixture/d{}/f{n}.txt", n % 30))).unwrap();
+        }
+        tx.commit().unwrap();
+        let plan = |db: &Connection| {
+            db.prepare(&format!("EXPLAIN QUERY PLAN {WATCHER_DELETE_SQL}"))
+                .unwrap()
+                .query_map(params!["file:/missing", "/missing/", "/missing0"], |r| {
+                    r.get::<_, String>(3)
+                })
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+                .join(" | ")
+        };
+        let steps = |db: &Connection| {
+            let mut stmt = db.prepare(WATCHER_DELETE_SQL).unwrap();
+            assert_eq!(
+                stmt.execute(params!["file:/missing", "/missing/", "/missing0"])
+                    .unwrap(),
+                0
+            );
+            stmt.get_status(rusqlite::StatementStatus::VmStep)
+        };
+        let after_plan = plan(&db);
+        let after = steps(&db);
+        db.execute_batch("DROP INDEX IF EXISTS idx_documents_category_source_path")
+            .unwrap();
+        let before_plan = plan(&db);
+        let before = steps(&db);
+        println!("SQLite {}\nbefore: {before_plan}\nafter: {after_plan}\nmissing DELETE VM steps: {before} -> {after}", rusqlite::version());
+        assert!(
+            after_plan.contains("idx_documents_category_source_path"),
+            "{after_plan}"
+        );
+        assert!(
+            after_plan.contains("source_path>?") && after_plan.contains("source_path<?"),
+            "{after_plan}"
+        );
+        assert!(after < 200, "no-op DELETE must be bounded: {after}");
+        assert!(
+            before > after * 10,
+            "fixture must expose the prior category scan"
+        );
+        integrity(&db);
     }
 }
