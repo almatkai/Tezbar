@@ -11,9 +11,13 @@ Opening the app is already satisfactory and is a regression constraint.
 
 ## Current evidence
 
-`beta17-baseline.json` contains the initial measurements and complete ordered
-result IDs/scores. No production optimization has been applied yet. The probes
-are test-only and excluded from the installed application.
+`beta17-baseline.json` contains the unchanged initial measurements and complete
+ordered result IDs/scores. The probes are test-only and excluded from the installed
+application. Production search changes and repeated interleaved A/B results are
+now recorded in [beta17-search-results.md](beta17-search-results.md), with full
+measurement JSON in `beta17-search-candidate.json` and a reproducible
+`compare-search.py` runner. Improvements vary by case; these do not establish a
+fivefold whole-app speedup or a total RAM reduction.
 
 These are native subsystem measurements, **not** end-to-end UI latency or total
 desktop app RAM. They exclude model inference and WebView processes. They cannot
@@ -86,17 +90,15 @@ Original logs and baseline executables are retained locally at
 `/tmp/tezbar-beta17-perf.e1qzXU`. Generated extension-worker bundles were restored
 after setup; they are not part of the source change.
 
-## Next experiments
+## Follow-up experiments
 
-1. Repeated per-candidate tokenization, Unicode conversion, and edit-distance
-   work: preparing query state once and reusing bounded scratch storage should
-   reduce typo/no-hit search time without changing scores.
-2. FTS/source selection work: reducing repeated scans and sorting should improve
-   broad file and deep lexical queries, while still choosing the same best chunk
-   per source and preserving all ranking/tie behavior.
-3. Idle maintenance and retained state: profile the complete desktop process
-   family and representative indexing workload before changing lifecycle or
-   memory policy. The empty-profile headless baseline is already low CPU and
-   does not explain the user's desktop RAM use.
+Query preparation, candidate hydration, exact semantic scoring and source
+selection experiments have now produced the measured changes described in the
+search report. Broad-match BM25, cold authoritative row traversal and warm winner
+hydration still limit search; further index/storage changes need their own real-
+profile measurements and exact parity checks.
 
-These are hypotheses, not established causes or improvement claims.
+Idle maintenance and retained state remain a separate round: profile the complete
+desktop process family and representative indexing workload before changing
+lifecycle or memory policy. The empty-profile headless baseline is already low
+CPU and does not explain the user's desktop RAM use.

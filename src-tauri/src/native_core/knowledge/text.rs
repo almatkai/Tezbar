@@ -70,6 +70,47 @@ pub fn cosine(a: &[f64], b: &[f64]) -> f64 {
         dot / (aa * bb).sqrt()
     }
 }
+/// Borrow SQLite's F32 blob while scoring a cold exact scan. Accumulation stays
+/// F64 and in the original dimension order; no quantization or reassociation.
+/// Legacy JSON and short/long vectors retain cosine's zipped-norm semantics.
+pub struct CosineQuery<'a> {
+    values: &'a [f64],
+    norm: f64,
+}
+impl<'a> CosineQuery<'a> {
+    pub fn new(values: &'a [f64]) -> Self {
+        let mut norm = 0.;
+        for v in values {
+            norm += v * v;
+        }
+        Self { values, norm }
+    }
+    pub fn score(&self, value: rusqlite::types::ValueRef<'_>) -> f64 {
+        if let rusqlite::types::ValueRef::Blob(bytes) = value {
+            if bytes.len() % 4 == 0 {
+                let (mut dot, mut bb, mut aa) = (0., 0., 0.);
+                let full = bytes.len() / 4 >= self.values.len();
+                for (x, bytes) in self.values.iter().zip(bytes.chunks_exact(4)) {
+                    let y = f32::from_le_bytes(bytes.try_into().unwrap()) as f64;
+                    dot += x * y;
+                    bb += y * y;
+                    if !full {
+                        aa += x * x;
+                    }
+                }
+                if full {
+                    aa = self.norm;
+                }
+                return if aa == 0. || bb == 0. {
+                    0.
+                } else {
+                    dot / (aa * bb).sqrt()
+                };
+            }
+        }
+        cosine(self.values, &decode(value))
+    }
+}
 pub fn encode(v: &[f64]) -> Vec<u8> {
     v.iter().flat_map(|x| (*x as f32).to_le_bytes()).collect()
 }
@@ -123,6 +164,45 @@ pub fn redact(input: &str) -> String {
     rules.iter().fold(input.to_string(), |s, (r, v)| {
         r.replace_all(&s, *v).into_owned()
     })
+}
+#[cfg(test)]
+mod exact_cosine_tests {
+    use super::*;
+    use rusqlite::types::ValueRef;
+    #[test]
+    fn borrowed_blob_scores_match_decoded_f64_including_legacy_and_odd_lengths() {
+        let mut seed = 31u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            (seed >> 32) as i32 as f64 / i32::MAX as f64
+        };
+        for n in [0, 1, 2, 17, 256, 384] {
+            let q: Vec<_> = (0..n).map(|_| next()).collect();
+            for m in [0, 1, 2, 16, 256, 384] {
+                let values: Vec<_> = (0..m).map(|_| next()).collect();
+                let blob = encode(&values);
+                let json = serde_json::to_vec(&values).unwrap();
+                for value in [
+                    ValueRef::Blob(&blob),
+                    ValueRef::Text(&json),
+                    ValueRef::Blob(&[1, 2, 3]),
+                    ValueRef::Null,
+                ] {
+                    assert_eq!(
+                        CosineQuery::new(&q).score(value).to_bits(),
+                        cosine(&q, &decode(value)).to_bits()
+                    );
+                }
+            }
+        }
+        for values in [vec![0.; 256], vec![f64::NAN; 256], vec![f64::INFINITY; 256]] {
+            let blob = encode(&values);
+            let q = vec![0.5; 256];
+            let expected = cosine(&q, &decode(ValueRef::Blob(&blob)));
+            let got = CosineQuery::new(&q).score(ValueRef::Blob(&blob));
+            assert!(got == expected || (got.is_nan() && expected.is_nan()));
+        }
+    }
 }
 #[cfg(test)]
 pub fn chunks(source: &str, pages: &[Value], embedding: bool) -> Vec<Value> {

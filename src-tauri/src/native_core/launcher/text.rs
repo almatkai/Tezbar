@@ -7,6 +7,14 @@ pub fn normalize(s: &str) -> String {
         .to_lowercase()
 }
 pub fn tokens(s: &str) -> Vec<String> {
+    // ASCII is already NFKC; avoid the Unicode iterator/buffer on common paths.
+    if s.is_ascii() {
+        return s
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .filter(|s| !s.is_empty())
+            .map(str::to_ascii_lowercase)
+            .collect();
+    }
     s.nfkc()
         .collect::<String>()
         .to_lowercase()
@@ -48,27 +56,7 @@ pub fn variants(s: &str) -> Vec<String> {
     }
     out
 }
-pub fn lexical(text: &str, query: &str) -> f64 {
-    let t = text.to_lowercase();
-    let q = query.trim().to_lowercase();
-    if q.is_empty() {
-        return 0.;
-    }
-    if t == q {
-        return 1.;
-    }
-    if t.starts_with(&q) {
-        return 0.9;
-    }
-    if t.contains(&q) {
-        return 0.75;
-    }
-    let terms = tokens(&q);
-    if terms.is_empty() {
-        return 0.;
-    }
-    terms.iter().filter(|x| t.contains(x.as_str())).count() as f64 / terms.len() as f64 / 1.5
-}
+#[cfg(test)]
 pub fn distance(a: &str, b: &str) -> usize {
     // Match JS UTF-16 edit distances, including non-BMP text.
     let a: Vec<_> = a.to_lowercase().encode_utf16().collect();
@@ -86,43 +74,249 @@ pub fn distance(a: &str, b: &str) -> usize {
     }
     prev[b.len()]
 }
-fn similarity(a: &str, b: &str) -> f64 {
-    if a == b {
-        return 1.;
-    }
-    if a.starts_with(b) {
-        return 0.92;
-    }
-    if b.starts_with(a) && a.chars().count() >= 3 {
-        return 0.82;
-    }
-    if b.chars().count() >= 3 && a.contains(b) {
-        return 0.74;
-    }
-    let d = distance(a, b);
-    let n = a.encode_utf16().count().max(b.encode_utf16().count());
-    if d > (1.max((n as f64 * 0.38).floor() as usize)) {
-        0.
-    } else {
-        1. - d as f64 / n.max(1) as f64
+struct MatchToken {
+    text: String,
+    units: Vec<u16>,
+    chars: usize,
+    length: usize,
+}
+impl MatchToken {
+    fn new(text: String) -> Self {
+        Self {
+            units: if text.is_ascii() {
+                text.encode_utf16().collect()
+            } else {
+                text.to_lowercase().encode_utf16().collect()
+            },
+            chars: text.chars().count(),
+            length: text.encode_utf16().count(),
+            text,
+        }
     }
 }
-pub fn fuzzy(text: &str, q: &str) -> f64 {
-    let a = tokens(text);
-    let b = tokens(q);
-    if b.is_empty() {
-        return 0.;
+
+/// Query-owned preparation, shared by all candidates and scoring passes. Never
+/// retained across searches, so index/learning mutations need no invalidation.
+pub struct Query {
+    normalized: String,
+    lexical: String,
+    terms: Vec<MatchToken>,
+    app_variants: Vec<Vec<String>>,
+}
+impl Query {
+    pub fn new(query: &str) -> Self {
+        let normalized = normalize(query);
+        let terms: Vec<_> = tokens(query).into_iter().map(MatchToken::new).collect();
+        let app_variants = tokens(&normalized).iter().map(|t| variants(t)).collect();
+        Self {
+            normalized,
+            lexical: query.trim().to_lowercase(),
+            terms,
+            app_variants,
+        }
     }
-    let score = b
+    fn lexical(&self, lower: &str) -> f64 {
+        let q = &self.lexical;
+        if q.is_empty() {
+            return 0.;
+        }
+        if lower == q {
+            return 1.;
+        }
+        if lower.starts_with(q) {
+            return 0.9;
+        }
+        if lower.contains(q) {
+            return 0.75;
+        }
+        if self.terms.is_empty() {
+            return 0.;
+        }
+        self.terms
+            .iter()
+            .filter(|t| lower.contains(&t.text))
+            .count() as f64
+            / self.terms.len() as f64
+            / 1.5
+    }
+    fn fuzzy(&self, candidate: &[MatchToken], scratch: &mut DistanceScratch) -> f64 {
+        if self.terms.is_empty() {
+            return 0.;
+        }
+        let mut sum = 0.;
+        for q in &self.terms {
+            let mut best: f64 = 0.;
+            for a in candidate {
+                best = best.max(scratch.similarity(a, q));
+                if best == 1. {
+                    break;
+                }
+            }
+            sum += best;
+        }
+        let score = sum / self.terms.len() as f64;
+        if score >= 0.45 {
+            score
+        } else {
+            0.
+        }
+    }
+    pub fn app_match(&self, name: &str) -> f64 {
+        app_matches(name, std::slice::from_ref(self))
+    }
+    pub fn full_tokens(&self, title: &str, subtitle: &str) -> f64 {
+        if self.terms.len() < 2 {
+            return 0.;
+        }
+        let s = format!("{title} {subtitle}").to_lowercase();
+        if self.terms.iter().all(|t| s.contains(&t.text)) {
+            200.
+        } else {
+            0.
+        }
+    }
+}
+
+/// Normalize/tokenize each application name/alias at most once for all keyboard
+/// variants. Direct name matches still avoid tokenization entirely.
+pub fn app_matches(name: &str, queries: &[Query]) -> f64 {
+    let name = normalize(name);
+    let mut best: f64 = 0.;
+    for name in std::iter::once(name.as_str()).chain(normalized_aliases(&name).iter().copied()) {
+        let mut name_tokens = None;
+        for (i, q) in queries.iter().enumerate() {
+            if q.app_variants.is_empty() {
+                continue;
+            }
+            let score = if name == q.normalized {
+                1.
+            } else if name.starts_with(&q.normalized) {
+                0.92
+            } else {
+                let terms = name_tokens.get_or_insert_with(|| tokens(name));
+                if q.app_variants.iter().all(|variants| {
+                    variants
+                        .iter()
+                        .any(|v| terms.iter().any(|n| n.starts_with(v)))
+                }) {
+                    0.9
+                } else {
+                    0.
+                }
+            };
+            best = best.max(score * if i == 0 { 1. } else { 0.9 });
+            if best == 1. {
+                return best;
+            }
+        }
+    }
+    best
+}
+#[derive(Default)]
+pub struct DistanceScratch {
+    prev: Vec<usize>,
+    cur: Vec<usize>,
+}
+impl DistanceScratch {
+    /// Ranking distinguishes only distances 0, 1 and 2. Do not compute a full
+    /// title/query matrix merely to discard every larger distance at the caller.
+    pub fn title_distance(&mut self, title: &str, query: &str) -> usize {
+        let a: Vec<_> = title.to_lowercase().encode_utf16().collect();
+        let b: Vec<_> = query.to_lowercase().encode_utf16().collect();
+        self.bounded(&a, &b, 2).min(3)
+    }
+    // Exact within the caller's threshold; values outside it are irrelevant to
+    // fuzzy scores. UTF-16 (not UTF-8/chars) preserves the legacy JS distances.
+    fn bounded(&mut self, a: &[u16], b: &[u16], k: usize) -> usize {
+        if a.len().abs_diff(b.len()) > k {
+            return k + 1;
+        }
+        self.prev.resize(b.len() + 1, k + 1);
+        self.cur.resize(b.len() + 1, k + 1);
+        for (j, v) in self.prev.iter_mut().enumerate() {
+            *v = j.min(k + 1);
+        }
+        for (i, x) in a.iter().enumerate() {
+            self.cur[0] = (i + 1).min(k + 1);
+            let start = (i + 1).saturating_sub(k).max(1);
+            let end = (i + 1 + k).min(b.len());
+            if start > 1 {
+                self.cur[start - 1] = k + 1;
+            }
+            let mut minimum = self.cur[0];
+            for j in start..=end {
+                self.cur[j] = (self.prev[j] + 1)
+                    .min(self.cur[j - 1] + 1)
+                    .min(self.prev[j - 1] + usize::from(*x != b[j - 1]));
+                minimum = minimum.min(self.cur[j]);
+            }
+            if end < b.len() {
+                self.cur[end + 1] = k + 1;
+            }
+            if minimum > k {
+                return k + 1;
+            }
+            std::mem::swap(&mut self.prev, &mut self.cur);
+        }
+        self.prev[b.len()]
+    }
+    fn similarity(&mut self, a: &MatchToken, b: &MatchToken) -> f64 {
+        if a.text == b.text {
+            return 1.;
+        }
+        if a.text.starts_with(&b.text) {
+            return 0.92;
+        }
+        if b.text.starts_with(&a.text) && a.chars >= 3 {
+            return 0.82;
+        }
+        if b.chars >= 3 && a.text.contains(&b.text) {
+            return 0.74;
+        }
+        let n = a.length.max(b.length);
+        let k = 1.max((n as f64 * 0.38).floor() as usize);
+        let d = self.bounded(&a.units, &b.units, k);
+        if d > k {
+            0.
+        } else {
+            1. - d as f64 / n.max(1) as f64
+        }
+    }
+}
+
+pub fn best_match(text: &str, queries: &[Query], scratch: &mut DistanceScratch) -> (f64, usize) {
+    let lower = text.to_lowercase();
+    let mut candidate = None;
+    queries
         .iter()
-        .map(|q| a.iter().map(|a| similarity(a, q)).fold(0., f64::max))
-        .sum::<f64>()
-        / b.len() as f64;
-    if score >= 0.45 {
-        score
-    } else {
-        0.
-    }
+        .enumerate()
+        .map(|(i, q)| {
+            let lex = q.lexical(&lower);
+            let score = if lex == 1. {
+                lex
+            } else {
+                let tokens = candidate.get_or_insert_with(|| {
+                    tokens(text)
+                        .into_iter()
+                        .map(MatchToken::new)
+                        .collect::<Vec<_>>()
+                });
+                lex.max(q.fuzzy(tokens, scratch))
+            };
+            (score * if i == 0 { 1. } else { 0.9 }, i)
+        })
+        .max_by(|a, b| a.0.total_cmp(&b.0))
+        .unwrap_or((0., 0))
+}
+#[cfg(test)]
+pub fn fuzzy(text: &str, q: &str) -> f64 {
+    Query::new(q).fuzzy(
+        &tokens(text)
+            .into_iter()
+            .map(MatchToken::new)
+            .collect::<Vec<_>>(),
+        &mut DistanceScratch::default(),
+    )
 }
 pub fn fts(q: &str) -> String {
     tokens(q)
@@ -213,7 +407,10 @@ pub fn hot(n: u64) -> f64 {
     }
 }
 pub fn aliases(name: &str) -> &'static [&'static str] {
-    match normalize(name).as_str() {
+    normalized_aliases(&normalize(name))
+}
+fn normalized_aliases(name: &str) -> &'static [&'static str] {
+    match name {
         "visual studio code" => &["vscode", "vsc", "code", "vs code", "вс код", "вскод"],
         "google chrome" | "chrome" => &["chrome", "хром", "гугл хром"],
         "telegram" => &["телеграм", "телеграмм"],
@@ -236,30 +433,7 @@ pub fn aliases(name: &str) -> &'static [&'static str] {
     }
 }
 pub fn app_match(name: &str, q: &str) -> f64 {
-    let q = normalize(q);
-    let qt = tokens(&q);
-    if qt.is_empty() {
-        return 0.;
-    }
-    let name = normalize(name);
-    std::iter::once(name.as_str())
-        .chain(aliases(&name).iter().copied())
-        .map(|name| {
-            if name == q {
-                1.
-            } else if name.starts_with(&q) {
-                0.92
-            } else if qt.iter().all(|t| {
-                variants(t)
-                    .iter()
-                    .any(|variant| tokens(name).iter().any(|n| n.starts_with(variant)))
-            }) {
-                0.9
-            } else {
-                0.
-            }
-        })
-        .fold(0., f64::max)
+    Query::new(q).app_match(name)
 }
 #[cfg(test)]
 mod tests {
@@ -307,7 +481,206 @@ mod tests {
         }
         for a in &inputs {
             for b in &inputs {
-                assert_eq!(distance(a, b), reference(a, b), "{a:?} / {b:?}");
+                let expected = reference(a, b);
+                assert_eq!(distance(a, b), expected, "{a:?} / {b:?}");
+                let mut scratch = DistanceScratch::default();
+                assert_eq!(
+                    scratch.title_distance(a, b),
+                    expected.min(3),
+                    "{a:?} / {b:?}"
+                );
+                let a: Vec<_> = a.to_lowercase().encode_utf16().collect();
+                let b: Vec<_> = b.to_lowercase().encode_utf16().collect();
+                for k in 0..=8 {
+                    assert_eq!(scratch.bounded(&a, &b, k).min(k + 1), expected.min(k + 1));
+                }
+            }
+        }
+    }
+    // Frozen beta.17 scoring oracle: optimizations must retain its Unicode,
+    // token, alias and keyboard-layout behavior, not just English typo recall.
+    fn reference_tokens(s: &str) -> Vec<String> {
+        s.nfkc()
+            .collect::<String>()
+            .to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .collect()
+    }
+    fn reference_lexical(text: &str, query: &str) -> f64 {
+        let t = text.to_lowercase();
+        let q = query.trim().to_lowercase();
+        if q.is_empty() {
+            return 0.;
+        }
+        if t == q {
+            return 1.;
+        }
+        if t.starts_with(&q) {
+            return 0.9;
+        }
+        if t.contains(&q) {
+            return 0.75;
+        }
+        let terms = reference_tokens(&q);
+        if terms.is_empty() {
+            return 0.;
+        }
+        terms.iter().filter(|x| t.contains(x.as_str())).count() as f64 / terms.len() as f64 / 1.5
+    }
+    fn reference_similarity(a: &str, b: &str) -> f64 {
+        if a == b {
+            return 1.;
+        }
+        if a.starts_with(b) {
+            return 0.92;
+        }
+        if b.starts_with(a) && a.chars().count() >= 3 {
+            return 0.82;
+        }
+        if b.chars().count() >= 3 && a.contains(b) {
+            return 0.74;
+        }
+        let d = distance(a, b);
+        let n = a.encode_utf16().count().max(b.encode_utf16().count());
+        if d > 1.max((n as f64 * 0.38).floor() as usize) {
+            0.
+        } else {
+            1. - d as f64 / n.max(1) as f64
+        }
+    }
+    fn reference_fuzzy(text: &str, query: &str) -> f64 {
+        let a = reference_tokens(text);
+        let b = reference_tokens(query);
+        if b.is_empty() {
+            return 0.;
+        }
+        let score = b
+            .iter()
+            .map(|q| {
+                a.iter()
+                    .map(|a| reference_similarity(a, q))
+                    .fold(0., f64::max)
+            })
+            .sum::<f64>()
+            / b.len() as f64;
+        if score >= 0.45 {
+            score
+        } else {
+            0.
+        }
+    }
+    fn reference_app(name: &str, q: &str) -> f64 {
+        let q = normalize(q);
+        let qt = reference_tokens(&q);
+        if qt.is_empty() {
+            return 0.;
+        }
+        let name = normalize(name);
+        std::iter::once(name.as_str())
+            .chain(aliases(&name).iter().copied())
+            .map(|name| {
+                if name == q {
+                    1.
+                } else if name.starts_with(&q) {
+                    0.92
+                } else if qt.iter().all(|t| {
+                    variants(t)
+                        .iter()
+                        .any(|v| reference_tokens(name).iter().any(|n| n.starts_with(v)))
+                }) {
+                    0.9
+                } else {
+                    0.
+                }
+            })
+            .fold(0., f64::max)
+    }
+    #[test]
+    fn prepared_scoring_matches_beta17_reference() {
+        let mut inputs: Vec<String> = [
+            "",
+            "Calculator 100001",
+            "calclator",
+            "сфдсгдфещк",
+            "Google Chrome",
+            "хром",
+            "Visual Studio Code",
+            "vs code",
+            "вс код",
+            "İΣ Қазақ",
+            "café",
+            "cafe\u{301}",
+            "１２ ﬁle",
+            "𐐀𐐨 𐐩",
+            "😀",
+            "---",
+            "a",
+            "abc",
+            "abcdef",
+            "terminal",
+            "терминал",
+            "мониторинг системы",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        let alphabet = ['a', 'z', 'İ', 'Σ', 'қ', '𐐀', '１', ' ', '-', '\u{301}'];
+        let mut seed = 71u64;
+        for n in 0..70 {
+            inputs.push(
+                (0..n % 19)
+                    .map(|_| {
+                        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                        alphabet[(seed >> 32) as usize % alphabet.len()]
+                    })
+                    .collect(),
+            );
+        }
+        inputs.push((0u8..=127).map(char::from).collect());
+        for text in &inputs {
+            assert_eq!(tokens(text), reference_tokens(text));
+            for query in &inputs {
+                assert_eq!(
+                    fuzzy(text, query),
+                    reference_fuzzy(text, query),
+                    "{text:?}/{query:?}"
+                );
+                assert_eq!(
+                    app_match(text, query),
+                    reference_app(text, query),
+                    "{text:?}/{query:?}"
+                );
+                let variants = variants(query);
+                let expected = variants
+                    .iter()
+                    .enumerate()
+                    .map(|(i, q)| {
+                        (
+                            reference_lexical(text, q).max(reference_fuzzy(text, q))
+                                * if i == 0 { 1. } else { 0.9 },
+                            i,
+                        )
+                    })
+                    .max_by(|a, b| a.0.total_cmp(&b.0))
+                    .unwrap_or((0., 0));
+                let prepared: Vec<_> = variants.iter().map(|q| Query::new(q)).collect();
+                let expected_app = variants
+                    .iter()
+                    .enumerate()
+                    .map(|(i, q)| reference_app(text, q) * if i == 0 { 1. } else { 0.9 })
+                    .fold(0., f64::max);
+                assert_eq!(
+                    app_matches(text, &prepared),
+                    expected_app,
+                    "{text:?}/{query:?}"
+                );
+                assert_eq!(
+                    best_match(text, &prepared, &mut DistanceScratch::default()),
+                    expected,
+                    "{text:?}/{query:?}"
+                );
             }
         }
     }
@@ -323,22 +696,22 @@ mod tests {
     }
 }
 
-pub fn surface_boost(category: &str, title: &str, subtitle: &str, q: &str) -> f64 {
+pub fn surface_boost(category: &str, title: &str, subtitle: &str, query: &Query) -> f64 {
     if category == "applications" {
-        return app_match(title, q) * 600.;
+        return query.app_match(title) * 600.;
     }
     if !["native-command", "commands", "extensions", "quick-notes"].contains(&category) {
         return 0.;
     }
     let title = title.to_lowercase();
-    let q = normalize(q);
+    let q = query.normalized.as_str();
     if q.is_empty() {
         return 0.;
     }
     if category == "commands"
         && ((title == "extensions" && q == "extensions")
             || (title == "extensions store"
-                && ["store", "extension store", "extensions store"].contains(&q.as_str())))
+                && ["store", "extension store", "extensions store"].contains(&q)))
     {
         return 1400.;
     }
@@ -393,15 +766,6 @@ pub fn exact_note(category: &str, title: &str, q: &str, age: u64) -> f64 {
         1400.
     } else if t.contains(&q) {
         900.
-    } else {
-        0.
-    }
-}
-pub fn full_tokens(title: &str, subtitle: &str, q: &str) -> f64 {
-    let t = tokens(q);
-    let s = format!("{title} {subtitle}").to_lowercase();
-    if t.len() >= 2 && t.iter().all(|t| s.contains(t)) {
-        200.
     } else {
         0.
     }
