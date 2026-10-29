@@ -4,11 +4,14 @@ import type { ExtensionManifest } from '../shared/extensions'
 import ExtensionsView from './ExtensionsView'
 
 const hooks = vi.hoisted(() => ({ current: null as HookHarness | null }))
-const images = vi.hoisted(() => ({ cached: vi.fn() }))
+const images = vi.hoisted(() => ({ cached: vi.fn(), release: vi.fn() }))
 
 vi.mock('./extensionImages', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./extensionImages')>()),
-  cachedExtensionImageSource: images.cached,
+  acquireExtensionImage: (...args: unknown[]) => ({
+    source: images.cached(...args),
+    release: images.release,
+  }),
 }))
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
@@ -208,6 +211,7 @@ async function catalog(items = [cleanShot, jsonResume]) {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  images.release.mockReset()
   images.cached.mockReset().mockImplementation((src: string) => Promise.resolve(src))
 })
 afterEach(() => {
@@ -278,6 +282,7 @@ describe('extension catalog icons (live components)', () => {
     renderElement(imageHooks, first)
     imageHooks.commit()
     imageHooks.unmount()
+    expect(images.release).toHaveBeenCalledTimes(3)
     pending.resolve('blob:unmounted')
     await Promise.resolve()
     expect(imgSource(renderElement(imageHooks, first))).not.toBe('blob:unmounted')

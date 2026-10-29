@@ -25,7 +25,7 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::{Child, Command},
-    sync::Mutex as AsyncMutex,
+    sync::{Mutex as AsyncMutex, Notify},
 };
 // Q8 compatibility constants: existing databases retain this exact identity.
 const REVISION: &str = runtime_models::Q8.revision;
@@ -115,6 +115,8 @@ impl Drop for RuntimeOwner {
     }
 }
 struct Inner {
+    state_changed: Notify,
+    observer: Mutex<Option<Arc<Notify>>>,
     directory: PathBuf,
     #[cfg(test)]
     supervisor: Mutex<Option<PathBuf>>,
@@ -141,11 +143,18 @@ struct Inner {
 }
 // Status cleanup on dropped/aborted inference futures; process ownership is
 // separately enforced by the supervisor lease, never by a status flag.
-struct RuntimeActivity<'a>(&'a Runtime);
+struct RuntimeActivity<'a>(Option<&'a Runtime>);
+impl RuntimeActivity<'_> {
+    fn complete(&mut self) {
+        self.0 = None;
+    }
+}
 impl Drop for RuntimeActivity<'_> {
     fn drop(&mut self) {
-        if self.0.snapshot()["runtimeState"] != "error" {
-            self.0.patch(json!({"runtimeState":"stopped"}));
+        if let Some(runtime) = self.0 {
+            if runtime.snapshot()["runtimeState"] != "error" {
+                runtime.patch(json!({"runtimeState":"stopped"}));
+            }
         }
     }
 }
@@ -229,6 +238,8 @@ impl Runtime {
         Self {
             _owner: Some(Arc::new(owner)),
             inner: Arc::new(Inner {
+                state_changed: Notify::new(),
+                observer: Mutex::new(None),
                 directory,
                 #[cfg(test)]
                 supervisor: Mutex::new(None),
@@ -340,11 +351,15 @@ impl Runtime {
                     guard = this.inner.process.lock() => guard,
                     error = this.interrupted(&cancel, expected) => return Err(error),
                 };
-                let _activity = RuntimeActivity(&this);
-                tokio::select! {
+                let mut activity = RuntimeActivity(Some(&this));
+                let result = tokio::select! {
                     r = this.ensure_process(&mut guard, &speed, &cancel, expected) => r,
                     error = this.interrupted(&cancel, expected) => Err(error),
+                };
+                if result.is_ok() {
+                    activity.complete();
                 }
+                result
             };
             let result = tokio::time::timeout(this.inner.ready_timeout, run)
                 .await
@@ -432,7 +447,7 @@ impl Runtime {
             self.prewarm(speed).await?;
             return Ok(ForegroundEmbedding::Warming);
         }
-        let _activity = RuntimeActivity(self);
+        let mut activity = RuntimeActivity(Some(self));
         // Metadata-only cache check: changed bytes require background verification,
         // never a foreground 300 MB checksum or an unauthorized stale launch.
         let inner = self.inner.clone();
@@ -467,7 +482,7 @@ impl Runtime {
             drop(guard.take());
             return Err("Local embedding runtime exited; retry startup".into());
         }
-        self.request_with_process(
+        let result = self.request_with_process(
             &mut guard,
             inputs,
             cancel,
@@ -475,7 +490,11 @@ impl Runtime {
             self.inner.foreground_timeout,
         )
         .await
-        .map(ForegroundEmbedding::Ready)
+        .map(ForegroundEmbedding::Ready);
+        if result.is_ok() {
+            activity.complete();
+        }
+        result
     }
     fn unavailable(&self) -> bool {
         self.inner.closed.load(Ordering::SeqCst)
@@ -513,14 +532,27 @@ impl Runtime {
     pub fn snapshot(&self) -> Value {
         self.inner.status.lock().unwrap().clone()
     }
+    pub fn observe(&self, observer: Arc<Notify>) {
+        *self.inner.observer.lock().unwrap() = Some(observer);
+    }
     pub fn patch(&self, patch: Value) {
         let mut status = self.inner.status.lock().unwrap();
+        let mut changed = false;
         if let Some(fields) = patch.as_object() {
             for (k, v) in fields {
-                status[k] = v.clone();
+                if status.get(k) != Some(v) {
+                    status[k] = v.clone();
+                    changed = true;
+                }
             }
         }
         drop(status);
+        if changed {
+            self.inner.state_changed.notify_waiters();
+            if let Some(observer) = self.inner.observer.lock().unwrap().as_ref() {
+                observer.notify_waiters();
+            }
+        }
     }
     pub async fn initialize(&self) -> Result<(), String> {
         // Snapshot/Settings initialization must never wait for a disk checksum.
@@ -970,14 +1002,27 @@ impl Runtime {
         // also aborts and joins it, including while child cleanup is awaited.
         let this = self.worker();
         *task = Some(OwnedTask(Some(tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
-                interval.tick().await;
+                let changed = this.inner.state_changed.notified();
+                tokio::pin!(changed);
+                changed.as_mut().enable();
                 if this.inner.closed.load(Ordering::SeqCst) {
                     break;
                 }
                 this.stop_idle().await;
+                let delay = match this.inner.process.try_lock() {
+                    Ok(process) => process.as_ref().map(|p| {
+                        // Keep the existing 120s policy. Inference updates
+                        // last_used and owns this mutex, so no active request
+                        // can be unloaded by this observer.
+                        std::time::Duration::from_millis(120001u64.saturating_sub(now_ms().saturating_sub(p.last_used)))
+                    }),
+                    Err(_) => Some(std::time::Duration::from_secs(1)),
+                };
+                match delay {
+                    Some(delay) => tokio::select! { _ = &mut changed => {}, _ = tokio::time::sleep(delay) => {} },
+                    None => changed.await,
+                }
             }
         }))));
     }
@@ -1057,19 +1102,23 @@ impl Runtime {
             guard = self.inner.process.lock() => guard,
             error = self.interrupted(cancel, expected) => return Err(error),
         };
-        let _activity = RuntimeActivity(self);
+        let mut activity = RuntimeActivity(Some(self));
         tokio::select! {
             r = self.ensure_process(&mut guard, speed, cancel, expected) => r?,
             error = self.interrupted(cancel, expected) => return Err(error),
         }
-        self.request_with_process(
+        let result = self.request_with_process(
             &mut guard,
             inputs,
             cancel,
             expected,
             self.inner.request_timeout,
         )
-        .await
+        .await;
+        if result.is_ok() {
+            activity.complete();
+        }
+        result
     }
     async fn ensure_process(
         &self,
@@ -2339,6 +2388,41 @@ server.serve_forever()
         runtime
             .embed(vec![text.into()], "slow", &cancellation())
             .await
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn successful_warm_inference_does_not_publish_false_stopped_transitions() {
+        let (_temp, runtime) = protocol_fixture("ok");
+        initialized(&runtime).await;
+        infer(&runtime, "warmup").await.unwrap();
+        let observer = Arc::new(Notify::new());
+        runtime.observe(observer.clone());
+        let mut spurious = Vec::new();
+        for foreground in [false, true] {
+            let changed = observer.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if foreground {
+                assert!(matches!(
+                    runtime
+                        .foreground_embed(vec!["fixture".into()], "slow", &cancellation())
+                        .await
+                        .unwrap(),
+                    ForegroundEmbedding::Ready(_)
+                ));
+            } else {
+                infer(&runtime, "fixture").await.unwrap();
+            }
+            spurious.push(
+                tokio::time::timeout(std::time::Duration::from_millis(20), changed)
+                    .await
+                    .is_ok(),
+            );
+        }
+        let owned = pids(&runtime);
+        runtime.shutdown().await;
+        wait_dead(owned).await;
+        assert_eq!(spurious, [false, false], "a successful request retains the ready process; only cancellation/failure should publish stopped");
     }
     #[cfg(unix)]
     #[tokio::test]

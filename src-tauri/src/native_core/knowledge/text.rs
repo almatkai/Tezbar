@@ -1,6 +1,10 @@
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use unicode_normalization::UnicodeNormalization;
+use std::sync::LazyLock;
+#[cfg(test)]
+#[path = "text_performance_tests.rs"]
+mod performance_tests;
 
 pub fn hash(text: impl AsRef<[u8]>) -> String {
     format!("{:x}", Sha256::digest(text.as_ref()))
@@ -25,27 +29,29 @@ pub fn js_whitespace(c: char) -> bool {
 }
 pub fn embed(value: &str) -> Vec<f64> {
     let normalized: String = value.to_lowercase().nfkc().collect();
-    let words: Vec<_> = normalized
-        .split(js_whitespace)
-        .filter(|s| !s.is_empty())
-        .collect();
-    let mut vector = vec![0f32; 384];
-    let mut add = |prefix: &str, word: &[u16]| {
-        let mut feature: Vec<_> = prefix.encode_utf16().collect();
-        feature.extend_from_slice(word);
-        let bucket = feature_hash(&feature, 2166136261) as usize % 384;
-        vector[bucket] += if feature_hash(&feature, 0x9e3779b9) & 1 == 0 {
+    let mut vector = [0f32; 384];
+    // FNV is incremental: seed each domain once instead of allocating a
+    // prefixed UTF-16 Vec for every word and every overlapping ngram. Preserve
+    // the exact feature order and F32 accumulation used by persisted vectors.
+    let seeds = |prefix: &[u16]| (feature_hash(prefix, 2166136261), feature_hash(prefix, 0x9e3779b9));
+    let word_seed = seeds(&[119, 58]); // w:
+    let char_seed = seeds(&[99, 58]); // c:
+    let mut add = |seed: (u32, u32), word: &[u16]| {
+        let bucket = feature_hash(word, seed.0) as usize % 384;
+        vector[bucket] += if feature_hash(word, seed.1) & 1 == 0 {
             1.0
         } else {
             -1.0
         };
     };
-    for word in words {
-        let units: Vec<_> = word.encode_utf16().collect();
-        add("w:", &units);
+    let mut units = Vec::with_capacity(32);
+    for word in normalized.split(js_whitespace).filter(|s| !s.is_empty()) {
+        units.clear();
+        units.extend(word.encode_utf16());
+        add(word_seed, &units);
         for size in 2..=4 {
             for part in units.windows(size) {
-                add("c:", part);
+                add(char_seed, part);
             }
         }
     }
@@ -214,6 +220,8 @@ pub fn chunks_checked(
     embedding: bool,
     mut checkpoint: impl FnMut() -> Result<(), String>,
 ) -> Result<Vec<Value>, String> {
+    static TRAILING_SPACE: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"[ \t]+\n").unwrap());
+    static EMPTY_LINES: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"\n{3,}").unwrap());
     let mut chunks = vec![];
     for page in pages {
         let extracted = page["extractedText"].as_str().unwrap_or("").trim();
@@ -226,11 +234,8 @@ pub fn chunks_checked(
             ocr.into()
         };
         let text = text.replace('\0', "");
-        let text = regex::Regex::new(r"[ \t]+\n")
-            .unwrap()
-            .replace_all(&text, "\n");
-        let text = regex::Regex::new(r"\n{3,}")
-            .unwrap()
+        let text = TRAILING_SPACE.replace_all(&text, "\n");
+        let text = EMPTY_LINES
             .replace_all(&text, "\n\n")
             .trim()
             .to_string();

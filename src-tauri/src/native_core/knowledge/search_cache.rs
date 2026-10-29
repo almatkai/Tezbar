@@ -573,6 +573,9 @@ impl Default for Cache {
     }
 }
 impl Cache {
+    pub(super) fn has_requested_cache(&self) -> bool {
+        self.key.is_some()
+    }
     pub fn clear(&mut self) {
         self.key = None;
         self.packed = None;

@@ -1,5 +1,7 @@
 // src-tauri/src/lib.rs
 mod backend_health;
+#[cfg(feature = "desktop-bench")]
+mod desktop_bench;
 mod native_core;
 mod native_v2_cli;
 pub use native_v2_cli::dispatch as dispatch_native_v2_cli;
@@ -2709,6 +2711,11 @@ async fn call_backend(
     channel: String,
     payload: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
+    #[cfg(feature = "desktop-bench")]
+    if channel == "__desktop_bench_reply" {
+        desktop_bench::reply(core.ctx.app.as_ref().unwrap(), payload[0].as_u64().unwrap(), payload[1].clone());
+        return Ok(serde_json::Value::Null);
+    }
     let args = payload
         .as_array()
         .ok_or("IPC payload must be an argument array")?;
@@ -2720,7 +2727,16 @@ async fn call_backend(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let context = tauri::generate_context!();
+    let builder = tauri::Builder::default();
+    #[cfg(feature = "desktop-bench")]
+    let (context, builder) = {
+        let mut context = context;
+        desktop_bench::validate_isolation();
+        context.config_mut().identifier = "com.tezbar.performance".into();
+        (context, builder.plugin(desktop_bench::plugin()))
+    };
+    builder
         // This must stay before every other plugin. A second launch should
         // wake the existing UI and exit before it creates another tray icon,
         // backend supervisor, or global shortcut registration.
@@ -3024,7 +3040,10 @@ pub fn run() {
             if let Some(path) = &config_path {
                 let _ = PROFILE_CONFIG_PATH.set(path.clone());
             }
+            #[cfg(not(feature = "desktop-bench"))]
             let home_dir = handle.path().home_dir()?;
+            #[cfg(feature = "desktop-bench")]
+            let home_dir = PathBuf::from(std::env::var_os("TEZBAR_BENCH_HOME").unwrap());
             let executable = if cfg!(debug_assertions) {
                 std::env::current_exe()?
             } else {
@@ -3167,7 +3186,7 @@ pub fn run() {
 
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = &event {

@@ -1,0 +1,157 @@
+{
+  "scope": "Test-only allocation request counts/volume, not live RAM or app RSS",
+  "executables": {
+    "baseline": {
+      "path": "/private/tmp/tezbar-beta17-perf.e1qzXU/runtime-baseline-tests",
+      "sha256": "898681a6e1e33947b171a77ae3b9b95b329cc5c5298775edc288cb61fc6dc2f7"
+    },
+    "candidate": {
+      "path": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-performance/src-tauri/target/release/deps/app_lib-42960ca2c7041bb3",
+      "sha256": "fff495d88542964bad7449739d004689c31273b1150cf3157618ecdef0b4cc29"
+    }
+  },
+  "runs": [
+    {
+      "round": 1,
+      "variant": "baseline",
+      "measurements": [
+        {
+          "allocations": 4299,
+          "name": "embedding",
+          "p50_ms": 0.08795900000000001,
+          "p95_ms": 0.093458,
+          "requested_bytes": 66844
+        },
+        {
+          "allocations": 23110,
+          "name": "pages",
+          "p50_ms": 1.209584,
+          "p95_ms": 1.8522079999999999,
+          "requested_bytes": 3445376
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "measurements": [
+        {
+          "allocations": 12,
+          "name": "embedding",
+          "p50_ms": 0.018083,
+          "p95_ms": 0.022333000000000002,
+          "requested_bytes": 8604
+        },
+        {
+          "allocations": 2438,
+          "name": "pages",
+          "p50_ms": 0.433916,
+          "p95_ms": 0.45679200000000003,
+          "requested_bytes": 1413952
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "measurements": [
+        {
+          "allocations": 12,
+          "name": "embedding",
+          "p50_ms": 0.019333,
+          "p95_ms": 0.020874999999999998,
+          "requested_bytes": 8604
+        },
+        {
+          "allocations": 2438,
+          "name": "pages",
+          "p50_ms": 0.42995799999999995,
+          "p95_ms": 0.438208,
+          "requested_bytes": 1413952
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "measurements": [
+        {
+          "allocations": 4299,
+          "name": "embedding",
+          "p50_ms": 0.08475,
+          "p95_ms": 0.09241700000000001,
+          "requested_bytes": 66844
+        },
+        {
+          "allocations": 23110,
+          "name": "pages",
+          "p50_ms": 1.187875,
+          "p95_ms": 1.2184590000000002,
+          "requested_bytes": 3445376
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "measurements": [
+        {
+          "allocations": 4299,
+          "name": "embedding",
+          "p50_ms": 0.093375,
+          "p95_ms": 0.09929199999999999,
+          "requested_bytes": 66844
+        },
+        {
+          "allocations": 23110,
+          "name": "pages",
+          "p50_ms": 1.2005830000000002,
+          "p95_ms": 1.249166,
+          "requested_bytes": 3445376
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "measurements": [
+        {
+          "allocations": 12,
+          "name": "embedding",
+          "p50_ms": 0.019459,
+          "p95_ms": 0.021500000000000002,
+          "requested_bytes": 8604
+        },
+        {
+          "allocations": 2438,
+          "name": "pages",
+          "p50_ms": 0.439083,
+          "p95_ms": 0.48012499999999997,
+          "requested_bytes": 1413952
+        }
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "name": "embedding",
+      "baseline_p50_ms": 0.08795900000000001,
+      "candidate_p50_ms": 0.019333,
+      "speedup": 4.549681891067088,
+      "baseline_allocations": 4299,
+      "candidate_allocations": 12,
+      "baseline_requested_bytes": 66844,
+      "candidate_requested_bytes": 8604
+    },
+    {
+      "name": "pages",
+      "baseline_p50_ms": 1.2005830000000002,
+      "candidate_p50_ms": 0.433916,
+      "speedup": 2.76685579697453,
+      "baseline_allocations": 23110,
+      "candidate_allocations": 2438,
+      "baseline_requested_bytes": 3445376,
+      "candidate_requested_bytes": 1413952
+    }
+  ]
+}

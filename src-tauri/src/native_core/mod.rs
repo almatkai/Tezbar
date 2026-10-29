@@ -10,6 +10,8 @@ pub mod terminal_bridge;
 
 #[cfg(test)]
 mod performance;
+#[cfg(test)]
+mod performance_alloc;
 
 use common::{CoreContext, CoreResult};
 use serde_json::{json, Value};

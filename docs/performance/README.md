@@ -17,12 +17,15 @@ application. Production search changes and repeated interleaved A/B results are
 now recorded in [beta17-search-results.md](beta17-search-results.md), with full
 measurement JSON in `beta17-search-candidate.json` and a reproducible
 `compare-search.py` runner. Improvements vary by case; these do not establish a
-fivefold whole-app speedup or a total RAM reduction.
+fivefold whole-app speedup or a total RAM reduction. The subsequent runtime round
+is recorded in [beta17-runtime-results.md](beta17-runtime-results.md), with full
+desktop process accounting, real Q4 inference, repeated before/after workloads,
+and a separate renderer image-retention fixture.
 
-These are native subsystem measurements, **not** end-to-end UI latency or total
-desktop app RAM. They exclude model inference and WebView processes. They cannot
-establish a fivefold improvement for the whole app. A desktop run with an active
-semantic model and indexing workload remains to be measured.
+The baseline/search probes are native subsystem measurements, **not** end-to-end
+UI latency or total desktop app RAM. They exclude model inference and WebView
+processes and cannot establish a fivefold improvement for the whole app. The
+desktop results linked above measure that broader scope separately.
 
 The launcher fixture has 100,000 file records and 400 application records and
 uses the production database search function. It measures home, exact, prefix,
@@ -98,7 +101,8 @@ search report. Broad-match BM25, cold authoritative row traversal and warm winne
 hydration still limit search; further index/storage changes need their own real-
 profile measurements and exact parity checks.
 
-Idle maintenance and retained state remain a separate round: profile the complete
-desktop process family and representative indexing workload before changing
-lifecycle or memory policy. The empty-profile headless baseline is already low
-CPU and does not explain the user's desktop RAM use.
+Idle maintenance and retained state were investigated in the desktop round
+linked above. Its event/deadline observers, indexing allocation reductions and
+renderer Blob-URL ownership fix have their own regression tests and measurements.
+The empty-profile headless baseline is already low CPU and must not substitute
+for those desktop results.

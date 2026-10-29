@@ -303,3 +303,90 @@ async fn profile_mutation_reindexes_unchanged_metadata_and_changed_work_keeps_pa
     assert_eq!(after["status"], "indexed");
     core.shutdown().await.unwrap();
 }
+
+#[tokio::test]
+async fn quiescent_observers_sleep_and_shutdown_wakes_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(CoreContext::headless(CorePaths {
+        data_dir: dir.path().join("data"),
+        config_dir: dir.path().join("config"),
+        resource_dir: dir.path().join("resources"),
+        temp_dir: dir.path().join("tmp"),
+        home_dir: dir.path().join("home"),
+    }));
+    core.start().await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    let before = core
+        .inner
+        .observer_ticks
+        .each_ref()
+        .map(|n| n.load(Ordering::Relaxed));
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    let after = core
+        .inner
+        .observer_ticks
+        .each_ref()
+        .map(|n| n.load(Ordering::Relaxed));
+    let start = std::time::Instant::now();
+    core.shutdown().await.unwrap();
+    assert!(
+        start.elapsed() < std::time::Duration::from_millis(200),
+        "shutdown must wake a sleeping observer"
+    );
+    assert_eq!(
+        after, before,
+        "unchanged state must not clone/probe every 250 ms"
+    );
+}
+
+#[tokio::test]
+async fn runtime_changes_wake_both_observers_but_identical_status_does_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(CoreContext::headless(CorePaths {
+        data_dir: dir.path().join("data"),
+        config_dir: dir.path().join("config"),
+        resource_dir: dir.path().join("resources"),
+        temp_dir: dir.path().join("tmp"),
+        home_dir: dir.path().join("home"),
+    }));
+    core.start().await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    let before = core
+        .inner
+        .observer_ticks
+        .each_ref()
+        .map(|n| n.load(Ordering::Relaxed));
+    let runtime = core.selected_runtime();
+    runtime.patch(json!({"error":"observer fixture"}));
+    tokio::time::timeout(std::time::Duration::from_millis(200), async {
+        while core
+            .inner
+            .observer_ticks
+            .iter()
+            .zip(before)
+            .any(|(n, b)| n.load(Ordering::Relaxed) <= b)
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("a runtime transition must wake both independent observers");
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let before = core
+        .inner
+        .observer_ticks
+        .each_ref()
+        .map(|n| n.load(Ordering::Relaxed));
+    runtime.patch(json!({"error":"observer fixture"}));
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    let after = core
+        .inner
+        .observer_ticks
+        .each_ref()
+        .map(|n| n.load(Ordering::Relaxed));
+    core.shutdown().await.unwrap();
+    assert_eq!(
+        after, before,
+        "identical runtime status must not create a feedback loop"
+    );
+}

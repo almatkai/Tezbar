@@ -124,6 +124,19 @@ fn run_worker(
                     std::thread::yield_now();
                     continue;
                 }
+                // No cache means no idle/pressure eviction deadline. A job or
+                // close message will wake the worker; mutation maintenance
+                // below still clears the transactional dirty journal.
+                if !store.search_cache.borrow().has_requested_cache() {
+                    match receiver.blocking_recv() {
+                        Some(Some(job)) => {
+                            job(&mut store);
+                            let _ = store.search_cache_maintenance();
+                            continue;
+                        }
+                        _ => break,
+                    }
+                }
                 match runtime.block_on(async {
                     tokio::time::timeout(Duration::from_secs(1), receiver.recv()).await
                 }) {
