@@ -1301,6 +1301,12 @@ impl Runtime {
                 "1",
                 "--threads",
                 &threads.to_string(),
+                // Dedicated embedding requests use the same compute workers;
+                // park them between jobs instead of CPU busy-wait polling.
+                "--poll",
+                "0",
+                "--poll-batch",
+                "0",
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
@@ -2328,6 +2334,15 @@ startup('imports complete')
 args=sys.argv[1:];port=int(args[args.index('--port')+1]);token=args[args.index('--api-key')+1]
 assert '--embedding' in args and args[args.index('--pooling')+1]=='mean'
 directory=Path(args[args.index('--model')+1]).parent
+(directory/'resource-policy.json').write_text(json.dumps({
+ 'ctx':args[args.index('--ctx-size')+1],
+ 'batch':args[args.index('--batch-size')+1],
+ 'ubatch':args[args.index('--ubatch-size')+1],
+ 'threads':args[args.index('--threads')+1],
+ 'poll':args[args.index('--poll')+1] if '--poll' in args else None,
+ 'poll_batch':args[args.index('--poll-batch')+1] if '--poll-batch' in args else None,
+ 'no_residency':os.environ.get('GGML_METAL_NO_RESIDENCY')
+}))
 leaf=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'])
 startup('leaf spawned')
 (directory/'pids').write_text(str(os.getpid())+' '+str(leaf.pid))
@@ -2391,6 +2406,29 @@ server.serve_forever()
         runtime
             .embed(vec![text.into()], "slow", &cancellation())
             .await
+    }
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn runtime_limits_and_speed_modes_disable_cpu_polling_and_keep_metal_policy() {
+        for variant in EmbeddingVariantId::ALL {
+            let temp = tempfile::tempdir().unwrap();
+            let runtime = protocol_variant(context(temp.path()), variant, "ok");
+            initialized(&runtime).await;
+            for speed in ["slow", "balanced", "fast"] {
+                runtime.embed(vec!["fixture".into()], speed, &cancellation()).await.unwrap();
+                let policy: Value = serde_json::from_slice(&std::fs::read(
+                    runtime.inner.directory.join("resource-policy.json")
+                ).unwrap()).unwrap();
+                assert_eq!(policy["ctx"], "8192");
+                assert_eq!(policy["batch"], "8192");
+                assert_eq!(policy["ubatch"], "8192");
+                assert_eq!(policy["threads"], threads(speed).to_string());
+                assert_eq!(policy["poll"], "0");
+                assert_eq!(policy["poll_batch"], "0");
+                assert!(policy["no_residency"].is_null(), "retain the default Metal policy: disabling residency delayed first use after idle");
+            }
+            runtime.shutdown().await;
+        }
     }
     #[cfg(unix)]
     #[tokio::test]

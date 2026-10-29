@@ -1023,6 +1023,59 @@ mod tests {
             )
         });
     }
+
+    #[test]
+    #[ignore = "scaled on-disk cache memory/parity probe; no inference or user data"]
+    fn scaled_cache_memory() {
+        let count = std::env::var("TEZBAR_MEMORY_ROWS")
+            .ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(100_000)
+            .clamp(10_000, 1_000_000);
+        let directory = tempfile::tempdir().unwrap();
+        let db = Connection::open(directory.path().join("synthetic.sqlite3")).unwrap();
+        db.execute_batch(include_str!("schema.sql")).unwrap();
+        db.execute_batch("BEGIN; INSERT INTO knowledge_roots VALUES('r','/synthetic','smart','local',1,0,0);").unwrap();
+        db.execute("WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<?) INSERT INTO knowledge_sources(id,root_id,path,content_hash,byte_size,modified_at,status) SELECT printf('s%08d',i),'r',printf('/synthetic/s%08d',i),'',0,0,'indexed' FROM n", [count.div_ceil(16)]).unwrap();
+        db.execute("WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<?) INSERT INTO knowledge_chunks(rowid,id,source_id,text) SELECT i,printf('c%08d',i),printf('s%08d',1+(i-1)/16),'archive' FROM n", [count]).unwrap();
+        db.execute("INSERT INTO knowledge_gemma_embeddings SELECT id,?,? FROM knowledge_chunks", params![MODEL_KEY, text::encode(&vector(true))]).unwrap();
+        db.execute_batch("COMMIT").unwrap();
+        let s = Store::from_connection(db, false, directory.path().into());
+        let footprint = || {
+            let output = std::process::Command::new("ps")
+                .args(["-o", "rss=", "-p", &std::process::id().to_string()])
+                .output().unwrap();
+            String::from_utf8_lossy(&output.stdout).trim().parse::<u64>().unwrap() * 1024
+        };
+        let rss_before = footprint();
+        let begin = Instant::now();
+        let cold = query(&s);
+        let cold_ms = begin.elapsed().as_secs_f64() * 1000.;
+        assert_eq!(cold.len(), 16);
+        let begin = Instant::now();
+        while s.search_cache.borrow().needs_work() {
+            s.search_cache_maintenance().unwrap();
+        }
+        let build_ms = begin.elapsed().as_secs_f64() * 1000.;
+        let (ready, rejected, allocated, budget, loaded) = {
+            let c = s.search_cache.borrow();
+            (c.ready, c.rejected, c.packed.as_ref().map(Packed::allocated).unwrap_or(0), c.budget, c.loaded_rows)
+        };
+        assert!(allocated <= budget);
+        assert!(ready || rejected);
+        let begin = Instant::now();
+        assert_eq!(query(&s), cold, "scaled cache/fallback must preserve full ordered results");
+        let warm_ms = begin.elapsed().as_secs_f64() * 1000.;
+        let rss_warm = footprint();
+        s.clear_search_cache();
+        assert_eq!(query(&s), cold);
+        eprintln!("TEZBAR_MEMORY {}", serde_json::json!({
+            "rows":count,"sources":count.div_ceil(16),"ready":ready,"rejected":rejected,
+            "loaded":loaded,"estimated_allocated_bytes":allocated,"budget_bytes":budget,
+            "rss_before":rss_before,"rss_warm":rss_warm,"rss_after_clear":footprint(),
+            "cold_ms":cold_ms,"cache_build_ms":build_ms,"warm_ms":warm_ms,
+            "database_bytes":std::fs::metadata(directory.path().join("synthetic.sqlite3")).unwrap().len(),
+            "ordered_parity":true
+        }));
+    }
     #[test]
     fn source_winners_match_full_sort_for_dense_legacy_ties_and_updates() {
         let s = fixture(360);

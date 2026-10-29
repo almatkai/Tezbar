@@ -160,6 +160,39 @@ fn server_failure_preserves_status_and_cleans_descendants() {
     wait_until(|| !alive(root) && !alive(leaf));
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn idle_supervisor_waits_without_periodic_wakeups() {
+    // Observe the actual isolated supervisor, not this test runner or its child.
+    // rusage v4 begins with UUID, user/system time and the two wakeup counters.
+    #[repr(C)]
+    struct Usage {
+        uuid: [u8; 16],
+        fields: [u64; 64],
+    }
+    extern "C" {
+        fn proc_pid_rusage(pid: i32, flavor: i32, data: *mut std::ffi::c_void) -> i32;
+    }
+    let wakes = |pid: u32| {
+        let mut usage = Usage { uuid: [0; 16], fields: [0; 64] };
+        assert_eq!(unsafe { proc_pid_rusage(pid as i32, 4, (&mut usage as *mut Usage).cast()) }, 0);
+        usage.fields[3]
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let mut child = supervised("tree", directory.path());
+    let root = pid(directory.path(), "root");
+    let leaf = pid(directory.path(), "leaf");
+    std::thread::sleep(Duration::from_millis(100));
+    let before = wakes(child.id());
+    std::thread::sleep(Duration::from_secs(1));
+    let delta = wakes(child.id()) - before;
+    // Always close/reap even when the assertion fails.
+    drop(child.stdin.take());
+    assert!(wait_exit(&mut child).success());
+    wait_until(|| !alive(root) && !alive(leaf));
+    assert!(delta <= 5, "idle supervisor woke {delta} times in one second");
+}
+
 #[test]
 fn missing_child_fails_without_waiting_for_open_lease() {
     let mut child = Command::new(fixture_executable())

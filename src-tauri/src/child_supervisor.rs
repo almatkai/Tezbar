@@ -3,14 +3,22 @@
 use std::{
     ffi::OsString,
     io::{self, Read, Write},
-    process::{Child, Command, Stdio},
+    process::{Command, Stdio},
     sync::mpsc,
     time::Duration,
 };
+#[cfg(any(windows, test))]
+use std::process::Child;
 
 pub const EXTENSION_MODE: &str = "--tezbar-private-extension-supervisor-v1";
 
 pub const MODE: &str = "--tezbar-private-child-supervisor-v1";
+
+enum MonitorEvent {
+    Closed,
+    #[cfg(unix)]
+    Exited(io::Result<i32>),
+}
 
 /// None means ordinary application startup; malformed helper requests fail closed.
 pub fn dispatch() -> Option<i32> {
@@ -38,6 +46,7 @@ fn supervise(args: Vec<OsString>, relay: bool) -> io::Result<i32> {
     let (closed, lease) = mpsc::channel();
     let relay_closed = closed.clone();
     if !relay {
+        let closed = closed.clone();
         std::thread::spawn(move || {
             let mut block = [0; 256];
             let mut stdin = io::stdin().lock();
@@ -49,7 +58,7 @@ fn supervise(args: Vec<OsString>, relay: bool) -> io::Result<i32> {
                     Err(_) => break,
                 }
             }
-            let _ = closed.send(());
+            let _ = closed.send(MonitorEvent::Closed);
         });
     }
     let mut command = Command::new(executable);
@@ -108,7 +117,7 @@ fn supervise(args: Vec<OsString>, relay: bool) -> io::Result<i32> {
                     Err(_) => break,
                 }
             }
-            let _ = relay_closed.send(());
+            let _ = relay_closed.send(MonitorEvent::Closed);
         });
         std::thread::spawn(move || {
             for bytes in rx {
@@ -118,23 +127,49 @@ fn supervise(args: Vec<OsString>, relay: bool) -> io::Result<i32> {
             }
         });
     }
+    // waitid(WNOWAIT) blocks without reaping the Unix group leader. Its PID
+    // therefore remains reserved until tree cleanup, including a lease-close
+    // racing normal child exit. Joining after kill prevents a detached waiter.
+    #[cfg(unix)]
+    let waiter = {
+        let pid = child.id();
+        std::thread::Builder::new().name("child-exit".into()).spawn(move || {
+            let _ = closed.send(MonitorEvent::Exited(wait_for_exit(pid)));
+        })
+    };
+    #[cfg(unix)]
+    let result = match &waiter {
+        Ok(_) => monitor(lease),
+        Err(error) => Err(io::Error::new(error.kind(), error.to_string())),
+    };
+    #[cfg(windows)]
     let result = monitor(&mut child, lease);
     // Cleanup also runs on normal server exit (including any surviving descendants).
     drop(tree);
     let _ = child.kill();
+    #[cfg(unix)]
+    if let Ok(waiter) = waiter {
+        let _ = waiter.join();
+    }
     let _ = child.wait();
     result
 }
 
-fn monitor(child: &mut Child, lease: mpsc::Receiver<()>) -> io::Result<i32> {
+#[cfg(unix)]
+fn monitor(lease: mpsc::Receiver<MonitorEvent>) -> io::Result<i32> {
+    match lease.recv() {
+        Ok(MonitorEvent::Exited(result)) => result,
+        Ok(MonitorEvent::Closed) | Err(_) => Ok(0),
+    }
+}
+#[cfg(windows)]
+fn monitor(child: &mut Child, lease: mpsc::Receiver<MonitorEvent>) -> io::Result<i32> {
     loop {
-        // Do not reap the Unix group leader yet: retaining its PID prevents reuse
-        // before the isolated group is killed. waitid(WNOWAIT) is used below.
         if let Some(code) = exited(child)? {
             return Ok(code);
         }
         match lease.recv_timeout(Duration::from_millis(20)) {
-            Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(0),
+            Ok(MonitorEvent::Closed) | Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(0),
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
     }
@@ -165,34 +200,21 @@ extern "C" {
 }
 
 #[cfg(unix)]
-fn exited(child: &mut Child) -> io::Result<Option<i32>> {
+fn wait_for_exit(pid: u32) -> io::Result<i32> {
     // `kill(pid, 0)` cannot detect zombies. Use the platform libc waitid layout
     // rather than reaping with try_wait, which permits process-group ID reuse.
-    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
-    let result = unsafe {
-        libc::waitid(
-            libc::P_PID,
-            child.id(),
-            &mut info,
-            libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
-        )
-    };
-    if result != 0 {
-        let error = io::Error::last_os_error();
-        if error.kind() == io::ErrorKind::Interrupted {
-            return Ok(None);
+    loop {
+        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+        let result = unsafe {
+            libc::waitid(libc::P_PID, pid, &mut info, libc::WEXITED | libc::WNOWAIT)
+        };
+        if result != 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() == io::ErrorKind::Interrupted { continue; }
+            return Err(error);
         }
-        return Err(error);
+        return Ok(if info.si_code == libc::CLD_EXITED { unsafe { info.si_status() } } else { 1 });
     }
-    if unsafe { info.si_pid() } == 0 {
-        return Ok(None);
-    }
-    let code = if info.si_code == libc::CLD_EXITED {
-        unsafe { info.si_status() }
-    } else {
-        1
-    };
-    Ok(Some(code))
 }
 #[cfg(windows)]
 fn exited(child: &mut Child) -> io::Result<Option<i32>> {
