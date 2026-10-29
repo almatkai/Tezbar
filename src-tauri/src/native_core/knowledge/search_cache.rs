@@ -939,6 +939,33 @@ mod tests {
         panic!("cache did not become ready");
     }
     #[test]
+    #[ignore = "release-only deterministic 10k-vector search, excluding inference"]
+    fn search_matrix() {
+        use crate::native_core::performance::measure;
+        use serde_json::json;
+        let s = fixture(10_000);
+        s.db.execute_batch("INSERT INTO knowledge_chunks_fts(rowid,id,source_id,text) SELECT rowid,id,source_id,text FROM knowledge_chunks;").unwrap();
+        let roots = ["r".to_owned()];
+        assert!(!query(&s).is_empty(), "semantic fixture must return hits");
+        assert!(!s.search_sources("unrelated archive", 16, &roots, true, None)
+            .unwrap().is_empty(), "lexical fixture must return hits");
+        // Include cold scans, then measure the exact same sources with the cache.
+        // Learned vectors are fixtures: this does not time a model or claim to.
+        let cold = measure("deep.semantic.cold", || {
+            s.clear_search_cache();
+            Value::Array(query(&s))
+        });
+        warm(&s);
+        let warm_result = measure("deep.semantic.warm", || Value::Array(query(&s)));
+        assert_eq!(cold["results"], warm_result["results"]);
+        let cache = s.search_cache.borrow();
+        eprintln!("TEZBAR_PERF {}", json!({"name":"deep.cache", "rows":cache.loaded_rows,
+            "estimated_allocated_bytes":cache.packed.as_ref().unwrap().allocated()}));
+        drop(cache);
+        measure("deep.lexical", || Value::Array(s.search_sources(
+            "unrelated archive", 16, &roots, true, None).unwrap()));
+    }
+    #[test]
     fn cache_same_count_deltas_status_and_rollback() {
         let s = fixture(3);
         let cold = query(&s);

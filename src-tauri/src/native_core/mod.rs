@@ -8,6 +8,9 @@ pub mod platform;
 pub mod system;
 pub mod terminal_bridge;
 
+#[cfg(test)]
+mod performance;
+
 use common::{CoreContext, CoreResult};
 use serde_json::{json, Value};
 use std::sync::{

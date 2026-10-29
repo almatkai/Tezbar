@@ -631,6 +631,36 @@ mod performance_tests {
     use super::*;
 
     #[test]
+    #[ignore = "release-only launcher query matrix over 100k files"]
+    fn search_matrix() {
+        use crate::native_core::performance::measure;
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = init(dir.path().join("matrix.sqlite3")).unwrap();
+        let tx = db.transaction().unwrap();
+        for n in 0..100_400 {
+            let file = n < 100_000;
+            upsert(&tx, &json!({"id":format!("doc:{n}"),
+                "category":if file {"files"} else {"applications"},
+                "title":if file {format!("Project document {n}.txt")} else {format!("Calculator {n}")},
+                "subtitle":if file {format!("/projects/archive/{n}/document.txt")} else {format!("/Applications/Calculator {n}.app")},
+                "tokens":"project archive document", "action":{"type":"open","path":format!("/fixture/{n}")},
+                "updatedAt":n})).unwrap();
+        }
+        tx.commit().unwrap();
+        for (name, query) in [
+            ("launcher.home", ""),
+            ("launcher.exact", "Calculator 100001"),
+            ("launcher.prefix", "calc"),
+            ("launcher.typo", "calclator"),
+            ("launcher.keyboard_layout", "сфдсгдфещк"),
+            ("launcher.file_heavy", "document"),
+            ("launcher.no_hit", "zzzxxyyqq"),
+        ] {
+            measure(name, || search(&db, query, false).unwrap());
+        }
+    }
+
+    #[test]
     #[ignore = "synthetic 100k-file search benchmark"]
     fn search_benchmark() {
         let dir = tempfile::tempdir().unwrap();
