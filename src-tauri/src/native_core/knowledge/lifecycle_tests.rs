@@ -390,3 +390,54 @@ async fn runtime_changes_wake_both_observers_but_identical_status_does_not() {
         "identical runtime status must not create a feedback loop"
     );
 }
+
+#[tokio::test]
+async fn unselected_download_keeps_progress_observation_active_then_returns_to_sleep() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = KnowledgeCore::new(CoreContext::headless(CorePaths {
+        data_dir: dir.path().join("data"),
+        config_dir: dir.path().join("config"),
+        resource_dir: dir.path().join("resources"),
+        temp_dir: dir.path().join("tmp"),
+        home_dir: dir.path().join("home"),
+    }));
+    core.start().await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    let runtime = core
+        .inner
+        .runtimes
+        .iter()
+        .find(|r| r.variant_id() != core.selected_variant())
+        .unwrap();
+    let mut observations = Vec::new();
+    for paused in [false, true] {
+        core.inner.paused.store(paused, Ordering::SeqCst);
+        let before = core.inner.observer_ticks[1].load(Ordering::Relaxed);
+        // Downloads are independent of indexing pause/selection. Byte progress
+        // changes under the status mutex between lifecycle notifications.
+        runtime.patch(json!({"modelState":"downloading"}));
+        tokio::time::sleep(std::time::Duration::from_millis(650)).await;
+        let active = core.inner.observer_ticks[1].load(Ordering::Relaxed);
+        runtime.patch(json!({"modelState":"not-downloaded"}));
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let settled = core.inner.observer_ticks[1].load(Ordering::Relaxed);
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        observations.push((
+            before,
+            active,
+            settled,
+            core.inner.observer_ticks[1].load(Ordering::Relaxed),
+        ));
+    }
+    core.shutdown().await.unwrap();
+    for (before, active, settled, after) in observations {
+        assert!(
+            active >= before + 3,
+            "active download must retain 250ms progress observations"
+        );
+        assert_eq!(
+            after, settled,
+            "finishing download must restore quiescent sleep"
+        );
+    }
+}

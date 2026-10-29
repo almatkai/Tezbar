@@ -52,6 +52,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--artifacts', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--candidate-source-ref', default='9ad23a9', help='Source of the frozen measured candidate, independently of the current checkout')
     args = p.parse_args()
     runs = []
     for number, (name, variant) in enumerate([
@@ -105,9 +106,9 @@ def main():
             a, b = (statistics.median(by[v]) for v in ['baseline','candidate'])
             summaries[phase][field] = dict(baseline=a,candidate=b,baseline_over_candidate=a/b if b else None,baseline_runs=by['baseline'],candidate_runs=by['candidate'])
     root = Path(__file__).resolve().parents[2]
-    changed = subprocess.check_output(['git','diff','354689e','--name-only'], cwd=root, text=True).splitlines()
-    changed += subprocess.check_output(['git','ls-files','--others','--exclude-standard'], cwd=root, text=True).splitlines()
-    fingerprints = {name: hashlib.sha256((root/name).read_bytes()).hexdigest() for name in sorted(set(changed)) if (name.startswith('src/') or name.startswith('src-tauri/')) and (root/name).is_file()}
+    source_ref = subprocess.check_output(['git','rev-parse',args.candidate_source_ref], cwd=root, text=True).strip()
+    changed = subprocess.check_output(['git','diff','354689e',source_ref,'--name-only'], cwd=root, text=True).splitlines()
+    fingerprints = {name: hashlib.sha256(subprocess.check_output(['git','show',source_ref+':'+name],cwd=root)).hexdigest() for name in sorted(set(changed)) if name.startswith(('src/','src-tauri/'))}
     parity_path = args.artifacts/'runtime-search-parity.json'
     parity = json.loads(parity_path.read_text())
     assert parity['exactOrderedIdScoreParity'] is True
@@ -115,6 +116,7 @@ def main():
     result = dict(schemaVersion=1, createdAt=datetime.now(timezone.utc).isoformat(),
         runtimeBase='354689e', originalBeta17Base='9ff3663342b48ab01be2e56ab30f6d7123b0ced8',
         branch='fix/beta17-runtime-search-memory',
+        measured_source_commit=source_ref,
         host=dict(model='Apple M5 Pro (Mac17,9)',memory_bytes=25769803776,os='macOS 26.3 (25D2125)',rust='1.98.0',node='26.7.0',pnpm='11.17.0',sqlite='bundled 3.46'),
         scope='Release Tauri/WKWebView desktop, synthetic home (5000 files), 96 real extracted text documents, installed Q4 model cloned to an isolated profile; accepted search changes already in runtime base.',
         protocol='visibility-and-durable-completion-v2',

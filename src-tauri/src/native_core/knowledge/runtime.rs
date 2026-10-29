@@ -532,6 +532,9 @@ impl Runtime {
     pub fn snapshot(&self) -> Value {
         self.inner.status.lock().unwrap().clone()
     }
+    pub fn downloading(&self) -> bool {
+        self.inner.status.lock().unwrap()["modelState"] == "downloading"
+    }
     pub fn observe(&self, observer: Arc<Notify>) {
         *self.inner.observer.lock().unwrap() = Some(observer);
     }

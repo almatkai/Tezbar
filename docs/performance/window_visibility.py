@@ -16,11 +16,12 @@ BOUNDS=ctypes.c_void_p.in_dll(CG,'kCGWindowBounds').value
 WIDTH=CF.CFStringCreateWithCString(None,b'Width',0x08000100)
 HEIGHT=CF.CFStringCreateWithCString(None,b'Height',0x08000100)
 
-def main_on_screen(pid):
+def owned_on_screen_bounds(pid):
     # On-screen only, with no image capture or title access. A tray icon is too
     # small to qualify; these workloads create just one launcher window.
     windows=CG.CGWindowListCopyWindowInfo(1,0)
     if not windows:raise RuntimeError('CoreGraphics window metadata unavailable')
+    result=[]
     try:
         for i in range(CF.CFArrayGetCount(windows)):
             window=CF.CFArrayGetValueAtIndex(windows,i)
@@ -30,6 +31,9 @@ def main_on_screen(pid):
             width,height=ctypes.c_double(),ctypes.c_double()
             CF.CFNumberGetValue(CF.CFDictionaryGetValue(bounds,WIDTH),6,ctypes.byref(width))
             CF.CFNumberGetValue(CF.CFDictionaryGetValue(bounds,HEIGHT),6,ctypes.byref(height))
-            if width.value>=480 and height.value>=80:return True
-        return False
+            result.append(dict(width=width.value,height=height.value))
+        return result
     finally:CF.CFRelease(windows)
+
+def main_on_screen(pid):
+    return any(w['width']>=480 and w['height']>=80 for w in owned_on_screen_bounds(pid))

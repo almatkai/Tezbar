@@ -11,7 +11,7 @@ import sqlite3
 import tempfile
 import time
 from desktop import Desktop, prepare
-from window_visibility import main_on_screen
+from window_visibility import main_on_screen, owned_on_screen_bounds
 spec=importlib.util.spec_from_file_location('workload',Path(__file__).with_name('desktop-workload.py'))
 w=importlib.util.module_from_spec(spec);spec.loader.exec_module(w)
 
@@ -118,7 +118,12 @@ if __name__=='__main__':
     root=tempfile.mkdtemp(prefix='tezbar-desktop-');prepare(root,a.model);d=Desktop(root)
     original_sample=d.sample
     def sample(label):
-        value=original_sample(label);value['main_on_screen']=main_on_screen(d.pid);return value
+        value=original_sample(label)
+        value['owned_on_screen_bounds']=owned_on_screen_bounds(d.pid)
+        value['main_on_screen']=any(w['width']>=480 and w['height']>=80 for w in value['owned_on_screen_bounds'])
+        if label=='visible_idle' and not value['main_on_screen']:
+            value['unexpected_visibility_state']=d.js("return {hidden:document.hidden,hiddenClass:document.documentElement.classList.contains('tezbar-window-hidden'),width:innerWidth,height:innerHeight,focused:document.hasFocus()};")
+        return value
     d.sample=sample
     result=dict(protocol='visibility-and-durable-completion-v2',root=root,binary_sha256=hashlib.sha256(Path(a.binary).read_bytes()).hexdigest(),metrics={},completed=False)
     try:

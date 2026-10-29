@@ -713,9 +713,15 @@ impl KnowledgeCore {
                     };
                     next = next.min(vector_due);
                 }
-                if self.settings()["embeddingModel"] == "embeddinggemma-2" {
-                    next = next.min(now.saturating_add(250));
-                }
+            }
+            if (!self.inner.paused.load(Ordering::SeqCst)
+                && self.settings()["embeddingModel"] == "embeddinggemma-2")
+                || self.inner.runtimes.iter().any(Runtime::downloading)
+            {
+                // Download progress is independent of indexing pause/selection.
+                // Its byte counter changes under the status mutex; retain the
+                // old observation cadence only while that work is active.
+                next = next.min(now.saturating_add(250));
             }
             tokio::select! {_=&mut wake=>{},_=tokio::time::sleep(std::time::Duration::from_millis(next.saturating_sub(now).max(1)))=>{}}
         }

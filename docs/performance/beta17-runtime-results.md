@@ -6,6 +6,13 @@ already includes the accepted search changes. The original beta.17 baseline and
 search results are unchanged. This round does **not** establish fivefold
 whole-app speed or RAM improvements.
 
+The four-process paired measurements below describe source snapshot `9ad23a9`.
+A subsequent review correction preserves download-progress observation for an
+unselected model and while indexing is paused. Downloads did not occur in the
+paired workload. Its frozen executables/results remain unchanged; the final
+binary receives separate verification described below, rather than silently
+reattributing old timings to a new executable.
+
 ## Production changes
 
 - Knowledge's prewarm observer now waits for actual settings/runtime events.
@@ -14,6 +21,8 @@ whole-app speed or RAM improvements.
   Selected Gemma indexing retains its original 250 ms cadence. Shutdown,
   cancellation, the 1.2 s foreground grace period, extraction concurrency and
   the five-minute reconciliation policy remain active.
+  Active downloads retain 250 ms progress observation independently of indexing
+  selection/pause and return to sleep after completion/cancellation.
 - Model idle supervision waits for process changes and the existing 120 s idle
   deadline instead of ticking every second without a process. Inference owns
   the process mutex, so the supervisor cannot unload an active request.
@@ -186,12 +195,14 @@ No fivefold launch improvement is claimed.
 
 ## Allocation and retention evidence
 
-Three AB/BA/AB pairs, 40 samples per case/process; median of process p50s:
+Three AB/BA/AB pairs, 40 samples per case/process; median of process p50s.
+Repeated on the frozen final test executable after the download-progress fix
+(the text implementation is unchanged). Its hash/path are in the JSON:
 
 | Production text case | p50 ms, before → after | Speedup | Allocations, before → after | Requested bytes, before → after |
 |---|---:|---:|---:|---:|
-| embedding | 0.087959 → 0.019333 | 4.55× | 4,299 → 12 | 66,844 → 8,604 |
-| pages | 1.200583 → 0.433916 | 2.77× | 23,110 → 2,438 | 3,445,376 → 1,413,952 |
+| embedding | 0.086291 → 0.023583 | 3.66× | 4,299 → 12 | 66,844 → 8,604 |
+| pages | 1.165458 → 0.499791 | 2.33× | 23,110 → 2,438 | 3,445,376 → 1,413,952 |
 
 These are direct text-subsystem time/allocation-request measurements, not live
 RAM or model inference. The allocation probe is test-only and thread-local.
@@ -213,7 +224,7 @@ may differ.
 - `pnpm test`: 736 passed, 9 skipped; 112 files passed, 2 skipped.
 - `pnpm build:frontend`: passed.
 - `cargo test --release --locked --manifest-path src-tauri/Cargo.toml --lib -- --test-threads=1`:
-  440 passed, 7 ignored in the complete final run.
+  440 passed, 7 ignored for the paired measurement snapshot.
 - Both `desktop-bench,tauri/custom-protocol` and ordinary `tauri/custom-protocol`
   release app builds completed. The ordinary build is distinct from test/lib
   binaries and was not installed over the user's app. Its bytes match the frozen
@@ -227,6 +238,36 @@ may differ.
   and shutdown, real runtime state notifications, successful warm-request
   status stability, semantic queue-drain count budgeting and image ownership
   through component cleanup and asynchronous completion.
+
+The final post-review source passed **441 release Rust tests, 7 ignored**,
+including the regression first observed failing for an unselected download. It
+covers observation while indexing is active **and paused**, then return to idle.
+Forty additional ordered ID/score signatures match exactly. Both release app
+builds completed again; the production executable has no benchmark markers.
+The final test executable is frozen as `runtime-final-tests`.
+
+One additional full desktop run of the newly linked final executable completed
+all visibility, source-count, vector-hash, image-decode/release and model-retention
+checks. This is **unpaired validation**, not a replacement for the four-process
+comparison. First UI was 1.198 s. Hidden/visible/post-feature/model-idle CPU was
+0.564/4.197/0.552/1.159% of one core, respectively; family footprints were
+144.96/244.07/219.00/709.59 MiB, and settled RSS
+335.58/341.50/501.61/1,420.55 MiB. Durable vector completion took 20.359 s,
+and family CPU through completion was 24.516 s. Two newly started owned
+`MTLCompilerService` workers account for 16.602 CPU s of that total; the
+`llama-server` accounts for 7.377 s. The compiler workers were born during the
+semantic phase, rather than inherited lifetime CPU from an older process.
+Shader caches were not flushed or controlled, so this cost is reported, not
+attributed to the download guard or excluded to improve the result. Cold model
+first-use behavior is therefore not established as regression-free by the warm
+paired results. The final run confirms **no fivefold RAM/CPU gain**.
+
+Full post-review verification, binary/source hashes and compact phase metrics
+are in [beta17-runtime-final-verification.json](beta17-runtime-final-verification.json).
+Its first visible-idle attempt failed the native assertion and remains under
+`post-review-desktop-candidate-visibility-failed.*`; the unchanged-binary retry
+passed with additional owned-window bounds diagnostics. The failed attempt
+is excluded; its cause was not established.
 
 An earlier complete Rust suite timed out in the existing
 `native_core::extensions::launcher::tests::timed_out_launcher_query_settles_and_recovers`
@@ -254,7 +295,8 @@ version in the final desktop comparison: ranges show repeat variation, not
 confidence intervals. Host/GPU scheduling and catalogue/network activity are
 not globally controlled. Fresh core profiles share the test identity's normal
 WebKit caches; launch milestones use 200 ms readiness polling and are not
-cold-install/cold-OS-cache launch tests. This is macOS Q4 inference, not Windows,
+cold-install/cold-OS-cache launch tests. Model/Metal shader caches were not
+controlled; the additional final run exposes this limitation directly. This is macOS Q4 inference, not Windows,
 voice/provider latency or an active compatibility-extension session benchmark.
 Those features are preserved, not certified fivefold faster here.
 
@@ -268,6 +310,12 @@ families, profiles, frozen executables and complete logs remain under
 artifacts are local evidence, not a durable distribution of binaries.
 
 From this worktree, with dependencies/resources already staged:
+
+The saved `desktop-candidate-app`/`production-candidate-app` are the frozen
+`9ad23a9` builds. Do not overwrite preserved executables. A newly built app must
+use a new filename/result path (the post-review build uses `desktop-final-app`
+and `production-final-app`). The paired summarizer fingerprints the measured
+source ref, not whatever source happens to be checked out later.
 
 ```sh
 pnpm build:frontend
@@ -301,6 +349,15 @@ python3 docs/performance/compare-search.py \
   --baseline-executable /tmp/tezbar-beta17-perf.e1qzXU/baseline-instrumented-tests \
   --candidate-executable src-tauri/target/release/deps/app_lib-42960ca2c7041bb3 \
   --rounds 2 --samples 40 --output /tmp/tezbar-beta17-perf.e1qzXU/runtime-search-parity.json
+```
+
+For the final post-review binary, run the same `final-desktop.py` protocol using
+`desktop-final-app` and output `post-review-desktop-candidate.json`, then:
+
+```sh
+python3 docs/performance/verify-final-runtime.py \
+  --artifacts /tmp/tezbar-beta17-perf.e1qzXU \
+  --output docs/performance/beta17-runtime-final-verification.json
 ```
 
 The executable hash suffix is host/build dependent: choose the actual completed
