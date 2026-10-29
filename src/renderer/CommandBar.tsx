@@ -1587,6 +1587,7 @@ export default function CommandBar({
   const draggingPinIdRef = useRef<string | null>(null)
   const pinDropIndexRef = useRef<number | null>(null)
   const pinRailRef = useRef<HTMLDivElement | null>(null)
+  const pinUnpinTargetRef = useRef<HTMLDivElement | null>(null)
   const pinPointerActiveRef = useRef(false)
   const pinPointerStartYRef = useRef(0)
   const pinUnpinDropActiveRef = useRef(false)
@@ -2539,6 +2540,12 @@ export default function CommandBar({
     if (!isPointerInsidePinRail(clientX, clientY)) return false
     const rail = pinRailRef.current
     if (!rail) return false
+    // The last pin can be below the scroll viewport; keep the visible target usable.
+    const target = pinUnpinTargetRef.current
+    if (target) {
+      const rect = target.getBoundingClientRect()
+      if (clientY >= rect.top && clientY <= rect.bottom) return true
+    }
     const items = Array.from(rail.querySelectorAll<HTMLElement>('[data-pin-index]'))
     const last = items.at(-1)
     if (!last) return false
@@ -4436,7 +4443,7 @@ export default function CommandBar({
           <div
             ref={pinRailRef}
             className={cx(
-              'tezbar-pin-rail glass-card flex shrink-0 flex-col items-center overflow-hidden',
+              'tezbar-pin-rail glass-card flex min-h-0 shrink-0 flex-col items-center overflow-hidden',
               densePinRail ? 'w-11 px-1 py-1' : 'w-11 px-1 py-1.5',
               draggingPinId ? 'pb-1' : '',
               pinUnpinDropActive ? 'border-rose-300/35 bg-rose-400/[0.04]' : '',
@@ -4445,7 +4452,8 @@ export default function CommandBar({
           >
             <div
               className={cx(
-                'flex min-h-0 flex-col items-center',
+                'flex min-h-0 -my-[5px] flex-col items-center overflow-y-auto py-[5px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+                draggingPinId ? 'mb-[3px]' : '',
                 densePinRail ? 'gap-[3px]' : 'gap-1'
               )}
             >
@@ -4491,7 +4499,7 @@ export default function CommandBar({
                       unpinCommandById(pin.id)
                     }}
                     className={cx(
-                      'group relative flex cursor-grab items-center justify-center rounded-tezbar-row transition active:cursor-grabbing',
+                      'group relative flex shrink-0 cursor-grab items-center justify-center rounded-tezbar-row transition active:cursor-grabbing',
                       draggingPinId === pin.id ? 'opacity-45' : 'hover:bg-white/[0.06]'
                     )}
                   >
@@ -4548,11 +4556,13 @@ export default function CommandBar({
                 )
               })}
             </div>
+            {/* Reserve space above the footer for the target while pins scroll. */}
             {draggingPinId ? (
               <div
+                ref={pinUnpinTargetRef}
                 aria-hidden
                 className={cx(
-                  'pointer-events-none absolute bottom-1 left-1 right-1 grid h-8 place-items-center rounded-tezbar-row border border-dashed transition',
+                  'pointer-events-none -mx-0.5 mt-auto grid h-8 shrink-0 self-stretch place-items-center rounded-tezbar-row border border-dashed transition',
                   pinUnpinDropActive
                     ? 'border-rose-300/55 bg-rose-400/15 text-rose-200 shadow-[0_0_14px_rgba(251,113,133,0.18)]'
                     : 'border-white/10 bg-white/[0.025] text-ink-4/70'

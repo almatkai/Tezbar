@@ -2515,6 +2515,8 @@ html.tezbar-window-hidden body {
 
 .tezbar-launcher .tezbar-pin-rail {
   border-right: 1px solid var(--ln-hairline);
+  /* The footer floats over the body; pins and the drop target must clear it. */
+  margin-bottom: var(--sheet-bar-h);
 }
 
 /* Reversed wrapping row: the chip nearest the query wraps onto the hidden
