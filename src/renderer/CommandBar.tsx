@@ -5152,7 +5152,7 @@ export default function CommandBar({
                             </>
                           ) : item.id === 'command:check-for-updates' ? (
                             <>
-                              <span className="flex min-w-0 flex-1 items-center gap-3">
+                              <span className="update-status flex min-w-0 flex-1 items-center gap-3">
                                 {effectiveUpdateStatus.kind === 'checking' ? (
                                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-sky-300/25 bg-sky-300/10 text-sky-200">
                                     <svg
@@ -5174,7 +5174,7 @@ export default function CommandBar({
                                     </svg>
                                   </span>
                                 ) : effectiveUpdateStatus.kind === 'ready' ? (
-                                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-emerald-300/30 bg-emerald-300/20 text-emerald-200 shadow-[0_0_12px_rgba(52,211,153,0.25)]">
+                                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border border-emerald-300/30 bg-emerald-300/20 text-emerald-200">
                                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
@@ -5227,7 +5227,7 @@ export default function CommandBar({
                                   )}
                                 </span>
                               </span>
-                              <span className="shrink-0 flex items-center gap-2">
+                              <span className="update-status shrink-0 flex items-center gap-2">
                                 {effectiveUpdateStatus.kind === 'checking' ? (
                                   <span className="rounded-full bg-sky-500/15 border border-sky-400/20 px-2 py-0.5 text-[10px] font-medium text-sky-300">
                                     Checking…
@@ -5243,7 +5243,7 @@ export default function CommandBar({
                                     Press ↵ to install
                                   </span>
                                 ) : effectiveUpdateStatus.kind === 'ready' ? (
-                                  <span className="rounded-full bg-emerald-500/25 border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.2)]">
+                                  <span className="rounded-full bg-emerald-500/25 border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300">
                                     Press ↵ to restart
                                   </span>
                                 ) : effectiveUpdateStatus.kind === 'upToDate' ? (
