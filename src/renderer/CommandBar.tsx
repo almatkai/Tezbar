@@ -15,6 +15,7 @@ import {
 import { createPortal } from 'react-dom'
 import { StringCache } from '../shared/stringCache'
 import { useBackendGeneration } from './backendGeneration'
+import { latestSearchScheduler } from './latestSearch'
 import { defaultModels, normalizeProviderModelList, recommendedModel } from '../shared/aiProviders'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import type { IconAssetKind, PathCompletionItem, SearchResult } from '../shared/search'
@@ -1584,6 +1585,14 @@ export default function CommandBar({
   const terminalSettingsOpenRef = useRef(terminalSettingsOpen)
   const launcherQueryHistoryRef = useRef<string[]>([])
   const lastSearchRequestId = useRef(0)
+  // Independent lanes let mode switches bypass a slow obsolete request, while
+  // bounding each lane to one running IPC + one latest pending input. A backend
+  // restart must not wait on promises owned by the previous generation.
+  const searchSchedulers = useMemo(
+    () => ({ normal: latestSearchScheduler(), deep: latestSearchScheduler() }),
+    [backendGeneration]
+  )
+  const [isComposing, setIsComposing] = useState(false)
   const draggingPinIdRef = useRef<string | null>(null)
   const pinDropIndexRef = useRef<number | null>(null)
   const pinRailRef = useRef<HTMLDivElement | null>(null)
@@ -2274,7 +2283,7 @@ export default function CommandBar({
   useEffect(() => {
     let cancelled = false
     const requestId = ++lastSearchRequestId.current
-    if (launcherArgumentMode) return
+    if (launcherArgumentMode || isComposing || isAiMode || isCompletionInput || terminalMode) return
     // The local candidate cache already renders useful one-character matches.
     // Avoid launching a broad SQLite prefix query for a value that is almost
     // always replaced by the next keystroke a few milliseconds later.
@@ -2282,16 +2291,14 @@ export default function CommandBar({
       setError(null)
       return
     }
-    const t = setTimeout(
-      () => {
-        if (isAiMode || isCompletionInput || terminalMode) {
-          return
-        }
+    const scheduler = isDeepSearchMode ? searchSchedulers.deep : searchSchedulers.normal
+    const cancelPending = scheduler.schedule(
+      async () => {
         if (isDeepSearchMode && deepSearchQuery.length >= 3) {
           setDeepSearchLoadingQuery(deepSearchQuery)
           setError(null)
         }
-        void window.tezbar
+        await window.tezbar
           .searchAll(normalizedSearchValue)
           .then((items) => {
             if (!cancelled && requestId === lastSearchRequestId.current) {
@@ -2338,14 +2345,15 @@ export default function CommandBar({
               setDeepSearchLoadingQuery(null)
             }
           })
-      },
-      isDeepSearchMode && deepSearchQuery.length >= 3 ? 180 : 80
+      }
     )
     return () => {
       cancelled = true
-      clearTimeout(t)
+      cancelPending()
     }
   }, [
+    searchSchedulers,
+    isComposing,
     launcherArgumentMode,
     launcherRevision,
     backendGeneration,
@@ -2720,28 +2728,19 @@ export default function CommandBar({
     setLauncherArgumentQuery('')
     setActiveCheckSessionId(null)
 
-    setTimeout(() => {
-      // The user may reopen and start a new search before this warmup runs.
-      if (valueRef.current) return
-      void window.tezbar
-        .searchAll('')
-        .then((items) => {
-          if (items && items.length > 0) {
-            homeSearchResultsRef.current = items.filter((item) => !item.ephemeral)
-            searchCandidatesRef.current = mergeSearchCandidates(searchCandidatesRef.current, items)
-            // Cache a completed warmup, but never replace a newer live query.
-            if (!valueRef.current) setSearchResults(items)
-            writeCachedHomeSearchResults(items)
-          }
-        })
-        .catch(() => undefined)
-    }, 60)
+    // Refresh through the same bounded/guarded search effect, even when already
+    // home. Native hide and document-hidden can both fire for one close; their
+    // refreshes coalesce instead of starting independent uncancellable warmups.
+    setLauncherRevision((revision) => revision + 1)
   }, [])
 
   useEffect(() => {
     let mounted = true
     const handleClose = () => {
       if (!mounted) return
+      // A native hide may interrupt IME without delivering compositionend to
+      // this input. Never leave the reopened launcher permanently suppressed.
+      setIsComposing(false)
       precomputeHomeResults()
     }
     const offHidden = window.tezbar.onWindowHidden?.(handleClose)
@@ -4341,7 +4340,11 @@ export default function CommandBar({
                 setSelectedSearch(nextTerminalMode || nextIsAiMode || nextDeepSearchMode ? -1 : 0)
               }
             }}
-            onKeyDown={handleInputKeyDown}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={() => setIsComposing(false)}
+            onKeyDown={(event) => {
+              if (!event.nativeEvent.isComposing && !isComposing) handleInputKeyDown(event)
+            }}
             aria-label="Search Tezbar or use a shortcut"
             placeholder={
               pendingInlineArgument

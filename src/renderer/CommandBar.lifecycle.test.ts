@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SearchResult } from '../shared/search'
 import CommandBar from './CommandBar'
+import { BackendGeneration } from './backendGeneration'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -255,6 +256,151 @@ describe('CommandBar hidden-window Deep Search lifecycle', () => {
       }
     )
   }
+
+  it.each(['ordinary query', '!fixture search'])('dispatches an isolated %s without a typing-length delay', async (query) => {
+    await mount(query)
+    await advance(24)
+    expect(searchAll.mock.calls).toEqual([[query]])
+  })
+
+  it('coalesces pending bursts and bounds in-flight work without losing the final query', async () => {
+    const first = deferred<SearchResult[]>()
+    const final = deferred<SearchResult[]>()
+    searchAll.mockImplementation((query) => query === 'first' ? first.promise : final.promise)
+    await mount('first')
+    await advance(24)
+    expect(searchAll.mock.calls).toEqual([['first']])
+    for (const query of ['sec', 'second', 'third', 'final query']) {
+      await type(query)
+      await advance(24)
+    }
+    expect(searchAll.mock.calls).toEqual([['first']])
+    await act(async () => first.resolve(homeResults))
+    await advance(24)
+    expect(searchAll.mock.calls).toEqual([['first'], ['final query']])
+    expect(container.textContent).not.toContain('Home fixture result')
+    await act(async () => final.resolve(results))
+    expect(container.textContent).toContain('First fixture result')
+  })
+
+  it('coalesces native/document hide into one authoritative home refresh', async () => {
+    await mount('ordinary query')
+    await advance(100)
+    searchAll.mockClear()
+    await hide('both')
+    await advance(100)
+    expect(searchAll.mock.calls).toEqual([['']])
+  })
+
+  it('suppresses intermediate IME searches and dispatches the committed final value', async () => {
+    await mount('one')
+    await advance(24)
+    searchAll.mockClear()
+    await act(async () => input().dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })))
+    await type('intermediate')
+    await advance(50)
+    await type('committed query')
+    await advance(50)
+    expect(searchAll).not.toHaveBeenCalled()
+    await act(async () => input().dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })))
+    await advance(24)
+    expect(searchAll.mock.calls).toEqual([['committed query']])
+  })
+
+  it('recovers after native hide interrupts IME without a compositionend event', async () => {
+    await mount('ordinary query')
+    await advance(24)
+    searchAll.mockClear()
+    await act(async () => input().dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })))
+    await type('intermediate')
+    await hide('native hide')
+    await reopen()
+    await type('final committed query')
+    await advance(24)
+    expect(searchAll.mock.calls).toEqual([['final committed query']])
+  })
+
+  it('drops a pending normal query on hide and reopens with the latest home result', async () => {
+    await mount('ordinary query')
+    await advance(24)
+    searchAll.mockClear()
+    await type('never dispatch this')
+    await hide('native hide')
+    await advance(100)
+    await act(async () => home.resolve(homeResults))
+    await reopen()
+    expect(searchAll.mock.calls).toEqual([['']])
+    expect(container.textContent).toContain('Home fixture result')
+  })
+
+  it('keeps single-character local matching and does not extend the pending deadline indefinitely', async () => {
+    await mount('a')
+    await advance(24)
+    expect(searchAll).not.toHaveBeenCalled()
+    // Keep changing input for longer than one display opportunity. Dispatch
+    // must make progress while typing continues, not only after a quiet gap.
+    let latest = 'ab'
+    for (let i = 0; i < 12; i++) {
+      latest += 'c'
+      await type(latest)
+      await advance(2)
+    }
+    expect(searchAll.mock.calls.length).toBeGreaterThan(0)
+    await advance(24)
+    expect(searchAll.mock.calls.at(-1)).toEqual([latest])
+  })
+
+  it('refreshes the latest query on invalidation, ignoring an older in-flight reply', async () => {
+    const old = deferred<SearchResult[]>()
+    searchAll.mockImplementationOnce(() => old.promise).mockResolvedValue(results)
+    await mount('ordinary query')
+    await advance(24)
+    await act(async () => launcherInvalidated.emit({ text: 'unrelated' }))
+    await advance(24)
+    expect(searchAll).toHaveBeenCalledTimes(1)
+    await act(async () => launcherInvalidated.emit({ text: 'ordinary query' }))
+    await advance(24)
+    expect(searchAll).toHaveBeenCalledTimes(1)
+    await act(async () => old.resolve(homeResults))
+    await advance(24)
+    expect(searchAll.mock.calls).toEqual([['ordinary query'], ['ordinary query']])
+    expect(container.textContent).toContain('First fixture result')
+    expect(container.textContent).not.toContain('Home fixture result')
+  })
+
+  it('does not let an unresolved previous backend generation block recovery', async () => {
+    const old = deferred<SearchResult[]>()
+    searchAll.mockImplementationOnce(() => old.promise).mockResolvedValue(results)
+    const render = async (generation: number) => {
+      await act(async () => root.render(createElement(BackendGeneration.Provider, { value: generation },
+        createElement(CommandBar, { ...props, initialValue: 'ordinary query' }))))
+    }
+    await render(0)
+    await advance(24)
+    await render(1)
+    await advance(24)
+    expect(searchAll.mock.calls).toEqual([['ordinary query'], ['ordinary query']])
+    expect(container.textContent).toContain('First fixture result')
+    await act(async () => old.resolve(homeResults))
+    expect(container.textContent).not.toContain('Home fixture result')
+  })
+
+  it('cancels pending search when entering AI mode and recovers after an error', async () => {
+    searchAll.mockRejectedValueOnce(new Error('fixture failure')).mockResolvedValue(results)
+    await mount('ordinary query')
+    await advance(24)
+    expect(container.textContent).toContain('Search unavailable: fixture failure')
+    searchAll.mockClear()
+    await type('pending query')
+    await type(' ask the agent')
+    await advance(24)
+    expect(searchAll).not.toHaveBeenCalled()
+    await type('recovered query')
+    await advance(24)
+    expect(searchAll.mock.calls).toEqual([['recovered query']])
+    expect(container.textContent).not.toContain('Search unavailable: fixture failure')
+    expect(container.textContent).toContain('First fixture result')
+  })
 
   it('does not start delayed home warmup after the user enters Deep Search', async () => {
     await mount('ordinary query')

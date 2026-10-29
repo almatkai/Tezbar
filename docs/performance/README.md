@@ -20,7 +20,12 @@ measurement JSON in `beta17-search-candidate.json` and a reproducible
 fivefold whole-app speedup or a total RAM reduction. The subsequent runtime round
 is recorded in [beta17-runtime-results.md](beta17-runtime-results.md), with full
 desktop process accounting, real Q4 inference, repeated before/after workloads,
-and a separate renderer image-retention fixture.
+and a separate renderer image-retention fixture. The subsequent
+[visible-search round](beta17-responsiveness-results.md) replaces fixed input
+waits with bounded latest-input scheduling: the preserved two-frame proxy improves
+118.5→48 ms, with more intermediate work and no demonstrated RAM reduction.
+Its [new JSON](beta17-responsiveness-results.json) preserves final release A/B,
+exact UI/native parity, opening checks and failed desktop attempts separately.
 
 The baseline/search probes are native subsystem measurements, **not** end-to-end
 UI latency or total desktop app RAM. They exclude model inference and WebView
