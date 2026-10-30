@@ -164,6 +164,7 @@ pub struct Store {
     semantic_work: RefCell<semantic_work::Work>,
     pub db: Connection,
     pub vector: bool,
+    rank_join: bool,
     pub path: PathBuf,
     // Drop after db: trace callbacks may run until the connection closes, even
     // when a regression test panics before its explicit asynchronous close.
@@ -234,9 +235,12 @@ pub fn default_status() -> Value {
 }
 impl Store {
     pub(crate) fn from_connection(db: Connection, vector: bool, path: PathBuf) -> Self {
+        let rank_join = crate::native_core::fts_rank::supported()
+            && crate::native_core::fts_rank::register(&db).is_ok();
         let store = Self {
             db,
             vector,
+            rank_join,
             path,
             search_cache: RefCell::default(),
             search_cancel: None,
@@ -958,12 +962,14 @@ impl Store {
             if fts_query.is_empty() {
                 continue;
             }
-            let matches = format!("FROM knowledge_chunks_fts f JOIN knowledge_chunks c ON c.rowid=f.rowid JOIN knowledge_sources s ON s.id=c.source_id JOIN knowledge_roots r ON r.id=s.root_id WHERE knowledge_chunks_fts MATCH ? AND s.status='indexed' AND r.enabled=1 AND r.id IN ({root_filter})");
+            let sizes = if self.rank_join { "LEFT JOIN knowledge_chunks_fts_docsize sz ON sz.id=f.rowid" } else { "" };
+            let matches = format!("FROM knowledge_chunks_fts f JOIN knowledge_chunks c ON c.rowid=f.rowid JOIN knowledge_sources s ON s.id=c.source_id JOIN knowledge_roots r ON r.id=s.root_id {sizes} WHERE knowledge_chunks_fts MATCH ? AND s.status='indexed' AND r.enabled=1 AND r.id IN ({root_filter})");
             let budget = limit.saturating_mul(5).max(40);
             let rows = if distinct_sources {
                 self.lexical_source_candidates(&matches, fts_query, budget)?
             } else {
-                let sql = format!("SELECT c.id,c.source_id,c.page_number,c.text,s.path,c.embedding_json {matches} ORDER BY bm25(knowledge_chunks_fts,1.0),c.id LIMIT ?");
+                let rank = self.lexical_rank();
+                let sql = format!("SELECT c.id,c.source_id,c.page_number,c.text,s.path,c.embedding_json {matches} ORDER BY {rank},c.id LIMIT ?");
                 let mut q = self.db.prepare(&sql).map_err(err)?;
                 let rows = q
                     .query_map(params![fts_query, budget as i64], hit_row)
@@ -1092,6 +1098,9 @@ impl Store {
         sort_hits(&mut hits, limit, &exact, distinct_sources);
         Ok(hits)
     }
+    fn lexical_rank(&self) -> &'static str {
+        if self.rank_join { "tezbar_bm25(knowledge_chunks_fts,sz.sz,1.0)" } else { "bm25(knowledge_chunks_fts,1.0)" }
+    }
     /// Reduce matching IDs to their exact best chunk/source before hydrating.
     /// The first row/source in global (BM25, chunk ID) order is exactly the
     /// window-function winner. Stop at the source budget, never a raw chunk cap:
@@ -1104,10 +1113,11 @@ impl Store {
     ) -> Result<Vec<(Value, Vec<f64>)>, String> {
         let mut seen = std::collections::HashSet::<String>::new();
         let mut selected = Vec::new();
+        let rank = self.lexical_rank();
         let mut stmt = self
             .db
             .prepare(&format!(
-                "SELECT c.rowid,c.source_id {matches} ORDER BY bm25(knowledge_chunks_fts,1.0),c.id"
+                "SELECT c.rowid,c.source_id {matches} ORDER BY {rank},c.id"
             ))
             .map_err(err)?;
         let mut rows = stmt.query([query]).map_err(err)?;

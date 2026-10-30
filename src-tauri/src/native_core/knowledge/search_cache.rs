@@ -1269,6 +1269,32 @@ mod tests {
         }
     }
     #[test]
+    fn joined_lengths_preserve_source_and_chunk_apis_through_root_and_chunk_mutations() {
+        let mut s=fixture(200);
+        s.db.execute("UPDATE knowledge_chunks SET source_id='s00001' WHERE rowid<=100",[]).unwrap();
+        s.db.execute_batch("INSERT INTO knowledge_chunks_fts(rowid,id,source_id,text) SELECT rowid,id,source_id,text FROM knowledge_chunks;").unwrap();
+        for phase in 0..5 {
+            if phase==1 { s.db.execute_batch("UPDATE knowledge_roots SET enabled=0 WHERE id='other'; UPDATE knowledge_sources SET status='pending' WHERE id='s00105'; UPDATE knowledge_sources SET root_id='other' WHERE id='s00106';").unwrap(); }
+            if phase==2 { s.db.execute_batch("DELETE FROM knowledge_chunks_fts WHERE rowid%11=0; DELETE FROM knowledge_chunks WHERE rowid%11=0; UPDATE knowledge_chunks SET text='unrelated archive café extra' WHERE rowid%7=0; UPDATE knowledge_chunks_fts SET text='unrelated archive café extra' WHERE rowid%7=0;").unwrap(); }
+            if phase==3 { s.db.execute_batch("BEGIN; UPDATE knowledge_roots SET enabled=0; DELETE FROM knowledge_chunks_fts; ROLLBACK;").unwrap(); }
+            if phase==4 { s.db.execute_batch("UPDATE knowledge_roots SET enabled=1;").unwrap(); }
+            for query in ["unrelated", "unrelated archive", "archive café", "absent"] {
+                for roots in [vec!["r".into()],vec!["other".into()],vec!["r".into(),"other".into()]] {
+                    for limit in [1,16,80] {
+                        for distinct in [false,true] {
+                            s.rank_join=false;
+                            let old=if distinct { s.search_sources(query,limit,&roots,true,None) } else { s.search(query,limit,&roots,true,None) }.unwrap();
+                            s.rank_join=true;
+                            let new=if distinct { s.search_sources(query,limit,&roots,true,None) } else { s.search(query,limit,&roots,true,None) }.unwrap();
+                            assert_eq!(new,old,"phase={phase} query={query} roots={roots:?} limit={limit} distinct={distinct}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn cache_same_count_deltas_status_and_rollback() {
         let s = fixture(3);
         let cold = query(&s);

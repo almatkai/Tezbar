@@ -171,6 +171,7 @@ fn run(
 fn open_reader(path: &std::path::Path) -> Result<Connection, String> {
     let db = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(err)?;
+    crate::native_core::fts_rank::register(&db)?;
     db.busy_timeout(std::time::Duration::from_secs(10))
         .map_err(err)?;
     Ok(db)
@@ -181,6 +182,7 @@ pub fn err(e: impl std::fmt::Display) -> String {
 fn init(path: PathBuf) -> Result<Connection, String> {
     std::fs::create_dir_all(path.parent().ok_or("Invalid DB path")?).map_err(err)?;
     let db = Connection::open(path).map_err(err)?;
+    crate::native_core::fts_rank::register(&db)?;
     db.busy_timeout(std::time::Duration::from_secs(10))
         .map_err(err)?;
     db.execute_batch("PRAGMA journal_mode=WAL;PRAGMA synchronous=NORMAL;
@@ -275,7 +277,11 @@ pub fn upsert(db: &Connection, d: &Value) -> Result<(), String> {
 const SELECT:&str="SELECT d.id,d.category,d.title,d.subtitle,d.action_json,d.updated_at,d.popularity FROM documents d ";
 // Rank the authoritative FTS matches before fetching document payloads. The old
 // FTS scan visited rowids ascending; retain that tie order at the unchanged cap.
-const FTS_SELECT: &str = "WITH selected AS MATERIALIZED (SELECT rowid,bm25(documents_fts,5.0,2.0,1.0) AS score FROM documents_fts WHERE documents_fts MATCH ? ORDER BY score,rowid LIMIT 160) SELECT d.id,d.category,d.title,d.subtitle,d.action_json,d.updated_at,d.popularity,selected.score FROM selected JOIN documents d ON d.rowid=selected.rowid ORDER BY selected.score,selected.rowid";
+const FTS_SELECT_BUILTIN: &str = "WITH selected AS MATERIALIZED (SELECT rowid,bm25(documents_fts,5.0,2.0,1.0) AS score FROM documents_fts WHERE documents_fts MATCH ? ORDER BY score,rowid LIMIT 160) SELECT d.id,d.category,d.title,d.subtitle,d.action_json,d.updated_at,d.popularity,selected.score FROM selected JOIN documents d ON d.rowid=selected.rowid ORDER BY selected.score,selected.rowid";
+const FTS_SELECT: &str = "WITH selected AS MATERIALIZED (SELECT f.rowid,tezbar_bm25(documents_fts,sz.sz,5.0,2.0,1.0) AS score FROM documents_fts f LEFT JOIN documents_fts_docsize sz ON sz.id=f.rowid WHERE documents_fts MATCH ? ORDER BY score,f.rowid LIMIT 160) SELECT d.id,d.category,d.title,d.subtitle,d.action_json,d.updated_at,d.popularity,selected.score FROM selected JOIN documents d ON d.rowid=selected.rowid ORDER BY selected.score,selected.rowid";
+fn fts_select() -> &'static str {
+    if crate::native_core::fts_rank::supported() { FTS_SELECT } else { FTS_SELECT_BUILTIN }
+}
 // Candidate pages are internal, not IPC JSON. Keep them typed until the final
 // result cap: broad/fuzzy searches discard most rows before serialization.
 struct Document {
@@ -354,7 +360,9 @@ fn stat(db: &Connection, id: &str, q: &str) -> Result<(f64, f64, u64), String> {
     }
 }
 pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
-    let now = now_ms();
+    search_at(db, q, candidates, now_ms(), fts_select())
+}
+fn search_at(db: &Connection, q: &str, candidates: bool, now: u64, fts_sql: &str) -> CoreResult {
     let variants = text::variants(q);
     let prepared: Vec<_> = variants.iter().map(|q| text::Query::new(q)).collect();
     let mut scratch = text::DistanceScratch::default();
@@ -370,7 +378,7 @@ pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
     } else {
         let query = text::fts(&variants.join(" "));
         if !query.is_empty() {
-            let mut statement = db.prepare_cached(FTS_SELECT).map_err(err)?;
+            let mut statement = db.prepare_cached(fts_sql).map_err(err)?;
             let rows = statement
                 .query_map([query], |r| {
                     let mut d = row(r)?;
@@ -667,6 +675,28 @@ mod performance_tests {
     }
 
     #[test]
+    #[ignore = "frozen broad fixture through the production read-only snapshot"]
+    fn broad_reader_matrix() {
+        use crate::native_core::performance::measure;
+        let path = PathBuf::from(std::env::var_os("TEZBAR_BROAD_FIXTURE").expect("isolated fixture path"));
+        // Install ordinary schema/triggers outside measurement, then use the
+        // same read-only connection and per-request snapshot as Database::search.
+        drop(init(path.clone()).unwrap());
+        let mut db = open_reader(&path).unwrap();
+        for (name, query) in [
+            ("reader.broad", "document"),
+            ("reader.multi", "archive project"),
+            ("reader.prefix", "doc"),
+            ("reader.no_hit", "unknown-broad-fixture"),
+        ] {
+            measure(name, || {
+                let snapshot = db.transaction().unwrap();
+                search(&snapshot, query, false).unwrap()
+            });
+        }
+    }
+
+    #[test]
     #[ignore = "synthetic 100k-file search benchmark"]
     fn search_benchmark() {
         let dir = tempfile::tempdir().unwrap();
@@ -759,6 +789,57 @@ mod reader_tests {
         );
         eprintln!("late hydration FTS plan: {plan:?}");
     }
+    #[tokio::test]
+    async fn joined_lengths_keep_complete_order_scores_actions_after_stats_rollback_and_reopen() {
+        let dir = tempfile::tempdir().unwrap();
+        let path=dir.path().join("index.sqlite3");
+        let mut db=Database::new(path.clone());
+        let docs=(0..520).map(|n| json!({"id":format!("doc:{n}"),"category":if n%9==0 {"applications"} else {"files"},
+            "title":if n%7==0 {"Archive café"} else {"Project document"},
+            "subtitle":format!("/archive/{}", "document ".repeat(n%13)),
+            "tokens":if n%3==0 {"project archive document"} else {"project"},
+            "action":{"type":"open","path":format!("/fixture/{n}"),"nested":{"unicode":"東京😀"}},"updatedAt":n})).collect();
+        db.upsert(docs,vec![]).await.unwrap();
+        for phase in 0..5 {
+            if phase==1 {
+                db.record("doc:7".into(),json!({"query":"archive","rank":2}),true).await.unwrap();
+                db.record("doc:0".into(),json!({"query":"document"}),false).await.unwrap();
+            }
+            if phase==2 { db.call(|c| { c.execute_batch("BEGIN; UPDATE documents SET title='different archive' WHERE rowid%5=0; DELETE FROM documents WHERE rowid%11=0; COMMIT;").map_err(err)?; Ok(Value::Null) }).await.unwrap(); }
+            if phase==3 { db.call(|c| { c.execute_batch("BEGIN; UPDATE documents SET title='rollback archive'; DELETE FROM action_stats; ROLLBACK;").map_err(err)?; Ok(Value::Null) }).await.unwrap(); }
+            if phase==4 { db.shutdown().await.unwrap(); db=Database::new(path.clone()); }
+            db.read(move |c| {
+                let snapshot=c.transaction().map_err(err)?;
+                let now=now_ms();
+                for query in ["", "document", "archive", "project archive", "café", "doc", "archve", "zzzxxyyqq"] {
+                    for candidates in [false,true] {
+                        assert_eq!(search_at(&snapshot,query,candidates,now,FTS_SELECT).unwrap(),search_at(&snapshot,query,candidates,now,FTS_SELECT_BUILTIN).unwrap(),"phase={phase} query={query} candidates={candidates}");
+                    }
+                }
+                Ok(Value::Null)
+            }).await.unwrap();
+        }
+        db.shutdown().await.unwrap();
+    }
+
+    #[test]
+    fn supplied_fts_lengths_preserve_builtin_scores() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = init(dir.path().join("index.sqlite3")).unwrap();
+        for n in 0..480 {
+            upsert(&db, &json!({"id":format!("doc:{n}"),"category":"files",
+                "title":if n%3==0 {"archive archive café"} else {"other"},
+                "subtitle":"archive location", "tokens":"common", "action":{}, "updatedAt":n})).unwrap();
+        }
+        let mut stmt = db.prepare("SELECT bm25(documents_fts,5.0,2.0,1.0),tezbar_bm25(documents_fts,sz.sz,5.0,2.0,1.0) FROM documents_fts f LEFT JOIN documents_fts_docsize sz ON sz.id=f.rowid WHERE documents_fts MATCH ?").unwrap();
+        for query in ["archive*", "archive* OR common*", "\"archive café\"", "absent*"] {
+            for row in stmt.query_map([query], |r| Ok((r.get::<_,f64>(0)?.to_bits(),r.get::<_,f64>(1)?.to_bits()))).unwrap() {
+                let (builtin, supplied) = row.unwrap();
+                assert_eq!(builtin, supplied, "{query}");
+            }
+        }
+    }
+
     #[test]
     fn nonfile_queries_use_partial_index() {
         let dir = tempfile::tempdir().unwrap();

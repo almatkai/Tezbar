@@ -11,6 +11,19 @@ Opening the app is already satisfactory and is a regression constraint.
 
 ## Current evidence
 
+The [exact native broad-ranking improvement (R14)](beta17-broad-search-results.md)
+removes BM25's nested per-hit document-size statement using an authoritative
+same-snapshot size join and bit-exact, bundled-engine-gated ranking. Broad native
+reader p50/CPU improves 26.326/26.244→13.103/13.005 ms; all 112 complete native
+replies match. Actual lean packaged-app pairs show smaller mixed UI effects,
+material RSS/idle-CPU regressions and no whole-family memory success. The
+[receipts](beta17-broad-search-results.json) retain both native cohorts, all desktop
+attempts, strict arithmetic/mutation parity, builds, opening/IME/90-second checks
+and hashes. An additional mutation trace preserves inherited equal-score/timestamp
+map-order randomness and checks adversarial full ordering with coupled seeds;
+literal independent tie-repeatability is a documented baseline limitation.
+Uniform 5× runtime/search and one-fifth RAM remain unmet.
+
 The [native tokenizer allocation audit (R13)](beta17-tokenizer-results.md) identifies
 the BPE rule table as the largest measured vocabulary container: 51.08 MiB in
 514,907 allocator blocks. Two exact storage candidates reduce allocations/RSS but

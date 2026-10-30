@@ -2,6 +2,7 @@ pub mod ai;
 pub mod common;
 pub mod extension_worker;
 pub mod extensions;
+mod fts_rank;
 pub mod knowledge;
 pub mod launcher;
 pub mod platform;

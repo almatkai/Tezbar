@@ -11,28 +11,46 @@ pub fn samples() -> usize {
 }
 
 pub fn measure(name: &str, mut run: impl FnMut() -> Value) -> Value {
+    #[cfg(unix)]
+    let first_cpu_start = cpu_seconds();
     let cold = Instant::now();
     let reference = run();
     let first_ms = cold.elapsed().as_secs_f64() * 1000.;
+    #[cfg(unix)]
+    let first_cpu_ms = (cpu_seconds() - first_cpu_start) * 1000.;
     for _ in 0..3 {
         assert_eq!(run(), reference, "unstable fixture: {name}");
     }
     let mut elapsed = Vec::with_capacity(samples());
+    #[cfg(unix)]
+    let mut cpu = Vec::with_capacity(samples());
     for _ in 0..samples() {
+        #[cfg(unix)]
+        let cpu_start = cpu_seconds();
         let start = Instant::now();
         let actual = run();
         elapsed.push(start.elapsed().as_secs_f64() * 1000.);
+        #[cfg(unix)]
+        cpu.push((cpu_seconds() - cpu_start) * 1000.);
         assert_eq!(actual, reference, "result changed: {name}");
         std::hint::black_box(actual);
     }
     elapsed.sort_by(f64::total_cmp);
     let percentile = |p: usize| elapsed[(elapsed.len() * p).div_ceil(100) - 1];
-    let result = json!({
+    let mut result = json!({
         "name":name, "samples":elapsed.len(), "first_ms":first_ms,
         "mean_ms":elapsed.iter().sum::<f64>() / elapsed.len() as f64,
         "p50_ms":percentile(50), "p95_ms":percentile(95), "p99_ms":percentile(99),
-        "results":signature(&reference),
+        "results":signature(&reference), "full_results":reference,
     });
+    #[cfg(unix)]
+    {
+        cpu.sort_by(f64::total_cmp);
+        result["first_cpu_ms"] = json!(first_cpu_ms);
+        result["cpu_p50_ms"] = json!(cpu[(cpu.len() * 50).div_ceil(100) - 1]);
+        result["cpu_p95_ms"] = json!(cpu[(cpu.len() * 95).div_ceil(100) - 1]);
+        result["cpu_accounting"] = json!("getrusage RUSAGE_SELF: timeval seconds + microseconds/1e6");
+    }
     eprintln!("TEZBAR_PERF {result}");
     result
 }

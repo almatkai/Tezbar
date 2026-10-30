@@ -47,6 +47,7 @@ native/**/Cargo.lock
 /build/performance-row-layout-*/
 /build/performance-geometry-*/
 /build/performance-tokenizer-*/
+/build/performance-broad-search-*/
 /build/p/
 
 # Generated release artifacts and signing material

@@ -1,5 +1,9 @@
 fn main() {
     verify_embedding_payload();
+    println!("cargo:rerun-if-changed=src/native_core/fts_rank_math.c");
+    cc::Build::new()
+        .file("src/native_core/fts_rank_math.c")
+        .compile("tezbar_fts_rank_math");
     println!("cargo:rerun-if-env-changed=TAURI_CONFIG");
     println!("cargo:rerun-if-changed=tauri.conf.json");
     let mut config: serde_json::Value = serde_json::from_str(

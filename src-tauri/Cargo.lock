@@ -4880,6 +4880,7 @@ dependencies = [
  "base64 0.22.1",
  "block2",
  "brotli-decompressor 5.0.0",
+ "cc",
  "chrono",
  "core-foundation 0.9.4",
  "core-graphics 0.23.2",
