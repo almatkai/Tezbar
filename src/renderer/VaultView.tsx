@@ -1,926 +1,612 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-  type KeyboardEvent,
-} from 'react'
-import type {
-  VaultCategory,
-  VaultItem,
-  VaultItemHeader,
-  VaultStatus,
+  TEZBAR_NEW_VAULT_ITEM_EVENT,
+  type VaultItem,
+  type VaultItemHeader,
+  type VaultKind,
+  type VaultStatus,
 } from '../shared/vault'
 import {
+  CommandSurfaceAction,
   CommandSurfaceBackButton,
-  CommandSurfaceChip,
   CommandSurfaceFooter,
   CommandSurfaceHeader,
   CommandSurfaceIcon,
   CommandSurfaceInput,
   CommandSurfaceStatus,
+  CommandSurfaceTitle,
 } from './ui/CommandSurface'
-import { Kbd, cx } from './ui/primitives'
+import { GlideList } from './ui/GlideList'
+import { Button, Hint, Kbd, cx } from './ui/primitives'
+import { VAULT_KIND_LABELS, detectSecret } from './vaultDetect'
 
-type VaultFilter = 'all' | VaultCategory
-
-type VaultViewProps = {
-  onClose: () => void
+type Draft = {
+  id?: string
+  value: string
+  name: string
+  /** False while the name still follows the detector's suggestion. */
+  nameTouched: boolean
+  note: string
+  showNote: boolean
 }
 
-const CATEGORY_LABELS: Record<VaultCategory, string> = {
-  server: 'Servers',
-  'api-key': 'API Keys',
-  login: 'Logins',
-  note: 'Notes',
+const EMPTY_DRAFT: Draft = { value: '', name: '', nameTouched: false, note: '', showNote: false }
+const MASK = '•'.repeat(18)
+const fieldClass =
+  'w-full rounded-tezbar-row border border-white/10 bg-white/[0.03] px-3 py-2 text-ink-1 outline-none transition placeholder:text-ink-4 focus:border-white/20 focus:bg-white/[0.05]'
+
+function relativeTime(ts: number, now = Date.now()): string {
+  const minutes = Math.round((now - ts) / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-const CATEGORY_ICONS: Record<VaultCategory, string> = {
-  server: '🖥',
-  'api-key': '🔑',
-  login: '👤',
-  note: '📝',
-}
-
-function generateRandomPassword(length = 20): string {
-  const chars =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?'
-  const array = new Uint32Array(length)
-  window.crypto.getRandomValues(array)
-  return Array.from(array, (x) => chars[x % chars.length]).join('')
-}
-
-export default function VaultView({ onClose }: VaultViewProps): JSX.Element {
-  const [status, setStatus] = useState<VaultStatus | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [items, setItems] = useState<VaultItemHeader[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [selectedDetail, setSelectedDetail] = useState<VaultItem | null>(null)
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<VaultFilter>('all')
-
-  // Auth / Setup form state
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [enableBiometrics, setEnableBiometrics] = useState(true)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [authBusy, setAuthBusy] = useState(false)
-
-  // Editor modal state
-  const [isEditing, setIsEditing] = useState(false)
-  const [editItem, setEditItem] = useState<Partial<VaultItem>>({
-    category: 'login',
-    title: '',
-    service: '',
-    account: '',
-    secret: '',
-    secondarySecret: '',
-    port: 22,
-    authType: 'password',
-    notes: '',
-    tags: [],
+function fullDate(ts: number): string {
+  return new Date(ts).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   })
+}
 
-  // Reveal secret state
-  const [revealSecret, setRevealSecret] = useState(false)
-  const [copyFeedback, setCopyFeedback] = useState(false)
+function KindIcon({ kind }: { kind: VaultKind }): JSX.Element {
+  const paths: Record<VaultKind, ReactNode> = {
+    'api-key': (
+      <>
+        <circle cx="5" cy="9" r="2.5" />
+        <path d="M7 7.5 12.5 2M10.5 4l1.5 1.5M9 5.5l1.2 1.2" />
+      </>
+    ),
+    token: (
+      <>
+        <rect x="1.5" y="4" width="11" height="6" rx="1.5" />
+        <path d="M4.5 7h5" />
+      </>
+    ),
+    'ssh-key': (
+      <>
+        <rect x="1.5" y="2.5" width="11" height="9" rx="1.5" />
+        <path d="m4 6 1.8 1.5L4 9M7.5 9h2.5" />
+      </>
+    ),
+    server: (
+      <>
+        <rect x="1.5" y="2" width="11" height="4" rx="1" />
+        <rect x="1.5" y="8" width="11" height="4" rx="1" />
+        <path d="M4 4h.01M4 10h.01" />
+      </>
+    ),
+    password: (
+      <>
+        <rect x="2.5" y="6" width="9" height="6" rx="1.5" />
+        <path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" />
+      </>
+    ),
+    note: <path d="M3 3.5h8M3 7h8M3 10.5h5" />,
+  }
+  return (
+    <span
+      aria-hidden
+      className="grid h-7 w-7 shrink-0 place-items-center rounded-tezbar-chip border border-white/10 bg-white/[0.04] text-ink-3"
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+        {paths[kind]}
+      </svg>
+    </span>
+  )
+}
 
-  const searchInputRef = useRef<HTMLInputElement>(null)
-  const passwordInputRef = useRef<HTMLInputElement>(null)
+function LockGlyph(): JSX.Element {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden className="text-ink-3">
+      <rect x="4" y="9" width="12" height="8" rx="2" />
+      <path d="M7 9V6.5a3 3 0 0 1 6 0V9" />
+    </svg>
+  )
+}
 
-  const refreshStatus = useCallback(async () => {
+function Centered({ children }: { children: ReactNode }): JSX.Element {
+  return <div className="flex h-full flex-col items-center justify-center gap-1.5 px-6 text-center">{children}</div>
+}
+
+/** Grows a textarea with its content up to a cap, then it scrolls. */
+function autoGrow(element: HTMLTextAreaElement | null, max = 220): void {
+  if (!element) return
+  element.style.height = 'auto'
+  element.style.height = `${Math.min(element.scrollHeight, max)}px`
+}
+
+export default function VaultView({ onClose }: { onClose: () => void }): JSX.Element {
+  const [status, setStatus] = useState<VaultStatus | null>(null)
+  const [unlocking, setUnlocking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [items, setItems] = useState<VaultItemHeader[]>([])
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState(0)
+  const [detail, setDetail] = useState<VaultItem | null>(null)
+  const [revealed, setRevealed] = useState(false)
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [flash, setFlash] = useState<string | null>(null)
+
+  const rootRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const valueRef = useRef<HTMLTextAreaElement>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const autoUnlockRef = useRef(false)
+
+  const unlocked = Boolean(status?.supported && status.unlocked)
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return items
+    return items.filter(
+      (item) => item.name.toLowerCase().includes(q) || VAULT_KIND_LABELS[item.kind].toLowerCase().includes(q)
+    )
+  }, [items, query])
+  const current = filtered[Math.min(selected, filtered.length - 1)] ?? null
+
+  const refresh = useCallback(async (): Promise<VaultStatus | null> => {
     try {
-      const st = await window.tezbar.vaultStatus()
-      setStatus(st)
-      if (st.unlocked) {
-        const list = await window.tezbar.vaultList()
-        setItems(list)
-        if (list.length > 0 && !selectedId) {
-          const first = list[0]
-          if (first) {
-            setSelectedId(first.id)
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Failed to get vault status:', e)
-    } finally {
-      setLoading(false)
+      const next = await window.tezbar.vaultStatus()
+      setStatus(next)
+      if (next.supported && next.unlocked) setItems(await window.tezbar.vaultList())
+      return next
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      return null
     }
-  }, [selectedId])
+  }, [])
 
-  useEffect(() => {
-    refreshStatus()
-  }, [refreshStatus])
+  const unlock = useCallback(async () => {
+    if (unlocking) return
+    setUnlocking(true)
+    setError(null)
+    try {
+      const result = await window.tezbar.vaultUnlock()
+      if (result.ok) await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setUnlocking(false)
+    }
+  }, [refresh, unlocking])
 
-  // Load details of selected item
+  // Opening a locked vault asks for Touch ID / the Mac password right away.
   useEffect(() => {
-    if (!selectedId || !status?.unlocked) {
-      setSelectedDetail(null)
+    void refresh().then((next) => {
+      if (next?.supported && !next.unlocked && !autoUnlockRef.current) {
+        autoUnlockRef.current = true
+        void unlock()
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // The secret itself is only fetched for the selected item.
+  useEffect(() => {
+    setRevealed(false)
+    setPendingDelete(null)
+    if (!unlocked || !current) {
+      setDetail(null)
       return
     }
-    let active = true
-    window.tezbar
-      .vaultGet(selectedId)
+    let cancelled = false
+    void window.tezbar
+      .vaultGet(current.id)
       .then((item) => {
-        if (active) {
-          setSelectedDetail(item)
-          setRevealSecret(false)
-        }
+        if (!cancelled) setDetail(item)
       })
-      .catch((e) => {
-        console.error('Failed to get item details:', e)
+      .catch(() => {
+        if (!cancelled) setDetail(null)
       })
     return () => {
-      active = false
+      cancelled = true
     }
-  }, [selectedId, status?.unlocked])
+  }, [current?.id, current?.updatedAt, unlocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSetup = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!password.trim()) {
-      setAuthError('Please enter a master password')
-      return
-    }
-    if (password !== confirmPassword) {
-      setAuthError('Passwords do not match')
-      return
-    }
-    if (password.length < 4) {
-      setAuthError('Master password must be at least 4 characters')
-      return
-    }
+  useEffect(() => {
+    if (!flash) return
+    const timer = window.setTimeout(() => setFlash(null), 2200)
+    return () => window.clearTimeout(timer)
+  }, [flash])
 
-    setAuthBusy(true)
-    setAuthError(null)
-    try {
-      await window.tezbar.vaultSetup({
-        password,
-        enableBiometrics,
-      })
-      setPassword('')
-      setConfirmPassword('')
-      await refreshStatus()
-    } catch (err: any) {
-      setAuthError(err?.message || String(err))
-    } finally {
-      setAuthBusy(false)
-    }
+  useEffect(() => {
+    if (!pendingDelete) return
+    const timer = window.setTimeout(() => setPendingDelete(null), 3000)
+    return () => window.clearTimeout(timer)
+  }, [pendingDelete])
+
+  const startNew = useCallback(() => {
+    if (!unlocked) return
+    setDraft((existing) => existing ?? { ...EMPTY_DRAFT })
+  }, [unlocked])
+
+  // App routes ⌘N here while the Vault is open.
+  useEffect(() => {
+    const onNew = (): void => startNew()
+    window.addEventListener(TEZBAR_NEW_VAULT_ITEM_EVENT, onNew)
+    return () => window.removeEventListener(TEZBAR_NEW_VAULT_ITEM_EVENT, onNew)
+  }, [startNew])
+
+  useEffect(() => {
+    if (draft && !draft.id) valueRef.current?.focus()
+    else if (!draft && unlocked) searchRef.current?.focus()
+    autoGrow(valueRef.current)
+  }, [draft === null, draft?.id, unlocked]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startEdit = (): void => {
+    if (!detail) return
+    setDraft({
+      id: detail.id,
+      value: detail.value,
+      name: detail.name,
+      nameTouched: true,
+      note: detail.note ?? '',
+      showNote: Boolean(detail.note),
+    })
   }
 
-  const handleUnlock = async (e?: FormEvent, useBiometrics = false) => {
-    if (e) e.preventDefault()
-    setAuthBusy(true)
-    setAuthError(null)
-    try {
-      await window.tezbar.vaultUnlock({
-        password: useBiometrics ? undefined : password,
-        useBiometrics,
-      })
-      setPassword('')
-      await refreshStatus()
-    } catch (err: any) {
-      setAuthError(err?.message || 'Incorrect password')
-    } finally {
-      setAuthBusy(false)
-    }
-  }
+  const detected = useMemo(() => detectSecret(draft?.value ?? ''), [draft?.value])
+  const draftName = draft ? (draft.nameTouched ? draft.name : detected.suggestedName) : ''
 
-  const handleLock = async () => {
-    try {
-      await window.tezbar.vaultLock()
-      setSelectedDetail(null)
-      setSelectedId(null)
-      await refreshStatus()
-    } catch (e) {
-      console.error('Failed to lock vault:', e)
-    }
-  }
-
-  const handleSaveItem = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!editItem.title?.trim() || !editItem.secret) {
-      return
-    }
+  const save = async (): Promise<void> => {
+    if (!draft || !draft.value.trim()) return
     try {
       const saved = await window.tezbar.vaultSave({
-        ...editItem,
-        title: editItem.title.trim(),
-        category: editItem.category || 'login',
-        secret: editItem.secret,
-        tags: editItem.tags || [],
+        id: draft.id,
+        name: draftName.trim(),
+        value: draft.value,
+        kind: detected.kind,
+        note: draft.note,
       })
-      setIsEditing(false)
+      setDraft(null)
+      setQuery('')
       const list = await window.tezbar.vaultList()
       setItems(list)
-      setSelectedId(saved.id)
+      setSelected(Math.max(0, list.findIndex((item) => item.id === saved.id)))
+      setFlash('Saved')
     } catch (err) {
-      console.error('Failed to save vault item:', err)
+      setFlash(err instanceof Error ? err.message : 'Could not save')
     }
   }
 
-  const handleDeleteItem = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this secret?')) return
+  const copy = async (): Promise<void> => {
+    if (!current) return
     try {
-      await window.tezbar.vaultDelete(id)
-      const list = await window.tezbar.vaultList()
-      setItems(list)
-      setSelectedId(list[0]?.id || null)
+      await window.tezbar.vaultCopy(current.id)
+      setFlash('Copied · clears in 30 s')
     } catch (err) {
-      console.error('Failed to delete vault item:', err)
+      setFlash(err instanceof Error ? err.message : 'Could not copy')
     }
   }
 
-  const handleCopySecret = async (secret?: string) => {
-    const val = secret ?? selectedDetail?.secret
-    if (!val) return
-    try {
-      await navigator.clipboard.writeText(val)
-      setCopyFeedback(true)
-      setTimeout(() => setCopyFeedback(false), 1500)
-    } catch (e) {
-      console.error('Clipboard write failed:', e)
+  const remove = async (): Promise<void> => {
+    if (!current) return
+    if (pendingDelete !== current.id) {
+      setPendingDelete(current.id)
+      return
     }
+    setPendingDelete(null)
+    await window.tezbar.vaultDelete(current.id)
+    const list = await window.tezbar.vaultList()
+    setItems(list)
+    setSelected((index) => Math.min(index, Math.max(0, list.length - 1)))
+    setFlash('Deleted')
   }
 
-  const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return items.filter((it) => {
-      if (filter !== 'all' && it.category !== filter) return false
-      if (!q) return true
-      return (
-        it.title.toLowerCase().includes(q) ||
-        it.service?.toLowerCase().includes(q) ||
-        it.account?.toLowerCase().includes(q) ||
-        it.tags?.some((t) => t.toLowerCase().includes(q))
-      )
-    })
-  }, [items, filter, search])
+  const lock = async (): Promise<void> => {
+    await window.tezbar.vaultLock()
+    setDraft(null)
+    setDetail(null)
+    setItems([])
+    autoUnlockRef.current = true
+    await refresh()
+    rootRef.current?.focus()
+  }
 
-  // Handle keyboard navigation
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      if (isEditing) {
-        setIsEditing(false)
-        e.preventDefault()
-      } else {
-        onClose()
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const mod = event.metaKey || event.ctrlKey
+    const key = event.key.toLowerCase()
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      // Stop App's window-level Escape from also leaving the Vault.
+      event.stopPropagation()
+      if (draft) setDraft(null)
+      else onClose()
+      return
+    }
+    if (!unlocked) {
+      if (event.key === 'Enter' && status?.supported) {
+        event.preventDefault()
+        void unlock()
       }
       return
     }
-
-    if (e.metaKey && e.key === 'l') {
-      e.preventDefault()
-      handleLock()
-      return
-    }
-
-    if (e.metaKey && e.key === 'n') {
-      e.preventDefault()
-      setEditItem({
-        category: filter !== 'all' ? filter : 'login',
-        title: '',
-        service: '',
-        account: '',
-        secret: '',
-        secondarySecret: '',
-        port: 22,
-        authType: 'password',
-        notes: '',
-        tags: [],
-      })
-      setIsEditing(true)
-      return
-    }
-
-    if (e.metaKey && e.key === 'e' && selectedDetail) {
-      e.preventDefault()
-      setEditItem(selectedDetail)
-      setIsEditing(true)
-      return
-    }
-
-    if (!isEditing && status?.unlocked) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        const idx = filteredItems.findIndex((it) => it.id === selectedId)
-        if (idx < filteredItems.length - 1 && filteredItems[idx + 1]) {
-          setSelectedId(filteredItems[idx + 1]!.id)
-        }
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        const idx = filteredItems.findIndex((it) => it.id === selectedId)
-        if (idx > 0 && filteredItems[idx - 1]) {
-          setSelectedId(filteredItems[idx - 1]!.id)
-        }
-      } else if (e.key === 'Enter') {
-        e.preventDefault()
-        handleCopySecret()
+    if (draft) {
+      if (mod && event.key === 'Enter') {
+        event.preventDefault()
+        void save()
       }
+      return
+    }
+    if (mod && key === 'n') {
+      event.preventDefault()
+      startNew()
+    } else if (mod && key === 'e') {
+      event.preventDefault()
+      startEdit()
+    } else if (mod && key === 'l') {
+      event.preventDefault()
+      void lock()
+    } else if (mod && event.key === 'Backspace' && !(query && event.target === searchRef.current)) {
+      event.preventDefault()
+      void remove()
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setSelected((index) => Math.min(index + 1, Math.max(0, filtered.length - 1)))
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setSelected((index) => Math.max(index - 1, 0))
+    } else if (event.key === 'Enter') {
+      event.preventDefault()
+      void copy()
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex h-full w-full flex-col bg-surface-1 select-none" data-vault-panel>
-        <CommandSurfaceHeader>
-          <CommandSurfaceBackButton onClick={onClose} />
-          <CommandSurfaceInput disabled placeholder="Loading Vault…" />
-        </CommandSurfaceHeader>
-        <div className="flex flex-1 items-center justify-center text-ink-3 text-[13px]">
-          Opening Vault…
-        </div>
-        <CommandSurfaceFooter
-          status={<CommandSurfaceStatus title="Vault">Loading</CommandSurfaceStatus>}
-        />
-      </div>
+  const header = (
+    <CommandSurfaceHeader>
+      <CommandSurfaceBackButton onClick={draft ? () => setDraft(null) : onClose} />
+      {unlocked && !draft ? (
+        <>
+          <CommandSurfaceInput
+            ref={searchRef}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setSelected(0)
+            }}
+            placeholder="Search vault…"
+            aria-label="Search vault"
+          />
+          <CommandSurfaceAction title="New ⌘N" aria-label="New secret" onClick={startNew}>
+            <CommandSurfaceIcon name="plus" />
+          </CommandSurfaceAction>
+        </>
+      ) : (
+        <CommandSurfaceTitle>{draft ? (draft.id ? 'Edit secret' : 'New secret') : 'Vault'}</CommandSurfaceTitle>
+      )}
+    </CommandSurfaceHeader>
+  )
+
+  let body: ReactNode
+  if (!status) {
+    body = <Centered>{error ? <p className="text-[12px] text-ink-3">{error}</p> : null}</Centered>
+  } else if (!status.supported) {
+    body = (
+      <Centered>
+        <p className="text-[12.5px] text-ink-3">Vault is available on macOS for now.</p>
+      </Centered>
     )
-  }
-
-  // Not initialized: Setup master password
-  if (!status?.initialized) {
-    return (
-      <div
-        className="flex h-full w-full flex-col bg-surface-1 select-none"
-        data-vault-panel
-        onKeyDown={handleKeyDown}
-      >
-        <CommandSurfaceHeader>
-          <CommandSurfaceBackButton onClick={onClose} />
-          <div className="text-[14px] font-medium text-ink-1">Set Up Tezbar Vault</div>
-        </CommandSurfaceHeader>
-
-        <div className="flex flex-1 items-center justify-center p-6">
-          <form
-            onSubmit={handleSetup}
-            className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-line/20 bg-surface-2/60 p-6 shadow-xl backdrop-blur-md"
-          >
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-2xl text-accent">
-                🔒
-              </div>
-              <h2 className="text-[16px] font-semibold text-ink-1">Create Master Password</h2>
-              <p className="text-[12px] text-ink-3">
-                Your vault is encrypted with AES-256-GCM. Your master password is never stored in
-                plaintext and cannot be recovered if lost.
-              </p>
+  } else if (!status.unlocked) {
+    body = (
+      <Centered>
+        <LockGlyph />
+        <p className="mt-1 text-[13px] text-ink-2">Vault is locked</p>
+        <Button variant="primary" className="mt-2" onClick={() => void unlock()} disabled={unlocking}>
+          {unlocking ? 'Waiting…' : 'Unlock'}
+        </Button>
+        <p className="mt-1 text-[11px] text-ink-4">{error ?? 'Touch ID or your Mac password'}</p>
+      </Centered>
+    )
+  } else {
+    body = (
+      <section className="flex min-h-0 flex-1 gap-3">
+        <div className="flex min-h-0 w-[44%] max-w-[340px] flex-col overflow-hidden">
+          {filtered.length === 0 ? (
+            <Centered>
+              {items.length === 0 ? (
+                <>
+                  <p className="text-[12.5px] text-ink-3">No secrets yet</p>
+                  <p className="text-[11px] text-ink-4">Press ⌘N and paste</p>
+                </>
+              ) : (
+                <p className="text-[12.5px] text-ink-3">Nothing matches “{query.trim()}”</p>
+              )}
+            </Centered>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+              <GlideList selectedIndex={selected} itemCount={filtered.length} className="flex flex-col gap-0.5 py-0.5">
+                {filtered.map((item, index) => (
+                  <li key={item.id} className="relative z-[1]">
+                    <button
+                      type="button"
+                      onMouseEnter={() => !draft && setSelected(index)}
+                      onClick={() => {
+                        setDraft(null)
+                        setSelected(index)
+                      }}
+                      className="flex w-full items-center gap-2 rounded-tezbar-row px-2 py-1.5 text-left transition"
+                    >
+                      <KindIcon kind={item.kind} />
+                      <div className="min-w-0 flex-1">
+                        <p className={cx('truncate text-[12.5px]', index === selected ? 'text-ink-1' : 'text-ink-2')}>
+                          {item.name}
+                        </p>
+                        <p className="mt-0.5 truncate text-[10.5px] text-ink-4">
+                          {VAULT_KIND_LABELS[item.kind]} · {relativeTime(item.updatedAt)}
+                        </p>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </GlideList>
             </div>
+          )}
+        </div>
 
-            {authError ? (
-              <div className="rounded-lg bg-red-500/10 px-3 py-2 text-[12px] text-red-400">
-                {authError}
-              </div>
-            ) : null}
-
-            <div className="flex flex-col gap-2">
-              <input
-                ref={passwordInputRef}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter master password…"
-                autoFocus
-                className="w-full rounded-lg border border-line/30 bg-surface-3 px-3 py-2 text-[13px] text-ink-1 placeholder:text-ink-4 outline-none focus:border-accent"
-              />
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm master password…"
-                className="w-full rounded-lg border border-line/30 bg-surface-3 px-3 py-2 text-[13px] text-ink-1 placeholder:text-ink-4 outline-none focus:border-accent"
-              />
-            </div>
-
-            {status?.biometricsAvailable ? (
-              <label className="flex items-center gap-2.5 cursor-pointer text-[12px] text-ink-2">
-                <input
-                  type="checkbox"
-                  checked={enableBiometrics}
-                  onChange={(e) => setEnableBiometrics(e.target.checked)}
-                  className="rounded border-line/40 text-accent focus:ring-accent"
+        <div className="sheet-above-bar min-h-0 flex-1 overflow-y-auto border-l border-white/[0.06] p-4">
+          {draft ? (
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[11px] text-ink-4">Value</span>
+                <textarea
+                  ref={valueRef}
+                  value={draft.value}
+                  rows={2}
+                  spellCheck={false}
+                  autoComplete="off"
+                  placeholder="Paste a password, API key, SSH key…"
+                  onChange={(event) => {
+                    setDraft({ ...draft, value: event.target.value })
+                    autoGrow(event.target)
+                  }}
+                  className={cx(fieldClass, 'resize-none font-mono text-[12.5px] leading-relaxed')}
                 />
-                <span>Enable Touch ID / Apple Keychain Unlock</span>
               </label>
-            ) : null}
-
-            <button
-              type="submit"
-              disabled={authBusy}
-              className="mt-2 w-full rounded-lg bg-accent py-2 text-[13px] font-medium text-white transition hover:bg-accent/90 disabled:opacity-50"
-            >
-              {authBusy ? 'Creating Vault…' : 'Create Vault'}
-            </button>
-          </form>
-        </div>
-
-        <CommandSurfaceFooter
-          status={<CommandSurfaceStatus title="Vault Setup">New</CommandSurfaceStatus>}
-        >
-          <Kbd>Esc Back</Kbd>
-        </CommandSurfaceFooter>
-      </div>
-    )
-  }
-
-  // Locked: Prompt for unlock password or biometrics
-  if (!status?.unlocked) {
-    return (
-      <div
-        className="flex h-full w-full flex-col bg-surface-1 select-none"
-        data-vault-panel
-        onKeyDown={handleKeyDown}
-      >
-        <CommandSurfaceHeader>
-          <CommandSurfaceBackButton onClick={onClose} />
-          <div className="text-[14px] font-medium text-ink-1">Vault Locked</div>
-        </CommandSurfaceHeader>
-
-        <div className="flex flex-1 items-center justify-center p-6">
-          <form
-            onSubmit={(e) => handleUnlock(e, false)}
-            className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-line/20 bg-surface-2/60 p-6 shadow-xl backdrop-blur-md"
-          >
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15 text-2xl text-amber-500">
-                🔒
-              </div>
-              <h2 className="text-[16px] font-semibold text-ink-1">Unlock Vault</h2>
-              <p className="text-[12px] text-ink-3">
-                Enter your master password to decrypt your credentials.
-              </p>
-            </div>
-
-            {authError ? (
-              <div className="rounded-lg bg-red-500/10 px-3 py-2 text-[12px] text-red-400">
-                {authError}
-              </div>
-            ) : null}
-
-            <input
-              ref={passwordInputRef}
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Master password…"
-              autoFocus
-              className="w-full rounded-lg border border-line/30 bg-surface-3 px-3 py-2 text-[13px] text-ink-1 placeholder:text-ink-4 outline-none focus:border-accent"
-            />
-
-            <div className="flex flex-col gap-2 mt-1">
-              <button
-                type="submit"
-                disabled={authBusy}
-                className="w-full rounded-lg bg-accent py-2 text-[13px] font-medium text-white transition hover:bg-accent/90 disabled:opacity-50"
-              >
-                {authBusy ? 'Unlocking…' : 'Unlock Vault'}
-              </button>
-
-              {status?.biometricsAvailable ? (
+              <label className="flex flex-col gap-1.5">
+                <span className="flex items-center justify-between text-[11px] text-ink-4">
+                  <span>Name</span>
+                  {draft.value.trim() ? <span>{VAULT_KIND_LABELS[detected.kind]}</span> : null}
+                </span>
+                <input
+                  ref={nameRef}
+                  value={draftName}
+                  placeholder="Name"
+                  onChange={(event) => setDraft({ ...draft, name: event.target.value, nameTouched: true })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey) {
+                      event.preventDefault()
+                      void save()
+                    }
+                  }}
+                  className={cx(fieldClass, 'text-[13px]')}
+                />
+              </label>
+              {draft.showNote ? (
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[11px] text-ink-4">Note</span>
+                  <textarea
+                    value={draft.note}
+                    rows={2}
+                    placeholder="Host, user, where it's used…"
+                    onChange={(event) => setDraft({ ...draft, note: event.target.value })}
+                    className={cx(fieldClass, 'resize-none text-[12.5px]')}
+                  />
+                </label>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => handleUnlock(undefined, true)}
-                  disabled={authBusy}
-                  className="flex items-center justify-center gap-2 w-full rounded-lg border border-line/30 bg-surface-3 py-2 text-[13px] font-medium text-ink-1 hover:bg-surface-4 transition"
+                  onClick={() => setDraft({ ...draft, showNote: true })}
+                  className="self-start text-[11.5px] text-ink-3 transition hover:text-ink-1"
                 >
-                  <span>Touch ID</span>
+                  Add note
                 </button>
-              ) : null}
+              )}
+              <div className="flex items-center gap-2 pt-1">
+                <Button variant="primary" onClick={() => void save()} disabled={!draft.value.trim()}>
+                  Save
+                </Button>
+                <Button variant="quiet" onClick={() => setDraft(null)}>
+                  Cancel
+                </Button>
+              </div>
             </div>
-          </form>
+          ) : detail ? (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2.5">
+                <KindIcon kind={detail.kind} />
+                <div className="min-w-0">
+                  <h2 className="truncate text-[14px] font-medium text-ink-1">{detail.name}</h2>
+                  <p className="text-[11px] text-ink-4">{VAULT_KIND_LABELS[detail.kind]}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 rounded-tezbar-row border border-white/10 bg-white/[0.03] px-3 py-2">
+                <pre
+                  className={cx(
+                    'min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-[12.5px] leading-relaxed',
+                    revealed ? 'max-h-[180px] select-text overflow-y-auto text-ink-1' : 'select-none text-ink-3'
+                  )}
+                >
+                  {revealed ? detail.value : MASK}
+                </pre>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button variant="quiet" onClick={() => setRevealed((value) => !value)}>
+                    {revealed ? 'Hide' : 'Reveal'}
+                  </Button>
+                  <Button variant="quiet" onClick={() => void copy()}>
+                    Copy
+                  </Button>
+                </div>
+              </div>
+              {detail.note ? (
+                <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink-2">{detail.note}</p>
+              ) : null}
+              <p className="text-[11px] text-ink-4">
+                Added {fullDate(detail.createdAt)}
+                {detail.updatedAt !== detail.createdAt ? ` · Updated ${fullDate(detail.updatedAt)}` : ''}
+              </p>
+            </div>
+          ) : null}
         </div>
-
-        <CommandSurfaceFooter
-          status={<CommandSurfaceStatus title="Vault">Locked</CommandSurfaceStatus>}
-        >
-          <Kbd>Esc Back</Kbd>
-        </CommandSurfaceFooter>
-      </div>
+      </section>
     )
   }
 
-  // Unlocked: Main Vault Explorer
+  const hints = !unlocked ? (
+    <>
+      {status?.supported ? <Hint label="Unlock" keys={<Kbd>↵</Kbd>} /> : null}
+      <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+    </>
+  ) : draft ? (
+    <>
+      <Hint label="Save" keys={<><Kbd>⌘</Kbd><Kbd>↵</Kbd></>} />
+      <Hint label="Cancel" keys={<Kbd>Esc</Kbd>} />
+    </>
+  ) : (
+    <>
+      {current ? <Hint label="Copy" keys={<Kbd>↵</Kbd>} /> : null}
+      <Hint label="New" keys={<><Kbd>⌘</Kbd><Kbd>N</Kbd></>} />
+      {current ? <Hint label="Edit" keys={<><Kbd>⌘</Kbd><Kbd>E</Kbd></>} /> : null}
+      {current ? (
+        <Hint
+          label={pendingDelete === current.id ? 'Press again to delete' : 'Delete'}
+          keys={<><Kbd>⌘</Kbd><Kbd>⌫</Kbd></>}
+        />
+      ) : null}
+      <Hint label="Lock" keys={<><Kbd>⌘</Kbd><Kbd>L</Kbd></>} />
+      <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+    </>
+  )
+
   return (
     <div
-      className="flex h-full w-full flex-col bg-surface-1 select-none"
+      ref={rootRef}
+      tabIndex={-1}
+      role="application"
+      aria-label="Vault"
       data-vault-panel
-      onKeyDown={handleKeyDown}
+      onKeyDown={onKeyDown}
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <CommandSurfaceHeader>
-        <CommandSurfaceBackButton onClick={onClose} />
-        <CommandSurfaceInput
-          ref={searchInputRef}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search vault secrets, logins, servers…"
-          autoFocus
-        />
-
-        <div className="flex items-center gap-1">
-          <CommandSurfaceChip active={filter === 'all'} onClick={() => setFilter('all')}>
-            All
-          </CommandSurfaceChip>
-          {(['server', 'api-key', 'login', 'note'] as VaultCategory[]).map((cat) => (
-            <CommandSurfaceChip
-              key={cat}
-              active={filter === cat}
-              onClick={() => setFilter(cat)}
-            >
-              {CATEGORY_LABELS[cat]}
-            </CommandSurfaceChip>
-          ))}
-
-          <button
-            type="button"
-            onClick={() => {
-              setEditItem({
-                category: filter !== 'all' ? filter : 'login',
-                title: '',
-                service: '',
-                account: '',
-                secret: '',
-                secondarySecret: '',
-                port: 22,
-                authType: 'password',
-                notes: '',
-                tags: [],
-              })
-              setIsEditing(true)
-            }}
-            className="launcher-mode-chip ml-1 flex items-center gap-1 text-accent border-accent/30 hover:bg-accent/10"
-            title="New Secret (⌘N)"
-          >
-            <CommandSurfaceIcon name="plus" />
-            <span>New</span>
-          </button>
-        </div>
-      </CommandSurfaceHeader>
-
-      {/* Main split explorer */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left: Item list */}
-        <div className="flex flex-col w-[320px] border-r border-line/20 overflow-y-auto">
-          {filteredItems.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center p-6 text-center text-ink-3">
-              <span className="text-3xl mb-2">🔐</span>
-              <p className="text-[13px] font-medium text-ink-2">No secrets found</p>
-              <p className="text-[11px] text-ink-4 mt-1">
-                {items.length === 0 ? 'Press + New or ⌘N to store your first secret.' : 'Try a different search query or filter.'}
-              </p>
-            </div>
-          ) : (
-            filteredItems.map((item) => {
-              const isSelected = item.id === selectedId
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => setSelectedId(item.id)}
-                  className={cx(
-                    'group flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-line/10 transition',
-                    isSelected ? 'bg-accent/15 text-ink-1' : 'hover:bg-surface-2/40 text-ink-2'
-                  )}
-                >
-                  <span className="text-lg flex-shrink-0" aria-hidden>
-                    {CATEGORY_ICONS[item.category] || '🔒'}
-                  </span>
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="truncate text-[13px] font-medium text-ink-1">
-                      {item.title}
-                    </span>
-                    <span className="truncate text-[11px] text-ink-3">
-                      {item.service || item.account || CATEGORY_LABELS[item.category]}
-                    </span>
-                  </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-
-        {/* Right: Item Detail View */}
-        <div className="flex flex-1 flex-col overflow-y-auto p-6">
-          {selectedDetail ? (
-            <div className="flex flex-col gap-6 max-w-lg">
-              {/* Header card */}
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-3 text-2xl">
-                    {CATEGORY_ICONS[selectedDetail.category] || '🔒'}
-                  </div>
-                  <div>
-                    <h2 className="text-[17px] font-semibold text-ink-1">
-                      {selectedDetail.title}
-                    </h2>
-                    <span className="text-[11px] font-medium text-accent uppercase tracking-wider">
-                      {CATEGORY_LABELS[selectedDetail.category]}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditItem(selectedDetail)
-                      setIsEditing(true)
-                    }}
-                    className="rounded-lg border border-line/30 bg-surface-2 px-2.5 py-1.5 text-[12px] font-medium text-ink-2 hover:bg-surface-3 transition"
-                    title="Edit (⌘E)"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteItem(selectedDetail.id)}
-                    className="rounded-lg border border-line/30 bg-surface-2 p-1.5 text-[12px] text-red-400 hover:bg-red-500/10 transition"
-                    title="Delete"
-                  >
-                    <CommandSurfaceIcon name="trash" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Secret payload with reveal & copy */}
-              <div className="flex flex-col gap-1.5 rounded-xl border border-line/20 bg-surface-2/40 p-4">
-                <div className="flex items-center justify-between text-[11px] text-ink-3">
-                  <span className="font-medium uppercase tracking-wider">
-                    {selectedDetail.category === 'note' ? 'Secure Note' : 'Secret / Password'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setRevealSecret(!revealSecret)}
-                    className="text-accent hover:underline text-[11px]"
-                  >
-                    {revealSecret ? 'Hide' : 'Reveal'}
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="flex-1 font-mono text-[13px] text-ink-1 break-all select-all">
-                    {revealSecret ? (
-                      selectedDetail.secret
-                    ) : (
-                      <span className="tracking-widest text-ink-3">••••••••••••••••</span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCopySecret()}
-                    className={cx(
-                      'rounded-lg px-3 py-1.5 text-[12px] font-medium transition',
-                      copyFeedback
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-accent text-white hover:bg-accent/90'
-                    )}
-                  >
-                    {copyFeedback ? 'Copied!' : 'Copy (↵)'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Extra attributes depending on category */}
-              <div className="grid grid-cols-2 gap-3 text-[12px]">
-                {selectedDetail.service ? (
-                  <div className="flex flex-col gap-1 rounded-lg border border-line/15 bg-surface-2/20 p-3">
-                    <span className="text-[10px] uppercase text-ink-4">Service / Host</span>
-                    <span className="font-medium text-ink-1 truncate select-all">
-                      {selectedDetail.service}
-                    </span>
-                  </div>
-                ) : null}
-
-                {selectedDetail.account ? (
-                  <div className="flex flex-col gap-1 rounded-lg border border-line/15 bg-surface-2/20 p-3">
-                    <span className="text-[10px] uppercase text-ink-4">Account / User</span>
-                    <span className="font-medium text-ink-1 truncate select-all">
-                      {selectedDetail.account}
-                    </span>
-                  </div>
-                ) : null}
-
-                {selectedDetail.port ? (
-                  <div className="flex flex-col gap-1 rounded-lg border border-line/15 bg-surface-2/20 p-3">
-                    <span className="text-[10px] uppercase text-ink-4">Port</span>
-                    <span className="font-medium text-ink-1">{selectedDetail.port}</span>
-                  </div>
-                ) : null}
-
-                {selectedDetail.authType ? (
-                  <div className="flex flex-col gap-1 rounded-lg border border-line/15 bg-surface-2/20 p-3">
-                    <span className="text-[10px] uppercase text-ink-4">Auth Type</span>
-                    <span className="font-medium text-ink-1 capitalize">
-                      {selectedDetail.authType}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-
-              {selectedDetail.notes ? (
-                <div className="flex flex-col gap-1.5 rounded-lg border border-line/15 bg-surface-2/20 p-3">
-                  <span className="text-[10px] uppercase text-ink-4">Notes</span>
-                  <div className="whitespace-pre-wrap text-[12px] text-ink-2 select-text">
-                    {selectedDetail.notes}
-                  </div>
-                </div>
-              ) : null}
-
-              {selectedDetail.tags && selectedDetail.tags.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {selectedDetail.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full bg-surface-3 px-2 py-0.5 text-[10px] text-ink-3"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="flex flex-1 items-center justify-center text-ink-4 text-[13px]">
-              Select an item to view secrets
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Editor Modal */}
-      {isEditing ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <form
-            onSubmit={handleSaveItem}
-            className="flex w-full max-w-md flex-col gap-3.5 rounded-xl border border-line/30 bg-surface-2 p-5 shadow-2xl"
-          >
-            <div className="flex items-center justify-between pb-1 border-b border-line/20">
-              <span className="text-[14px] font-semibold text-ink-1">
-                {editItem.id ? 'Edit Secret' : 'New Vault Secret'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsEditing(false)}
-                className="text-ink-4 hover:text-ink-2 text-sm"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Category tabs */}
-            <div className="flex gap-1">
-              {(['server', 'api-key', 'login', 'note'] as VaultCategory[]).map((cat) => (
-                <button
-                  type="button"
-                  key={cat}
-                  onClick={() => setEditItem({ ...editItem, category: cat })}
-                  className={cx(
-                    'flex-1 rounded-md py-1 text-[11px] font-medium transition',
-                    editItem.category === cat
-                      ? 'bg-accent text-white'
-                      : 'bg-surface-3 text-ink-3 hover:text-ink-1'
-                  )}
-                >
-                  {CATEGORY_LABELS[cat]}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-2.5 text-[12px]">
-              <input
-                type="text"
-                value={editItem.title || ''}
-                onChange={(e) => setEditItem({ ...editItem, title: e.target.value })}
-                placeholder="Title (e.g. AWS Production, Root Server)…"
-                required
-                className="rounded-lg border border-line/30 bg-surface-3 px-3 py-1.5 text-ink-1 placeholder:text-ink-4 outline-none focus:border-accent"
-              />
-
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="text"
-                  value={editItem.service || ''}
-                  onChange={(e) => setEditItem({ ...editItem, service: e.target.value })}
-                  placeholder={
-                    editItem.category === 'server'
-                      ? 'Host / IP (e.g. 1.2.3.4)'
-                      : 'Service / URL'
-                  }
-                  className="rounded-lg border border-line/30 bg-surface-3 px-3 py-1.5 text-ink-1 placeholder:text-ink-4 outline-none focus:border-accent"
-                />
-                <input
-                  type="text"
-                  value={editItem.account || ''}
-                  onChange={(e) => setEditItem({ ...editItem, account: e.target.value })}
-                  placeholder={
-                    editItem.category === 'server'
-                      ? 'SSH User (e.g. ubuntu)'
-                      : 'Username / Key ID'
-                  }
-                  className="rounded-lg border border-line/30 bg-surface-3 px-3 py-1.5 text-ink-1 placeholder:text-ink-4 outline-none focus:border-accent"
-                />
-              </div>
-
-              {editItem.category === 'server' ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    value={editItem.port || 22}
-                    onChange={(e) => setEditItem({ ...editItem, port: Number(e.target.value) })}
-                    placeholder="Port (22)"
-                    className="rounded-lg border border-line/30 bg-surface-3 px-3 py-1.5 text-ink-1 placeholder:text-ink-4 outline-none focus:border-accent"
-                  />
-                  <select
-                    value={editItem.authType || 'password'}
-                    onChange={(e) =>
-                      setEditItem({
-                        ...editItem,
-                        authType: e.target.value as 'password' | 'ssh-key',
-                      })
-                    }
-                    className="rounded-lg border border-line/30 bg-surface-3 px-3 py-1.5 text-ink-1 outline-none focus:border-accent"
-                  >
-                    <option value="password">Password Auth</option>
-                    <option value="ssh-key">SSH Private Key</option>
-                  </select>
-                </div>
-              ) : null}
-
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between text-[11px] text-ink-3">
-                  <span>Secret / Password / Private Key</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setEditItem({ ...editItem, secret: generateRandomPassword(24) })
-                    }
-                    className="text-accent hover:underline"
-                  >
-                    🎲 Generate Strong
-                  </button>
-                </div>
-                {editItem.category === 'note' ? (
-                  <textarea
-                    rows={4}
-                    value={editItem.secret || ''}
-                    onChange={(e) => setEditItem({ ...editItem, secret: e.target.value })}
-                    placeholder="Enter confidential notes or private text…"
-                    required
-                    className="rounded-lg border border-line/30 bg-surface-3 px-3 py-1.5 text-ink-1 placeholder:text-ink-4 outline-none focus:border-accent resize-none font-mono"
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    value={editItem.secret || ''}
-                    onChange={(e) => setEditItem({ ...editItem, secret: e.target.value })}
-                    placeholder="Password, API secret, or SSH key…"
-                    required
-                    className="rounded-lg border border-line/30 bg-surface-3 px-3 py-1.5 text-ink-1 placeholder:text-ink-4 outline-none focus:border-accent font-mono"
-                  />
-                )}
-              </div>
-
-              <textarea
-                rows={2}
-                value={editItem.notes || ''}
-                onChange={(e) => setEditItem({ ...editItem, notes: e.target.value })}
-                placeholder="Optional notes or description…"
-                className="rounded-lg border border-line/30 bg-surface-3 px-3 py-1.5 text-ink-1 placeholder:text-ink-4 outline-none focus:border-accent resize-none"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-line/20">
-              <button
-                type="button"
-                onClick={() => setIsEditing(false)}
-                className="rounded-lg border border-line/30 px-3 py-1.5 text-[12px] font-medium text-ink-3 hover:bg-surface-3 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="rounded-lg bg-accent px-4 py-1.5 text-[12px] font-medium text-white hover:bg-accent/90 transition"
-              >
-                Save Secret
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
-
+      {header}
+      <div className="command-surface-body no-drag flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2">{body}</div>
       <CommandSurfaceFooter
         status={
           <CommandSurfaceStatus title="Vault">
-            {`${filteredItems.length} ${filteredItems.length === 1 ? 'item' : 'items'}`}
+            {flash ?? (unlocked ? `${items.length} item${items.length === 1 ? '' : 's'}` : status?.supported ? 'Locked' : undefined)}
           </CommandSurfaceStatus>
         }
       >
-        <div className="flex items-center gap-2">
-          <Kbd>↵ Copy</Kbd>
-          <Kbd>⌘N New</Kbd>
-          <Kbd>⌘E Edit</Kbd>
-          <Kbd>⌘L Lock</Kbd>
-          <Kbd>Esc Back</Kbd>
-        </div>
+        {hints}
       </CommandSurfaceFooter>
     </div>
   )

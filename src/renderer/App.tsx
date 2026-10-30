@@ -5,9 +5,8 @@ import { LauncherResizeHandles } from './LauncherAppearance'
 import { LauncherFrame } from './LauncherFrame'
 import { useLauncherScaleShortcuts } from './useLauncherScaleShortcuts'
 import { installWindowDrag } from './windowDrag'
-import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
+import { newItemEventFor } from './newItemShortcut'
 import type { AiChatBoot } from '../shared/aiChatSurface'
-import { RAYMES_AI_NEW_CHAT_EVENT, RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
 import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../shared/llmConfig'
 import type { TerminalSessionsAction } from '../shared/terminal'
@@ -581,16 +580,7 @@ function LauncherApp(): JSX.Element {
       if (isCmdOrCtrl && e.key.toLowerCase() === 'n') {
         e.preventDefault()
         e.stopPropagation()
-        const s = surfaceRef.current
-        if (s === 'ai-chat') {
-          window.dispatchEvent(new Event(RAYMES_AI_NEW_CHAT_EVENT))
-          return
-        }
-        if (s === 'snippets') {
-          window.dispatchEvent(new Event(RAYMES_NEW_SNIPPET_EVENT))
-          return
-        }
-        window.dispatchEvent(new Event(RAYMES_QUICK_NOTE_SHORTCUT_EVENT))
+        window.dispatchEvent(new Event(newItemEventFor(surfaceRef.current)))
       }
     }
     window.addEventListener('keydown', onKey, true)

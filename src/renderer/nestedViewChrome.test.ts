@@ -55,12 +55,13 @@ describe('nested views share launcher chrome', () => {
     )
   })
 
-  it('renders Vault in one shared header with back button, input, and footer status', () => {
+  it('renders Vault in the shared chrome without a modal or a master password field', () => {
     const doc = render(createElement(VaultView, { onClose: noop }))
     const header = expectChrome(doc)
-    expect(header.querySelector('input')?.placeholder).toBe('Loading Vault…')
-    expect(header.querySelector('input')?.classList.contains('command-surface-input')).toBe(true)
-    expect(doc.querySelector('[data-command-surface-status]')?.textContent).toBe('Vault · Loading')
+    expect(header.textContent).toContain('Vault')
+    expect(doc.querySelector('[data-vault-panel].view-sheet')).not.toBeNull()
+    expect(doc.querySelector('input[type="password"], [role="dialog"]')).toBeNull()
+    expect(doc.querySelector('[data-command-surface-status]')?.textContent).toBe('Vault')
   })
 
   it('renders extension list search/accessory in the same header and keeps its count', () => {

@@ -1,510 +1,543 @@
+pub mod auth;
 pub mod crypto;
 pub mod keychain;
 pub mod storage;
 
 use crate::native_core::common::{now_ms, CoreResult};
-use crypto::{decrypt, derive_key, encrypt, generate_random_bytes, hex, SALT_LEN};
+use auth::{AuthOutcome, DeviceAuthenticator, SystemAuthenticator};
+use crypto::{decrypt, encrypt, generate_random_bytes, KEY_LEN};
+use keychain::{KeyStore, SystemKeychain, VaultKey};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use storage::{
-    exists, read_envelope, write_envelope, VaultEnvelope, VaultItem, VaultItemHeader,
-    VaultPayload, VaultSettings,
+    exists, read_envelope, set_aside_legacy, write_envelope, VaultEnvelope, VaultItem,
+    VaultItemHeader, VaultPayload, ENVELOPE_VERSION,
 };
+use zeroize::Zeroize;
+
+const UNLOCK_REASON: &str = "unlock your Vault";
+const RESET_REASON: &str = "erase your Vault";
+const UNSUPPORTED: &str = "Vault is available on macOS for now";
+const LOCKED: &str = "Vault is locked";
+/// How long a copied secret may stay on the pasteboard.
+const CLIPBOARD_CLEAR_AFTER: Duration = Duration::from_secs(30);
+const KINDS: [&str; 6] = ["api-key", "token", "ssh-key", "server", "password", "note"];
 
 #[derive(Clone)]
 pub struct VaultService {
     root: PathBuf,
+    supported: bool,
+    auth: Arc<dyn DeviceAuthenticator>,
+    keys: Arc<dyn KeyStore>,
     inner: Arc<Mutex<InnerState>>,
 }
 
 struct InnerState {
-    unlocked_key: Option<[u8; 32]>,
-    cached_payload: Option<VaultPayload>,
-    cached_salt: Option<[u8; SALT_LEN]>,
+    key: Option<VaultKey>,
+    payload: Option<VaultPayload>,
     last_active: Instant,
 }
 
 impl VaultService {
     pub fn new(root: PathBuf) -> Self {
+        Self::with_parts(
+            root,
+            cfg!(target_os = "macos"),
+            Arc::new(SystemAuthenticator),
+            Arc::new(SystemKeychain),
+        )
+    }
+
+    fn with_parts(
+        root: PathBuf,
+        supported: bool,
+        auth: Arc<dyn DeviceAuthenticator>,
+        keys: Arc<dyn KeyStore>,
+    ) -> Self {
         Self {
             root,
+            supported,
+            auth,
+            keys,
             inner: Arc::new(Mutex::new(InnerState {
-                unlocked_key: None,
-                cached_payload: None,
-                cached_salt: None,
+                key: None,
+                payload: None,
                 last_active: Instant::now(),
             })),
         }
     }
 
+    fn state(&self) -> std::sync::MutexGuard<'_, InnerState> {
+        let mut state = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        Self::check_auto_lock(&mut state);
+        state
+    }
+
     fn check_auto_lock(state: &mut InnerState) {
-        if state.unlocked_key.is_none() {
+        if state.key.is_none() {
             return;
         }
-
         let minutes = state
-            .cached_payload
+            .payload
             .as_ref()
             .map(|p| p.settings.auto_lock_minutes)
             .unwrap_or(15);
-
         if state.last_active.elapsed() > Duration::from_secs(u64::from(minutes) * 60) {
             Self::lock_internal(state);
         }
     }
 
     fn lock_internal(state: &mut InnerState) {
-        if let Some(mut key) = state.unlocked_key.take() {
-            // Zeroize sensitive key buffer
-            key.fill(0);
+        if let Some(mut key) = state.key.take() {
+            key.zeroize();
         }
-        state.cached_payload = None;
-        state.cached_salt = None;
+        if let Some(mut payload) = state.payload.take() {
+            payload.wipe();
+        }
     }
 
     pub fn lock(&self) {
-        let mut state = self.inner.lock().unwrap();
+        let mut state = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         Self::lock_internal(&mut state);
     }
 
-    #[allow(dead_code)]
     pub fn is_unlocked(&self) -> bool {
-        let mut state = self.inner.lock().unwrap();
-        Self::check_auto_lock(&mut state);
-        state.unlocked_key.is_some()
+        self.state().key.is_some()
     }
 
     pub async fn handle(&self, channel: &str, args: &[Value]) -> Option<CoreResult> {
         if !channel.starts_with("vault:") {
             return None;
         }
-
-        let this = self.clone();
-        let channel = channel.to_string();
-        let args = args.to_vec();
-
-        match tokio::task::spawn_blocking(move || this.dispatch(&channel, &args)).await {
-            Ok(res) => Some(res),
-            Err(e) => Some(Err(e.to_string())),
+        if !self.supported {
+            return Some(match channel {
+                "vault:status" => Ok(json!({ "supported": false, "unlocked": false, "itemCount": 0 })),
+                _ => Err(UNSUPPORTED.to_string()),
+            });
         }
+        let result = match channel {
+            "vault:unlock" => self.unlock().await,
+            "vault:reset" => self.reset().await,
+            _ => {
+                let this = self.clone();
+                let channel = channel.to_string();
+                let args = args.to_vec();
+                tokio::task::spawn_blocking(move || this.dispatch(&channel, &args))
+                    .await
+                    .unwrap_or_else(|e| Err(e.to_string()))
+            }
+        };
+        Some(result)
     }
 
     fn dispatch(&self, channel: &str, args: &[Value]) -> CoreResult {
         match channel {
-            "vault:status" => self.handle_status(),
-            "vault:setup" => self.handle_setup(args),
-            "vault:unlock" => self.handle_unlock(args),
-            "vault:lock" => self.handle_lock(),
-            "vault:list" => self.handle_list(),
-            "vault:get" => self.handle_get(args),
-            "vault:save" => self.handle_save(args),
-            "vault:delete" => self.handle_delete(args),
-            "vault:reset" => self.handle_reset(),
-            "vault:change-password" => self.handle_change_password(args),
+            "vault:status" => self.status(),
+            "vault:lock" => {
+                self.lock();
+                Ok(json!({ "ok": true }))
+            }
+            "vault:list" => self.list(),
+            "vault:get" => self.get(id_arg(args)?),
+            "vault:save" => self.save(args),
+            "vault:delete" => self.delete(id_arg(args)?),
+            "vault:copy" => self.copy(id_arg(args)?),
             _ => Err(format!("Unknown vault channel: {channel}")),
         }
     }
 
-    fn handle_status(&self) -> CoreResult {
-        let mut state = self.inner.lock().unwrap();
-        Self::check_auto_lock(&mut state);
-
-        let initialized = exists(&self.root);
-        let unlocked = state.unlocked_key.is_some();
-        let biometrics_available = keychain::is_biometrics_supported();
-        let auto_lock_minutes = state
-            .cached_payload
-            .as_ref()
-            .map(|p| p.settings.auto_lock_minutes)
-            .unwrap_or(15);
-        let item_count = state
-            .cached_payload
-            .as_ref()
-            .map(|p| p.items.len())
-            .unwrap_or(0);
-
+    fn status(&self) -> CoreResult {
+        let state = self.state();
         Ok(json!({
-            "initialized": initialized,
-            "unlocked": unlocked,
-            "biometricsAvailable": biometrics_available,
-            "autoLockMinutes": auto_lock_minutes,
-            "itemCount": item_count,
+            "supported": true,
+            "unlocked": state.key.is_some(),
+            "itemCount": state.payload.as_ref().map(|p| p.items.len()).unwrap_or(0),
         }))
     }
 
-    fn handle_setup(&self, args: &[Value]) -> CoreResult {
-        let first = args.first().ok_or("Missing setup arguments")?;
-        let password = first["password"]
-            .as_str()
-            .ok_or("Password is required")?
-            .trim();
-
-        if password.len() < 4 {
-            return Err("Master password must be at least 4 characters long".to_string());
+    async fn unlock(&self) -> CoreResult {
+        if self.is_unlocked() {
+            return Ok(json!({ "ok": true }));
         }
-
-        let enable_biometrics = first["enableBiometrics"].as_bool().unwrap_or(false);
-
-        let salt_bytes = generate_random_bytes::<SALT_LEN>();
-        let key = derive_key(password, &salt_bytes);
-
-        let payload = VaultPayload {
-            items: Vec::new(),
-            settings: VaultSettings {
-                auto_lock_minutes: 15,
-                biometrics_enabled: enable_biometrics,
-            },
-        };
-
-        let serialized = serde_json::to_vec(&payload)
-            .map_err(|e| format!("Failed to serialize initial payload: {e}"))?;
-
-        let (nonce_hex, ciphertext_b64) = encrypt(&key, &serialized)?;
-
-        let envelope = VaultEnvelope {
-            version: 1,
-            salt: hex::encode(salt_bytes),
-            nonce: nonce_hex,
-            ciphertext: ciphertext_b64,
-            updated_at: now_ms(),
-        };
-
-        write_envelope(&self.root, &envelope)?;
-
-        if enable_biometrics && keychain::is_biometrics_supported() {
-            let _ = keychain::save_master_key(&key);
+        match self.auth.authenticate(UNLOCK_REASON).await {
+            AuthOutcome::Granted => {}
+            AuthOutcome::Cancelled => return Ok(json!({ "ok": false, "cancelled": true })),
+            AuthOutcome::Failed(message) => return Err(message),
         }
-
-        let mut state = self.inner.lock().unwrap();
-        state.unlocked_key = Some(key);
-        state.cached_salt = Some(salt_bytes);
-        state.cached_payload = Some(payload);
-        state.last_active = Instant::now();
-
-        Ok(json!({ "ok": true }))
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || this.open())
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()))
     }
 
-    fn handle_unlock(&self, args: &[Value]) -> CoreResult {
-        let first = args.first();
-        let use_biometrics = first
-            .and_then(|v| v["useBiometrics"].as_bool())
-            .unwrap_or(false);
-
-        let envelope = read_envelope(&self.root)?;
-        let salt_bytes = hex::decode(&envelope.salt)?;
-        if salt_bytes.len() != SALT_LEN {
-            return Err("Invalid salt in vault envelope".to_string());
-        }
-        let mut salt = [0u8; SALT_LEN];
-        salt.copy_from_slice(&salt_bytes);
-
-        let key = if use_biometrics {
-            keychain::read_master_key()?
+    /// Runs only after a successful device-owner authentication.
+    fn open(&self) -> CoreResult {
+        set_aside_legacy(&self.root)?;
+        let has_file = exists(&self.root);
+        let key = match self.keys.load()? {
+            Some(key) => key,
+            None if has_file => {
+                return Err(
+                    "The vault key is missing from Keychain, so this vault cannot be opened."
+                        .to_string(),
+                )
+            }
+            None => {
+                let key = generate_random_bytes::<KEY_LEN>();
+                self.keys.save(&key)?;
+                key
+            }
+        };
+        let payload = if has_file {
+            let envelope = read_envelope(&self.root)?;
+            let mut plaintext = decrypt(&key, &envelope.nonce, &envelope.ciphertext)?;
+            let parsed = serde_json::from_slice::<VaultPayload>(&plaintext)
+                .map_err(|e| format!("Failed to read vault contents: {e}"));
+            plaintext.zeroize();
+            parsed?
         } else {
-            let password = first
-                .and_then(|v| v["password"].as_str())
-                .ok_or("Password or biometrics required to unlock")?;
-            derive_key(password, &salt)
+            let payload = VaultPayload::default();
+            persist(&self.root, &key, &payload)?;
+            payload
         };
-
-        let plaintext = decrypt(&key, &envelope.nonce, &envelope.ciphertext)?;
-        let payload: VaultPayload = serde_json::from_slice(&plaintext)
-            .map_err(|e| format!("Failed to parse vault payload: {e}"))?;
-
-        if payload.settings.biometrics_enabled && !use_biometrics && keychain::is_biometrics_supported() {
-            let _ = keychain::save_master_key(&key);
-        }
-
-        let mut state = self.inner.lock().unwrap();
-        state.unlocked_key = Some(key);
-        state.cached_salt = Some(salt);
-        state.cached_payload = Some(payload);
-        state.last_active = Instant::now();
-
-        Ok(json!({ "ok": true }))
-    }
-
-    fn handle_lock(&self) -> CoreResult {
-        self.lock();
-        Ok(json!({ "ok": true }))
-    }
-
-    fn handle_list(&self) -> CoreResult {
-        let mut state = self.inner.lock().unwrap();
-        Self::check_auto_lock(&mut state);
-
-        let mut headers: Vec<VaultItemHeader> = match state.cached_payload.as_ref() {
-            Some(p) => p.items.iter().map(VaultItemHeader::from).collect(),
-            None => return Err("Vault is locked".to_string()),
-        };
-
-        state.last_active = Instant::now();
-        headers.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-
-        Ok(json!(headers))
-    }
-
-    fn handle_get(&self, args: &[Value]) -> CoreResult {
-        let id = args
-            .first()
-            .and_then(|v| {
-                if let Some(s) = v.as_str() {
-                    Some(s)
-                } else {
-                    v["id"].as_str()
-                }
-            })
-            .ok_or("Item id is required")?;
-
-        let mut state = self.inner.lock().unwrap();
-        Self::check_auto_lock(&mut state);
-
-        let item = match state.cached_payload.as_ref() {
-            Some(p) => p
-                .items
-                .iter()
-                .find(|it| it.id == id)
-                .cloned()
-                .ok_or_else(|| format!("Vault item '{id}' not found"))?,
-            None => return Err("Vault is locked".to_string()),
-        };
-
-        state.last_active = Instant::now();
-        Ok(json!(item))
-    }
-
-    fn handle_save(&self, args: &[Value]) -> CoreResult {
-        let first = args.first().ok_or("Missing item payload")?;
-        let item_val = first.get("item").unwrap_or(first);
-
-        let mut item: VaultItem = serde_json::from_value(item_val.clone())
-            .map_err(|e| format!("Invalid vault item: {e}"))?;
-
-        let now = now_ms();
-        if item.id.trim().is_empty() {
-            item.id = uuid::Uuid::new_v4().to_string();
-            item.created_at = now;
-        }
-        item.updated_at = now;
-
-        let mut state = self.inner.lock().unwrap();
-        Self::check_auto_lock(&mut state);
-
-        let key = state.unlocked_key.ok_or("Vault is locked")?;
-        let salt = state.cached_salt.ok_or("Vault salt missing")?;
-
-        let payload = state
-            .cached_payload
-            .as_mut()
-            .ok_or("Vault is locked")?;
-
-        if let Some(existing) = payload.items.iter_mut().find(|it| it.id == item.id) {
-            *existing = item.clone();
-        } else {
-            payload.items.insert(0, item.clone());
-        }
-
-        // Persist to disk
-        Self::persist_payload(&self.root, &key, &salt, payload)?;
-        state.last_active = Instant::now();
-
-        Ok(json!(item))
-    }
-
-    fn handle_delete(&self, args: &[Value]) -> CoreResult {
-        let id = args
-            .first()
-            .and_then(|v| {
-                if let Some(s) = v.as_str() {
-                    Some(s)
-                } else {
-                    v["id"].as_str()
-                }
-            })
-            .ok_or("Item id is required")?;
-
-        let mut state = self.inner.lock().unwrap();
-        Self::check_auto_lock(&mut state);
-
-        let key = state.unlocked_key.ok_or("Vault is locked")?;
-        let salt = state.cached_salt.ok_or("Vault salt missing")?;
-
-        let payload = state
-            .cached_payload
-            .as_mut()
-            .ok_or("Vault is locked")?;
-
-        let before = payload.items.len();
-        payload.items.retain(|it| it.id != id);
-
-        if before != payload.items.len() {
-            Self::persist_payload(&self.root, &key, &salt, payload)?;
-        }
-
+        let mut state = self.state();
+        state.key = Some(key);
+        state.payload = Some(payload);
         state.last_active = Instant::now();
         Ok(json!({ "ok": true }))
     }
 
-    fn handle_reset(&self) -> CoreResult {
+    async fn reset(&self) -> CoreResult {
+        match self.auth.authenticate(RESET_REASON).await {
+            AuthOutcome::Granted => {}
+            AuthOutcome::Cancelled => return Ok(json!({ "ok": false, "cancelled": true })),
+            AuthOutcome::Failed(message) => return Err(message),
+        }
         self.lock();
         let path = storage::vault_path(&self.root);
         if path.exists() {
-            let _ = std::fs::remove_file(path);
+            std::fs::remove_file(path).map_err(|e| format!("Could not delete the vault: {e}"))?;
         }
-        let _ = keychain::delete_master_key();
+        self.keys.delete()?;
         Ok(json!({ "ok": true }))
     }
 
-    fn handle_change_password(&self, args: &[Value]) -> CoreResult {
-        let first = args.first().ok_or("Missing password arguments")?;
-        let old_pass = first["oldPassword"].as_str().ok_or("Old password required")?;
-        let new_pass = first["newPassword"].as_str().ok_or("New password required")?.trim();
-
-        if new_pass.len() < 4 {
-            return Err("New master password must be at least 4 characters long".to_string());
-        }
-
-        let envelope = read_envelope(&self.root)?;
-        let salt_bytes = hex::decode(&envelope.salt)?;
-        let mut old_salt = [0u8; SALT_LEN];
-        old_salt.copy_from_slice(&salt_bytes);
-
-        let old_key = derive_key(old_pass, &old_salt);
-        let plaintext = decrypt(&old_key, &envelope.nonce, &envelope.ciphertext)?;
-        let payload: VaultPayload =
-            serde_json::from_slice(&plaintext).map_err(|e| e.to_string())?;
-
-        let new_salt = generate_random_bytes::<SALT_LEN>();
-        let new_key = derive_key(new_pass, &new_salt);
-
-        Self::persist_payload(&self.root, &new_key, &new_salt, &payload)?;
-
-        if payload.settings.biometrics_enabled && keychain::is_biometrics_supported() {
-            let _ = keychain::save_master_key(&new_key);
-        }
-
-        let mut state = self.inner.lock().unwrap();
-        state.unlocked_key = Some(new_key);
-        state.cached_salt = Some(new_salt);
-        state.cached_payload = Some(payload);
+    fn list(&self) -> CoreResult {
+        let mut state = self.state();
+        let mut headers: Vec<VaultItemHeader> = state
+            .payload
+            .as_ref()
+            .ok_or(LOCKED)?
+            .items
+            .iter()
+            .map(VaultItemHeader::from)
+            .collect();
         state.last_active = Instant::now();
+        headers.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        Ok(json!(headers))
+    }
 
+    fn find(&self, id: &str) -> Result<VaultItem, String> {
+        let mut state = self.state();
+        let item = state
+            .payload
+            .as_ref()
+            .ok_or(LOCKED)?
+            .items
+            .iter()
+            .find(|item| item.id == id)
+            .cloned()
+            .ok_or_else(|| "This secret no longer exists".to_string())?;
+        state.last_active = Instant::now();
+        Ok(item)
+    }
+
+    fn get(&self, id: &str) -> CoreResult {
+        Ok(json!(self.find(id)?))
+    }
+
+    fn save(&self, args: &[Value]) -> CoreResult {
+        let input = args.first().ok_or("Missing item")?;
+        let input = input.get("item").unwrap_or(input);
+        let value = input["value"].as_str().unwrap_or_default().to_string();
+        if value.trim().is_empty() {
+            return Err("Paste a value to save".to_string());
+        }
+        let name = input["name"].as_str().unwrap_or_default().trim().to_string();
+        let kind = input["kind"]
+            .as_str()
+            .filter(|kind| KINDS.contains(kind))
+            .unwrap_or("password")
+            .to_string();
+        let note = input["note"]
+            .as_str()
+            .map(str::trim)
+            .filter(|note| !note.is_empty())
+            .map(str::to_string);
+        let id = input["id"].as_str().unwrap_or_default().trim().to_string();
+
+        let mut state = self.state();
+        let key = state.key.ok_or(LOCKED)?;
+        let payload = state.payload.as_mut().ok_or(LOCKED)?;
+        let now = now_ms();
+        let item = if let Some(existing) = payload.items.iter_mut().find(|it| !id.is_empty() && it.id == id) {
+            existing.name = if name.is_empty() { existing.name.clone() } else { name };
+            existing.value.zeroize();
+            existing.value = value;
+            existing.kind = kind;
+            existing.note.zeroize();
+            existing.note = note;
+            existing.updated_at = now;
+            existing.clone()
+        } else {
+            let item = VaultItem {
+                id: uuid::Uuid::new_v4().to_string(),
+                name: if name.is_empty() { "Untitled".to_string() } else { name },
+                value,
+                kind,
+                note,
+                created_at: now,
+                updated_at: now,
+            };
+            payload.items.insert(0, item.clone());
+            item
+        };
+        persist(&self.root, &key, payload)?;
+        state.last_active = Instant::now();
+        Ok(json!(VaultItemHeader::from(&item)))
+    }
+
+    fn delete(&self, id: &str) -> CoreResult {
+        let mut state = self.state();
+        let key = state.key.ok_or(LOCKED)?;
+        let payload = state.payload.as_mut().ok_or(LOCKED)?;
+        let before = payload.items.len();
+        payload.items.retain(|item| item.id != id);
+        if payload.items.len() != before {
+            persist(&self.root, &key, payload)?;
+        }
+        state.last_active = Instant::now();
         Ok(json!({ "ok": true }))
     }
 
-    fn persist_payload(
-        root: &Path,
-        key: &[u8; 32],
-        salt: &[u8; 32],
-        payload: &VaultPayload,
-    ) -> Result<(), String> {
-        let bytes = serde_json::to_vec(payload)
-            .map_err(|e| format!("Failed to serialize payload: {e}"))?;
-        let (nonce_hex, ciphertext_b64) = encrypt(key, &bytes)?;
-
-        let envelope = VaultEnvelope {
-            version: 1,
-            salt: hex::encode(salt),
-            nonce: nonce_hex,
-            ciphertext: ciphertext_b64,
-            updated_at: now_ms(),
-        };
-
-        write_envelope(root, &envelope)
+    /// Copies a value marked concealed + transient, so clipboard managers
+    /// (Tezbar's own history included) skip it, then clears it after 30 s
+    /// unless something else was copied meanwhile.
+    fn copy(&self, id: &str) -> CoreResult {
+        let mut item = self.find(id)?;
+        let written = crate::native_core::launcher::clipboard_native::write_concealed_text(&item.value);
+        item.value.zeroize();
+        item.note.zeroize();
+        let sequence = written?;
+        std::thread::spawn(move || {
+            std::thread::sleep(CLIPBOARD_CLEAR_AFTER);
+            crate::native_core::launcher::clipboard_native::clear_if_sequence(sequence);
+        });
+        Ok(json!({ "ok": true, "clearAfterSeconds": CLIPBOARD_CLEAR_AFTER.as_secs() }))
     }
+}
+
+fn id_arg(args: &[Value]) -> Result<&str, String> {
+    args.first()
+        .and_then(|value| value.as_str().or_else(|| value["id"].as_str()))
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(|| "Item id is required".to_string())
+}
+
+fn persist(root: &Path, key: &VaultKey, payload: &VaultPayload) -> Result<(), String> {
+    let mut bytes =
+        serde_json::to_vec(payload).map_err(|e| format!("Failed to serialize vault: {e}"))?;
+    let encrypted = encrypt(key, &bytes);
+    bytes.zeroize();
+    let (nonce, ciphertext) = encrypted?;
+    write_envelope(
+        root,
+        &VaultEnvelope {
+            version: ENVELOPE_VERSION,
+            nonce,
+            ciphertext,
+            updated_at: now_ms(),
+        },
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use auth::AuthFuture;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct FakeAuth(AuthOutcome, Arc<AtomicUsize>);
+    impl DeviceAuthenticator for FakeAuth {
+        fn authenticate(&self, _reason: &str) -> AuthFuture {
+            self.1.fetch_add(1, Ordering::SeqCst);
+            let outcome = self.0.clone();
+            Box::pin(async move { outcome })
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeKeys {
+        key: Mutex<Option<VaultKey>>,
+        loads: AtomicUsize,
+    }
+    impl KeyStore for FakeKeys {
+        fn load(&self) -> Result<Option<VaultKey>, String> {
+            self.loads.fetch_add(1, Ordering::SeqCst);
+            Ok(*self.key.lock().unwrap())
+        }
+        fn save(&self, key: &VaultKey) -> Result<(), String> {
+            *self.key.lock().unwrap() = Some(*key);
+            Ok(())
+        }
+        fn delete(&self) -> Result<(), String> {
+            *self.key.lock().unwrap() = None;
+            Ok(())
+        }
+    }
+
+    fn service(root: &Path, outcome: AuthOutcome, keys: Arc<FakeKeys>) -> (VaultService, Arc<AtomicUsize>) {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let service = VaultService::with_parts(
+            root.to_path_buf(),
+            true,
+            Arc::new(FakeAuth(outcome, calls.clone())),
+            keys,
+        );
+        (service, calls)
+    }
+
+    async fn call(service: &VaultService, channel: &str, args: &[Value]) -> CoreResult {
+        service.handle(channel, args).await.unwrap()
+    }
 
     #[tokio::test]
-    async fn test_vault_lifecycle() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let service = VaultService::new(temp_dir.path().to_path_buf());
+    async fn denied_or_cancelled_auth_keeps_the_vault_locked_without_reading_the_key() {
+        let dir = tempfile::tempdir().unwrap();
+        for outcome in [AuthOutcome::Cancelled, AuthOutcome::Failed("no".into())] {
+            let keys = Arc::new(FakeKeys::default());
+            let (vault, calls) = service(dir.path(), outcome.clone(), keys.clone());
+            let result = call(&vault, "vault:unlock", &[]).await;
+            match outcome {
+                AuthOutcome::Cancelled => assert_eq!(result.unwrap()["cancelled"], true),
+                _ => assert!(result.is_err()),
+            }
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            assert_eq!(keys.loads.load(Ordering::SeqCst), 0);
+            assert!(!vault.is_unlocked());
+            assert!(call(&vault, "vault:list", &[]).await.is_err());
+        }
+    }
 
-        // Status: not initialized
-        let st = service.dispatch("vault:status", &[]).unwrap();
-        assert_eq!(st["initialized"], false);
-        assert_eq!(st["unlocked"], false);
+    #[tokio::test]
+    async fn first_unlock_creates_a_key_and_an_empty_encrypted_vault() {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = Arc::new(FakeKeys::default());
+        let (vault, _) = service(dir.path(), AuthOutcome::Granted, keys.clone());
+        assert_eq!(call(&vault, "vault:unlock", &[]).await.unwrap()["ok"], true);
+        assert!(keys.key.lock().unwrap().is_some());
+        assert!(exists(dir.path()));
+        let status = call(&vault, "vault:status", &[]).await.unwrap();
+        assert_eq!(status["unlocked"], true);
+        assert_eq!(status["itemCount"], 0);
+        let raw = std::fs::read_to_string(storage::vault_path(dir.path())).unwrap();
+        assert!(raw.contains("\"version\": 2"));
+    }
 
-        // Setup with password
-        let setup_res = service
-            .dispatch(
-                "vault:setup",
-                &[json!({ "password": "super-master-key", "enableBiometrics": false })],
-            )
-            .unwrap();
-        assert_eq!(setup_res["ok"], true);
+    #[tokio::test]
+    async fn items_roundtrip_across_lock_and_list_never_exposes_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = Arc::new(FakeKeys::default());
+        let (vault, _) = service(dir.path(), AuthOutcome::Granted, keys.clone());
+        call(&vault, "vault:unlock", &[]).await.unwrap();
+        let saved = call(
+            &vault,
+            "vault:save",
+            &[json!({ "item": { "name": "OpenAI API key", "value": "value-under-test-123", "kind": "api-key", "note": " prod " } })],
+        )
+        .await
+        .unwrap();
+        let id = saved["id"].as_str().unwrap().to_string();
+        assert!(saved.get("value").is_none());
 
-        // Status: initialized and unlocked
-        let st2 = service.dispatch("vault:status", &[]).unwrap();
-        assert_eq!(st2["initialized"], true);
-        assert_eq!(st2["unlocked"], true);
-        assert_eq!(st2["itemCount"], 0);
+        let raw = std::fs::read_to_string(storage::vault_path(dir.path())).unwrap();
+        assert!(!raw.contains("value-under-test-123"));
 
-        // Save server credential
-        let item = service
-            .dispatch(
-                "vault:save",
-                &[json!({
-                    "item": {
-                        "id": "",
-                        "category": "server",
-                        "title": "Prod Server 1",
-                        "service": "prod.example.com",
-                        "account": "root",
-                        "secret": "super_secret_ssh_key_or_pass",
-                        "port": 22,
-                        "tags": ["prod", "infra"]
-                    }
-                })],
-            )
-            .unwrap();
+        call(&vault, "vault:lock", &[]).await.unwrap();
+        assert!(call(&vault, "vault:get", &[json!(id)]).await.is_err());
+        call(&vault, "vault:unlock", &[]).await.unwrap();
 
-        assert_eq!(item["title"], "Prod Server 1");
-        let id = item["id"].as_str().unwrap().to_string();
+        let list = call(&vault, "vault:list", &[]).await.unwrap();
+        assert_eq!(list[0]["name"], "OpenAI API key");
+        assert!(list[0].get("value").is_none());
+        assert!(list[0].get("note").is_none());
+        let item = call(&vault, "vault:get", &[json!(id)]).await.unwrap();
+        assert_eq!(item["value"], "value-under-test-123");
+        assert_eq!(item["note"], "prod");
 
-        // List headers: contains item, but no raw secret
-        let list = service.dispatch("vault:list", &[]).unwrap();
-        let arr = list.as_array().unwrap();
-        assert_eq!(arr.len(), 1);
-        assert_eq!(arr[0]["title"], "Prod Server 1");
-        assert!(arr[0].get("secret").is_none());
+        let created = item["createdAt"].as_u64().unwrap();
+        let edited = call(
+            &vault,
+            "vault:save",
+            &[json!({ "item": { "id": id, "name": "", "value": "replaced-value", "kind": "bogus" } })],
+        )
+        .await
+        .unwrap();
+        assert_eq!(edited["name"], "OpenAI API key");
+        assert_eq!(edited["kind"], "password");
+        assert_eq!(edited["createdAt"].as_u64().unwrap(), created);
 
-        // Get single item: secret is present
-        let retrieved = service.dispatch("vault:get", &[json!(id)]).unwrap();
-        assert_eq!(retrieved["secret"], "super_secret_ssh_key_or_pass");
+        assert!(call(&vault, "vault:save", &[json!({ "item": { "name": "x", "value": "  " } })]).await.is_err());
 
-        // Lock vault
-        service.dispatch("vault:lock", &[]).unwrap();
-        assert_eq!(service.is_unlocked(), false);
+        call(&vault, "vault:delete", &[json!(id)]).await.unwrap();
+        assert_eq!(call(&vault, "vault:list", &[]).await.unwrap().as_array().unwrap().len(), 0);
+    }
 
-        // List fails when locked
-        assert!(service.dispatch("vault:list", &[]).is_err());
+    #[tokio::test]
+    async fn a_password_based_v1_file_is_set_aside() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            storage::vault_path(dir.path()),
+            r#"{"version":1,"salt":"00","nonce":"00","ciphertext":"","updatedAt":0}"#,
+        )
+        .unwrap();
+        let keys = Arc::new(FakeKeys::default());
+        let (vault, _) = service(dir.path(), AuthOutcome::Granted, keys);
+        assert_eq!(call(&vault, "vault:unlock", &[]).await.unwrap()["ok"], true);
+        assert!(storage::legacy_backup_path(dir.path()).exists());
+        assert_eq!(call(&vault, "vault:status", &[]).await.unwrap()["itemCount"], 0);
+    }
 
-        // Unlock with wrong password fails
-        assert!(service
-            .dispatch("vault:unlock", &[json!({ "password": "wrong-password" })])
-            .is_err());
+    #[tokio::test]
+    async fn reset_requires_authentication() {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = Arc::new(FakeKeys::default());
+        let (vault, _) = service(dir.path(), AuthOutcome::Granted, keys.clone());
+        call(&vault, "vault:unlock", &[]).await.unwrap();
 
-        // Unlock with correct password succeeds
-        let unlock_res = service
-            .dispatch(
-                "vault:unlock",
-                &[json!({ "password": "super-master-key" })],
-            )
-            .unwrap();
-        assert_eq!(unlock_res["ok"], true);
-        assert_eq!(service.is_unlocked(), true);
+        let (denied, _) = service(dir.path(), AuthOutcome::Cancelled, keys.clone());
+        assert_eq!(call(&denied, "vault:reset", &[]).await.unwrap()["cancelled"], true);
+        assert!(exists(dir.path()));
+        assert!(keys.key.lock().unwrap().is_some());
 
-        // Delete item
-        let del = service.dispatch("vault:delete", &[json!(id)]).unwrap();
-        assert_eq!(del["ok"], true);
+        assert_eq!(call(&vault, "vault:reset", &[]).await.unwrap()["ok"], true);
+        assert!(!exists(dir.path()));
+        assert!(keys.key.lock().unwrap().is_none());
+        assert!(!vault.is_unlocked());
+    }
 
-        let list_empty = service.dispatch("vault:list", &[]).unwrap();
-        assert_eq!(list_empty.as_array().unwrap().len(), 0);
+    #[tokio::test]
+    async fn unsupported_platforms_report_it_instead_of_faking_support() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = VaultService::with_parts(
+            dir.path().to_path_buf(),
+            false,
+            Arc::new(FakeAuth(AuthOutcome::Granted, Arc::new(AtomicUsize::new(0)))),
+            Arc::new(FakeKeys::default()),
+        );
+        assert_eq!(call(&vault, "vault:status", &[]).await.unwrap()["supported"], false);
+        assert!(call(&vault, "vault:unlock", &[]).await.is_err());
     }
 }

@@ -1,6 +1,6 @@
 //! Native launcher search, local content, clipboard and terminal metadata.
 mod clipboard;
-mod clipboard_native;
+pub(crate) mod clipboard_native;
 mod db;
 mod providers;
 mod storage;

@@ -63,8 +63,7 @@ arboard = "=3.6.1"
 notify = "8"
 libc = "0.2"
 aes-gcm = "0.10"
-pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
-hmac = "0.12"
+zeroize = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
@@ -77,6 +76,7 @@ objc2 = "0.6.4"
 objc2-foundation = "0.3.2"
 objc2-user-notifications = "0.3.2"
 security-framework = "3"
+objc2-local-authentication = { version = "0.3", default-features = false, features = ["std", "LAContext", "LAError", "block2"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.59", features = [

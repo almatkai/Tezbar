@@ -2,25 +2,15 @@ use aes_gcm::aead::{Aead, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use pbkdf2::pbkdf2_hmac;
-use sha2::Sha256;
 
-pub const SALT_LEN: usize = 32;
 pub const NONCE_LEN: usize = 12;
 pub const KEY_LEN: usize = 32;
-pub const PBKDF2_ROUNDS: u32 = 100_000;
 
 pub fn generate_random_bytes<const N: usize>() -> [u8; N] {
     use aes_gcm::aead::rand_core::RngCore;
     let mut bytes = [0u8; N];
     OsRng.fill_bytes(&mut bytes);
     bytes
-}
-
-pub fn derive_key(password: &str, salt: &[u8; SALT_LEN]) -> [u8; KEY_LEN] {
-    let mut key = [0u8; KEY_LEN];
-    pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, PBKDF2_ROUNDS, &mut key);
-    key
 }
 
 pub fn encrypt(key: &[u8; KEY_LEN], plaintext: &[u8]) -> Result<(String, String), String> {
@@ -63,7 +53,7 @@ pub fn decrypt(
 
     cipher
         .decrypt(nonce, ciphertext.as_ref())
-        .map_err(|_| "Decryption failed: incorrect password or corrupted data".to_string())
+        .map_err(|_| "Decryption failed: wrong key or corrupted vault file".to_string())
 }
 
 pub mod hex {
@@ -97,39 +87,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_derive_key_consistent() {
-        let salt = generate_random_bytes::<SALT_LEN>();
-        let k1 = derive_key("my-secret-pass", &salt);
-        let k2 = derive_key("my-secret-pass", &salt);
-        assert_eq!(k1, k2);
-
-        let k3 = derive_key("wrong-pass", &salt);
-        assert_ne!(k1, k3);
+    fn encrypt_decrypt_roundtrip_uses_a_fresh_nonce() {
+        let key = generate_random_bytes::<KEY_LEN>();
+        let secret = b"server root password";
+        let (nonce_a, cipher_a) = encrypt(&key, secret).unwrap();
+        let (nonce_b, cipher_b) = encrypt(&key, secret).unwrap();
+        assert_ne!(nonce_a, nonce_b);
+        assert_ne!(cipher_a, cipher_b);
+        assert_eq!(decrypt(&key, &nonce_a, &cipher_a).unwrap(), secret);
     }
 
     #[test]
-    fn test_encrypt_decrypt_roundtrip() {
-        let salt = generate_random_bytes::<SALT_LEN>();
-        let key = derive_key("master-vault-password", &salt);
-        let secret_data = b"Hello, Tezbar Local Vault! Highly confidential server credentials.";
-
-        let (nonce_hex, ciphertext_b64) = encrypt(&key, secret_data).expect("encryption succeeds");
-        assert!(!nonce_hex.is_empty());
-        assert!(!ciphertext_b64.is_empty());
-
-        let decrypted = decrypt(&key, &nonce_hex, &ciphertext_b64).expect("decryption succeeds");
-        assert_eq!(decrypted, secret_data);
-    }
-
-    #[test]
-    fn test_decrypt_with_wrong_key_fails() {
-        let salt = generate_random_bytes::<SALT_LEN>();
-        let key1 = derive_key("correct-password", &salt);
-        let key2 = derive_key("wrong-password", &salt);
-        let secret_data = b"Confidential notes.";
-
-        let (nonce_hex, ciphertext_b64) = encrypt(&key1, secret_data).expect("encryption succeeds");
-        let result = decrypt(&key2, &nonce_hex, &ciphertext_b64);
-        assert!(result.is_err());
+    fn decrypt_with_wrong_key_fails() {
+        let key = generate_random_bytes::<KEY_LEN>();
+        let other = generate_random_bytes::<KEY_LEN>();
+        let (nonce, cipher) = encrypt(&key, b"api key").unwrap();
+        assert!(decrypt(&other, &nonce, &cipher).is_err());
     }
 }

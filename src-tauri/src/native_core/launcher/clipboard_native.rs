@@ -81,6 +81,57 @@ mod platform {
             out
         }
     }
+    unsafe fn ns_string(value: &str) -> Result<Id, String> {
+        let c = CString::new(value).map_err(|e| e.to_string())?;
+        Ok(s1(class("NSString"), "stringWithUTF8String:", c.as_ptr()))
+    }
+    /// Pasteboard type identifiers of the current contents.
+    pub fn types() -> Vec<String> {
+        unsafe {
+            let _p = Pool::new();
+            let types: Id = s0(board(), "types");
+            if types.is_null() {
+                return vec![];
+            }
+            let count: usize = s0(types, "count");
+            let mut out = Vec::with_capacity(count.min(64));
+            for i in 0..count.min(64) {
+                let value: Id = s1(types, "objectAtIndex:", i);
+                let p: *const c_char = s0(value, "UTF8String");
+                if !p.is_null() {
+                    out.push(CStr::from_ptr(p).to_string_lossy().into_owned())
+                }
+            }
+            out
+        }
+    }
+    /// Writes text marked concealed + transient and returns the new changeCount.
+    pub fn write_concealed_text(text: &str) -> Result<u64, String> {
+        unsafe {
+            let _p = Pool::new();
+            let pb = board();
+            s0::<isize>(pb, "clearContents");
+            let value = ns_string(text)?;
+            let empty = ns_string("")?;
+            if !s2::<_, _, bool>(pb, "setString:forType:", value, ns_string("public.utf8-plain-text")?) {
+                return Err("Could not write to the pasteboard".into());
+            }
+            for marker in [super::CONCEALED_TYPE, super::TRANSIENT_TYPE] {
+                s2::<_, _, bool>(pb, "setString:forType:", empty, ns_string(marker)?);
+            }
+            Ok(s0::<isize>(pb, "changeCount") as u64)
+        }
+    }
+    /// Clears the pasteboard only if nothing was copied since `sequence`.
+    pub fn clear_if_sequence(sequence: u64) {
+        unsafe {
+            let _p = Pool::new();
+            let pb = board();
+            if s0::<isize>(pb, "changeCount") as u64 == sequence {
+                s0::<isize>(pb, "clearContents");
+            }
+        }
+    }
     pub fn write_files(paths: &[String]) -> Result<(), String> {
         unsafe {
             let _p = Pool::new();
@@ -183,6 +234,13 @@ mod platform {
             }
         }
     }
+    pub fn types() -> Vec<String> {
+        vec![]
+    }
+    pub fn write_concealed_text(_: &str) -> Result<u64, String> {
+        Err("Concealed clipboard writes are available on macOS for now".into())
+    }
+    pub fn clear_if_sequence(_: u64) {}
     pub fn sequence() -> Option<u64> {
         Some(unsafe { GetClipboardSequenceNumber() } as u64)
     }
@@ -257,6 +315,13 @@ mod platform {
 }
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod platform {
+    pub fn types() -> Vec<String> {
+        vec![]
+    }
+    pub fn write_concealed_text(_: &str) -> Result<u64, String> {
+        Err("Concealed clipboard writes are available on macOS for now".into())
+    }
+    pub fn clear_if_sequence(_: u64) {}
     pub fn sequence() -> Option<u64> {
         None
     }
@@ -268,3 +333,27 @@ mod platform {
     }
 }
 pub use platform::*;
+
+/// Markers from nspasteboard.org that password managers set on secrets.
+pub const CONCEALED_TYPE: &str = "org.nspasteboard.ConcealedType";
+pub const TRANSIENT_TYPE: &str = "org.nspasteboard.TransientType";
+
+/// Clipboard history must not record contents carrying these markers.
+pub fn is_private_types<S: AsRef<str>>(types: &[S]) -> bool {
+    types
+        .iter()
+        .any(|t| matches!(t.as_ref(), CONCEALED_TYPE | TRANSIENT_TYPE))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn concealed_and_transient_contents_are_private() {
+        assert!(is_private_types(&["public.utf8-plain-text", CONCEALED_TYPE]));
+        assert!(is_private_types(&[TRANSIENT_TYPE]));
+        assert!(!is_private_types(&["public.utf8-plain-text", "public.html"]));
+        assert!(!is_private_types::<&str>(&[]));
+    }
+}

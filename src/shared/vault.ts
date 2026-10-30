@@ -1,48 +1,33 @@
-export type VaultCategory = 'server' | 'api-key' | 'login' | 'note'
+export type VaultKind = 'api-key' | 'token' | 'ssh-key' | 'server' | 'password' | 'note'
 
 export type VaultItem = {
   id: string
-  category: VaultCategory
-  title: string
-  service?: string
-  account?: string
-  secret: string
-  secondarySecret?: string
-  port?: number
-  authType?: 'password' | 'ssh-key'
-  notes?: string
-  tags: string[]
+  name: string
+  value: string
+  kind: VaultKind
+  note?: string
   createdAt: number
   updatedAt: number
 }
 
-export type VaultItemHeader = {
-  id: string
-  category: VaultCategory
-  title: string
-  service?: string
-  account?: string
-  port?: number
-  authType?: 'password' | 'ssh-key'
-  tags: string[]
-  createdAt: number
-  updatedAt: number
-}
+/** List entries never carry the value or the note. */
+export type VaultItemHeader = Omit<VaultItem, 'value' | 'note'>
 
 export type VaultStatus = {
-  initialized: boolean
+  supported: boolean
   unlocked: boolean
-  biometricsAvailable: boolean
-  autoLockMinutes: number
   itemCount: number
 }
 
-export type VaultSetupPayload = {
-  password: string
-  enableBiometrics?: boolean
+export type VaultUnlockResult = { ok: boolean; cancelled?: boolean }
+
+export type VaultSaveInput = {
+  id?: string
+  name: string
+  value: string
+  kind: VaultKind
+  note?: string
 }
 
-export type VaultUnlockPayload = {
-  password?: string
-  useBiometrics?: boolean
-}
+/** Dispatched from App when ⌘N fires while the Vault surface is open. */
+export const TEZBAR_NEW_VAULT_ITEM_EVENT = 'tezbar:new-vault-item'

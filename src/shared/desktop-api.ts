@@ -43,12 +43,11 @@ import type { SafetyDescriptor, SafetyLogEntry } from './safety'
 import type { QuickNoteEntry } from './quickNotes'
 import type { SnippetListRow, SnippetWritePayload } from './snippets'
 import type {
-  VaultCategory,
   VaultItem,
   VaultItemHeader,
-  VaultSetupPayload,
+  VaultSaveInput,
   VaultStatus,
-  VaultUnlockPayload,
+  VaultUnlockResult,
 } from './vault'
 import type {
   PathCompletionItem,
@@ -343,15 +342,16 @@ export type RaymesApi = {
   updateQuickNote: (createdAt: number, text: string) => Promise<boolean>
   deleteQuickNote: (createdAt: number) => Promise<boolean>
   vaultStatus: () => Promise<VaultStatus>
-  vaultSetup: (payload: VaultSetupPayload) => Promise<{ ok: boolean }>
-  vaultUnlock: (payload: VaultUnlockPayload) => Promise<{ ok: boolean }>
+  /** Asks for Touch ID or the Mac password, then opens the vault. */
+  vaultUnlock: () => Promise<VaultUnlockResult>
   vaultLock: () => Promise<{ ok: boolean }>
   vaultList: () => Promise<VaultItemHeader[]>
   vaultGet: (id: string) => Promise<VaultItem>
-  vaultSave: (item: Partial<VaultItem> & { title: string; category: VaultCategory; secret: string }) => Promise<VaultItem>
+  vaultSave: (item: VaultSaveInput) => Promise<VaultItemHeader>
   vaultDelete: (id: string) => Promise<{ ok: boolean }>
-  vaultReset: () => Promise<{ ok: boolean }>
-  vaultChangePassword: (payload: { oldPassword: string; newPassword: string }) => Promise<{ ok: boolean }>
+  /** Copies the value marked concealed; it is cleared after 30 s. */
+  vaultCopy: (id: string) => Promise<{ ok: boolean }>
+  vaultReset: () => Promise<VaultUnlockResult>
   terminalCreate: (request: TerminalCreateRequest) => Promise<TerminalCreateResult>
   terminalAttach: (request: TerminalAttachRequest) => Promise<TerminalAttachResult | null>
   terminalDetach: (sessionId: string) => Promise<boolean>
