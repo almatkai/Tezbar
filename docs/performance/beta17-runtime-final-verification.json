@@ -1,0 +1,758 @@
+{
+  "schemaVersion": 1,
+  "scope": "One additional full release desktop validation after download-progress cadence correction; not a replacement paired comparison or a new speedup claim.",
+  "paired_measurement_source_commit": "9ad23a9f53d348c23c4238cc427422cb67eec1a5",
+  "paired_measurements": {
+    "path": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-performance/docs/performance/beta17-runtime-candidate.json",
+    "sha256": "6e17969f085e318977fd72353654d67639f55a4d00c943a79d71155b8d78df32"
+  },
+  "post_measurement_change": "Keep 250ms progress observation during downloads, independently of indexing selection/pause; new regression covers active and quiescent transitions. No download occurred in the paired workload.",
+  "source_sha256": {
+    "src-tauri/Cargo.toml": "55e9f1ee7d3603732865c3f5ba807fc9dd1fa5a4a972a119caf2ae72ae9792f6",
+    "src-tauri/src/desktop_bench.rs": "441da0bc5a8e635b325b77e88051e20274b30cb7fdac5277817eec39d79eab4a",
+    "src-tauri/src/lib.rs": "bc7b3fab9f32787f175e3905cc49564d9cced4f6a891303fa2d3dd1964c013a5",
+    "src-tauri/src/native_core/knowledge/db.rs": "229c46cb33357ef39f115ce0f7efb4fc81ec409e490355729db9ebb974063457",
+    "src-tauri/src/native_core/knowledge/lifecycle_tests.rs": "db77149a188efc74bd1b0d5ec002c9a5f1064588556a9af576d4292bbab3f8b6",
+    "src-tauri/src/native_core/knowledge/mod.rs": "028a4584dc977e63b0c412e75950e13b1d922f063a9af6c44c99910b9fe2b971",
+    "src-tauri/src/native_core/knowledge/runtime.rs": "d55663275a8af83d2f7b067df272ef6e8641f7d1c165609e280a449f1d780d87",
+    "src-tauri/src/native_core/knowledge/search_cache.rs": "595afb774cc23efc4857476515f2fad2cc124ad08295e879b22c52c2ffa0492e",
+    "src-tauri/src/native_core/knowledge/semantic_work.rs": "4d30b7350a0c1a88f7bb981528038a6ebdb99674629111766adaf27fc87f07b8",
+    "src-tauri/src/native_core/knowledge/semantic_work_tests.rs": "e78a2fee0c0717a4ef9640975e0282c6a879c103164ba1ba223fe02e49799b86",
+    "src-tauri/src/native_core/knowledge/text.rs": "96383e04cdf7196821786428d9db44b0fcbe51497104ebad3ebae00c1bc26543",
+    "src-tauri/src/native_core/knowledge/text_performance_tests.rs": "85dd891297851d3b89db8940bd276389517b27e2eeb0241ecca6908848b79ba3",
+    "src-tauri/src/native_core/mod.rs": "df82d31e60b33f3b46cdb0770893171c1e898b08d3b4eadbed84a19dfdabebc8",
+    "src-tauri/src/native_core/performance_alloc.rs": "c1d695aa48563e2e36c0315b3405b5a0f8bd313a9a7120ad0499eeb840a2a7eb",
+    "src/renderer/ExtensionsView.test.ts": "81b487f3941d5a34686c70d84179420a7ef4f2293e06c9b07d81e2b4d3155919",
+    "src/renderer/ExtensionsView.tsx": "dc8b14eb534ea98d0f950d34d757d69eb3db24f410744a919fc47ba3c86f114a",
+    "src/renderer/extensionImages.test.ts": "1e188f048c27c0f05a46cf77fd6b6315e8c5c2de04df08a963247a8a47a5ebd4",
+    "src/renderer/extensionImages.ts": "b74fd25f01b5a1cf25154eab08a94df3c2008b3dd7f7f4f27cd8945c4f32c4d6"
+  },
+  "checks": {
+    "rust_passed": 441,
+    "rust_ignored": 7,
+    "rust_log": {
+      "path": "/tmp/tezbar-beta17-perf.e1qzXU/runtime-final-release-tests.log",
+      "sha256": "2b2f6f75be8df0246fb9d82d511b378c77047bc1f608e754980e642b76d33f66"
+    },
+    "exact_40_case_search_parity": {
+      "path": "/tmp/tezbar-beta17-perf.e1qzXU/runtime-final-search-parity.json",
+      "sha256": "7795ea6d0604dcec1117a10f59f186a3ae8433ac9b754b0f68c8d7f47aea6cb5"
+    },
+    "desktop_build": {
+      "path": "/tmp/tezbar-beta17-perf.e1qzXU/runtime-final-desktop-build.log",
+      "sha256": "2138425715563a327ac1cd30052ca3633b20293d3685cfbd1f24603b0efab300"
+    },
+    "production_build": {
+      "path": "/tmp/tezbar-beta17-perf.e1qzXU/runtime-final-production-build.log",
+      "sha256": "395a3b4f27209197a5cf74bb46edee9022ee18912e5cfe2e9ea3f261b93b5236"
+    }
+  },
+  "binaries": {
+    "desktop": {
+      "path": "/tmp/tezbar-beta17-perf.e1qzXU/desktop-final-app",
+      "sha256": "cd4b30764efd2000c26b73d791b9421dd3820d2b386e412161827d6eb88766cf"
+    },
+    "production": {
+      "path": "/tmp/tezbar-beta17-perf.e1qzXU/production-final-app",
+      "sha256": "a0c74eb996cdc42c718d9ed626405d3eb8af16fc95274eaaee436cff0281222f"
+    }
+  },
+  "frozen_test_executable": {
+    "path": "/tmp/tezbar-beta17-perf.e1qzXU/runtime-final-tests",
+    "sha256": "cd8157c6a73c4ee9e5d8fe355d9774562031f102c3acbd815a2c136d922767c1"
+  },
+  "final_text_probe": {
+    "path": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-performance/docs/performance/beta17-runtime-text.json",
+    "sha256": "06a9ace4f6dfd689edeed2079e41cb133cf593e2d2b379e8d29522305045dfa1"
+  },
+  "desktop_validation": {
+    "raw": {
+      "path": "/tmp/tezbar-beta17-perf.e1qzXU/post-review-desktop-candidate.json",
+      "sha256": "b1ba8fa94a4445067a650603fe310a181ac03e185d7b1bd399d121959db9b226"
+    },
+    "log": {
+      "path": "/tmp/tezbar-beta17-perf.e1qzXU/post-review-desktop-candidate.log",
+      "sha256": "14a3d5d831cd33187b071146bc40d7c899a1d180ec1b44b0bee99cab35ff0e64"
+    },
+    "ready_ms": 963.552875,
+    "first_ui_ms": 1198.347542,
+    "launcher_counts": {
+      "applications": 238,
+      "commands": 9,
+      "files": 5000,
+      "native-command": 40,
+      "quick-links": 1,
+      "snippets": 29
+    },
+    "knowledge_counts": {
+      "knowledge_sources": 96,
+      "knowledge_chunks": 192
+    },
+    "phases": {
+      "hidden_idle": {
+        "wall_s": 30.036707999999997,
+        "cpu_s": 0.1694137083333332,
+        "cpu_percent_one_core": 0.5640222235184136,
+        "interrupt_wakeups": 1340,
+        "idle_wakeups": 6,
+        "footprint_median_bytes": 151998784,
+        "footprint_peak_bytes": 159650112,
+        "footprint_last_bytes": 146772288,
+        "rss_last_bytes": 351879168,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "tezbar"
+        ],
+        "value": null
+      },
+      "visible_idle": {
+        "wall_s": 29.99135783300001,
+        "cpu_s": 1.2586649583333334,
+        "cpu_percent_one_core": 4.19675883080026,
+        "interrupt_wakeups": 4826,
+        "idle_wakeups": 21,
+        "footprint_median_bytes": 255922520.0,
+        "footprint_peak_bytes": 282693976,
+        "footprint_last_bytes": 270504280,
+        "rss_last_bytes": 358088704,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "tezbar"
+        ],
+        "value": null
+      },
+      "bridge_search": {
+        "wall_s": 0.17108670899999368,
+        "cpu_s": 0.14734550000000007,
+        "cpu_percent_one_core": 86.12328851331492,
+        "interrupt_wakeups": 40,
+        "idle_wakeups": 0,
+        "footprint_median_bytes": 272388440.0,
+        "footprint_peak_bytes": 274256216,
+        "footprint_last_bytes": 274256216,
+        "rss_last_bytes": 362119168,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "tezbar"
+        ],
+        "operation_wall_s": 0.17284933300000205,
+        "queries": {
+          "runtime-fixture-00123": {
+            "latency": {
+              "n": 10,
+              "first_ms": 12,
+              "min_ms": 3,
+              "max_ms": 12,
+              "p50_ms": 4.0,
+              "p95_ms": 12
+            },
+            "counts": [
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80
+            ],
+            "ordered_result_hashes": [
+              "b9a41de4a70a38106d4a90759bd84a55ec2bef35d4b1517d0d30351216a91d4b",
+              "b9a41de4a70a38106d4a90759bd84a55ec2bef35d4b1517d0d30351216a91d4b",
+              "b9a41de4a70a38106d4a90759bd84a55ec2bef35d4b1517d0d30351216a91d4b",
+              "b9a41de4a70a38106d4a90759bd84a55ec2bef35d4b1517d0d30351216a91d4b",
+              "b9a41de4a70a38106d4a90759bd84a55ec2bef35d4b1517d0d30351216a91d4b",
+              "b9a41de4a70a38106d4a90759bd84a55ec2bef35d4b1517d0d30351216a91d4b",
+              "b9a41de4a70a38106d4a90759bd84a55ec2bef35d4b1517d0d30351216a91d4b",
+              "b9a41de4a70a38106d4a90759bd84a55ec2bef35d4b1517d0d30351216a91d4b",
+              "b9a41de4a70a38106d4a90759bd84a55ec2bef35d4b1517d0d30351216a91d4b",
+              "b9a41de4a70a38106d4a90759bd84a55ec2bef35d4b1517d0d30351216a91d4b"
+            ]
+          },
+          "runtime-fixture": {
+            "latency": {
+              "n": 10,
+              "first_ms": 5,
+              "min_ms": 1.999999999985448,
+              "max_ms": 5,
+              "p50_ms": 3.0,
+              "p95_ms": 5
+            },
+            "counts": [
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80
+            ],
+            "ordered_result_hashes": [
+              "40d197539098d0c3a2c64524caabeb7416b466b20a7f741c7ed53d4fc442eb58",
+              "40d197539098d0c3a2c64524caabeb7416b466b20a7f741c7ed53d4fc442eb58",
+              "40d197539098d0c3a2c64524caabeb7416b466b20a7f741c7ed53d4fc442eb58",
+              "40d197539098d0c3a2c64524caabeb7416b466b20a7f741c7ed53d4fc442eb58",
+              "40d197539098d0c3a2c64524caabeb7416b466b20a7f741c7ed53d4fc442eb58",
+              "40d197539098d0c3a2c64524caabeb7416b466b20a7f741c7ed53d4fc442eb58",
+              "40d197539098d0c3a2c64524caabeb7416b466b20a7f741c7ed53d4fc442eb58",
+              "40d197539098d0c3a2c64524caabeb7416b466b20a7f741c7ed53d4fc442eb58",
+              "40d197539098d0c3a2c64524caabeb7416b466b20a7f741c7ed53d4fc442eb58",
+              "40d197539098d0c3a2c64524caabeb7416b466b20a7f741c7ed53d4fc442eb58"
+            ]
+          },
+          "rutnime": {
+            "latency": {
+              "n": 10,
+              "first_ms": 2,
+              "min_ms": 1,
+              "max_ms": 2,
+              "p50_ms": 1.999999999992724,
+              "p95_ms": 2
+            },
+            "counts": [
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "ordered_result_hashes": [
+              "1835c924e8e494bffe4c2057ddde6a7b60c6902bcb1c6c7d65a2c8a7d2d27f13",
+              "1835c924e8e494bffe4c2057ddde6a7b60c6902bcb1c6c7d65a2c8a7d2d27f13",
+              "1835c924e8e494bffe4c2057ddde6a7b60c6902bcb1c6c7d65a2c8a7d2d27f13",
+              "1835c924e8e494bffe4c2057ddde6a7b60c6902bcb1c6c7d65a2c8a7d2d27f13",
+              "1835c924e8e494bffe4c2057ddde6a7b60c6902bcb1c6c7d65a2c8a7d2d27f13",
+              "1835c924e8e494bffe4c2057ddde6a7b60c6902bcb1c6c7d65a2c8a7d2d27f13",
+              "1835c924e8e494bffe4c2057ddde6a7b60c6902bcb1c6c7d65a2c8a7d2d27f13",
+              "1835c924e8e494bffe4c2057ddde6a7b60c6902bcb1c6c7d65a2c8a7d2d27f13",
+              "1835c924e8e494bffe4c2057ddde6a7b60c6902bcb1c6c7d65a2c8a7d2d27f13",
+              "1835c924e8e494bffe4c2057ddde6a7b60c6902bcb1c6c7d65a2c8a7d2d27f13"
+            ]
+          },
+          "no-such-runtime-fixture": {
+            "latency": {
+              "n": 10,
+              "first_ms": 6,
+              "min_ms": 3,
+              "max_ms": 6,
+              "p50_ms": 3.999999999985448,
+              "p95_ms": 6
+            },
+            "counts": [
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80
+            ],
+            "ordered_result_hashes": [
+              "c415843db47b2bc767d9c935bad86351534025c4ce0992db3abea67858a6689d",
+              "c415843db47b2bc767d9c935bad86351534025c4ce0992db3abea67858a6689d",
+              "c415843db47b2bc767d9c935bad86351534025c4ce0992db3abea67858a6689d",
+              "c584c44283da2fcb8312932cf86da83aeb76b230f75d2bc0e2811d5c14285c6b",
+              "c584c44283da2fcb8312932cf86da83aeb76b230f75d2bc0e2811d5c14285c6b",
+              "6dd10a4a29f02f19f75bdaafa14b26f144376eccab053e091489476da6463542",
+              "03f584e0c070d5ab54c8a21b0cb385c0ff0100fdfd756fc71a4abc7535b10ba4",
+              "c415843db47b2bc767d9c935bad86351534025c4ce0992db3abea67858a6689d",
+              "c415843db47b2bc767d9c935bad86351534025c4ce0992db3abea67858a6689d",
+              "00ab0fbfb93ffc4b1e39a6cf6af4cdac3afe1b8d88546e3399db643dd1e17593"
+            ]
+          }
+        }
+      },
+      "search_open_close": {
+        "wall_s": 6.2372252499999945,
+        "cpu_s": 2.4757319166666663,
+        "cpu_percent_one_core": 39.69284124646081,
+        "interrupt_wakeups": 1589,
+        "idle_wakeups": 33,
+        "footprint_median_bytes": 422990288,
+        "footprint_peak_bytes": 439390672,
+        "footprint_last_bytes": 428904912,
+        "rss_last_bytes": 473726976,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "tezbar"
+        ],
+        "operation_wall_s": 6.247396624999993,
+        "input_to_paint": {
+          "n": 12,
+          "first_ms": 118,
+          "min_ms": 112,
+          "max_ms": 122,
+          "p50_ms": 118.5,
+          "p95_ms": 122
+        },
+        "ipc": {
+          "n": 12,
+          "first_ms": 4,
+          "min_ms": 4,
+          "max_ms": 7,
+          "p50_ms": 5.0,
+          "p95_ms": 7
+        },
+        "counts": [
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80
+        ]
+      },
+      "index_with_search": {
+        "wall_s": 1.566001583000002,
+        "cpu_s": 0.34839350000000024,
+        "cpu_percent_one_core": 22.24732744730564,
+        "interrupt_wakeups": 484,
+        "idle_wakeups": 5,
+        "footprint_median_bytes": 406458832.0,
+        "footprint_peak_bytes": 429134288,
+        "footprint_last_bytes": 380637648,
+        "rss_last_bytes": 477413376,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "tezbar"
+        ],
+        "operation_wall_s": 1.5803464170000012,
+        "value": {
+          "count": 96
+        },
+        "searches": {
+          "n": 2,
+          "first_ms": 5,
+          "min_ms": 5,
+          "max_ms": 5,
+          "p50_ms": 5.0,
+          "p95_ms": 5
+        },
+        "searches_counts": [
+          80,
+          80
+        ]
+      },
+      "deep_lexical": {
+        "wall_s": 0.07413462499999923,
+        "cpu_s": 0.045257083333333226,
+        "cpu_percent_one_core": 61.047160261933875,
+        "interrupt_wakeups": 19,
+        "idle_wakeups": 2,
+        "footprint_median_bytes": 381104592.0,
+        "footprint_peak_bytes": 381571536,
+        "footprint_last_bytes": 381571536,
+        "rss_last_bytes": 478494720,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "tezbar"
+        ],
+        "operation_wall_s": 0.07368208300000845,
+        "queries": {
+          "!orchards apples pears": {
+            "latency": {
+              "n": 10,
+              "first_ms": 9,
+              "min_ms": 3,
+              "max_ms": 9,
+              "p50_ms": 4.0,
+              "p95_ms": 9
+            },
+            "counts": [
+              16,
+              16,
+              16,
+              16,
+              16,
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "ordered_result_hashes": [
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90",
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90",
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90",
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90",
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90",
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90",
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90",
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90",
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90",
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90"
+            ]
+          }
+        }
+      },
+      "feature_visits": {
+        "wall_s": 1.6986030829999947,
+        "cpu_s": 0.7533185833333335,
+        "cpu_percent_one_core": 44.349300367620714,
+        "interrupt_wakeups": 416,
+        "idle_wakeups": 5,
+        "footprint_median_bytes": 515904120,
+        "footprint_peak_bytes": 554226344,
+        "footprint_last_bytes": 554226344,
+        "rss_last_bytes": 530808832,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "tezbar"
+        ],
+        "operation_wall_s": 1.706403917000003,
+        "value": [
+          {
+            "surface": "notes",
+            "ready_ms": 204.34520800000655
+          },
+          {
+            "surface": "snippets",
+            "ready_ms": 208.05891699998824
+          },
+          {
+            "surface": "indexing",
+            "ready_ms": 210.4991669999947
+          },
+          {
+            "surface": "extensions",
+            "ready_ms": 211.05295899999987
+          },
+          {
+            "surface": "notes",
+            "ready_ms": 208.78299999999683
+          },
+          {
+            "surface": "snippets",
+            "ready_ms": 206.08845799999642
+          },
+          {
+            "surface": "indexing",
+            "ready_ms": 207.05008400000224
+          },
+          {
+            "surface": "extensions",
+            "ready_ms": 215.02808400001072
+          }
+        ]
+      },
+      "post_features": {
+        "wall_s": 30.032563875000008,
+        "cpu_s": 0.16571874999999997,
+        "cpu_percent_one_core": 0.551796878514089,
+        "interrupt_wakeups": 1334,
+        "idle_wakeups": 162,
+        "footprint_median_bytes": 229642920.0,
+        "footprint_peak_bytes": 328880808,
+        "footprint_last_bytes": 229642920,
+        "rss_last_bytes": 525975552,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "tezbar"
+        ],
+        "value": null
+      },
+      "semantic_index": {
+        "wall_s": 20.39074512500001,
+        "cpu_s": 24.516005125,
+        "cpu_percent_one_core": 120.23104096839614,
+        "interrupt_wakeups": 4397,
+        "idle_wakeups": 437,
+        "footprint_median_bytes": 430283544,
+        "footprint_peak_bytes": 804035976,
+        "footprint_last_bytes": 803970440,
+        "rss_last_bytes": 1496678400,
+        "process_names": [
+          "MTLCompilerService",
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "llama-server",
+          "tezbar"
+        ],
+        "operation_wall_s": 20.405096041999997,
+        "value": {
+          "actual_complete_s": 20.358646124999993,
+          "first_saved_s": 14.766642583000007,
+          "published_complete_s": 20.359024625000004,
+          "indexedChunks": 192,
+          "totalChunks": 192
+        },
+        "foreground_searches": {
+          "n": 9,
+          "first_ms": 10,
+          "min_ms": 3,
+          "max_ms": 89,
+          "p50_ms": 10,
+          "p95_ms": 89
+        },
+        "foreground_searches_counts": [
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80,
+          80
+        ]
+      },
+      "active_model_idle": {
+        "wall_s": 30.03238029100001,
+        "cpu_s": 0.3480886250000002,
+        "cpu_percent_one_core": 1.1590444101572397,
+        "interrupt_wakeups": 8284,
+        "idle_wakeups": 25,
+        "footprint_median_bytes": 744054152.0,
+        "footprint_peak_bytes": 803970440,
+        "footprint_last_bytes": 744054152,
+        "rss_last_bytes": 1489551360,
+        "process_names": [
+          "MTLCompilerService",
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "llama-server",
+          "tezbar"
+        ],
+        "value": null
+      },
+      "model_idle_scope": "After bulk inference, without model restart/unload",
+      "image_retention": {
+        "mounted": {
+          "bytesPerImage": 262144,
+          "count": 96,
+          "created": 96,
+          "loaded": 96,
+          "unrevoked": 96
+        },
+        "held": {
+          "wall_s": 3.032981791999987,
+          "cpu_s": 0.08267454166666645,
+          "cpu_percent_one_core": 2.7258502469330623,
+          "interrupt_wakeups": 917,
+          "idle_wakeups": 0,
+          "footprint_median_bytes": 738450944,
+          "footprint_peak_bytes": 841244160,
+          "footprint_last_bytes": 738369024,
+          "rss_last_bytes": 1613381632,
+          "process_names": [
+            "MTLCompilerService",
+            "com.apple.SafariPlatformSupport.Helper",
+            "com.apple.WebKit.GPU",
+            "com.apple.WebKit.Networking",
+            "com.apple.WebKit.WebContent",
+            "com.apple.audio.SandboxHelper",
+            "llama-server",
+            "tezbar"
+          ]
+        },
+        "released": {
+          "created": 96,
+          "revoked": 96,
+          "unrevoked": 0
+        },
+        "settled": {
+          "wall_s": 30.045552125,
+          "cpu_s": 0.34494733333333316,
+          "cpu_percent_one_core": 1.148081193177052,
+          "interrupt_wakeups": 7828,
+          "idle_wakeups": 38,
+          "footprint_median_bytes": 738090472,
+          "footprint_peak_bytes": 802758096,
+          "footprint_last_bytes": 802627024,
+          "rss_last_bytes": 834961408,
+          "process_names": [
+            "MTLCompilerService",
+            "com.apple.SafariPlatformSupport.Helper",
+            "com.apple.WebKit.GPU",
+            "com.apple.WebKit.Networking",
+            "com.apple.WebKit.WebContent",
+            "com.apple.audio.SandboxHelper",
+            "llama-server",
+            "tezbar"
+          ]
+        }
+      },
+      "model_after_images": "ready",
+      "before_cold_query": "starting",
+      "deep_model_first": {
+        "wall_s": 0.035141167000006135,
+        "cpu_s": 0.04558883333333333,
+        "cpu_percent_one_core": 129.73056168944353,
+        "interrupt_wakeups": 16,
+        "idle_wakeups": 0,
+        "footprint_median_bytes": 555448176.0,
+        "footprint_peak_bytes": 557602672,
+        "footprint_last_bytes": 557602672,
+        "rss_last_bytes": 564084736,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "llama-server",
+          "tezbar"
+        ],
+        "operation_wall_s": 0.03604154199999243,
+        "queries": {
+          "!orchards apples pears": {
+            "latency": {
+              "n": 1,
+              "first_ms": 6,
+              "min_ms": 6,
+              "max_ms": 6,
+              "p50_ms": 6,
+              "p95_ms": 6
+            },
+            "counts": [
+              16
+            ],
+            "ordered_result_hashes": [
+              "18217ea231b680198bf173c90f086f45f5e42b6e1f0dc98d8aaee3bfbca90d90"
+            ]
+          }
+        }
+      },
+      "after_cold_query": "starting",
+      "cold_to_ready": {
+        "wall_s": 0.8437903749999975,
+        "cpu_s": 0.4762070000000001,
+        "cpu_percent_one_core": 56.43664755005075,
+        "interrupt_wakeups": 385,
+        "idle_wakeups": 0,
+        "footprint_median_bytes": 578803952,
+        "footprint_peak_bytes": 583620488,
+        "footprint_last_bytes": 578148592,
+        "rss_last_bytes": 809762816,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "llama-server",
+          "tezbar"
+        ],
+        "operation_wall_s": 0.8447292500000003,
+        "value": null
+      },
+      "deep_model_warm": {
+        "wall_s": 0.17305954200000429,
+        "cpu_s": 0.38475233333333414,
+        "cpu_percent_one_core": 222.3236747808593,
+        "interrupt_wakeups": 79,
+        "idle_wakeups": 0,
+        "footprint_median_bytes": 585890032.0,
+        "footprint_peak_bytes": 593631472,
+        "footprint_last_bytes": 593631472,
+        "rss_last_bytes": 821805056,
+        "process_names": [
+          "com.apple.SafariPlatformSupport.Helper",
+          "com.apple.WebKit.GPU",
+          "com.apple.WebKit.Networking",
+          "com.apple.WebKit.WebContent",
+          "com.apple.audio.SandboxHelper",
+          "llama-server",
+          "tezbar"
+        ],
+        "operation_wall_s": 0.17417891699997767,
+        "queries": {
+          "!orchards apples pears": {
+            "latency": {
+              "n": 10,
+              "first_ms": 26,
+              "min_ms": 12,
+              "max_ms": 26,
+              "p50_ms": 13.0,
+              "p95_ms": 26
+            },
+            "counts": [
+              16,
+              16,
+              16,
+              16,
+              16,
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "ordered_result_hashes": [
+              "21c59d448c4da69c7d812931c2a2b3650fa5a39d03ac8051d5d9ddc1695e8cfb",
+              "21c59d448c4da69c7d812931c2a2b3650fa5a39d03ac8051d5d9ddc1695e8cfb",
+              "21c59d448c4da69c7d812931c2a2b3650fa5a39d03ac8051d5d9ddc1695e8cfb",
+              "21c59d448c4da69c7d812931c2a2b3650fa5a39d03ac8051d5d9ddc1695e8cfb",
+              "21c59d448c4da69c7d812931c2a2b3650fa5a39d03ac8051d5d9ddc1695e8cfb",
+              "21c59d448c4da69c7d812931c2a2b3650fa5a39d03ac8051d5d9ddc1695e8cfb",
+              "21c59d448c4da69c7d812931c2a2b3650fa5a39d03ac8051d5d9ddc1695e8cfb",
+              "21c59d448c4da69c7d812931c2a2b3650fa5a39d03ac8051d5d9ddc1695e8cfb",
+              "21c59d448c4da69c7d812931c2a2b3650fa5a39d03ac8051d5d9ddc1695e8cfb",
+              "21c59d448c4da69c7d812931c2a2b3650fa5a39d03ac8051d5d9ddc1695e8cfb"
+            ]
+          }
+        }
+      },
+      "after_warm_query": "ready",
+      "vectors_sha256": "27efcec49c95f8e1d1d0a96046b8efdb509e07219f1e070b06ab8e0e8d60399c",
+      "vector_bytes": 196608
+    }
+  }
+}

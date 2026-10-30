@@ -124,6 +124,19 @@ fn run_worker(
                     std::thread::yield_now();
                     continue;
                 }
+                // No cache means no idle/pressure eviction deadline. A job or
+                // close message will wake the worker; mutation maintenance
+                // below still clears the transactional dirty journal.
+                if !store.search_cache.borrow().has_requested_cache() {
+                    match receiver.blocking_recv() {
+                        Some(Some(job)) => {
+                            job(&mut store);
+                            let _ = store.search_cache_maintenance();
+                            continue;
+                        }
+                        _ => break,
+                    }
+                }
                 match runtime.block_on(async {
                     tokio::time::timeout(Duration::from_secs(1), receiver.recv()).await
                 }) {
@@ -151,6 +164,7 @@ pub struct Store {
     semantic_work: RefCell<semantic_work::Work>,
     pub db: Connection,
     pub vector: bool,
+    rank_join: bool,
     pub path: PathBuf,
     // Drop after db: trace callbacks may run until the connection closes, even
     // when a regression test panics before its explicit asynchronous close.
@@ -221,9 +235,12 @@ pub fn default_status() -> Value {
 }
 impl Store {
     pub(crate) fn from_connection(db: Connection, vector: bool, path: PathBuf) -> Self {
+        let rank_join = crate::native_core::fts_rank::register(&db).is_ok()
+            && crate::native_core::fts_rank::supported();
         let store = Self {
             db,
             vector,
+            rank_join,
             path,
             search_cache: RefCell::default(),
             search_cancel: None,
@@ -945,24 +962,22 @@ impl Store {
             if fts_query.is_empty() {
                 continue;
             }
-            let matches = format!("FROM knowledge_chunks_fts f JOIN knowledge_chunks c ON c.rowid=f.rowid JOIN knowledge_sources s ON s.id=c.source_id JOIN knowledge_roots r ON r.id=s.root_id WHERE knowledge_chunks_fts MATCH ? AND s.status='indexed' AND r.enabled=1 AND r.id IN ({root_filter})");
-            let sql = if distinct_sources {
-                // Materialize bm25 before the window function (FTS5 auxiliary
-                // functions cannot execute in the outer window/aggregate context).
-                // Rank only matching IDs; load text/vectors after the source cap.
-                format!("WITH scored AS MATERIALIZED (SELECT c.id,c.source_id,bm25(knowledge_chunks_fts,1.0) AS rank {matches}), ranked AS (SELECT *,ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY rank,id) AS source_rank FROM scored), selected AS MATERIALIZED (SELECT id,rank FROM ranked WHERE source_rank=1 ORDER BY rank,id LIMIT ?) SELECT c.id,c.source_id,c.page_number,c.text,s.path,c.embedding_json FROM selected JOIN knowledge_chunks c ON c.id=selected.id JOIN knowledge_sources s ON s.id=c.source_id ORDER BY selected.rank,c.id")
+            let sizes = if self.rank_join { "LEFT JOIN knowledge_chunks_fts_docsize sz ON sz.id=f.rowid" } else { "" };
+            let matches = format!("FROM knowledge_chunks_fts f JOIN knowledge_chunks c ON c.rowid=f.rowid JOIN knowledge_sources s ON s.id=c.source_id JOIN knowledge_roots r ON r.id=s.root_id {sizes} WHERE knowledge_chunks_fts MATCH ? AND s.status='indexed' AND r.enabled=1 AND r.id IN ({root_filter})");
+            let budget = limit.saturating_mul(5).max(40);
+            let rows = if distinct_sources {
+                self.lexical_source_candidates(&matches, fts_query, budget)?
             } else {
-                format!("SELECT c.id,c.source_id,c.page_number,c.text,s.path,c.embedding_json {matches} ORDER BY bm25(knowledge_chunks_fts,1.0),c.id LIMIT ?")
+                let rank = self.lexical_rank();
+                let sql = format!("SELECT c.id,c.source_id,c.page_number,c.text,s.path,c.embedding_json {matches} ORDER BY {rank},c.id LIMIT ?");
+                let mut q = self.db.prepare(&sql).map_err(err)?;
+                let rows = q
+                    .query_map(params![fts_query, budget as i64], hit_row)
+                    .map_err(err)?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(err)?;
+                rows
             };
-            let mut q = self.db.prepare(&sql).map_err(err)?;
-            let rows = q
-                .query_map(
-                    params![fts_query, limit.saturating_mul(5).max(40) as i64],
-                    hit_row,
-                )
-                .map_err(err)?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(err)?;
             for (hit, v) in rows {
                 let id = string(&hit, "chunkId").to_owned();
                 if is_exact {
@@ -1082,6 +1097,52 @@ impl Store {
         }
         sort_hits(&mut hits, limit, &exact, distinct_sources);
         Ok(hits)
+    }
+    fn lexical_rank(&self) -> &'static str {
+        if self.rank_join { "tezbar_bm25(knowledge_chunks_fts,sz.sz,1.0)" } else { "bm25(knowledge_chunks_fts,1.0)" }
+    }
+    /// Reduce matching IDs to their exact best chunk/source before hydrating.
+    /// The first row/source in global (BM25, chunk ID) order is exactly the
+    /// window-function winner. Stop at the source budget, never a raw chunk cap:
+    /// arbitrarily many chunks from one source cannot starve the next source.
+    fn lexical_source_candidates(
+        &self,
+        matches: &str,
+        query: &str,
+        budget: usize,
+    ) -> Result<Vec<(Value, Vec<f64>)>, String> {
+        let mut seen = std::collections::HashSet::<String>::new();
+        let mut selected = Vec::new();
+        let rank = self.lexical_rank();
+        let mut stmt = self
+            .db
+            .prepare(&format!(
+                "SELECT c.rowid,c.source_id {matches} ORDER BY {rank},c.id"
+            ))
+            .map_err(err)?;
+        let mut rows = stmt.query([query]).map_err(err)?;
+        let mut count = 0;
+        while let Some(row) = rows.next().map_err(err)? {
+            if count % 256 == 0 {
+                self.search_checkpoint()?;
+            }
+            count += 1;
+            let source: String = row.get(1).map_err(err)?;
+            if seen.insert(source) {
+                selected.push(row.get::<_, i64>(0).map_err(err)?);
+                if selected.len() == budget {
+                    break;
+                }
+            }
+        }
+        let mut hydrate = self.db.prepare_cached("SELECT c.id,c.source_id,c.page_number,c.text,s.path,c.embedding_json FROM knowledge_chunks c JOIN knowledge_sources s ON s.id=c.source_id WHERE c.rowid=?").map_err(err)?;
+        selected
+            .into_iter()
+            .map(|rowid| {
+                self.search_checkpoint()?;
+                hydrate.query_row([rowid], hit_row).map_err(err)
+            })
+            .collect()
     }
     /// Exact source representatives before the unchanged 80@16 budget. Cache
     /// readiness is proven by a complete authoritative scan plus transactional
@@ -1391,11 +1452,14 @@ fn sort_hits(
     hits.truncate(limit);
 }
 
+fn content_word_regex() -> &'static regex::Regex {
+    static WORDS: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    WORDS.get_or_init(|| regex::Regex::new(r"[\p{L}\p{N}]+").unwrap())
+}
 fn content_fts_phrase(query: &str) -> String {
     use unicode_normalization::UnicodeNormalization;
     let normalized: String = query.to_lowercase().nfkc().collect();
-    let words: Vec<_> = regex::Regex::new(r"[\p{L}\p{N}]+")
-        .unwrap()
+    let words: Vec<_> = content_word_regex()
         .find_iter(&normalized)
         .map(|m| m.as_str())
         .collect();
@@ -1410,8 +1474,7 @@ fn content_fts_phrase(query: &str) -> String {
 fn content_fts_query(query: &str) -> String {
     use unicode_normalization::UnicodeNormalization;
     let normalized: String = query.to_lowercase().nfkc().collect();
-    let terms: Vec<_> = regex::Regex::new(r"[\p{L}\p{N}]+")
-        .unwrap()
+    let terms: Vec<_> = content_word_regex()
         .find_iter(&normalized)
         .map(|m| m.as_str())
         .filter(|w| w.encode_utf16().count() >= 3)

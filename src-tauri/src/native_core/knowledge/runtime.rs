@@ -3,6 +3,8 @@
 #[allow(dead_code)]
 #[path = "../../child_supervisor.rs"]
 mod child_supervisor;
+#[path = "runtime_bundle.rs"]
+mod runtime_bundle;
 #[path = "runtime_integrity.rs"]
 mod runtime_integrity;
 #[path = "runtime_models.rs"]
@@ -25,7 +27,7 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::{Child, Command},
-    sync::Mutex as AsyncMutex,
+    sync::{Mutex as AsyncMutex, Notify},
 };
 // Q8 compatibility constants: existing databases retain this exact identity.
 const REVISION: &str = runtime_models::Q8.revision;
@@ -115,7 +117,10 @@ impl Drop for RuntimeOwner {
     }
 }
 struct Inner {
+    state_changed: Notify,
+    observer: Mutex<Option<Arc<Notify>>>,
     directory: PathBuf,
+    bundle: Option<runtime_bundle::Bundle>,
     #[cfg(test)]
     supervisor: Mutex<Option<PathBuf>>,
     #[cfg(test)]
@@ -141,11 +146,18 @@ struct Inner {
 }
 // Status cleanup on dropped/aborted inference futures; process ownership is
 // separately enforced by the supervisor lease, never by a status flag.
-struct RuntimeActivity<'a>(&'a Runtime);
+struct RuntimeActivity<'a>(Option<&'a Runtime>);
+impl RuntimeActivity<'_> {
+    fn complete(&mut self) {
+        self.0 = None;
+    }
+}
 impl Drop for RuntimeActivity<'_> {
     fn drop(&mut self) {
-        if self.0.snapshot()["runtimeState"] != "error" {
-            self.0.patch(json!({"runtimeState":"stopped"}));
+        if let Some(runtime) = self.0 {
+            if runtime.snapshot()["runtimeState"] != "error" {
+                runtime.patch(json!({"runtimeState":"stopped"}));
+            }
         }
     }
 }
@@ -229,7 +241,19 @@ impl Runtime {
         Self {
             _owner: Some(Arc::new(owner)),
             inner: Arc::new(Inner {
+                state_changed: Notify::new(),
+                observer: Mutex::new(None),
                 directory,
+                #[cfg(not(test))]
+                bundle: runtime_bundle::Bundle::current(
+                    &ctx.paths.data_dir,
+                    &ctx.paths.resource_dir,
+                ),
+                // Protocol fixtures deliberately use fake model/server bytes.
+                // Bundle pin/install tests and actual desktop builds test the
+                // production selection, without an ordinary-build override.
+                #[cfg(test)]
+                bundle: None,
                 #[cfg(test)]
                 supervisor: Mutex::new(None),
                 #[cfg(test)]
@@ -340,11 +364,15 @@ impl Runtime {
                     guard = this.inner.process.lock() => guard,
                     error = this.interrupted(&cancel, expected) => return Err(error),
                 };
-                let _activity = RuntimeActivity(&this);
-                tokio::select! {
+                let mut activity = RuntimeActivity(Some(&this));
+                let result = tokio::select! {
                     r = this.ensure_process(&mut guard, &speed, &cancel, expected) => r,
                     error = this.interrupted(&cancel, expected) => Err(error),
+                };
+                if result.is_ok() {
+                    activity.complete();
                 }
+                result
             };
             let result = tokio::time::timeout(this.inner.ready_timeout, run)
                 .await
@@ -432,7 +460,7 @@ impl Runtime {
             self.prewarm(speed).await?;
             return Ok(ForegroundEmbedding::Warming);
         }
-        let _activity = RuntimeActivity(self);
+        let mut activity = RuntimeActivity(Some(self));
         // Metadata-only cache check: changed bytes require background verification,
         // never a foreground 300 MB checksum or an unauthorized stale launch.
         let inner = self.inner.clone();
@@ -467,15 +495,20 @@ impl Runtime {
             drop(guard.take());
             return Err("Local embedding runtime exited; retry startup".into());
         }
-        self.request_with_process(
-            &mut guard,
-            inputs,
-            cancel,
-            expected,
-            self.inner.foreground_timeout,
-        )
-        .await
-        .map(ForegroundEmbedding::Ready)
+        let result = self
+            .request_with_process(
+                &mut guard,
+                inputs,
+                cancel,
+                expected,
+                self.inner.foreground_timeout,
+            )
+            .await
+            .map(ForegroundEmbedding::Ready);
+        if result.is_ok() {
+            activity.complete();
+        }
+        result
     }
     fn unavailable(&self) -> bool {
         self.inner.closed.load(Ordering::SeqCst)
@@ -513,14 +546,30 @@ impl Runtime {
     pub fn snapshot(&self) -> Value {
         self.inner.status.lock().unwrap().clone()
     }
+    pub fn downloading(&self) -> bool {
+        self.inner.status.lock().unwrap()["modelState"] == "downloading"
+    }
+    pub fn observe(&self, observer: Arc<Notify>) {
+        *self.inner.observer.lock().unwrap() = Some(observer);
+    }
     pub fn patch(&self, patch: Value) {
         let mut status = self.inner.status.lock().unwrap();
+        let mut changed = false;
         if let Some(fields) = patch.as_object() {
             for (k, v) in fields {
-                status[k] = v.clone();
+                if status.get(k) != Some(v) {
+                    status[k] = v.clone();
+                    changed = true;
+                }
             }
         }
         drop(status);
+        if changed {
+            self.inner.state_changed.notify_waiters();
+            if let Some(observer) = self.inner.observer.lock().unwrap().as_ref() {
+                observer.notify_waiters();
+            }
+        }
     }
     pub async fn initialize(&self) -> Result<(), String> {
         // Snapshot/Settings initialization must never wait for a disk checksum.
@@ -568,13 +617,27 @@ impl Runtime {
                 }
             };
             match platform() {
-                Some(runtime) => runtime_integrity::verify(
-                    &inner.directory,
-                    &runtime,
-                    inner.model,
-                    cached.as_ref(),
-                    &check,
-                ),
+                Some(runtime) => {
+                    let mut verified = runtime_integrity::verify(
+                        &inner.directory,
+                        &runtime,
+                        inner.model,
+                        cached.as_ref(),
+                        &check,
+                    )?;
+                    if let (Some(verified), Some(bundle)) = (&mut verified, &inner.bundle) {
+                        // Merely having downloaded weights must not extract a
+                        // runtime during app opening. Select/verify it when an
+                        // actual prewarm/launch asks for a runtime epoch, or when
+                        // rechecking an already-selected process-local bundle.
+                        if runtime_epoch.is_some() || verified.bundle.is_some() {
+                            let selected = bundle.ensure(verified.bundle.as_ref(), &check)?;
+                            verified.executable = selected.executable.clone();
+                            verified.bundle = Some(selected);
+                        }
+                    }
+                    Ok(verified)
+                }
                 None => Ok(None),
             }
         })
@@ -596,7 +659,7 @@ impl Runtime {
                 let repaired = self.snapshot()["errorSource"] == "integrity";
                 let downloading = self.snapshot()["modelState"] == "downloading";
                 self.patch(json!({"modelState":if downloading {"downloading"} else {"ready"},"integrityState":"verified",
-                    "runtimeIntegrity":if verified.legacy {"legacy-local-baseline"} else {"installed-file-sha256"},
+                    "runtimeIntegrity":if verified.bundle.is_some() {"app-bundled-pinned-sha256"} else if verified.legacy {"legacy-local-baseline"} else {"installed-file-sha256"},
                     "modelFile":self.inner.model.descriptor.file,"modelSha256":self.inner.model.sha,"modelKey":self.model_key(),
                     "downloadProgress":1,"downloadBytes":total}));
                 if repaired {
@@ -970,14 +1033,31 @@ impl Runtime {
         // also aborts and joins it, including while child cleanup is awaited.
         let this = self.worker();
         *task = Some(OwnedTask(Some(tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
-                interval.tick().await;
+                let changed = this.inner.state_changed.notified();
+                tokio::pin!(changed);
+                changed.as_mut().enable();
                 if this.inner.closed.load(Ordering::SeqCst) {
                     break;
                 }
                 this.stop_idle().await;
+                let delay = match this.inner.process.try_lock() {
+                    Ok(process) => process.as_ref().map(|p| {
+                        // Keep the existing 120s policy. Inference updates
+                        // last_used and owns this mutex, so no active request
+                        // can be unloaded by this observer.
+                        std::time::Duration::from_millis(
+                            120001u64.saturating_sub(now_ms().saturating_sub(p.last_used)),
+                        )
+                    }),
+                    Err(_) => Some(std::time::Duration::from_secs(1)),
+                };
+                match delay {
+                    Some(delay) => {
+                        tokio::select! { _ = &mut changed => {}, _ = tokio::time::sleep(delay) => {} }
+                    }
+                    None => changed.await,
+                }
             }
         }))));
     }
@@ -1057,19 +1137,24 @@ impl Runtime {
             guard = self.inner.process.lock() => guard,
             error = self.interrupted(cancel, expected) => return Err(error),
         };
-        let _activity = RuntimeActivity(self);
+        let mut activity = RuntimeActivity(Some(self));
         tokio::select! {
             r = self.ensure_process(&mut guard, speed, cancel, expected) => r?,
             error = self.interrupted(cancel, expected) => return Err(error),
         }
-        self.request_with_process(
-            &mut guard,
-            inputs,
-            cancel,
-            expected,
-            self.inner.request_timeout,
-        )
-        .await
+        let result = self
+            .request_with_process(
+                &mut guard,
+                inputs,
+                cancel,
+                expected,
+                self.inner.request_timeout,
+            )
+            .await;
+        if result.is_ok() {
+            activity.complete();
+        }
+        result
     }
     async fn ensure_process(
         &self,
@@ -1249,6 +1334,12 @@ impl Runtime {
                 "1",
                 "--threads",
                 &threads.to_string(),
+                // Dedicated embedding requests use the same compute workers;
+                // park them between jobs instead of CPU busy-wait polling.
+                "--poll",
+                "0",
+                "--poll-batch",
+                "0",
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
@@ -2276,6 +2367,15 @@ startup('imports complete')
 args=sys.argv[1:];port=int(args[args.index('--port')+1]);token=args[args.index('--api-key')+1]
 assert '--embedding' in args and args[args.index('--pooling')+1]=='mean'
 directory=Path(args[args.index('--model')+1]).parent
+(directory/'resource-policy.json').write_text(json.dumps({
+ 'ctx':args[args.index('--ctx-size')+1],
+ 'batch':args[args.index('--batch-size')+1],
+ 'ubatch':args[args.index('--ubatch-size')+1],
+ 'threads':args[args.index('--threads')+1],
+ 'poll':args[args.index('--poll')+1] if '--poll' in args else None,
+ 'poll_batch':args[args.index('--poll-batch')+1] if '--poll-batch' in args else None,
+ 'no_residency':os.environ.get('GGML_METAL_NO_RESIDENCY')
+}))
 leaf=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'])
 startup('leaf spawned')
 (directory/'pids').write_text(str(os.getpid())+' '+str(leaf.pid))
@@ -2339,6 +2439,68 @@ server.serve_forever()
         runtime
             .embed(vec![text.into()], "slow", &cancellation())
             .await
+    }
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn runtime_limits_and_speed_modes_disable_cpu_polling_and_keep_metal_policy() {
+        for variant in EmbeddingVariantId::ALL {
+            let temp = tempfile::tempdir().unwrap();
+            let runtime = protocol_variant(context(temp.path()), variant, "ok");
+            initialized(&runtime).await;
+            for speed in ["slow", "balanced", "fast"] {
+                runtime
+                    .embed(vec!["fixture".into()], speed, &cancellation())
+                    .await
+                    .unwrap();
+                let policy: Value = serde_json::from_slice(
+                    &std::fs::read(runtime.inner.directory.join("resource-policy.json")).unwrap(),
+                )
+                .unwrap();
+                assert_eq!(policy["ctx"], "8192");
+                assert_eq!(policy["batch"], "8192");
+                assert_eq!(policy["ubatch"], "8192");
+                assert_eq!(policy["threads"], threads(speed).to_string());
+                assert_eq!(policy["poll"], "0");
+                assert_eq!(policy["poll_batch"], "0");
+                assert!(policy["no_residency"].is_null(), "retain the default Metal policy: disabling residency delayed first use after idle");
+            }
+            runtime.shutdown().await;
+        }
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn successful_warm_inference_does_not_publish_false_stopped_transitions() {
+        let (_temp, runtime) = protocol_fixture("ok");
+        initialized(&runtime).await;
+        infer(&runtime, "warmup").await.unwrap();
+        let observer = Arc::new(Notify::new());
+        runtime.observe(observer.clone());
+        let mut spurious = Vec::new();
+        for foreground in [false, true] {
+            let changed = observer.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if foreground {
+                assert!(matches!(
+                    runtime
+                        .foreground_embed(vec!["fixture".into()], "slow", &cancellation())
+                        .await
+                        .unwrap(),
+                    ForegroundEmbedding::Ready(_)
+                ));
+            } else {
+                infer(&runtime, "fixture").await.unwrap();
+            }
+            spurious.push(
+                tokio::time::timeout(std::time::Duration::from_millis(20), changed)
+                    .await
+                    .is_ok(),
+            );
+        }
+        let owned = pids(&runtime);
+        runtime.shutdown().await;
+        wait_dead(owned).await;
+        assert_eq!(spurious, [false, false], "a successful request retains the ready process; only cancellation/failure should publish stopped");
     }
     #[cfg(unix)]
     #[tokio::test]
@@ -2857,6 +3019,69 @@ socket.getfqdn=reject_hostname_resolution
         );
         assert!(result.unwrap().unwrap().is_err());
         assert!(runtime.snapshot()["error"].is_null());
+    }
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    #[tokio::test]
+    async fn bundled_upgrade_verifies_q4_and_legacy_q8_without_rewriting_or_downloading_models() {
+        let temp = tempfile::tempdir().unwrap();
+        for variant in [EmbeddingVariantId::Q4KM, EmbeddingVariantId::Q8_0] {
+            let ctx = context(temp.path());
+            let bundle = runtime_bundle::Bundle::fixture(&ctx.paths.data_dir).unwrap();
+            let mut runtime = protocol_variant(ctx, variant, "ok");
+            Arc::get_mut(&mut runtime.inner).unwrap().bundle = Some(bundle);
+            let path = runtime.inner.directory.join("installed.json");
+            let old_manifest = std::fs::read(&path).unwrap();
+            let model_path = runtime.inner.directory.join(variant.descriptor().file);
+            let old_model = std::fs::read(&model_path).unwrap();
+            let unopened = runtime.verify_installed(0).await.unwrap();
+            assert!(unopened.bundle.is_none());
+            assert!(
+                !context(temp.path())
+                    .paths
+                    .data_dir
+                    .join("knowledge/runtimes")
+                    .exists()
+                    || variant == EmbeddingVariantId::Q8_0
+            );
+            let selected = runtime.verify_installed_checked(0, Some(0)).await.unwrap();
+            assert!(selected.bundle.is_some());
+            assert!(selected.executable.starts_with(
+                context(temp.path())
+                    .paths
+                    .data_dir
+                    .join("knowledge/runtimes")
+            ));
+            assert_eq!(
+                runtime.snapshot()["runtimeIntegrity"],
+                "app-bundled-pinned-sha256"
+            );
+            assert_eq!(runtime.model_key(), variant.descriptor().model_key);
+            assert_eq!(std::fs::read(&path).unwrap(), old_manifest);
+            assert_eq!(std::fs::read(&model_path).unwrap(), old_model);
+            assert!(runtime.inner.download.lock().await.is_none());
+            let manifest = platform().unwrap();
+            assert!(runtime_integrity::cached_install(
+                &runtime.inner.directory,
+                &manifest,
+                runtime.inner.model,
+                Some(&selected)
+            )
+            .is_some());
+            // Rollback to the old app still verifies its untouched old runtime.
+            let old = runtime_integrity::verify(
+                &runtime.inner.directory,
+                &manifest,
+                runtime.inner.model,
+                None,
+                &|| Ok(()),
+            )
+            .unwrap()
+            .unwrap();
+            assert!(old
+                .executable
+                .starts_with(runtime.inner.directory.join("runtime")));
+            assert!(old.bundle.is_none());
+        }
     }
     #[cfg(unix)]
     #[tokio::test]

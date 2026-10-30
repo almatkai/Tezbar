@@ -12,7 +12,7 @@ import {
   normalizeInstalledExtension,
 } from './extensionCatalogState'
 import {
-  cachedExtensionImageSource,
+  acquireExtensionImage,
   extensionImageSource,
   type ExtensionImageVariant,
 } from './extensionImages'
@@ -85,13 +85,14 @@ function CachedImage({
 
   useEffect(() => {
     let cancelled = false
-
-    void cachedExtensionImageSource(normalized, variant).then((source) => {
+    const image = acquireExtensionImage(normalized, variant)
+    void image.source.then((source) => {
       if (!cancelled) setResolvedImage({ src: normalized, variant, source })
     })
 
     return () => {
       cancelled = true
+      image.release()
     }
   }, [normalized, variant])
 

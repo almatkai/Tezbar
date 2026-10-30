@@ -2,11 +2,17 @@ pub mod ai;
 pub mod common;
 pub mod extension_worker;
 pub mod extensions;
+mod fts_rank;
 pub mod knowledge;
 pub mod launcher;
 pub mod platform;
 pub mod system;
 pub mod terminal_bridge;
+
+#[cfg(test)]
+mod performance;
+#[cfg(test)]
+mod performance_alloc;
 
 use common::{CoreContext, CoreResult};
 use serde_json::{json, Value};

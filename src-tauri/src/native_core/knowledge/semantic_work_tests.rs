@@ -457,3 +457,31 @@ fn explain_exact_count_and_pending_on_bundled_sqlite() {
         println!("SQLite {} {:?}: {:?}", rusqlite::version(), sql, plan);
     }
 }
+
+#[test]
+fn drained_known_incomplete_progress_reconciles_once_without_per_chunk_counts() {
+    let f = fixture();
+    let s = &f.store;
+    let at = Instant::now();
+    s.db.execute_batch("UPDATE knowledge_chunks SET embedding_json='[]' WHERE id='old'").unwrap();
+    let key = scope(s, "q8");
+    assert_eq!(count(s, &key, at).value, Some((1, 2)));
+    s.db.execute_batch("INSERT INTO knowledge_gemma_embeddings VALUES('old','q8',X'00'); INSERT INTO knowledge_gemma_embeddings VALUES('a','q4',X'00'),('old','q4',X'00');").unwrap();
+    // An empty other-model queue must not bypass this scope's count budget.
+    let other = scope(s, "q4");
+    assert!(s.semantic_pending(&other, 8, at).unwrap().is_empty());
+    assert!(!count(s, &key, at).fresh);
+    assert_eq!(f.queries.counts.load(Ordering::SeqCst), 1);
+    assert!(s.semantic_pending(&key, 8, at).unwrap().is_empty());
+    let complete = count(s, &key, at + Duration::from_millis(1));
+    assert!(complete.fresh && complete.reconciled, "known incomplete progress must become fresh when its exact queue drains");
+    assert_eq!(complete.value, Some((2, 2)));
+    assert_eq!(f.queries.counts.load(Ordering::SeqCst), 2);
+    // A stream of already-complete tiny additions retains normal coalescing.
+    for i in 0..20 {
+        s.db.execute_batch(&format!("INSERT INTO knowledge_chunks(id,source_id,text,embedding_json) VALUES('extra{i}','s','extra','[]'); INSERT INTO knowledge_gemma_embeddings VALUES('extra{i}','q8',X'00');")).unwrap();
+        assert!(s.semantic_pending(&key, 8, at).unwrap().is_empty());
+        assert!(!count(s, &key, at + Duration::from_millis(2)).fresh);
+    }
+    assert_eq!(f.queries.counts.load(Ordering::SeqCst), 2, "no COUNT per already-complete mini-batch");
+}

@@ -121,7 +121,17 @@ impl Store {
                         reconciled: false,
                     });
                 }
-                if now.saturating_duration_since(c.completed) < COUNT_INTERVAL {
+                // Publish terminal progress when an authoritative pending read
+                // drains this exact scope/generation. Only a previously known
+                // incomplete count gets this extra reconciliation: repeated
+                // already-complete mini-batches retain the normal 10s budget.
+                let drained_incomplete = c.value.0 < c.value.1
+                    && work.empty.as_ref().is_some_and(|e| {
+                        e.scope == *scope && e.stamp == stamp
+                    });
+                if now.saturating_duration_since(c.completed) < COUNT_INTERVAL
+                    && !drained_incomplete
+                {
                     return Ok(CountObservation {
                         value: Some(c.value),
                         fresh: false,

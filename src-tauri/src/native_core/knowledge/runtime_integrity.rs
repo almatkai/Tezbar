@@ -17,7 +17,7 @@ pub(super) struct ModelIdentity {
     pub sha: &'static str,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Fingerprint {
+pub(super) struct Fingerprint {
     path: PathBuf,
     target: PathBuf,
     bytes: u64,
@@ -34,8 +34,9 @@ pub(super) struct VerifiedInstall {
     pub executable: PathBuf,
     pub runtime_files: Value,
     pub legacy: bool,
+    pub bundle: Option<super::runtime_bundle::VerifiedBundle>,
 }
-fn fingerprint(path: &Path) -> Result<Fingerprint, String> {
+pub(super) fn fingerprint(path: &Path) -> Result<Fingerprint, String> {
     let m = fs::metadata(path).map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
     if !m.is_file() {
         return Err(format!("Not a file: {}", path.display()));
@@ -53,7 +54,7 @@ fn fingerprint(path: &Path) -> Result<Fingerprint, String> {
         },
     })
 }
-fn inventory(directory: &Path) -> Result<Vec<Fingerprint>, String> {
+pub(super) fn inventory(directory: &Path) -> Result<Vec<Fingerprint>, String> {
     let root = fs::canonicalize(directory).map_err(|e| e.to_string())?;
     let mut files = Vec::new();
     for entry in walkdir::WalkDir::new(directory).max_depth(8) {
@@ -211,6 +212,7 @@ pub(super) fn verify(
         executable,
         runtime_files: digests,
         legacy,
+        bundle: None,
     }))
 }
 
@@ -231,5 +233,11 @@ pub(super) fn cached_install(
         fingerprint(&directory.join(model.descriptor.file)).ok()?,
     ];
     current.extend(inventory(&directory.join("runtime")).ok()?);
-    (current == cached.fingerprint).then(|| cached.clone())
+    (current == cached.fingerprint
+        && cached
+            .bundle
+            .as_ref()
+            .map(|b| b.unchanged())
+            .unwrap_or(true))
+    .then(|| cached.clone())
 }

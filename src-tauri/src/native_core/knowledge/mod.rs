@@ -60,6 +60,8 @@ pub struct KnowledgeCore {
 struct Inner {
     ctx: CoreContext,
     #[cfg(test)]
+    observer_ticks: [AtomicU64; 2],
+    #[cfg(test)]
     progress_events: AtomicU64,
     #[cfg(test)]
     pacing_delays: AtomicU64,
@@ -74,7 +76,7 @@ struct Inner {
     paused: AtomicBool,
     requested: AtomicBool,
     dirty: Arc<AtomicU64>,
-    wake: Notify,
+    wake: Arc<Notify>,
     task: AsyncMutex<Option<tokio::task::JoinHandle<()>>>,
     prewarm_task: AsyncMutex<Option<tokio::task::JoinHandle<()>>>,
     run: AsyncMutex<()>,
@@ -87,11 +89,13 @@ struct Inner {
 struct SemanticChange<'a> {
     generation: &'a AtomicU64,
     changing: &'a AtomicBool,
+    wake: &'a Notify,
 }
 impl Drop for SemanticChange<'_> {
     fn drop(&mut self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.changing.store(false, Ordering::SeqCst);
+        self.wake.notify_waiters();
     }
 }
 #[derive(Debug, PartialEq, Eq)]
@@ -118,9 +122,15 @@ fn semantic_counts_ready(settings: &Value, runtime: &Value) -> bool {
 impl KnowledgeCore {
     pub fn new(ctx: CoreContext) -> Self {
         let runtimes = EmbeddingVariantId::ALL.map(|v| Runtime::new_for_variant(ctx.clone(), v));
+        let wake = Arc::new(Notify::new());
+        for runtime in &runtimes {
+            runtime.observe(wake.clone());
+        }
         Self {
             inner: Arc::new(Inner {
                 ctx,
+                #[cfg(test)]
+                observer_ticks: [AtomicU64::new(0), AtomicU64::new(0)],
                 #[cfg(test)]
                 progress_events: AtomicU64::new(0),
                 #[cfg(test)]
@@ -142,7 +152,7 @@ impl KnowledgeCore {
                 paused: AtomicBool::new(false),
                 requested: AtomicBool::new(false),
                 dirty: Arc::new(AtomicU64::new(0)),
-                wake: Notify::new(),
+                wake,
                 task: AsyncMutex::new(None),
                 prewarm_task: AsyncMutex::new(None),
                 run: AsyncMutex::new(()),
@@ -314,6 +324,7 @@ impl KnowledgeCore {
         SemanticChange {
             generation: &self.inner.semantic_generation,
             changing: &self.inner.semantic_changing,
+            wake: &self.inner.wake,
         }
     }
     fn semantic_cancel(&self) -> Cancellation {
@@ -486,16 +497,17 @@ impl KnowledgeCore {
         }
         self.refresh_counts().await?;
         // Counts are coalesced by the background owner, not settings polling.
-        self.inner.wake.notify_one();
+        self.inner.wake.notify_waiters();
         Ok(())
     }
     fn request_index(&self) {
         self.inner.requested.store(true, Ordering::SeqCst);
-        self.inner.wake.notify_one();
+        self.inner.wake.notify_waiters();
     }
     async fn sync_watchers(&self) -> Result<(), String> {
         let roots = self.roots();
         let dirty = self.inner.dirty.clone();
+        let wake = self.inner.wake.clone();
         let watched_paths: Vec<_> = roots.iter().map(|r| PathBuf::from(string(r, "path"))).collect();
         let watcher = tokio::task::spawn_blocking(move || {
             let mut watcher = notify::recommended_watcher(
@@ -505,6 +517,7 @@ impl KnowledgeCore {
                     }
                     if watcher_requests_reconcile(&event, &watched_paths) {
                         dirty.store(now_ms(), Ordering::SeqCst);
+                        wake.notify_waiters();
                     }
                 },
             )
@@ -535,7 +548,15 @@ impl KnowledgeCore {
     // independently; query supersession never owns or restarts this task.
     async fn prewarm_loop(&self) {
         let mut prewarmed = None;
-        while !self.inner.closed.load(Ordering::SeqCst) {
+        loop {
+            // Register before observing state: completion during an await must
+            // remain visible, including while the extraction owner is busy.
+            let wake = self.inner.wake.notified();
+            tokio::pin!(wake);
+            wake.as_mut().enable();
+            if self.inner.closed.load(Ordering::SeqCst) { break; }
+            #[cfg(test)]
+            self.inner.observer_ticks[0].fetch_add(1, Ordering::Relaxed);
             let settings = self.settings();
             let variant =
                 serde_json::from_value(settings["embeddingVariant"].clone()).unwrap_or_default();
@@ -557,7 +578,7 @@ impl KnowledgeCore {
             } else {
                 prewarmed = None;
             }
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            wake.await;
         }
     }
     async fn background_loop(&self) {
@@ -572,6 +593,11 @@ impl KnowledgeCore {
         let mut last_variant = self.selected_variant();
         let mut last_semantic_epoch = self.inner.semantic_generation.load(Ordering::SeqCst);
         while !self.inner.closed.load(Ordering::SeqCst) {
+            let wake = self.inner.wake.notified();
+            tokio::pin!(wake);
+            wake.as_mut().enable();
+            #[cfg(test)]
+            self.inner.observer_ticks[1].fetch_add(1, Ordering::Relaxed);
             let variant = self.selected_variant();
             let epoch = self.inner.semantic_generation.load(Ordering::SeqCst);
             if epoch != last_semantic_epoch {
@@ -600,6 +626,10 @@ impl KnowledgeCore {
             // Periodic reconciliation also recovers from OS watcher overflow/missing permissions.
             if now_ms().saturating_sub(last_rescan) > 300000 {
                 self.request_index();
+                // A paused service retains the request without running it.
+                // Advance the timer too, rather than spinning on a past due
+                // deadline until the user resumes.
+                last_rescan = now_ms();
             }
             if !self.inner.paused.load(Ordering::SeqCst)
                 && self.inner.requested.swap(false, Ordering::SeqCst)
@@ -665,7 +695,35 @@ impl KnowledgeCore {
                 last_semantic = semantic;
                 self.status(json!({}));
             }
-            tokio::select! {_=self.inner.wake.notified()=>{},_=tokio::time::sleep(std::time::Duration::from_millis(250))=>{}}
+            // Sleep to actual service deadlines when quiescent. Selected
+            // semantic indexes retain their original 250ms responsiveness for
+            // pending work, external writers and counts. Filesystem/runtime/
+            // settings changes and shutdown wake both observers immediately.
+            let now = now_ms();
+            let mut next = last_rescan.saturating_add(300001);
+            if !started { next = next.min(startup); }
+            let dirty = self.inner.dirty.load(Ordering::SeqCst);
+            if dirty > 0 { next = next.min(dirty.saturating_add(5000)); }
+            if !self.inner.paused.load(Ordering::SeqCst) {
+                if backfill {
+                    let vector_due = if self.inner.ctx.foreground_active() {
+                        now.saturating_add(250)
+                    } else {
+                        startup.max(last_vector.saturating_add(251))
+                    };
+                    next = next.min(vector_due);
+                }
+            }
+            if (!self.inner.paused.load(Ordering::SeqCst)
+                && self.settings()["embeddingModel"] == "embeddinggemma-2")
+                || self.inner.runtimes.iter().any(Runtime::downloading)
+            {
+                // Download progress is independent of indexing pause/selection.
+                // Its byte counter changes under the status mutex; retain the
+                // old observation cadence only while that work is active.
+                next = next.min(now.saturating_add(250));
+            }
+            tokio::select! {_=&mut wake=>{},_=tokio::time::sleep(std::time::Duration::from_millis(next.saturating_sub(now).max(1)))=>{}}
         }
     }
     async fn learned_batch(&self, cancel: &Cancellation) -> Result<(), String> {
@@ -1211,7 +1269,7 @@ impl KnowledgeCore {
             if model == "embeddinggemma-2" {
                 runtime.prewarm(string(&settings, "indexingSpeed")).await?;
             }
-            self.inner.wake.notify_one();
+            self.inner.wake.notify_waiters();
             return Ok(self.snapshot());
         }
         let _change = (!removing || active_remove).then(|| self.semantic_change());
@@ -1255,7 +1313,7 @@ impl KnowledgeCore {
         }
         drop(_change);
         self.prewarm_sources().await;
-        self.inner.wake.notify_one();
+        self.inner.wake.notify_waiters();
         Ok(self.snapshot())
     }
     pub async fn handle(&self, channel: &str, args: &[Value]) -> HandlerResult {

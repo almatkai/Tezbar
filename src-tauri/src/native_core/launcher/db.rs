@@ -171,6 +171,7 @@ fn run(
 fn open_reader(path: &std::path::Path) -> Result<Connection, String> {
     let db = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(err)?;
+    crate::native_core::fts_rank::register(&db)?;
     db.busy_timeout(std::time::Duration::from_secs(10))
         .map_err(err)?;
     Ok(db)
@@ -181,6 +182,7 @@ pub fn err(e: impl std::fmt::Display) -> String {
 fn init(path: PathBuf) -> Result<Connection, String> {
     std::fs::create_dir_all(path.parent().ok_or("Invalid DB path")?).map_err(err)?;
     let db = Connection::open(path).map_err(err)?;
+    crate::native_core::fts_rank::register(&db)?;
     db.busy_timeout(std::time::Duration::from_secs(10))
         .map_err(err)?;
     db.execute_batch("PRAGMA journal_mode=WAL;PRAGMA synchronous=NORMAL;
@@ -272,19 +274,65 @@ pub fn upsert(db: &Connection, d: &Value) -> Result<(), String> {
     db.execute("INSERT INTO documents(id,category,title,subtitle,tokens,action_json,updated_at,source_path,source_mtime,popularity) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(id) DO UPDATE SET category=excluded.category,title=excluded.title,subtitle=excluded.subtitle,tokens=excluded.tokens,action_json=excluded.action_json,updated_at=excluded.updated_at,source_path=excluded.source_path,source_mtime=excluded.source_mtime,popularity=excluded.popularity WHERE category<>excluded.category OR title<>excluded.title OR subtitle<>excluded.subtitle OR tokens<>excluded.tokens OR action_json<>excluded.action_json OR (NOT ?11 AND updated_at<>excluded.updated_at) OR popularity<>excluded.popularity OR source_path IS NOT excluded.source_path OR source_mtime IS NOT excluded.source_mtime",params![id,category,d["title"].as_str().unwrap_or(""),d["subtitle"].as_str().unwrap_or(""),d["tokens"].as_str().unwrap_or(""),serde_json::to_string(&d["action"]).map_err(err)?,d["updatedAt"].as_u64().unwrap_or(0),d["sourcePath"].as_str(),d["sourceMtime"].as_u64(),d["popularity"].as_f64().unwrap_or(0.),synthetic_time]).map_err(err)?;
     Ok(())
 }
-const SELECT:&str="SELECT d.id,d.category,d.title,d.subtitle,d.tokens,d.action_json,d.updated_at,d.popularity FROM documents d ";
-fn row(r: &rusqlite::Row) -> rusqlite::Result<Value> {
-    let action: String = r.get(5)?;
-    Ok(
-        json!({"id":r.get::<_,String>(0)?,"category":r.get::<_,String>(1)?,"title":r.get::<_,String>(2)?,"subtitle":r.get::<_,String>(3)?,"tokens":r.get::<_,String>(4)?,"_actionJson":action,"updatedAt":r.get::<_,i64>(6)?,"popularity":r.get::<_,f64>(7)?}),
-    )
+const SELECT:&str="SELECT d.id,d.category,d.title,d.subtitle,d.action_json,d.updated_at,d.popularity FROM documents d ";
+// Rank the authoritative FTS matches before fetching document payloads. The old
+// FTS scan visited rowids ascending; retain that tie order at the unchanged cap.
+const FTS_SELECT_BUILTIN: &str = "WITH selected AS MATERIALIZED (SELECT rowid,bm25(documents_fts,5.0,2.0,1.0) AS score FROM documents_fts WHERE documents_fts MATCH ? ORDER BY score,rowid LIMIT 160) SELECT d.id,d.category,d.title,d.subtitle,d.action_json,d.updated_at,d.popularity,selected.score FROM selected JOIN documents d ON d.rowid=selected.rowid ORDER BY selected.score,selected.rowid";
+const FTS_SELECT: &str = "WITH selected AS MATERIALIZED (SELECT f.rowid,tezbar_bm25(documents_fts,sz.sz,5.0,2.0,1.0) AS score FROM documents_fts f LEFT JOIN documents_fts_docsize sz ON sz.id=f.rowid WHERE documents_fts MATCH ? ORDER BY score,f.rowid LIMIT 160) SELECT d.id,d.category,d.title,d.subtitle,d.action_json,d.updated_at,d.popularity,selected.score FROM selected JOIN documents d ON d.rowid=selected.rowid ORDER BY selected.score,selected.rowid";
+fn fts_select() -> &'static str {
+    if crate::native_core::fts_rank::supported() { FTS_SELECT } else { FTS_SELECT_BUILTIN }
 }
-fn collect(db: &Connection, sql: &str, args: impl rusqlite::Params) -> Result<Vec<Value>, String> {
+// Candidate pages are internal, not IPC JSON. Keep them typed until the final
+// result cap: broad/fuzzy searches discard most rows before serialization.
+struct Document {
+    id: String,
+    category: String,
+    title: String,
+    subtitle: String,
+    action_json: String,
+    updated_at: Option<u64>,
+    popularity: f64,
+    lex: f64,
+    distance: Option<usize>,
+    score: f64,
+}
+fn row(r: &rusqlite::Row) -> rusqlite::Result<Document> {
+    Ok(Document {
+        id: r.get(0)?,
+        category: r.get(1)?,
+        title: r.get(2)?,
+        subtitle: r.get(3)?,
+        action_json: r.get(4)?,
+        updated_at: u64::try_from(r.get::<_, i64>(5)?).ok(),
+        popularity: {
+            let p: f64 = r.get(6)?;
+            if p.is_finite() {
+                p
+            } else {
+                0.
+            }
+        },
+        lex: 0.,
+        distance: None,
+        score: 0.,
+    })
+}
+fn collect(
+    db: &Connection,
+    sql: &str,
+    args: impl rusqlite::Params,
+) -> Result<Vec<Document>, String> {
     db.prepare(sql)
         .map_err(err)?
         .query_map(args, row)
         .map_err(err)?
         .collect::<Result<_, _>>()
+        .map_err(err)
+}
+fn hydrate(db: &Connection, id: &str) -> Result<Document, String> {
+    db.prepare_cached(&format!("{SELECT} WHERE d.id=?"))
+        .map_err(err)?
+        .query_row([id], row)
         .map_err(err)
 }
 fn stat(db: &Connection, id: &str, q: &str) -> Result<(f64, f64, u64), String> {
@@ -311,155 +359,129 @@ fn stat(db: &Connection, id: &str, q: &str) -> Result<(f64, f64, u64), String> {
         Ok((0., 0., 0))
     }
 }
-fn best_match(text: &str, variants: &[String]) -> (f64, String) {
-    variants
-        .iter()
-        .enumerate()
-        .map(|(i, q)| {
-            (
-                text::lexical(text, q).max(text::fuzzy(text, q)) * if i == 0 { 1. } else { 0.9 },
-                q.clone(),
-            )
-        })
-        .max_by(|a, b| a.0.total_cmp(&b.0))
-        .unwrap_or((0., String::new()))
-}
 pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
-    let now = now_ms();
+    search_at(db, q, candidates, now_ms(), fts_select())
+}
+fn search_at(db: &Connection, q: &str, candidates: bool, now: u64, fts_sql: &str) -> CoreResult {
     let variants = text::variants(q);
+    let prepared: Vec<_> = variants.iter().map(|q| text::Query::new(q)).collect();
+    let mut scratch = text::DistanceScratch::default();
     let normalized = text::normalize(q);
     let home = normalized.is_empty();
     let mut docs = HashMap::new();
     if home {
         let sql=format!("{SELECT} LEFT JOIN action_stats a ON a.action_id=d.id WHERE d.category<>'files' ORDER BY coalesce(a.last_used_at,0) DESC,updated_at DESC LIMIT 1200");
         for mut d in collect(db, &sql, [])? {
-            d["_lex"] = json!(0.92);
-            docs.insert(d["id"].as_str().unwrap().to_owned(), d);
+            d.lex = 0.92;
+            docs.insert(d.id.clone(), d);
         }
     } else {
         let query = text::fts(&variants.join(" "));
         if !query.is_empty() {
-            let sql="SELECT d.id,d.category,d.title,d.subtitle,d.tokens,d.action_json,d.updated_at,d.popularity,bm25(documents_fts,5.0,2.0,1.0) FROM documents d JOIN documents_fts f ON f.rowid=d.rowid WHERE documents_fts MATCH ? ORDER BY bm25(documents_fts,5.0,2.0,1.0) LIMIT 160";
-            let mut statement = db.prepare(sql).map_err(err)?;
+            let mut statement = db.prepare_cached(fts_sql).map_err(err)?;
             let rows = statement
                 .query_map([query], |r| {
                     let mut d = row(r)?;
-                    let bm25: f64 = r.get(8)?;
+                    let bm25: f64 = r.get(7)?;
                     let inverse = if bm25.is_finite() {
                         let n = (-bm25).max(0.);
                         n / (1. + n)
                     } else {
                         0.5
                     };
-                    let metadata = format!(
-                        "{} {}",
-                        d["title"].as_str().unwrap_or(""),
-                        d["subtitle"].as_str().unwrap_or("")
-                    );
-                    d["_lex"] = json!(inverse.max(best_match(&metadata, &variants).0));
+                    let metadata = format!("{} {}", d.title, d.subtitle);
+                    d.lex = inverse.max(text::best_match(&metadata, &prepared, &mut scratch).0);
                     Ok(d)
                 })
                 .map_err(err)?
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(err)?;
             for d in rows {
-                docs.insert(d["id"].as_str().unwrap().to_owned(), d);
+                docs.insert(d.id.clone(), d);
             }
         }
         if docs.len() < 160 {
-            let rows = collect(
-                db,
-                &format!("{SELECT} WHERE category<>'files' ORDER BY updated_at DESC LIMIT 1600"),
-                [],
-            )?;
+            // Score only the searchable metadata of this unchanged page. Large
+            // action payloads/category/timestamps are needed only by winners.
+            let mut statement = db.prepare_cached("SELECT id,title,subtitle,tokens FROM documents WHERE category<>'files' ORDER BY updated_at DESC LIMIT 1600").map_err(err)?;
+            let mut rows = statement.query([]).map_err(err)?;
             let mut fuzzy = vec![];
-            for mut d in rows {
-                let content = format!(
-                    "{} {} {}",
-                    d["title"].as_str().unwrap_or(""),
-                    d["subtitle"].as_str().unwrap_or(""),
-                    d["tokens"].as_str().unwrap_or("")
-                );
-                let (lex, query) = best_match(&content, &variants);
-                if lex <= 0. {
-                    continue;
+            while let Some(r) = rows.next().map_err(err)? {
+                let title: String = r.get(1).map_err(err)?;
+                let subtitle: String = r.get(2).map_err(err)?;
+                let tokens: String = r.get(3).map_err(err)?;
+                let content = format!("{title} {subtitle} {tokens}");
+                let (lex, query) = text::best_match(&content, &prepared, &mut scratch);
+                if lex > 0. {
+                    let id: String = r.get(0).map_err(err)?;
+                    let distance = scratch.title_distance(&title, &variants[query]);
+                    fuzzy.push((id, lex, distance));
                 }
-                d["_lex"] = json!(lex);
-                d["_distance"] = json!(text::distance(d["title"].as_str().unwrap_or(""), &query));
-                fuzzy.push(d);
             }
-            fuzzy.sort_by(|a, b| {
-                b["_lex"]
-                    .as_f64()
-                    .unwrap_or(0.)
-                    .total_cmp(&a["_lex"].as_f64().unwrap_or(0.))
-            });
+            fuzzy.sort_by(|a, b| b.1.total_cmp(&a.1));
             fuzzy.truncate(160);
-            for d in fuzzy {
-                let id = d["id"].as_str().unwrap().to_owned();
-                if docs.get(&id).map_or(true, |old| {
-                    d["_lex"].as_f64().unwrap_or(0.) > old["_lex"].as_f64().unwrap_or(0.)
-                }) {
+            for (id, lex, distance) in fuzzy {
+                if docs.get(&id).map_or(true, |old| lex > old.lex) {
+                    let mut d = hydrate(db, &id)?;
+                    d.lex = lex;
+                    d.distance = Some(distance);
                     docs.insert(id, d);
                 }
             }
         }
         // Applications reserve a compact name/alias page even when files fill FTS.
         let mut applications = vec![];
-        for mut d in collect(
-            db,
-            &format!("{SELECT} WHERE category='applications' LIMIT 2000"),
-            [],
-        )? {
-            let title = d["title"].as_str().unwrap_or("");
-            let lex = variants
-                .iter()
-                .enumerate()
-                .map(|(i, q)| text::app_match(title, q) * if i == 0 { 1. } else { 0.9 })
-                .fold(0., f64::max);
+        let mut statement = db
+            .prepare_cached(
+                "SELECT id,title FROM documents WHERE category='applications' LIMIT 2000",
+            )
+            .map_err(err)?;
+        let mut rows = statement.query([]).map_err(err)?;
+        while let Some(r) = rows.next().map_err(err)? {
+            let title: String = r.get(1).map_err(err)?;
+            let lex = text::app_matches(&title, &prepared);
             if lex > 0. {
-                d["_lex"] = json!(lex);
-                d.as_object_mut().unwrap().remove("_distance");
-                applications.push(d);
+                applications.push((r.get::<_, String>(0).map_err(err)?, lex));
             }
         }
-        applications.sort_by(|a, b| {
-            b["_lex"]
-                .as_f64()
-                .unwrap_or(0.)
-                .total_cmp(&a["_lex"].as_f64().unwrap_or(0.))
-        });
+        applications.sort_by(|a, b| b.1.total_cmp(&a.1));
         applications.truncate(20);
-        for d in applications {
-            docs.insert(d["id"].as_str().unwrap().to_owned(), d);
+        for (id, lex) in applications {
+            let mut d = hydrate(db, &id)?;
+            d.lex = lex;
+            docs.insert(id, d);
         }
-        for mut d in collect(db,&format!("{SELECT} JOIN query_action_stats q ON q.action_id=d.id WHERE q.query=? AND q.success_count>0 ORDER BY q.last_used_at DESC LIMIT 20"),[&normalized])?{let id=d["id"].as_str().unwrap().to_owned();d["_lex"]=json!(0.);docs.entry(id).or_insert(d);}
+        for d in collect(db,&format!("{SELECT} JOIN query_action_stats q ON q.action_id=d.id WHERE q.query=? AND q.success_count>0 ORDER BY q.last_used_at DESC LIMIT 20"),[&normalized])? {
+            docs.entry(d.id.clone()).or_insert(d);
+        }
     }
-    let note_query = regex::Regex::new(r"(?i)\bnotes?\b|quick note")
-        .unwrap()
+    static NOTE_QUERY: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let note_query = NOTE_QUERY
+        .get_or_init(|| regex::Regex::new(r"(?i)\bnotes?\b|quick note").unwrap())
         .is_match(&normalized);
     let mut out = vec![];
+    let mut recent_usage = db
+        .prepare_cached(
+            "SELECT count(*) FROM action_usage_events WHERE action_id=? AND created_at>=?",
+        )
+        .map_err(err)?;
     for (_, mut d) in docs {
-        let id = d["id"].as_str().unwrap_or("");
-        let category = d["category"].as_str().unwrap_or("");
-        let title = d["title"].as_str().unwrap_or("");
-        let subtitle = d["subtitle"].as_str().unwrap_or("");
-        let lex = d["_lex"].as_f64().unwrap_or(0.);
+        let id = d.id.as_str();
+        let category = d.category.as_str();
+        let title = d.title.as_str();
+        let subtitle = d.subtitle.as_str();
+        let lex = d.lex;
         let (freq, rate, last) = stat(db, id, if home { "" } else { &normalized })?;
-        let age = now.saturating_sub(d["updatedAt"].as_u64().unwrap_or(0));
-        let mut score = text::weighted(lex, age, category, d["popularity"].as_f64().unwrap_or(0.));
+        let age = now.saturating_sub(d.updated_at.unwrap_or(0));
+        let mut score = text::weighted(lex, age, category, d.popularity);
         if home {
-            let recent: u64 = db
-                .query_row(
-                    "SELECT count(*) FROM action_usage_events WHERE action_id=? AND created_at>=?",
-                    params![id, now.saturating_sub(300_000)],
-                    |r| r.get(0),
-                )
+            let recent: u64 = recent_usage
+                .query_row(params![id, now.saturating_sub(300_000)], |r| r.get(0))
                 .map_err(err)?;
             let activity = if last > 0 {
                 last
             } else {
-                d["updatedAt"].as_u64().unwrap_or(0)
+                d.updated_at.unwrap_or(0)
             };
             let learned_category = [
                 "applications",
@@ -472,9 +494,8 @@ pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
             ]
             .contains(&category);
             let recommendation = if category == "extensions" {
-                d["_actionJson"]
-                    .as_str()
-                    .and_then(|s| serde_json::from_str::<Value>(s).ok())
+                serde_json::from_str::<Value>(&d.action_json)
+                    .ok()
                     .and_then(|a| a["launcher"]["recommendation"].as_f64())
                     .unwrap_or(0.)
                     .clamp(0., 2000.)
@@ -497,7 +518,7 @@ pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
                 + text::recommendation(id)
                 + recommendation;
         } else {
-            if let Some(distance) = d["_distance"].as_u64() {
+            if let Some(distance) = d.distance {
                 score += match distance {
                     0 => 80.,
                     1 => 50.,
@@ -506,44 +527,37 @@ pub fn search(db: &Connection, q: &str, candidates: bool) -> CoreResult {
                 };
             }
             score += text::query_boost(freq, rate, last, now)
-                + variants
+                + prepared
                     .iter()
                     .enumerate()
                     .map(|(i, q)| {
                         (text::surface_boost(category, title, subtitle, q)
-                            + text::exact_note(category, title, q, age)
-                            + text::full_tokens(title, subtitle, q))
+                            + text::exact_note(category, title, &variants[i], age)
+                            + q.full_tokens(title, subtitle))
                             * if i == 0 { 1. } else { 0.9 }
                     })
                     .fold(0., f64::max)
                 + text::note_recency(category, age)
                 + if note_query { 780. } else { 120. };
         }
-        d["score"] = json!(score.round());
-        for key in ["tokens", "popularity", "_lex", "_distance"] {
-            d.as_object_mut().unwrap().remove(key);
-        }
+        d.score = score.round();
         out.push(d);
     }
     out.sort_by(|a, b| {
-        b["score"]
-            .as_f64()
-            .unwrap_or(0.)
-            .total_cmp(&a["score"].as_f64().unwrap_or(0.))
-            .then_with(|| b["updatedAt"].as_u64().cmp(&a["updatedAt"].as_u64()))
+        b.score
+            .total_cmp(&a.score)
+            .then_with(|| b.updated_at.cmp(&a.updated_at))
     });
     out.truncate(if candidates { 1000 } else { 80 });
-    for d in &mut out {
-        let action = d
-            .as_object_mut()
-            .unwrap()
-            .remove("_actionJson")
-            .unwrap_or(Value::Null);
-        d["action"] =
-            serde_json::from_str::<Value>(action.as_str().unwrap_or("")).unwrap_or(Value::Null);
-        d.as_object_mut().unwrap().remove("updatedAt");
-    }
-    Ok(json!(out))
+    Ok(Value::Array(
+        out.into_iter()
+            .map(|d| {
+                let action = serde_json::from_str::<Value>(&d.action_json).unwrap_or(Value::Null);
+                json!({"id":d.id,"category":d.category,"title":d.title,"subtitle":d.subtitle,
+            "score":d.score,"action":action})
+            })
+            .collect(),
+    ))
 }
 #[cfg(test)]
 mod tests {
@@ -631,6 +645,58 @@ mod performance_tests {
     use super::*;
 
     #[test]
+    #[ignore = "release-only launcher query matrix over 100k files"]
+    fn search_matrix() {
+        use crate::native_core::performance::measure;
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = init(dir.path().join("matrix.sqlite3")).unwrap();
+        let tx = db.transaction().unwrap();
+        for n in 0..100_400 {
+            let file = n < 100_000;
+            upsert(&tx, &json!({"id":format!("doc:{n}"),
+                "category":if file {"files"} else {"applications"},
+                "title":if file {format!("Project document {n}.txt")} else {format!("Calculator {n}")},
+                "subtitle":if file {format!("/projects/archive/{n}/document.txt")} else {format!("/Applications/Calculator {n}.app")},
+                "tokens":"project archive document", "action":{"type":"open","path":format!("/fixture/{n}")},
+                "updatedAt":n})).unwrap();
+        }
+        tx.commit().unwrap();
+        for (name, query) in [
+            ("launcher.home", ""),
+            ("launcher.exact", "Calculator 100001"),
+            ("launcher.prefix", "calc"),
+            ("launcher.typo", "calclator"),
+            ("launcher.keyboard_layout", "сфдсгдфещк"),
+            ("launcher.file_heavy", "document"),
+            ("launcher.no_hit", "zzzxxyyqq"),
+        ] {
+            measure(name, || search(&db, query, false).unwrap());
+        }
+    }
+
+    #[test]
+    #[ignore = "frozen broad fixture through the production read-only snapshot"]
+    fn broad_reader_matrix() {
+        use crate::native_core::performance::measure;
+        let path = PathBuf::from(std::env::var_os("TEZBAR_BROAD_FIXTURE").expect("isolated fixture path"));
+        // Install ordinary schema/triggers outside measurement, then use the
+        // same read-only connection and per-request snapshot as Database::search.
+        drop(init(path.clone()).unwrap());
+        let mut db = open_reader(&path).unwrap();
+        for (name, query) in [
+            ("reader.broad", "document"),
+            ("reader.multi", "archive project"),
+            ("reader.prefix", "doc"),
+            ("reader.no_hit", "unknown-broad-fixture"),
+        ] {
+            measure(name, || {
+                let snapshot = db.transaction().unwrap();
+                search(&snapshot, query, false).unwrap()
+            });
+        }
+    }
+
+    #[test]
     #[ignore = "synthetic 100k-file search benchmark"]
     fn search_benchmark() {
         let dir = tempfile::tempdir().unwrap();
@@ -660,6 +726,136 @@ mod performance_tests {
 #[cfg(test)]
 mod reader_tests {
     use super::*;
+
+    #[test]
+    fn fts_late_hydration_keeps_weighted_scores_and_rowid_ties_after_mutations() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = init(dir.path().join("index.sqlite3")).unwrap();
+        for n in 0..480 {
+            upsert(
+                &db,
+                &json!({"id":format!("doc:{n}"),"category":"files",
+                "title":if n % 3 == 0 { "archive archive" } else { "other" },
+                "subtitle":if n % 7 == 0 { "archive café" } else { "location" },
+                "tokens":if n % 2 == 0 { "archive common" } else { "common" },
+                "action":{},"updatedAt":n}),
+            )
+            .unwrap();
+        }
+        for mutation in [false, true] {
+            if mutation {
+                db.execute("DELETE FROM documents WHERE rowid%5=0", [])
+                    .unwrap();
+                db.execute(
+                    "UPDATE documents SET title='café archive extra' WHERE rowid%11=0",
+                    [],
+                )
+                .unwrap();
+            }
+            for query in [
+                "archive*",
+                "archive* OR common*",
+                "cafe*",
+                "archive* OR absent*",
+                "absent*",
+            ] {
+                let read = |sql: &str| {
+                    db.prepare(sql)
+                        .unwrap()
+                        .query_map([query], |r| {
+                            Ok((
+                                r.get::<_, String>(0)?,
+                                r.get::<_, f64>(r.as_ref().column_count() - 1)?,
+                            ))
+                        })
+                        .unwrap()
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap()
+                };
+                let old = "SELECT d.id,d.category,d.title,d.subtitle,d.tokens,d.action_json,d.updated_at,d.popularity,bm25(documents_fts,5.0,2.0,1.0) FROM documents d JOIN documents_fts f ON f.rowid=d.rowid WHERE documents_fts MATCH ? ORDER BY bm25(documents_fts,5.0,2.0,1.0) LIMIT 160";
+                assert_eq!(read(FTS_SELECT), read(old), "{query}, mutation={mutation}");
+            }
+        }
+        let plan = db
+            .prepare(&format!("EXPLAIN QUERY PLAN {FTS_SELECT}"))
+            .unwrap()
+            .query_map(["archive*"], |r| r.get::<_, String>(3))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(
+            plan.iter().any(|s| s.contains("MATERIALIZE selected")),
+            "{plan:?}"
+        );
+        eprintln!("late hydration FTS plan: {plan:?}");
+    }
+    #[tokio::test]
+    async fn joined_lengths_keep_complete_order_scores_actions_after_stats_rollback_and_reopen() {
+        let dir = tempfile::tempdir().unwrap();
+        let path=dir.path().join("index.sqlite3");
+        let mut db=Database::new(path.clone());
+        let docs=(0..520).map(|n| json!({"id":format!("doc:{n}"),"category":if n%9==0 {"applications"} else {"files"},
+            "title":if n%7==0 {"Archive café"} else {"Project document"},
+            "subtitle":format!("/archive/{}", "document ".repeat(n%13)),
+            "tokens":if n%3==0 {"project archive document"} else {"project"},
+            "action":{"type":"open","path":format!("/fixture/{n}"),"nested":{"unicode":"東京😀"}},"updatedAt":n})).collect();
+        db.upsert(docs,vec![]).await.unwrap();
+        for phase in 0..5 {
+            if phase==1 {
+                db.record("doc:7".into(),json!({"query":"archive","rank":2}),true).await.unwrap();
+                db.record("doc:0".into(),json!({"query":"document"}),false).await.unwrap();
+            }
+            if phase==2 { db.call(|c| { c.execute_batch("BEGIN; UPDATE documents SET title='different archive' WHERE rowid%5=0; DELETE FROM documents WHERE rowid%11=0; COMMIT;").map_err(err)?; Ok(Value::Null) }).await.unwrap(); }
+            if phase==3 { db.call(|c| { c.execute_batch("BEGIN; UPDATE documents SET title='rollback archive'; DELETE FROM action_stats; ROLLBACK;").map_err(err)?; Ok(Value::Null) }).await.unwrap(); }
+            if phase==4 { db.shutdown().await.unwrap(); db=Database::new(path.clone()); }
+            db.read(move |c| {
+                let snapshot=c.transaction().map_err(err)?;
+                let now=now_ms();
+                for query in ["", "document", "archive", "project archive", "café", "doc", "archve", "zzzxxyyqq"] {
+                    for candidates in [false,true] {
+                        assert_eq!(search_at(&snapshot,query,candidates,now,FTS_SELECT).unwrap(),search_at(&snapshot,query,candidates,now,FTS_SELECT_BUILTIN).unwrap(),"phase={phase} query={query} candidates={candidates}");
+                    }
+                }
+                Ok(Value::Null)
+            }).await.unwrap();
+        }
+        db.shutdown().await.unwrap();
+    }
+
+    #[test]
+    fn production_search_selects_joined_rank_only_on_qualified_target() {
+        // Bundled engine is 3.46.0; an upgrade must requalify (and update) this.
+        assert_eq!(rusqlite::version_number(), 3_046_000);
+        let qualified = cfg!(all(target_os = "macos", target_arch = "aarch64"));
+        assert_eq!(fts_select() == FTS_SELECT, qualified);
+        assert_eq!(fts_select() == FTS_SELECT_BUILTIN, !qualified);
+        // The function stays registered everywhere so these oracles run in CI.
+        let dir = tempfile::tempdir().unwrap();
+        let db = init(dir.path().join("index.sqlite3")).unwrap();
+        upsert(&db, &json!({"id":"doc:0","category":"files","title":"archive","subtitle":"","tokens":"","action":{},"updatedAt":0})).unwrap();
+        let mut plan = db.prepare(&format!("EXPLAIN QUERY PLAN {}", fts_select())).unwrap();
+        let joined = plan.query_map(["archive*"], |r| r.get::<_, String>(3)).unwrap()
+            .any(|detail| detail.unwrap().contains("sz USING"));
+        assert_eq!(joined, qualified);
+    }
+
+    #[test]
+    fn supplied_fts_lengths_preserve_builtin_scores() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = init(dir.path().join("index.sqlite3")).unwrap();
+        for n in 0..480 {
+            upsert(&db, &json!({"id":format!("doc:{n}"),"category":"files",
+                "title":if n%3==0 {"archive archive café"} else {"other"},
+                "subtitle":"archive location", "tokens":"common", "action":{}, "updatedAt":n})).unwrap();
+        }
+        let mut stmt = db.prepare("SELECT bm25(documents_fts,5.0,2.0,1.0),tezbar_bm25(documents_fts,sz.sz,5.0,2.0,1.0) FROM documents_fts f LEFT JOIN documents_fts_docsize sz ON sz.id=f.rowid WHERE documents_fts MATCH ?").unwrap();
+        for query in ["archive*", "archive* OR common*", "\"archive café\"", "absent*"] {
+            for row in stmt.query_map([query], |r| Ok((r.get::<_,f64>(0)?.to_bits(),r.get::<_,f64>(1)?.to_bits()))).unwrap() {
+                let (builtin, supplied) = row.unwrap();
+                assert_eq!(builtin, supplied, "{query}");
+            }
+        }
+    }
 
     #[test]
     fn nonfile_queries_use_partial_index() {

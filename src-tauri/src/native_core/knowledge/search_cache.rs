@@ -13,6 +13,7 @@ use std::{
 };
 
 const BATCH: usize = 1024;
+const _: () = assert!(BATCH % 4 == 0); // Packed dot-product groups cannot cross slabs.
 const IDLE: Duration = Duration::from_secs(120);
 const ROW_ALLOWANCE: usize = 176;
 
@@ -464,40 +465,67 @@ impl Packed {
         best.try_reserve_exact(self.sources.len())
             .map_err(|e| e.to_string())?;
         best.resize(self.sources.len(), None::<(usize, f64)>);
-        for (i, row) in self.rows.iter().enumerate() {
-            if i % 256 == 0 {
+        // Four independent accumulators expose instruction/SIMD parallelism
+        // without reordering a single vector's additions (or using F32 sums).
+        // BATCH is divisible by four, so each group stays inside one dense slab.
+        for (group, rows) in self.rows.chunks(4).enumerate() {
+            let base = group * 4;
+            if base % 256 == 0 {
                 checkpoint()?;
             }
-            let score = if let Some(v) = &row.legacy {
-                text::cosine(query, v)
-            } else {
-                let mut dot = 0.;
-                for (q, v) in query.iter().zip(
-                    &self.values[i / BATCH]
-                        [(i % BATCH) * self.dimensions..(i % BATCH + 1) * self.dimensions],
-                ) {
-                    dot += q * (*v as f64);
+            let slab = &self.values[base / BATCH];
+            let offset = (base % BATCH) * self.dimensions;
+            let mut dots = [0.; 4];
+            if rows.len() == 4 {
+                let a = &slab[offset..offset + self.dimensions];
+                let b = &slab[offset + self.dimensions..offset + 2 * self.dimensions];
+                let c = &slab[offset + 2 * self.dimensions..offset + 3 * self.dimensions];
+                let d = &slab[offset + 3 * self.dimensions..offset + 4 * self.dimensions];
+                for ((((q, a), b), c), d) in query.iter().zip(a).zip(b).zip(c).zip(d) {
+                    dots[0] += q * (*a as f64);
+                    dots[1] += q * (*b as f64);
+                    dots[2] += q * (*c as f64);
+                    dots[3] += q * (*d as f64);
                 }
-                if norm == 0. || row.norm == 0. {
-                    0.
-                } else {
-                    dot / (norm * row.norm).sqrt()
+            } else {
+                for (j, dot) in dots.iter_mut().take(rows.len()).enumerate() {
+                    for (q, v) in query.iter().zip(
+                        &slab[offset + j * self.dimensions..offset + (j + 1) * self.dimensions],
+                    ) {
+                        *dot += q * (*v as f64);
+                    }
                 }
             }
-            .max(0.);
-            if best[row.source]
-                .map(|(j, v)| score > v || (score == v && row.id < self.rows[j].id))
-                .unwrap_or(true)
-            {
-                best[row.source] = Some((i, score));
+            for (j, row) in rows.iter().enumerate() {
+                let i = base + j;
+                let score = if let Some(v) = &row.legacy {
+                    text::cosine(query, v)
+                } else if norm == 0. || row.norm == 0. {
+                    0.
+                } else {
+                    dots[j] / (norm * row.norm).sqrt()
+                }
+                .max(0.);
+                if best[row.source]
+                    .map(|(old, score_old)| {
+                        score > score_old || (score == score_old && row.id < self.rows[old].id)
+                    })
+                    .unwrap_or(true)
+                {
+                    best[row.source] = Some((i, score));
+                }
             }
         }
         let mut winners = best.into_iter().flatten().collect::<Vec<_>>();
-        winners.sort_by(|a, b| {
+        let compare = |a: &(usize, f64), b: &(usize, f64)| {
             b.1.total_cmp(&a.1)
                 .then_with(|| self.rows[a.0].id.cmp(&self.rows[b.0].id))
-        });
-        winners.truncate(budget);
+        };
+        if winners.len() > budget {
+            winners.select_nth_unstable_by(budget, compare);
+            winners.truncate(budget);
+        }
+        winners.sort_unstable_by(compare);
         Ok(winners
             .into_iter()
             .map(|(i, score)| {
@@ -545,6 +573,9 @@ impl Default for Cache {
     }
 }
 impl Cache {
+    pub(super) fn has_requested_cache(&self) -> bool {
+        self.key.is_some()
+    }
     pub fn clear(&mut self) {
         self.key = None;
         self.packed = None;
@@ -795,26 +826,42 @@ impl Store {
         let mut stmt = self.db.prepare(&key.select()).map_err(err)?;
         let mut rows = stmt.query([]).map_err(err)?;
         let mut count = 0;
+        let query = text::CosineQuery::new(vector);
         while let Some(row) = rows.next().map_err(err)? {
             if count % 256 == 0 {
                 self.search_checkpoint()?;
             }
             count += 1;
             let rowid = row.get(0).map_err(err)?;
-            let id: String = row.get(1).map_err(err)?;
-            let source: String = row.get(2).map_err(err)?;
-            let score = text::cosine(vector, &text::decode(row.get_ref(3).map_err(err)?)).max(0.);
-            let winner = best
-                .entry(source)
-                .or_insert_with(|| (rowid, id.clone(), score));
-            if score > winner.2 || (score == winner.2 && id < winner.1) {
-                *winner = (rowid, id, score);
+            let id = row
+                .get_ref(1)
+                .map_err(err)?
+                .as_str()
+                .map_err(|e| e.to_string())?;
+            let source = row
+                .get_ref(2)
+                .map_err(err)?
+                .as_str()
+                .map_err(|e| e.to_string())?;
+            let score = query.score(row.get_ref(3).map_err(err)?).max(0.);
+            if let Some(winner) = best.get_mut(source) {
+                if score > winner.2 || (score == winner.2 && id < winner.1.as_str()) {
+                    *winner = (rowid, id.to_owned(), score);
+                }
+            } else {
+                best.insert(source.to_owned(), (rowid, id.to_owned(), score));
             }
         }
         self.search_checkpoint()?;
         let mut winners = best.into_values().collect::<Vec<_>>();
-        winners.sort_by(|a, b| b.2.total_cmp(&a.2).then_with(|| a.1.cmp(&b.1)));
-        winners.truncate(budget);
+        let compare = |a: &(i64, String, f64), b: &(i64, String, f64)| {
+            b.2.total_cmp(&a.2).then_with(|| a.1.cmp(&b.1))
+        };
+        if winners.len() > budget {
+            winners.select_nth_unstable_by(budget, compare);
+            winners.truncate(budget);
+        }
+        winners.sort_unstable_by(compare);
         Ok(winners)
     }
 }
@@ -938,6 +985,321 @@ mod tests {
         }
         panic!("cache did not become ready");
     }
+    #[test]
+    #[ignore = "release-only deterministic 10k-vector search, excluding inference"]
+    fn search_matrix() {
+        use crate::native_core::performance::measure;
+        use serde_json::json;
+        let s = fixture(10_000);
+        s.db.execute_batch("INSERT INTO knowledge_chunks_fts(rowid,id,source_id,text) SELECT rowid,id,source_id,text FROM knowledge_chunks;").unwrap();
+        let roots = ["r".to_owned()];
+        assert!(!query(&s).is_empty(), "semantic fixture must return hits");
+        assert!(
+            !s.search_sources("unrelated archive", 16, &roots, true, None)
+                .unwrap()
+                .is_empty(),
+            "lexical fixture must return hits"
+        );
+        // Include cold scans, then measure the exact same sources with the cache.
+        // Learned vectors are fixtures: this does not time a model or claim to.
+        let cold = measure("deep.semantic.cold", || {
+            s.clear_search_cache();
+            Value::Array(query(&s))
+        });
+        warm(&s);
+        let warm_result = measure("deep.semantic.warm", || Value::Array(query(&s)));
+        assert_eq!(cold["results"], warm_result["results"]);
+        let cache = s.search_cache.borrow();
+        eprintln!(
+            "TEZBAR_PERF {}",
+            json!({"name":"deep.cache", "rows":cache.loaded_rows,
+            "estimated_allocated_bytes":cache.packed.as_ref().unwrap().allocated()})
+        );
+        drop(cache);
+        measure("deep.lexical", || {
+            Value::Array(
+                s.search_sources("unrelated archive", 16, &roots, true, None)
+                    .unwrap(),
+            )
+        });
+    }
+
+    #[test]
+    #[ignore = "scaled on-disk cache memory/parity probe; no inference or user data"]
+    fn scaled_cache_memory() {
+        let count = std::env::var("TEZBAR_MEMORY_ROWS")
+            .ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(100_000)
+            .clamp(10_000, 1_000_000);
+        let directory = tempfile::tempdir().unwrap();
+        let db = Connection::open(directory.path().join("synthetic.sqlite3")).unwrap();
+        db.execute_batch(include_str!("schema.sql")).unwrap();
+        db.execute_batch("BEGIN; INSERT INTO knowledge_roots VALUES('r','/synthetic','smart','local',1,0,0);").unwrap();
+        db.execute("WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<?) INSERT INTO knowledge_sources(id,root_id,path,content_hash,byte_size,modified_at,status) SELECT printf('s%08d',i),'r',printf('/synthetic/s%08d',i),'',0,0,'indexed' FROM n", [count.div_ceil(16)]).unwrap();
+        db.execute("WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<?) INSERT INTO knowledge_chunks(rowid,id,source_id,text) SELECT i,printf('c%08d',i),printf('s%08d',1+(i-1)/16),'archive' FROM n", [count]).unwrap();
+        db.execute("INSERT INTO knowledge_gemma_embeddings SELECT id,?,? FROM knowledge_chunks", params![MODEL_KEY, text::encode(&vector(true))]).unwrap();
+        db.execute_batch("COMMIT").unwrap();
+        let s = Store::from_connection(db, false, directory.path().into());
+        let footprint = || {
+            let output = std::process::Command::new("ps")
+                .args(["-o", "rss=", "-p", &std::process::id().to_string()])
+                .output().unwrap();
+            String::from_utf8_lossy(&output.stdout).trim().parse::<u64>().unwrap() * 1024
+        };
+        let rss_before = footprint();
+        let begin = Instant::now();
+        let cold = query(&s);
+        let cold_ms = begin.elapsed().as_secs_f64() * 1000.;
+        assert_eq!(cold.len(), 16);
+        let begin = Instant::now();
+        while s.search_cache.borrow().needs_work() {
+            s.search_cache_maintenance().unwrap();
+        }
+        let build_ms = begin.elapsed().as_secs_f64() * 1000.;
+        let (ready, rejected, allocated, budget, loaded) = {
+            let c = s.search_cache.borrow();
+            (c.ready, c.rejected, c.packed.as_ref().map(Packed::allocated).unwrap_or(0), c.budget, c.loaded_rows)
+        };
+        assert!(allocated <= budget);
+        assert!(ready || rejected);
+        let begin = Instant::now();
+        assert_eq!(query(&s), cold, "scaled cache/fallback must preserve full ordered results");
+        let warm_ms = begin.elapsed().as_secs_f64() * 1000.;
+        let rss_warm = footprint();
+        s.clear_search_cache();
+        assert_eq!(query(&s), cold);
+        eprintln!("TEZBAR_MEMORY {}", serde_json::json!({
+            "rows":count,"sources":count.div_ceil(16),"ready":ready,"rejected":rejected,
+            "loaded":loaded,"estimated_allocated_bytes":allocated,"budget_bytes":budget,
+            "rss_before":rss_before,"rss_warm":rss_warm,"rss_after_clear":footprint(),
+            "cold_ms":cold_ms,"cache_build_ms":build_ms,"warm_ms":warm_ms,
+            "database_bytes":std::fs::metadata(directory.path().join("synthetic.sqlite3")).unwrap().len(),
+            "ordered_parity":true
+        }));
+    }
+    #[test]
+    fn source_winners_match_full_sort_for_dense_legacy_ties_and_updates() {
+        let s = fixture(360);
+        let mut seed = 93u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            ((seed >> 32) as i32 as f64 / i32::MAX as f64) * 0.7
+        };
+        for i in 1..=360 {
+            let v: Vec<_> = (0..256).map(|_| next()).collect();
+            let data = if i % 13 == 0 {
+                serde_json::to_string(&v[..i % 17]).unwrap().into_bytes()
+            } else {
+                text::encode(&v)
+            };
+            if i % 13 == 0 {
+                s.db.execute(
+                    "UPDATE knowledge_gemma_embeddings SET vector=? WHERE chunk_id=?",
+                    params![std::str::from_utf8(&data).unwrap(), format!("c{i:05}")],
+                )
+                .unwrap();
+            } else {
+                s.db.execute(
+                    "UPDATE knowledge_gemma_embeddings SET vector=? WHERE chunk_id=?",
+                    params![data, format!("c{i:05}")],
+                )
+                .unwrap();
+            }
+            // Multiple chunks/source, not a top-chunk shortcut. Include exact ties.
+            s.db.execute(
+                "UPDATE knowledge_chunks SET source_id=? WHERE id=?",
+                params![format!("s{:05}", (i - 1) / 3 + 1), format!("c{i:05}")],
+            )
+            .unwrap();
+        }
+        query(&s);
+        warm(&s);
+        let key = s.search_cache.borrow().key.clone().unwrap();
+        let mut checkpoints = 0;
+        assert!(s
+            .search_cache
+            .borrow()
+            .packed
+            .as_ref()
+            .unwrap()
+            .winners(&vector(true), 80, || {
+                checkpoints += 1;
+                if checkpoints == 2 {
+                    Err("cancel during packed scan".into())
+                } else {
+                    Ok(())
+                }
+            })
+            .is_err());
+        assert_eq!(checkpoints, 2);
+        for query in [
+            vec![0.; 256],
+            (0..256).map(|_| next()).collect(),
+            vector(true),
+        ] {
+            let mut best = HashMap::<String, (i64, String, f64)>::new();
+            let mut stmt = s.db.prepare(&key.select()).unwrap();
+            let mut rows = stmt.query([]).unwrap();
+            while let Some(r) = rows.next().unwrap() {
+                let rowid = r.get(0).unwrap();
+                let id: String = r.get(1).unwrap();
+                let source: String = r.get(2).unwrap();
+                let score = text::cosine(&query, &text::decode(r.get_ref(3).unwrap())).max(0.);
+                let winner = best.entry(source).or_insert((rowid, id.clone(), score));
+                if score > winner.2 || (score == winner.2 && id < winner.1) {
+                    *winner = (rowid, id, score);
+                }
+            }
+            let mut reference: Vec<_> = best.into_values().collect();
+            reference.sort_by(|a, b| b.2.total_cmp(&a.2).then_with(|| a.1.cmp(&b.1)));
+            for budget in [0, 1, 16, 80, 1000] {
+                let expected = reference.iter().take(budget).cloned().collect::<Vec<_>>();
+                s.clear_search_cache();
+                assert_eq!(
+                    s.exact_source_winners(&key, &query, budget).unwrap(),
+                    expected,
+                    "authoritative cold lane, budget={budget}"
+                );
+                warm(&s);
+                assert_eq!(
+                    s.search_cache
+                        .borrow()
+                        .packed
+                        .as_ref()
+                        .unwrap()
+                        .winners(&query, budget, || Ok(()))
+                        .unwrap(),
+                    expected
+                );
+            }
+        }
+    }
+    #[test]
+    fn lexical_source_selection_matches_beta17_window_with_starvation_and_filters() {
+        let s = fixture(180);
+        // A large source must not consume the unchanged 80-source window.
+        s.db.execute(
+            "UPDATE knowledge_chunks SET source_id='s00001' WHERE rowid<=100",
+            [],
+        )
+        .unwrap();
+        s.db.execute(
+            "UPDATE knowledge_sources SET status='pending' WHERE id='s00105'",
+            [],
+        )
+        .unwrap();
+        s.db.execute(
+            "UPDATE knowledge_sources SET root_id='other' WHERE id='s00106'",
+            [],
+        )
+        .unwrap();
+        s.db.execute(
+            "UPDATE knowledge_chunks SET text='unrelated unrelated archive extra' WHERE rowid%7=0",
+            [],
+        )
+        .unwrap();
+        s.db.execute_batch("INSERT INTO knowledge_chunks_fts(rowid,id,source_id,text) SELECT rowid,id,source_id,text FROM knowledge_chunks;").unwrap();
+        for query in ["unrelated", "unrelated archive", "archive extra", "absent"] {
+            let matches = "FROM knowledge_chunks_fts f JOIN knowledge_chunks c ON c.rowid=f.rowid JOIN knowledge_sources s ON s.id=c.source_id JOIN knowledge_roots r ON r.id=s.root_id WHERE knowledge_chunks_fts MATCH ? AND s.status='indexed' AND r.enabled=1 AND r.id IN ('r')";
+            let sql = format!("WITH scored AS MATERIALIZED (SELECT c.id,c.source_id,bm25(knowledge_chunks_fts,1.0) AS rank {matches}), ranked AS (SELECT *,ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY rank,id) AS source_rank FROM scored) SELECT id FROM ranked WHERE source_rank=1 ORDER BY rank,id LIMIT ?");
+            let mut lexical = vec![];
+            let mut exact = std::collections::HashSet::new();
+            for (fts, phrase) in [
+                (super::super::content_fts_phrase(query), true),
+                (super::super::content_fts_query(query), false),
+            ] {
+                if fts.is_empty() {
+                    continue;
+                }
+                let ids =
+                    s.db.prepare(&sql)
+                        .unwrap()
+                        .query_map(params![fts, 80], |r| r.get::<_, String>(0))
+                        .unwrap()
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap();
+                for id in ids {
+                    if phrase {
+                        exact.insert(id.clone());
+                    }
+                    if !lexical.contains(&id) {
+                        lexical.push(id);
+                    }
+                }
+            }
+            let mut reference: Vec<_> = lexical
+                .iter()
+                .enumerate()
+                .map(|(i, id)| {
+                    let ls = (1. - i as f64 / lexical.len().max(1) as f64).max(0.15);
+                    let score = ls * 0.72;
+                    (
+                        id.clone(),
+                        if exact.is_empty() {
+                            score
+                        } else if exact.contains(id) {
+                            0.75 + score * 0.25
+                        } else {
+                            score * 0.74
+                        },
+                    )
+                })
+                .collect();
+            // sort_hits places phrase matches first; within each group score/id.
+            reference.sort_by(|a, b| {
+                exact
+                    .contains(&b.0)
+                    .cmp(&exact.contains(&a.0))
+                    .then_with(|| b.1.total_cmp(&a.1))
+                    .then_with(|| a.0.cmp(&b.0))
+            });
+            reference.truncate(16);
+            let hits = s
+                .search_sources(query, 16, &["r".into()], true, None)
+                .unwrap();
+            assert_eq!(
+                hits.iter()
+                    .map(|h| h["chunkId"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
+                reference.iter().map(|h| h.0.as_str()).collect::<Vec<_>>(),
+                "{query}"
+            );
+            for (hit, (_, score)) in hits.iter().zip(reference) {
+                assert_eq!(hit["score"].as_f64().unwrap(), score, "{query}");
+            }
+        }
+    }
+    #[test]
+    fn store_selects_joined_rank_only_on_qualified_target() {
+        let s = fixture(1);
+        assert_eq!(s.rank_join, cfg!(all(target_os = "macos", target_arch = "aarch64")));
+    }
+
+    #[test]
+    fn joined_lengths_preserve_source_and_chunk_apis_through_root_and_chunk_mutations() {
+        let mut s=fixture(200);
+        s.db.execute("UPDATE knowledge_chunks SET source_id='s00001' WHERE rowid<=100",[]).unwrap();
+        s.db.execute_batch("INSERT INTO knowledge_chunks_fts(rowid,id,source_id,text) SELECT rowid,id,source_id,text FROM knowledge_chunks;").unwrap();
+        for phase in 0..5 {
+            if phase==1 { s.db.execute_batch("UPDATE knowledge_roots SET enabled=0 WHERE id='other'; UPDATE knowledge_sources SET status='pending' WHERE id='s00105'; UPDATE knowledge_sources SET root_id='other' WHERE id='s00106';").unwrap(); }
+            if phase==2 { s.db.execute_batch("DELETE FROM knowledge_chunks_fts WHERE rowid%11=0; DELETE FROM knowledge_chunks WHERE rowid%11=0; UPDATE knowledge_chunks SET text='unrelated archive café extra' WHERE rowid%7=0; UPDATE knowledge_chunks_fts SET text='unrelated archive café extra' WHERE rowid%7=0;").unwrap(); }
+            if phase==3 { s.db.execute_batch("BEGIN; UPDATE knowledge_roots SET enabled=0; DELETE FROM knowledge_chunks_fts; ROLLBACK;").unwrap(); }
+            if phase==4 { s.db.execute_batch("UPDATE knowledge_roots SET enabled=1;").unwrap(); }
+            for query in ["unrelated", "unrelated archive", "archive café", "absent"] {
+                for roots in [vec!["r".into()],vec!["other".into()],vec!["r".into(),"other".into()]] {
+                    for limit in [1,16,80] {
+                        for distinct in [false,true] {
+                            s.rank_join=false;
+                            let old=if distinct { s.search_sources(query,limit,&roots,true,None) } else { s.search(query,limit,&roots,true,None) }.unwrap();
+                            s.rank_join=true;
+                            let new=if distinct { s.search_sources(query,limit,&roots,true,None) } else { s.search(query,limit,&roots,true,None) }.unwrap();
+                            assert_eq!(new,old,"phase={phase} query={query} roots={roots:?} limit={limit} distinct={distinct}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn cache_same_count_deltas_status_and_rollback() {
         let s = fixture(3);

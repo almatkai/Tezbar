@@ -1,0 +1,6 @@
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -2136 +2136,2 @@
+-    bool has_logits     = true;
++    bool has_logits = !(cparams.embeddings && model.arch == LLM_ARCH_GEMMA_EMBEDDING2
++        && cparams.pooling_type == LLAMA_POOLING_TYPE_MEAN && sampling.samplers.empty());
