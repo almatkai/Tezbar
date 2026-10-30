@@ -415,6 +415,46 @@
     user-select: none;
   }
 
+  /* ⌘C on a vault search result: replaces the hint next to the query. */
+  .vault-copy-feedback {
+    display: inline-flex;
+    height: 20px;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 5px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 0 8px;
+    color: rgb(var(--c-text-3));
+    font-size: 11.5px;
+    font-weight: 500;
+    animation: tezbar-scale-in 160ms ease-out both;
+  }
+
+  .vault-copy-feedback--done {
+    background: rgba(52, 211, 153, 0.12);
+    color: rgb(110, 231, 183);
+  }
+
+  .vault-copy-feedback--error {
+    background: rgba(251, 113, 133, 0.12);
+    color: rgb(253, 164, 175);
+  }
+
+  :root[data-theme='white'] .vault-copy-feedback {
+    background: rgba(15, 23, 42, 0.06);
+  }
+
+  :root[data-theme='white'] .vault-copy-feedback--done {
+    background: rgba(16, 185, 129, 0.12);
+    color: rgb(4, 120, 87);
+  }
+
+  :root[data-theme='white'] .vault-copy-feedback--error {
+    background: rgba(244, 63, 94, 0.1);
+    color: rgb(190, 18, 60);
+  }
+
   .glass-card > *,
   .glass-panel > * {
     -webkit-app-region: no-drag;

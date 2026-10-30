@@ -1396,6 +1396,13 @@ export default function CommandBar({
   const [followSearchSelection, setFollowSearchSelection] = useState(false)
   const [searchResultNavigationActive, setSearchResultNavigationActive] = useState(false)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
+  /** Inline result of ⌘C on a vault search result, shown next to the query. */
+  const [vaultCopyFeedback, setVaultCopyFeedback] = useState<{
+    id: string
+    tone: 'pending' | 'done' | 'error'
+    text: string
+  } | null>(null)
+  const vaultCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [actionMsgCard, setActionMsgCard] = useState<{
     kind: string
     iconKind?: CommandIconKind
@@ -3567,8 +3574,22 @@ export default function CommandBar({
           input instanceof HTMLInputElement && input.selectionStart !== input.selectionEnd
         if (selected?.action.type === 'open-vault-item' && !hasTextSelection) {
           event.preventDefault()
-          void copyVaultSecret(selected.action.id).then((message) => {
-            if (message) showActionMsg(message)
+          const id = selected.action.id
+          if (vaultCopyTimerRef.current) clearTimeout(vaultCopyTimerRef.current)
+          setVaultCopyFeedback({ id, tone: 'pending', text: 'Copying…' })
+          void copyVaultSecret(id, () =>
+            setVaultCopyFeedback({ id, tone: 'pending', text: 'Waiting for Touch ID…' })
+          ).then((outcome) => {
+            if (outcome.status === 'cancelled') {
+              setVaultCopyFeedback(null)
+              return
+            }
+            setVaultCopyFeedback({
+              id,
+              tone: outcome.status === 'copied' ? 'done' : 'error',
+              text: outcome.message,
+            })
+            vaultCopyTimerRef.current = setTimeout(() => setVaultCopyFeedback(null), 2500)
           })
           return
         }
@@ -4266,12 +4287,35 @@ export default function CommandBar({
           ) : null}
           {value && !isSlashInput && !isAiMode && !terminalMode &&
           activeSearchResult?.action.type === 'open-vault-item' ? (
-            <span className="path-command-hint select-none" aria-hidden>
+            <span
+              className="path-command-hint select-none"
+              aria-hidden={vaultCopyFeedback?.id === activeSearchResult.action.id ? undefined : true}
+            >
               <span className="path-command-hint__value select-none">{value}</span>
-              <span className="rolling-command-hint__shortcut select-none">
-                {VAULT_COPY_HINT.shortcut}
-              </span>
-              <span className="rolling-command-hint__label select-none">{VAULT_COPY_HINT.label}</span>
+              {vaultCopyFeedback?.id === activeSearchResult.action.id ? (
+                <span
+                  role="status"
+                  className={cx(
+                    'vault-copy-feedback select-none',
+                    vaultCopyFeedback.tone === 'done' && 'vault-copy-feedback--done',
+                    vaultCopyFeedback.tone === 'error' && 'vault-copy-feedback--error'
+                  )}
+                >
+                  {vaultCopyFeedback.tone === 'done' ? (
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="m2.5 6.2 2.3 2.3 4.7-5" />
+                    </svg>
+                  ) : null}
+                  {vaultCopyFeedback.text}
+                </span>
+              ) : (
+                <>
+                  <span className="rolling-command-hint__shortcut select-none">
+                    {VAULT_COPY_HINT.shortcut}
+                  </span>
+                  <span className="rolling-command-hint__label select-none">{VAULT_COPY_HINT.label}</span>
+                </>
+              )}
             </span>
           ) : null}
           {isSlashInput && !isAiMode ? (
