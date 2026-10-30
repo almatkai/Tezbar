@@ -138,6 +138,8 @@ def main():
     result['child_environment'] = ENVS.get(a.config, {})
     child = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log,
                              env={**os.environ, **ENVS.get(a.config, {})})
+    result['popen_ms'] = (time.monotonic()-start)*1000
+    result['health_attempts'] = []
 
     def request(route, body=None):
         data = json.dumps(body).encode() if body is not None else None
@@ -187,10 +189,16 @@ def main():
         while True:
             if child.poll() is not None:
                 raise RuntimeError('runtime exited during startup')
+            attempt_start = time.monotonic()
+            if (out/'server.log').stat().st_size and 'first_log_observed_ms' not in result:
+                result['first_log_observed_ms'] = (attempt_start-start)*1000
+            sample('startup')
             try:
                 request('/health')
+                result['health_attempts'].append(dict(start_ms=(attempt_start-start)*1000, duration_ms=(time.monotonic()-attempt_start)*1000, ok=True))
                 break
-            except (OSError, urllib.error.HTTPError):
+            except (OSError, urllib.error.HTTPError) as error:
+                result['health_attempts'].append(dict(start_ms=(attempt_start-start)*1000, duration_ms=(time.monotonic()-attempt_start)*1000, ok=False, error=type(error).__name__))
                 if time.monotonic() > deadline:
                     raise RuntimeError('startup deadline')
                 time.sleep(.05)

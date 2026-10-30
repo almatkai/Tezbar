@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build an isolated pinned llama control + unused-logits prototype, not an install.
+"""Build isolated pinned llama control + unused-logits libraries, not an install.
 
 Downloads source and a local CMake wheel only. No model downloads, system package
 installation, profile edits or runtime catalog changes. Run outside timed work.
@@ -20,6 +20,9 @@ import urllib.request
 
 COMMIT = 'b9acf138a1e28ce1fc23b5a4fc4b12444b50f7ea'
 ARCHIVE_SHA256 = '0b7309d385c523c636231c10f808b226166fec13332277406361463ee2dc885d'
+CMAKE_WHEEL = 'cmake-3.31.6-py3-none-macosx_10_10_universal2.whl'
+CMAKE_URL = 'https://files.pythonhosted.org/packages/7f/09/516b0d709672bc430eb13278f0316acd34869269447744f5d136daeef689/'+CMAKE_WHEEL
+CMAKE_SHA256 = 'da9d4fd9abd571fd016ddb27da0428b10277010b23bb21e3678f8b9e96e1686e'
 
 
 def materialize_library(source, target):
@@ -50,7 +53,9 @@ def main():
     p.add_argument('--source-archive', type=Path, help='Reuse an existing pinned source archive on a retry')
     a = p.parse_args()
     out = a.output.resolve()
-    if not any(root in out.parents for root in [Path(tempfile.gettempdir()).resolve(), Path('/tmp').resolve()]):
+    roots = [Path(tempfile.gettempdir()).resolve(), Path('/tmp').resolve(),
+             Path(__file__).resolve().parents[2]/'build/embedding-runtime']
+    if not any(root in out.parents for root in roots):
         raise ValueError('prototype builds belong in an isolated temporary directory')
     out.mkdir(exist_ok=False)
     result = dict(commit=COMMIT, completed=False)
@@ -59,11 +64,18 @@ def main():
         if a.cmake:
             cmake = a.cmake.resolve()
         else:
+            wheel = out/CMAKE_WHEEL
+            with urllib.request.urlopen(CMAKE_URL) as r, wheel.open('wb') as f:
+                shutil.copyfileobj(r, f)
+            assert hashlib.sha256(wheel.read_bytes()).hexdigest() == CMAKE_SHA256
             subprocess.run([sys.executable, '-m', 'pip', '--disable-pip-version-check', 'install',
                             '--no-cache-dir', '--no-deps', '--no-compile',
-                            '--target', str(tools), 'cmake==3.31.6'], check=True)
+                            '--target', str(tools), str(wheel)], check=True)
             cmake = tools/'cmake/data/bin/cmake'
         result['cmake_version'] = subprocess.check_output([str(cmake), '--version'], text=True)
+        assert result['cmake_version'].splitlines()[0] == 'cmake version 3.31.6'
+        result['cmake_executable_sha256'] = hashlib.sha256(cmake.read_bytes()).hexdigest()
+        result['cmake_wheel_sha256'] = CMAKE_SHA256
         url = 'https://codeload.github.com/ggml-org/llama.cpp/tar.gz/'+COMMIT
         archive = out/'source.tar.gz'
         if a.source_archive:
@@ -83,8 +95,16 @@ def main():
             tar.extractall(out)
         source = out/('llama.cpp-'+COMMIT)
         build = out/'build'
+        # macOS /tmp is an alias for /private/tmp; CMake/Clang can use either
+        # spelling in __FILE__. Normalize both without changing generated code.
+        prefix_flags = ' '.join('-ffile-prefix-map="'+p+'=/llama.cpp"' for p in
+                                dict.fromkeys([str(source), str(source).removeprefix('/private')]))
         subprocess.run([str(cmake), '-S', str(source), '-B', str(build),
                         '-DCMAKE_BUILD_TYPE=Release', '-DBUILD_SHARED_LIBS=ON',
+                        '-DCMAKE_CXX_FLAGS='+prefix_flags,
+                        '-DCMAKE_C_FLAGS='+prefix_flags,
+                        '-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON',
+                        '-DCMAKE_INSTALL_NAME_DIR=@rpath', '-DCMAKE_INSTALL_RPATH=@loader_path',
                         '-DLLAMA_BUILD_TESTS=OFF', '-DLLAMA_BUILD_TOOLS=OFF',
                         '-DLLAMA_BUILD_EXAMPLES=OFF', '-DLLAMA_BUILD_SERVER=OFF',
                         '-DGGML_METAL=ON', '-DGGML_METAL_EMBED_LIBRARY=OFF',
@@ -101,14 +121,11 @@ def main():
         file = source/'src/llama-context.cpp'
         original = file.read_text()
         result['context_source_sha256'] = hashlib.sha256(file.read_bytes()).hexdigest()
-        arch = re.search(r'\{\s*(LLM_ARCH_\w+)\s*,\s*"gemma-embedding2"\s*\}',
-                         (source/'src/llama-arch.cpp').read_text()).group(1)
-        before = 'bool has_logits     = true;'
-        assert original.count(before) == 1
-        after = ('bool has_logits = !(cparams.embeddings && model.arch == '+arch+'\n'
-                 '        && cparams.pooling_type == LLAMA_POOLING_TYPE_MEAN && sampling.samplers.empty());')
-        file.write_text(original.replace(before, after))
-        result['replacement'] = dict(before=before, after=after)
+        patch = Path(__file__).with_name('llama-b11474-embedding-output.patch')
+        subprocess.run(['patch', '--batch', '--fuzz=0', '-p1', '-i', str(patch.resolve())], cwd=source, check=True)
+        result['patch_sha256'] = hashlib.sha256(patch.read_bytes()).hexdigest()
+        result['compiler_version'] = subprocess.check_output(['clang++', '--version'], text=True)
+        result['cmake_cache'] = (build/'CMakeCache.txt').read_text()
         diff = subprocess.run(
             ['diff', '-u', '--label', 'a/src/llama-context.cpp', '--label', 'b/src/llama-context.cpp',
              '/dev/stdin', str(file)], input=original.encode(), capture_output=True)

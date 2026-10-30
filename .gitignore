@@ -38,6 +38,11 @@ native/**/Cargo.lock
 *.key
 *.key.pub
 
+# Reproducible runtime payloads (pins/recipes live in source control)
+/build/embedding-runtime/
+/build/performance-runtime-*/
+/build/p/
+
 # Generated release artifacts and signing material
 /build/release-*/
 /release-artifacts/

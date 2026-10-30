@@ -13,6 +13,7 @@ import { dirname, join, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildConfiguration, PRODUCT_NAMES, resolveBuildMode } from './lib/release-policy.mjs'
 import { verifyUpdaterSignature } from './verify-updater-signature.mjs'
+import { assertEmbeddingRuntimeDistribution } from './lib/embedding-runtime-policy.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const values = {},
@@ -85,6 +86,15 @@ if (flags.has('dry-run')) {
     (process.platform === 'win32' && process.arch !== 'x64')
   )
     throw new Error('Unsupported release architecture')
+
+  assertEmbeddingRuntimeDistribution({
+    platform: process.platform,
+    arch: process.arch,
+    unsigned: mode.unsigned,
+    catalog: JSON.parse(
+      readFileSync(join(root, 'src-tauri/runtime/embedding-macos-arm64.json'), 'utf8')
+    ),
+  })
 
   // Auto-detect updater signing key from ~/.tauri/tezbar.key if not set in environment
   const localKeyPath = join(process.env.USERPROFILE || process.env.HOME || '', '.tauri', 'tezbar.key')

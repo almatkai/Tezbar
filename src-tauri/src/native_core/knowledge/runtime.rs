@@ -3,6 +3,8 @@
 #[allow(dead_code)]
 #[path = "../../child_supervisor.rs"]
 mod child_supervisor;
+#[path = "runtime_bundle.rs"]
+mod runtime_bundle;
 #[path = "runtime_integrity.rs"]
 mod runtime_integrity;
 #[path = "runtime_models.rs"]
@@ -118,6 +120,7 @@ struct Inner {
     state_changed: Notify,
     observer: Mutex<Option<Arc<Notify>>>,
     directory: PathBuf,
+    bundle: Option<runtime_bundle::Bundle>,
     #[cfg(test)]
     supervisor: Mutex<Option<PathBuf>>,
     #[cfg(test)]
@@ -241,6 +244,16 @@ impl Runtime {
                 state_changed: Notify::new(),
                 observer: Mutex::new(None),
                 directory,
+                #[cfg(not(test))]
+                bundle: runtime_bundle::Bundle::current(
+                    &ctx.paths.data_dir,
+                    &ctx.paths.resource_dir,
+                ),
+                // Protocol fixtures deliberately use fake model/server bytes.
+                // Bundle pin/install tests and actual desktop builds test the
+                // production selection, without an ordinary-build override.
+                #[cfg(test)]
+                bundle: None,
                 #[cfg(test)]
                 supervisor: Mutex::new(None),
                 #[cfg(test)]
@@ -482,15 +495,16 @@ impl Runtime {
             drop(guard.take());
             return Err("Local embedding runtime exited; retry startup".into());
         }
-        let result = self.request_with_process(
-            &mut guard,
-            inputs,
-            cancel,
-            expected,
-            self.inner.foreground_timeout,
-        )
-        .await
-        .map(ForegroundEmbedding::Ready);
+        let result = self
+            .request_with_process(
+                &mut guard,
+                inputs,
+                cancel,
+                expected,
+                self.inner.foreground_timeout,
+            )
+            .await
+            .map(ForegroundEmbedding::Ready);
         if result.is_ok() {
             activity.complete();
         }
@@ -603,13 +617,27 @@ impl Runtime {
                 }
             };
             match platform() {
-                Some(runtime) => runtime_integrity::verify(
-                    &inner.directory,
-                    &runtime,
-                    inner.model,
-                    cached.as_ref(),
-                    &check,
-                ),
+                Some(runtime) => {
+                    let mut verified = runtime_integrity::verify(
+                        &inner.directory,
+                        &runtime,
+                        inner.model,
+                        cached.as_ref(),
+                        &check,
+                    )?;
+                    if let (Some(verified), Some(bundle)) = (&mut verified, &inner.bundle) {
+                        // Merely having downloaded weights must not extract a
+                        // runtime during app opening. Select/verify it when an
+                        // actual prewarm/launch asks for a runtime epoch, or when
+                        // rechecking an already-selected process-local bundle.
+                        if runtime_epoch.is_some() || verified.bundle.is_some() {
+                            let selected = bundle.ensure(verified.bundle.as_ref(), &check)?;
+                            verified.executable = selected.executable.clone();
+                            verified.bundle = Some(selected);
+                        }
+                    }
+                    Ok(verified)
+                }
                 None => Ok(None),
             }
         })
@@ -631,7 +659,7 @@ impl Runtime {
                 let repaired = self.snapshot()["errorSource"] == "integrity";
                 let downloading = self.snapshot()["modelState"] == "downloading";
                 self.patch(json!({"modelState":if downloading {"downloading"} else {"ready"},"integrityState":"verified",
-                    "runtimeIntegrity":if verified.legacy {"legacy-local-baseline"} else {"installed-file-sha256"},
+                    "runtimeIntegrity":if verified.bundle.is_some() {"app-bundled-pinned-sha256"} else if verified.legacy {"legacy-local-baseline"} else {"installed-file-sha256"},
                     "modelFile":self.inner.model.descriptor.file,"modelSha256":self.inner.model.sha,"modelKey":self.model_key(),
                     "downloadProgress":1,"downloadBytes":total}));
                 if repaired {
@@ -1018,12 +1046,16 @@ impl Runtime {
                         // Keep the existing 120s policy. Inference updates
                         // last_used and owns this mutex, so no active request
                         // can be unloaded by this observer.
-                        std::time::Duration::from_millis(120001u64.saturating_sub(now_ms().saturating_sub(p.last_used)))
+                        std::time::Duration::from_millis(
+                            120001u64.saturating_sub(now_ms().saturating_sub(p.last_used)),
+                        )
                     }),
                     Err(_) => Some(std::time::Duration::from_secs(1)),
                 };
                 match delay {
-                    Some(delay) => tokio::select! { _ = &mut changed => {}, _ = tokio::time::sleep(delay) => {} },
+                    Some(delay) => {
+                        tokio::select! { _ = &mut changed => {}, _ = tokio::time::sleep(delay) => {} }
+                    }
                     None => changed.await,
                 }
             }
@@ -1110,14 +1142,15 @@ impl Runtime {
             r = self.ensure_process(&mut guard, speed, cancel, expected) => r?,
             error = self.interrupted(cancel, expected) => return Err(error),
         }
-        let result = self.request_with_process(
-            &mut guard,
-            inputs,
-            cancel,
-            expected,
-            self.inner.request_timeout,
-        )
-        .await;
+        let result = self
+            .request_with_process(
+                &mut guard,
+                inputs,
+                cancel,
+                expected,
+                self.inner.request_timeout,
+            )
+            .await;
         if result.is_ok() {
             activity.complete();
         }
@@ -2415,10 +2448,14 @@ server.serve_forever()
             let runtime = protocol_variant(context(temp.path()), variant, "ok");
             initialized(&runtime).await;
             for speed in ["slow", "balanced", "fast"] {
-                runtime.embed(vec!["fixture".into()], speed, &cancellation()).await.unwrap();
-                let policy: Value = serde_json::from_slice(&std::fs::read(
-                    runtime.inner.directory.join("resource-policy.json")
-                ).unwrap()).unwrap();
+                runtime
+                    .embed(vec!["fixture".into()], speed, &cancellation())
+                    .await
+                    .unwrap();
+                let policy: Value = serde_json::from_slice(
+                    &std::fs::read(runtime.inner.directory.join("resource-policy.json")).unwrap(),
+                )
+                .unwrap();
                 assert_eq!(policy["ctx"], "8192");
                 assert_eq!(policy["batch"], "8192");
                 assert_eq!(policy["ubatch"], "8192");
@@ -2982,6 +3019,69 @@ socket.getfqdn=reject_hostname_resolution
         );
         assert!(result.unwrap().unwrap().is_err());
         assert!(runtime.snapshot()["error"].is_null());
+    }
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    #[tokio::test]
+    async fn bundled_upgrade_verifies_q4_and_legacy_q8_without_rewriting_or_downloading_models() {
+        let temp = tempfile::tempdir().unwrap();
+        for variant in [EmbeddingVariantId::Q4KM, EmbeddingVariantId::Q8_0] {
+            let ctx = context(temp.path());
+            let bundle = runtime_bundle::Bundle::fixture(&ctx.paths.data_dir).unwrap();
+            let mut runtime = protocol_variant(ctx, variant, "ok");
+            Arc::get_mut(&mut runtime.inner).unwrap().bundle = Some(bundle);
+            let path = runtime.inner.directory.join("installed.json");
+            let old_manifest = std::fs::read(&path).unwrap();
+            let model_path = runtime.inner.directory.join(variant.descriptor().file);
+            let old_model = std::fs::read(&model_path).unwrap();
+            let unopened = runtime.verify_installed(0).await.unwrap();
+            assert!(unopened.bundle.is_none());
+            assert!(
+                !context(temp.path())
+                    .paths
+                    .data_dir
+                    .join("knowledge/runtimes")
+                    .exists()
+                    || variant == EmbeddingVariantId::Q8_0
+            );
+            let selected = runtime.verify_installed_checked(0, Some(0)).await.unwrap();
+            assert!(selected.bundle.is_some());
+            assert!(selected.executable.starts_with(
+                context(temp.path())
+                    .paths
+                    .data_dir
+                    .join("knowledge/runtimes")
+            ));
+            assert_eq!(
+                runtime.snapshot()["runtimeIntegrity"],
+                "app-bundled-pinned-sha256"
+            );
+            assert_eq!(runtime.model_key(), variant.descriptor().model_key);
+            assert_eq!(std::fs::read(&path).unwrap(), old_manifest);
+            assert_eq!(std::fs::read(&model_path).unwrap(), old_model);
+            assert!(runtime.inner.download.lock().await.is_none());
+            let manifest = platform().unwrap();
+            assert!(runtime_integrity::cached_install(
+                &runtime.inner.directory,
+                &manifest,
+                runtime.inner.model,
+                Some(&selected)
+            )
+            .is_some());
+            // Rollback to the old app still verifies its untouched old runtime.
+            let old = runtime_integrity::verify(
+                &runtime.inner.directory,
+                &manifest,
+                runtime.inner.model,
+                None,
+                &|| Ok(()),
+            )
+            .unwrap()
+            .unwrap();
+            assert!(old
+                .executable
+                .starts_with(runtime.inner.directory.join("runtime")));
+            assert!(old.bundle.is_none());
+        }
     }
     #[cfg(unix)]
     #[tokio::test]

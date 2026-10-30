@@ -1,5 +1,6 @@
 // scripts/build-backend.ts
 import { build } from 'esbuild'
+import { execFileSync } from 'node:child_process'
 import {
   chmodSync,
   copyFileSync,
@@ -48,6 +49,19 @@ function copyRuntimePackage(source: string, destination: string, label: string):
 async function runBuild(): Promise<void> {
   const root = join(__dirname, '..')
   const outputDirectory = join(root, 'dist-backend')
+  const target = process.env.TAURI_ENV_TARGET_TRIPLE ?? process.env.CARGO_BUILD_TARGET
+  const embeddingResources = join(root, 'build/embedding-runtime/resources')
+  mkdirSync(embeddingResources, { recursive: true })
+  copyFileSync(join(root, 'licenses/llama.cpp-MIT.txt'), join(embeddingResources, 'LICENSE'))
+  const needsEmbeddingPayload = target
+    ? target === 'aarch64-apple-darwin'
+    : process.platform === 'darwin' && process.arch === 'arm64'
+  if (needsEmbeddingPayload) {
+    execFileSync('python3', [join(root, 'scripts/prepare-embedding-runtime.py')], {
+      cwd: root,
+      stdio: 'inherit',
+    })
+  }
 
   console.log('Building isolated Extension Worker...')
   const result = await build({

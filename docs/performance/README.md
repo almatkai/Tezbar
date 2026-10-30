@@ -27,6 +27,16 @@ waits with bounded latest-input scheduling: the preserved two-frame proxy improv
 Its [new JSON](beta17-responsiveness-results.json) preserves final release A/B,
 exact UI/native parity, opening checks and failed desktop attempts separately.
 
+The subsequent [runtime-package round](beta17-runtime-package-results.md) turns
+the unused-logits prototype into a reproducible pinned app resource with atomic
+installation, offline old-model compatibility and ordinary-app validation. Final
+complete-family retained footprint is 525→275 MiB for ordinary indexing and
+1174→286 MiB for the CJK-rich pair; these are workload-specific, not a uniform
+one-fifth result. The final thin-resource app preserves the opening/90-second
+visible-response checks. Fresh-profile package materialization adds CPU cost;
+no further general runtime/CPU speedup is claimed. Build/trust and parent-owned
+distribution steps are in [the runtime contract](../EMBEDDING_RUNTIME.md).
+
 The baseline/search probes are native subsystem measurements, **not** end-to-end
 UI latency or total desktop app RAM. They exclude model inference and WebView
 processes and cannot establish a fivefold improvement for the whole app. The

@@ -1,0 +1,166 @@
+{
+  "schema": 1,
+  "distribution": "local-ad-hoc",
+  "target": "aarch64-apple-darwin",
+  "id": "b11474-tezbar-mean-no-logits-v1",
+  "archiveSha256": "75698aa84eb35398cee7b3afb6fee7b9bdb1db7a3aedc3cc43af25780100e475",
+  "archiveBytes": 23852033,
+  "executable": "llama-server",
+  "upstreamCommit": "b9acf138a1e28ce1fc23b5a4fc4b12444b50f7ea",
+  "upstreamArchiveSha256": "ae7f002f2b477d14fea8ac4d93438684344cd18ec10d2b0ee9d5518b2a74def5",
+  "patchSha256": "01b37a3b0f6be326693d4a1dbb0bfa87a894cb4e4868e4209dc2e0bb3ecc88ee",
+  "files": {
+    "LICENSE": {
+      "bytes": 1078,
+      "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+    },
+    "TEZBAR-PROVENANCE.json": {
+      "bytes": 722,
+      "sha256": "8cdd36db107ddc343bbc51ac9268e8b109d716d65129846f3fbc1a1b089d450b"
+    },
+    "libggml-base.0.26.0.dylib": {
+      "bytes": 751256,
+      "sha256": "da56a8e7ade5c4dc72755c912b0fd483c37701cbc7d05dbb3f7f4c19ec1def4d"
+    },
+    "libggml-base.0.dylib": {
+      "bytes": 751256,
+      "sha256": "da56a8e7ade5c4dc72755c912b0fd483c37701cbc7d05dbb3f7f4c19ec1def4d"
+    },
+    "libggml-base.dylib": {
+      "bytes": 751256,
+      "sha256": "da56a8e7ade5c4dc72755c912b0fd483c37701cbc7d05dbb3f7f4c19ec1def4d"
+    },
+    "libggml-blas.0.26.0.dylib": {
+      "bytes": 58776,
+      "sha256": "6526259e8f70a5b3a394df3ba082050c290d7653846efbdc84b3710b22fb4eac"
+    },
+    "libggml-blas.0.dylib": {
+      "bytes": 58776,
+      "sha256": "6526259e8f70a5b3a394df3ba082050c290d7653846efbdc84b3710b22fb4eac"
+    },
+    "libggml-blas.dylib": {
+      "bytes": 58776,
+      "sha256": "6526259e8f70a5b3a394df3ba082050c290d7653846efbdc84b3710b22fb4eac"
+    },
+    "libggml-cpu.0.26.0.dylib": {
+      "bytes": 957408,
+      "sha256": "937073375f79a187d8fda2e3900a9095e979593b691d6bbb146956743ceddd82"
+    },
+    "libggml-cpu.0.dylib": {
+      "bytes": 957408,
+      "sha256": "937073375f79a187d8fda2e3900a9095e979593b691d6bbb146956743ceddd82"
+    },
+    "libggml-cpu.dylib": {
+      "bytes": 957408,
+      "sha256": "937073375f79a187d8fda2e3900a9095e979593b691d6bbb146956743ceddd82"
+    },
+    "libggml-metal.0.26.0.dylib": {
+      "bytes": 5554552,
+      "sha256": "63a6a89b1e4ebffbe66ca46514979134f9b75668308da4fb71681b4df830ffef"
+    },
+    "libggml-metal.0.dylib": {
+      "bytes": 5554552,
+      "sha256": "63a6a89b1e4ebffbe66ca46514979134f9b75668308da4fb71681b4df830ffef"
+    },
+    "libggml-metal.dylib": {
+      "bytes": 5554552,
+      "sha256": "63a6a89b1e4ebffbe66ca46514979134f9b75668308da4fb71681b4df830ffef"
+    },
+    "libggml-rpc.0.26.0.dylib": {
+      "bytes": 219808,
+      "sha256": "48c13b7c2c56e2b569b636e6a28d1c0853ad2d1db1980c0afd374651c6e897d0"
+    },
+    "libggml-rpc.0.dylib": {
+      "bytes": 219808,
+      "sha256": "48c13b7c2c56e2b569b636e6a28d1c0853ad2d1db1980c0afd374651c6e897d0"
+    },
+    "libggml-rpc.dylib": {
+      "bytes": 219808,
+      "sha256": "48c13b7c2c56e2b569b636e6a28d1c0853ad2d1db1980c0afd374651c6e897d0"
+    },
+    "libggml.0.26.0.dylib": {
+      "bytes": 60128,
+      "sha256": "85ac40d540a5cc86f28a70270ddcdde677e92eb585c3bacd1b7e82270fe8934b"
+    },
+    "libggml.0.dylib": {
+      "bytes": 60128,
+      "sha256": "85ac40d540a5cc86f28a70270ddcdde677e92eb585c3bacd1b7e82270fe8934b"
+    },
+    "libggml.dylib": {
+      "bytes": 60128,
+      "sha256": "85ac40d540a5cc86f28a70270ddcdde677e92eb585c3bacd1b7e82270fe8934b"
+    },
+    "libllama-batched-bench-impl.dylib": {
+      "bytes": 56576,
+      "sha256": "7773f40963c6775449670bc6824a41cb668f4da7b585bebef1356fde2edf7bdb"
+    },
+    "libllama-bench-impl.dylib": {
+      "bytes": 323016,
+      "sha256": "4078f2a25c20ffcb331feecc7761aa1999fd03dc3cbdd39abfabb3940fa6615a"
+    },
+    "libllama-cli-impl.dylib": {
+      "bytes": 237864,
+      "sha256": "8d2112ada0377cd214d95088cd0ea9285fa177a6cf79d0c836783e1a7cc3b3cc"
+    },
+    "libllama-common.0.6.0.dylib": {
+      "bytes": 7753304,
+      "sha256": "c1f98dd804b0c485dec9983b6a4faa39a563e6e18d523f55093ca2dcd8ff9e25"
+    },
+    "libllama-common.0.dylib": {
+      "bytes": 7753304,
+      "sha256": "c1f98dd804b0c485dec9983b6a4faa39a563e6e18d523f55093ca2dcd8ff9e25"
+    },
+    "libllama-common.dylib": {
+      "bytes": 7753304,
+      "sha256": "c1f98dd804b0c485dec9983b6a4faa39a563e6e18d523f55093ca2dcd8ff9e25"
+    },
+    "libllama-completion-impl.dylib": {
+      "bytes": 104208,
+      "sha256": "7b8a11c605b1c042b862b0d541ae9fb627e538e468db2c235e103af753dd54b5"
+    },
+    "libllama-fit-params-impl.dylib": {
+      "bytes": 55264,
+      "sha256": "7d9f1943abb2698415ef118ef4a4886d15bd18e34e28c77b01fb1ee36a4b41e8"
+    },
+    "libllama-perplexity-impl.dylib": {
+      "bytes": 156384,
+      "sha256": "2a34a9b4e00b8b9d390fe55a1743f7b419e285719ad855098aebb9cbb6fc4108"
+    },
+    "libllama-quantize-impl.dylib": {
+      "bytes": 96496,
+      "sha256": "7fafd3747929dcf0e70192ef8965b396db6b16b96750d053f07aa49614498131"
+    },
+    "libllama-server-impl.dylib": {
+      "bytes": 9195480,
+      "sha256": "64ce0ec8e25e657420d2aaeb9b8a011a5c69723c4fb3063d36a404196ff3e5ec"
+    },
+    "libllama.0.6.0.dylib": {
+      "bytes": 3294336,
+      "sha256": "b459731b73340e3ad888f1b5fec9a26644940976edfc950fbc1bdd11673fecaf"
+    },
+    "libllama.0.dylib": {
+      "bytes": 3294336,
+      "sha256": "b459731b73340e3ad888f1b5fec9a26644940976edfc950fbc1bdd11673fecaf"
+    },
+    "libllama.dylib": {
+      "bytes": 3294336,
+      "sha256": "b459731b73340e3ad888f1b5fec9a26644940976edfc950fbc1bdd11673fecaf"
+    },
+    "libmtmd.0.6.0.dylib": {
+      "bytes": 1398944,
+      "sha256": "c87488222bc71275f75da743e8cc628b014b59d051bc0e303c444e96f54762a7"
+    },
+    "libmtmd.0.dylib": {
+      "bytes": 1398944,
+      "sha256": "c87488222bc71275f75da743e8cc628b014b59d051bc0e303c444e96f54762a7"
+    },
+    "libmtmd.dylib": {
+      "bytes": 1398944,
+      "sha256": "c87488222bc71275f75da743e8cc628b014b59d051bc0e303c444e96f54762a7"
+    },
+    "llama-server": {
+      "bytes": 49984,
+      "sha256": "1bf5602a2be50097c44282a6ecc63234d94ee8f96d39fd45fed6eff4e74b6b41"
+    }
+  }
+}

@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from desktop import Desktop, prepare
+from desktop import Desktop, prepare, require_unlocked_display
 
 spec=importlib.util.spec_from_file_location('input_bench',Path(__file__).with_name('responsiveness-desktop.py'))
 b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
@@ -26,6 +26,7 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--baseline',type=Path,required=True);p.add_argument('--candidate',type=Path,required=True)
     p.add_argument('--model',required=True);p.add_argument('--template-result',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
     a=p.parse_args()
+    require_unlocked_display()
     if a.output.exists():raise ValueError('refusing to overwrite evidence')
     result=dict(openings=[],parity=[],completed=False)
     try:

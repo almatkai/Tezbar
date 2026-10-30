@@ -1,4 +1,5 @@
 fn main() {
+    verify_embedding_payload();
     println!("cargo:rerun-if-env-changed=TAURI_CONFIG");
     println!("cargo:rerun-if-changed=tauri.conf.json");
     let mut config: serde_json::Value = serde_json::from_str(
@@ -33,6 +34,33 @@ fn main() {
         );
     }
     tauri_build::build()
+}
+
+fn verify_embedding_payload() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos")
+        || std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() != Ok("aarch64")
+    {
+        return;
+    }
+    use sha2::{Digest, Sha256};
+    let catalog = "runtime/embedding-macos-arm64.json";
+    let payload = "../build/embedding-runtime/resources/embedding-runtime.zip";
+    println!("cargo:rerun-if-changed={catalog}");
+    println!("cargo:rerun-if-changed={payload}");
+    let pin: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(catalog).expect("runtime catalog"))
+            .expect("runtime catalog JSON");
+    let bytes = std::fs::read(payload).expect("Missing pinned embedding payload; see docs/EMBEDDING_RUNTIME.md. Build/stage the reviewed package before compiling macOS arm64.");
+    assert_eq!(
+        Some(bytes.len() as u64),
+        pin["archiveBytes"].as_u64(),
+        "embedding payload length"
+    );
+    assert_eq!(
+        format!("{:x}", Sha256::digest(&bytes)),
+        pin["archiveSha256"].as_str().unwrap(),
+        "embedding payload must match the reviewed catalog"
+    );
 }
 
 #[allow(dead_code)]

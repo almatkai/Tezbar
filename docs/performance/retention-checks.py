@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from desktop import Desktop, prepare, processes
+from desktop import Desktop, prepare, processes, require_unlocked_display
 from window_visibility import main_on_screen
 
 
@@ -26,6 +26,7 @@ def main():
     p.add_argument('--seconds', type=float, default=90)
     p.add_argument('--candidate-library', type=Path, help='Explicit Q4 fixture library experiment; never an installed profile')
     a = p.parse_args()
+    require_unlocked_display()
     assert 0 < a.seconds < 110
     if a.output.exists():
         raise ValueError('refusing to overwrite evidence')

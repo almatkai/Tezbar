@@ -16,6 +16,14 @@ class Timebase(ctypes.Structure):
 TIMEBASE=Timebase(); LIB.mach_timebase_info(ctypes.byref(TIMEBASE))
 TICK_SECONDS=TIMEBASE.numer/TIMEBASE.denom/1e9
 
+def require_unlocked_display():
+    # Read-only preflight. Never wake/unlock the session or change power settings.
+    import re
+    state=subprocess.run(['ioreg','-n','Root','-d1'],capture_output=True,text=True,check=True).stdout
+    if re.search(r'CGSSessionScreenIsLocked"?\s*=\s*Yes',state):
+        raise RuntimeError('macOS display is locked; unlock before visible UI benchmarks')
+
+
 def processes(root):
     rows = subprocess.check_output(['ps','-axo','pid=,ppid=,comm='], text=True).splitlines()
     rows = [r.strip().split(None, 2) for r in rows]
@@ -62,7 +70,7 @@ class Desktop:
         (contents/'MacOS').mkdir(parents=True,exist_ok=True); (contents/'Resources').mkdir(exist_ok=True)
         shutil.copy2(binary, contents/'MacOS'/'tezbar')
         repo=pathlib.Path(__file__).resolve().parents[2]
-        for name,source in [('dist-backend',repo/'dist-backend'),('trayIconTemplate@2x.png',repo/'resources/trayIconTemplate@2x.png')]:
+        for name,source in [('dist-backend',repo/'dist-backend'),('embedding-runtime',repo/'build/embedding-runtime/resources'),('trayIconTemplate@2x.png',repo/'resources/trayIconTemplate@2x.png')]:
             target=contents/'Resources'/name
             if not target.exists():
                 if source.is_dir(): shutil.copytree(source,target)
@@ -77,15 +85,21 @@ class Desktop:
         while time.monotonic()<until:
             pids=subprocess.check_output(['ps','-axo','pid=,comm='],text=True).splitlines()
             exact=[int(r.strip().split(None,1)[0]) for r in pids if r.strip().endswith(str(contents/'MacOS'/'tezbar'))]
-            if exact and (self.root/'control.sock').exists(): self.pid=exact[0]; break
+            if exact:
+                self.pid=exact[0]  # retain ownership even if control setup fails
+                if (self.root/'control.sock').exists(): break
             time.sleep(.1)
-        if self.pid is None: raise RuntimeError('desktop did not start (check macOS crash/log reports)')
+        if self.pid is None or not (self.root/'control.sock').exists(): raise RuntimeError('desktop did not start (check macOS crash/log reports)')
         def ready():
             try: return self.command('status')['phase']=='ready'
             except RuntimeError as error:
                 if str(error)=='main window missing': return False
                 raise
-        self.wait(ready,60)
+        try:
+            self.wait(ready,60)
+        except Exception:
+            subprocess.run(['sample',str(self.pid),'2','-file',str(self.root/'startup-timeout-stack.txt')],capture_output=True)
+            raise
         self.ready_ms=(time.monotonic()-self.started)*1000
         self.wait(lambda:self.command('status')['rendererLoaded'],60)
         self.wait(lambda:self.js("return !!window.tezbar && !!document.querySelector('input, textarea')"),60)
@@ -106,13 +120,34 @@ class Desktop:
         return summarize([s for s in self.samples if s['phase']==label])
     def close(self):
         if self.pid:
-            try: self.command('quit')
+            try:
+                self.command('quit')
+            except (OSError, RuntimeError):
+                # A failed control socket must not leak its actual owned fixture.
+                # Never target a process merely by name or a stale PID.
+                expected = str(self.root/'Tezbar Performance.app/Contents/MacOS/tezbar')
+                actual = subprocess.run(['ps','-p',str(self.pid),'-o','comm='],capture_output=True,text=True).stdout.strip()
+                if actual == expected:
+                    try:
+                        subprocess.run(['osascript','-e','tell application '+json.dumps(str(self.root/'Tezbar Performance.app'))+' to quit'],capture_output=True,timeout=5)
+                    except subprocess.TimeoutExpired:
+                        pass
             finally:
                 deadline=time.monotonic()+15
                 while time.monotonic()<deadline:
                     if not any(p['pid']==self.pid for p in processes(self.pid)): break
                     time.sleep(.1)
-                else: raise RuntimeError('owned desktop failed graceful shutdown')
+                else:
+                    expected = str(self.root/'Tezbar Performance.app/Contents/MacOS/tezbar')
+                    actual = subprocess.run(['ps','-p',str(self.pid),'-o','comm='],capture_output=True,text=True).stdout.strip()
+                    if actual == expected:
+                        import signal
+                        os.kill(self.pid, signal.SIGTERM)
+                        for _ in range(50):
+                            if not any(p['pid']==self.pid for p in processes(self.pid)): break
+                            time.sleep(.1)
+                        else: raise RuntimeError('owned desktop failed termination after graceful shutdown timeout')
+                    else: raise RuntimeError('owned desktop shutdown identity changed; refusing signal')
                 survivors=processes(self.pid)
                 if survivors: print('owned survivors after host exit:',[p['name'] for p in survivors])
 
@@ -135,6 +170,8 @@ def summarize(samples):
 def prepare(root,model=None):
     root=pathlib.Path(root)
     resolved=root.resolve()
+    if 'build' in resolved.parts:
+        raise ValueError("launcher excludes 'build' path components; use the default OS temporary directory for desktop profiles")
     if pathlib.Path(tempfile.gettempdir()).resolve() not in resolved.parents:
         raise ValueError('benchmark profiles must be beneath the OS temporary directory')
     marker=root/'.tezbar-desktop-benchmark'
