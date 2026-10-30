@@ -16,12 +16,24 @@ extern "C" {
     fn tezbar_bm25_sum(n: i32, idf: *const f64, freq: *const f64, length: f64, avgdl: f64) -> f64;
 }
 
-pub(super) fn supported() -> bool {
+fn engine_supported() -> bool {
     rusqlite::version_number() == 3_046_000
 }
 
+/// Bit-exact score/tie parity has only been executed for optimized builds on
+/// macOS arm64 (AppleClang). Other targets compile and register the function so
+/// the strict oracle tests run there, but production queries keep built-in BM25
+/// until that target's shipping profile is requalified.
+const QUALIFIED_TARGET: bool = cfg!(all(target_os = "macos", target_arch = "aarch64"));
+
+/// Whether production queries use the joined document-size rank.
+pub(super) fn supported() -> bool {
+    QUALIFIED_TARGET && engine_supported()
+}
+
+/// Registers `tezbar_bm25` for the qualified engine on every target.
 pub(super) fn register(db: &Connection) -> Result<(), String> {
-    if !supported() {
+    if !engine_supported() {
         return Ok(());
     }
     // SAFETY: the connection is exclusively used by its owning DB thread. The

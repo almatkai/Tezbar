@@ -1269,6 +1269,12 @@ mod tests {
         }
     }
     #[test]
+    fn store_selects_joined_rank_only_on_qualified_target() {
+        let s = fixture(1);
+        assert_eq!(s.rank_join, cfg!(all(target_os = "macos", target_arch = "aarch64")));
+    }
+
+    #[test]
     fn joined_lengths_preserve_source_and_chunk_apis_through_root_and_chunk_mutations() {
         let mut s=fixture(200);
         s.db.execute("UPDATE knowledge_chunks SET source_id='s00001' WHERE rowid<=100",[]).unwrap();

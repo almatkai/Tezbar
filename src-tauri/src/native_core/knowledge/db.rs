@@ -235,8 +235,8 @@ pub fn default_status() -> Value {
 }
 impl Store {
     pub(crate) fn from_connection(db: Connection, vector: bool, path: PathBuf) -> Self {
-        let rank_join = crate::native_core::fts_rank::supported()
-            && crate::native_core::fts_rank::register(&db).is_ok();
+        let rank_join = crate::native_core::fts_rank::register(&db).is_ok()
+            && crate::native_core::fts_rank::supported();
         let store = Self {
             db,
             vector,

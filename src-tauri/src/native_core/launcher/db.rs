@@ -823,6 +823,23 @@ mod reader_tests {
     }
 
     #[test]
+    fn production_search_selects_joined_rank_only_on_qualified_target() {
+        // Bundled engine is 3.46.0; an upgrade must requalify (and update) this.
+        assert_eq!(rusqlite::version_number(), 3_046_000);
+        let qualified = cfg!(all(target_os = "macos", target_arch = "aarch64"));
+        assert_eq!(fts_select() == FTS_SELECT, qualified);
+        assert_eq!(fts_select() == FTS_SELECT_BUILTIN, !qualified);
+        // The function stays registered everywhere so these oracles run in CI.
+        let dir = tempfile::tempdir().unwrap();
+        let db = init(dir.path().join("index.sqlite3")).unwrap();
+        upsert(&db, &json!({"id":"doc:0","category":"files","title":"archive","subtitle":"","tokens":"","action":{},"updatedAt":0})).unwrap();
+        let mut plan = db.prepare(&format!("EXPLAIN QUERY PLAN {}", fts_select())).unwrap();
+        let joined = plan.query_map(["archive*"], |r| r.get::<_, String>(3)).unwrap()
+            .any(|detail| detail.unwrap().contains("sz USING"));
+        assert_eq!(joined, qualified);
+    }
+
+    #[test]
     fn supplied_fts_lengths_preserve_builtin_scores() {
         let dir = tempfile::tempdir().unwrap();
         let db = init(dir.path().join("index.sqlite3")).unwrap();
