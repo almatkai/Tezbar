@@ -2,6 +2,7 @@
 
 import { act, createElement, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { flushSync } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SearchResult } from '../shared/search'
 import CommandBar from './CommandBar'
@@ -221,6 +222,47 @@ describe('CommandBar hidden-window Deep Search lifecycle', () => {
       'Second fixture result'
     )
   }
+
+  it('updates result highlight in the same frame when selection commits inside rAF', async () => {
+    let nextId = 0
+    const frames = new Map<number, FrameRequestCallback>()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.set(++nextId, callback)
+      return nextId
+    })
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
+    vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        return 6 + Array.from(this.parentElement!.children).indexOf(this) * 38
+      }
+    )
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(36)
+    searchAll.mockImplementation(async () => results)
+    await mount('ordinary fixture')
+    await advance(100)
+    const frame = async () => {
+      const current = [...frames.values()]
+      frames.clear()
+      await act(async () => current.forEach((callback) => callback(16)))
+    }
+    await frame()
+    requestAnimationFrame(() => {
+      // Reproduce the real WKWebView late-rAF commit. flushSync establishes the
+      // commit boundary explicitly in act; the next frame must remain pending.
+      flushSync(() => input().dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        bubbles: true,
+      })))
+    })
+    await frame()
+    const row = container.querySelector<HTMLElement>(
+      'button.list-row[data-tone="accent"][data-selected="true"]'
+    )!.parentElement!
+    const highlight = row.parentElement!.parentElement!.querySelector<HTMLElement>('.glide-highlight')!
+    expect(row.offsetTop).toBeGreaterThan(6)
+    expect(highlight.style.transform).toBe(`translateY(${row.offsetTop}px)`)
+    expect(highlight.style.height).toBe(`${row.offsetHeight}px`)
+  })
 
   it('keeps measured width current across style, deep-mode text and clear changes', async () => {
     let width = 48

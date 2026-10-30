@@ -11,6 +11,14 @@ Opening the app is already satisfactory and is a regression constraint.
 
 ## Current evidence
 
+The [row-layout experiments (R11)](beta17-row-layout-results.md) validate actual
+WKWebView row skipping and test selected-geometry batching. Row skipping increases
+CPU; batching reduces full-cohort simple-search CPU but delays a late-rAF selection
+highlight until the next frame and does not establish safe retained RAM. Both
+prototypes are rejected. Production is restored; a same-frame CommandBar regression
+test and [hashed evidence](beta17-row-layout-results.json) remain. The uniform
+fivefold/one-fifth targets remain unmet.
+
 The [synchronous-layout experiments (R10)](beta17-layout-results.md) acquire actual
 WebContent native CPU stacks and time lazy style/geometry reads. `offsetTop`
 forces dirty flex/text layout; input font measurement is comparatively small.

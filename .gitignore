@@ -44,6 +44,7 @@ native/**/Cargo.lock
 /build/performance-renderer-*/
 /build/performance-ui-allocation-*/
 /build/performance-layout-*/
+/build/performance-row-layout-*/
 /build/p/
 
 # Generated release artifacts and signing material
