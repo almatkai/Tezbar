@@ -26,7 +26,7 @@
    "severity": "low",
    "kind": "fallback",
    "summary": "launcher open fails if tezbar_bm25 registration fails on 3.46.0 (pre-existing in R14)",
-   "status": "documented"
+   "status": "documented limitation remains open; allocation or API errors can also cause registration failure; no failure observed or fault-injection qualification"
   }
  ],
  "cohort": {
@@ -319,7 +319,7 @@
   "control_binary_contains_joined_sql": false,
   "candidate_contains_both": true,
   "ordinary_bench_markers": false,
-  "manifest": "build/performance-opus-pass2-20261030/artifact-manifest.json (71 raw, 618 pins)"
+  "manifest": "build/performance-opus-pass2-20261030/artifact-manifest.json (71 raw, 620 pins)"
  },
  "cleanup": {
   "identities": 250,

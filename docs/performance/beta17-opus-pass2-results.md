@@ -15,7 +15,7 @@ Worktree `Tezbar-performance`, branch `fix/beta17-runtime-search-memory`, start
 production code: `git diff cb3a74b -- src-tauri src package.json pnpm-lock.yaml
 vite.config.ts scripts index.html` is empty). No subagents. XERJ was not used
 (supplied shared-breaker history); `rg` only. New raw evidence is only in
-`build/performance-opus-pass2-20261030/` (71 files and 618 source/harness pins in
+`build/performance-opus-pass2-20261030/` (71 files and 620 source/harness pins in
 `artifact-manifest.json`). R5–R14 and pass-1 raw data are not modified.
 
 ## Parent fixes carried in (not redone)
@@ -35,7 +35,7 @@ vite.config.ts scripts index.html` is empty). No subagents. XERJ was not used
 | 1 | High (claim) | Pass 1 states as facts that the R14 transient "is WindowServer event delivery", that the deferred-host hypothesis is "falsified", and that RSS is "not retained allocation / not build-caused". None of these is established (A, C). | Corrected here and in the pass-1 report header. No raw data altered. |
 | 2 | Medium (measurement) | The receipt used `t + 0.05 s` as the bound on when the HID value was read, and had no guard before the window. Measured delay from `t` to the HID read reaches **140 ms** under load, and input just before the window counted as quiet (B). | Fixed: timed in-process receipt, 2 s guard, callsite tests. Pass-1 classes are unchanged (margins ≥ 638 s). |
 | 3 | Medium (provenance) | "Inventories differ only in `Contents/MacOS/tezbar`" cannot prove the renderer is identical, because Tauri embeds the frontend in that binary (D). | Closed: a runtime asset fingerprint, a rebuild from current source and binary SQL strings all match. |
-| 4 | Low | The launcher's `open_reader`/`init` returns an error if `tezbar_bm25` registration fails on a 3.46.0 engine, where Knowledge falls back to built-in BM25. This was already true in R14 and is not new. Registration can only fail when FTS5 is absent, and the schema needs FTS5 anyway. | Documented. No change. |
+| 4 | Low | The launcher's `open_reader`/`init` returns an error if `tezbar_bm25` registration fails on a 3.46.0 engine, where Knowledge falls back to built-in BM25. This was already true in R14 and is not new. Missing FTS5 also prevents schema creation, but allocation or API errors can cause registration failure even when FTS5 is available. No registration failure was observed in these runs. | Documented limitation remains open. No product change or fault-injection qualification. |
 
 ## A. Causal claim strength
 
