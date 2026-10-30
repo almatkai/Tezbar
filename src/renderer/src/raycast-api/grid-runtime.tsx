@@ -2,7 +2,6 @@ import {
   CommandSurfaceHeader,
   CommandSurfaceBackButton,
   CommandSurfaceInput,
-  CommandSurfaceTitle,
   CommandSurfaceFooter,
   CommandSurfaceStatus,
 } from '../../ui/CommandSurface'
@@ -164,13 +163,6 @@ export function GridRuntime({
     typeof root.props?.searchBarPlaceholder === 'string' && root.props.searchBarPlaceholder.trim()
       ? root.props.searchBarPlaceholder
       : title || 'Search'
-  const shouldShowSearch =
-    hasServerSearch ||
-    Boolean(searchAccessory) ||
-    typeof root.props?.searchBarPlaceholder === 'string' ||
-    typeof root.props?.searchText === 'string' ||
-    items.length > 0 ||
-    !root.props?.navigationTitle
   const navigationTitle =
     typeof root.props?.navigationTitle === 'string' && root.props.navigationTitle.trim()
       ? root.props.navigationTitle
@@ -298,21 +290,17 @@ export function GridRuntime({
     >
       <CommandSurfaceHeader>
         <CommandSurfaceBackButton onClick={onBack} />
-        {shouldShowSearch ? (
-          <CommandSurfaceInput
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-              setSelected(0)
-            }}
-            placeholder={searchBarPlaceholder}
-            aria-label={searchBarPlaceholder}
-          />
-        ) : (
-          <CommandSurfaceTitle>{navigationTitle}</CommandSurfaceTitle>
-        )}
+        <CommandSurfaceInput
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setSelected(0)
+          }}
+          placeholder={searchBarPlaceholder}
+          aria-label={searchBarPlaceholder}
+        />
         {searchAccessory && searchAccessory.options.length > 0 ? (
           <select
             value={accessoryValue}

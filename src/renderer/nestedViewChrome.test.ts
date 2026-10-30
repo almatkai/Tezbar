@@ -108,17 +108,30 @@ describe('nested views share launcher chrome', () => {
     )
   })
 
-  it.each(['List', 'Grid'])('uses a plain title when %s has no search', (type) => {
-    const props = {
-      ...runtimeProps,
-      root: { type, props: { navigationTitle: 'System Overview' } },
-    }
+  it('uses a plain title when List has no search', () => {
     const doc = render(
-      type === 'List' ? createElement(ListRuntime, props) : createElement(GridRuntime, props)
+      createElement(ListRuntime, {
+        ...runtimeProps,
+        root: { type: 'List', props: { navigationTitle: 'System Overview' } },
+      })
     )
     const header = expectChrome(doc)
     expect(header.querySelector('input')).toBeNull()
     expect(header.textContent).toContain('System Overview')
+  })
+
+  it('keeps the Grid search input while the grid is empty', () => {
+    const doc = render(
+      createElement(GridRuntime, {
+        ...runtimeProps,
+        root: { type: 'Grid', props: { navigationTitle: 'System Overview' } },
+      })
+    )
+    const header = expectChrome(doc)
+    expect(header.querySelector('input')).not.toBeNull()
+    expect(doc.querySelector('[data-command-surface-status]')?.textContent).toContain(
+      'System Overview'
+    )
   })
 
   it.each(['List', 'Grid', 'Tezbar.PreferenceSetup'])(
