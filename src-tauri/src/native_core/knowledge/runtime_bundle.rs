@@ -34,6 +34,18 @@ pub(super) struct VerifiedBundle {
     fingerprint: Vec<Fingerprint>,
     directory: PathBuf,
 }
+
+fn archive_path(resources: &Path, source: &Path, unbundled_dev: bool) -> PathBuf {
+    // CorePaths uses the source root only for an unbundled development app.
+    // Packaged apps must resolve their own resource and never fall back to a
+    // developer's staged files when a bundled resource is missing.
+    if unbundled_dev && resources == source {
+        resources.join("build/embedding-runtime/resources/embedding-runtime.zip")
+    } else {
+        resources.join("embedding-runtime/embedding-runtime.zip")
+    }
+}
+
 impl VerifiedBundle {
     pub fn unchanged(&self) -> bool {
         fs::symlink_metadata(&self.directory)
@@ -57,7 +69,11 @@ impl Bundle {
         return Some(Self {
             root: data.join("knowledge/runtimes"),
             catalog: include_str!("../../../runtime/embedding-macos-arm64.json"),
-            archive: resources.join("embedding-runtime/embedding-runtime.zip"),
+            archive: archive_path(
+                resources,
+                &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                cfg!(debug_assertions) && tauri::is_dev(),
+            ),
         });
         #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
         {
@@ -263,6 +279,26 @@ fn publish(staging: &Path, destination: &Path, backup: &Path) -> Result<bool, St
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bundled_runtime_resource_lookup_preserves_development_and_packaged_paths() {
+        let source = Path::new("/worktree with spaces/src-tauri/..");
+        let packaged = Path::new("/Applications/Tezbar.app/Contents/Resources");
+        assert_eq!(
+            archive_path(source, source, true),
+            source.join("build/embedding-runtime/resources/embedding-runtime.zip")
+        );
+        for unbundled_dev in [false, true] {
+            assert_eq!(
+                archive_path(packaged, source, unbundled_dev),
+                packaged.join("embedding-runtime/embedding-runtime.zip")
+            );
+        }
+        assert_eq!(
+            archive_path(source, source, false),
+            source.join("embedding-runtime/embedding-runtime.zip")
+        );
+    }
+
     #[test]
     fn bundled_runtime_failed_publish_restores_previous_directory() {
         let temp = tempfile::tempdir().unwrap();

@@ -36,6 +36,9 @@ one-fifth result. The final thin-resource app preserves the opening/90-second
 visible-response checks. Fresh-profile package materialization adds CPU cost;
 no further general runtime/CPU speedup is claimed. Build/trust and parent-owned
 distribution steps are in [the runtime contract](../EMBEDDING_RUNTIME.md).
+The [independent package review](beta17-runtime-package-review.md) records
+parent-run integrity/lifecycle checks, ordinary-app activation, and a follow-up
+fix for unbundled development resource lookup.
 
 The baseline/search probes are native subsystem measurements, **not** end-to-end
 UI latency or total desktop app RAM. They exclude model inference and WebView
@@ -104,8 +107,10 @@ disabling features or shrinking result/candidate limits.
 - `pnpm build:frontend` and `pnpm tauri build --no-bundle --ci`: passed.
 - Both search matrix tests and the headless idle probe: passed.
 
-Original logs and baseline executables are retained locally at
-`/tmp/tezbar-beta17-perf.e1qzXU`. Generated extension-worker bundles were restored
+Original logs and baseline executables were initially stored at
+`/tmp/tezbar-beta17-perf.e1qzXU`; that directory later became absent for an
+unestablished reason. The runtime-package report identifies recovered artifacts,
+regenerated evidence and excluded missing results. Generated extension-worker bundles were restored
 after setup; they are not part of the source change.
 
 ## Follow-up experiments

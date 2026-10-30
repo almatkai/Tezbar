@@ -16,6 +16,11 @@ from an unpublished URL or embedded into executable code pages. Ordinary and
 benchmark apps use the same fixed resource lookup. There is no runtime/library
 environment override.
 
+Unbundled development apps use the verified staged ZIP under
+`build/embedding-runtime/resources/`. This source-tree location is selected only
+for development with the exact source resource root; packaged and release apps
+never fall back to it when their own resource is missing.
+
 Merely verifying installed weights does not extract a disabled model's runtime
 or add that work to opening. Actual prewarm/launch verifies the app resource and
 materializes the package under `<data>/knowledge/runtimes/<archive SHA-256>`.
