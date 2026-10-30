@@ -289,7 +289,7 @@ export default function BackgroundTaskStatus({
             placement === 'start' ? 'left-0' : 'right-0'
           )}
         >
-          <div className="flex items-center justify-between border-b border-white/[0.07] px-3 py-2.5">
+          <div className="border-b border-white/[0.07] px-3 py-2.5">
             <div>
               <p className="font-display text-[11.5px] font-semibold text-ink-1">
                 Background tasks
@@ -298,22 +298,6 @@ export default function BackgroundTaskStatus({
                 {allTasks.length} {allTasks.length === 1 ? 'task' : 'tasks'} running
               </p>
             </div>
-            <span
-              aria-hidden
-              className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] border border-white/[0.08] bg-white/[0.04] text-ink-3"
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M3 4.25h10M3 8h10M3 11.75h10"
-                  stroke="currentColor"
-                  strokeWidth="1.25"
-                  strokeLinecap="round"
-                />
-                <circle cx="5" cy="4.25" r="1" fill="#11141c" stroke="currentColor" />
-                <circle cx="10.5" cy="8" r="1" fill="#11141c" stroke="currentColor" />
-                <circle cx="7" cy="11.75" r="1" fill="#11141c" stroke="currentColor" />
-              </svg>
-            </span>
           </div>
 
           <div className="p-1">
