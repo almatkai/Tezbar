@@ -41,6 +41,7 @@ native/**/Cargo.lock
 # Reproducible runtime payloads (pins/recipes live in source control)
 /build/embedding-runtime/
 /build/performance-runtime-*/
+/build/performance-renderer-*/
 /build/p/
 
 # Generated release artifacts and signing material

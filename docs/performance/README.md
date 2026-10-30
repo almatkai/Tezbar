@@ -11,6 +11,16 @@ Opening the app is already satisfactory and is a regression constraint.
 
 ## Current evidence
 
+The focused [renderer regression follow-up](beta17-renderer-results.md) adds a
+fresh-process simple-only loop and a full lean-protocol AB/BA cohort, using the
+unchanged frozen original/current apps. The [new JSON](beta17-renderer-results.json)
+retains per-step/per-role accounting, diagnostics and receipts. The regression is
+**not fixed**: simple-burst CPU is +27.6% and post-repeat WebContent footprint is
+2.70× original even without retained full-reply measurement payloads. Extra prefix
+work is established; its avoidable allocation/retainer owner is not. No speculative
+production optimization or whole-family RAM win is claimed. R7 evidence below is
+preserved under its original protocol, not rewritten by this follow-up.
+
 The [final cumulative comparison](beta17-final-results.md) rebuilds original
 beta.17 production source with measurement-only instrumentation and compares it
 directly with the final candidate in AB/BA order. It records per-workload latency,
