@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from desktop import Desktop, prepare, require_unlocked_display
+from desktop import Desktop, prepare, require_unlocked_display, processes
 
 spec=importlib.util.spec_from_file_location('input_bench',Path(__file__).with_name('responsiveness-desktop.py'))
 b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
@@ -34,9 +34,12 @@ def main():
             binary=getattr(a,variant);root=Path(tempfile.mkdtemp(prefix='tezbar-input-opening-'));prepare(root,a.model);d=Desktop(root)
             try:
                 d.launch(binary)
-                value=dict(variant=variant,root=str(root),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),ready_ms=d.ready_ms,first_ui_ms=d.first_ui_ms,viewport=d.js('return {width:innerWidth,height:innerHeight,pixelRatio:devicePixelRatio};'))
+                value=dict(variant=variant,root=str(root),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),ready_ms=d.ready_ms,first_ui_ms=d.first_ui_ms,viewport=d.js('return {width:innerWidth,height:innerHeight,pixelRatio:devicePixelRatio};'),owned_family=processes(d.pid))
                 result['openings'].append(value);print('opening',variant,value['first_ui_ms'],flush=True)
-            finally:d.close()
+            finally:
+                d.close()
+                if result['openings'] and result['openings'][-1]['root']==str(root):
+                    result['openings'][-1]['survivors']=processes(d.pid) if d.pid else []
         template=json.loads(a.template_result.read_text())
         # Both processes receive separate APFS clones of one completed isolated
         # index, preserving its authoritative IDs, row order, paths and vectors.
@@ -60,7 +63,7 @@ def main():
                         expected=d.js('return await window.__inputBench.original('+json.dumps(queries[-1])+');')
                         assert value['finalRows']==expected,'fresh final reply differs from authoritative final query'
                         values.append(dict(query=queries[-1],rows=normalize(expected,root),dispatched=value['dispatched'],domTitles=value['domTitles']))
-                result['parity'].append(dict(variant=variant,root=str(root),values=values))
+                result['parity'].append(dict(variant=variant,root=str(root),values=values,owned_family=processes(d.pid)))
                 print('parity',variant,len(values),'fresh final replies equal direct native rows/actions',flush=True)
                 if variant=='candidate':
                     b.reset(d)
@@ -79,6 +82,8 @@ def main():
                 if d.pid:
                     try:d.js("await window.__TAURI_INTERNALS__.invoke('set_suppress_blur_hide',{value:false}); return true;")
                     finally:d.close()
+                if result['parity'] and result['parity'][-1]['root']==str(root):
+                    result['parity'][-1]['survivors']=processes(d.pid) if d.pid else []
         baseline=result['parity'][0]['values'];candidate=result['parity'][1]['values']
         assert [(v['query'],v['rows']) for v in baseline]==[(v['query'],v['rows']) for v in candidate], 'A/B ordered final rows/scores/actions differ on cloned index'
         result['exact_final_query_parity']=True

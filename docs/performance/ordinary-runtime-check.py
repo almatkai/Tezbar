@@ -11,7 +11,7 @@ import signal
 import subprocess
 import tempfile
 import time
-from desktop import prepare, processes
+from desktop import prepare, processes, scrub_fixture_clipboard
 
 
 def sha(path):
@@ -104,6 +104,7 @@ def main():
                     deadline=time.monotonic()+15
                     while time.monotonic()<deadline and processes(pid): time.sleep(.1)
             result['survivors']=processes(pid)
+        scrub_fixture_clipboard(root)
         for name in ['stdout.log', 'stderr.log']:
             if (root/name).exists(): shutil.copyfile(root/name, a.output/name)
         (a.output/'result.json').write_text(json.dumps(result,indent=2)+'\n')

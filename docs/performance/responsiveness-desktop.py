@@ -11,7 +11,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import time
-from desktop import Desktop, prepare
+from desktop import Desktop, prepare, summarize
 from window_visibility import main_on_screen, owned_on_screen_bounds
 
 spec = importlib.util.spec_from_file_location('final_desktop', Path(__file__).with_name('final-desktop.py'))
@@ -198,10 +198,13 @@ def scenario(d, out):
     assert db.execute('SELECT count(*) FROM knowledge_chunks').fetchone()[0]==192
     def semantic():
         start=time.monotonic();d.request('knowledge:embedding:set','embeddinggemma-2','q4_k_m')
-        next_probe=time.monotonic()+2;probes=[];actual=None
+        next_probe=time.monotonic()+2;probes=[];actual=None;durable=None
         while True:
             count=db.execute('SELECT count(*) FROM knowledge_gemma_embeddings').fetchone()[0]
-            if count==192 and actual is None:actual=time.monotonic()-start
+            if count==192 and actual is None:
+                actual=time.monotonic()-start
+                d.sample('semantic_index_with_bursts')
+                durable=summarize([v for v in d.samples if v['phase']=='semantic_index_with_bursts'])
             s=d.request('knowledge:snapshot')['semanticSearch']
             if actual is not None and s['indexedChunks']==192 and s['totalChunks']==192 and not s['indexing']:break
             if time.monotonic()-start>240:raise RuntimeError('semantic indexing timeout')
@@ -209,7 +212,7 @@ def scenario(d, out):
                 probes.append(burst(d,['runtime-fixture','runtime-fixture-00','runtime-fixture-00123'],20))
                 next_probe=time.monotonic()+2
             time.sleep(.02)
-        return dict(actual_complete_s=actual,published_complete_s=time.monotonic()-start,bursts=probes)
+        return dict(actual_complete_s=actual,durable_family=durable,published_complete_s=time.monotonic()-start,bursts=probes)
     out['semantic_index_with_bursts']=f.w.measure(d,'semantic_index_with_bursts',semantic)
     d.command('hide');d.wait(lambda:not main_on_screen(d.pid),5)
     out['active_model_idle']=f.idle(d,'active_model_idle',False)

@@ -300,6 +300,53 @@ mod tests {
     }
 
     #[test]
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    fn bundled_runtime_real_source_configuration_finds_staged_pin_and_package_fails_closed() {
+        // Exercise the same resource-directory seam used to construct CorePaths
+        // in lib.rs, against the actual build hook output, without Bundle::fixture.
+        let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let resources = crate::resource_directory::resolve(
+            true,
+            true,
+            &source.join("src-tauri/target/debug/tezbar"),
+            &source,
+            || -> Result<PathBuf, std::io::Error> { panic!("unbundled dev uses source root") },
+        )
+        .unwrap();
+        let selected = archive_path(&resources, &source, true);
+        let bytes = fs::read(&selected).expect("build hook must stage the actual development ZIP");
+        let catalog: Catalog =
+            serde_json::from_str(include_str!("../../../runtime/embedding-macos-arm64.json"))
+                .unwrap();
+        assert_eq!(bytes.len() as u64, catalog.archive_bytes);
+        assert_eq!(
+            format!("{:x}", Sha256::digest(bytes)),
+            catalog.archive_sha256
+        );
+        let package = tempfile::tempdir().unwrap();
+        let packaged_resources = package.path().join("Tezbar.app/Contents/Resources");
+        for (debug, dev) in [(true, true), (false, false)] {
+            let resources = crate::resource_directory::resolve(
+                debug,
+                dev,
+                &package.path().join("Tezbar.app/Contents/MacOS/tezbar"),
+                &source,
+                || Ok::<_, std::io::Error>(packaged_resources.clone()),
+            )
+            .unwrap();
+            let selected = archive_path(&resources, &source, debug && dev);
+            assert_eq!(
+                selected,
+                packaged_resources.join("embedding-runtime/embedding-runtime.zip")
+            );
+            assert!(
+                fs::read(selected).is_err(),
+                "missing packaged resource must fail closed"
+            );
+        }
+    }
+
+    #[test]
     fn bundled_runtime_failed_publish_restores_previous_directory() {
         let temp = tempfile::tempdir().unwrap();
         let installed = temp.path().join("installed");

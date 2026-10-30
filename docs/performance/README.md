@@ -11,6 +11,15 @@ Opening the app is already satisfactory and is a regression constraint.
 
 ## Current evidence
 
+The [final cumulative comparison](beta17-final-results.md) rebuilds original
+beta.17 production source with measurement-only instrumentation and compares it
+directly with the final candidate in AB/BA order. It records per-workload latency,
+CPU, full observed process-family footprint/RSS, exact parity, rebuilt app/source
+identities and acceptance. The [JSON](beta17-final-results.json) and
+[chart](beta17-final-results.html) retain the distinct outcomes: some searches/UI
+responses exceed 5×, but uniform 5× runtime and one-fifth RAM remain unachieved.
+The earlier immediate-baseline rounds below are historical context.
+
 `beta17-baseline.json` contains the unchanged initial measurements and complete
 ordered result IDs/scores. The probes are test-only and excluded from the installed
 application. Production search changes and repeated interleaved A/B results are

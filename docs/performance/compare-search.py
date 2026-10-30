@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--samples", type=int, default=80)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--log-dir", type=Path, help="New retained artifact directory for raw process logs")
     args = parser.parse_args()
     if args.rounds < 2 or not 10 <= args.samples <= 10000:
         parser.error("use at least two rounds and 10..10000 samples")
@@ -42,7 +43,9 @@ def main():
     }
     baseline = json.loads((ROOT / "docs/performance/beta17-baseline.json").read_text())
     expected = {m["name"]: m["results"] for m in baseline["measurements"] if "results" in m}
-    log_dir = Path(tempfile.mkdtemp(prefix="tezbar-search-ab-"))
+    log_dir = args.log_dir or Path(tempfile.mkdtemp(prefix="tezbar-search-ab-"))
+    if args.log_dir:
+        log_dir.mkdir(parents=True, exist_ok=False)
     runs = []
     signatures = None
     for round_index in range(args.rounds):

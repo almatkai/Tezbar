@@ -24,6 +24,24 @@ def require_unlocked_display():
         raise RuntimeError('macOS display is locked; unlock before visible UI benchmarks')
 
 
+def scrub_fixture_clipboard(root):
+    # Keep the production observer enabled during measurements. Never inspect,
+    # copy, hash or retain its incidental OS clipboard contents in evidence.
+    # This removes only this marked OS-temp fixture's private stores after exit.
+    root=pathlib.Path(root)
+    if not (root/'.tezbar-desktop-benchmark').is_file():
+        raise ValueError('refusing clipboard-store cleanup outside a marked fixture')
+    if pathlib.Path(tempfile.gettempdir()).resolve() not in root.resolve().parents:
+        raise ValueError('fixture cleanup requires an OS-temp root')
+    if not (root/'data/search').resolve().is_relative_to(root.resolve()):
+        raise ValueError('fixture search directory escapes its root')
+    path=root/'data/search/clipboard.json'
+    path.unlink(missing_ok=True)
+    images=root/'data/search/clipboard-images'
+    if images.is_symlink(): images.unlink()
+    elif images.exists(): shutil.rmtree(images)
+
+
 def processes(root):
     rows = subprocess.check_output(['ps','-axo','pid=,ppid=,comm='], text=True).splitlines()
     rows = [r.strip().split(None, 2) for r in rows]
@@ -150,6 +168,7 @@ class Desktop:
                     else: raise RuntimeError('owned desktop shutdown identity changed; refusing signal')
                 survivors=processes(self.pid)
                 if survivors: print('owned survivors after host exit:',[p['name'] for p in survivors])
+        scrub_fixture_clipboard(self.root)
 
 def summarize(samples):
     # CPU/wakeup deltas include every observed identity, even helpers that exited.
