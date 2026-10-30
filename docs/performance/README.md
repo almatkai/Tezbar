@@ -11,6 +11,14 @@ Opening the app is already satisfactory and is a regression constraint.
 
 ## Current evidence
 
+The [native tokenizer allocation audit (R13)](beta17-tokenizer-results.md) identifies
+the BPE rule table as the largest measured vocabulary container: 51.08 MiB in
+514,907 allocator blocks. Two exact storage candidates reduce allocations/RSS but
+increase retained physical footprint in separate P/C/C/P cohorts; both are rejected.
+Production source and runtime package remain unchanged. The
+[receipts](beta17-tokenizer-results.json) include a new exhaustive C/C++ parity
+probe, allocation checkpoints and verified restoration. Whole-app targets remain unmet.
+
 The [same-cycle geometry boundary (R12)](beta17-geometry-results.md) implements a
 narrowed correction for R11: immediate target transitions plus stable-target
 microtask coalescing. Component and actual WKWebView late-rAF checks pass, but
