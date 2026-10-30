@@ -35,8 +35,19 @@ def window(d, phase):
 
 
 def contaminated(samples):
+    if not samples:
+        raise ValueError('Cannot qualify an empty idle window')
+    previous = None
+    for sample in samples:
+        timestamp, idle = sample.get('t'), sample.get('hid_idle_s')
+        if any(type(v) not in (int, float) or not math.isfinite(v) or v < 0
+               for v in (timestamp, idle)):
+            raise ValueError('Cannot qualify an idle window without valid timestamp/HID receipts')
+        if previous is not None and timestamp < previous:
+            raise ValueError('Cannot qualify an idle window with unordered timestamps')
+        previous = timestamp
     t0 = samples[0]['t']
-    hits = [round(s['t']-t0, 2) for s in samples if s.get('hid_idle_s') is not None and s['hid_idle_s'] < s['t']-t0+.05]
+    hits = [round(s['t']-t0, 2) for s in samples if s['hid_idle_s'] < s['t']-t0+.05]
     return hits
 
 

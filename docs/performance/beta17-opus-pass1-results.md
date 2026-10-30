@@ -95,7 +95,7 @@ elevated idle wakeups: 540/821/852). Quiet cohorts: **control 4, candidate 3**.
 
 Medians over runs; full ranges/values in JSON. The R14 2.35× post-search family
 CPU becomes **1.08×** (+.009 CPU-s per 30 s, i.e. 0.03 % of one core; candidate
-range .114–.151 lies inside control .096–.148). Host post-search +.009 CPU-s with
+range .114–.151 overlaps control .096–.148, with a slightly higher maximum). Host post-search +.009 CPU-s with
 identical wakeups is within control range (.065–.082) at its edge; it is reported,
 not hidden, and is far below R14's +.17–.21.
 
