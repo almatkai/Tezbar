@@ -253,7 +253,15 @@ describe('extension catalog icons (live components)', () => {
       const imageHooks = mount()
       const output = renderElement(iconHooks, icon(view.tree, extension.name, size))
       const image = cachedImage(output)
-      expect(imgSource(renderElement(imageHooks, image))).toBe(extension.iconUrl)
+      const first = renderElement(imageHooks, image)
+      if (/^https?:/.test(extension.iconUrl!)) {
+        // Remote originals are never painted: they would download the full
+        // PNG next to the WebP conversion. A placeholder holds the slot.
+        expect(elements(first).some((element) => element.type === 'img')).toBe(false)
+        expect(find(first, (element) => 'data-image-pending' in element.props)).toBeDefined()
+      } else {
+        expect(imgSource(first)).toBe(extension.iconUrl)
+      }
       imageHooks.commit()
       await Promise.resolve()
       expect(imgSource(renderElement(imageHooks, image))).toBe('blob:json-resume')

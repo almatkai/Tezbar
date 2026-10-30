@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   acquireExtensionImage,
   extensionImageSource,
+  isRemoteExtensionImage,
+  peekExtensionImage,
   type ExtensionImageVariant,
 } from './extensionImages'
 
@@ -23,6 +25,28 @@ afterEach(() => {
 })
 
 describe('extension images', () => {
+  it('exposes a ready WebP URL to new consumers only while it is owned', async () => {
+    vi.stubGlobal('window', {
+      caches: {
+        open: vi.fn().mockResolvedValue({
+          match: vi.fn().mockImplementation(async () => new Response(new Blob(['webp']))),
+        }),
+      },
+    })
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:peek-ready')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const source = 'https://example.com/peek-icon.png'
+    expect(isRemoteExtensionImage(source)).toBe(true)
+    expect(isRemoteExtensionImage('/Applications/Foo.app/icon.png')).toBe(false)
+    const image = acquireExtensionImage(source, 'icon')
+    expect(peekExtensionImage(source, 'icon')).toBeNull()
+    await image.source
+    expect(peekExtensionImage(source, 'icon')).toBe('blob:peek-ready')
+    expect(peekExtensionImage(source, 'avatar')).toBeNull()
+    image.release()
+    expect(peekExtensionImage(source, 'icon')).toBeNull()
+  })
+
   it('keeps a shared blob alive for mounted consumers and revokes it after the last release', async () => {
     const open = vi
       .fn()

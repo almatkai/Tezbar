@@ -43,6 +43,22 @@ async function toWebpBlob(source: Blob, variant: ExtensionImageVariant): Promise
   }
 }
 
+function cacheKey(normalized: string, variant: ExtensionImageVariant): string {
+  return `https://tezbar.local/extension-image-cache/${variant}/${encodeURIComponent(normalized)}.webp`
+}
+
+/** True for images that go through the WebP cache instead of loading directly. */
+export function isRemoteExtensionImage(src: string): boolean {
+  return /^https?:\/\//i.test(extensionImageSource(src))
+}
+
+/** The ready WebP URL another mounted consumer already holds, if any. Lets a
+ * newly mounted image paint it on the first render instead of a placeholder. */
+export function peekExtensionImage(src: string, variant: ExtensionImageVariant): string | null {
+  const entry = images.get(cacheKey(extensionImageSource(src), variant))
+  return entry && entry.users > 0 && entry.objectUrl ? entry.objectUrl : null
+}
+
 /** Share conversion work and Blob URLs only while a mounted image owns them.
  * CacheStorage remains the durable image cache, including offline revisits.
  */
@@ -63,7 +79,7 @@ export function acquireExtensionImage(
     return direct()
   }
 
-  const key = `https://tezbar.local/extension-image-cache/${variant}/${encodeURIComponent(normalized)}.webp`
+  const key = cacheKey(normalized, variant)
   let entry = images.get(key)
   if (!entry) {
     entry = { users: 0, source: Promise.resolve(normalized) }

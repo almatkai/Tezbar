@@ -23,6 +23,8 @@ import {
 import {
   acquireExtensionImage,
   extensionImageSource,
+  isRemoteExtensionImage,
+  peekExtensionImage,
   type ExtensionImageVariant,
 } from './extensionImages'
 import {
@@ -85,12 +87,20 @@ function CachedImage({
   onError?: () => void
 }): ReactNode {
   const normalized = extensionImageSource(src)
-  const [resolvedImage, setResolvedImage] = useState({ src: normalized, variant, source: normalized })
+  // Remote images are only painted once their WebP copy is ready. Showing the
+  // original URL meanwhile downloads the full PNG/JPEG a second time.
+  const initialSource = (): string | null =>
+    isRemoteExtensionImage(normalized) ? peekExtensionImage(normalized, variant) : normalized
+  const [resolvedImage, setResolvedImage] = useState<{
+    src: string
+    variant: ExtensionImageVariant
+    source: string | null
+  }>(() => ({ src: normalized, variant, source: initialSource() }))
   // A prop change renders before its effect runs; never paint the previous
   // extension's cached image during that render.
   const resolvedSrc = resolvedImage.src === normalized && resolvedImage.variant === variant
     ? resolvedImage.source
-    : normalized
+    : initialSource()
 
   useEffect(() => {
     let cancelled = false
@@ -105,6 +115,7 @@ function CachedImage({
     }
   }, [normalized, variant])
 
+  if (!resolvedSrc) return <span aria-hidden data-image-pending className={cx('block', className)} />
   return <img src={resolvedSrc} alt={alt} loading="lazy" decoding="async" className={className} onError={onError} />
 }
 
