@@ -110,7 +110,9 @@ not hidden, and is far below R14's +.17–.21.
 | Repeated deep | 23.0→23.0 / 29.0→28.0 | 54.5→53.5 / 59.5→57.0 | 1.455→1.456 |
 
 Simple-broad two-frame p50/p95 and warm-deep response p50 are slightly worse;
-these four/three-run medians are descriptive, not tail guarantees. Durable
+these four-per-build burst medians are descriptive, not tail guarantees. The
+input-contaminated idle windows are excluded only from idle cohorts; burst
+cohorts retain all four completed runs per build. Durable
 192-vector completion 12.34→12.26 s, CPU 3.11→2.98 CPU-s (slower absolute than
 R14 on this machine state, both builds alike). No UI or app-wide speedup is
 claimed from the native gain; the desktop Knowledge index is small.
