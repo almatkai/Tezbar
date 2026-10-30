@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """R8: unchanged R7 desktop workload, with explicitly lean burst receipts.
 
-No application changes. Frozen .apps supply their own embedded frontend/resources.
+Apps supply their own embedded frontend/resources. The optional production label
+records a new candidate without changing the R8 lean workload or timing guards.
 Full ordered row/score/action parity is measured separately, never retained by
 this timed wrapper. Historical R7 scripts and evidence remain unchanged.
 """
@@ -24,6 +25,7 @@ def main():
     p.add_argument('--app',type=Path,required=True)
     p.add_argument('--model',required=True)
     p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--production-label',choices=['original','current','candidate'],default='current')
     a=p.parse_args()
     require_unlocked_display()
     a.output.mkdir(parents=True,exist_ok=False)
@@ -32,7 +34,7 @@ def main():
     root=Path(tempfile.mkdtemp(prefix='tb-renderer-full-'))
     prepare(root,a.model)
     d=r.packaged(app,root)
-    result=dict(protocol='R8-R7-workload-lean-replies-v1',production_optimization=False,root=str(root),app=str(app),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),metrics={},inspections={},completed=False)
+    result=dict(protocol='R8-R7-workload-lean-replies-v1',production_optimization=a.production_label=='candidate',production_label=a.production_label,root=str(root),app=str(app),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),metrics={},inspections={},completed=False)
     workload=r.b
     workload.INSTALL=r.LEAN_INSTALL
     original_burst=workload.burst

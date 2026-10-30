@@ -11,6 +11,14 @@ Opening the app is already satisfactory and is a regression constraint.
 
 ## Current evidence
 
+The [UI allocation experiments (R9)](beta17-ui-allocation-results.md) test scoped
+canvas, icon and row-presentation prototypes. No production candidate is accepted:
+row memoization saves CPU but increases full-workload retained memory; icon-only
+memoization removes 88.7% of icon render invocations without a credible CPU gain.
+All production prototypes are reverted. Two behavior tests, diagnostic tooling and
+[receipts](beta17-ui-allocation-results.json) remain. The fivefold/one-fifth goals
+and the renderer CPU/RAM regression remain open. R8/R7 below are historical evidence.
+
 The focused [renderer regression follow-up](beta17-renderer-results.md) adds a
 fresh-process simple-only loop and a full lean-protocol AB/BA cohort, using the
 unchanged frozen original/current apps. The [new JSON](beta17-renderer-results.json)

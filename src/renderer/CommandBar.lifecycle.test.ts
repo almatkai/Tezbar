@@ -222,6 +222,90 @@ describe('CommandBar hidden-window Deep Search lifecycle', () => {
     )
   }
 
+  it('commits fresh result content and icon props and recovers from image errors', async () => {
+    let current: SearchResult = {
+      id: 'stable-file',
+      title: 'Fixture file',
+      subtitle: '/fixtures/file.txt',
+      category: 'files',
+      score: 10,
+      action: { type: 'open-file', path: '/fixtures/file.txt' },
+    }
+    searchAll.mockImplementation(async () => [{ ...current }])
+    await mount('fixture')
+    await advance(24)
+    await type('fixture f')
+    await advance(24)
+    current = {
+      ...current,
+      title: 'Fixture file renamed',
+      score: 20,
+      action: { type: 'open-file', path: '/fixtures/file.txt' },
+    }
+    await type('fixture fi')
+    await advance(24)
+    expect(container.querySelector('.list-row__title')?.textContent).toContain('Fixture file renamed')
+    current = { ...current, iconDataUrl: 'data:image/png;base64,ZmFrZQ==' }
+    await type('fixture fil')
+    await advance(24)
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(current.iconDataUrl)
+    await act(async () => container.querySelector('img')!.dispatchEvent(new Event('error')))
+    expect(container.querySelector('img')).toBeNull()
+    current = {
+      ...current,
+      iconDataUrl: 'data:image/png;base64,bmV3',
+      action: { type: 'open-file', path: '/fixtures/new.txt' },
+    }
+    await type('fixture file')
+    await advance(24)
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(current.iconDataUrl)
+    const execute = vi.fn(async () => ({ ok: true, message: '' }))
+    Object.assign(window.tezbar, { executeSearchAction: execute })
+    await act(async () =>
+      container
+        .querySelector<HTMLElement>('.list-row__title')!
+        .closest<HTMLButtonElement>('button')!
+        .click()
+    )
+    expect(execute).toHaveBeenCalledWith(
+      current.action,
+      expect.objectContaining({ resultId: current.id })
+    )
+  })
+
+  it('keeps the latest action when a fresh reply changes no visual row props', async () => {
+    let action: SearchResult['action'] = { type: 'copy-text', text: 'old fixture' }
+    searchAll.mockImplementation(async () => [
+      {
+        id: 'stable-command',
+        title: 'Fixture command',
+        subtitle: 'Same description',
+        category: 'commands',
+        score: 10,
+        action,
+      },
+    ])
+    const execute = vi.fn(async () => ({ ok: true, message: '' }))
+    Object.assign(window.tezbar, { executeSearchAction: execute })
+    await mount('fixture')
+    await advance(24)
+    action = { type: 'copy-text', text: 'new fixture' }
+    await act(async () => launcherInvalidated.emit({ text: 'fixture' }))
+    await advance(24)
+    expect(searchAll).toHaveBeenCalledTimes(2)
+    await act(async () =>
+      container
+        .querySelector<HTMLElement>('.list-row__title')!
+        .closest<HTMLButtonElement>('button')!
+        .click()
+    )
+    expect(execute).toHaveBeenCalledWith(action, {
+      query: 'fixture',
+      rank: 1,
+      resultId: 'stable-command',
+    })
+  })
+
   for (const timing of ['before debounce', 'request in flight'] as const) {
     it.each<HideEvent>(['native hide', 'document hidden', 'both'])(
       `preserves work, hidden completion and selection across repeated %s (${timing})`,

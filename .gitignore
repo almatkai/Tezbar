@@ -42,6 +42,7 @@ native/**/Cargo.lock
 /build/embedding-runtime/
 /build/performance-runtime-*/
 /build/performance-renderer-*/
+/build/performance-ui-allocation-*/
 /build/p/
 
 # Generated release artifacts and signing material
