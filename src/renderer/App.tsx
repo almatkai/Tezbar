@@ -37,6 +37,7 @@ const PermissionsView = React.lazy(() => import('./PermissionsView'))
 const ClipboardView = React.lazy(() => import('./ClipboardView'))
 const NotesView = React.lazy(() => import('./NotesView'))
 const SnippetsView = React.lazy(() => import('./SnippetsView'))
+const VaultView = React.lazy(() => import('./VaultView'))
 const EmojiPickerView = React.lazy(() => import('./EmojiPickerView'))
 const TerminalView = React.lazy(() => import('./TerminalView'))
 const TerminalSessionsWindow = React.lazy(() => import('./TerminalSessionsWindow'))
@@ -60,6 +61,7 @@ type Surface =
   | 'clipboard'
   | 'snippets'
   | 'notes'
+  | 'vault'
   | 'emoji-picker'
   | 'terminal'
   | 'release-notes'
@@ -77,6 +79,7 @@ const SHEET_SURFACES: ReadonlySet<Surface> = new Set<Surface>([
   'clipboard',
   'snippets',
   'notes',
+  'vault',
   'emoji-picker',
   'terminal',
   'release-notes',
@@ -129,6 +132,7 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
   clipboard: '[aria-label="Clipboard History"]',
   snippets: '[aria-label="Snippets"]',
   notes: '[aria-label="Quick Notes"]',
+  vault: '[data-vault-panel]',
   'emoji-picker': '[aria-label="Emoji Picker"]',
   terminal: '[aria-label="Terminal"]',
   'release-notes': '[aria-label="Release Notes"]',
@@ -704,6 +708,8 @@ function LauncherApp(): JSX.Element {
             <ClipboardView onBack={returnToLauncher} />
           ) : surface === 'snippets' ? (
             <SnippetsView onBack={returnToLauncher} />
+          ) : surface === 'vault' ? (
+            <VaultView onClose={returnToLauncher} />
           ) : surface === 'notes' ? (
             <NotesView onBack={returnToLauncher} initialSelectedNoteId={notesInitialSelectedId} />
           ) : surface === 'emoji-picker' ? (
@@ -794,6 +800,7 @@ function LauncherApp(): JSX.Element {
               }}
               onOpenClipboardPage={() => setSurface('clipboard')}
               onOpenSnippetsPage={() => setSurface('snippets')}
+              onOpenVault={() => setSurface('vault')}
               onOpenNotesPage={(opts) => {
                 setNotesInitialSelectedId(
                   typeof opts?.createdAt === 'number' ? opts.createdAt : null

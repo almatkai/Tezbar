@@ -774,6 +774,7 @@ pub fn recommendation(id: &str) -> f64 {
     match id {
         "native:open-clipboard-history" => 900.,
         "native:open-snippets" => 880.,
+        "native:open-vault" => 870.,
         "extcmd:raycast.kill-process:index" => 860.,
         _ => 0.,
     }

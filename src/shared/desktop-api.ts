@@ -43,6 +43,14 @@ import type { SafetyDescriptor, SafetyLogEntry } from './safety'
 import type { QuickNoteEntry } from './quickNotes'
 import type { SnippetListRow, SnippetWritePayload } from './snippets'
 import type {
+  VaultCategory,
+  VaultItem,
+  VaultItemHeader,
+  VaultSetupPayload,
+  VaultStatus,
+  VaultUnlockPayload,
+} from './vault'
+import type {
   PathCompletionItem,
   SearchAction,
   SearchBenchmarkReport,
@@ -334,6 +342,16 @@ export type RaymesApi = {
   appendQuickNote: (text: string) => Promise<QuickNoteEntry | null>
   updateQuickNote: (createdAt: number, text: string) => Promise<boolean>
   deleteQuickNote: (createdAt: number) => Promise<boolean>
+  vaultStatus: () => Promise<VaultStatus>
+  vaultSetup: (payload: VaultSetupPayload) => Promise<{ ok: boolean }>
+  vaultUnlock: (payload: VaultUnlockPayload) => Promise<{ ok: boolean }>
+  vaultLock: () => Promise<{ ok: boolean }>
+  vaultList: () => Promise<VaultItemHeader[]>
+  vaultGet: (id: string) => Promise<VaultItem>
+  vaultSave: (item: Partial<VaultItem> & { title: string; category: VaultCategory; secret: string }) => Promise<VaultItem>
+  vaultDelete: (id: string) => Promise<{ ok: boolean }>
+  vaultReset: () => Promise<{ ok: boolean }>
+  vaultChangePassword: (payload: { oldPassword: string; newPassword: string }) => Promise<{ ok: boolean }>
   terminalCreate: (request: TerminalCreateRequest) => Promise<TerminalCreateResult>
   terminalAttach: (request: TerminalAttachRequest) => Promise<TerminalAttachResult | null>
   terminalDetach: (sessionId: string) => Promise<boolean>

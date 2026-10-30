@@ -247,7 +247,9 @@ impl SystemCore {
             }
             "open-clipboard-history"
             | "open-snippets"
+            | "open-notes"
             | "open-quick-notes"
+            | "open-vault"
             | "open-emoji-picker" => {
                 return Ok(result(
                     false,

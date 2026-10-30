@@ -651,6 +651,13 @@ export async function executeNativeCommandRaw(
         }
       }
 
+      case 'open-vault': {
+        return {
+          ok: false,
+          message: 'Vault is a UI navigation — open the launcher to browse it.',
+        }
+      }
+
       case 'open-quick-notes': {
         return {
           ok: false,

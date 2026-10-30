@@ -679,6 +679,7 @@ type TezbarCommandId =
   | 'open-extensions-settings'
   | 'open-extensions'
   | 'open-snippets'
+  | 'open-vault'
   | 'open-notes'
   | 'open-emoji-picker'
   | 'open-indexing'
@@ -695,6 +696,7 @@ const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'open-extensions-settings': 'settings',
   'open-extensions': 'extensions',
   'open-snippets': 'snippets',
+  'open-vault': 'key',
   'open-notes': 'notes',
   'open-emoji-picker': 'emoji',
   'open-indexing': 'indexing',
@@ -746,6 +748,7 @@ const NATIVE_COMMAND_ICON_BY_ID: Record<NativeCommandId, CommandIconKind> = {
   'brew-update': 'brew',
   'open-clipboard-history': 'clipboard',
   'open-snippets': 'snippets',
+  'open-vault': 'key',
   'open-quick-notes': 'notes',
   'open-emoji-picker': 'emoji',
   'generate-password': 'key',
@@ -1288,6 +1291,7 @@ export default function CommandBar({
   onOpenIndexingPage,
   onOpenClipboardPage,
   onOpenSnippetsPage,
+  onOpenVault,
   onOpenNotesPage,
   onOpenEmojiPicker,
   onStartOnboarding,
@@ -1308,6 +1312,7 @@ export default function CommandBar({
   onOpenIndexingPage: () => void
   onOpenClipboardPage: () => void
   onOpenSnippetsPage: () => void
+  onOpenVault: () => void
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
   onOpenEmojiPicker: () => void
   onStartOnboarding: () => void
@@ -3067,6 +3072,11 @@ export default function CommandBar({
         onOpenSnippetsPage()
         return
       }
+      if (result.action.commandId === 'open-vault') {
+        await recordHandledSearchUsage()
+        onOpenVault()
+        return
+      }
       if (result.action.commandId === 'open-notes') {
         await recordHandledSearchUsage()
         onOpenNotesPage()
@@ -3142,6 +3152,18 @@ export default function CommandBar({
       setValue('')
       await recordHandledSearchUsage()
       onOpenSnippetsPage()
+      return
+    }
+
+    if (
+      result.action.type === 'run-native-command' &&
+      result.action.commandId === 'open-vault'
+    ) {
+      clearPendingAction()
+      showActionMsg(null)
+      setValue('')
+      await recordHandledSearchUsage()
+      onOpenVault()
       return
     }
 

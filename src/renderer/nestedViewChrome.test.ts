@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import ClipboardView from './ClipboardView'
+import VaultView from './VaultView'
 import ExtensionsView from './ExtensionsView'
 import PermissionsView from './PermissionsView'
 import ExtensionRuntimeView from './ExtensionRuntimeView'
@@ -52,6 +53,14 @@ describe('nested views share launcher chrome', () => {
     expect(doc.querySelector('[data-command-surface-status]')?.textContent).toBe(
       'Clipboard History · 0 items'
     )
+  })
+
+  it('renders Vault in one shared header with back button, input, and footer status', () => {
+    const doc = render(createElement(VaultView, { onClose: noop }))
+    const header = expectChrome(doc)
+    expect(header.querySelector('input')?.placeholder).toBe('Loading Vault…')
+    expect(header.querySelector('input')?.classList.contains('command-surface-input')).toBe(true)
+    expect(doc.querySelector('[data-command-surface-status]')?.textContent).toBe('Vault · Loading')
   })
 
   it('renders extension list search/accessory in the same header and keeps its count', () => {

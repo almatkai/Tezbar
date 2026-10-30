@@ -297,6 +297,17 @@ export function initTauriBridge(): void {
       callBackend('notes:update', { createdAt, text }),
     deleteQuickNote: (createdAt: number) => callBackend('notes:delete', createdAt),
 
+    vaultStatus: () => callBackend('vault:status'),
+    vaultSetup: (payload: any) => callBackend('vault:setup', payload),
+    vaultUnlock: (payload: any) => callBackend('vault:unlock', payload),
+    vaultLock: () => callBackend('vault:lock'),
+    vaultList: () => callBackend('vault:list'),
+    vaultGet: (id: string) => callBackend('vault:get', id),
+    vaultSave: (item: any) => callBackend('vault:save', { item }),
+    vaultDelete: (id: string) => callBackend('vault:delete', id),
+    vaultReset: () => callBackend('vault:reset'),
+    vaultChangePassword: (payload: any) => callBackend('vault:change-password', payload),
+
     terminalCreate: async (request: any) => {
       // Register listeners before spawning even when no component subscribed yet.
       await Promise.all([

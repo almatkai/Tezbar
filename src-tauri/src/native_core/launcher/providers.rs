@@ -240,6 +240,12 @@ pub(super) fn command_documents_at(native: &[Value], now: u64) -> Vec<Value> {
             "snippets text snippets /snippets",
         ),
         (
+            "open-vault",
+            "Open Vault",
+            "Tezbar secure vault for credentials, passwords, and secret keys",
+            "vault secrets passwords keys credentials ssh tokens /vault",
+        ),
+        (
             "open-notes",
             "Open Notes",
             "Tezbar quick notes",
