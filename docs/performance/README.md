@@ -11,6 +11,15 @@ Opening the app is already satisfactory and is a regression constraint.
 
 ## Current evidence
 
+The [same-cycle geometry boundary (R12)](beta17-geometry-results.md) implements a
+narrowed correction for R11: immediate target transitions plus stable-target
+microtask coalescing. Component and actual WKWebView late-rAF checks pass, but
+full P/C/C/P family CPU improves only 2.1% with overlapping runs, source-index
+input CPU rises, and retained RAM does not jointly qualify. The candidate is
+reverted; a same-index replacement regression and
+[hashed receipts](beta17-geometry-results.json) remain. No new production fix or
+overall target completion is claimed.
+
 The [row-layout experiments (R11)](beta17-row-layout-results.md) validate actual
 WKWebView row skipping and test selected-geometry batching. Row skipping increases
 CPU; batching reduces full-cohort simple-search CPU but delays a late-rAF selection

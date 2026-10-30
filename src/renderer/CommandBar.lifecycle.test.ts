@@ -264,6 +264,49 @@ describe('CommandBar hidden-window Deep Search lifecycle', () => {
     expect(highlight.style.height).toBe(`${row.offsetHeight}px`)
   })
 
+  it('updates an equal-height same-index fresh row replacement without another frame', async () => {
+    let nextId = 0
+    let top = 6
+    const frames = new Map<number, FrameRequestCallback>()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.set(++nextId, callback)
+      return nextId
+    })
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
+    vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(() => top)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(36)
+    const reply = deferred<SearchResult[]>()
+    searchAll.mockImplementation(() => reply.promise)
+    await mount('ordinary fixture')
+    await advance(100)
+    const frame = async () => {
+      const current = [...frames.values()]
+      frames.clear()
+      await act(async () => current.forEach((callback) => callback(16)))
+    }
+    await frame()
+    const selectedRow = () => container.querySelector<HTMLElement>(
+      'button.list-row[data-tone="accent"][data-selected="true"]'
+    )!.parentElement!
+    const previous = selectedRow()
+    const highlight = previous.parentElement!.parentElement!.querySelector<HTMLElement>('.glide-highlight')!
+    expect(highlight.style.transform).toBe('translateY(6px)')
+    requestAnimationFrame(() => {
+      top = 20
+      reply.resolve(results.map((row, index) => ({
+        ...row,
+        id: `fresh:${index}`,
+        title: `ordinary fixture ${index}`,
+        category: 'files',
+      })))
+    })
+    await frame()
+    expect(selectedRow()).not.toBe(previous)
+    expect(previous.isConnected).toBe(false)
+    expect(highlight.style.transform).toBe('translateY(20px)')
+    expect(highlight.style.height).toBe('36px')
+  })
+
   it('keeps measured width current across style, deep-mode text and clear changes', async () => {
     let width = 48
     const context = { font: '', measureText: vi.fn(() => ({ width })) }
