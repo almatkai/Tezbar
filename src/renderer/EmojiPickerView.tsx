@@ -50,9 +50,6 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
   const rootRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const selectedButtonRef = useRef<HTMLButtonElement | null>(null)
-  const gridRef = useRef<HTMLDivElement | null>(null)
-  // Mirror of `selected` kept in a ref so wheel handler can read it synchronously.
-  const selectedRef = useRef(0)
 
   useEffect(() => {
     setRecent(readRecentEmojis())
@@ -124,11 +121,6 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
     setSelected((index) => Math.min(index, visibleEmojis.length - 1))
   }, [visibleEmojis.length])
 
-  // Keep selectedRef in sync with state so event handlers always read the latest value.
-  useEffect(() => {
-    selectedRef.current = selected
-  })
-
   const canUseRecentShortcuts = query.trim().length === 0 && recentRows.length > 0
 
   const copyEmoji = async (emoji: string): Promise<void> => {
@@ -179,24 +171,6 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
     }
   }
 
-  // Native wheel listener with passive:false so we can call preventDefault.
-  useEffect(() => {
-    const el = gridRef.current
-    if (!el) return
-    const handler = (event: WheelEvent): void => {
-      if (visibleEmojis.length === 0) return
-      const delta = event.deltaY > 0 ? GRID_COLS : -GRID_COLS
-      const current = selectedRef.current
-      const next = Math.min(Math.max(current + delta, 0), visibleEmojis.length - 1)
-      if (next !== current) {
-        event.preventDefault()
-        setSelected(next)
-      }
-    }
-    el.addEventListener('wheel', handler, { passive: false })
-    return () => el.removeEventListener('wheel', handler)
-  }, [visibleEmojis])
-
   useEffect(() => {
     selectedButtonRef.current?.scrollIntoView({
       block: 'nearest',
@@ -245,12 +219,11 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
       </CommandSurfaceHeader>
 
       <div
-        ref={gridRef}
-        className="command-surface-body no-drag min-h-0 flex-1 overflow-hidden px-3 py-3"
+        className="command-surface-body no-drag min-h-0 flex-1 scroll-pt-3 overflow-y-auto px-3 pt-3"
       >
         {query.trim().length > 0 ? (
           searchResults.length > 0 ? (
-            <div className="grid min-h-0 grid-cols-8 gap-1 overflow-y-auto">
+            <div className="grid grid-cols-8 gap-1">
               {searchResults.map((entry, index) => (
                 <button
                   key={`${entry.char}-${entry.name}`}
@@ -278,7 +251,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
             </div>
           )
         ) : category === 'All' ? (
-          <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
+          <div className="space-y-3">
             {recentRows.length > 0 ? (
               <section>
                 <p className="mb-1 text-[11px] font-medium text-ink-3">Recently Used</p>
@@ -345,7 +318,7 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
             })}
           </div>
         ) : (
-          <div className="min-h-0 overflow-y-auto">
+          <div>
             <section>
               <p className="mb-1 text-[11px] font-medium text-ink-3">{category}</p>
               <div className="grid grid-cols-8 gap-1">

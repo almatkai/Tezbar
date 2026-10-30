@@ -105,6 +105,8 @@ export function CommandSurfaceIcon({
   )
 }
 
+/** The chevron is a thin glyph centred in its 24px box; negative margins pull
+ * it in so its gap to the input matches the launcher badge's. */
 export function CommandSurfaceBackButton(
   props: ButtonHTMLAttributes<HTMLButtonElement>
 ): JSX.Element {
@@ -112,7 +114,7 @@ export function CommandSurfaceBackButton(
     <button
       type="button"
       aria-label="Back"
-      className="command-surface-back no-drag grid h-6 w-6 shrink-0 place-items-center rounded-[7px] bg-transparent text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="command-surface-back no-drag -ml-1 -mr-1.5 grid h-6 w-6 shrink-0 place-items-center rounded-[7px] bg-transparent text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       {...props}
     >
       <svg
