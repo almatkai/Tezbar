@@ -11,6 +11,15 @@ Opening the app is already satisfactory and is a regression constraint.
 
 ## Current evidence
 
+The [synchronous-layout experiments (R10)](beta17-layout-results.md) acquire actual
+WebContent native CPU stacks and time lazy style/geometry reads. `offsetTop`
+forces dirty flex/text layout; input font measurement is comparatively small.
+Geometry equality and layout containment do not qualify. Removing the width-only
+CommandBar commit saves CPU, but a three-process/build full cohort does not clear
+RAM qualification; all prototypes are reverted. The [compact JSON](beta17-layout-results.json)
+links hashed manifests/raw per-process evidence. No new production fix or goal
+completion is claimed; restored production retains the R7/R8/R9 gaps below.
+
 The [UI allocation experiments (R9)](beta17-ui-allocation-results.md) test scoped
 canvas, icon and row-presentation prototypes. No production candidate is accepted:
 row memoization saves CPU but increases full-workload retained memory; icon-only

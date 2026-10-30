@@ -222,6 +222,32 @@ describe('CommandBar hidden-window Deep Search lifecycle', () => {
     )
   }
 
+  it('keeps measured width current across style, deep-mode text and clear changes', async () => {
+    let width = 48
+    const context = { font: '', measureText: vi.fn(() => ({ width })) }
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      context as unknown as CanvasRenderingContext2D
+    )
+    await mount('!fixture')
+    expect(context.measureText).toHaveBeenLastCalledWith('fixture')
+    expect(input().parentElement!.style.flexBasis).toBe('64px')
+    input().style.fontSize = '19px'
+    width = 96
+    await act(async () =>
+      root.render(
+        createElement(CommandBar, {
+          ...props,
+          initialValue: '!fixture',
+          hasUnreadReleaseNotes: true,
+        })
+      )
+    )
+    expect(context.font).toContain('19px')
+    expect(input().parentElement!.style.flexBasis).toBe('112px')
+    await type('')
+    expect(input().parentElement!.style.flexBasis).toBe('')
+  })
+
   it('commits fresh result content and icon props and recovers from image errors', async () => {
     let current: SearchResult = {
       id: 'stable-file',
