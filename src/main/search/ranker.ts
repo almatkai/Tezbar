@@ -41,6 +41,7 @@ const CATEGORY_PRIOR: Record<SearchCategory, number> = {
   'quick-links': 0.55,
   calculator: 0.9,
   'color-converter': 0.9,
+  vault: 0.68,
 }
 
 function normalizeRecency(ms: number): number {

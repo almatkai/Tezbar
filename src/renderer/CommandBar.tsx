@@ -1234,6 +1234,7 @@ const SEARCH_CATEGORY_LABELS: Record<SearchResult['category'], string> = {
   knowledge: 'Document',
   clipboard: 'Clipboard',
   'quick-notes': 'Note',
+  vault: 'Vault',
   extensions: 'Extension',
   store: 'Store',
   'mac-cli': 'Command',
@@ -1312,7 +1313,7 @@ export default function CommandBar({
   onOpenIndexingPage: () => void
   onOpenClipboardPage: () => void
   onOpenSnippetsPage: () => void
-  onOpenVault: () => void
+  onOpenVault: (opts?: { itemId?: string }) => void
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
   onOpenEmojiPicker: () => void
   onStartOnboarding: () => void
@@ -3101,6 +3102,15 @@ export default function CommandBar({
         await window.tezbar.appQuit()
         return
       }
+    }
+
+    if (result.action.type === 'open-vault-item') {
+      clearPendingAction()
+      showActionMsg(null)
+      setValue('')
+      await recordHandledSearchUsage()
+      onOpenVault({ itemId: result.action.id })
+      return
     }
 
     const quickNoteIdMatch = /^note:(\d+)$/.exec(result.id)

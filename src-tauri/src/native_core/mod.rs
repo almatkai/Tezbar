@@ -223,6 +223,14 @@ impl NativeCore {
             return result;
         }
         if let Some(result) = self.vault.handle(channel, args).await {
+            // Keep vault names in global search in step with the vault.
+            if result.is_ok()
+                && matches!(channel, "vault:unlock" | "vault:save" | "vault:delete" | "vault:reset")
+            {
+                if let Err(error) = self.launcher.local_refresh().await {
+                    log::warn!("vault search refresh failed: {error}");
+                }
+            }
             return result;
         }
         if channel == "health:ping" {

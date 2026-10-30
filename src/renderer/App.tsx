@@ -6,6 +6,7 @@ import { LauncherFrame } from './LauncherFrame'
 import { useLauncherScaleShortcuts } from './useLauncherScaleShortcuts'
 import { installWindowDrag } from './windowDrag'
 import { newItemEventFor } from './newItemShortcut'
+import type { VaultDraftSeed } from '../shared/vault'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
 import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../shared/llmConfig'
@@ -83,6 +84,8 @@ const SHEET_SURFACES: ReadonlySet<Surface> = new Set<Surface>([
   'terminal',
   'release-notes',
 ])
+
+type VaultEntry = { itemId?: string; draft?: VaultDraftSeed }
 
 type SettingsTab =
   | 'general'
@@ -326,6 +329,12 @@ function LauncherApp(): JSX.Element {
   const markReleaseNotesRead = useCallback(() => setHasUnreadReleaseNotes(false), [])
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   const [notesInitialSelectedId, setNotesInitialSelectedId] = useState<number | null>(null)
+  /** How the Vault was opened: on a search result, or with a clipboard value to save. */
+  const [vaultEntry, setVaultEntry] = useState<VaultEntry>({})
+  // A search target or clipboard value applies to one visit only.
+  useEffect(() => {
+    if (surface !== 'vault') setVaultEntry({})
+  }, [surface])
   const [commandInitialValue, setCommandInitialValue] = useState('')
   const [commandInitialSelectedChatId, setCommandInitialSelectedChatId] = useState<string | null>(
     null
@@ -695,11 +704,21 @@ function LauncherApp(): JSX.Element {
           ) : surface === 'permissions' ? (
             <PermissionsView onBack={() => setSurface('settings')} />
           ) : surface === 'clipboard' ? (
-            <ClipboardView onBack={returnToLauncher} />
+            <ClipboardView
+              onBack={returnToLauncher}
+              onSaveToVault={(draft) => {
+                setVaultEntry({ draft })
+                setSurface('vault')
+              }}
+            />
           ) : surface === 'snippets' ? (
             <SnippetsView onBack={returnToLauncher} />
           ) : surface === 'vault' ? (
-            <VaultView onClose={returnToLauncher} />
+            <VaultView
+              initialItemId={vaultEntry.itemId}
+              initialDraft={vaultEntry.draft}
+              onClose={() => (vaultEntry.draft ? setSurface('clipboard') : returnToLauncher())}
+            />
           ) : surface === 'notes' ? (
             <NotesView onBack={returnToLauncher} initialSelectedNoteId={notesInitialSelectedId} />
           ) : surface === 'emoji-picker' ? (
@@ -790,7 +809,10 @@ function LauncherApp(): JSX.Element {
               }}
               onOpenClipboardPage={() => setSurface('clipboard')}
               onOpenSnippetsPage={() => setSurface('snippets')}
-              onOpenVault={() => setSurface('vault')}
+              onOpenVault={(opts) => {
+                setVaultEntry({ itemId: opts?.itemId })
+                setSurface('vault')
+              }}
               onOpenNotesPage={(opts) => {
                 setNotesInitialSelectedId(
                   typeof opts?.createdAt === 'number' ? opts.createdAt : null

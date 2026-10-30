@@ -5,7 +5,9 @@ use zeroize::Zeroize;
 
 pub const ENVELOPE_VERSION: u32 = 2;
 
-/// On-disk file: the payload JSON encrypted with the random vault key.
+/// On-disk file: the payload JSON encrypted with the random vault key, plus
+/// a plaintext index of names so global search finds items while locked.
+/// Values and notes only exist inside the ciphertext.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultEnvelope {
@@ -13,23 +15,27 @@ pub struct VaultEnvelope {
     pub nonce: String,
     pub ciphertext: String,
     pub updated_at: u64,
+    #[serde(default)]
+    pub index: Vec<VaultIndexEntry>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct VaultSettings {
-    #[serde(default = "default_auto_lock_minutes")]
-    pub auto_lock_minutes: u32,
+pub struct VaultIndexEntry {
+    pub id: String,
+    pub name: String,
+    pub kind: String,
+    #[serde(default)]
+    pub updated_at: u64,
 }
 
-fn default_auto_lock_minutes() -> u32 {
-    15
-}
-
-impl Default for VaultSettings {
-    fn default() -> Self {
+impl From<&VaultItem> for VaultIndexEntry {
+    fn from(item: &VaultItem) -> Self {
         Self {
-            auto_lock_minutes: default_auto_lock_minutes(),
+            id: item.id.clone(),
+            name: item.name.clone(),
+            kind: item.kind.clone(),
+            updated_at: item.updated_at,
         }
     }
 }
@@ -39,8 +45,6 @@ impl Default for VaultSettings {
 pub struct VaultPayload {
     #[serde(default)]
     pub items: Vec<VaultItem>,
-    #[serde(default)]
-    pub settings: VaultSettings,
 }
 
 impl VaultPayload {
@@ -131,6 +135,14 @@ pub fn read_envelope(root: &Path) -> Result<VaultEnvelope, String> {
         return Err(format!("Unsupported vault file version {}", envelope.version));
     }
     Ok(envelope)
+}
+
+/// Names for global search. Empty when there is no readable v2 vault.
+pub fn read_index(root: &Path) -> Vec<VaultIndexEntry> {
+    if !exists(root) {
+        return vec![];
+    }
+    read_envelope(root).map(|envelope| envelope.index).unwrap_or_default()
 }
 
 pub fn write_envelope(root: &Path, envelope: &VaultEnvelope) -> Result<(), String> {

@@ -337,7 +337,7 @@ pub fn prior(c: &str) -> f64 {
         "files" => 0.6,
         "knowledge" => 0.64,
         "clipboard" => 0.45,
-        "quick-notes" | "extensions" => 0.68,
+        "quick-notes" | "extensions" | "vault" => 0.68,
         "store" => 0.25,
         "mac-cli" => 0.46,
         "native-command" => 0.7,

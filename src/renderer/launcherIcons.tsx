@@ -71,6 +71,12 @@ const BLOCKS = (
     <path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3" />
   </>
 )
+const KEY = (
+  <>
+    <path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4M21 2l-9.6 9.6" />
+    <circle cx="7.5" cy="15.5" r="5.5" />
+  </>
+)
 const NOTE = (
   <>
     <path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5Z" />
@@ -258,12 +264,7 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
   terminal: { color: GRAPHITE, glyph: TERMINAL },
   key: {
     color: GREEN,
-    glyph: (
-      <>
-        <path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4M21 2l-9.6 9.6" />
-        <circle cx="7.5" cy="15.5" r="5.5" />
-      </>
-    ),
+    glyph: KEY,
   },
   moon: { color: VIOLET, glyph: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /> },
   display: { color: BLUE, glyph: MONITOR },
@@ -510,6 +511,10 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
   application: { color: INDIGO, glyph: GRID },
   store: { color: ORANGE, glyph: BLOCKS },
   'quick-notes': { color: AMBER, glyph: NOTE },
+  vault: {
+    color: GREEN,
+    glyph: KEY,
+  },
   'quick-links': { color: BLUE, glyph: LINK },
   commands: { color: GRAPHITE, glyph: TERMINAL },
   'native-command': { color: GRAPHITE, glyph: TERMINAL },

@@ -29,5 +29,12 @@ export type VaultSaveInput = {
   note?: string
 }
 
+/** A value handed to the Vault editor, e.g. from Clipboard History. */
+export type VaultDraftSeed = {
+  value: string
+  /** Clipboard history entry to remove once the value is in the Vault. */
+  clipboardEntryId?: string
+}
+
 /** Dispatched from App when ⌘N fires while the Vault surface is open. */
 export const TEZBAR_NEW_VAULT_ITEM_EVENT = 'tezbar:new-vault-item'

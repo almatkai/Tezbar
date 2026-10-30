@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
   TEZBAR_NEW_VAULT_ITEM_EVENT,
+  type VaultDraftSeed,
   type VaultItem,
   type VaultItemHeader,
   type VaultKind,
@@ -28,6 +29,8 @@ type Draft = {
   nameTouched: boolean
   note: string
   showNote: boolean
+  /** Clipboard history entry this value came from; removed after saving. */
+  clipboardEntryId?: string
 }
 
 const EMPTY_DRAFT: Draft = { value: '', name: '', nameTouched: false, note: '', showNote: false }
@@ -123,7 +126,17 @@ function autoGrow(element: HTMLTextAreaElement | null, max = 220): void {
   element.style.height = `${Math.min(element.scrollHeight, max)}px`
 }
 
-export default function VaultView({ onClose }: { onClose: () => void }): JSX.Element {
+export default function VaultView({
+  onClose,
+  initialItemId,
+  initialDraft,
+}: {
+  onClose: () => void
+  /** Select this item once the vault is open (global search result). */
+  initialItemId?: string
+  /** Start the editor with this value once the vault is open (Clipboard). */
+  initialDraft?: VaultDraftSeed
+}): JSX.Element {
   const [status, setStatus] = useState<VaultStatus | null>(null)
   const [unlocking, setUnlocking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -141,6 +154,7 @@ export default function VaultView({ onClose }: { onClose: () => void }): JSX.Ele
   const valueRef = useRef<HTMLTextAreaElement>(null)
   const nameRef = useRef<HTMLInputElement>(null)
   const autoUnlockRef = useRef(false)
+  const entryAppliedRef = useRef(false)
 
   const unlocked = Boolean(status?.supported && status.unlocked)
 
@@ -212,6 +226,18 @@ export default function VaultView({ onClose }: { onClose: () => void }): JSX.Ele
     }
   }, [current?.id, current?.updatedAt, unlocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Apply how the Vault was opened as soon as it is unlocked, once.
+  useEffect(() => {
+    if (!unlocked || entryAppliedRef.current) return
+    entryAppliedRef.current = true
+    if (initialDraft?.value) {
+      setDraft({ ...EMPTY_DRAFT, value: initialDraft.value, clipboardEntryId: initialDraft.clipboardEntryId })
+    } else if (initialItemId) {
+      const index = items.findIndex((item) => item.id === initialItemId)
+      if (index >= 0) setSelected(index)
+    }
+  }, [unlocked, items, initialDraft, initialItemId])
+
   useEffect(() => {
     if (!flash) return
     const timer = window.setTimeout(() => setFlash(null), 2200)
@@ -267,12 +293,15 @@ export default function VaultView({ onClose }: { onClose: () => void }): JSX.Ele
         kind: detected.kind,
         note: draft.note,
       })
+      const removedFromClipboard = draft.clipboardEntryId
+        ? await window.tezbar.deleteClipboardEntry(draft.clipboardEntryId).catch(() => false)
+        : false
       setDraft(null)
       setQuery('')
       const list = await window.tezbar.vaultList()
       setItems(list)
       setSelected(Math.max(0, list.findIndex((item) => item.id === saved.id)))
-      setFlash('Saved')
+      setFlash(removedFromClipboard ? 'Saved · removed from Clipboard History' : 'Saved')
     } catch (err) {
       setFlash(err instanceof Error ? err.message : 'Could not save')
     }

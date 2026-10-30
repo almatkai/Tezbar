@@ -21,6 +21,8 @@ const UNLOCK_REASON: &str = "unlock your Vault";
 const RESET_REASON: &str = "erase your Vault";
 const UNSUPPORTED: &str = "Vault is available on macOS for now";
 const LOCKED: &str = "Vault is locked";
+/// Opening the vault again within this idle window needs no new prompt.
+const AUTO_LOCK_AFTER: Duration = Duration::from_secs(30 * 60);
 /// How long a copied secret may stay on the pasteboard.
 const CLIPBOARD_CLEAR_AFTER: Duration = Duration::from_secs(30);
 const KINDS: [&str; 6] = ["api-key", "token", "ssh-key", "server", "password", "note"];
@@ -79,12 +81,7 @@ impl VaultService {
         if state.key.is_none() {
             return;
         }
-        let minutes = state
-            .payload
-            .as_ref()
-            .map(|p| p.settings.auto_lock_minutes)
-            .unwrap_or(15);
-        if state.last_active.elapsed() > Duration::from_secs(u64::from(minutes) * 60) {
+        if state.last_active.elapsed() > AUTO_LOCK_AFTER {
             Self::lock_internal(state);
         }
     }
@@ -196,7 +193,12 @@ impl VaultService {
             let parsed = serde_json::from_slice::<VaultPayload>(&plaintext)
                 .map_err(|e| format!("Failed to read vault contents: {e}"));
             plaintext.zeroize();
-            parsed?
+            let payload = parsed?;
+            // Files written before the search index existed get one now.
+            if envelope.index.len() != payload.items.len() {
+                persist(&self.root, &key, &payload)?;
+            }
+            payload
         } else {
             let payload = VaultPayload::default();
             persist(&self.root, &key, &payload)?;
@@ -359,6 +361,7 @@ fn persist(root: &Path, key: &VaultKey, payload: &VaultPayload) -> Result<(), St
             nonce,
             ciphertext,
             updated_at: now_ms(),
+            index: payload.items.iter().map(Into::into).collect(),
         },
     )
 }
@@ -464,6 +467,11 @@ mod tests {
 
         let raw = std::fs::read_to_string(storage::vault_path(dir.path())).unwrap();
         assert!(!raw.contains("value-under-test-123"));
+        assert!(!raw.contains("prod"));
+        let index = storage::read_index(dir.path());
+        assert_eq!(index.len(), 1);
+        assert_eq!(index[0].name, "OpenAI API key");
+        assert_eq!(index[0].id, id);
 
         call(&vault, "vault:lock", &[]).await.unwrap();
         assert!(call(&vault, "vault:get", &[json!(id)]).await.is_err());
