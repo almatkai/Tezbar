@@ -1,6 +1,12 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceTitle,
+  CommandSurfaceFooter,
+} from './ui/CommandSurface'
 import { useEffect, useRef, useState } from 'react'
 import { Markdown } from './ui/Markdown'
-import { Button, Hint, HintBar, Kbd, ViewHeader } from './ui/primitives'
+import { Button, Hint, Kbd } from './ui/primitives'
 import {
   CURRENT_APP_VERSION,
   fetchReleaseNotes,
@@ -80,19 +86,13 @@ export default function ReleaseNotesView({
       }}
       className="no-drag view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3">
-        <ViewHeader
-          title="What’s new in Tezbar"
-          onBack={onBack}
-          trailing={
-            <span className="rounded-tezbar-chip border border-white/10 px-2 py-1 text-xs text-ink-2">
-              v{version}
-            </span>
-          }
-        />
-        <p className="mt-2 text-xs text-ink-3">Release notes for your Tezbar version.</p>
-      </div>
-      <div className="glass-card min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceTitle>What’s new in Tezbar</CommandSurfaceTitle>
+        <span className="shrink-0 text-xs text-ink-3">v{version}</span>
+      </CommandSurfaceHeader>
+      <div className="command-surface-body no-drag min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <p className="mb-3 text-xs text-ink-3">Release notes for your Tezbar version.</p>
         {error ? (
           <div role="status" className="space-y-3 text-sm text-ink-3">
             <p>Couldn’t load the Tezbar release notes. Please try again.</p>
@@ -112,9 +112,9 @@ export default function ReleaseNotesView({
           </div>
         )}
       </div>
-      <HintBar className="shrink-0 px-2 py-1">
-        <Hint keys={<Kbd>ESC</Kbd>} label="Back" />
-      </HintBar>
+      <CommandSurfaceFooter>
+        <Hint keys={<Kbd>Esc</Kbd>} label="Back" />
+      </CommandSurfaceFooter>
     </div>
   )
 }

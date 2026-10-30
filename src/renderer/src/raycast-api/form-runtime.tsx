@@ -1,4 +1,10 @@
 import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceTitle,
+  CommandSurfaceFooter,
+} from '../../ui/CommandSurface'
+import {
   forwardRef,
   useCallback,
   useEffect,
@@ -9,7 +15,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
-import { Hint, HintBar, Kbd, ViewHeader } from '../../ui/primitives'
+import { Hint, Kbd } from '../../ui/primitives'
 import { NativeColorWheel, parseNativeColorWheel } from './detail-runtime'
 
 type FormField = {
@@ -283,7 +289,7 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
 
   return (
     <form
-      className="flex h-full min-h-0 flex-col"
+      className="view-sheet flex h-full min-h-0 flex-col"
       onSubmit={(event) => {
         event.preventDefault()
         onSubmitForm(values)
@@ -301,11 +307,12 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
         onSubmitForm(values)
       }}
     >
-      <div className="glass-card mb-2 shrink-0 px-4 py-3">
-        <ViewHeader title={title} />
-      </div>
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceTitle>{title}</CommandSurfaceTitle>
+      </CommandSurfaceHeader>
 
-      <div className="glass-card min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
+      <div className="command-surface-body no-drag min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
         <div className="mx-auto max-w-[900px] space-y-4">
           {nativeColorWheel ? (
             <NativeColorWheel
@@ -527,7 +534,7 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
         <div
           role="status"
           aria-live="polite"
-          className={`glass-card mt-2 shrink-0 px-4 py-2 text-[11px] font-medium ${
+          className={`sheet-above-bar shrink-0 px-4 py-2 text-[11px] font-medium ${
             actionNotice.tone === 'error' ? 'text-rose-300' : 'text-emerald-200'
           }`}
         >
@@ -535,16 +542,14 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
         </div>
       ) : null}
 
-      <div className="glass-card mt-2 flex shrink-0 items-center justify-between gap-3 px-4 py-2">
+      <CommandSurfaceFooter>
         <button
           type="button"
           onClick={onBack}
           className="rounded-tezbar-chip px-1.5 py-1 transition hover:bg-white/[0.06]"
           aria-label="Back"
         >
-          <HintBar>
-            <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-          </HintBar>
+          <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
         </button>
         <div className="flex items-center gap-1">
           <button
@@ -552,9 +557,7 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
             className="rounded-tezbar-chip px-1.5 py-1 transition hover:bg-white/[0.06]"
             aria-label="Submit form"
           >
-            <HintBar>
-              <Hint label="Submit" keys={<Kbd>↵</Kbd>} />
-            </HintBar>
+            <Hint label="Submit" keys={<Kbd>↵</Kbd>} />
           </button>
           <button
             type="button"
@@ -562,20 +565,18 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
             className="rounded-tezbar-chip px-1.5 py-1 transition hover:bg-white/[0.06]"
             aria-label="Open actions"
           >
-            <HintBar>
-              <Hint
-                label="Actions"
-                keys={
-                  <>
-                    <Kbd>⌘</Kbd>
-                    <Kbd>K</Kbd>
-                  </>
-                }
-              />
-            </HintBar>
+            <Hint
+              label="Actions"
+              keys={
+                <>
+                  <Kbd>⌘</Kbd>
+                  <Kbd>K</Kbd>
+                </>
+              }
+            />
           </button>
         </div>
-      </div>
+      </CommandSurfaceFooter>
     </form>
   )
 })

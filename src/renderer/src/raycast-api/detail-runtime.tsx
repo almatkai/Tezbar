@@ -1,8 +1,16 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceTitle,
+  CommandSurfaceAction,
+  CommandSurfaceIcon,
+  CommandSurfaceFooter,
+} from '../../ui/CommandSurface'
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
 import { buildColorFormatRows, type Rgba } from '../../colorConverter'
 import { Markdown } from '../../ui/Markdown'
-import { cx } from '../../ui/primitives'
+import { cx, Hint, Kbd } from '../../ui/primitives'
 
 function normalizeMetadataType(type: string): string {
   return type.replace(/^List\.Item\./, '')
@@ -545,26 +553,20 @@ export function DetailRuntime({
   const imageOnly = parseImageOnlyMarkdown(markdown, assetsPath)
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="glass-card mb-2 shrink-0 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn btn-ghost" onClick={onBack}>
-            Back
-          </button>
-          <div className="text-[12px] font-semibold text-ink-2">{title}</div>
-          <div className="ml-auto flex items-center gap-1">
-            <button type="button" className="btn btn-ghost" onClick={onRunPrimaryAction}>
-              Enter
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={onOpenActions}>
-              Cmd+K
-            </button>
-          </div>
-        </div>
-      </div>
+    <div className="view-sheet flex h-full min-h-0 flex-col">
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceTitle>{title}</CommandSurfaceTitle>
+        <CommandSurfaceAction title="Enter" aria-label="Enter" onClick={onRunPrimaryAction}>
+          <CommandSurfaceIcon name="enter" />
+        </CommandSurfaceAction>
+        <CommandSurfaceAction title="Actions" aria-label="Actions" onClick={onOpenActions}>
+          <CommandSurfaceIcon name="actions" />
+        </CommandSurfaceAction>
+      </CommandSurfaceHeader>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="glass-card min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="command-surface-body no-drag flex min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {imageOnly && imageOnly.alt.toLowerCase().includes('color wheel') ? (
             <ColorWheelDetail image={imageOnly} initialColor={root.props?.initialColor} />
           ) : imageOnly ? (
@@ -591,6 +593,19 @@ export function DetailRuntime({
 
         {root.metadata ? <MetadataSidebar root={root.metadata} /> : null}
       </div>
+      <CommandSurfaceFooter>
+        <Hint label="Enter" keys={<Kbd>↵</Kbd>} />
+        <Hint
+          label="Actions"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>K</Kbd>
+            </>
+          }
+        />
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+      </CommandSurfaceFooter>
     </div>
   )
 }

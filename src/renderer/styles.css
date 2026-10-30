@@ -691,7 +691,7 @@
 
   /* The search header is flat chrome separated by a hairline, matching dark
      mode. The input is always focused, so it gets no ring of its own. */
-  :root[data-theme='white'] .command-search #command-input:focus-visible {
+  :root[data-theme='white'] .command-search :is(#command-input, .command-surface-input):focus-visible {
     outline: none;
   }
 
@@ -2416,6 +2416,11 @@ html.tezbar-window-hidden body {
   border-top: 1px solid var(--ln-hairline);
 }
 
+/* The shared header owns the single hairline above the body. */
+.view-sheet > [data-command-surface-header] + * {
+  border-top: 0;
+}
+
 /* Shared compact header rhythm. Avoid stacking header padding, control
    margins and the next section's padding into large empty bands. Scoped to
    sheets so settings dialogs and other card layouts keep their own spacing. */
@@ -2447,12 +2452,15 @@ html.tezbar-window-hidden body {
   --sheet-bar-h: 36px;
 }
 
-.tezbar-launcher {
+.tezbar-launcher,
+.view-sheet:has(> .command-surface-body):has(> .launcher-footer) {
   --sheet-bar-h: 32px;
 }
 
 .view-sheet > .glass-card:last-child:not(:first-child):has(.kbd-group),
 :root[data-theme='white'] .view-sheet > .glass-card:last-child:not(:first-child):has(.kbd-group),
+.view-sheet:has(> .command-surface-body) > .launcher-footer,
+:root[data-theme='white'] .view-sheet:has(> .command-surface-body) > .launcher-footer,
 .tezbar-launcher > .launcher-footer,
 :root[data-theme='white'] .tezbar-launcher > .launcher-footer {
   position: absolute;
@@ -2471,12 +2479,18 @@ html.tezbar-window-hidden body {
   padding-bottom: 0;
 }
 
+.view-sheet:has(> .launcher-footer) > .command-surface-body {
+  padding-bottom: 0;
+}
+
 /* … and its scroll areas pad their end so the last row clears the bar. */
 .view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
   > .glass-card:nth-last-child(2)
   :is([class~='overflow-y-auto'], [class~='overflow-auto']),
 .view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
   > .glass-card:nth-last-child(2):is([class~='overflow-y-auto'], [class~='overflow-auto']):not(.sheet-above-bar),
+.view-sheet:has(> .launcher-footer) > .command-surface-body :is([class~='overflow-y-auto'], [class~='overflow-auto']),
+.view-sheet:has(> .launcher-footer) > .command-surface-body:is([class~='overflow-y-auto'], [class~='overflow-auto']),
 .tezbar-launcher .launcher-body :is([class~='overflow-y-auto'], [class~='overflow-auto']) {
   padding-bottom: calc(var(--sheet-bar-h) + 6px);
   scroll-padding-bottom: calc(var(--sheet-bar-h) + 6px);
@@ -2532,7 +2546,8 @@ html.tezbar-window-hidden body {
   overflow: hidden;
 }
 
-.tezbar-launcher .launcher-mode-chip {
+:is(.tezbar-launcher, [data-command-surface-header]) .launcher-mode-chip,
+[data-command-surface-header] .command-surface-select {
   display: inline-flex;
   height: 20px;
   flex-shrink: 0;
@@ -2544,6 +2559,31 @@ html.tezbar-window-hidden body {
   white-space: nowrap;
   color: rgb(var(--c-text-3));
   background: var(--ln-pill);
+}
+
+[data-command-surface-header] .launcher-mode-chip:hover,
+[data-command-surface-header] .command-surface-back:hover {
+  background: var(--ln-hover);
+}
+
+[data-command-surface-header] .launcher-mode-chip[aria-pressed='true'] {
+  color: rgb(var(--c-text-1));
+  background: var(--ln-pill-strong);
+}
+
+[data-command-surface-header] .command-surface-chips {
+  display: flex;
+  min-width: 0;
+  max-width: 55%;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+[data-command-surface-header] .command-surface-chips::-webkit-scrollbar {
+  display: none;
 }
 
 .tezbar-launcher .rolling-command-hint__shortcut,
@@ -2618,11 +2658,6 @@ html.tezbar-window-hidden body {
 .extensions-store-message {
   border-color: var(--ln-hairline);
   background: var(--ln-bar);
-}
-
-:root[data-theme='white'] .extensions-store-search {
-  border-color: var(--ln-hairline);
-  background: var(--ln-field);
 }
 
 :root[data-theme='white'] .extensions-store .extension-detail-footer {

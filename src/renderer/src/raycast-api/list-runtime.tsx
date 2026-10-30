@@ -1,9 +1,18 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceInput,
+  CommandSurfaceTitle,
+  CommandSurfaceChip,
+  CommandSurfaceFooter,
+  CommandSurfaceStatus,
+} from '../../ui/CommandSurface'
 import React, { useMemo, useState, useEffect, useRef } from 'react'
 import type {
   ExtensionRuntimeAction,
   ExtensionRuntimeNode,
 } from '../../../shared/extensionRuntime'
-import { Hint, HintBar, Kbd, ViewHeader, cx } from '../../ui/primitives'
+import { Hint, Kbd, cx } from '../../ui/primitives'
 import { Markdown } from '../../ui/Markdown'
 import { MetadataItem, MetadataSidebar } from './detail-runtime'
 import { buildColorConversionResults } from '../../colorConverter'
@@ -511,7 +520,6 @@ export function ListRuntime({
   const hasServerSearch = onSearchTextChanged !== undefined && root.props?.__hasServerSearch === true
   const hasMore = root.props?.__hasMore === true
   const isColorConversionSurface = isColorConversionCommand(commandName, title, navigationTitle)
-  const hasManySearchOptions = (searchAccessory?.options.length ?? 0) > 4
   const hasSearchPlaceholder =
     typeof root.props?.searchBarPlaceholder === 'string' &&
     root.props.searchBarPlaceholder.trim().length > 0
@@ -706,73 +714,66 @@ export function ListRuntime({
 
   return (
     <div
-      className="flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="view-sheet flex h-full min-h-0 w-full flex-col outline-none animate-tezbar-scale-in"
       onKeyDown={onKeyDown}
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
-        <ViewHeader title={navigationTitle} onBack={onBack} />
-
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
         {shouldShowSearch ? (
-          <div className={cx('mt-2 flex gap-2', hasManySearchOptions ? 'flex-col items-stretch' : 'items-center')}>
-            <div className="min-w-0 flex-1">
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value)
-                  setSelected(0)
-                }}
-                placeholder={searchBarPlaceholder}
-                className="h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
-                aria-label={searchBarPlaceholder}
-              />
-            </div>
-            {searchAccessory && searchAccessory.options.length > 0 ? (
-              <div
-                className={cx(
-                  'flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-tezbar-field p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-                  hasManySearchOptions ? 'w-full' : 'shrink-0',
-                )}
-              >
-                {searchAccessory.options.map((option) => {
-                  const active = accessoryValue === option.value
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setAccessoryValue(option.value)
-                        setSelected(0)
-                        if (searchAccessory.actionId) {
-                          onRunPrimaryAction(searchAccessory.actionId, { value: option.value })
-                        }
-                      }}
-                      className={
-                        active
-                          ? 'shrink-0 rounded-tezbar-chip bg-white/[0.14] px-2.5 py-1.5 text-[11px] font-medium text-ink-1 transition'
-                          : 'shrink-0 rounded-tezbar-chip px-2.5 py-1.5 text-[11px] text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1'
-                      }
+          <CommandSurfaceInput
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setSelected(0)
+            }}
+            placeholder={searchBarPlaceholder}
+            aria-label={searchBarPlaceholder}
+          />
+        ) : (
+          <CommandSurfaceTitle>{navigationTitle}</CommandSurfaceTitle>
+        )}
+        {searchAccessory && searchAccessory.options.length > 0 ? (
+          <div className="command-surface-chips">
+            {searchAccessory.options.map((option) => {
+              const active = accessoryValue === option.value
+              return (
+                <CommandSurfaceChip
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setAccessoryValue(option.value)
+                    setSelected(0)
+                    if (searchAccessory.actionId) {
+                      onRunPrimaryAction(searchAccessory.actionId, { value: option.value })
+                    }
+                  }}
+                  active={active}
+                >
+                  {isEmojiGlyph(option.icon) ? (
+                    <span
+                      className="mr-1.5 inline-grid h-4 w-4 place-items-center text-[13px] leading-none"
+                      aria-hidden="true"
                     >
-                      {isEmojiGlyph(option.icon) ? (
-                        <span className="mr-1.5 inline-grid h-4 w-4 place-items-center text-[13px] leading-none" aria-hidden="true">
-                          {option.icon}
-                        </span>
-                      ) : null}
-                      {option.title}
-                    </button>
-                  )
-                })}
-              </div>
-            ) : null}
+                      {option.icon}
+                    </span>
+                  ) : null}
+                  {option.title}
+                </CommandSurfaceChip>
+              )
+            })}
           </div>
         ) : null}
-      </div>
+      </CommandSurfaceHeader>
 
       <div
         ref={listRef}
-        className={`glass-card min-h-0 flex-1 overflow-hidden animate-tezbar-scale-in ${hasDetails ? 'grid grid-cols-[minmax(280px,40%)_minmax(0,1fr)] px-2 py-2' : 'flex flex-col px-4 py-3'
-          }`}
+        className={`command-surface-body no-drag min-h-0 flex-1 overflow-hidden ${
+          hasDetails
+            ? 'grid grid-cols-[minmax(280px,40%)_minmax(0,1fr)] px-2 py-2'
+            : 'flex flex-col px-4 py-3'
+        }`}
       >
         {filteredRows.length === 0 ? (
           <div className="flex h-full items-center justify-center text-center">
@@ -850,7 +851,7 @@ export function ListRuntime({
               ))}
             </div>
             {hasDetails ? (
-              <div className="min-h-0 overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
+              <div className="sheet-above-bar min-h-0 overflow-hidden border-l border-white/[0.06]">
                 <ListDetailPane row={selectedRow} />
               </div>
             ) : null}
@@ -858,27 +859,44 @@ export function ListRuntime({
         )}
       </div>
 
-      <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
-        <span className="flex items-center gap-2 text-[11px] font-medium text-ink-4">
-          {filteredRows.length} item{filteredRows.length === 1 ? '' : 's'}
-          {hasMore ? (
-            <button
-              type="button"
-              disabled={loadingMore}
-              onClick={() => void requestMore()}
-              className="ml-1 text-[10.5px] font-semibold normal-case tracking-normal text-ink-2 transition hover:text-ink-1 disabled:opacity-50"
-            >
-              {loadingMore ? 'Loading...' : 'Load more'}
-            </button>
-          ) : null}
-        </span>
-        <HintBar>
-          <Hint label="Select" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
-          <Hint label={selectedActionLabel} keys={<Kbd>↵</Kbd>} />
-          <Hint label="Actions" keys={<><Kbd>⌘</Kbd><Kbd>K</Kbd></>} />
-          <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-        </HintBar>
-      </div>
+      <CommandSurfaceFooter
+        status={
+          <CommandSurfaceStatus title={navigationTitle}>
+            {filteredRows.length} item{filteredRows.length === 1 ? '' : 's'}
+            {hasMore ? (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => void requestMore()}
+                className="ml-1 text-[10.5px] font-semibold normal-case tracking-normal text-ink-2 transition hover:text-ink-1 disabled:opacity-50"
+              >
+                {loadingMore ? 'Loading...' : 'Load more'}
+              </button>
+            ) : null}
+          </CommandSurfaceStatus>
+        }
+      >
+        <Hint
+          label="Select"
+          keys={
+            <>
+              <Kbd>↑</Kbd>
+              <Kbd>↓</Kbd>
+            </>
+          }
+        />
+        <Hint label={selectedActionLabel} keys={<Kbd>↵</Kbd>} />
+        <Hint
+          label="Actions"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>K</Kbd>
+            </>
+          }
+        />
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+      </CommandSurfaceFooter>
     </div>
   )
 }

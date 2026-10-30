@@ -1,6 +1,14 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceInput,
+  CommandSurfaceChip,
+  CommandSurfaceFooter,
+  CommandSurfaceStatus,
+} from './ui/CommandSurface'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ClipboardEntry, ClipboardImagePayload } from '../shared/clipboard'
-import { Hint, HintBar, Kbd, Message, ViewHeader } from './ui/primitives'
+import { Hint, Kbd, Message } from './ui/primitives'
 import { GlideList } from './ui/GlideList'
 import { ConvertActionRow } from './clipboardActions'
 import { visibleEventRefresh } from './visibleEventRefresh'
@@ -401,51 +409,37 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
       onKeyDown={onKeyDown}
       className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
-        <ViewHeader
-          title="Clipboard History"
-          onBack={onBack}
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceInput
+          ref={inputRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search clipboard history…"
         />
-
-        {/* Search + filter chips */}
-        <div className="mt-2 flex items-center gap-2">
-          <div className="relative flex-1">
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search clipboard history…"
-              className="h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
-            />
-          </div>
-          <div className="flex items-center gap-1">
-            {filters.map((f) => {
-              const active = filter === f.id
-              const count = countsByFilter[f.id]
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setFilter(f.id)}
-                  className={
-                    active
-                      ? 'rounded-tezbar-chip bg-white/[0.12] px-2 py-1 text-[11px] font-medium text-ink-1 transition'
-                      : 'rounded-tezbar-chip px-2 py-1 text-[11px] text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1'
-                  }
-                >
-                  <span>{f.label}</span>
-                  {count > 0 && f.id !== 'all' ? (
-                    <span className="ml-1 text-ink-4">{count}</span>
-                  ) : null}
-                </button>
-              )
-            })}
-          </div>
+        <div className="command-surface-chips">
+          {filters.map((f) => {
+            const active = filter === f.id
+            const count = countsByFilter[f.id]
+            return (
+              <CommandSurfaceChip
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                active={active}
+              >
+                <span>{f.label}</span>
+                {count > 0 && f.id !== 'all' ? (
+                  <span className="ml-1 text-ink-4">{count}</span>
+                ) : null}
+              </CommandSurfaceChip>
+            )
+          })}
         </div>
-      </div>
+      </CommandSurfaceHeader>
 
       {/* Split pane */}
-      <div className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2 animate-tezbar-scale-in">
+      <div className="command-surface-body no-drag flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2">
         <section className="flex min-h-0 flex-1 gap-3">
           {/* Left: list */}
           <div className="flex min-h-0 w-[44%] max-w-[340px] flex-col overflow-hidden">
@@ -478,7 +472,7 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
           </div>
 
           {/* Right: preview */}
-          <div className="sheet-above-bar min-h-0 flex-1 overflow-hidden rounded-tezbar-row border border-white/[0.06] bg-white/[0.02]">
+          <div className="sheet-above-bar min-h-0 flex-1 overflow-hidden border-l border-white/[0.06]">
             {currentEntry ? (
               <PreviewPane
                 key={currentEntry.id}
@@ -504,18 +498,27 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
         ) : null}
       </div>
 
-      <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
-        <span className="text-[11px] text-ink-4">
-          {filtered.length} item{filtered.length === 1 ? '' : 's'}
-          {filter !== 'all' ? ` · ${filters.find((f) => f.id === filter)?.label}` : ''}
-        </span>
-        <HintBar>
-          <Hint label={primaryActionLabel ?? 'Copy'} keys={<Kbd>↵</Kbd>} />
-          <Hint label="Pin" keys={<Kbd>P</Kbd>} />
-          <Hint label="Delete" keys={<><Kbd>⌘</Kbd><Kbd>D</Kbd></>} />
-          <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-        </HintBar>
-      </div>
+      <CommandSurfaceFooter
+        status={
+          <CommandSurfaceStatus title="Clipboard History">
+            {filtered.length} item{filtered.length === 1 ? '' : 's'}
+            {filter !== 'all' ? ` · ${filters.find((f) => f.id === filter)?.label}` : ''}
+          </CommandSurfaceStatus>
+        }
+      >
+        <Hint label={primaryActionLabel ?? 'Copy'} keys={<Kbd>↵</Kbd>} />
+        <Hint label="Pin" keys={<Kbd>P</Kbd>} />
+        <Hint
+          label="Delete"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>D</Kbd>
+            </>
+          }
+        />
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+      </CommandSurfaceFooter>
     </div>
   )
 }

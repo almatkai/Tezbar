@@ -1,8 +1,17 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceInput,
+  CommandSurfaceAction,
+  CommandSurfaceIcon,
+  CommandSurfaceFooter,
+  CommandSurfaceStatus,
+} from './ui/CommandSurface'
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { ExtensionManifest, ExtensionPlatform } from '../shared/extensions'
 import type { ExtensionStorePage } from '../shared/desktop-api'
 import { parseGitHubRepositoryUrl } from '../shared/extensionRepository'
-import { Button, Hint, HintBar, Kbd, Message, ViewHeader, cx } from './ui/primitives'
+import { Button, Hint, Kbd, Message, cx } from './ui/primitives'
 import { KNOWN_EXTENSION_APP_MAP, Squircle, normalizeIconKind } from './launcherIcons'
 import { GlideList } from './ui/GlideList'
 import { ExtensionPreferencesEditor } from './ExtensionPreferencesEditor'
@@ -543,34 +552,36 @@ export default function ExtensionsView({
       )}
     >
       {!embedded ? (
-        <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
-          <ViewHeader
-            title="Extensions"
-            onBack={onBack}
-            trailing={
-              <Button variant="ghost" onClick={() => void reload()} disabled={loading}>
-                {loading ? 'Refreshing' : 'Refresh'}
-              </Button>
-            }
+        <CommandSurfaceHeader>
+          <CommandSurfaceBackButton onClick={onBack} />
+          <CommandSurfaceInput
+            ref={searchRef}
+            value={query}
+            onChange={(event) => {
+              pendingNextAfterLoadRef.current = null
+              dispatchCatalog({ type: 'query', query: event.target.value })
+            }}
+            aria-label="Search extensions or paste a GitHub repository URL"
+            placeholder={`${isWindows ? 'Search loved extensions' : 'Search extensions'} or paste a GitHub URL…`}
+            autoFocus
           />
-          <div className="mt-2">
-            <input
-              ref={searchRef}
-              value={query}
-              onChange={(event) => {
-                pendingNextAfterLoadRef.current = null
-                dispatchCatalog({ type: 'query', query: event.target.value })
-              }}
-              aria-label="Search extensions or paste a GitHub repository URL"
-              placeholder={`${isWindows ? 'Search loved extensions' : 'Search extensions'} or paste a GitHub URL…`}
-              className="extensions-store-search h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
-              autoFocus
-            />
-          </div>
-        </div>
+          <CommandSurfaceAction
+            title={loading ? 'Refreshing' : 'Refresh'}
+            aria-label="Refresh"
+            onClick={() => void reload()}
+            disabled={loading}
+          >
+            <CommandSurfaceIcon name="refresh" />
+          </CommandSurfaceAction>
+        </CommandSurfaceHeader>
       ) : null}
 
-      <section className="extensions-store-body glass-card grid min-h-0 flex-1 gap-3 overflow-hidden px-2 py-2">
+      <section
+        className={cx(
+          'extensions-store-body grid min-h-0 flex-1 gap-3 overflow-hidden px-2 py-2',
+          embedded ? 'glass-card' : 'command-surface-body no-drag'
+        )}
+      >
         <aside
           aria-label={isWindows ? 'Loved by Tezbar' : 'Extension catalog'}
           className="flex min-h-0 min-w-0 flex-col overflow-hidden"
@@ -947,25 +958,26 @@ export default function ExtensionsView({
       </section>
 
       {!embedded ? (
-        <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2">
-          <span className="text-[11px] text-ink-4">
-            {total.toLocaleString()} extension{total === 1 ? '' : 's'}
-          </span>
-          <HintBar>
-            <Hint label="Search" keys={<Kbd>/</Kbd>} />
-            <Hint
-              label="Navigate"
-              keys={
-                <>
-                  <Kbd>↑</Kbd>
-                  <Kbd>↓</Kbd>
-                </>
-              }
-            />
-            <Hint label="Install / Remove" keys={<Kbd>↵</Kbd>} />
-            <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-          </HintBar>
-        </div>
+        <CommandSurfaceFooter
+          status={
+            <CommandSurfaceStatus title="Extensions">
+              {total.toLocaleString()} extension{total === 1 ? '' : 's'}
+            </CommandSurfaceStatus>
+          }
+        >
+          <Hint label="Search" keys={<Kbd>/</Kbd>} />
+          <Hint
+            label="Navigate"
+            keys={
+              <>
+                <Kbd>↑</Kbd>
+                <Kbd>↓</Kbd>
+              </>
+            }
+          />
+          <Hint label="Install / Remove" keys={<Kbd>↵</Kbd>} />
+          <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+        </CommandSurfaceFooter>
       ) : null}
     </div>
   )

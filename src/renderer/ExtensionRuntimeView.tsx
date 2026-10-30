@@ -1,3 +1,10 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceTitle,
+  CommandSurfaceFooter,
+  CommandSurfaceStatus,
+} from './ui/CommandSurface'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ExtensionRunCommandResult,
@@ -6,7 +13,7 @@ import type {
   ExtensionRuntimeNode,
 } from '../shared/extensionRuntime'
 import { startSessionRefresh } from './extensionSessionRefresh'
-import { Button, Message } from './ui/primitives'
+import { Button, Message, Hint, Kbd } from './ui/primitives'
 import { ExtensionRuntimeSurface } from './src/raycast-api'
 
 type PreferenceOption = { title?: string; value?: string }
@@ -283,38 +290,13 @@ function PreferenceSetupView({
   }
 
   return (
-    <div className="glass-card relative flex h-full min-h-0 flex-col overflow-hidden text-white">
-      <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/[0.065] px-3.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <button
-            type="button"
-            onClick={onBack}
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-tezbar-chip text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1"
-            aria-label="Back"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-          </button>
-          <span className="h-4 w-px bg-white/[0.08]" aria-hidden />
-          <p className="truncate text-[11.5px] font-medium text-ink-2">{title}</p>
-        </div>
-        <span className="rounded-tezbar-chip border border-white/[0.07] bg-white/[0.035] px-2 py-1 text-[11px] font-medium text-ink-4">
-          Extension setup
-        </span>
-      </header>
+    <div className="view-sheet relative flex h-full min-h-0 flex-col overflow-hidden">
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceTitle>{title}</CommandSurfaceTitle>
+      </CommandSurfaceHeader>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
+      <div className="command-surface-body no-drag min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
         <div className="mx-auto w-full max-w-[760px]">
           <div className="mb-6 flex items-start gap-4">
             <span className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-[14px] border border-white/[0.1] bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
@@ -346,7 +328,7 @@ function PreferenceSetupView({
             </div>
           </div>
 
-          <section className="overflow-hidden rounded-tezbar-card border border-white/[0.065] bg-black/[0.1]">
+          <section className="overflow-hidden">
             <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] px-4 py-3">
               <div>
                 <h2 className="text-[12px] font-semibold text-ink-1">Configuration</h2>
@@ -412,6 +394,9 @@ function PreferenceSetupView({
           ) : null}
         </div>
       </div>
+      <CommandSurfaceFooter status={<CommandSurfaceStatus title="Extension setup" />}>
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+      </CommandSurfaceFooter>
     </div>
   )
 }
@@ -601,7 +586,7 @@ export default function ExtensionRuntimeView({
     <div
       role="application"
       aria-label="Extension Runtime"
-      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+      className="extension-runtime-host flex h-full min-h-0 w-full flex-col outline-none animate-tezbar-scale-in"
     >
       <div className="min-h-0 flex-1">
         {state.root.type === 'Tezbar.PreferenceSetup' ? (
@@ -682,13 +667,13 @@ export default function ExtensionRuntimeView({
       </div>
 
       {error ? (
-        <div className="glass-card shrink-0 px-3 py-2">
+        <div className="shrink-0 px-3 py-2">
           <Message tone="error">{error}</Message>
         </div>
       ) : null}
 
       {state.message ? (
-        <div className="glass-card shrink-0 px-3 py-2">
+        <div className="shrink-0 px-3 py-2">
           <Message>{state.message}</Message>
         </div>
       ) : null}

@@ -1,6 +1,15 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceTitle,
+  CommandSurfaceChip,
+  CommandSurfaceAction,
+  CommandSurfaceIcon,
+  CommandSurfaceFooter,
+} from './ui/CommandSurface'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { SystemStatsSnapshot } from '../shared/systemStats'
-import { Button, ViewHeader, cx } from './ui/primitives'
+import { Button, cx } from './ui/primitives'
 
 const REFRESH_INTERVAL_MS = 2_500
 
@@ -221,40 +230,28 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
       aria-label="System Monitor"
       className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3">
-        <ViewHeader
-          title="System Monitor"
-          onBack={onBack}
-          trailing={
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={autoRefresh}
-                onClick={() => setAutoRefresh((current) => !current)}
-                className={cx(
-                  'rounded-tezbar-chip border px-2 py-1 text-[10px] transition',
-                  autoRefresh
-                    ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200'
-                    : 'border-white/[0.07] bg-white/[0.025] text-ink-4'
-                )}
-              >
-                <span
-                  className={cx(
-                    'mr-1 inline-block h-1.5 w-1.5 rounded-full',
-                    autoRefresh ? 'animate-pulse bg-emerald-300' : 'bg-ink-4'
-                  )}
-                />
-                Live
-              </button>
-              <Button variant="ghost" onClick={() => void refresh()} disabled={loadingRef.current}>
-                Refresh
-              </Button>
-            </div>
-          }
-        />
-
-        <div className="mt-2 flex items-end justify-between gap-4 border-t border-white/[0.055] pt-2.5">
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceTitle>System Monitor</CommandSurfaceTitle>
+        <CommandSurfaceChip
+          role="switch"
+          aria-checked={autoRefresh}
+          active={autoRefresh}
+          onClick={() => setAutoRefresh((current) => !current)}
+        >
+          Live
+        </CommandSurfaceChip>
+        <CommandSurfaceAction
+          title="Refresh"
+          aria-label="Refresh"
+          onClick={() => void refresh()}
+          disabled={loadingRef.current}
+        >
+          <CommandSurfaceIcon name="refresh" />
+        </CommandSurfaceAction>
+      </CommandSurfaceHeader>
+      <div className="command-surface-body no-drag min-h-0 flex-1 overflow-y-auto p-3.5">
+        <div className="mb-3 flex items-end justify-between gap-4">
           <div className="min-w-0">
             <p className="truncate font-display text-[15px] font-semibold tracking-[-0.015em] text-ink-1">
               {snapshot?.device.name ?? 'Reading this computer…'}
@@ -263,13 +260,7 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
               {deviceSummary}
             </p>
           </div>
-          <p className="shrink-0 text-[9.5px] tabular-nums text-ink-4">
-            {updatedAt ? `Updated ${updatedAt}` : 'Collecting…'}
-          </p>
         </div>
-      </div>
-
-      <div className="glass-card min-h-0 flex-1 overflow-y-auto p-3.5">
         {error && !snapshot ? (
           <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
             <p className="font-display text-[14px] font-semibold text-rose-200">
@@ -507,6 +498,13 @@ export default function SystemMonitorView({ onBack }: { onBack: () => void }): J
           </div>
         ) : null}
       </div>
+      <CommandSurfaceFooter
+        status={
+          <span className="text-[11px] text-ink-4">
+            {updatedAt ? `Updated ${updatedAt}` : 'Collecting…'}
+          </span>
+        }
+      />
     </div>
   )
 }
