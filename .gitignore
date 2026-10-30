@@ -49,6 +49,7 @@ native/**/Cargo.lock
 /build/performance-tokenizer-*/
 /build/performance-broad-search-*/
 /build/performance-opus-pass1-*/
+/build/performance-opus-pass2-*/
 /build/p/
 
 # Generated release artifacts and signing material

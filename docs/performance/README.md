@@ -191,6 +191,10 @@ after setup; they are not part of the source change.
 
 R14's post-search idle/RSS regression was re-examined with a matched control and
 a physical-input receipt; see [beta17-opus-pass1-results.md](beta17-opus-pass1-results.md).
+An independent second pass ([beta17-opus-pass2-results.md](beta17-opus-pass2-results.md))
+bounds pass 1's causal/RAM conclusions, fixes the receipt's timing/guard coverage
+and replicates the matched post-search cohort (6+6): no production regression, the
+R14 historical transient cause remains unknown.
 
 Query preparation, candidate hydration, exact semantic scoring and source
 selection experiments have now produced the measured changes described in the

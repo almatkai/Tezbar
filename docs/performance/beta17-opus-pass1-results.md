@@ -1,5 +1,19 @@
 # Beta.17 R14 follow-up: post-search idle regression and RSS (Opus pass 1)
 
+> **Pass-2 interpretation correction (appended; raw data and numbers below unchanged).**
+> An independent review ([beta17-opus-pass2-results.md](beta17-opus-pass2-results.md))
+> finds that three statements here are stronger than the evidence: that the R14
+> transient "is WindowServer event delivery", that hypothesis 1 is "falsified", and
+> that the RSS increase is "not retained allocation / not build-caused". Read them as:
+> R14's large transient was **not reproduced** in receipted quiet windows; its
+> historical cause is **unknown**; `main`/`NSEventThread` work co-occurs with physical
+> input in both builds at +25–50 ms per window, far below R14's +170–210 ms; no
+> material retained-memory regression is established, but build causation of the
+> WebContent residency is neither shown nor excluded. A matched 6+6 replication did
+> not reproduce the 4/4-vs-0/4 WebContent RSS split. The receipt's `t + 0.05 s`
+> bound was an assumption (measured delay up to 140 ms) and it had no pre-window
+> guard; reclassifying with timed bounds and a 2 s guard changes no pass-1 window.
+
 **Outcome: R14's joined-BM25 production adoption is retained, now gated to the
 only qualified target (macOS arm64 + bundled SQLite 3.46.0).** The R14 hidden
 post-search regression (family CPU 2.35×, host wakeups +70–95 %) does **not**

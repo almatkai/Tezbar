@@ -1,0 +1,338 @@
+{
+ "protocol": "beta17-opus-pass2",
+ "start": "467adce",
+ "production_commit": "cb3a74b59a524344d1ff851c16ebffcdd525b3d9",
+ "decision": "joined BM25 retained as gated in cb3a74b; no production regression found; pass-1 causal/RAM claims bounded; receipt coverage fixed",
+ "findings": [
+  {
+   "severity": "high",
+   "kind": "claim",
+   "summary": "pass-1 WindowServer/falsified/not-build-caused statements unestablished",
+   "status": "corrected"
+  },
+  {
+   "severity": "medium",
+   "kind": "measurement",
+   "summary": "t+0.05 skew assumption (measured up to 140 ms) and no pre-window guard",
+   "status": "fixed; pass-1 classes unchanged (margins >= 638 s)"
+  },
+  {
+   "severity": "medium",
+   "kind": "provenance",
+   "summary": "frontend embedded in binary; inventory equality insufficient",
+   "status": "closed by runtime fingerprint + rebuild + SQL strings"
+  },
+  {
+   "severity": "low",
+   "kind": "fallback",
+   "summary": "launcher open fails if tezbar_bm25 registration fails on 3.46.0 (pre-existing in R14)",
+   "status": "documented"
+  }
+ ],
+ "cohort": {
+  "order": "ABBA x3",
+  "completed": {
+   "control": 6,
+   "candidate": 6
+  },
+  "quiet_windows": {
+   "control": 4,
+   "candidate": 3
+  },
+  "transients": {
+   "control": {
+    "all": 1,
+    "quiet": 0
+   },
+   "candidate": {
+    "all": 1,
+    "quiet": 0
+   }
+  },
+  "transient_owner": "main + com.apple.NSEventThread, input windows only, both builds",
+  "quiet": {
+   "host_cpu_ms": {
+    "control": {
+     "median": 73.89,
+     "range": [
+      71.09,
+      76.32
+     ]
+    },
+    "candidate": {
+     "median": 75.04,
+     "range": [
+      72.6,
+      77.19
+     ]
+    },
+    "p": 0.5428571428571428
+   },
+   "host_wakeups": {
+    "control": {
+     "median": 506.5,
+     "range": [
+      505,
+      519
+     ]
+    },
+    "candidate": {
+     "median": 507,
+     "range": [
+      501,
+      509
+     ]
+    },
+    "p": 0.5714285714285714
+   },
+   "family_cpu_ms": {
+    "control": {
+     "median": 136.31,
+     "range": [
+      131.79,
+      144.24
+     ]
+    },
+    "candidate": {
+     "median": 148.31,
+     "range": [
+      147.86,
+      151.73
+     ]
+    },
+    "p": 0.05714285714285714
+   }
+  },
+  "ram_all_windows": {
+   "wc_rss_post_mib": {
+    "control": {
+     "median": 307.6,
+     "range": [
+      248.06,
+      383.88
+     ]
+    },
+    "candidate": {
+     "median": 313.48,
+     "range": [
+      208.88,
+      435.53
+     ]
+    },
+    "p": 0.9415584415584416
+   },
+   "wc_rss_growth_broad_mib": {
+    "control": {
+     "median": 0.65,
+     "range": [
+      0.25,
+      44.14
+     ]
+    },
+    "candidate": {
+     "median": 4.28,
+     "range": [
+      0.95,
+      57.66
+     ]
+    },
+    "p": 0.7878787878787878
+   },
+   "wc_fp_max_broad_mib": {
+    "control": {
+     "median": 391.74,
+     "range": [
+      357.05,
+      489.38
+     ]
+    },
+    "candidate": {
+     "median": 386.38,
+     "range": [
+      297.5,
+      502.0
+     ]
+    },
+    "p": 0.8268398268398268
+   },
+   "wc_fp_post_median_mib": {
+    "control": {
+     "median": 175.61,
+     "range": [
+      89.66,
+      270.36
+     ]
+    },
+    "candidate": {
+     "median": 99.27,
+     "range": [
+      81.5,
+      186.58
+     ]
+    },
+    "p": 0.17316017316017315
+   },
+   "wc_vmmap_peak_mib": {
+    "control": {
+     "median": 417.55,
+     "range": [
+      365.9,
+      496.1
+     ]
+    },
+    "candidate": {
+     "median": 394.25,
+     "range": [
+      302.4,
+      506.3
+     ]
+    },
+    "p": 0.6515151515151515
+   },
+   "wc_vmmap_footprint_mib": {
+    "control": {
+     "median": 175.6,
+     "range": [
+      85.6,
+      270.4
+     ]
+    },
+    "candidate": {
+     "median": 98.5,
+     "range": [
+      81.5,
+      186.6
+     ]
+    },
+    "p": 0.18181818181818182
+   },
+   "wc_wk_resident_mib": {
+    "control": {
+     "median": 263.75,
+     "range": [
+      203.8,
+      339.5
+     ]
+    },
+    "candidate": {
+     "median": 269.35,
+     "range": [
+      165.3,
+      391.2
+     ]
+    },
+    "p": 0.948051948051948
+   },
+   "wc_wk_dirty_mib": {
+    "control": {
+     "median": 144.5,
+     "range": [
+      54.8,
+      239.0
+     ]
+    },
+    "candidate": {
+     "median": 67.35,
+     "range": [
+      50.9,
+      155.3
+     ]
+    },
+    "p": 0.1774891774891775
+   },
+   "wc_wk_allocated_mib": {
+    "control": {
+     "median": 147.2,
+     "range": [
+      38.7,
+      250.8
+     ]
+    },
+    "candidate": {
+     "median": 58.65,
+     "range": [
+      41.0,
+      160.9
+     ]
+    },
+    "p": 0.2619047619047619
+   }
+  },
+  "broad_growth_ge36_mib": {
+   "control": "2/6",
+   "candidate": "2/6"
+  },
+  "identity": {
+   "frontend_assets_identical": true,
+   "reply_lengths_identical": true
+  }
+ },
+ "reanalysis": {
+  "pass1_broad_growth": {
+   "control": [
+    3,
+    0,
+    2,
+    1
+   ],
+   "candidate": [
+    56,
+    57,
+    59,
+    2
+   ]
+  },
+  "pass1_probe_growth_ge40": {
+   "R7_baseline": "1/10",
+   "R14_candidate": "8/12",
+   "note": "unmatched builds"
+  },
+  "matched_pooled_high_growth": {
+   "control": "2/10",
+   "candidate": "5/10",
+   "fisher_p_approx": 0.35
+  },
+  "unreceipted_transient_rate": {
+   "baseline": "3/17",
+   "candidate": "6/17"
+  },
+  "input_cost_candidate4_ms": {
+   "main": 16,
+   "NSEventThread": 8
+  },
+  "r14_transient_owner": "unknown (no thread/HID data)",
+  "pass1_reclassification_changes": 0
+ },
+ "receipt": {
+  "read_ms_median": 0.068,
+  "read_ms_max": 0.24,
+  "t_to_read_delay_ms_max": 140.6,
+  "guard_s": 2.0
+ },
+ "tests": {
+  "python": "30 passed",
+  "rust185_focused": "7/7 (existing binary bfa0c4f2...)"
+ },
+ "provenance": {
+  "app_pins": "3x41 files equal",
+  "frontend": "runtime fingerprint == dist == fresh vite build (23 files)",
+  "control_binary_contains_joined_sql": false,
+  "candidate_contains_both": true,
+  "ordinary_bench_markers": false,
+  "manifest": "build/performance-opus-pass2-20261030/artifact-manifest.json (71 raw, 618 pins)"
+ },
+ "cleanup": {
+  "identities": 250,
+  "alive_same_start": [],
+  "recorded_survivors": 0,
+  "installed_models_unchanged": true,
+  "unrelated_html_sha256": "1ee1b0742261dbfb1ad8071817778b5881cb82c084bda482684117279f45816d"
+ },
+ "unmet": [
+  "uniform 5x speed/search",
+  "one-fifth RAM",
+  "R14 historical transient cause",
+  "WebContent bimodal residency trigger",
+  "Windows/Intel qualification"
+ ]
+}
