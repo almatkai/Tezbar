@@ -189,6 +189,9 @@ after setup; they are not part of the source change.
 
 ## Follow-up experiments
 
+R14's post-search idle/RSS regression was re-examined with a matched control and
+a physical-input receipt; see [beta17-opus-pass1-results.md](beta17-opus-pass1-results.md).
+
 Query preparation, candidate hydration, exact semantic scoring and source
 selection experiments have now produced the measured changes described in the
 search report. Broad-match BM25, cold authoritative row traversal and warm winner

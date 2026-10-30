@@ -313,3 +313,13 @@ Reproduce with new output paths using `broad-native.py`, `broad-full.py`,
 `summarize-broad.py`. Exact commands, toolchain options and complete records are
 in the artifact root. Local commits only: **no push, PR, remote build/workflow,
 merge, signing-credential access, installed-app replacement, publication or deploy**.
+
+## Later interpretation (Opus pass 1, appended; measurements above unchanged)
+
+A matched current-source control (same commit/resources, only the executable
+differs) with a physical-input receipt did **not** reproduce the post-search idle
+regression in verified-quiet windows (family .109→.118 CPU-s, host wakeups
+504.5→505). The R14 transient tracks WindowServer event delivery (`main` +
+`NSEventThread`) and appears in both builds; the RSS increase is clean WebKit
+allocator residency with large within-build variance. The joined rank is now
+selected only on macOS arm64. See [beta17-opus-pass1-results.md](beta17-opus-pass1-results.md).
