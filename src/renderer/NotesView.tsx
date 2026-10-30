@@ -1,6 +1,15 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceInput,
+  CommandSurfaceAction,
+  CommandSurfaceIcon,
+  CommandSurfaceFooter,
+  CommandSurfaceStatus,
+} from './ui/CommandSurface'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { QuickNoteEntry } from '../shared/quickNotes'
-import { Button, Hint, HintBar, Kbd, Message, ViewHeader } from './ui/primitives'
+import { Hint, Kbd, Message } from './ui/primitives'
 import { GlideList } from './ui/GlideList'
 
 const ALLOWED_RICH_TAGS = new Set(['div', 'br', 'p', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li'])
@@ -472,38 +481,28 @@ export default function NotesView({
       onKeyDown={onRootKeyDown}
       className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
-        <ViewHeader
-          title="Quick Notes"
-          onBack={onBack}
-          trailing={
-            <>
-              <Button variant="quiet" onClick={() => void createNote()}>
-                New
-              </Button>
-              <Button
-                variant="quiet"
-                onClick={() => void deleteSelectedNote()}
-                disabled={!currentNote}
-              >
-                Delete
-              </Button>
-            </>
-          }
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceInput
+          ref={searchRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search notes..."
         />
+        <CommandSurfaceAction title="New" aria-label="New" onClick={() => void createNote()}>
+          <CommandSurfaceIcon name="plus" />
+        </CommandSurfaceAction>
+        <CommandSurfaceAction
+          title="Delete"
+          aria-label="Delete"
+          onClick={() => void deleteSelectedNote()}
+          disabled={!currentNote}
+        >
+          <CommandSurfaceIcon name="trash" />
+        </CommandSurfaceAction>
+      </CommandSurfaceHeader>
 
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search notes..."
-            className="h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
-          />
-        </div>
-      </div>
-
-      <div className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2 animate-tezbar-scale-in">
+      <div className="command-surface-body no-drag flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2">
         <section className="flex min-h-0 flex-1 gap-3">
           <div className="flex min-h-0 w-[44%] max-w-[340px] flex-col overflow-hidden">
             {filtered.length === 0 ? (
@@ -599,19 +598,60 @@ export default function NotesView({
         ) : null}
       </div>
 
-      <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
-        <span className="text-[11px] text-ink-4">
-          {filtered.length} note{filtered.length === 1 ? '' : 's'}
-        </span>
-        <HintBar>
-          <Hint label="Create" keys={<><Kbd>Cmd</Kbd><Kbd>N</Kbd></>} />
-          <Hint label="Copy note" keys={<><Kbd>Cmd</Kbd><Kbd>↵</Kbd></>} />
-          <Hint label="Bold" keys={<><Kbd>Cmd</Kbd><Kbd>B</Kbd></>} />
-          <Hint label="Italic" keys={<><Kbd>Cmd</Kbd><Kbd>I</Kbd></>} />
-          <Hint label="Delete" keys={<><Kbd>Cmd</Kbd><Kbd>D</Kbd></>} />
-          <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-        </HintBar>
-      </div>
+      <CommandSurfaceFooter
+        status={
+          <CommandSurfaceStatus title="Quick Notes">
+            {filtered.length} note{filtered.length === 1 ? '' : 's'}
+          </CommandSurfaceStatus>
+        }
+      >
+        <Hint
+          label="Create"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>N</Kbd>
+            </>
+          }
+        />
+        <Hint
+          label="Copy note"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>↵</Kbd>
+            </>
+          }
+        />
+        <Hint
+          label="Bold"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>B</Kbd>
+            </>
+          }
+        />
+        <Hint
+          label="Italic"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>I</Kbd>
+            </>
+          }
+        />
+        <Hint
+          label="Delete"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>D</Kbd>
+            </>
+          }
+        />
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+      </CommandSurfaceFooter>
     </div>
   )
 }

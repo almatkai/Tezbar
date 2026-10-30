@@ -1,8 +1,28 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceInput,
+  CommandSurfaceTitle,
+  CommandSurfaceAction,
+  CommandSurfaceIcon,
+  CommandSurfaceFooter,
+  CommandSurfaceStatus,
+} from './ui/CommandSurface'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
 import type { SnippetListRow } from '../shared/snippets'
 import { GlideList } from './ui/GlideList'
-import { Button, FieldLabel, Hint, HintBar, Kbd, ListRow, ListRowTag, Message, TextArea, TextField, ViewHeader } from './ui/primitives'
+import {
+  Button,
+  FieldLabel,
+  Hint,
+  Kbd,
+  ListRow,
+  ListRowTag,
+  Message,
+  TextArea,
+  TextField,
+} from './ui/primitives'
 import { Squircle } from './launcherIcons'
 
 type EditorState = null | 'create' | { mode: 'edit'; id: string }
@@ -215,32 +235,26 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
       aria-label="Snippets"
       className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
-        <ViewHeader
-          title="Snippets"
-          onBack={onBack}
-          trailing={
-            editor ? null : (
-              <Button type="button" variant="primary" className="!px-2.5 !py-1 text-[11px]" onClick={openCreate}>
-                New snippet
-              </Button>
-            )
-          }
-        />
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
         {!editor ? (
-          <div className="relative mt-2">
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search snippets…"
-              className="glass-field h-8 text-[12.5px]"
-            />
-          </div>
+          <CommandSurfaceInput
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search snippets…"
+          />
+        ) : (
+          <CommandSurfaceTitle>Snippets</CommandSurfaceTitle>
+        )}
+        {!editor ? (
+          <CommandSurfaceAction title="New snippet" aria-label="New snippet" onClick={openCreate}>
+            <CommandSurfaceIcon name="plus" />
+          </CommandSurfaceAction>
         ) : null}
-      </div>
+      </CommandSurfaceHeader>
 
-      <div className="glass-card flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-2 py-2 animate-tezbar-scale-in">
+      <div className="command-surface-body no-drag flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-2 py-2">
         {editor ? (
           <form
             className="flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2 pt-1"
@@ -377,32 +391,69 @@ export default function SnippetsView({ onBack }: { onBack: () => void }): JSX.El
         ) : null}
       </div>
 
-      <div className="glass-card flex shrink-0 items-center justify-between gap-3 px-4 py-2 animate-tezbar-scale-in">
-        <span className="text-[11px] text-ink-4">
-          {editor ? (editor === 'create' ? 'New snippet' : 'Editing') : `${filtered.length} snippet${filtered.length === 1 ? '' : 's'}`}
-        </span>
-        <HintBar>
-          {editor ? (
-            <>
-              <Hint label="Save" keys={<Kbd>↵</Kbd>} />
-              <Hint label="Cancel" keys={<Kbd>Esc</Kbd>} />
-            </>
-          ) : (
-            <>
-              <Hint label="New" keys={<><Kbd>⌘</Kbd><Kbd>N</Kbd></>} />
-              <Hint label="Copy" keys={<Kbd>↵</Kbd>} />
-              {current && !current.readonly ? (
+      <CommandSurfaceFooter
+        status={
+          <CommandSurfaceStatus title="Snippets">
+            {editor
+              ? editor === 'create'
+                ? 'New snippet'
+                : 'Editing'
+              : `${filtered.length} snippet${filtered.length === 1 ? '' : 's'}`}
+          </CommandSurfaceStatus>
+        }
+      >
+        {editor ? (
+          <>
+            <Hint label="Save" keys={<Kbd>↵</Kbd>} />
+            <Hint label="Cancel" keys={<Kbd>Esc</Kbd>} />
+          </>
+        ) : (
+          <>
+            <Hint
+              label="New"
+              keys={
                 <>
-                  <Hint label="Edit" keys={<><Kbd>⌘</Kbd><Kbd>E</Kbd></>} />
-                  <Hint label="Delete" keys={<><Kbd>⌘</Kbd><Kbd>⌫</Kbd></>} />
+                  <Kbd>⌘</Kbd>
+                  <Kbd>N</Kbd>
                 </>
-              ) : null}
-              <Hint label="Jump" keys={<><Kbd>⌘</Kbd><Kbd>1-9</Kbd></>} />
-              <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-            </>
-          )}
-        </HintBar>
-      </div>
+              }
+            />
+            <Hint label="Copy" keys={<Kbd>↵</Kbd>} />
+            {current && !current.readonly ? (
+              <>
+                <Hint
+                  label="Edit"
+                  keys={
+                    <>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>E</Kbd>
+                    </>
+                  }
+                />
+                <Hint
+                  label="Delete"
+                  keys={
+                    <>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>⌫</Kbd>
+                    </>
+                  }
+                />
+              </>
+            ) : null}
+            <Hint
+              label="Jump"
+              keys={
+                <>
+                  <Kbd>⌘</Kbd>
+                  <Kbd>1-9</Kbd>
+                </>
+              }
+            />
+            <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+          </>
+        )}
+      </CommandSurfaceFooter>
     </div>
   )
 }

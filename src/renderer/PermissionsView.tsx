@@ -1,6 +1,14 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceTitle,
+  CommandSurfaceAction,
+  CommandSurfaceIcon,
+  CommandSurfaceFooter,
+} from './ui/CommandSurface'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PermissionsSnapshot, PermissionState, PermissionStatus } from '../shared/permissions'
-import { Button, Hint, HintBar, Kbd, Message, ViewHeader, cx } from './ui/primitives'
+import { Button, Hint, Kbd, Message, cx } from './ui/primitives'
 
 const STATE_LABEL: Record<PermissionState, string> = {
   granted: 'Granted',
@@ -171,61 +179,6 @@ export default function PermissionsView({
     </>
   )
 
-  if (nativeWindow) {
-    return (
-      <div
-        ref={rootRef}
-        tabIndex={-1}
-        role="application"
-        aria-label="Permissions"
-        className="flex h-full min-h-0 w-full flex-col bg-[#1e1f2e] outline-none animate-tezbar-scale-in"
-      >
-        <header className="shrink-0 border-b border-white/[0.07] px-5 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label="Back"
-              className="flex h-7 w-7 items-center justify-center rounded-tezbar-chip text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1"
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-            </button>
-            <div className="min-w-0">
-              <h1 className="text-[15px] font-semibold text-ink-1">Permissions</h1>
-              <p className="mt-0.5 text-[11.5px] text-ink-4">
-                System access used by automation, voice, calendar, and screen-aware features.
-              </p>
-            </div>
-            <Button variant="quiet" className="ml-auto" onClick={() => void reload()}>
-              Refresh
-            </Button>
-          </div>
-        </header>
-
-        <main className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{content}</main>
-
-        <footer className="shrink-0 border-t border-white/[0.07] px-5 py-2">
-          <HintBar>
-            <Hint label="Refresh" keys={<Kbd>R</Kbd>} />
-            <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-          </HintBar>
-        </footer>
-      </div>
-    )
-  }
-
   return (
     <div
       ref={rootRef}
@@ -234,28 +187,32 @@ export default function PermissionsView({
       aria-label="Permissions"
       className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
-        <ViewHeader
-          title="Permissions"
-          onBack={onBack}
-          trailing={
-            <Button variant="quiet" onClick={() => void reload()}>
-              Refresh
-            </Button>
-          }
-        />
-      </div>
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceTitle>Permissions</CommandSurfaceTitle>
+        <CommandSurfaceAction title="Refresh" aria-label="Refresh" onClick={() => void reload()}>
+          <CommandSurfaceIcon name="refresh" />
+        </CommandSurfaceAction>
+      </CommandSurfaceHeader>
 
-      <div className="glass-card min-h-0 flex-1 overflow-y-auto px-4 py-3 pr-[calc(0.5rem+2px)] animate-tezbar-scale-in">
+      <div
+        className={cx(
+          'command-surface-body no-drag min-h-0 flex-1 overflow-y-auto',
+          nativeWindow ? 'px-5 py-4' : 'px-4 py-3 pr-[calc(0.5rem+2px)]'
+        )}
+      >
+        {nativeWindow ? (
+          <p className="mb-3 text-[11.5px] text-ink-4">
+            System access used by automation, voice, calendar, and screen-aware features.
+          </p>
+        ) : null}
         {content}
       </div>
 
-      <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
-        <HintBar>
-          <Hint label="Refresh" keys={<Kbd>R</Kbd>} />
-          <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-        </HintBar>
-      </div>
+      <CommandSurfaceFooter>
+        <Hint label="Refresh" keys={<Kbd>R</Kbd>} />
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+      </CommandSurfaceFooter>
     </div>
   )
 }

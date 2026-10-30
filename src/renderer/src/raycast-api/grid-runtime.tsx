@@ -1,6 +1,14 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceInput,
+  CommandSurfaceTitle,
+  CommandSurfaceFooter,
+  CommandSurfaceStatus,
+} from '../../ui/CommandSurface'
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import type { ExtensionRuntimeAction, ExtensionRuntimeNode } from '../../../shared/extensionRuntime'
-import { Hint, HintBar, Kbd, cx } from '../../ui/primitives'
+import { Hint, Kbd, cx } from '../../ui/primitives'
 import { colorFromGridContent } from './grid-content'
 
 type GridItem = {
@@ -156,6 +164,17 @@ export function GridRuntime({
     typeof root.props?.searchBarPlaceholder === 'string' && root.props.searchBarPlaceholder.trim()
       ? root.props.searchBarPlaceholder
       : title || 'Search'
+  const shouldShowSearch =
+    hasServerSearch ||
+    Boolean(searchAccessory) ||
+    typeof root.props?.searchBarPlaceholder === 'string' ||
+    typeof root.props?.searchText === 'string' ||
+    items.length > 0 ||
+    !root.props?.navigationTitle
+  const navigationTitle =
+    typeof root.props?.navigationTitle === 'string' && root.props.navigationTitle.trim()
+      ? root.props.navigationTitle
+      : title
   const filteredItems = useMemo(
     () => (usesServerFiltering ? items : items.filter((item) => gridItemMatches(item, query))),
     [items, query, usesServerFiltering]
@@ -274,15 +293,13 @@ export function GridRuntime({
     <div
       role="application"
       tabIndex={-1}
-      className="flex h-full min-h-0 flex-col outline-none"
+      className="view-sheet flex h-full min-h-0 flex-col outline-none"
       onKeyDown={onKeyDown}
     >
-      <div className="glass-card mb-2 shrink-0 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn btn-ghost" onClick={onBack}>
-            Back
-          </button>
-          <input
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        {shouldShowSearch ? (
+          <CommandSurfaceInput
             ref={inputRef}
             type="text"
             value={query}
@@ -292,36 +309,34 @@ export function GridRuntime({
             }}
             placeholder={searchBarPlaceholder}
             aria-label={searchBarPlaceholder}
-            className="h-8 min-w-0 flex-1 rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-3 text-[12px] font-semibold text-ink-1 outline-none transition placeholder:text-ink-4 focus:border-white/20 focus:bg-white/[0.06]"
           />
-          {searchAccessory && searchAccessory.options.length > 0 ? (
-            <select
-              value={accessoryValue}
-              onChange={(event) => {
-                const next = event.target.value
-                setAccessoryValue(next)
-                setSelected(0)
-                if (searchAccessory.actionId) {
-                  onRunPrimaryAction(searchAccessory.actionId, { value: next })
-                }
-              }}
-              className={cx(
-                'h-8 max-w-[220px] shrink-0 rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-3 text-[12px] font-semibold text-ink-1 outline-none transition',
-                'hover:bg-white/[0.06] focus:border-white/20 focus:bg-white/[0.06]'
-              )}
-              aria-label="GIF provider"
-            >
-              {searchAccessory.options.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.title}
-                </option>
-              ))}
-            </select>
-          ) : null}
-        </div>
-      </div>
+        ) : (
+          <CommandSurfaceTitle>{navigationTitle}</CommandSurfaceTitle>
+        )}
+        {searchAccessory && searchAccessory.options.length > 0 ? (
+          <select
+            value={accessoryValue}
+            onChange={(event) => {
+              const next = event.target.value
+              setAccessoryValue(next)
+              setSelected(0)
+              if (searchAccessory.actionId) {
+                onRunPrimaryAction(searchAccessory.actionId, { value: next })
+              }
+            }}
+            className="command-surface-select no-drag min-w-0 max-w-[180px] shrink-0 outline-none"
+            aria-label="GIF provider"
+          >
+            {searchAccessory.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.title}
+              </option>
+            ))}
+          </select>
+        ) : null}
+      </CommandSurfaceHeader>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2">
+      <div className="command-surface-body no-drag min-h-0 flex-1 overflow-y-auto px-1 py-2">
         {gridError && filteredItems.length > 0 ? (
           <div role="alert" className="px-3 py-2 text-[12px] text-rose-300">{gridError}</div>
         ) : null}
@@ -388,7 +403,7 @@ export function GridRuntime({
         <div
           role="status"
           aria-live="polite"
-          className={`shrink-0 px-3 pb-1 pt-2 text-[11px] font-medium ${
+          className={`sheet-above-bar shrink-0 px-3 pb-1 pt-2 text-[11px] font-medium ${
             actionNotice.tone === 'error' ? 'text-rose-300' : 'text-ink-2'
           }`}
         >
@@ -396,9 +411,15 @@ export function GridRuntime({
         </div>
       ) : null}
 
-      <div className="glass-card mt-2 flex shrink-0 items-center justify-between gap-3 px-3 py-2">
+      <CommandSurfaceFooter
+        status={
+          <CommandSurfaceStatus title={navigationTitle}>
+            {filteredItems.length} item{filteredItems.length === 1 ? '' : 's'}
+          </CommandSurfaceStatus>
+        }
+      >
         {favoriteAction ? (
-          <HintBar>
+          <>
             <Hint
               label={favoriteAction.title}
               keys={
@@ -408,11 +429,11 @@ export function GridRuntime({
                 </>
               }
             />
-          </HintBar>
+          </>
         ) : (
           <span />
         )}
-        <HintBar className="justify-end">
+        <>
           <Hint label={primaryActionLabel} keys={<Kbd>↵</Kbd>} />
           <Hint
             label="Actions"
@@ -423,8 +444,8 @@ export function GridRuntime({
               </>
             }
           />
-        </HintBar>
-      </div>
+        </>
+      </CommandSurfaceFooter>
     </div>
   )
 }

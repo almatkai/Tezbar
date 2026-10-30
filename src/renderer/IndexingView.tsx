@@ -1,10 +1,19 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceInput,
+  CommandSurfaceAction,
+  CommandSurfaceIcon,
+  CommandSurfaceFooter,
+  CommandSurfaceStatus,
+} from './ui/CommandSurface'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   KnowledgeSnapshot,
   KnowledgeSourceSummary,
   KnowledgeSourcesPage,
 } from '../shared/knowledge'
-import { Button, cx, Hint, HintBar, Kbd, TextField, ViewHeader } from './ui/primitives'
+import { Button, cx, Hint, Kbd } from './ui/primitives'
 
 const PAGE_SIZE = 200
 
@@ -233,22 +242,33 @@ export default function IndexingView({
       onKeyDown={onKeyDown}
       className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <section className="glass-card shrink-0 overflow-hidden px-4 py-3">
-        <ViewHeader
-          title="Indexing"
-          onBack={onBack}
-          trailing={(
-            <div className="flex items-center gap-2">
-              <Button variant="quiet" disabled={loading} onClick={() => void refresh()}>
-                {loading ? 'Refreshing' : 'Refresh'}
-              </Button>
-              <Button variant="ghost" onClick={onOpenSettings}>Edit in Settings</Button>
-            </div>
-          )}
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceInput
+          ref={inputRef}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Filter indexed files by name or path…"
+          aria-label="Filter indexed files"
         />
-
-        <div className="relative mt-2 overflow-hidden rounded-[14px] border border-white/[0.08] bg-[linear-gradient(120deg,rgba(43,161,207,0.13),rgba(255,255,255,0.025)_58%)] p-3.5">
-          <div aria-hidden className="absolute -right-12 -top-20 h-40 w-40 rounded-full bg-cyan-300/10 blur-3xl" />
+        <CommandSurfaceAction
+          title={loading ? 'Refreshing' : 'Refresh'}
+          aria-label="Refresh"
+          disabled={loading}
+          onClick={() => void refresh()}
+        >
+          <CommandSurfaceIcon name="refresh" />
+        </CommandSurfaceAction>
+        <CommandSurfaceAction
+          title="Edit in Settings"
+          aria-label="Edit in Settings"
+          onClick={onOpenSettings}
+        >
+          <CommandSurfaceIcon name="settings" />
+        </CommandSurfaceAction>
+      </CommandSurfaceHeader>
+      <section className="command-surface-body no-drag min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <div className="relative p-3.5">
           <div className="relative flex items-start justify-between gap-5">
             <div className="min-w-0">
               <div className="flex items-center gap-2.5">
@@ -272,7 +292,7 @@ export default function IndexingView({
           </div>
           <div className="relative mt-3 h-1.5 overflow-hidden rounded-full bg-black/20">
             <div
-              className="h-full rounded-full bg-[linear-gradient(90deg,#5ea7ff,#6de1c2)] transition-[width] duration-300"
+              className="h-full rounded-full bg-ink-3 transition-[width] duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -292,7 +312,10 @@ export default function IndexingView({
             ) : (
               <>
                 <span>{snapshot?.status.processedSources ?? 0} processed</span>
-                <span>{snapshot?.status.queuedSources ?? 0} remaining · {snapshot?.status.failedSources ?? 0} failed</span>
+                <span>
+                  {snapshot?.status.queuedSources ?? 0} remaining ·{' '}
+                  {snapshot?.status.failedSources ?? 0} failed
+                </span>
               </>
             )}
           </div>
@@ -300,31 +323,14 @@ export default function IndexingView({
 
         <div className="mt-2.5 grid grid-cols-4 gap-2">
           {metricCards.map((metric) => (
-            <div key={metric.label} className="rounded-[11px] border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
+            <div key={metric.label} className="px-3 py-2.5">
               <p className="text-[11px] font-medium text-ink-4">{metric.label}</p>
               <p className="mt-1 truncate font-display text-[13px] font-semibold text-ink-1" title={metric.value}>{metric.value}</p>
               <p className="mt-0.5 truncate text-[9.5px] text-ink-4">{metric.note}</p>
             </div>
           ))}
         </div>
-      </section>
-
-      <section className="glass-card flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-3">
-        <div className="flex shrink-0 items-center gap-2 px-1 pb-2.5">
-          <TextField
-            ref={inputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter indexed files by name or path…"
-            aria-label="Filter indexed files"
-            className="h-8 flex-1 text-[11.5px]"
-          />
-          <span className="shrink-0 font-mono text-[10px] text-ink-4">
-            {page.sources.length.toLocaleString()} / {page.total.toLocaleString()}
-          </span>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-[12px] border border-white/[0.07] bg-black/[0.08] p-1.5">
+        <div className="shrink-0 p-1.5">
           {page.sources.length > 0 ? (
             <div className="space-y-1">
               {page.sources.map((source, index) => (
@@ -381,14 +387,34 @@ export default function IndexingView({
         </div>
       </section>
 
-      <div className="glass-card shrink-0 px-3 py-2">
-        <HintBar>
-          <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
-          <Hint label="Open file" keys={<Kbd>↵</Kbd>} />
-          <Hint label="Knowledge Settings" keys={<><Kbd>⌘</Kbd><Kbd>,</Kbd></>} />
-          <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-        </HintBar>
-      </div>
+      <CommandSurfaceFooter
+        status={
+          <CommandSurfaceStatus title="Indexing">
+            {page.sources.length.toLocaleString()} / {page.total.toLocaleString()}
+          </CommandSurfaceStatus>
+        }
+      >
+        <Hint
+          label="Navigate"
+          keys={
+            <>
+              <Kbd>↑</Kbd>
+              <Kbd>↓</Kbd>
+            </>
+          }
+        />
+        <Hint label="Open file" keys={<Kbd>↵</Kbd>} />
+        <Hint
+          label="Knowledge Settings"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>,</Kbd>
+            </>
+          }
+        />
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+      </CommandSurfaceFooter>
     </div>
   )
 }

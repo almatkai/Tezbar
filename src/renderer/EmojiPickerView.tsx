@@ -1,7 +1,15 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceInput,
+  CommandSurfaceChip,
+  CommandSurfaceFooter,
+  CommandSurfaceStatus,
+} from './ui/CommandSurface'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EMOJI_CATEGORIES, EMOJI_DATA, type EmojiCategory } from './emoji/emojiData'
 import { searchEmojis } from './emoji/emojiSearch'
-import { Hint, HintBar, Kbd, ViewHeader, cx } from './ui/primitives'
+import { Hint, Kbd, cx } from './ui/primitives'
 
 const RECENT_EMOJI_KEY = 'tezbar:recent-emojis'
 const RECENT_LIMIT = 24
@@ -205,9 +213,9 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
       onKeyDown={onKeyDown}
       className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
     >
-      <div className="glass-card shrink-0 px-4 py-3 animate-tezbar-scale-in">
-        <ViewHeader title="Emoji Picker" onBack={onBack} />
-        <input
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceInput
           ref={inputRef}
           value={query}
           onChange={(event) => {
@@ -215,34 +223,31 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
             setSelected(0)
           }}
           placeholder="Search emojis by name, mood, or slang..."
-          className="mt-2 h-8 w-full rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-2.5 text-[12px] text-ink-1 placeholder:text-ink-4 outline-none transition focus:border-white/20 focus:bg-white/[0.06]"
         />
-        <div className="mt-2 flex flex-wrap items-center gap-1">
+        <div className="command-surface-chips">
           {(['All', ...EMOJI_CATEGORIES] as CategoryFilter[]).map((chip) => {
             const active = category === chip
             return (
-              <button
+              <CommandSurfaceChip
                 key={chip}
                 type="button"
                 onClick={() => {
                   setCategory(chip)
                   setSelected(0)
                 }}
-                className={cx(
-                  'rounded-tezbar-chip px-2 py-1 text-[11px] transition',
-                  active
-                    ? 'bg-white/[0.12] font-medium text-ink-1'
-                    : 'text-ink-3 hover:bg-white/[0.06] hover:text-ink-1',
-                )}
+                active={active}
               >
                 {chip}
-              </button>
+              </CommandSurfaceChip>
             )
           })}
         </div>
-      </div>
+      </CommandSurfaceHeader>
 
-      <div ref={gridRef} className="glass-card min-h-0 flex-1 overflow-hidden px-3 py-3 animate-tezbar-scale-in">
+      <div
+        ref={gridRef}
+        className="command-surface-body no-drag min-h-0 flex-1 overflow-hidden px-3 py-3"
+      >
         {query.trim().length > 0 ? (
           searchResults.length > 0 ? (
             <div className="grid min-h-0 grid-cols-8 gap-1 overflow-y-auto">
@@ -369,14 +374,30 @@ export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX
         )}
       </div>
 
-      <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
-        <HintBar>
-          <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd><Kbd>←</Kbd><Kbd>→</Kbd></>} />
-          <Hint label="Copy" keys={<Kbd>↵</Kbd>} />
-          <Hint label="Recent" keys={<><Kbd>⌘</Kbd><Kbd>1-9</Kbd></>} />
-          <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-        </HintBar>
-      </div>
+      <CommandSurfaceFooter status={<CommandSurfaceStatus title="Emoji Picker" />}>
+        <Hint
+          label="Navigate"
+          keys={
+            <>
+              <Kbd>↑</Kbd>
+              <Kbd>↓</Kbd>
+              <Kbd>←</Kbd>
+              <Kbd>→</Kbd>
+            </>
+          }
+        />
+        <Hint label="Copy" keys={<Kbd>↵</Kbd>} />
+        <Hint
+          label="Recent"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>1-9</Kbd>
+            </>
+          }
+        />
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+      </CommandSurfaceFooter>
     </div>
   )
 }
