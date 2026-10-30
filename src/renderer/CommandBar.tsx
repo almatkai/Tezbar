@@ -117,6 +117,7 @@ import {
   reorderPinnedByInsertIndex,
   writePinnedCommands,
 } from './pinnedCommands'
+import { copyVaultSecret } from './vaultCopy'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
@@ -130,6 +131,8 @@ const QUERY_RESULTS_CACHE_LIMIT = 32
 const PINNED_HOME_RESULT_SCORE_PENALTY = 850
 const SEARCH_RESULT_PIN_DRAG_THRESHOLD = 6
 const COMMAND_HINT = { shortcut: '>', label: 'Open terminal' } as const
+const VAULT_COPY_HINT = { shortcut: '⌘C', label: 'Copy secret' } as const
+
 let measureCanvas: HTMLCanvasElement | undefined
 const COMMAND_HINTS = [
   { shortcut: '/directory', label: 'Search files and folders' },
@@ -3556,6 +3559,20 @@ export default function CommandBar({
           return
         }
       }
+      if (hasCommandMod && event.key.toLowerCase() === 'c' && !event.shiftKey && !isAiMode) {
+        const selected = visibleSearchResults[selectedSearch] ?? visibleSearchResults[0] ?? null
+        const input = document.activeElement
+        // A text selection in the field keeps the normal ⌘C.
+        const hasTextSelection =
+          input instanceof HTMLInputElement && input.selectionStart !== input.selectionEnd
+        if (selected?.action.type === 'open-vault-item' && !hasTextSelection) {
+          event.preventDefault()
+          void copyVaultSecret(selected.action.id).then((message) => {
+            if (message) showActionMsg(message)
+          })
+          return
+        }
+      }
       if (hasCommandMod) {
         if (event.key.toLowerCase() === 'p' && !event.shiftKey) {
           event.preventDefault()
@@ -4246,6 +4263,16 @@ export default function CommandBar({
           !terminalMode &&
           !value ? (
             <RollingText items={COMMAND_HINTS} />
+          ) : null}
+          {value && !isSlashInput && !isAiMode && !terminalMode &&
+          activeSearchResult?.action.type === 'open-vault-item' ? (
+            <span className="path-command-hint select-none" aria-hidden>
+              <span className="path-command-hint__value select-none">{value}</span>
+              <span className="rolling-command-hint__shortcut select-none">
+                {VAULT_COPY_HINT.shortcut}
+              </span>
+              <span className="rolling-command-hint__label select-none">{VAULT_COPY_HINT.label}</span>
+            </span>
           ) : null}
           {isSlashInput && !isAiMode ? (
             <span className="path-command-hint select-none" aria-hidden>
