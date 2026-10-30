@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isValidElement, type ReactElement, type ReactNode } from 'react'
+import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import type { ExtensionManifest } from '../shared/extensions'
 import ExtensionsView from './ExtensionsView'
 
@@ -84,6 +84,9 @@ class HookHarness {
 
   render(render: () => ReactNode): ReactNode {
     this.index = 0
+    // Only the latest render's effects can commit, including when an async
+    // state update arrives between rendering new props and the effect flush.
+    this.pending = []
     hooks.current = this
     try {
       return render()
@@ -165,11 +168,26 @@ const jsonResume: ExtensionManifest = {
   version: '1',
   iconUrl: 'blob:json-resume-original',
 }
+const mole: ExtensionManifest = {
+  ...jsonResume,
+  id: 'raycast.mole',
+  name: 'Mole',
+  iconUrl: 'https://raw.githubusercontent.com/raycast/extensions/main/extensions/mole/assets/extension-icon.png',
+}
+const amphetamine: ExtensionManifest = {
+  ...jsonResume,
+  id: 'raycast.amphetamine',
+  name: 'Amphetamine',
+}
 
-async function catalog(items = [cleanShot, jsonResume]) {
+async function catalog(
+  items = [cleanShot, jsonResume],
+  getAppIconDataUrl?: (path: string) => Promise<string | null>
+) {
   const view = mount()
   vi.stubGlobal('window', {
     tezbar: {
+      getAppIconDataUrl,
       extensionList: vi.fn().mockResolvedValue([]),
       extensionSearchStore: vi
         .fn()
@@ -221,20 +239,132 @@ afterEach(() => {
 })
 
 describe('extension catalog icons (live components)', () => {
-  it('renders supported icons in both catalog rows and selected details, then uses the cache', async () => {
-    const view = await catalog([jsonResume])
+  it.each([
+    jsonResume,
+    cleanShot,
+    { ...jsonResume, iconUrl: 'data:image/png;base64,aWNvbg==' },
+    mole,
+    { ...mole, iconUrl: mole.iconUrl!.replace('https:', 'http:') },
+  ])('renders $iconUrl in rows and details through the cache', async (extension) => {
+    const view = await catalog([extension])
     images.cached.mockResolvedValue('blob:json-resume')
     for (const size of ['small', undefined]) {
       const iconHooks = mount()
       const imageHooks = mount()
-      const output = renderElement(iconHooks, icon(view.tree, jsonResume.name, size))
+      const output = renderElement(iconHooks, icon(view.tree, extension.name, size))
       const image = cachedImage(output)
-      expect(imgSource(renderElement(imageHooks, image))).toBe(jsonResume.iconUrl)
+      expect(imgSource(renderElement(imageHooks, image))).toBe(extension.iconUrl)
       imageHooks.commit()
       await Promise.resolve()
       expect(imgSource(renderElement(imageHooks, image))).toBe('blob:json-resume')
     }
-    expect(images.cached).toHaveBeenCalledWith(jsonResume.iconUrl, 'icon')
+    expect(images.cached).toHaveBeenCalledWith(extension.iconUrl, 'icon')
+  })
+
+  it('drops a resolved app icon when selecting Mole, before and after effects', async () => {
+    const lookup = vi.fn().mockResolvedValue('data:image/png;base64,cleanshot')
+    const view = await catalog([cleanShot, mole], lookup)
+    const iconHooks = mount()
+    const first = icon(view.tree, cleanShot.name)
+    renderElement(iconHooks, first)
+    iconHooks.commit()
+    await Promise.resolve()
+    expect(imgSource(renderElement(iconHooks, first))).toBe('data:image/png;base64,cleanshot')
+
+    const next = icon(view.select(mole.name), mole.name)
+    expect(cachedImage(renderElement(iconHooks, next)).props.src).toBe(mole.iconUrl)
+    iconHooks.commit()
+    expect(cachedImage(renderElement(iconHooks, next)).props.src).toBe(mole.iconUrl)
+    expect(lookup).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    amphetamine,
+    { ...cleanShot, id: 'raycast.clean-shot-x', name: 'CleanShot alias' },
+    { ...cleanShot, slug: 'amphetamine', name: 'Changed app path' },
+  ])('scopes resolved app icons to the current extension and app path: $name', async (extension) => {
+    const pending = deferred()
+    const lookup = vi.fn()
+      .mockResolvedValueOnce('data:image/png;base64,cleanshot')
+      .mockReturnValueOnce(pending.promise)
+    const view = await catalog(extension.id === cleanShot.id ? [cleanShot] : [cleanShot, extension], lookup)
+    const iconHooks = mount()
+    const first = icon(view.tree, cleanShot.name)
+    renderElement(iconHooks, first)
+    iconHooks.commit()
+    await Promise.resolve()
+    expect(imgSource(renderElement(iconHooks, first))).toBe('data:image/png;base64,cleanshot')
+
+    // Installed metadata can change the runtime slug without changing the ID.
+    const next = extension.id === cleanShot.id
+      ? cloneElement(first, { ext: extension })
+      : icon(view.select(extension.name), extension.name)
+    expect(cachedImage(renderElement(iconHooks, next)).props.src).toBe(extension.iconUrl)
+    iconHooks.commit()
+    expect(cachedImage(renderElement(iconHooks, next)).props.src).toBe(extension.iconUrl)
+    expect(lookup).toHaveBeenCalledTimes(2)
+    pending.resolve('data:image/png;base64,current')
+    await Promise.resolve()
+    expect(imgSource(renderElement(iconHooks, next))).toBe('data:image/png;base64,current')
+  })
+
+  it.each(['before effects', 'after effects'])('ignores late app-icon results %s', async (timing) => {
+    const old = deferred()
+    const current = deferred()
+    const lookup = vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise)
+    const view = await catalog([cleanShot, amphetamine], lookup)
+    const iconHooks = mount()
+    renderElement(iconHooks, icon(view.tree, cleanShot.name))
+    iconHooks.commit()
+    const next = icon(view.select(amphetamine.name), amphetamine.name)
+    renderElement(iconHooks, next)
+
+    if (timing === 'before effects') {
+      old.resolve('data:image/png;base64,stale')
+      await Promise.resolve()
+      expect(cachedImage(renderElement(iconHooks, next)).props.src).toBe(amphetamine.iconUrl)
+    }
+    iconHooks.commit()
+    current.resolve('data:image/png;base64,current')
+    await Promise.resolve()
+    expect(imgSource(renderElement(iconHooks, next))).toBe('data:image/png;base64,current')
+    old.resolve('data:image/png;base64,stale')
+    await Promise.resolve()
+    expect(imgSource(renderElement(iconHooks, next))).toBe('data:image/png;base64,current')
+  })
+
+  it.each(['empty', 'rejected', 'unavailable'])('keeps the catalog icon when app lookup is %s', async (result) => {
+    const lookup = vi.fn().mockResolvedValueOnce('data:image/png;base64,cleanshot')
+    const view = await catalog([cleanShot, amphetamine], lookup)
+    const iconHooks = mount()
+    const first = icon(view.tree, cleanShot.name)
+    renderElement(iconHooks, first)
+    iconHooks.commit()
+    await Promise.resolve()
+    expect(imgSource(renderElement(iconHooks, first))).toBe('data:image/png;base64,cleanshot')
+
+    if (result === 'unavailable') delete (window.tezbar as Partial<typeof window.tezbar>).getAppIconDataUrl
+    else if (result === 'rejected') lookup.mockRejectedValueOnce(new Error('App not installed'))
+    else lookup.mockResolvedValueOnce(null)
+    const next = icon(view.select(amphetamine.name), amphetamine.name)
+    renderElement(iconHooks, next)
+    iconHooks.commit()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(cachedImage(renderElement(iconHooks, next)).props.src).toBe(amphetamine.iconUrl)
+  })
+
+  it('ignores an app-icon lookup that resolves after unmount', async () => {
+    const pending = deferred()
+    const view = await catalog([cleanShot], () => pending.promise)
+    const iconHooks = mount()
+    const first = icon(view.tree, cleanShot.name)
+    renderElement(iconHooks, first)
+    iconHooks.commit()
+    iconHooks.unmount()
+    pending.resolve('data:image/png;base64,unmounted')
+    await Promise.resolve()
+    expect(cachedImage(renderElement(iconHooks, first)).props.src).toBe(cleanShot.iconUrl)
   })
 
   it('never renders the previous extension image while a newly selected supported icon loads', async () => {

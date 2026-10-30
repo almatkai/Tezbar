@@ -113,7 +113,15 @@ function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 's
   // Installed manifests carry a runtime slug that the store type does not declare.
   const slug = normalizeIconKind((ext as StoreExtension & { slug?: string }).slug || ext.id || '')
   const knownAppPath = KNOWN_EXTENSION_APP_MAP[slug]
-  const [appIconUrl, setAppIconUrl] = useState<string | null>(null)
+  const [appIcon, setAppIcon] = useState<{
+    extensionId: string
+    appPath: string
+    url: string
+  } | null>(null)
+  // Selection changes render before effects clean up the previous lookup.
+  const appIconUrl = appIcon?.extensionId === ext.id && appIcon.appPath === knownAppPath
+    ? appIcon.url
+    : null
   const [failedIconUrl, setFailedIconUrl] = useState<string | null>(null)
   const sizePx = size === 'large' ? 48 : 28
   const roundedClass = size === 'large' ? 'rounded-[12px]' : 'rounded-[7px]'
@@ -121,13 +129,13 @@ function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 's
   useEffect(() => {
     if (!knownAppPath) return
     let cancelled = false
-    void window.tezbar?.getAppIconDataUrl(knownAppPath).then((url) => {
-      if (!cancelled && url) setAppIconUrl(url)
+    void window.tezbar?.getAppIconDataUrl?.(knownAppPath).then((url) => {
+      if (!cancelled && url) setAppIcon({ extensionId: ext.id, appPath: knownAppPath, url })
     }).catch(() => undefined)
     return () => {
       cancelled = true
     }
-  }, [knownAppPath])
+  }, [ext.id, knownAppPath])
 
   if (appIconUrl) {
     return (
@@ -148,11 +156,7 @@ function ExtensionIcon({ ext, size = 'large' }: { ext: StoreExtension; size?: 's
   }
 
   const iconUrl = ext.iconUrl?.trim() || ''
-  const isImageSrc =
-    iconUrl &&
-    (iconUrl.startsWith('data:image/') ||
-      iconUrl.startsWith('blob:') ||
-      iconUrl.startsWith('file://'))
+  const isImageSrc = /^(https?:\/\/|data:image\/|blob:|file:\/\/)/i.test(iconUrl)
   const hasIcon = Boolean(isImageSrc) && failedIconUrl !== iconUrl
 
   if (hasIcon) {
