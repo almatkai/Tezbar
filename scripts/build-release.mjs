@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { buildConfiguration, PRODUCT_NAMES, resolveBuildMode } from './lib/release-policy.mjs'
 import { verifyUpdaterSignature } from './verify-updater-signature.mjs'
 import { assertEmbeddingRuntimeDistribution } from './lib/embedding-runtime-policy.mjs'
+import { macOSSigningIdentity, verifyMacOSSigning } from './lib/macos-signing.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const values = {},
@@ -51,15 +52,21 @@ mkdirSync(directory, { recursive: true })
 const configPath = join(directory, 'tauri-release.json')
 if (mode.unsigned) {
   override.bundle.createUpdaterArtifacts = false
-  if (process.platform === 'darwin') override.bundle.macOS = { signingIdentity: '-' }
 }
+if (process.platform === 'darwin')
+  override.bundle.macOS = {
+    signingIdentity: macOSSigningIdentity({
+      localPreview: mode.localPreview,
+      identity:
+        process.env.APPLE_SIGNING_IDENTITY ??
+        (mode.localPreview ? undefined : base.bundle.macOS?.signingIdentity),
+    }),
+  }
 if (process.platform === 'win32' && process.env.WINDOWS_CERTIFICATE_THUMBPRINT) {
   override.bundle.windows.certificateThumbprint = process.env.WINDOWS_CERTIFICATE_THUMBPRINT
   override.bundle.windows.digestAlgorithm = 'sha256'
   override.bundle.windows.timestampUrl = 'http://timestamp.digicert.com'
 }
-if (!mode.unsigned && process.platform === 'darwin' && process.env.APPLE_SIGNING_IDENTITY)
-  override.bundle.macOS = { signingIdentity: process.env.APPLE_SIGNING_IDENTITY }
 writeFileSync(configPath, `${JSON.stringify(override, null, 2)}\n`)
 if (flags.has('dry-run')) {
   console.log(
@@ -97,7 +104,11 @@ if (flags.has('dry-run')) {
   })
 
   // Auto-detect updater signing key from ~/.tauri/tezbar.key if not set in environment
-  const localKeyPath = join(process.env.USERPROFILE || process.env.HOME || '', '.tauri', 'tezbar.key')
+  const localKeyPath = join(
+    process.env.USERPROFILE || process.env.HOME || '',
+    '.tauri',
+    'tezbar.key'
+  )
   if (!process.env.TAURI_SIGNING_PRIVATE_KEY && existsSync(localKeyPath)) {
     process.env.TAURI_SIGNING_PRIVATE_KEY = readFileSync(localKeyPath, 'utf8')
     if (process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD === undefined) {
@@ -126,6 +137,8 @@ if (flags.has('dry-run')) {
     )
       throw new Error('Developer ID signing and notarization credentials are required')
   }
+  if (!mode.localPreview && !process.env.TAURI_SIGNING_PRIVATE_KEY)
+    throw new Error('Every distributed build requires the existing updater signing key')
   const helpers = spawnSync(process.execPath, [join(root, 'scripts/build-native.mjs')], {
     cwd: root,
     stdio: 'inherit',
@@ -160,12 +173,21 @@ if (flags.has('dry-run')) {
   )
   if (result.error || result.status !== 0)
     throw result.error ?? new Error('Native release build failed')
-  const bundle = existsSync(join(root, 'src-tauri/target/release/bundle')) ? join(root, 'src-tauri/target/release/bundle') : join(root, 'target/release/bundle')
+  const bundle = existsSync(join(root, 'src-tauri/target/release/bundle'))
+    ? join(root, 'src-tauri/target/release/bundle')
+    : join(root, 'target/release/bundle')
   const platform =
     process.platform === 'win32'
       ? 'windows-x86_64-nsis'
       : `darwin-${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}`
   const product = PRODUCT_NAMES[channel]
+  const macOSSigning =
+    process.platform === 'darwin' && !mode.localPreview
+      ? verifyMacOSSigning(
+          join(bundle, 'macos', `${product}.app`),
+          JSON.parse(readFileSync(join(root, 'src-tauri/macos-signing.json'), 'utf8'))
+        )
+      : undefined
   if (mode.unsigned && process.platform === 'darwin') {
     execFileSync(
       'tar',
@@ -238,30 +260,31 @@ if (flags.has('dry-run')) {
     if (isUpdater) {
       const sigPath = `${path}.sig`
       if (existsSync(sigPath)) {
-        try { unlinkSync(sigPath) } catch {}
+        try {
+          unlinkSync(sigPath)
+        } catch {}
       }
       if (process.env.TAURI_SIGNING_PRIVATE_KEY) {
-        spawnSync(
+        const signed = spawnSync(
           process.execPath,
           [join(root, 'node_modules/@tauri-apps/cli/tauri.js'), 'signer', 'sign', path],
           {
             env: {
               ...process.env,
               TAURI_SIGNING_PRIVATE_KEY: process.env.TAURI_SIGNING_PRIVATE_KEY,
-              TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '',
+              TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+                process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '',
             },
             stdio: 'inherit',
           }
         )
+        if (signed.error || signed.status !== 0)
+          throw signed.error ?? new Error('Updater artifact signing failed')
       }
       if (existsSync(sigPath)) {
-        verifyUpdaterSignature(
-          bytes,
-          readFileSync(sigPath, 'utf8'),
-          base.plugins.updater.pubkey
-        )
+        verifyUpdaterSignature(bytes, readFileSync(sigPath, 'utf8'), base.plugins.updater.pubkey)
         copyFileSync(sigPath, join(directory, `${filename}.sig`))
-      } else if (!mode.unsigned) {
+      } else if (!mode.localPreview) {
         throw new Error('Updater signature is missing')
       }
     }
@@ -281,6 +304,7 @@ if (flags.has('dry-run')) {
         appIdentifier: override.identifier,
         platform,
         platformVerified,
+        ...(macOSSigning ? { macOSSigning } : {}),
         distribution: mode.localPreview
           ? 'local-preview'
           : mode.unsigned

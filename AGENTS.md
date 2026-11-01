@@ -16,6 +16,8 @@ Welcome to the Tezbar project! This document outlines general guidelines and poi
 ---
 
 ## 2. Quality Gates
+Before building, signing, re-signing, or publishing a macOS app, read [macOS signing continuity](docs/MACOS_SIGNING.md). Release builds must pass its pinned certificate-identity check, including Alpha/Beta builds with `--allow-unsigned`. Updater signatures alone do not satisfy this check.
+
 Before submitting PRs or finalizing tasks:
 - `pnpm typecheck` must pass without errors.
 - `pnpm test` must pass (unit and integration test suites).
