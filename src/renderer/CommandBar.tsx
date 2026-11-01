@@ -117,6 +117,7 @@ import {
   reorderPinnedByInsertIndex,
   writePinnedCommands,
 } from './pinnedCommands'
+import { copyVaultSecret } from './vaultCopy'
 
 const RECENT_EXTENSION_COMMANDS_KEY = 'tezbar:recent-extension-commands'
 const RECENT_EXTENSION_COMMANDS_LIMIT = 20
@@ -130,6 +131,8 @@ const QUERY_RESULTS_CACHE_LIMIT = 32
 const PINNED_HOME_RESULT_SCORE_PENALTY = 850
 const SEARCH_RESULT_PIN_DRAG_THRESHOLD = 6
 const COMMAND_HINT = { shortcut: '>', label: 'Open terminal' } as const
+const VAULT_COPY_HINT = { shortcut: '⌘C', label: 'Copy secret' } as const
+
 let measureCanvas: HTMLCanvasElement | undefined
 const COMMAND_HINTS = [
   { shortcut: '/directory', label: 'Search files and folders' },
@@ -679,6 +682,7 @@ type TezbarCommandId =
   | 'open-extensions-settings'
   | 'open-extensions'
   | 'open-snippets'
+  | 'open-vault'
   | 'open-notes'
   | 'open-emoji-picker'
   | 'open-indexing'
@@ -695,6 +699,7 @@ const TEZBAR_COMMAND_ICON_BY_ID: Record<TezbarCommandId, CommandIconKind> = {
   'open-extensions-settings': 'settings',
   'open-extensions': 'extensions',
   'open-snippets': 'snippets',
+  'open-vault': 'key',
   'open-notes': 'notes',
   'open-emoji-picker': 'emoji',
   'open-indexing': 'indexing',
@@ -746,6 +751,7 @@ const NATIVE_COMMAND_ICON_BY_ID: Record<NativeCommandId, CommandIconKind> = {
   'brew-update': 'brew',
   'open-clipboard-history': 'clipboard',
   'open-snippets': 'snippets',
+  'open-vault': 'key',
   'open-quick-notes': 'notes',
   'open-emoji-picker': 'emoji',
   'generate-password': 'key',
@@ -1231,6 +1237,7 @@ const SEARCH_CATEGORY_LABELS: Record<SearchResult['category'], string> = {
   knowledge: 'Document',
   clipboard: 'Clipboard',
   'quick-notes': 'Note',
+  vault: 'Vault',
   extensions: 'Extension',
   store: 'Store',
   'mac-cli': 'Command',
@@ -1288,6 +1295,7 @@ export default function CommandBar({
   onOpenIndexingPage,
   onOpenClipboardPage,
   onOpenSnippetsPage,
+  onOpenVault,
   onOpenNotesPage,
   onOpenEmojiPicker,
   onStartOnboarding,
@@ -1308,6 +1316,7 @@ export default function CommandBar({
   onOpenIndexingPage: () => void
   onOpenClipboardPage: () => void
   onOpenSnippetsPage: () => void
+  onOpenVault: (opts?: { itemId?: string }) => void
   onOpenNotesPage: (opts?: { createdAt?: number }) => void
   onOpenEmojiPicker: () => void
   onStartOnboarding: () => void
@@ -1387,6 +1396,13 @@ export default function CommandBar({
   const [followSearchSelection, setFollowSearchSelection] = useState(false)
   const [searchResultNavigationActive, setSearchResultNavigationActive] = useState(false)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
+  /** Inline result of ⌘C on a vault search result, shown next to the query. */
+  const [vaultCopyFeedback, setVaultCopyFeedback] = useState<{
+    id: string
+    tone: 'pending' | 'done' | 'error'
+    text: string
+  } | null>(null)
+  const vaultCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [actionMsgCard, setActionMsgCard] = useState<{
     kind: string
     iconKind?: CommandIconKind
@@ -3067,6 +3083,11 @@ export default function CommandBar({
         onOpenSnippetsPage()
         return
       }
+      if (result.action.commandId === 'open-vault') {
+        await recordHandledSearchUsage()
+        onOpenVault()
+        return
+      }
       if (result.action.commandId === 'open-notes') {
         await recordHandledSearchUsage()
         onOpenNotesPage()
@@ -3091,6 +3112,15 @@ export default function CommandBar({
         await window.tezbar.appQuit()
         return
       }
+    }
+
+    if (result.action.type === 'open-vault-item') {
+      clearPendingAction()
+      showActionMsg(null)
+      setValue('')
+      await recordHandledSearchUsage()
+      onOpenVault({ itemId: result.action.id })
+      return
     }
 
     const quickNoteIdMatch = /^note:(\d+)$/.exec(result.id)
@@ -3142,6 +3172,18 @@ export default function CommandBar({
       setValue('')
       await recordHandledSearchUsage()
       onOpenSnippetsPage()
+      return
+    }
+
+    if (
+      result.action.type === 'run-native-command' &&
+      result.action.commandId === 'open-vault'
+    ) {
+      clearPendingAction()
+      showActionMsg(null)
+      setValue('')
+      await recordHandledSearchUsage()
+      onOpenVault()
       return
     }
 
@@ -3521,6 +3563,34 @@ export default function CommandBar({
         if (key === 'd') {
           event.preventDefault()
           void deleteSelectedTerminalSession()
+          return
+        }
+      }
+      if (hasCommandMod && event.key.toLowerCase() === 'c' && !event.shiftKey && !isAiMode) {
+        const selected = visibleSearchResults[selectedSearch] ?? visibleSearchResults[0] ?? null
+        const input = document.activeElement
+        // A text selection in the field keeps the normal ⌘C.
+        const hasTextSelection =
+          input instanceof HTMLInputElement && input.selectionStart !== input.selectionEnd
+        if (selected?.action.type === 'open-vault-item' && !hasTextSelection) {
+          event.preventDefault()
+          const id = selected.action.id
+          if (vaultCopyTimerRef.current) clearTimeout(vaultCopyTimerRef.current)
+          setVaultCopyFeedback({ id, tone: 'pending', text: 'Copying…' })
+          void copyVaultSecret(id, () =>
+            setVaultCopyFeedback({ id, tone: 'pending', text: 'Waiting for Touch ID…' })
+          ).then((outcome) => {
+            if (outcome.status === 'cancelled') {
+              setVaultCopyFeedback(null)
+              return
+            }
+            setVaultCopyFeedback({
+              id,
+              tone: outcome.status === 'copied' ? 'done' : 'error',
+              text: outcome.message,
+            })
+            vaultCopyTimerRef.current = setTimeout(() => setVaultCopyFeedback(null), 2500)
+          })
           return
         }
       }
@@ -4214,6 +4284,39 @@ export default function CommandBar({
           !terminalMode &&
           !value ? (
             <RollingText items={COMMAND_HINTS} />
+          ) : null}
+          {value && !isSlashInput && !isAiMode && !terminalMode &&
+          activeSearchResult?.action.type === 'open-vault-item' ? (
+            <span
+              className="path-command-hint select-none"
+              aria-hidden={vaultCopyFeedback?.id === activeSearchResult.action.id ? undefined : true}
+            >
+              <span className="path-command-hint__value select-none">{value}</span>
+              {vaultCopyFeedback?.id === activeSearchResult.action.id ? (
+                <span
+                  role="status"
+                  className={cx(
+                    'vault-copy-feedback select-none',
+                    vaultCopyFeedback.tone === 'done' && 'vault-copy-feedback--done',
+                    vaultCopyFeedback.tone === 'error' && 'vault-copy-feedback--error'
+                  )}
+                >
+                  {vaultCopyFeedback.tone === 'done' ? (
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="m2.5 6.2 2.3 2.3 4.7-5" />
+                    </svg>
+                  ) : null}
+                  {vaultCopyFeedback.text}
+                </span>
+              ) : (
+                <>
+                  <span className="rolling-command-hint__shortcut select-none">
+                    {VAULT_COPY_HINT.shortcut}
+                  </span>
+                  <span className="rolling-command-hint__label select-none">{VAULT_COPY_HINT.label}</span>
+                </>
+              )}
+            </span>
           ) : null}
           {isSlashInput && !isAiMode ? (
             <span className="path-command-hint select-none" aria-hidden>

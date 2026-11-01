@@ -1,6 +1,6 @@
 //! Native launcher search, local content, clipboard and terminal metadata.
 mod clipboard;
-mod clipboard_native;
+pub(crate) mod clipboard_native;
 mod db;
 mod providers;
 mod storage;
@@ -289,7 +289,8 @@ impl LauncherCore {
             *s = v;
         }
     }
-    async fn local_refresh(&self) -> CoreResult {
+    /// Re-indexes notes, snippets, quick links, clipboard and vault names.
+    pub(crate) async fn local_refresh(&self) -> CoreResult {
         let docs = self.inner.stores.documents().await?;
         let docs = docs.as_array().cloned().ok_or("Invalid local documents")?;
         self.inner
@@ -301,6 +302,7 @@ impl LauncherCore {
                     "snippets".into(),
                     "quick-links".into(),
                     "clipboard".into(),
+                    "vault".into(),
                 ],
             )
             .await

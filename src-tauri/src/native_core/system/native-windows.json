@@ -600,6 +600,25 @@
     "macOnly": false
   },
   {
+    "id": "open-vault",
+    "title": "Open Vault",
+    "subtitle": "Securely store and manage server logins, API keys, passwords, and secrets.",
+    "category": "productivity",
+    "strategy": "native-helper",
+    "keywords": [
+      "vault",
+      "passwords",
+      "password",
+      "secrets",
+      "keys",
+      "api key",
+      "server",
+      "ssh",
+      "credentials"
+    ],
+    "macOnly": false
+  },
+  {
     "id": "open-quick-notes",
     "title": "Quick Notes",
     "subtitle": "View and edit saved notes with rich text; first line is the title.",

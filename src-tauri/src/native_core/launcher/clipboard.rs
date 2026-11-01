@@ -388,6 +388,11 @@ impl Worker {
         if sequence.is_some() && sequence == self.last_sequence {
             return Ok(());
         }
+        // Secrets copied from the Vault or a password manager stay out of history.
+        if native::is_private_types(&native::types()) {
+            self.last_sequence = sequence;
+            return Ok(());
+        }
         self.load()?;
         let paths = native::files();
         if let Some(entry) = file_entry(paths) {

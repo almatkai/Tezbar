@@ -13,6 +13,7 @@ export type SearchCategory =
   | 'quick-links'
   | 'calculator'
   | 'color-converter'
+  | 'vault'
 
 export type ExtensionCommandArgument = {
   name: string
@@ -37,6 +38,7 @@ export type LauncherCommandMetadata = {
 }
 
 export type SearchAction =
+  | { type: 'open-vault-item'; id: string }
   | { type: 'open-app'; appName: string; appPath?: string }
   | { type: 'open-file'; path: string }
   | { type: 'open-with-app'; path: string; appName?: string }

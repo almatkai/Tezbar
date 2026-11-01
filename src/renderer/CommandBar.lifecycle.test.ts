@@ -63,6 +63,7 @@ const props: ComponentProps<typeof CommandBar> = {
   onOpenIndexingPage: noop,
   onOpenClipboardPage: noop,
   onOpenSnippetsPage: noop,
+  onOpenVault: noop,
   onOpenNotesPage: noop,
   onOpenEmojiPicker: noop,
   onStartOnboarding: noop,

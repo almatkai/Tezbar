@@ -8,6 +8,7 @@ pub mod launcher;
 pub mod platform;
 pub mod system;
 pub mod terminal_bridge;
+pub mod vault;
 
 #[cfg(test)]
 mod performance;
@@ -31,6 +32,7 @@ pub struct NativeCore {
     pub extensions: extensions::ExtensionsCore,
     pub platform: platform::PlatformCore,
     pub system: system::SystemCore,
+    pub vault: vault::VaultService,
     initialized: AtomicBool,
     ready: tokio::sync::Notify,
     closing: AtomicBool,
@@ -47,6 +49,7 @@ impl NativeCore {
             extensions: extensions::ExtensionsCore::new(ctx.clone()),
             platform: platform::PlatformCore::new(ctx.clone()),
             system: system::SystemCore::new(ctx.clone()),
+            vault: vault::VaultService::new(ctx.paths.data_dir.clone()),
             ctx: ctx.clone(),
             initialized: AtomicBool::new(false),
             ready: tokio::sync::Notify::new(),
@@ -145,6 +148,7 @@ impl NativeCore {
             "open-extensions" => Some("extensions"),
             "open-snippets" => Some("snippets"),
             "open-notes" | "open-quick-notes" => Some("notes"),
+            "open-vault" => Some("vault"),
             "open-clipboard-history" => Some("clipboard"),
             "open-emoji-picker" => Some("emoji-picker"),
             "show-system-monitor" => Some("system-monitor"),
@@ -218,6 +222,17 @@ impl NativeCore {
         if let Some(result) = self.system.handle(channel, args).await {
             return result;
         }
+        if let Some(result) = self.vault.handle(channel, args).await {
+            // Keep vault names in global search in step with the vault.
+            if result.is_ok()
+                && matches!(channel, "vault:unlock" | "vault:save" | "vault:delete" | "vault:reset")
+            {
+                if let Err(error) = self.launcher.local_refresh().await {
+                    log::warn!("vault search refresh failed: {error}");
+                }
+            }
+            return result;
+        }
         if channel == "health:ping" {
             return Ok(json!({"ok":true,"runtime":"rust"}));
         }
@@ -229,6 +244,7 @@ impl NativeCore {
         if self.closing.swap(true, Ordering::AcqRel) {
             return;
         }
+        self.vault.lock();
         let startup = self
             .knowledge_start
             .lock()

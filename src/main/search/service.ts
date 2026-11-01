@@ -706,6 +706,7 @@ function rankRows(
 function recommendationBoost(id: string): number {
   if (id === 'native:open-clipboard-history') return 900
   if (id === 'native:open-snippets') return 880
+  if (id === 'native:open-vault') return 870
   if (id === 'extcmd:raycast.kill-process:index') return 860
   return 0
 }

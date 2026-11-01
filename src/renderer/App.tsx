@@ -5,9 +5,9 @@ import { LauncherResizeHandles } from './LauncherAppearance'
 import { LauncherFrame } from './LauncherFrame'
 import { useLauncherScaleShortcuts } from './useLauncherScaleShortcuts'
 import { installWindowDrag } from './windowDrag'
-import { RAYMES_NEW_SNIPPET_EVENT } from '../shared/snippetEvents'
+import { newItemEventFor } from './newItemShortcut'
+import type { VaultDraftSeed } from '../shared/vault'
 import type { AiChatBoot } from '../shared/aiChatSurface'
-import { RAYMES_AI_NEW_CHAT_EVENT, RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
 import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../shared/llmConfig'
 import type { TerminalSessionsAction } from '../shared/terminal'
@@ -37,6 +37,7 @@ const PermissionsView = React.lazy(() => import('./PermissionsView'))
 const ClipboardView = React.lazy(() => import('./ClipboardView'))
 const NotesView = React.lazy(() => import('./NotesView'))
 const SnippetsView = React.lazy(() => import('./SnippetsView'))
+const VaultView = React.lazy(() => import('./VaultView'))
 const EmojiPickerView = React.lazy(() => import('./EmojiPickerView'))
 const TerminalView = React.lazy(() => import('./TerminalView'))
 const TerminalSessionsWindow = React.lazy(() => import('./TerminalSessionsWindow'))
@@ -60,6 +61,7 @@ type Surface =
   | 'clipboard'
   | 'snippets'
   | 'notes'
+  | 'vault'
   | 'emoji-picker'
   | 'terminal'
   | 'release-notes'
@@ -77,10 +79,13 @@ const SHEET_SURFACES: ReadonlySet<Surface> = new Set<Surface>([
   'clipboard',
   'snippets',
   'notes',
+  'vault',
   'emoji-picker',
   'terminal',
   'release-notes',
 ])
+
+type VaultEntry = { itemId?: string; draft?: VaultDraftSeed }
 
 type SettingsTab =
   | 'general'
@@ -129,6 +134,7 @@ const PANEL_SELECTORS: Record<Exclude<Surface, 'command'>, string> = {
   clipboard: '[aria-label="Clipboard History"]',
   snippets: '[aria-label="Snippets"]',
   notes: '[aria-label="Quick Notes"]',
+  vault: '[data-vault-panel]',
   'emoji-picker': '[aria-label="Emoji Picker"]',
   terminal: '[aria-label="Terminal"]',
   'release-notes': '[aria-label="Release Notes"]',
@@ -323,6 +329,12 @@ function LauncherApp(): JSX.Element {
   const markReleaseNotesRead = useCallback(() => setHasUnreadReleaseNotes(false), [])
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   const [notesInitialSelectedId, setNotesInitialSelectedId] = useState<number | null>(null)
+  /** How the Vault was opened: on a search result, or with a clipboard value to save. */
+  const [vaultEntry, setVaultEntry] = useState<VaultEntry>({})
+  // A search target or clipboard value applies to one visit only.
+  useEffect(() => {
+    if (surface !== 'vault') setVaultEntry({})
+  }, [surface])
   const [commandInitialValue, setCommandInitialValue] = useState('')
   const [commandInitialSelectedChatId, setCommandInitialSelectedChatId] = useState<string | null>(
     null
@@ -577,16 +589,7 @@ function LauncherApp(): JSX.Element {
       if (isCmdOrCtrl && e.key.toLowerCase() === 'n') {
         e.preventDefault()
         e.stopPropagation()
-        const s = surfaceRef.current
-        if (s === 'ai-chat') {
-          window.dispatchEvent(new Event(RAYMES_AI_NEW_CHAT_EVENT))
-          return
-        }
-        if (s === 'snippets') {
-          window.dispatchEvent(new Event(RAYMES_NEW_SNIPPET_EVENT))
-          return
-        }
-        window.dispatchEvent(new Event(RAYMES_QUICK_NOTE_SHORTCUT_EVENT))
+        window.dispatchEvent(new Event(newItemEventFor(surfaceRef.current)))
       }
     }
     window.addEventListener('keydown', onKey, true)
@@ -701,9 +704,21 @@ function LauncherApp(): JSX.Element {
           ) : surface === 'permissions' ? (
             <PermissionsView onBack={() => setSurface('settings')} />
           ) : surface === 'clipboard' ? (
-            <ClipboardView onBack={returnToLauncher} />
+            <ClipboardView
+              onBack={returnToLauncher}
+              onSaveToVault={(draft) => {
+                setVaultEntry({ draft })
+                setSurface('vault')
+              }}
+            />
           ) : surface === 'snippets' ? (
             <SnippetsView onBack={returnToLauncher} />
+          ) : surface === 'vault' ? (
+            <VaultView
+              initialItemId={vaultEntry.itemId}
+              initialDraft={vaultEntry.draft}
+              onClose={() => (vaultEntry.draft ? setSurface('clipboard') : returnToLauncher())}
+            />
           ) : surface === 'notes' ? (
             <NotesView onBack={returnToLauncher} initialSelectedNoteId={notesInitialSelectedId} />
           ) : surface === 'emoji-picker' ? (
@@ -794,6 +809,10 @@ function LauncherApp(): JSX.Element {
               }}
               onOpenClipboardPage={() => setSurface('clipboard')}
               onOpenSnippetsPage={() => setSurface('snippets')}
+              onOpenVault={(opts) => {
+                setVaultEntry({ itemId: opts?.itemId })
+                setSurface('vault')
+              }}
               onOpenNotesPage={(opts) => {
                 setNotesInitialSelectedId(
                   typeof opts?.createdAt === 'number' ? opts.createdAt : null

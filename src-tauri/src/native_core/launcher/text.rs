@@ -56,6 +56,119 @@ pub fn variants(s: &str) -> Vec<String> {
     }
     out
 }
+fn is_cyrillic(c: char) -> bool {
+    matches!(c, '\u{0400}'..='\u{04FF}')
+}
+fn translit(c: char) -> &'static str {
+    match c {
+        'а' | 'ә' => "a",
+        'б' => "b",
+        'в' => "v",
+        'г' | 'ғ' => "g",
+        'д' => "d",
+        'е' | 'ё' | 'э' => "e",
+        'ж' => "zh",
+        'з' => "z",
+        'и' | 'і' => "i",
+        'й' | 'ы' => "y",
+        'к' | 'қ' => "k",
+        'л' => "l",
+        'м' => "m",
+        'н' | 'ң' => "n",
+        'о' | 'ө' => "o",
+        'п' => "p",
+        'р' => "r",
+        'с' => "s",
+        'т' => "t",
+        'у' | 'ұ' | 'ү' => "u",
+        'ф' => "f",
+        'х' | 'һ' => "h",
+        'ц' => "ts",
+        'ч' => "ch",
+        'ш' => "sh",
+        'щ' => "sch",
+        'ю' => "yu",
+        'я' => "ya",
+        _ => "",
+    }
+}
+/// Consonant skeleton of a word after Cyrillic→Latin transliteration, so a
+/// name typed by ear in the other script still matches: "клауд" and
+/// "cloudflare" give "kld" and "kldflr".
+pub fn phonetic_key(word: &str) -> String {
+    let mut latin = String::with_capacity(word.len());
+    for c in word.chars().flat_map(char::to_lowercase) {
+        if is_cyrillic(c) {
+            latin.push_str(translit(c));
+        } else if c.is_ascii_alphanumeric() {
+            latin.push(c);
+        }
+    }
+    let chars: Vec<char> = latin.chars().collect();
+    let mut key = String::with_capacity(chars.len());
+    for (i, &c) in chars.iter().enumerate() {
+        let next = chars.get(i + 1).copied();
+        let mapped = match c {
+            'a' | 'e' | 'i' | 'o' | 'u' | 'y' => continue,
+            'c' if matches!(next, Some('e' | 'i' | 'y')) => 's',
+            'c' | 'q' => 'k',
+            'w' => 'v',
+            'x' => {
+                key.push('k');
+                's'
+            }
+            other => other,
+        };
+        if !key.ends_with(mapped) {
+            key.push(mapped);
+        }
+    }
+    key
+}
+/// Query typed in one script against a title in the other one. Same-script
+/// matching is already covered by the lexical and fuzzy passes.
+pub struct PhoneticQuery {
+    keys: Vec<String>,
+    cyrillic: bool,
+}
+impl PhoneticQuery {
+    pub fn new(query: &str) -> Option<Self> {
+        let letters = query.chars().filter(|c| c.is_alphabetic()).count();
+        let cyrillic = query.chars().any(is_cyrillic);
+        let latin = query.chars().any(|c| c.is_ascii_alphabetic());
+        if letters < 3 || cyrillic == latin {
+            return None;
+        }
+        let keys: Vec<String> = query.split_whitespace().map(phonetic_key).collect();
+        if keys.iter().any(|k| k.len() < 2) {
+            return None;
+        }
+        Some(Self { keys, cyrillic })
+    }
+    pub fn score(&self, title: &str) -> f64 {
+        let other_script = if self.cyrillic {
+            title.chars().any(|c| c.is_ascii_alphabetic())
+        } else {
+            title.chars().any(is_cyrillic)
+        };
+        if !other_script {
+            return 0.;
+        }
+        let words: Vec<String> = tokens(title).iter().map(|t| phonetic_key(t)).collect();
+        let mut exact = true;
+        for key in &self.keys {
+            match words.iter().find(|w| w.starts_with(key.as_str())) {
+                Some(word) => exact &= word == key,
+                None => return 0.,
+            }
+        }
+        if exact {
+            0.7
+        } else {
+            0.62
+        }
+    }
+}
 #[cfg(test)]
 pub fn distance(a: &str, b: &str) -> usize {
     // Match JS UTF-16 edit distances, including non-BMP text.
@@ -337,7 +450,7 @@ pub fn prior(c: &str) -> f64 {
         "files" => 0.6,
         "knowledge" => 0.64,
         "clipboard" => 0.45,
-        "quick-notes" | "extensions" => 0.68,
+        "quick-notes" | "extensions" | "vault" => 0.68,
         "store" => 0.25,
         "mac-cli" => 0.46,
         "native-command" => 0.7,
@@ -438,6 +551,27 @@ pub fn app_match(name: &str, q: &str) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn phonetic_keys_bridge_cyrillic_and_latin_spelling() {
+        assert_eq!(phonetic_key("клауд"), "kld");
+        assert_eq!(phonetic_key("CloudFlare"), "kldflr");
+        assert_eq!(phonetic_key("гитхаб"), phonetic_key("github"));
+        assert_eq!(phonetic_key("докер"), phonetic_key("docker"));
+        assert_eq!(phonetic_key("телеграм"), phonetic_key("telegram"));
+        assert_eq!(phonetic_key("офис"), phonetic_key("office"));
+    }
+    #[test]
+    fn phonetic_query_matches_only_across_scripts() {
+        let q = PhoneticQuery::new("клауд").unwrap();
+        assert!(q.score("CloudFlare API Key") > 0.);
+        assert_eq!(q.score("Клавиатура"), 0.);
+        assert_eq!(q.score("Notes"), 0.);
+        let latin = PhoneticQuery::new("osnovnoy server").unwrap();
+        assert!(latin.score("Основной сервер") > 0.);
+        assert_eq!(PhoneticQuery::new("cloud").unwrap().score("CloudFlare"), 0.);
+        assert!(PhoneticQuery::new("клауд cloud").is_none());
+        assert!(PhoneticQuery::new("кл").is_none());
+    }
     #[test]
     fn distance_matches_reference() {
         fn reference(a: &str, b: &str) -> usize {
@@ -774,6 +908,7 @@ pub fn recommendation(id: &str) -> f64 {
     match id {
         "native:open-clipboard-history" => 900.,
         "native:open-snippets" => 880.,
+        "native:open-vault" => 870.,
         "extcmd:raycast.kill-process:index" => 860.,
         _ => 0.,
     }

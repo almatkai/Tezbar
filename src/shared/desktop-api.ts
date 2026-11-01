@@ -43,6 +43,13 @@ import type { SafetyDescriptor, SafetyLogEntry } from './safety'
 import type { QuickNoteEntry } from './quickNotes'
 import type { SnippetListRow, SnippetWritePayload } from './snippets'
 import type {
+  VaultItem,
+  VaultItemHeader,
+  VaultSaveInput,
+  VaultStatus,
+  VaultUnlockResult,
+} from './vault'
+import type {
   PathCompletionItem,
   SearchAction,
   SearchBenchmarkReport,
@@ -334,6 +341,17 @@ export type RaymesApi = {
   appendQuickNote: (text: string) => Promise<QuickNoteEntry | null>
   updateQuickNote: (createdAt: number, text: string) => Promise<boolean>
   deleteQuickNote: (createdAt: number) => Promise<boolean>
+  vaultStatus: () => Promise<VaultStatus>
+  /** Asks for Touch ID or the Mac password, then opens the vault. */
+  vaultUnlock: () => Promise<VaultUnlockResult>
+  vaultLock: () => Promise<{ ok: boolean }>
+  vaultList: () => Promise<VaultItemHeader[]>
+  vaultGet: (id: string) => Promise<VaultItem>
+  vaultSave: (item: VaultSaveInput) => Promise<VaultItemHeader>
+  vaultDelete: (id: string) => Promise<{ ok: boolean }>
+  /** Copies the value marked concealed; it is cleared after 30 s. */
+  vaultCopy: (id: string) => Promise<{ ok: boolean }>
+  vaultReset: () => Promise<VaultUnlockResult>
   terminalCreate: (request: TerminalCreateRequest) => Promise<TerminalCreateResult>
   terminalAttach: (request: TerminalAttachRequest) => Promise<TerminalAttachResult | null>
   terminalDetach: (sessionId: string) => Promise<boolean>

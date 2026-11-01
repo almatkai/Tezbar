@@ -65,6 +65,13 @@ function buildRaymesSurfaceDocuments(): IndexedDocument[] {
       commandId: 'open-snippets',
     },
     {
+      id: 'command:open-vault',
+      title: 'Open Vault',
+      subtitle: 'Tezbar secure vault for credentials, passwords, and secret keys',
+      keywords: ['vault', 'secrets', 'passwords', 'keys', 'credentials', 'ssh', 'tokens', '/vault'],
+      commandId: 'open-vault',
+    },
+    {
       id: 'command:open-notes',
       title: 'Open Notes',
       subtitle: 'Tezbar quick notes',

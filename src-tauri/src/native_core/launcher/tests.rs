@@ -788,3 +788,39 @@ async fn contribution_command_row_replaces_the_same_indexed_id_by_score() {
     assert_eq!(matched[0]["score"], 20000);
     core.shutdown().await.unwrap();
 }
+#[tokio::test]
+async fn global_search_finds_vault_items_by_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = profile(dir.path());
+    std::fs::create_dir_all(&ctx.paths.data_dir).unwrap();
+    write_json_atomic(
+        &ctx.paths.data_dir.join("vault.enc"),
+        &json!({"version":2,"nonce":"00","ciphertext":"opaque","updatedAt":5,
+                "index":[{"id":"srv","name":"Основной сервер","kind":"server","updatedAt":5}]}),
+    )
+    .unwrap();
+    let core = LauncherCore::new(ctx.clone());
+    core.local_refresh().await.unwrap();
+    let rows = core.search("основной сервер").await.unwrap();
+    assert_eq!(rows[0]["id"], "vault:srv");
+    assert_eq!(rows[0]["category"], "vault");
+    assert_eq!(rows[0]["action"]["type"], "open-vault-item");
+    core.shutdown().await.unwrap();
+}
+#[tokio::test]
+async fn names_typed_by_ear_in_cyrillic_find_latin_vault_items() {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = profile(dir.path());
+    std::fs::create_dir_all(&ctx.paths.data_dir).unwrap();
+    write_json_atomic(
+        &ctx.paths.data_dir.join("vault.enc"),
+        &json!({"version":2,"nonce":"00","ciphertext":"opaque","updatedAt":5,
+                "index":[{"id":"cf","name":"CloudFlare API Key","kind":"api-key","updatedAt":5}]}),
+    )
+    .unwrap();
+    let core = LauncherCore::new(ctx.clone());
+    core.local_refresh().await.unwrap();
+    let rows = core.search("клауд").await.unwrap();
+    assert!(rows.as_array().unwrap().iter().any(|r| r["id"] == "vault:cf"));
+    core.shutdown().await.unwrap();
+}

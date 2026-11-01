@@ -385,6 +385,16 @@ pub fn document(
 ) -> Value {
     json!({"id":id,"category":cat,"title":title,"subtitle":subtitle,"tokens":tokens,"action":action,"updatedAt":updated})
 }
+fn vault_kind_label(kind: &str) -> &'static str {
+    match kind {
+        "api-key" => "API key",
+        "token" => "Token",
+        "ssh-key" => "SSH key",
+        "server" => "Server",
+        "note" => "Note",
+        _ => "Password",
+    }
+}
 fn documents(root: &Path) -> CoreResult {
     let mut docs = vec![];
     let notes = read_or(&root.join("search/notes.json"), json!({"notes":[]}))?;
@@ -408,6 +418,19 @@ fn documents(root: &Path) -> CoreResult {
                 n["updatedAt"].as_u64().unwrap_or(stamp),
             ));
         }
+    }
+    // Vault names only: values stay encrypted and open behind Touch ID.
+    for entry in crate::native_core::vault::storage::read_index(root) {
+        let label = vault_kind_label(&entry.kind);
+        docs.push(document(
+            &format!("vault:{}", entry.id),
+            "vault",
+            &entry.name,
+            &format!("Vault · {label}"),
+            &format!("{} {label} vault secret", entry.name),
+            json!({"type":"open-vault-item","id":entry.id}),
+            entry.updated_at,
+        ));
     }
     let snippets = load_snippets(root)?;
     for s in array(&snippets, "snippets")? {
@@ -492,5 +515,29 @@ mod tests {
             true
         );
         assert_eq!(rows[15]["updatedAt"], 1);
+    }
+
+    #[test]
+    fn vault_names_are_searchable_without_values() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("vault.enc"),
+            r#"{"version":2,"nonce":"00","ciphertext":"opaque","updatedAt":5,
+               "index":[{"id":"a1","name":"Основной сервер","kind":"server","updatedAt":5}]}"#,
+        )
+        .unwrap();
+        let docs = documents(dir.path()).unwrap();
+        let vault: Vec<_> = docs
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|doc| doc["category"] == "vault")
+            .collect();
+        assert_eq!(vault.len(), 1);
+        assert_eq!(vault[0]["id"], "vault:a1");
+        assert_eq!(vault[0]["title"], "Основной сервер");
+        assert_eq!(vault[0]["subtitle"], "Vault · Server");
+        assert_eq!(vault[0]["action"]["type"], "open-vault-item");
+        assert!(!vault[0].to_string().contains("opaque"));
     }
 }

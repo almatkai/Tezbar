@@ -8,6 +8,7 @@ import {
 } from './ui/CommandSurface'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ClipboardEntry, ClipboardImagePayload } from '../shared/clipboard'
+import type { VaultDraftSeed } from '../shared/vault'
 import { Hint, Kbd, Message } from './ui/primitives'
 import { GlideList } from './ui/GlideList'
 import { ConvertActionRow } from './clipboardActions'
@@ -153,7 +154,14 @@ function RowIcon({
 /* =========================================================================
    Main view
    ========================================================================= */
-export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.Element {
+export default function ClipboardView({
+  onBack,
+  onSaveToVault,
+}: {
+  onBack: () => void
+  /** Opens the Vault editor with this text; the entry is removed once saved. */
+  onSaveToVault?: (draft: VaultDraftSeed) => void
+}): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -344,6 +352,12 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
       return
     }
 
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && entry.kind === 'text' && onSaveToVault) {
+      e.preventDefault()
+      onSaveToVault({ value: entry.text, clipboardEntryId: entry.id })
+      return
+    }
+
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'r') {
       e.preventDefault()
       void revealInFinder(entry)
@@ -508,6 +522,17 @@ export default function ClipboardView({ onBack }: { onBack: () => void }): JSX.E
       >
         <Hint label={primaryActionLabel ?? 'Copy'} keys={<Kbd>↵</Kbd>} />
         <Hint label="Pin" keys={<Kbd>P</Kbd>} />
+        {currentEntry?.kind === 'text' && onSaveToVault ? (
+          <Hint
+            label="Save to Vault"
+            keys={
+              <>
+                <Kbd>⌘</Kbd>
+                <Kbd>S</Kbd>
+              </>
+            }
+          />
+        ) : null}
         <Hint
           label="Delete"
           keys={

@@ -451,6 +451,30 @@ fn search_at(db: &Connection, q: &str, candidates: bool, now: u64, fts_sql: &str
             d.lex = lex;
             docs.insert(id, d);
         }
+        // Names typed by ear in the other script: "клауд" finds "CloudFlare".
+        if let Some(phonetic) = text::PhoneticQuery::new(&normalized) {
+            let mut matches = vec![];
+            let mut statement = db
+                .prepare_cached("SELECT id,title FROM documents WHERE category<>'files' LIMIT 4000")
+                .map_err(err)?;
+            let mut rows = statement.query([]).map_err(err)?;
+            while let Some(r) = rows.next().map_err(err)? {
+                let title: String = r.get(1).map_err(err)?;
+                let lex = phonetic.score(&title);
+                if lex > 0. {
+                    matches.push((r.get::<_, String>(0).map_err(err)?, lex));
+                }
+            }
+            matches.sort_by(|a, b| b.1.total_cmp(&a.1));
+            matches.truncate(20);
+            for (id, lex) in matches {
+                if docs.get(&id).map_or(true, |old| lex > old.lex) {
+                    let mut d = hydrate(db, &id)?;
+                    d.lex = lex;
+                    docs.insert(id, d);
+                }
+            }
+        }
         for d in collect(db,&format!("{SELECT} JOIN query_action_stats q ON q.action_id=d.id WHERE q.query=? AND q.success_count>0 ORDER BY q.last_used_at DESC LIMIT 20"),[&normalized])? {
             docs.entry(d.id.clone()).or_insert(d);
         }
