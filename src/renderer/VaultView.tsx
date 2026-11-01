@@ -4,7 +4,6 @@ import {
   type VaultDraftSeed,
   type VaultItem,
   type VaultItemHeader,
-  type VaultKind,
   type VaultStatus,
 } from '../shared/vault'
 import {
@@ -20,9 +19,12 @@ import {
 import { GlideList } from './ui/GlideList'
 import { Button, Hint, Kbd, cx } from './ui/primitives'
 import { VAULT_KIND_LABELS, detectSecret } from './vaultDetect'
+import { VaultItemIcon } from './vaultIcons'
+import { VaultIconPicker } from './VaultIconPicker'
 
 type Draft = {
   id?: string
+  icon?: string
   value: string
   name: string
   /** False while the name still follows the detector's suggestion. */
@@ -57,53 +59,6 @@ function fullDate(ts: number): string {
     hour: 'numeric',
     minute: '2-digit',
   })
-}
-
-function KindIcon({ kind }: { kind: VaultKind }): JSX.Element {
-  const paths: Record<VaultKind, ReactNode> = {
-    'api-key': (
-      <>
-        <circle cx="5" cy="9" r="2.5" />
-        <path d="M7 7.5 12.5 2M10.5 4l1.5 1.5M9 5.5l1.2 1.2" />
-      </>
-    ),
-    token: (
-      <>
-        <rect x="1.5" y="4" width="11" height="6" rx="1.5" />
-        <path d="M4.5 7h5" />
-      </>
-    ),
-    'ssh-key': (
-      <>
-        <rect x="1.5" y="2.5" width="11" height="9" rx="1.5" />
-        <path d="m4 6 1.8 1.5L4 9M7.5 9h2.5" />
-      </>
-    ),
-    server: (
-      <>
-        <rect x="1.5" y="2" width="11" height="4" rx="1" />
-        <rect x="1.5" y="8" width="11" height="4" rx="1" />
-        <path d="M4 4h.01M4 10h.01" />
-      </>
-    ),
-    password: (
-      <>
-        <rect x="2.5" y="6" width="9" height="6" rx="1.5" />
-        <path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" />
-      </>
-    ),
-    note: <path d="M3 3.5h8M3 7h8M3 10.5h5" />,
-  }
-  return (
-    <span
-      aria-hidden
-      className="grid h-7 w-7 shrink-0 place-items-center rounded-tezbar-chip border border-white/10 bg-white/[0.04] text-ink-3"
-    >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-        {paths[kind]}
-      </svg>
-    </span>
-  )
 }
 
 function LockGlyph(): JSX.Element {
@@ -283,6 +238,7 @@ export default function VaultView({
     if (!detail) return
     setDraft({
       id: detail.id,
+      icon: detail.icon,
       value: detail.value,
       name: detail.name,
       nameTouched: true,
@@ -302,6 +258,7 @@ export default function VaultView({
         name: draftName.trim(),
         value: draft.value,
         kind: detected.kind,
+        icon: draft.icon,
         note: draft.note,
       })
       const removedFromClipboard = draft.clipboardEntryId
@@ -476,7 +433,7 @@ export default function VaultView({
                       }}
                       className="flex w-full items-center gap-2 rounded-tezbar-row px-2 py-1.5 text-left transition"
                     >
-                      <KindIcon kind={item.kind} />
+                      <VaultItemIcon kind={item.kind} icon={item.icon} />
                       <div className="min-w-0 flex-1">
                         <p className={cx('truncate text-[12.5px]', index === selected ? 'text-ink-1' : 'text-ink-2')}>
                           {item.name}
@@ -512,25 +469,29 @@ export default function VaultView({
                   className={cx(fieldClass, 'resize-none font-mono text-[12.5px] leading-relaxed')}
                 />
               </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="flex items-center justify-between text-[11px] text-ink-4">
-                  <span>Name</span>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-[11px] text-ink-4">
+                  <label htmlFor="vault-item-name">Name</label>
                   {draft.value.trim() ? <span>{VAULT_KIND_LABELS[detected.kind]}</span> : null}
-                </span>
-                <input
-                  ref={nameRef}
-                  value={draftName}
-                  placeholder="Name"
-                  onChange={(event) => setDraft({ ...draft, name: event.target.value, nameTouched: true })}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey) {
-                      event.preventDefault()
-                      void save()
-                    }
-                  }}
-                  className={cx(fieldClass, 'text-[13px]')}
-                />
-              </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <VaultIconPicker kind={detected.kind} icon={draft.icon} onChange={(icon) => setDraft({ ...draft, icon })} />
+                  <input
+                    id="vault-item-name"
+                    ref={nameRef}
+                    value={draftName}
+                    placeholder="Name"
+                    onChange={(event) => setDraft({ ...draft, name: event.target.value, nameTouched: true })}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey) {
+                        event.preventDefault()
+                        void save()
+                      }
+                    }}
+                    className={cx(fieldClass, 'min-w-0 flex-1 text-[13px]')}
+                  />
+                </div>
+              </div>
               {draft.showNote ? (
                 <label className="flex flex-col gap-1.5">
                   <span className="text-[11px] text-ink-4">Note</span>
@@ -563,7 +524,7 @@ export default function VaultView({
           ) : detail ? (
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-2.5">
-                <KindIcon kind={detail.kind} />
+                <VaultItemIcon kind={detail.kind} icon={detail.icon} />
                 <div className="min-w-0">
                   <h2 className="truncate text-[14px] font-medium text-ink-1">{detail.name}</h2>
                   <p className="text-[11px] text-ink-4">{VAULT_KIND_LABELS[detail.kind]}</p>

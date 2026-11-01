@@ -319,6 +319,15 @@ impl VaultService {
             .filter(|kind| KINDS.contains(kind))
             .unwrap_or("password")
             .to_string();
+        let icon = input["icon"]
+            .as_str()
+            .filter(|id| {
+                (1..=32).contains(&id.len())
+                    && id.bytes().all(|byte| {
+                        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-'
+                    })
+            })
+            .map(str::to_string);
         let note = input["note"]
             .as_str()
             .map(str::trim)
@@ -335,6 +344,7 @@ impl VaultService {
             existing.value.zeroize();
             existing.value = value;
             existing.kind = kind;
+            existing.icon = icon;
             existing.note.zeroize();
             existing.note = note;
             existing.updated_at = now;
@@ -345,6 +355,7 @@ impl VaultService {
                 name: if name.is_empty() { "Untitled".to_string() } else { name },
                 value,
                 kind,
+                icon,
                 note,
                 created_at: now,
                 updated_at: now,
@@ -461,6 +472,118 @@ mod tests {
 
     async fn call(service: &VaultService, channel: &str, args: &[Value]) -> CoreResult {
         service.handle(channel, args).await.unwrap()
+    }
+
+    #[test]
+    fn old_json_without_icons_deserializes() {
+        let legacy = json!({ "id": "old", "name": "Old", "value": "secret", "kind": "password", "createdAt": 1, "updatedAt": 2 });
+        let item: VaultItem = serde_json::from_value(legacy.clone()).unwrap();
+        let header: VaultItemHeader = serde_json::from_value(legacy.clone()).unwrap();
+        let index: storage::VaultIndexEntry = serde_json::from_value(legacy).unwrap();
+        assert_eq!(item.icon, None);
+        assert_eq!(header.icon, None);
+        assert_eq!(index.icon, None);
+        for value in [json!(item), json!(header), json!(index)] {
+            assert!(value.get("icon").is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn custom_icon_persists_in_item_header_and_plaintext_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let (vault, _) = service(
+            dir.path(),
+            AuthOutcome::Granted,
+            Arc::new(FakeKeys::default()),
+        );
+        call(&vault, "vault:unlock", &[]).await.unwrap();
+        let saved = call(
+            &vault,
+            "vault:save",
+            &[json!({ "name": "Cloud", "value": "secret", "kind": "api-key", "icon": "cloud-2" })],
+        )
+        .await
+        .unwrap();
+        let id = saved["id"].clone();
+        assert_eq!(saved["icon"], "cloud-2");
+        assert_eq!(
+            storage::read_index(dir.path())[0].icon.as_deref(),
+            Some("cloud-2")
+        );
+        call(&vault, "vault:lock", &[]).await.unwrap();
+        call(&vault, "vault:unlock", &[]).await.unwrap();
+        assert_eq!(
+            call(&vault, "vault:get", &[id]).await.unwrap()["icon"],
+            "cloud-2"
+        );
+        assert_eq!(
+            call(&vault, "vault:list", &[]).await.unwrap()[0]["icon"],
+            "cloud-2"
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_icons_are_dropped_and_edits_can_reset_to_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let (vault, _) = service(
+            dir.path(),
+            AuthOutcome::Granted,
+            Arc::new(FakeKeys::default()),
+        );
+        call(&vault, "vault:unlock", &[]).await.unwrap();
+        let saved = call(
+            &vault,
+            "vault:save",
+            &[json!({ "value": "secret", "icon": "a".repeat(32) })],
+        )
+        .await
+        .unwrap();
+        let id = saved["id"].clone();
+        assert_eq!(saved["icon"], "a".repeat(32));
+        for invalid in [
+            json!(""),
+            json!("Cloud"),
+            json!("cloud_2"),
+            json!(" cloud"),
+            json!("a".repeat(33)),
+            json!("é"),
+            json!(7),
+            Value::Null,
+        ] {
+            let edited = call(
+                &vault,
+                "vault:save",
+                &[json!({ "id": id, "value": "secret", "icon": invalid })],
+            )
+            .await
+            .unwrap();
+            assert!(edited.get("icon").is_none());
+            assert_eq!(storage::read_index(dir.path())[0].icon, None);
+            assert!(call(&vault, "vault:get", &[id.clone()])
+                .await
+                .unwrap()
+                .get("icon")
+                .is_none());
+        }
+        call(
+            &vault,
+            "vault:save",
+            &[json!({ "id": id, "value": "secret", "icon": "star" })],
+        )
+        .await
+        .unwrap();
+        let reset = call(
+            &vault,
+            "vault:save",
+            &[json!({ "id": id, "value": "secret" })],
+        )
+        .await
+        .unwrap();
+        assert!(reset.get("icon").is_none());
+        assert!(call(&vault, "vault:list", &[]).await.unwrap()[0]
+            .get("icon")
+            .is_none());
+        assert_eq!(storage::read_index(dir.path())[0].icon, None);
     }
 
     #[tokio::test]
