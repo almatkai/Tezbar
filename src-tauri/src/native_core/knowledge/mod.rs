@@ -75,7 +75,8 @@ struct Inner {
     closed: AtomicBool,
     paused: AtomicBool,
     requested: AtomicBool,
-    dirty: Arc<AtomicU64>,
+    pending: Arc<Mutex<PendingReconcile>>,
+    profile_roots: Arc<Mutex<HashSet<PathBuf>>>,
     wake: Arc<Notify>,
     task: AsyncMutex<Option<tokio::task::JoinHandle<()>>>,
     prewarm_task: AsyncMutex<Option<tokio::task::JoinHandle<()>>>,
@@ -102,6 +103,95 @@ impl Drop for SemanticChange<'_> {
 enum IndexOutcome {
     Unchanged,
     Indexed,
+}
+const FULL_RECONCILE_MS: u64 = 300_000;
+const RECONCILE_DEBOUNCE_MS: u64 = 5_000;
+const RECONCILE_MAX_WAIT_MS: u64 = 30_000;
+const MAX_PENDING_PATHS: usize = 2_000;
+const COMPLETION_BATCH: usize = 128;
+
+#[derive(Default, Debug)]
+struct PendingReconcile {
+    paths: HashSet<PathBuf>,
+    full: bool,
+    first: u64,
+    last: u64,
+}
+impl PendingReconcile {
+    fn record(
+        &mut self,
+        event: &notify::Result<notify::Event>,
+        roots: &[PathBuf],
+        profiles: &HashSet<PathBuf>,
+        now: u64,
+    ) -> bool {
+        if !watcher_requests_reconcile(event, roots) {
+            return false;
+        }
+        let full = match event {
+            Ok(event) => event.need_rescan() || event.paths.is_empty(),
+            Err(_) => true,
+        };
+        let paths: Vec<_> = event
+            .as_ref()
+            .ok()
+            .into_iter()
+            .flat_map(|e| &e.paths)
+            .filter_map(|path| {
+                // Resolve lexical parent components before applying exclusions;
+                // deleted paths cannot be canonicalized with a filesystem stat.
+                let path = if path
+                    .components()
+                    .any(|c| matches!(c, std::path::Component::ParentDir))
+                {
+                    db::normalize_root(path).ok()?
+                } else {
+                    path.clone()
+                };
+                (roots.iter().any(|r| path.starts_with(r))
+                    && watcher_path_reconcile(&path, roots)
+                    && !profiles.iter().any(|r| path.starts_with(r)))
+                .then_some(path)
+            })
+            .collect();
+        if !full && paths.is_empty() {
+            return false;
+        }
+        if self.first == 0 {
+            self.first = now;
+        }
+        self.last = now;
+        self.full |= full;
+        if !self.full {
+            self.paths.extend(paths);
+            self.full = self.paths.len() > MAX_PENDING_PATHS;
+        }
+        if self.full {
+            self.paths.clear();
+        }
+        true
+    }
+    fn deadline(&self, last_full: u64) -> Option<u64> {
+        if self.first == 0 {
+            return None;
+        }
+        let due = self
+            .last
+            .saturating_add(RECONCILE_DEBOUNCE_MS)
+            .min(self.first.saturating_add(RECONCILE_MAX_WAIT_MS));
+        Some(if self.full {
+            due.max(last_full.saturating_add(FULL_RECONCILE_MS))
+        } else {
+            due
+        })
+    }
+    fn take_due(&mut self, now: u64, last_full: u64) -> Option<Self> {
+        if self.deadline(last_full).is_some_and(|due| now >= due) {
+            Some(std::mem::take(self))
+        } else {
+            None
+        }
+    }
 }
 struct Cache {
     settings: Value,
@@ -151,7 +241,8 @@ impl KnowledgeCore {
                 closed: AtomicBool::new(false),
                 paused: AtomicBool::new(false),
                 requested: AtomicBool::new(false),
-                dirty: Arc::new(AtomicU64::new(0)),
+                pending: Arc::default(),
+                profile_roots: Arc::default(),
                 wake,
                 task: AsyncMutex::new(None),
                 prewarm_task: AsyncMutex::new(None),
@@ -506,17 +597,48 @@ impl KnowledgeCore {
     }
     async fn sync_watchers(&self) -> Result<(), String> {
         let roots = self.roots();
-        let dirty = self.inner.dirty.clone();
+        let pending = self.inner.pending.clone();
+        let profiles = self.inner.profile_roots.clone();
         let wake = self.inner.wake.clone();
         let watched_paths: Vec<_> = roots.iter().map(|r| PathBuf::from(string(r, "path"))).collect();
         let watcher = tokio::task::spawn_blocking(move || {
+            // FSEvents may return /private/var/... for a configured /var/...
+            // root. Keep stored source paths in the configured namespace, even
+            // for removed paths which can no longer be canonicalized.
+            let mut aliases: Vec<_> = watched_paths
+                .iter()
+                .filter_map(|root| {
+                    root.canonicalize()
+                        .ok()
+                        .filter(|p| p != root)
+                        .map(|p| (p, root.clone()))
+                })
+                .collect();
+            aliases.sort_by_key(|(path, _)| std::cmp::Reverse(path.components().count()));
             let mut watcher = notify::recommended_watcher(
-                move |event: notify::Result<notify::Event>| {
+                move |mut event: notify::Result<notify::Event>| {
+                    if let Ok(event) = &mut event {
+                        for path in &mut event.paths {
+                            if let Some((_, root, relative)) =
+                                aliases.iter().find_map(|(alias, root)| {
+                                    path.strip_prefix(alias)
+                                        .ok()
+                                        .map(|relative| (alias, root, relative.to_path_buf()))
+                                })
+                            {
+                                *path = root.join(relative);
+                            }
+                        }
+                    }
                     if let Err(error) = &event {
                         log::warn!("Knowledge watcher: {error}");
                     }
-                    if watcher_requests_reconcile(&event, &watched_paths) {
-                        dirty.store(now_ms(), Ordering::SeqCst);
+                    if pending.lock().unwrap().record(
+                        &event,
+                        &watched_paths,
+                        &profiles.lock().unwrap(),
+                        now_ms(),
+                    ) {
                         wake.notify_waiters();
                     }
                 },
@@ -618,36 +740,73 @@ impl KnowledgeCore {
                     self.request_index();
                 }
             }
-            let dirty = self.inner.dirty.load(Ordering::SeqCst);
-            if dirty > 0 && now_ms().saturating_sub(dirty) >= 5000 {
-                self.inner.dirty.store(0, Ordering::SeqCst);
-                self.request_index();
-            }
-            // Periodic reconciliation also recovers from OS watcher overflow/missing permissions.
-            if now_ms().saturating_sub(last_rescan) > 300000 {
-                self.request_index();
-                // A paused service retains the request without running it.
-                // Advance the timer too, rather than spinning on a past due
-                // deadline until the user resumes.
-                last_rescan = now_ms();
-            }
-            if !self.inner.paused.load(Ordering::SeqCst)
-                && self.inner.requested.swap(false, Ordering::SeqCst)
-            {
+            // Explicit requests (startup/settings/user) bypass the full-pass
+            // interval. Watcher recovery and periodic work share the same limit.
+            let paused = self.inner.paused.load(Ordering::SeqCst);
+            let explicit = !paused && self.inner.requested.swap(false, Ordering::SeqCst);
+            let periodic = now_ms().saturating_sub(last_rescan) >= FULL_RECONCILE_MS;
+            let pending = if !paused {
+                self.inner
+                    .pending
+                    .lock()
+                    .unwrap()
+                    .take_due(now_ms(), last_rescan)
+            } else {
+                None
+            };
+            if explicit || (!paused && periodic) || pending.is_some() {
                 let _run = self.inner.run.lock().await;
                 let cancel = self.cancel();
                 if !self.inner.paused.load(Ordering::SeqCst)
                     && !self.inner.closed.load(Ordering::SeqCst)
                 {
-                    if let Err(error) = self.run_index(&cancel).await {
+                    let full = explicit || periodic || pending.as_ref().is_some_and(|p| p.full);
+                    let result = if full {
+                        self.run_index(&cancel).await
+                    } else {
+                        self.run_incremental(&pending.as_ref().unwrap().paths, &cancel)
+                            .await
+                    };
+                    if let Err(error) = result {
                         if cancel.check().is_ok() {
                             self.status(json!({"state":"failed","error":error}));
                             let _ = self.persist().await;
                         }
+                        // Incremental work has no durable queue. Retain its paths
+                        // on cancellation/error; a full checkpoint resumes normally.
+                        if !full {
+                            let mut queued = self.inner.pending.lock().unwrap();
+                            let retry = pending.unwrap();
+                            queued.paths.extend(retry.paths);
+                            if queued.first == 0 {
+                                queued.first = now_ms();
+                            }
+                            queued.last = now_ms();
+                            if queued.paths.len() > MAX_PENDING_PATHS {
+                                queued.full = true;
+                                queued.paths.clear();
+                            }
+                        }
                     }
-                    // Missing watcher/overflow recovery remains periodic, but
-                    // a long pass must not make another pass immediately due.
-                    last_rescan = now_ms();
+                    if full {
+                        last_rescan = now_ms();
+                    }
+                } else if !self.inner.closed.load(Ordering::SeqCst) {
+                    if explicit {
+                        self.request_index();
+                    }
+                    if let Some(retry) = pending {
+                        let mut queued = self.inner.pending.lock().unwrap();
+                        queued.paths.extend(retry.paths);
+                        queued.full |= retry.full || queued.paths.len() > MAX_PENDING_PATHS;
+                        if queued.full {
+                            queued.paths.clear();
+                        }
+                        if queued.first == 0 {
+                            queued.first = retry.first;
+                        }
+                        queued.last = queued.last.max(retry.last);
+                    }
                 }
             }
             if self.inner.closed.load(Ordering::SeqCst) {
@@ -700,10 +859,13 @@ impl KnowledgeCore {
             // pending work, external writers and counts. Filesystem/runtime/
             // settings changes and shutdown wake both observers immediately.
             let now = now_ms();
-            let mut next = last_rescan.saturating_add(300001);
+            let mut next = if self.inner.paused.load(Ordering::SeqCst) { now.saturating_add(FULL_RECONCILE_MS) } else { last_rescan.saturating_add(FULL_RECONCILE_MS) };
             if !started { next = next.min(startup); }
-            let dirty = self.inner.dirty.load(Ordering::SeqCst);
-            if dirty > 0 { next = next.min(dirty.saturating_add(5000)); }
+            if !self.inner.paused.load(Ordering::SeqCst) {
+                if let Some(due) = self.inner.pending.lock().unwrap().deadline(last_rescan) {
+                    next = next.min(due);
+                }
+            }
             if !self.inner.paused.load(Ordering::SeqCst) {
                 if backfill {
                     let vector_due = if self.inner.ctx.foreground_active() {
@@ -816,6 +978,112 @@ impl KnowledgeCore {
         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
         cancel.check()
     }
+    fn queue_changed_path(&self, path: PathBuf) {
+        let roots = self
+            .roots()
+            .iter()
+            .map(|r| PathBuf::from(string(r, "path")))
+            .collect::<Vec<_>>();
+        let event = Ok(notify::Event::new(notify::EventKind::Any).add_path(path));
+        if self.inner.pending.lock().unwrap().record(
+            &event,
+            &roots,
+            &self.inner.profile_roots.lock().unwrap(),
+            now_ms(),
+        ) {
+            self.inner.wake.notify_waiters();
+        }
+    }
+    async fn run_incremental(
+        &self,
+        changed: &HashSet<PathBuf>,
+        cancel: &Cancellation,
+    ) -> Result<(), String> {
+        let db = self.database().await?;
+        let roots = self.roots();
+        let watched: Vec<_> = roots
+            .iter()
+            .map(|r| PathBuf::from(string(r, "path")))
+            .collect();
+        let mut changed: Vec<_> = changed.iter().collect();
+        changed.sort_by_key(|p| p.components().count());
+        let mut subtrees: Vec<&PathBuf> = vec![];
+        for path in changed {
+            if !subtrees.iter().any(|ancestor| path.starts_with(ancestor)) {
+                subtrees.push(path);
+            }
+        }
+        self.status(
+            json!({"state":"indexing","error":null,"detail":"Updating changed knowledge files"}),
+        );
+        let ocr = Arc::new(tokio::sync::Semaphore::new(
+            self.settings()["maxConcurrentOcrJobs"]
+                .as_u64()
+                .unwrap_or(1)
+                .clamp(1, 4) as usize,
+        ));
+        for path in subtrees {
+            self.idle(cancel).await?;
+            if !watcher_path_reconcile(path, &watched) {
+                continue;
+            }
+            // Detect profiles created since the last full walk as well. This
+            // runs on the worker, never in the synchronous notify callback.
+            let scan_path = path.clone();
+            let condition = cancel.clone();
+            let ctx = self.inner.ctx.clone();
+            let (paths, complete, profiles) = tokio::task::spawn_blocking(move || {
+                let profiles: HashSet<_> = scan_path
+                    .ancestors()
+                    .filter(|p| extract::browser_profile(p))
+                    .map(Path::to_path_buf)
+                    .collect();
+                if !profiles.is_empty() {
+                    return Ok((vec![], true, profiles));
+                }
+                match std::fs::symlink_metadata(&scan_path) {
+                    Ok(_) => scan(&scan_path, &condition, &ctx),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                        Ok((vec![], true, profiles))
+                    }
+                    Err(e) => Err(e.to_string()),
+                }
+            })
+            .await
+            .map_err(|e| e.to_string())??;
+            self.inner.profile_roots.lock().unwrap().extend(profiles);
+            for root in roots.iter().filter(|r| path.starts_with(string(r, "path"))) {
+                if complete {
+                    let present = paths.iter().cloned().collect();
+                    let id = string(root, "id").to_owned();
+                    let subtree = path.clone();
+                    let condition = cancel.clone();
+                    db.call(move |s| {
+                        condition.check()?;
+                        s.prune_path(&id, &subtree, &present)
+                    })
+                    .await?;
+                }
+                for file in &paths {
+                    let result = self.index_one(root, file, cancel, ocr.clone()).await;
+                    cancel.check()?;
+                    if let Err(error) = result {
+                        let id = text::hash(file);
+                        let condition = cancel.clone();
+                        db.call(move |s| {
+                            condition.check()?;
+                            s.failed(&id, &error)
+                        })
+                        .await?;
+                    }
+                }
+            }
+        }
+        cancel.check()?;
+        self.refresh().await?;
+        self.status(json!({"state":"completed","detail":"Knowledge index is up to date","lastCompletedAt":now_ms()}));
+        self.persist().await
+    }
     async fn run_index(&self, cancel: &Cancellation) -> Result<(), String> {
         let db = self.database().await?;
         if self.roots().is_empty() {
@@ -828,17 +1096,19 @@ impl KnowledgeCore {
             self.status(json!({"state":"scanning","progress":0,"error":null,"detail":"Scanning knowledge folders"}));
             let roots = self.roots();
             let mut queue = vec![];
+            let mut profiles = HashSet::new();
             for root in roots {
                 self.idle(cancel).await?;
                 let root_path = PathBuf::from(string(&root, "path"));
                 let path = root_path.clone();
                 let cancellation = cancel.clone();
                 let ctx = self.inner.ctx.clone();
-                let (paths, complete) =
+                let (paths, complete, discovered) =
                     tokio::task::spawn_blocking(move || scan(&path, &cancellation, &ctx))
                         .await
                         .map_err(|e| e.to_string())??;
                 cancel.check()?;
+                profiles.extend(discovered);
                 let present: HashSet<_> = paths.iter().cloned().collect();
                 let root_id = string(&root, "id").to_owned();
                 if complete {
@@ -852,6 +1122,7 @@ impl KnowledgeCore {
                 }
                 queue.extend(paths.into_iter().map(|path| (root_id.clone(), path)));
             }
+            *self.inner.profile_roots.lock().unwrap() = profiles;
             let condition = cancel.clone();
             db.call(move |s| {
                 condition.check()?;
@@ -875,30 +1146,30 @@ impl KnowledgeCore {
                 .unwrap_or(1)
                 .clamp(1, 4) as usize,
         ));
+        let mut completed = Vec::with_capacity(COMPLETION_BATCH);
         let mut unpublished = 0usize;
         loop {
             self.idle(cancel).await?;
-            let jobs = db.call(move |s| s.next_batch(concurrency)).await?;
+            let jobs = db.call(move |s| s.next_batch(COMPLETION_BATCH)).await?;
             if jobs.is_empty() {
                 break;
             }
-            use futures_util::{stream::FuturesUnordered, StreamExt};
-            let mut futures = FuturesUnordered::new();
-            for (job, position, root_id, path) in jobs {
+            use futures_util::{stream, StreamExt};
+            let mut futures = stream::iter(jobs).map(|(job, position, root_id, path)| {
                 let root = self
                     .roots()
                     .into_iter()
                     .find(|r| string(r, "id") == root_id);
                 let ocr = ocr.clone();
-                futures.push(async move {
+                async move {
                     let result = if let Some(root) = root {
                         self.index_one(&root, &path, cancel, ocr).await
                     } else {
                         Ok(IndexOutcome::Unchanged)
                     };
                     (job, position, path, result)
-                });
-            }
+                }
+            }).buffer_unordered(concurrency);
             while let Some((job, position, path, result)) = futures.next().await {
                 cancel.check()?;
                 let paced = result != Ok(IndexOutcome::Unchanged);
@@ -914,20 +1185,27 @@ impl KnowledgeCore {
                 } else {
                     false
                 };
+                completed.push((job, position, failed));
                 let condition = cancel.clone();
                 unpublished += 1;
-                let publish = paced || unpublished >= 32;
-                let checkpoint = db
-                    .call(move |s| {
+                let publish = paced || unpublished >= COMPLETION_BATCH;
+                // Flush before progress publication, and once at the end of each
+                // fetched batch. Dropped tails stay in the checkpoint on cancel.
+                let durable = if publish {
+                    std::mem::take(&mut completed)
+                } else {
+                    vec![]
+                };
+                let checkpoint = if publish {
+                    db.call(move |s| {
                         condition.check()?;
-                        s.complete(&job, position, failed)?;
-                        if publish {
-                            s.checkpoint()
-                        } else {
-                            Ok(None)
-                        }
+                        s.complete_batch(&durable)?;
+                        s.checkpoint()
                     })
-                    .await?;
+                    .await?
+                } else {
+                    None
+                };
                 if let Some(checkpoint) = checkpoint {
                     unpublished = 0;
                     self.refresh_counts().await?;
@@ -947,6 +1225,15 @@ impl KnowledgeCore {
                     self.inner.pacing_delays.fetch_add(1, Ordering::SeqCst);
                     tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                 }
+            }
+            let durable = std::mem::take(&mut completed);
+            if !durable.is_empty() {
+                let condition = cancel.clone();
+                db.call(move |s| {
+                    condition.check()?;
+                    s.complete_batch(&durable)
+                })
+                .await?;
             }
         }
         cancel.check()?;
@@ -972,6 +1259,32 @@ impl KnowledgeCore {
         cancel: &Cancellation,
         ocr: Arc<tokio::sync::Semaphore>,
     ) -> Result<IndexOutcome, String> {
+        let result = self.index_existing(root, path, cancel, ocr).await;
+        if result.is_err()
+            && tokio::fs::metadata(path)
+                .await
+                .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+        {
+            let condition = cancel.clone();
+            let id = text::hash(path);
+            self.database()
+                .await?
+                .call(move |s| {
+                    condition.check()?;
+                    s.remove_source(&id)
+                })
+                .await?;
+            return Ok(IndexOutcome::Unchanged);
+        }
+        result
+    }
+    async fn index_existing(
+        &self,
+        root: &Value,
+        path: &str,
+        cancel: &Cancellation,
+        ocr: Arc<tokio::sync::Semaphore>,
+    ) -> Result<IndexOutcome, String> {
         let settings = self.settings();
         let selected_depth = depth(root, &settings);
         if selected_depth == "off" {
@@ -987,7 +1300,9 @@ impl KnowledgeCore {
         let metadata = tokio::fs::metadata(path).await.map_err(|e| e.to_string())?;
         let modified = modified_ms(&metadata);
         if let Some(existing) = existing {
-            if existing["status"] == "indexed"
+            if (existing["status"] == "indexed"
+                || (existing["status"] == "failed"
+                    && existing["error"] != "File changed during indexing; queued for rescan"))
                 && existing["byteSize"].as_u64() == Some(metadata.len())
                 && existing["modifiedAt"].as_f64().unwrap_or(0.).round() == modified.round()
                 && existing["indexingProfile"] == profile
@@ -1090,7 +1405,7 @@ impl KnowledgeCore {
         cancel.check()?;
         let after = tokio::fs::metadata(path).await.map_err(|e| e.to_string())?;
         if after.len() != metadata.len() || modified_ms(&after) != modified {
-            self.inner.dirty.store(now_ms(), Ordering::SeqCst);
+            self.queue_changed_path(PathBuf::from(path));
             return Err("File changed during indexing; queued for rescan".into());
         }
         let condition = cancel.clone();
@@ -1673,14 +1988,19 @@ fn scan(
     path: &Path,
     cancel: &Cancellation,
     ctx: &CoreContext,
-) -> Result<(Vec<String>, bool), String> {
+) -> Result<(Vec<String>, bool, HashSet<PathBuf>), String> {
     let mut paths = vec![];
     let mut complete = true;
     let mut visited = 0;
+    let mut profiles = HashSet::new();
     let iter = walkdir::WalkDir::new(path)
         .follow_links(false)
         .into_iter()
         .filter_entry(|e| {
+            if e.file_type().is_dir() && extract::browser_profile(e.path()) {
+                profiles.insert(e.path().to_path_buf());
+                return false;
+            }
             e.depth() == 0
                 || !extract::skip(&e.file_name().to_string_lossy(), e.file_type().is_dir())
         });
@@ -1724,11 +2044,11 @@ fn scan(
             paths.push(entry.path().to_string_lossy().into_owned());
         }
     }
-    Ok((paths, complete))
+    Ok((paths, complete, profiles))
 }
 
-// Filter only paths certainly hidden by the scanner's subtree rules. No stat or
-// extension test: removed/renamed directories must still reconcile their children.
+// Filter paths hidden by scanner exclusions without stat calls. Removed and
+// renamed eligible directories must still reconcile their children.
 fn watcher_reconcile(event: &notify::Event, roots: &[PathBuf]) -> bool {
     if event.need_rescan() {
         return true;
@@ -1736,42 +2056,40 @@ fn watcher_reconcile(event: &notify::Event, roots: &[PathBuf]) -> bool {
     if matches!(event.kind, notify::EventKind::Access(_)) {
         return false;
     }
-    if matches!(
-        event.kind,
-        notify::EventKind::Any | notify::EventKind::Other
-    ) || event.paths.is_empty()
-    {
+    if event.paths.is_empty() {
         return true;
     }
-    event.paths.iter().any(|path| {
-        let containing: Vec<_> = roots
+    event
+        .paths
+        .iter()
+        .any(|path| watcher_path_reconcile(path, roots))
+}
+
+fn watcher_path_reconcile(path: &Path, roots: &[PathBuf]) -> bool {
+    let containing: Vec<_> = roots
+        .iter()
+        .filter_map(|root| path.strip_prefix(root).ok())
+        .collect();
+    if containing.is_empty() {
+        return true;
+    }
+    // A nested explicit root overrides the parent's name exclusions (depth 0).
+    containing.iter().any(|relative| {
+        let components: Vec<_> = relative.components().collect();
+        if components
             .iter()
-            .filter_map(|root| path.strip_prefix(root).ok())
-            .collect();
-        if containing.is_empty() {
+            .any(|c| !matches!(c, std::path::Component::Normal(_)))
+        {
             return true;
         }
-        // A nested explicit root overrides the parent's exclusion (scanner depth 0).
-        containing.iter().any(|relative| {
-            let components: Vec<_> = relative.components().collect();
-            if components
-                .iter()
-                .any(|c| !matches!(c, std::path::Component::Normal(_)))
-            {
-                return true;
+        !components.iter().enumerate().any(|(i, component)| match component {
+            std::path::Component::Normal(name) => {
+                // No stat here: removed directories still reconcile children.
+                // File exclusions apply to leaves, directory rules to ancestors.
+                extract::skip(&name.to_string_lossy(), i + 1 < components.len())
+                    || extract::skip(&name.to_string_lossy(), true)
             }
-            !components.iter().enumerate().any(|(i, component)| {
-                match component {
-                    std::path::Component::Normal(name) => {
-                        // Ancestors are directories even after deletion. For the
-                        // event leaf, only use rules shared by files/directories.
-                        let name = name.to_string_lossy();
-                        extract::skip(&name, true)
-                            && (i + 1 < components.len() || extract::skip(&name, false))
-                    }
-                    _ => false,
-                }
-            })
+            _ => false,
         })
     })
 }

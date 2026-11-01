@@ -556,21 +556,27 @@ impl Store {
             .map_err(err)?;
         Ok(rows)
     }
-    pub fn complete(&mut self, job: &str, position: i64, failed: bool) -> Result<(), String> {
+    // Queue deletion and counters move together. A cancelled caller may replay
+    // the uncommitted tail, but can never advance beyond durable completions.
+    pub fn complete_batch(&mut self, completed: &[(String, i64, bool)]) -> Result<(), String> {
         let tx = self.db.transaction().map_err(err)?;
-        let n = tx
-            .execute(
+        for (job, position, failed) in completed {
+            let n = tx.execute(
                 "DELETE FROM knowledge_indexing_queue WHERE job_id=? AND position=?",
                 params![job, position],
-            )
-            .map_err(err)?;
-        if n > 0 {
-            tx.execute("UPDATE knowledge_indexing_jobs SET processed_sources=processed_sources+1,failed_sources=failed_sources+? WHERE id=1 AND job_id=?",params![failed as i64,job]).map_err(err)?;
+            ).map_err(err)?;
+            if n > 0 {
+                tx.execute("UPDATE knowledge_indexing_jobs SET processed_sources=processed_sources+1,failed_sources=failed_sources+? WHERE id=1 AND job_id=?",params![*failed as i64,job]).map_err(err)?;
+            }
         }
         tx.commit().map_err(err)
     }
+    #[cfg(test)]
+    pub fn complete(&mut self, job: &str, position: i64, failed: bool) -> Result<(), String> {
+        self.complete_batch(&[(job.to_owned(), position, failed)])
+    }
     pub fn source(&self, path: &str) -> Result<Option<Value>, String> {
-        self.db.query_row("SELECT id,content_hash,byte_size,modified_at,status,indexing_profile FROM knowledge_sources WHERE path=?",[path],|r|Ok(json!({"id":r.get::<_,String>(0)?,"contentHash":r.get::<_,String>(1)?,"byteSize":r.get::<_,u64>(2)?,"modifiedAt":r.get::<_,f64>(3)?,"status":r.get::<_,String>(4)?,"indexingProfile":r.get::<_,String>(5)?}))).optional().map_err(err)
+        self.db.query_row("SELECT id,content_hash,byte_size,modified_at,status,indexing_profile,error FROM knowledge_sources WHERE path=?",[path],|r|Ok(json!({"id":r.get::<_,String>(0)?,"contentHash":r.get::<_,String>(1)?,"byteSize":r.get::<_,u64>(2)?,"modifiedAt":r.get::<_,f64>(3)?,"status":r.get::<_,String>(4)?,"indexingProfile":r.get::<_,String>(5)?,"error":r.get::<_,Option<String>>(6)?}))).optional().map_err(err)
     }
     pub fn pending(
         &self,
@@ -636,6 +642,40 @@ impl Store {
                 )
                 .map_err(err)?;
             if !present.contains(&path) {
+                self.remove_source(&id)?;
+            }
+        }
+        Ok(())
+    }
+    pub fn prune_path(
+        &mut self,
+        root: &str,
+        subtree: &Path,
+        present: &std::collections::HashSet<String>,
+    ) -> Result<(), String> {
+        // The unique path index bounds subtree lookup; a single changed file
+        // must not enumerate every source in the root.
+        let path = subtree.to_string_lossy();
+        let base = path.trim_end_matches(std::path::MAIN_SEPARATOR);
+        let prefix = format!("{base}{}", std::path::MAIN_SEPARATOR);
+        let end = format!("{base}{}", (std::path::MAIN_SEPARATOR as u8 + 1) as char);
+        // Filter ownership after the bounded lookup so SQLite cannot choose
+        // the root_id index and scan an entire root for each watcher path.
+        let mut q = self.db.prepare("SELECT id,path,root_id FROM knowledge_sources WHERE path=? OR (path>=? AND path<?)").map_err(err)?;
+        let removed = q
+            .query_map(params![path, prefix, end], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(err)?;
+        drop(q);
+        for (id, path, owner) in removed {
+            if owner == root && Path::new(&path).starts_with(subtree) && !present.contains(&path) {
                 self.remove_source(&id)?;
             }
         }

@@ -171,12 +171,12 @@ async fn probe(core: &KnowledgeCore, cancel_at: u64) -> Arc<QueueProbe> {
 
 #[tokio::test]
 async fn mixed_concurrent_pass_cancels_durably_and_reopens_without_double_counts() {
-    let (core, _dir, docs) = corpus(6).await;
+    let (core, _dir, docs) = corpus(160).await;
     let ctx = core.inner.ctx.clone();
     std::fs::write(docs.join("1.txt"), "changed longer document").unwrap();
     std::fs::remove_file(docs.join("2.txt")).unwrap();
     let root = string(&core.roots()[0], "id").to_owned();
-    let queue: Vec<_> = (0..6)
+    let queue: Vec<_> = (0..160)
         .map(|i| {
             (
                 root.clone(),
@@ -201,16 +201,17 @@ async fn mixed_concurrent_pass_cancels_durably_and_reopens_without_double_counts
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(checkpoint["processedSources"], 3);
-    assert_eq!(q.completed.load(Ordering::SeqCst), 3);
+    let processed = number(&checkpoint, "processedSources");
+    assert!((3..160).contains(&processed));
+    assert_eq!(q.completed.load(Ordering::SeqCst), processed as u64);
     let left = core
         .database()
         .await
         .unwrap()
-        .call(|s| s.next_batch(8))
+        .call(|s| s.next_batch(200))
         .await
         .unwrap();
-    assert_eq!(left.len(), 3);
+    assert_eq!(left.len(), (160 - processed) as usize);
     core.handle("knowledge:index:pause", &[])
         .await
         .unwrap()
@@ -218,22 +219,22 @@ async fn mixed_concurrent_pass_cancels_durably_and_reopens_without_double_counts
     assert_eq!(core.inner.cache.lock().unwrap().status["state"], "paused");
     assert_eq!(
         core.inner.cache.lock().unwrap().status["processedSources"],
-        3
+        processed
     );
     core.shutdown().await.unwrap();
     let reopened = KnowledgeCore::new(ctx);
     reopened.refresh().await.unwrap();
-    reopened
-        .handle("knowledge:index:resume", &[])
-        .await
-        .unwrap()
-        .unwrap();
+    // Resume the durable partial batch in a new service instance. The original
+    // queue contains more than a batch, so cancellation cannot drain the job.
     reopened.run_index(&reopened.cancel()).await.unwrap();
     let status = reopened.inner.cache.lock().unwrap().status.clone();
     assert_eq!(status["state"], "completed");
     assert_eq!(status["progress"], 1);
-    assert_eq!(status["processedSources"], 6);
-    assert_eq!(status["failedSources"], 1);
+    assert_eq!(status["processedSources"], 160);
+    assert_eq!(
+        status["failedSources"], 0,
+        "ENOENT removes sources without recording failures"
+    );
     assert!(reopened
         .database()
         .await
@@ -258,7 +259,7 @@ async fn mixed_concurrent_pass_cancels_durably_and_reopens_without_double_counts
     reopened.run_index(&reopened.cancel()).await.unwrap();
     assert_eq!(
         reopened.inner.cache.lock().unwrap().status["processedSources"],
-        5
+        159
     );
     reopened.shutdown().await.unwrap();
 }

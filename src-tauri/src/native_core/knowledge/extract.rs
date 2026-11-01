@@ -71,6 +71,17 @@ pub fn skip(name: &str, directory: bool) -> bool {
             "target",
             "__pycache__",
             "venv",
+            "leveldb",
+            "IndexedDB",
+            "Local Storage",
+            "Session Storage",
+            "Service Worker",
+            "Cache",
+            "Code Cache",
+            "GPUCache",
+            "blob_storage",
+            "shared_proto_db",
+            "Crashpad",
         ]
         .contains(&name)
     {
@@ -105,6 +116,16 @@ pub fn skip(name: &str, directory: bool) -> bool {
         "poetry.lock",
     ]
     .contains(&name)
+        || [
+            ".sqlite", ".sqlite3", ".db", "-wal", "-shm", "-journal", ".ldb",
+        ]
+        .iter()
+        .any(|suffix| lower.ends_with(suffix))
+        || ["LOG", "LOG.old", "CURRENT", "LOCK"].contains(&name)
+        || name.starts_with("MANIFEST-")
+        || name
+            .strip_suffix(".log")
+            .is_some_and(|stem| stem.len() == 6 && stem.bytes().all(|b| b.is_ascii_digit()))
         || lower.ends_with(".min.js")
         || lower.ends_with(".min.css")
     {
@@ -113,6 +134,16 @@ pub fn skip(name: &str, directory: bool) -> bool {
     use std::sync::OnceLock;
     static RE: OnceLock<regex::Regex> = OnceLock::new();
     RE.get_or_init(||regex::Regex::new(r"(?i)^(?:id_(?:rsa|dsa|ecdsa|ed25519)|authorized_keys|known_hosts)$|(?:^|[._-])(?:credentials?|secrets?|tokens?)(?:[._-]|$)|\.(?:pem|key|p12|pfx|keystore)$").unwrap()).is_match(name)
+}
+pub fn browser_profile(path: &Path) -> bool {
+    path.join("Local State").is_file()
+        || (path.file_name().is_some_and(|name| {
+            let name = name.to_string_lossy();
+            name == "Default"
+                || name
+                    .strip_prefix("Profile ")
+                    .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        }) && path.join("Preferences").is_file())
 }
 #[derive(Clone)]
 pub struct Cancellation {

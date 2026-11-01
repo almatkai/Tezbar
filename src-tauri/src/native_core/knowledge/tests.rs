@@ -742,9 +742,9 @@ async fn native_watcher_reindexes_changed_files_and_removes_deleted_sources() {
     .await
     .unwrap_or_else(|error| {
         panic!(
-            "{error}: snapshot={} dirty={} now={} requested={} run_free={} watcher={}",
+            "{error}: snapshot={} pending={:?} now={} requested={} run_free={} watcher={}",
             core.snapshot(),
-            core.inner.dirty.load(Ordering::SeqCst),
+            core.inner.pending.lock().unwrap(),
             now_ms(),
             core.inner.requested.load(Ordering::SeqCst),
             core.inner.run.try_lock().is_ok(),
@@ -761,7 +761,16 @@ async fn native_watcher_reindexes_changed_files_and_removes_deleted_sources() {
         }
     })
     .await
-    .unwrap();
+    .unwrap_or_else(|error| {
+        panic!(
+            "{error}: removal snapshot={} pending={:?} now={} requested={} run_free={}",
+            core.snapshot(),
+            core.inner.pending.lock().unwrap(),
+            now_ms(),
+            core.inner.requested.load(Ordering::SeqCst),
+            core.inner.run.try_lock().is_ok()
+        )
+    });
     assert_eq!(core.snapshot()["status"]["chunkCount"], 0);
     core.shutdown().await.unwrap();
 }
