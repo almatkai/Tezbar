@@ -171,6 +171,17 @@ async function runBuild(): Promise<void> {
     }
     replaceGeneratedFile(sqliteLibrary, join(outputDirectory, 'libsqlite3.dylib'))
   }
+  const releaseIdentity = process.env.TEZBAR_MACOS_SIGNING_IDENTITY
+  if (process.platform === 'darwin' && releaseIdentity && releaseIdentity !== '-') {
+    execFileSync(
+      process.execPath,
+      [join(root, 'scripts/sign-macos-resources.mjs'), outputDirectory, releaseIdentity],
+      {
+        cwd: root,
+        stdio: 'inherit',
+      }
+    )
+  }
   console.log('Extension Worker built successfully at dist-backend/')
 }
 

@@ -1,13 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   macOSSigningIdentity,
   validateMacOSSigning,
   verifyMacOSSigning,
+  signMacOSResources,
+  verifyMacOSResources,
 } from './lib/macos-signing.mjs'
 
 const policy = JSON.parse(
@@ -145,6 +147,55 @@ test(
       const binary = join(directory, 'build-2')
       execFileSync('codesign', ['--force', '--sign', '-', binary])
       assert.throws(() => verifyMacOSSigning(binary, policy), /identity changed or is ad-hoc/)
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  }
+)
+
+test(
+  'a hardened certificate-signed process loads extensionless native resources from the same team',
+  {
+    skip: process.platform !== 'darwin' || !process.env.TEZBAR_SIGNING_TEST_IDENTITY,
+  },
+  () => {
+    const directory = mkdtempSync(join(tmpdir(), 'tezbar-library-signing-'))
+    try {
+      const resources = join(directory, 'resources')
+      mkdirSync(resources)
+      const library = join(resources, 'vec0')
+      const source = join(directory, 'library.c')
+      writeFileSync(source, 'int fixture(void){return 42;}\n')
+      execFileSync('clang', ['-dynamiclib', source, '-o', library])
+      const loaderSource = join(directory, 'loader.c')
+      const loader = join(directory, 'loader')
+      writeFileSync(
+        loaderSource,
+        '#include <dlfcn.h>\n#include <stdio.h>\nint main(int argc,char**argv){void*h=dlopen(argv[1],RTLD_NOW|RTLD_LOCAL);if(!h){puts(dlerror());return 1;}dlclose(h);return 0;}\n'
+      )
+      execFileSync('clang', [loaderSource, '-o', loader])
+      execFileSync('codesign', [
+        '--force',
+        '--sign',
+        process.env.TEZBAR_SIGNING_TEST_IDENTITY,
+        '--identifier',
+        policy.identifier,
+        '--options',
+        'runtime',
+        '--timestamp=none',
+        loader,
+      ])
+      const before = spawnSync(loader, [library], { encoding: 'utf8' })
+      assert.notEqual(before.status, 0)
+      assert.match(before.stdout + before.stderr, /Team ID|mapped file|code signature/)
+      assert.throws(
+        () => verifyMacOSResources(resources, policy),
+        /must share the app signing team/
+      )
+      const signed = signMacOSResources(resources, process.env.TEZBAR_SIGNING_TEST_IDENTITY, policy)
+      assert.deepEqual(signed, [{ path: 'vec0', teamIdentifier: policy.teamIdentifier }])
+      const after = spawnSync(loader, [library], { encoding: 'utf8' })
+      assert.equal(after.status, 0, after.stdout + after.stderr)
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }

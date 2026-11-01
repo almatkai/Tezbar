@@ -1,4 +1,60 @@
 import { execFileSync, spawnSync } from 'node:child_process'
+import { existsSync, readdirSync, openSync, readSync, closeSync } from 'node:fs'
+import { join, relative } from 'node:path'
+
+function* machOFiles(directory) {
+  if (!existsSync(directory)) return
+  const magic = new Set([
+    'feedface',
+    'feedfacf',
+    'cefaedfe',
+    'cffaedfe',
+    'cafebabe',
+    'bebafeca',
+    'cafebabf',
+    'bfbafeca',
+  ])
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const file = join(directory, entry.name)
+    if (entry.isDirectory()) yield* machOFiles(file)
+    else if (entry.isFile()) {
+      const handle = openSync(file, 'r')
+      const bytes = Buffer.alloc(4)
+      let native
+      try {
+        native = readSync(handle, bytes, 0, 4, 0) === 4 && magic.has(bytes.toString('hex'))
+      } finally {
+        closeSync(handle)
+      }
+      if (native) yield file
+    }
+  }
+}
+
+export function verifyMacOSResources(directory, policy) {
+  const resources = []
+  for (const file of machOFiles(directory)) {
+    const details = spawnSync('codesign', ['-d', '--verbose=4', file], { encoding: 'utf8' })
+    const metadata = details.stdout + details.stderr
+    const team = metadata.match(/^TeamIdentifier=(.+)$/m)?.[1]?.trim()
+    if (
+      details.status !== 0 ||
+      team !== policy.teamIdentifier ||
+      /^Signature=adhoc$/m.test(metadata)
+    )
+      throw new Error(`Native resource must share the app signing team: ${file}`)
+    execFileSync('codesign', ['--verify', '--strict', file])
+    resources.push({ path: relative(directory, file), teamIdentifier: team })
+  }
+  return resources
+}
+
+export function signMacOSResources(directory, identity, policy) {
+  const certificate = macOSSigningIdentity({ identity })
+  for (const file of machOFiles(directory))
+    execFileSync('codesign', ['--force', '--sign', certificate, '--options', 'runtime', file])
+  return verifyMacOSResources(directory, policy)
+}
 
 export function macOSSigningIdentity({ localPreview, identity }) {
   const selected = identity?.trim()
@@ -52,5 +108,8 @@ export function verifyMacOSSigning(app, policy) {
     `-R=${policy.designatedRequirement}`,
     app,
   ])
-  return signing
+  return {
+    ...signing,
+    nativeResources: verifyMacOSResources(join(app, 'Contents', 'Resources'), policy),
+  }
 }

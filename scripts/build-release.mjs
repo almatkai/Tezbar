@@ -168,6 +168,9 @@ if (flags.has('dry-run')) {
         TEZBAR_RELEASE_VERSION: version,
         TEZBAR_RELEASE_NOTES_PATH: notesPath,
         TEZBAR_RELEASE_CHANNEL: channel,
+        ...(process.platform === 'darwin'
+          ? { TEZBAR_MACOS_SIGNING_IDENTITY: override.bundle.macOS.signingIdentity }
+          : {}),
       },
     }
   )
