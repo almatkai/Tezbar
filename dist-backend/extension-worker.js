@@ -709,6 +709,7 @@ function discoverInstalledExtensionCommands() {
           mode: cmd.mode || "view",
           interval: typeof cmd.interval === "string" ? cmd.interval : void 0,
           disabledByDefault: Boolean(cmd.disabledByDefault),
+          ...cmd.launcher ? { launcher: cmd.launcher } : {},
           commandArgumentDefinitions: Array.isArray(cmd.arguments) ? cmd.arguments.filter((arg) => arg && arg.name).map((arg) => ({
             name: String(arg.name),
             required: Boolean(arg.required),
@@ -4755,7 +4756,8 @@ function normalizeRegistryCommand(command) {
     subtitle: command.description || command.extensionTitle,
     description: command.description,
     mode: command.mode,
-    argumentDefinitions: command.commandArgumentDefinitions
+    argumentDefinitions: command.commandArgumentDefinitions,
+    ...command.launcher ? { launcher: command.launcher } : {}
   };
 }
 function githubAvatarUrlForHandle(value) {

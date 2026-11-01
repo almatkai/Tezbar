@@ -160,7 +160,7 @@
       "format": "esm"
     },
     "src/main/extension-builder.ts": {
-      "bytes": 42072,
+      "bytes": 42199,
       "imports": [
         {
           "path": "src/main/extensionWorker/desktop.ts",
@@ -273,7 +273,7 @@
       "format": "esm"
     },
     "src/main/extension-registry.ts": {
-      "bytes": 65476,
+      "bytes": 65541,
       "imports": [
         {
           "path": "src/main/extensionWorker/desktop.ts",
@@ -673,7 +673,7 @@
       "imports": [],
       "exports": [],
       "inputs": {},
-      "bytes": 761369
+      "bytes": 761676
     },
     "dist-backend/extension-worker.js": {
       "imports": [
@@ -998,7 +998,7 @@
           "bytesInOutput": 1611
         },
         "src/main/extension-builder.ts": {
-          "bytesInOutput": 32802
+          "bytesInOutput": 32863
         },
         "src/main/extension-api.ts": {
           "bytesInOutput": 3786
@@ -1010,7 +1010,7 @@
           "bytesInOutput": 80217
         },
         "src/main/extension-registry.ts": {
-          "bytesInOutput": 50272
+          "bytesInOutput": 50335
         },
         "src/main/extension-runner.ts": {
           "bytesInOutput": 136929
@@ -1031,7 +1031,7 @@
           "bytesInOutput": 906
         }
       },
-      "bytes": 427881
+      "bytes": 428005
     }
   }
 }
