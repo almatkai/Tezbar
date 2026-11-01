@@ -54,6 +54,11 @@ async fn unchanged_real_pass_coalesces_progress_without_extraction_delays() {
         q.completed.load(Ordering::SeqCst), q.metadata_writes.load(Ordering::SeqCst));
     assert!(q.metadata_writes.load(Ordering::SeqCst) <= 4);
     assert_eq!(q.completed.load(Ordering::SeqCst), 64);
+    // Includes save_queue's transaction; no source/content writes on this pass.
+    assert!(
+        q.commits.load(Ordering::SeqCst) <= 3,
+        "unchanged completions must be batched"
+    );
     assert_eq!(
         delays, 0,
         "unchanged files must not pay medium extraction pacing"
@@ -117,6 +122,10 @@ fn watcher_uses_scanner_exclusions_but_keeps_uncertain_and_removed_directories()
 struct QueueProbe {
     completed: AtomicU64,
     metadata_writes: AtomicU64,
+    commits: AtomicU64,
+    queue_saves: AtomicU64,
+    source_reads: AtomicU64,
+    extractions: AtomicU64,
     cancel_at: u64,
     generation: Arc<AtomicU64>,
 }
@@ -129,6 +138,18 @@ unsafe extern "C" fn queue_trace(
     if kind == rusqlite::ffi::SQLITE_TRACE_STMT as u32 && !sql.is_null() {
         let probe = unsafe { &*context.cast::<QueueProbe>() };
         let sql = unsafe { std::ffi::CStr::from_ptr(sql.cast()) }.to_string_lossy();
+        if sql == "COMMIT" {
+            probe.commits.fetch_add(1, Ordering::SeqCst);
+        }
+        if sql.starts_with("INSERT INTO knowledge_indexing_jobs") {
+            probe.queue_saves.fetch_add(1, Ordering::SeqCst);
+        }
+        if sql.starts_with("SELECT id,content_hash,byte_size,modified_at,status,indexing_profile") {
+            probe.source_reads.fetch_add(1, Ordering::SeqCst);
+        }
+        if sql.starts_with("INSERT INTO knowledge_sources(id,root_id,path,content_hash") {
+            probe.extractions.fetch_add(1, Ordering::SeqCst);
+        }
         if sql.starts_with("DELETE FROM knowledge_indexing_queue WHERE job_id=") {
             let n = probe.completed.fetch_add(1, Ordering::SeqCst) + 1;
             if n == probe.cancel_at {
@@ -145,6 +166,10 @@ async fn probe(core: &KnowledgeCore, cancel_at: u64) -> Arc<QueueProbe> {
     let probe = Arc::new(QueueProbe {
         completed: AtomicU64::new(0),
         metadata_writes: AtomicU64::new(0),
+        commits: AtomicU64::new(0),
+        queue_saves: AtomicU64::new(0),
+        source_reads: AtomicU64::new(0),
+        extractions: AtomicU64::new(0),
         cancel_at,
         generation: core.inner.generation.clone(),
     });
@@ -441,4 +466,325 @@ async fn unselected_download_keeps_progress_observation_active_then_returns_to_s
             "finishing download must restore quiescent sleep"
         );
     }
+}
+
+#[tokio::test]
+async fn watcher_single_file_update_is_incremental_and_preserves_job_queue() {
+    let (core, _dir, docs) = corpus(8).await;
+    let q = probe(&core, 0).await;
+    let changed = docs.join("0.txt");
+    std::fs::write(&changed, "modified single document").unwrap();
+    let event = Ok(
+        notify::Event::new(notify::EventKind::Modify(notify::event::ModifyKind::Any))
+            .add_path(changed.clone()),
+    );
+    let roots = vec![docs.clone()];
+    let mut pending = PendingReconcile::default();
+    assert!(pending.record(&event, &roots, &HashSet::new(), 100));
+    assert!(pending.record(&event, &roots, &HashSet::new(), 200));
+    assert!(pending.take_due(5199, 0).is_none());
+    let work = pending.take_due(5200, 0).unwrap();
+    assert!(!work.full);
+    assert_eq!(work.paths.len(), 1);
+    core.run_incremental(&work.paths, &core.cancel())
+        .await
+        .unwrap();
+    assert_eq!(q.queue_saves.load(Ordering::SeqCst), 0);
+    assert_eq!(q.completed.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        q.source_reads.load(Ordering::SeqCst),
+        1,
+        "only the changed file is checked"
+    );
+    assert_eq!(q.extractions.load(Ordering::SeqCst), 1);
+    let path = changed.to_string_lossy().into_owned();
+    let source = core
+        .database()
+        .await
+        .unwrap()
+        .call(move |s| s.source(&path))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(source["byteSize"], 24);
+    assert!(core
+        .database()
+        .await
+        .unwrap()
+        .call(|s| s.checkpoint())
+        .await
+        .unwrap()
+        .is_none());
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn incremental_rename_and_removed_directory_prune_only_their_children() {
+    let (core, _dir, docs) = corpus(1).await;
+    let old = docs.join("folder");
+    let new = docs.join("renamed");
+    std::fs::create_dir(&old).unwrap();
+    std::fs::write(old.join("child.txt"), "child document").unwrap();
+    core.run_incremental(&HashSet::from([old.clone()]), &core.cancel())
+        .await
+        .unwrap();
+    std::fs::rename(&old, &new).unwrap();
+    core.run_incremental(&HashSet::from([old.clone(), new.clone()]), &core.cancel())
+        .await
+        .unwrap();
+    let old_child = old.join("child.txt").to_string_lossy().into_owned();
+    let new_child = new.join("child.txt").to_string_lossy().into_owned();
+    core.database()
+        .await
+        .unwrap()
+        .call(move |s| {
+            assert!(s.source(&old_child)?.is_none());
+            assert!(s.source(&new_child)?.is_some());
+            Ok(())
+        })
+        .await
+        .unwrap();
+    std::fs::remove_dir_all(&new).unwrap();
+    core.run_incremental(&HashSet::from([new]), &core.cancel())
+        .await
+        .unwrap();
+    assert_eq!(
+        core.database()
+            .await
+            .unwrap()
+            .call(|s| s.counts())
+            .await
+            .unwrap()["sourceCount"],
+        1
+    );
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn unchanged_failed_source_does_not_hash_or_extract_until_change_or_transient_retry() {
+    let (core, _dir, docs) = corpus(0).await;
+    let file = docs.join("binary.txt");
+    std::fs::write(&file, b"binary\0data").unwrap();
+    let path = file.to_string_lossy().into_owned();
+    core.run_index(&core.cancel()).await.unwrap();
+    let q = probe(&core, 0).await;
+    core.run_index(&core.cancel()).await.unwrap();
+    assert_eq!(q.source_reads.load(Ordering::SeqCst), 1);
+    assert_eq!(q.extractions.load(Ordering::SeqCst), 0);
+    let root = core.roots()[0].clone();
+    let semaphore = || Arc::new(tokio::sync::Semaphore::new(1));
+    assert_eq!(
+        core.index_one(&root, &path, &core.cancel(), semaphore())
+            .await
+            .unwrap(),
+        IndexOutcome::Unchanged
+    );
+    let id = text::hash(&path);
+    core.database()
+        .await
+        .unwrap()
+        .call(move |s| s.failed(&id, "File changed during indexing; queued for rescan"))
+        .await
+        .unwrap();
+    assert!(core
+        .index_one(&root, &path, &core.cancel(), semaphore())
+        .await
+        .unwrap_err()
+        .contains("binary"));
+    assert_eq!(q.extractions.load(Ordering::SeqCst), 1);
+    let id = text::hash(&path);
+    core.database()
+        .await
+        .unwrap()
+        .call(move |s| s.failed(&id, "File appears to contain binary data"))
+        .await
+        .unwrap();
+    let mut changed_profile = root.clone();
+    changed_profile["depth"] = json!("smart");
+    assert!(core
+        .index_one(&changed_profile, &path, &core.cancel(), semaphore())
+        .await
+        .unwrap_err()
+        .contains("binary"));
+    assert_eq!(
+        q.extractions.load(Ordering::SeqCst),
+        2,
+        "a profile change retries the failed source"
+    );
+    std::fs::write(&file, "now normal user text").unwrap();
+    assert_eq!(
+        core.index_one(&root, &path, &core.cancel(), semaphore())
+            .await
+            .unwrap(),
+        IndexOutcome::Indexed
+    );
+    std::fs::remove_file(&file).unwrap();
+    assert_eq!(
+        core.index_one(&root, &path, &core.cancel(), semaphore())
+            .await
+            .unwrap(),
+        IndexOutcome::Unchanged
+    );
+    assert!(core
+        .database()
+        .await
+        .unwrap()
+        .call(move |s| s.source(&path))
+        .await
+        .unwrap()
+        .is_none());
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn chrome_profiles_are_skipped_cached_and_previously_indexed_sources_pruned() {
+    let (core, _dir, docs) = corpus(1).await;
+    let profile = docs.join("agent-chrome");
+    std::fs::create_dir(&profile).unwrap();
+    std::fs::write(profile.join("history.log"), "formerly indexed").unwrap();
+    core.run_index(&core.cancel()).await.unwrap();
+    assert_eq!(
+        core.database()
+            .await
+            .unwrap()
+            .call(|s| s.counts())
+            .await
+            .unwrap()["sourceCount"],
+        2
+    );
+    std::fs::write(profile.join("Local State"), "{}").unwrap();
+    for name in ["Default", "Profile 2"] {
+        let path = docs.join(name);
+        std::fs::create_dir(&path).unwrap();
+        std::fs::write(path.join("Preferences"), "{}").unwrap();
+        std::fs::write(path.join("notes.txt"), "profile junk").unwrap();
+    }
+    for name in [
+        "leveldb",
+        "IndexedDB",
+        "Local Storage",
+        "Session Storage",
+        "Service Worker",
+        "Cache",
+        "Code Cache",
+        "GPUCache",
+        "blob_storage",
+        "shared_proto_db",
+        "Crashpad",
+        ".git",
+        ".venv",
+    ] {
+        let dir = docs.join(name);
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::write(dir.join("junk.txt"), "ignored").unwrap();
+        assert!(extract::skip(name, true), "{name}");
+    }
+    for name in [
+        "a.sqlite",
+        "a.sqlite3",
+        "a.db",
+        "a.db-wal",
+        "a.db-shm",
+        "a.db-journal",
+        "000003.ldb",
+        "000003.log",
+        "LOG",
+        "LOG.old",
+        "MANIFEST-000001",
+        "CURRENT",
+        "LOCK",
+    ] {
+        std::fs::write(docs.join(name), "ignored").unwrap();
+        assert!(extract::skip(name, false), "{name}");
+    }
+    std::fs::write(docs.join("normal.log"), "normal user log").unwrap();
+    core.run_index(&core.cancel()).await.unwrap();
+    assert_eq!(
+        core.database()
+            .await
+            .unwrap()
+            .call(|s| s.counts())
+            .await
+            .unwrap()["sourceCount"],
+        2
+    );
+    let roots = vec![docs.clone()];
+    let profiles = core.inner.profile_roots.lock().unwrap().clone();
+    assert_eq!(profiles.len(), 3);
+    let event = Ok(
+        notify::Event::new(notify::EventKind::Modify(notify::event::ModifyKind::Any))
+            .add_path(profile.join("history.log")),
+    );
+    let mut pending = PendingReconcile::default();
+    assert!(!pending.record(&event, &roots, &profiles, 100));
+    assert!(pending.deadline(0).is_none());
+    core.shutdown().await.unwrap();
+}
+
+#[test]
+fn watcher_skips_browser_junk_and_pending_work_has_max_wait_and_full_rate_limit() {
+    use notify::{event::ModifyKind, Event, EventKind};
+    let roots = vec![PathBuf::from("/docs")];
+    let profiles = HashSet::new();
+    let event =
+        |p: &str| Ok(Event::new(EventKind::Modify(ModifyKind::Any)).add_path(PathBuf::from(p)));
+    let mut pending = PendingReconcile::default();
+    for path in [
+        "/docs/leveldb/000003.log",
+        "/docs/Session Storage/data.txt",
+        "/docs/Local Storage/leveldb/a",
+        "/docs/a.sqlite3",
+        "/docs/a.db-wal",
+        "/docs/000003.log",
+        "/docs/LOG",
+        "/docs/Cache/junk.txt",
+        "/docs/.venv/a.py",
+        "/docs/.git/a.txt",
+    ] {
+        let e = event(path);
+        assert!(!watcher_reconcile(e.as_ref().unwrap(), &roots), "{path}");
+        assert!(
+            !watcher_reconcile(
+                &Event::new(EventKind::Any).add_path(PathBuf::from(path)),
+                &roots
+            ),
+            "{path}"
+        );
+        assert!(!pending.record(&e, &roots, &profiles, 100));
+    }
+    assert!(!pending.record(&event("/elsewhere/a.txt"), &roots, &profiles, 100));
+    let mut lexical = PendingReconcile::default();
+    assert!(lexical.record(&event("/docs/.git/../eligible"), &roots, &profiles, 100));
+    assert_eq!(
+        lexical.paths,
+        HashSet::from([PathBuf::from("/docs/eligible")])
+    );
+    assert!(!lexical.full);
+    for now in (100..=30_100).step_by(1000) {
+        assert!(pending.record(&event("/docs/user.log"), &roots, &profiles, now));
+    }
+    assert!(pending.take_due(30_099, 0).is_none());
+    assert_eq!(pending.take_due(30_100, 0).unwrap().paths.len(), 1);
+    let overflow = Ok(Event::new(EventKind::Any).set_flag(notify::event::Flag::Rescan));
+    assert!(pending.record(&overflow, &roots, &profiles, 40_000));
+    assert!(pending.take_due(299_999, 0).is_none());
+    assert!(pending.take_due(300_000, 0).unwrap().full);
+    assert!(pending.record(
+        &Err(notify::Error::generic("overflow")),
+        &roots,
+        &profiles,
+        400_000
+    ));
+    assert!(pending.take_due(599_999, 300_000).is_none());
+    assert!(pending.take_due(600_000, 300_000).unwrap().full);
+    for i in 0..=MAX_PENDING_PATHS {
+        pending.record(
+            &event(&format!("/docs/{i}.txt")),
+            &roots,
+            &profiles,
+            700_000,
+        );
+    }
+    assert!(pending.full);
+    assert!(pending.paths.is_empty());
 }
