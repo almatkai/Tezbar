@@ -28,7 +28,7 @@ export type ExtensionRuntimeSurfaceProps = {
   commandName: string
   root: ExtensionRuntimeNode
   actions: ExtensionRuntimeAction[]
-  actionNotice?: { message: string; tone: 'success' | 'error' } | null
+  actionNotice?: { message: string; tone: 'success' | 'error'; working?: boolean } | null
   onBack: () => void
   onSearchTextChanged: (searchText: string) => Promise<void> | void
   onLoadMore: () => Promise<void> | void

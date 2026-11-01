@@ -38,9 +38,33 @@ type FormItem =
   | { key: string; type: 'description'; title?: string; text?: string }
   | { key: string; type: 'field'; field: FormField }
 
-const FIELD_ROW_CLASS = 'grid items-start gap-2 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-5'
+const FIELD_ROW_CLASS = 'grid items-start gap-2 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-5'
 const FIELD_TITLE_CLASS =
-  'pt-2 text-left text-[11.5px] font-medium leading-5 text-ink-3 sm:text-right'
+  'pt-2.5 text-left text-[12px] font-medium leading-5 text-ink-3 sm:text-right'
+
+// No shared renderer platform helper exists; resolve this once for hints and shortcuts.
+const IS_MAC =
+  typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || navigator.userAgent)
+
+type FormSubmitKey = {
+  key: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  repeat: boolean
+  isComposing: boolean
+  inTextArea: boolean
+  isMac: boolean
+}
+
+export function shouldSubmitFormOnKey(event: FormSubmitKey): boolean {
+  if (event.key !== 'Enter' || event.repeat || event.isComposing || event.altKey) return false
+  if (event.metaKey || event.ctrlKey) {
+    return event.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+  }
+  return !event.inTextArea
+}
 
 function collectOptionData(node: ExtensionRuntimeNode): Array<{ title: string; value: string }> {
   const options: Array<{ title: string; value: string }> = []
@@ -218,7 +242,7 @@ type FormRuntimeProps = {
   onChangeField: (actionId: string, value: unknown) => Promise<void> | void
   onInvokeAction: (actionId: string, values?: Record<string, unknown>) => Promise<void> | void
   onOpenActions: () => void
-  actionNotice?: { message: string; tone: 'success' | 'error' } | null
+  actionNotice?: { message: string; tone: 'success' | 'error'; working?: boolean } | null
 }
 
 export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(function FormRuntime(
@@ -231,7 +255,25 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
     [items]
   )
   const [values, setValues] = useState<Record<string, unknown>>(() => reconcileFormValues(fields))
-  const nativeColorWheel = useMemo(() => parseNativeColorWheel(root.props?.nativeColorWheel), [root.props?.nativeColorWheel])
+  const nativeColorWheel = useMemo(
+    () => parseNativeColorWheel(root.props?.nativeColorWheel),
+    [root.props?.nativeColorWheel]
+  )
+  const composerField =
+    !nativeColorWheel && fields.length === 1 && fields[0]?.type === 'Form.TextArea'
+      ? fields[0]
+      : null
+  const composerRef = useRef<HTMLTextAreaElement>(null)
+  const hasTextArea = fields.some((field) => field.type === 'Form.TextArea')
+  const composerKey = composerField?.key
+
+  useEffect(() => {
+    const textarea = composerRef.current
+    if (!composerKey || !textarea) return
+    textarea.focus()
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+  }, [composerKey, title])
+
   const localWheelCoordinates = useRef<FormWheelCoordinates | null>(null)
   const filePickerOpenRef = useRef(false)
   const previousServerForm = useRef({ title, fields })
@@ -240,8 +282,8 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
     if (nativeColorWheel) {
       localWheelCoordinates.current = reconcileFormWheelDraft(fields, localWheelCoordinates.current)
     }
-    const previousFields = previousServerForm.current.title === title
-      ? previousServerForm.current.fields : undefined
+    const previousFields =
+      previousServerForm.current.title === title ? previousServerForm.current.fields : undefined
     const wheelDraft = nativeColorWheel ? localWheelCoordinates.current : null
     previousServerForm.current = { title, fields }
     setValues((previous) => ({
@@ -289,18 +331,34 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
 
   return (
     <form
-      className="view-sheet flex h-full min-h-0 flex-col"
+      className="view-sheet flex h-full min-h-0 flex-col [&_[data-command-surface-status]]:flex-1 [&_.launcher-hints]:flex-none"
       onSubmit={(event) => {
         event.preventDefault()
         onSubmitForm(values)
       }}
       onKeyDownCapture={(event) => {
+        const inTextArea = event.target instanceof HTMLTextAreaElement
+        // Prevent native implicit submission on held Enter in single-line controls too.
+        if (event.key === 'Enter' && event.repeat && !event.nativeEvent.isComposing) {
+          event.preventDefault()
+          return
+        }
         if (
-          event.key !== 'Enter' ||
-          event.repeat ||
-          event.nativeEvent.isComposing ||
-          event.target instanceof HTMLTextAreaElement
+          !shouldSubmitFormOnKey({
+            key: event.key,
+            metaKey: event.metaKey,
+            ctrlKey: event.ctrlKey,
+            altKey: event.altKey,
+            shiftKey: event.shiftKey,
+            repeat: event.repeat,
+            isComposing: event.nativeEvent.isComposing,
+            inTextArea,
+            isMac: IS_MAC,
+          })
         ) {
+          if (event.key === 'Enter' && !inTextArea && !event.nativeEvent.isComposing) {
+            event.preventDefault()
+          }
           return
         }
         event.preventDefault()
@@ -312,148 +370,222 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
         <CommandSurfaceTitle>{title}</CommandSurfaceTitle>
       </CommandSurfaceHeader>
 
-      <div className="command-surface-body no-drag min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
-        <div className="mx-auto max-w-[900px] space-y-4">
-          {nativeColorWheel ? (
-            <NativeColorWheel
-              data={nativeColorWheel}
-              onInvokeAction={onInvokeAction}
-              onCoordinatesChange={(coordinates) => {
-                localWheelCoordinates.current = coordinates
-                setValues((previous) => ({ ...previous, ...coordinates }))
-              }}
+      <div
+        className={`command-surface-body no-drag min-h-0 flex-1 overflow-y-auto ${
+          composerField ? 'flex flex-col pl-[38px] pr-3.5 pb-3.5 pt-3.5' : 'px-5 py-5 sm:px-8'
+        }`}
+      >
+        {composerField ? (
+          <>
+            <textarea
+              ref={composerRef}
+              aria-label={composerField.title}
+              value={String(values[composerField.id] ?? '')}
+              onChange={(event) => updateValue(composerField, event.target.value)}
+              placeholder={composerField.placeholder || composerField.title}
+              className="min-h-[96px] w-full flex-1 resize-none border-0 bg-transparent p-0 font-display text-[15px] font-normal leading-[1.55] text-ink-1 shadow-none outline-none ring-0 placeholder:text-ink-4 focus:shadow-none focus:ring-0 focus-visible:!outline-none"
             />
-          ) : null}
-          {items.map((item) => {
-            if (item.type === 'separator') {
-              return <div key={item.key} className="-mx-8 border-t border-white/[0.065]" />
-            }
-
-            if (item.type === 'description') {
-              return (
-                <div key={item.key} className={FIELD_ROW_CLASS}>
-                  <div className={item.title ? FIELD_TITLE_CLASS : ''}>{item.title}</div>
-                  <p className="py-1.5 text-[11px] leading-5 text-ink-4">{item.text}</p>
+            <FormFieldFeedback field={composerField} />
+            {items.map((item) =>
+              item.type === 'description' ? (
+                <div key={item.key} className="mt-2 text-[11px] leading-5 text-ink-4">
+                  {item.title ? <div>{item.title}</div> : null}
+                  {item.text ? <p>{item.text}</p> : null}
                 </div>
-              )
-            }
+              ) : null
+            )}
+          </>
+        ) : (
+          <div className="max-w-[640px] space-y-4 [&_.glass-field:focus-visible]:!outline-none [&_.glass-field:focus]:!shadow-[inset_0_0_0_1px_rgb(var(--c-text-4))] [&_.glass-field:focus-visible]:!shadow-[inset_0_0_0_1px_rgb(var(--c-text-4))]">
+            {nativeColorWheel ? (
+              <NativeColorWheel
+                data={nativeColorWheel}
+                onInvokeAction={onInvokeAction}
+                onCoordinatesChange={(coordinates) => {
+                  localWheelCoordinates.current = coordinates
+                  setValues((previous) => ({ ...previous, ...coordinates }))
+                }}
+              />
+            ) : null}
+            {items.map((item) => {
+              if (item.type === 'separator') {
+                return <div key={item.key} className="-mx-8 border-t border-white/[0.065]" />
+              }
 
-            const field = item.field
-            const rawValue = values[field.id]
-            const current = typeof rawValue === 'string' || typeof rawValue === 'number' ? String(rawValue) : ''
-            const controlId = `runtime-form-${field.key.replace(/[^a-z0-9_-]/gi, '-')}`
-
-            if (field.type === 'Form.TextArea') {
-              return (
-                <div key={field.key} className={FIELD_ROW_CLASS}>
-                  <label htmlFor={controlId} className={FIELD_TITLE_CLASS}>
-                    {field.title}
-                  </label>
-                  <div>
-                    <textarea
-                      id={controlId}
-                      value={current}
-                      onChange={(event) => updateValue(field, event.target.value)}
-                      placeholder={field.placeholder}
-                      className="glass-field min-h-[88px] resize-y"
-                    />
-                    <FormFieldFeedback field={field} />
+              if (item.type === 'description') {
+                return (
+                  <div key={item.key} className={FIELD_ROW_CLASS}>
+                    <div className={item.title ? FIELD_TITLE_CLASS : ''}>{item.title}</div>
+                    <p className="py-1.5 text-[11px] leading-5 text-ink-4">{item.text}</p>
                   </div>
-                </div>
-              )
-            }
+                )
+              }
 
-            if (field.type === 'Form.Checkbox') {
-              const checked = rawValue === true
-              return (
-                <div key={field.key} className={FIELD_ROW_CLASS}>
-                  <div className={FIELD_TITLE_CLASS}>{field.title}</div>
-                  <div>
-                    <label
-                      htmlFor={controlId}
-                      className="flex min-h-9 cursor-pointer items-center gap-2.5 text-[12px] font-medium text-ink-2"
-                    >
+              const field = item.field
+              const rawValue = values[field.id]
+              const current =
+                typeof rawValue === 'string' || typeof rawValue === 'number' ? String(rawValue) : ''
+              const controlId = `runtime-form-${field.key.replace(/[^a-z0-9_-]/gi, '-')}`
+
+              if (field.type === 'Form.TextArea') {
+                return (
+                  <div key={field.key} className={FIELD_ROW_CLASS}>
+                    <label htmlFor={controlId} className={FIELD_TITLE_CLASS}>
+                      {field.title}
+                    </label>
+                    <div>
+                      <textarea
+                        id={controlId}
+                        value={current}
+                        onChange={(event) => updateValue(field, event.target.value)}
+                        placeholder={field.placeholder}
+                        className="glass-field min-h-[96px] resize-none"
+                      />
+                      <FormFieldFeedback field={field} />
+                    </div>
+                  </div>
+                )
+              }
+
+              if (field.type === 'Form.Checkbox') {
+                const checked = rawValue === true
+                return (
+                  <div key={field.key} className={FIELD_ROW_CLASS}>
+                    <div className={FIELD_TITLE_CLASS}>{field.title}</div>
+                    <div>
+                      <label
+                        htmlFor={controlId}
+                        className="flex min-h-9 cursor-pointer items-center gap-2.5 text-[12px] font-medium text-ink-2"
+                      >
+                        <input
+                          id={controlId}
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => updateValue(field, event.target.checked)}
+                          className="h-4 w-4 rounded-[5px] accent-[rgb(var(--c-text-3))]"
+                        />
+                        <span>{field.label || field.title}</span>
+                      </label>
+                      <FormFieldFeedback field={field} />
+                    </div>
+                  </div>
+                )
+              }
+
+              if (field.type === 'Form.Dropdown') {
+                return (
+                  <div key={field.key} className={FIELD_ROW_CLASS}>
+                    <label htmlFor={controlId} className={FIELD_TITLE_CLASS}>
+                      {field.title}
+                    </label>
+                    <div>
+                      <select
+                        id={controlId}
+                        value={current}
+                        onChange={(event) => updateValue(field, event.target.value)}
+                        className="glass-field h-10 py-0"
+                      >
+                        {!field.options?.some((option) => option.value === '') ? (
+                          <option value="">Select</option>
+                        ) : null}
+                        {(field.options ?? []).map((option) => (
+                          <option key={`${field.id}:${option.value}`} value={option.value}>
+                            {option.title}
+                          </option>
+                        ))}
+                      </select>
+                      <FormFieldFeedback field={field} />
+                    </div>
+                  </div>
+                )
+              }
+
+              if (field.type === 'Form.TagPicker') {
+                const selected = Array.isArray(rawValue)
+                  ? rawValue.filter((value): value is string => typeof value === 'string')
+                  : []
+                return (
+                  <div key={field.key} className={FIELD_ROW_CLASS}>
+                    <label htmlFor={controlId} className={FIELD_TITLE_CLASS}>
+                      {field.title}
+                    </label>
+                    <div>
+                      <select
+                        id={controlId}
+                        multiple
+                        value={selected}
+                        onChange={(event) =>
+                          updateValue(
+                            field,
+                            Array.from(event.target.selectedOptions, (option) => option.value)
+                          )
+                        }
+                        className="glass-field min-h-[96px]"
+                      >
+                        {(field.options ?? []).map((option) => (
+                          <option key={`${field.id}:${option.value}`} value={option.value}>
+                            {option.title}
+                          </option>
+                        ))}
+                      </select>
+                      <FormFieldFeedback field={field} />
+                    </div>
+                  </div>
+                )
+              }
+
+              if (field.type === 'Form.FilePicker') {
+                const selected = Array.isArray(rawValue)
+                  ? rawValue.filter((value): value is string => typeof value === 'string')
+                  : []
+                return (
+                  <div key={field.key} className={FIELD_ROW_CLASS}>
+                    <label htmlFor={controlId} className={FIELD_TITLE_CLASS}>
+                      {field.title}
+                    </label>
+                    <div>
                       <input
                         id={controlId}
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => updateValue(field, event.target.checked)}
-                        className="h-4 w-4 rounded-[5px] accent-accent"
+                        type="file"
+                        multiple={field.allowMultipleSelection}
+                        onPointerDown={prepareForFilePicker}
+                        onClick={prepareForFilePicker}
+                        onChange={(event) => {
+                          const next = Array.from(event.target.files ?? [], (file) => {
+                            const desktopFile = file as File & { path?: string }
+                            return desktopFile.path || file.name
+                          })
+                          updateValue(field, next)
+                          releaseFilePickerBlurSuppression()
+                        }}
+                        className="glass-field cursor-pointer py-1.5 file:mr-3 file:cursor-pointer file:rounded-tezbar-chip file:border-0 file:bg-white/[0.09] file:px-3 file:py-1 file:text-[11px] file:font-medium file:text-ink-1 hover:file:bg-white/[0.13]"
                       />
-                      <span>{field.label || field.title}</span>
-                    </label>
-                    <FormFieldFeedback field={field} />
-                  </div>
-                </div>
-              )
-            }
-
-            if (field.type === 'Form.Dropdown') {
-              return (
-                <div key={field.key} className={FIELD_ROW_CLASS}>
-                  <label htmlFor={controlId} className={FIELD_TITLE_CLASS}>
-                    {field.title}
-                  </label>
-                  <div>
-                    <select
-                      id={controlId}
-                      value={current}
-                      onChange={(event) => updateValue(field, event.target.value)}
-                      className="glass-field h-10 py-0"
-                    >
-                      {!field.options?.some((option) => option.value === '') ? (
-                        <option value="">Select</option>
+                      {selected.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {selected.map((path) => (
+                            <span
+                              key={path}
+                              title={path}
+                              className="max-w-full truncate rounded-tezbar-chip border border-emerald-300/[0.14] bg-emerald-400/[0.06] px-2 py-1 text-[10.5px] text-emerald-100/85"
+                            >
+                              {displayFileName(path)}
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
-                      {(field.options ?? []).map((option) => (
-                        <option key={`${field.id}:${option.value}`} value={option.value}>
-                          {option.title}
-                        </option>
-                      ))}
-                    </select>
-                    <FormFieldFeedback field={field} />
+                      <FormFieldFeedback field={field} />
+                    </div>
                   </div>
-                </div>
-              )
-            }
+                )
+              }
 
-            if (field.type === 'Form.TagPicker') {
-              const selected = Array.isArray(rawValue)
-                ? rawValue.filter((value): value is string => typeof value === 'string')
-                : []
-              return (
-                <div key={field.key} className={FIELD_ROW_CLASS}>
-                  <label htmlFor={controlId} className={FIELD_TITLE_CLASS}>
-                    {field.title}
-                  </label>
-                  <div>
-                    <select
-                      id={controlId}
-                      multiple
-                      value={selected}
-                      onChange={(event) =>
-                        updateValue(
-                          field,
-                          Array.from(event.target.selectedOptions, (option) => option.value)
-                        )
-                      }
-                      className="glass-field min-h-[96px]"
-                    >
-                      {(field.options ?? []).map((option) => (
-                        <option key={`${field.id}:${option.value}`} value={option.value}>
-                          {option.title}
-                        </option>
-                      ))}
-                    </select>
-                    <FormFieldFeedback field={field} />
-                  </div>
-                </div>
-              )
-            }
+              const inputType =
+                field.type === 'Form.PasswordField'
+                  ? 'password'
+                  : field.type === 'Form.DatePicker'
+                    ? 'date'
+                    : 'text'
 
-            if (field.type === 'Form.FilePicker') {
-              const selected = Array.isArray(rawValue)
-                ? rawValue.filter((value): value is string => typeof value === 'string')
-                : []
               return (
                 <div key={field.key} className={FIELD_ROW_CLASS}>
                   <label htmlFor={controlId} className={FIELD_TITLE_CLASS}>
@@ -462,102 +594,71 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
                   <div>
                     <input
                       id={controlId}
-                      type="file"
-                      multiple={field.allowMultipleSelection}
-                      onPointerDown={prepareForFilePicker}
-                      onClick={prepareForFilePicker}
-                      onChange={(event) => {
-                        const next = Array.from(event.target.files ?? [], (file) => {
-                          const desktopFile = file as File & { path?: string }
-                          return desktopFile.path || file.name
-                        })
-                        updateValue(field, next)
-                        releaseFilePickerBlurSuppression()
-                      }}
-                      className="glass-field cursor-pointer py-1.5 file:mr-3 file:cursor-pointer file:rounded-tezbar-chip file:border-0 file:bg-white/[0.09] file:px-3 file:py-1 file:text-[11px] file:font-medium file:text-ink-1 hover:file:bg-white/[0.13]"
+                      type={inputType}
+                      value={current}
+                      onChange={(event) => updateValue(field, event.target.value)}
+                      placeholder={field.placeholder}
+                      className="glass-field h-10 py-0"
                     />
-                    {selected.length > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {selected.map((path) => (
-                          <span
-                            key={path}
-                            title={path}
-                            className="max-w-full truncate rounded-tezbar-chip border border-emerald-300/[0.14] bg-emerald-400/[0.06] px-2 py-1 text-[10.5px] text-emerald-100/85"
-                          >
-                            {displayFileName(path)}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
                     <FormFieldFeedback field={field} />
                   </div>
                 </div>
               )
-            }
+            })}
 
-            const inputType =
-              field.type === 'Form.PasswordField'
-                ? 'password'
-                : field.type === 'Form.DatePicker'
-                  ? 'date'
-                  : 'text'
-
-            return (
-              <div key={field.key} className={FIELD_ROW_CLASS}>
-                <label htmlFor={controlId} className={FIELD_TITLE_CLASS}>
-                  {field.title}
-                </label>
-                <div>
-                  <input
-                    id={controlId}
-                    type={inputType}
-                    value={current}
-                    onChange={(event) => updateValue(field, event.target.value)}
-                    placeholder={field.placeholder}
-                    className="glass-field h-10 py-0"
-                  />
-                  <FormFieldFeedback field={field} />
-                </div>
+            {fields.length === 0 ? (
+              <div className="rounded-tezbar-row bg-white/[0.03] px-3 py-4 text-[12px] text-ink-3">
+                This form did not expose any editable fields.
               </div>
-            )
-          })}
-
-          {fields.length === 0 ? (
-            <div className="rounded-tezbar-row bg-white/[0.03] px-3 py-4 text-[12px] text-ink-3">
-              This form did not expose any editable fields.
-            </div>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        )}
       </div>
 
-      {actionNotice ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className={`sheet-above-bar shrink-0 px-4 py-2 text-[11px] font-medium ${
-            actionNotice.tone === 'error' ? 'text-rose-300' : 'text-emerald-200'
-          }`}
-        >
-          {actionNotice.message}
-        </div>
-      ) : null}
-
-      <CommandSurfaceFooter>
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-tezbar-chip px-1.5 py-1 transition hover:bg-white/[0.06]"
-          aria-label="Back"
-        >
-          <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
-        </button>
-        <div className="flex items-center gap-1">
+      <CommandSurfaceFooter
+        status={
+          actionNotice ? (
+            <span
+              role="status"
+              aria-live="polite"
+              className={`flex min-w-0 items-center gap-1.5 text-[11px] ${
+                actionNotice.tone === 'error' ? 'text-rose-300' : 'text-ink-3'
+              }`}
+            >
+              {actionNotice.working ? (
+                <span
+                  aria-hidden
+                  className="h-[11px] w-[11px] shrink-0 animate-spin rounded-full border border-current border-t-transparent motion-reduce:animate-none"
+                />
+              ) : null}
+              <span className="truncate">{actionNotice.message}</span>
+            </span>
+          ) : null
+        }
+      >
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-tezbar-chip px-1.5 py-1 transition hover:bg-white/[0.06]"
+            aria-label="Back"
+          >
+            <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+          </button>
           <button
             type="submit"
             className="rounded-tezbar-chip px-1.5 py-1 transition hover:bg-white/[0.06]"
             aria-label="Submit form"
           >
-            <Hint label="Submit" keys={<Kbd>↵</Kbd>} />
+            <Hint
+              label="Submit"
+              keys={
+                <>
+                  {hasTextArea ? <Kbd>{IS_MAC ? '⌘' : 'Ctrl'}</Kbd> : null}
+                  <Kbd>↵</Kbd>
+                </>
+              }
+            />
           </button>
           <button
             type="button"

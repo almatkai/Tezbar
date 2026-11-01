@@ -42,6 +42,7 @@ type RuntimeViewState = {
 type ActionNotice = {
   message: string
   tone: 'success' | 'error'
+  working?: boolean
 }
 
 function fallbackActionNotice(action: ExtensionRuntimeAction | undefined): string | null {
@@ -423,22 +424,28 @@ export default function ExtensionRuntimeView({
     []
   )
   const disposeTimerRef = useRef<{ sessionId: string; timer: number } | null>(null)
+  const pendingSubmitRef = useRef<{ owner: string } | null>(null)
   const actionNoticeTimerRef = useRef<number | null>(null)
 
-  const showActionNotice = useCallback((message: string, persist = false): void => {
-    if (actionNoticeTimerRef.current !== null) {
-      window.clearTimeout(actionNoticeTimerRef.current)
-      actionNoticeTimerRef.current = null
-    }
-    const tone = /could not|failed|failure|error/i.test(message) ? 'error' : 'success'
-    setActionNotice({ message, tone })
-    if (persist) return
+  const showActionNotice = useCallback(
+    (message: string, persist = false, working = false): ActionNotice => {
+      if (actionNoticeTimerRef.current !== null) {
+        window.clearTimeout(actionNoticeTimerRef.current)
+        actionNoticeTimerRef.current = null
+      }
+      const tone = !working && /could not|failed|failure|error/i.test(message) ? 'error' : 'success'
+      const notice: ActionNotice = { message, tone, working }
+      setActionNotice(notice)
+      if (persist) return notice
 
-    actionNoticeTimerRef.current = window.setTimeout(() => {
-      actionNoticeTimerRef.current = null
-      setActionNotice(null)
-    }, 2400)
-  }, [])
+      actionNoticeTimerRef.current = window.setTimeout(() => {
+        actionNoticeTimerRef.current = null
+        setActionNotice(null)
+      }, 2400)
+      return notice
+    },
+    []
+  )
 
   const isFormSurface = state.root.type.startsWith('Form')
 
@@ -454,6 +461,11 @@ export default function ExtensionRuntimeView({
     searchRequestSeq.current += 1
     setState(fromRunResult(initial))
     setError(null)
+    setActionNotice(null)
+    if (actionNoticeTimerRef.current !== null) {
+      window.clearTimeout(actionNoticeTimerRef.current)
+      actionNoticeTimerRef.current = null
+    }
   }, [initial])
 
   useEffect(
@@ -611,56 +623,75 @@ export default function ExtensionRuntimeView({
             onSearchTextChanged={handleSearchTextChanged}
             onLoadMore={handleLoadMore}
             onInvokeAction={async (actionId, formValues) => {
-              setError(null)
               const invokedAction = state.actions.find((action) => action.id === actionId)
-              if (isFormSurface && invokedAction?.kind === 'submit-form') {
-                showActionNotice(`Working · ${invokedAction.title}…`, true)
-              }
-              const result = await window.tezbar.extensionInvokeAction({
-                sessionId: state.sessionId,
-                actionId,
-                formValues,
-              })
-
-              if (currentSession.current !== sessionOwner) return
-              if (!result.ok) {
-                setError(result.message)
-                showActionFailure(result.message)
-                return
-              }
-
-              const effectNoticeValue = effectNotice(result.effects)
-              const messageNotice = result.message?.trim()
-                ? {
-                    message: result.message.trim(),
-                    tone: /could not|failed|failure|error/i.test(result.message)
-                      ? ('error' as const)
-                      : ('success' as const),
-                  }
+              const isSubmit = isFormSurface && invokedAction?.kind === 'submit-form'
+              if (isSubmit && pendingSubmitRef.current?.owner === sessionOwner) return
+              const submission = isSubmit ? { owner: sessionOwner } : null
+              if (submission) pendingSubmitRef.current = submission
+              setError(null)
+              const workingNotice = isSubmit
+                ? showActionNotice(`Working · ${invokedAction.title}…`, true, true)
                 : null
-              const fallbackNotice = fallbackActionNotice(invokedAction)
-              const notice =
-                effectNoticeValue ||
-                messageNotice ||
-                (fallbackNotice ? { message: fallbackNotice, tone: 'success' as const } : null)
-              if (notice) showActionNotice(notice.message, isFormSurface)
+              try {
+                const result = await window.tezbar.extensionInvokeAction({
+                  sessionId: state.sessionId,
+                  actionId,
+                  formValues,
+                })
 
-              if (result.mode === 'no-view') {
-                setState((prev) => ({ ...prev, message: undefined }))
-                return
+                if (currentSession.current !== sessionOwner) return
+                if (!result.ok) {
+                  setError(result.message)
+                  showActionFailure(result.message)
+                  return
+                }
+
+                const effectNoticeValue = effectNotice(result.effects)
+                const messageNotice = result.message?.trim()
+                  ? {
+                      message: result.message.trim(),
+                      tone: /could not|failed|failure|error/i.test(result.message)
+                        ? ('error' as const)
+                        : ('success' as const),
+                    }
+                  : null
+                const fallbackNotice = fallbackActionNotice(invokedAction)
+                const notice =
+                  effectNoticeValue ||
+                  messageNotice ||
+                  (fallbackNotice ? { message: fallbackNotice, tone: 'success' as const } : null)
+                if (notice) showActionNotice(notice.message, isFormSurface)
+
+                if (result.mode === 'no-view') {
+                  setState((prev) => ({ ...prev, message: undefined }))
+                  return
+                }
+
+                setState({
+                  refreshMs: result.refreshMs,
+                  generation: result.generation,
+                  sessionId: result.sessionId,
+                  extensionId: result.extensionId,
+                  commandName: result.commandName,
+                  title: result.title,
+                  root: result.root,
+                  actions: result.actions,
+                  message: undefined,
+                })
+              } catch (error) {
+                if (currentSession.current !== sessionOwner) return
+                const message = error instanceof Error ? error.message : String(error)
+                setError(message)
+                showActionFailure(message)
+              } finally {
+                if (submission && pendingSubmitRef.current === submission) {
+                  pendingSubmitRef.current = null
+                }
+                // Only remove this invocation's progress; preserve failures and newer notices.
+                if (workingNotice && currentSession.current !== null) {
+                  setActionNotice((notice) => (notice === workingNotice ? null : notice))
+                }
               }
-
-              setState({
-                refreshMs: result.refreshMs,
-                generation: result.generation,
-                sessionId: result.sessionId,
-                extensionId: result.extensionId,
-                commandName: result.commandName,
-                title: result.title,
-                root: result.root,
-                actions: result.actions,
-                message: undefined,
-              })
             }}
           />
         )}
