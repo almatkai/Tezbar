@@ -5,6 +5,7 @@ export type VaultItem = {
   name: string
   value: string
   kind: VaultKind
+  icon?: string
   note?: string
   createdAt: number
   updatedAt: number
@@ -26,6 +27,7 @@ export type VaultSaveInput = {
   name: string
   value: string
   kind: VaultKind
+  icon?: string
   note?: string
 }
 

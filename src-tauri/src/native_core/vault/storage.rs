@@ -25,6 +25,8 @@ pub struct VaultIndexEntry {
     pub id: String,
     pub name: String,
     pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     #[serde(default)]
     pub updated_at: u64,
 }
@@ -35,6 +37,7 @@ impl From<&VaultItem> for VaultIndexEntry {
             id: item.id.clone(),
             name: item.name.clone(),
             kind: item.kind.clone(),
+            icon: item.icon.clone(),
             updated_at: item.updated_at,
         }
     }
@@ -67,6 +70,8 @@ pub struct VaultItem {
     /// "api-key" | "token" | "ssh-key" | "server" | "password" | "note"
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     #[serde(default)]
     pub created_at: u64,
@@ -75,12 +80,14 @@ pub struct VaultItem {
 }
 
 /// What the list shows: never the value or the note.
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultItemHeader {
     pub id: String,
     pub name: String,
     pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,
 }
@@ -91,6 +98,7 @@ impl From<&VaultItem> for VaultItemHeader {
             id: item.id.clone(),
             name: item.name.clone(),
             kind: item.kind.clone(),
+            icon: item.icon.clone(),
             created_at: item.created_at,
             updated_at: item.updated_at,
         }

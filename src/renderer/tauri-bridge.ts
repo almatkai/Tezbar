@@ -11,6 +11,7 @@ import type {
   ResizeEdge,
 } from '../shared/windowLayout'
 import type { AppUpdateStatus, UpdateChannelInfo } from '../shared/updater'
+import type { VaultSaveInput } from '../shared/vault'
 import type { TerminalSessionsAction } from '../shared/terminal'
 
 type TauriRaymesApi = RaymesApi & {
@@ -310,7 +311,7 @@ export function initTauriBridge(): void {
     vaultLock: () => callBackend('vault:lock'),
     vaultList: () => callBackend('vault:list'),
     vaultGet: (id: string) => callBackend('vault:get', id),
-    vaultSave: (item: unknown) => callBackend('vault:save', { item }),
+    vaultSave: (item: VaultSaveInput) => callBackend('vault:save', { item }),
     vaultDelete: (id: string) => callBackend('vault:delete', id),
     vaultCopy: (id: string) => callBackend('vault:copy', id),
     vaultReset: async () => {
