@@ -24,51 +24,58 @@ export function useKnowledgeSettings(active: boolean) {
     request.current = null
   }, [])
 
-  const refresh = useCallback(() => {
-    if (!mounted.current) return
-    cancel()
-    setLoading(true)
-    setError(null)
-    failed.current = false
-    let current = true
-    const timer = window.setTimeout(() => {
-      finish()
-      failed.current = true
-      setError('Loading Knowledge settings timed out. Try Refresh status or Retry.')
-    }, KNOWLEDGE_SETTINGS_TIMEOUT_MS)
-    const pending = {
-      cancel: () => {
-        current = false
-        window.clearTimeout(timer)
-      },
-    }
-    request.current = pending
-    const finish = () => {
-      pending.cancel()
-      request.current = null
-      setLoading(false)
-    }
-    // Also catches synchronous bridge errors and avoids dispatching an invocation
-    // that was already superseded during effect cleanup (e.g. React StrictMode).
-    void Promise.resolve()
-      .then(() => (current ? window.tezbar.getKnowledgeSnapshot() : null))
-      .then(
-        (snapshot) => {
-          if (!current || !snapshot) return
-          finish()
-          hasSnapshot.current = true
-          updateKnowledge(snapshot)
-          setSnapshotSeq(++snapshotSeqRef.current)
+  const readSnapshot = useCallback(
+    (background = false) => {
+      if (!mounted.current) return
+      cancel()
+      // Automatic reads keep the cached controls in place instead of briefly
+      // inserting a loading banner on every poll.
+      setLoading(!background)
+      setError(null)
+      failed.current = false
+      let current = true
+      const timer = window.setTimeout(() => {
+        finish()
+        failed.current = true
+        setError('Loading Knowledge settings timed out. Try Refresh status or Retry.')
+      }, KNOWLEDGE_SETTINGS_TIMEOUT_MS)
+      const pending = {
+        cancel: () => {
+          current = false
+          window.clearTimeout(timer)
         },
-        (failure: unknown) => {
-          if (!current) return
-          finish()
-          failed.current = true
-          const message = failure instanceof Error ? failure.message : String(failure)
-          setError(message || 'Could not load Knowledge settings. Try Refresh status or Retry.')
-        }
-      )
-  }, [cancel])
+      }
+      request.current = pending
+      const finish = () => {
+        pending.cancel()
+        request.current = null
+        setLoading(false)
+      }
+      // Also catches synchronous bridge errors and avoids dispatching an invocation
+      // that was already superseded during effect cleanup (e.g. React StrictMode).
+      void Promise.resolve()
+        .then(() => (current ? window.tezbar.getKnowledgeSnapshot() : null))
+        .then(
+          (snapshot) => {
+            if (!current || !snapshot) return
+            finish()
+            hasSnapshot.current = true
+            updateKnowledge(snapshot)
+            setSnapshotSeq(++snapshotSeqRef.current)
+          },
+          (failure: unknown) => {
+            if (!current) return
+            finish()
+            failed.current = true
+            const message = failure instanceof Error ? failure.message : String(failure)
+            setError(message || 'Could not load Knowledge settings. Try Refresh status or Retry.')
+          }
+        )
+    },
+    [cancel]
+  )
+
+  const refresh = useCallback(() => readSnapshot(), [readSnapshot])
 
   // Mutation responses are newer than any already-pending snapshot read.
   const setKnowledge = useCallback(
@@ -94,15 +101,16 @@ export function useKnowledgeSettings(active: boolean) {
 
   useEffect(() => {
     if (!active) return
-    refresh()
+    readSnapshot()
     const timer = window.setInterval(() => {
       // Poll only a healthy, previously loaded snapshot, serially. A failure or
       // timeout requires an explicit retry instead of a silent retry loop.
-      if (!document.hidden && hasSnapshot.current && !failed.current && !request.current) refresh()
+      if (!document.hidden && hasSnapshot.current && !failed.current && !request.current)
+        readSnapshot(true)
     }, 1500)
     const onVisibility = () => {
       // A failed read still requires explicit Retry/Refresh, even after hide/show.
-      if (!document.hidden && !failed.current) refresh()
+      if (!document.hidden && !failed.current) readSnapshot(hasSnapshot.current)
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
@@ -110,7 +118,7 @@ export function useKnowledgeSettings(active: boolean) {
       window.clearInterval(timer)
       cancel()
     }
-  }, [active, cancel, refresh])
+  }, [active, cancel, readSnapshot])
 
   useEffect(
     () =>

@@ -339,6 +339,38 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     expect(engine().value).toBe('embeddinggemma-2:q8_0')
   })
 
+  it('keeps idle polling from inserting a refresh banner above the controls', async () => {
+    await ready()
+    const depth = container.querySelector('[aria-label="Default Knowledge Depth"]')
+    const model = engine()
+    const content = container.textContent
+
+    for (let i = 0; i < 2; i++) {
+      const poll = deferred<KnowledgeSnapshot>()
+      getSnapshot.mockReturnValue(poll.promise)
+      await advance(1_500)
+      expect(getSnapshot).toHaveBeenCalledTimes(i + 2)
+      expect(container.textContent).toBe(content)
+      expect(container.querySelector('[aria-label="Default Knowledge Depth"]')).toBe(depth)
+      expect(engine()).toBe(model)
+      expect(model.disabled).toBe(false)
+      await act(async () => poll.resolve(variantsSnapshot()))
+      expect(container.textContent).toBe(content)
+    }
+  })
+
+  it('refreshes an existing snapshot quietly when the window becomes visible', async () => {
+    await ready()
+    const poll = deferred<KnowledgeSnapshot>()
+    getSnapshot.mockReturnValue(poll.promise)
+    const content = container.textContent
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    expect(getSnapshot).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toBe(content)
+    await act(async () => poll.resolve(variantsSnapshot()))
+    expect(container.textContent).toBe(content)
+  })
+
   it('polls serially after success, but does not silently retry a polling failure', async () => {
     getSnapshot.mockResolvedValueOnce(snapshot())
     await mount()
