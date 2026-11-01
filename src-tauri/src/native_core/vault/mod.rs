@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tauri::{Emitter, Manager};
 use storage::{
     exists, read_envelope, set_aside_legacy, write_envelope, VaultEnvelope, VaultItem,
     VaultItemHeader, VaultPayload, ENVELOPE_VERSION,
@@ -34,6 +35,7 @@ pub struct VaultService {
     auth: Arc<dyn DeviceAuthenticator>,
     keys: Arc<dyn KeyStore>,
     inner: Arc<Mutex<InnerState>>,
+    app: Option<tauri::AppHandle>,
 }
 
 struct InnerState {
@@ -43,12 +45,13 @@ struct InnerState {
 }
 
 impl VaultService {
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(root: PathBuf, app: Option<tauri::AppHandle>) -> Self {
         Self::with_parts(
             root,
             cfg!(target_os = "macos"),
             Arc::new(SystemAuthenticator),
             Arc::new(SystemKeychain),
+            app,
         )
     }
 
@@ -57,6 +60,7 @@ impl VaultService {
         supported: bool,
         auth: Arc<dyn DeviceAuthenticator>,
         keys: Arc<dyn KeyStore>,
+        app: Option<tauri::AppHandle>,
     ) -> Self {
         Self {
             root,
@@ -68,6 +72,7 @@ impl VaultService {
                 payload: None,
                 last_active: Instant::now(),
             })),
+            app,
         }
     }
 
@@ -154,19 +159,50 @@ impl VaultService {
         }))
     }
 
+    fn set_blur_suppressed(&self, value: bool) {
+        if let Some(app) = &self.app {
+            if let Some(state) = app.try_state::<crate::WindowBehaviorState>() {
+                if let Ok(mut suppress) = state.suppress_blur_hide.lock() {
+                    *suppress = value;
+                }
+            }
+        }
+    }
+
+    fn refocus_main_window(&self) {
+        if let Some(app) = &self.app {
+            if let Some(main_window) = app.get_webview_window("main") {
+                let _ = crate::show_main_window_native(&main_window);
+                let _ = main_window.set_focus();
+                let _ = main_window.emit("window-shown", json!({ "resetUi": false }));
+            }
+        }
+    }
+
     async fn unlock(&self) -> CoreResult {
         if self.is_unlocked() {
             return Ok(json!({ "ok": true }));
         }
-        match self.auth.authenticate(UNLOCK_REASON).await {
+        self.set_blur_suppressed(true);
+        let auth_outcome = self.auth.authenticate(UNLOCK_REASON).await;
+        self.set_blur_suppressed(false);
+        match auth_outcome {
             AuthOutcome::Granted => {}
-            AuthOutcome::Cancelled => return Ok(json!({ "ok": false, "cancelled": true })),
-            AuthOutcome::Failed(message) => return Err(message),
+            AuthOutcome::Cancelled => {
+                self.refocus_main_window();
+                return Ok(json!({ "ok": false, "cancelled": true }));
+            }
+            AuthOutcome::Failed(message) => {
+                self.refocus_main_window();
+                return Err(message);
+            }
         }
         let this = self.clone();
-        tokio::task::spawn_blocking(move || this.open())
+        let open_res = tokio::task::spawn_blocking(move || this.open())
             .await
-            .unwrap_or_else(|e| Err(e.to_string()))
+            .unwrap_or_else(|e| Err(e.to_string()));
+        self.refocus_main_window();
+        open_res
     }
 
     /// Runs only after a successful device-owner authentication.
@@ -212,10 +248,19 @@ impl VaultService {
     }
 
     async fn reset(&self) -> CoreResult {
-        match self.auth.authenticate(RESET_REASON).await {
+        self.set_blur_suppressed(true);
+        let auth_outcome = self.auth.authenticate(RESET_REASON).await;
+        self.set_blur_suppressed(false);
+        match auth_outcome {
             AuthOutcome::Granted => {}
-            AuthOutcome::Cancelled => return Ok(json!({ "ok": false, "cancelled": true })),
-            AuthOutcome::Failed(message) => return Err(message),
+            AuthOutcome::Cancelled => {
+                self.refocus_main_window();
+                return Ok(json!({ "ok": false, "cancelled": true }));
+            }
+            AuthOutcome::Failed(message) => {
+                self.refocus_main_window();
+                return Err(message);
+            }
         }
         self.lock();
         let path = storage::vault_path(&self.root);
@@ -223,6 +268,7 @@ impl VaultService {
             std::fs::remove_file(path).map_err(|e| format!("Could not delete the vault: {e}"))?;
         }
         self.keys.delete()?;
+        self.refocus_main_window();
         Ok(json!({ "ok": true }))
     }
 
@@ -408,6 +454,7 @@ mod tests {
             true,
             Arc::new(FakeAuth(outcome, calls.clone())),
             keys,
+            None,
         );
         (service, calls)
     }
@@ -544,6 +591,7 @@ mod tests {
             false,
             Arc::new(FakeAuth(AuthOutcome::Granted, Arc::new(AtomicUsize::new(0)))),
             Arc::new(FakeKeys::default()),
+            None,
         );
         assert_eq!(call(&vault, "vault:status", &[]).await.unwrap()["supported"], false);
         assert!(call(&vault, "vault:unlock", &[]).await.is_err());

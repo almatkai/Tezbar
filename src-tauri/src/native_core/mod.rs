@@ -49,7 +49,7 @@ impl NativeCore {
             extensions: extensions::ExtensionsCore::new(ctx.clone()),
             platform: platform::PlatformCore::new(ctx.clone()),
             system: system::SystemCore::new(ctx.clone()),
-            vault: vault::VaultService::new(ctx.paths.data_dir.clone()),
+            vault: vault::VaultService::new(ctx.paths.data_dir.clone(), ctx.app.clone()),
             ctx: ctx.clone(),
             initialized: AtomicBool::new(false),
             ready: tokio::sync::Notify::new(),

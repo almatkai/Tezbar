@@ -298,14 +298,30 @@ export function initTauriBridge(): void {
     deleteQuickNote: (createdAt: number) => callBackend('notes:delete', createdAt),
 
     vaultStatus: () => callBackend('vault:status'),
-    vaultUnlock: () => callBackend('vault:unlock'),
+    vaultUnlock: async () => {
+      await setBlurHideSuppressed(true)
+      try {
+        return await callBackend('vault:unlock')
+      } finally {
+        await setBlurHideSuppressed(false).catch(() => undefined)
+        await invoke('show_window').catch(() => undefined)
+      }
+    },
     vaultLock: () => callBackend('vault:lock'),
     vaultList: () => callBackend('vault:list'),
     vaultGet: (id: string) => callBackend('vault:get', id),
     vaultSave: (item: unknown) => callBackend('vault:save', { item }),
     vaultDelete: (id: string) => callBackend('vault:delete', id),
     vaultCopy: (id: string) => callBackend('vault:copy', id),
-    vaultReset: () => callBackend('vault:reset'),
+    vaultReset: async () => {
+      await setBlurHideSuppressed(true)
+      try {
+        return await callBackend('vault:reset')
+      } finally {
+        await setBlurHideSuppressed(false).catch(() => undefined)
+        await invoke('show_window').catch(() => undefined)
+      }
+    },
 
     terminalCreate: async (request: any) => {
       // Register listeners before spawning even when no component subscribed yet.

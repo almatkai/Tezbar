@@ -312,6 +312,7 @@ impl PlatformCore {
                     "extensions",
                     "indexing",
                     "snippets",
+                    "vault",
                     "notes",
                     "emoji-picker",
                     "system-monitor",

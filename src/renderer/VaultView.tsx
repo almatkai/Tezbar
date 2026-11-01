@@ -204,6 +204,17 @@ export default function VaultView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    const off = window.tezbar.onWindowShown?.(() => {
+      void refresh().then((next) => {
+        if (next?.supported && !next.unlocked && !unlocking) {
+          void unlock()
+        }
+      })
+    })
+    return off
+  }, [refresh, unlock, unlocking])
+
   // The secret itself is only fetched for the selected item.
   useEffect(() => {
     setRevealed(false)

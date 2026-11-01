@@ -270,7 +270,7 @@ fn emit_main_window_visibility(window: &WebviewWindow, visible: bool) {
     }
 }
 
-fn show_main_window_native(window: &WebviewWindow) -> Result<(), String> {
+pub(crate) fn show_main_window_native(window: &WebviewWindow) -> Result<(), String> {
     window.show().map_err(|error| error.to_string())?;
     emit_main_window_visibility(window, true);
     Ok(())
