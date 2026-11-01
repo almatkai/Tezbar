@@ -126,6 +126,7 @@ struct QueueProbe {
     queue_saves: AtomicU64,
     source_reads: AtomicU64,
     extractions: AtomicU64,
+    change_during_indexing: Mutex<Option<PathBuf>>,
     cancel_at: u64,
     generation: Arc<AtomicU64>,
 }
@@ -149,6 +150,9 @@ unsafe extern "C" fn queue_trace(
         }
         if sql.starts_with("INSERT INTO knowledge_sources(id,root_id,path,content_hash") {
             probe.extractions.fetch_add(1, Ordering::SeqCst);
+            if let Some(path) = probe.change_during_indexing.lock().unwrap().take() {
+                std::fs::write(path, "file changed after hashing, before committing").unwrap();
+            }
         }
         if sql.starts_with("DELETE FROM knowledge_indexing_queue WHERE job_id=") {
             let n = probe.completed.fetch_add(1, Ordering::SeqCst) + 1;
@@ -170,6 +174,7 @@ async fn probe(core: &KnowledgeCore, cancel_at: u64) -> Arc<QueueProbe> {
         queue_saves: AtomicU64::new(0),
         source_reads: AtomicU64::new(0),
         extractions: AtomicU64::new(0),
+        change_during_indexing: Mutex::new(None),
         cancel_at,
         generation: core.inner.generation.clone(),
     });
@@ -515,6 +520,257 @@ async fn watcher_single_file_update_is_incremental_and_preserves_job_queue() {
         .await
         .unwrap()
         .is_none());
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn incremental_churn_defers_without_reading_sources_and_eventually_indexes() {
+    let (core, _dir, docs) = corpus(1).await;
+    let q = probe(&core, 0).await;
+    let file = docs.join("0.txt");
+    let changed = HashSet::from([file.clone()]);
+    let mut now = 100_000;
+    std::fs::write(&file, "first incremental revision").unwrap();
+    core.run_incremental_with_clock(&changed, &core.cancel(), || now)
+        .await
+        .unwrap();
+    assert_eq!(q.extractions.load(Ordering::SeqCst), 1);
+
+    for (revision, interval) in [("second revision", 120_000), ("third revision", 240_000)] {
+        std::fs::write(&file, revision).unwrap();
+        // Directory notifications must also respect the child's backoff.
+        core.run_incremental_with_clock(&HashSet::from([docs.clone()]), &core.cancel(), || {
+            now + 1000
+        })
+        .await
+        .unwrap();
+        let reads = q.source_reads.load(Ordering::SeqCst);
+        let due = now + interval;
+        {
+            let mut pending = core.inner.pending.lock().unwrap();
+            assert_eq!(pending.churn[&file].interval, interval);
+            assert_eq!(pending.deadline(0), Some(due));
+            let event = Ok(notify::Event::new(notify::EventKind::Any).add_path(file.clone()));
+            for tick in ((now + 2000)..due).step_by(1000) {
+                pending.record(&event, std::slice::from_ref(&docs), &HashSet::new(), tick);
+            }
+            assert_eq!(
+                pending.deadline(0),
+                Some(due),
+                "appends cannot extend the window"
+            );
+            assert!(pending.take_due(due - 1, 0).is_none());
+        }
+        core.run_incremental_with_clock(&changed, &core.cancel(), || due - 1)
+            .await
+            .unwrap();
+        assert_eq!(q.source_reads.load(Ordering::SeqCst), reads);
+        let work = core.inner.pending.lock().unwrap().take_due(due, 0).unwrap();
+        assert_eq!(work.paths, changed);
+        core.run_incremental_with_clock(&work.paths, &core.cancel(), || due)
+            .await
+            .unwrap();
+        assert_eq!(q.source_reads.load(Ordering::SeqCst), reads + 1);
+        now = due;
+    }
+    assert_eq!(q.extractions.load(Ordering::SeqCst), 3);
+
+    // Quiet for longer than the current interval restores the base window.
+    now += 240_001;
+    std::fs::write(&file, "revision after a quiet period").unwrap();
+    core.run_incremental_with_clock(&changed, &core.cancel(), || now)
+        .await
+        .unwrap();
+    assert_eq!(
+        core.inner.pending.lock().unwrap().churn[&file].interval,
+        CHURN_BASE_MS
+    );
+    assert_eq!(q.extractions.load(Ordering::SeqCst), 4);
+
+    // A full pass can still update a changed file during incremental backoff.
+    std::fs::write(&file, "revision for a full pass").unwrap();
+    core.run_index(&core.cancel()).await.unwrap();
+    assert_eq!(q.extractions.load(Ordering::SeqCst), 5);
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn changed_during_indexing_retries_through_backoff_for_full_and_incremental_passes() {
+    for full in [false, true] {
+        let (core, _dir, docs) = corpus(1).await;
+        let q = probe(&core, 0).await;
+        let file = docs.join("0.txt");
+        std::fs::write(&file, "revision before indexing").unwrap();
+        *q.change_during_indexing.lock().unwrap() = Some(file.clone());
+        let changed = HashSet::from([file.clone()]);
+        let before = now_ms();
+        if full {
+            core.run_index(&core.cancel()).await.unwrap();
+        } else {
+            core.run_incremental(&changed, &core.cancel())
+                .await
+                .unwrap();
+        }
+        let path = file.to_string_lossy().into_owned();
+        let source = core
+            .database()
+            .await
+            .unwrap()
+            .call(move |s| s.source(&path))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            source["error"],
+            "File changed during indexing; queued for rescan"
+        );
+        let due = {
+            let pending = core.inner.pending.lock().unwrap();
+            assert!(pending.paths.is_empty());
+            assert_eq!(pending.churn[&file].interval, 2 * CHURN_BASE_MS);
+            let due = pending.deadline(0).unwrap();
+            assert!(due >= before + 2 * CHURN_BASE_MS);
+            due
+        };
+        assert_eq!(q.extractions.load(Ordering::SeqCst), 1);
+        let reads = q.source_reads.load(Ordering::SeqCst);
+        core.run_incremental(&changed, &core.cancel())
+            .await
+            .unwrap();
+        assert_eq!(
+            q.source_reads.load(Ordering::SeqCst),
+            reads,
+            "retry does no hashing/extraction work before due"
+        );
+        let work = core.inner.pending.lock().unwrap().take_due(due, 0).unwrap();
+        core.run_incremental_with_clock(&work.paths, &core.cancel(), || due)
+            .await
+            .unwrap();
+        assert_eq!(q.extractions.load(Ordering::SeqCst), 2);
+        core.shutdown().await.unwrap();
+    }
+}
+
+#[test]
+fn pending_deadline_keeps_deferred_paths_separate_from_debounce_and_full_recovery() {
+    let mut pending = PendingReconcile::default();
+    let hot = PathBuf::from("/docs/hot.txt");
+    let cold = PathBuf::from("/docs/cold.txt");
+    let roots = [PathBuf::from("/docs")];
+    let event =
+        |path: &Path| Ok(notify::Event::new(notify::EventKind::Any).add_path(path.to_path_buf()));
+    pending.indexed(&hot, 100_000);
+    assert!(pending.record(&event(&hot), &roots, &HashSet::new(), 101_000));
+    assert!(pending.record(&event(&cold), &roots, &HashSet::new(), 102_000));
+    assert_eq!(pending.deadline(0), Some(107_000));
+    assert_eq!(
+        pending.take_due(107_000, 0).unwrap().paths,
+        HashSet::from([cold])
+    );
+    assert_eq!(pending.deadline(0), Some(220_000));
+    for now in (110_000..220_000).step_by(1000) {
+        assert!(!pending.record(&event(&hot), &roots, &HashSet::new(), now));
+        assert_eq!(pending.deadline(0), Some(220_000));
+        assert!(pending.take_due(now, 0).is_none());
+    }
+    let overflow =
+        Ok(notify::Event::new(notify::EventKind::Any).set_flag(notify::event::Flag::Rescan));
+    pending.record(&overflow, &roots, &HashSet::new(), 219_000);
+    let work = pending.take_due(220_000, 0).unwrap();
+    assert!(!work.full);
+    assert_eq!(work.paths, HashSet::from([hot]));
+    assert_eq!(pending.deadline(0), Some(FULL_RECONCILE_MS));
+    assert!(pending.take_due(FULL_RECONCILE_MS, 0).unwrap().full);
+    assert_eq!(pending.deadline(0), None);
+}
+
+#[test]
+fn churn_intervals_and_memory_are_bounded() {
+    let mut pending = PendingReconcile::default();
+    let path = PathBuf::from("/docs/hot.txt");
+    let mut now = 100_000;
+    pending.indexed(&path, now);
+    for _ in 0..10 {
+        assert!(pending.defer(&path, now + 1));
+        let interval = pending.churn[&path].interval;
+        assert!(interval <= CHURN_MAX_MS);
+        now += interval;
+        assert!(pending.take_due(now - 1, 0).is_none());
+        assert!(pending.take_due(now, 0).unwrap().paths.contains(&path));
+        pending.indexed(&path, now);
+    }
+    assert_eq!(pending.churn[&path].interval, CHURN_MAX_MS);
+    for i in 0..MAX_CHURN_PATHS {
+        pending.indexed(Path::new(&format!("/docs/{i}.txt")), now + i as u64 + 1);
+    }
+    assert_eq!(pending.churn.len(), MAX_CHURN_PATHS);
+    assert!(
+        !pending.churn.contains_key(&path),
+        "oldest entry is evicted"
+    );
+}
+
+#[tokio::test]
+async fn oversized_logs_are_skipped_and_existing_sources_pruned_by_full_scan() {
+    let (core, _dir, docs) = corpus(0).await;
+    let small = docs.join("small.log");
+    let large = docs.join("large.LOG");
+    std::fs::write(&small, "small user log").unwrap();
+    std::fs::File::create(&large)
+        .unwrap()
+        .set_len(4 * 1024 * 1024 + 1)
+        .unwrap();
+    let (paths, complete, _) = scan(&docs, &core.cancel(), &core.inner.ctx).unwrap();
+    assert!(complete);
+    assert_eq!(paths, vec![small.to_string_lossy().into_owned()]);
+    for ext in ["log", "out", "err", "trace"] {
+        let path = docs.join(format!("example.{ext}"));
+        let expected = if extract::TEXT_EXTENSIONS.split(' ').any(|e| e == ext) {
+            4
+        } else {
+            64
+        };
+        assert_eq!(extract::max_bytes(&path), expected * 1024 * 1024);
+    }
+    assert_eq!(
+        extract::max_bytes(&docs.join("notes.txt")),
+        64 * 1024 * 1024
+    );
+    core.run_index(&core.cancel()).await.unwrap();
+    let path = small.to_string_lossy().into_owned();
+    let lookup = path.clone();
+    assert!(core
+        .database()
+        .await
+        .unwrap()
+        .call(move |s| s.source(&lookup))
+        .await
+        .unwrap()
+        .is_some());
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&small)
+        .unwrap()
+        .set_len(4 * 1024 * 1024 + 1)
+        .unwrap();
+    core.run_index(&core.cancel()).await.unwrap();
+    assert!(core
+        .database()
+        .await
+        .unwrap()
+        .call(move |s| s.source(&path))
+        .await
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        core.database()
+            .await
+            .unwrap()
+            .call(|s| s.counts())
+            .await
+            .unwrap()["sourceCount"],
+        0
+    );
     core.shutdown().await.unwrap();
 }
 

@@ -40,7 +40,9 @@ pub fn indexable(path: &Path) -> bool {
 }
 pub fn max_bytes(path: &Path) -> u64 {
     let ext = extension(path);
-    if ext == "pdf" || contains(RICH, &ext) {
+    if ["log", "out", "err", "trace"].contains(&ext.as_str()) && contains(TEXT_EXTENSIONS, &ext) {
+        4 * 1024 * 1024
+    } else if ext == "pdf" || contains(RICH, &ext) {
         150 * 1024 * 1024
     } else if contains(IMAGES, &ext) {
         75 * 1024 * 1024

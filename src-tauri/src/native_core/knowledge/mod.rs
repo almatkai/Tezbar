@@ -19,7 +19,7 @@ use notify::{RecursiveMode, Watcher};
 use runtime::{EmbeddingVariantId, ForegroundEmbedding, Runtime};
 use serde_json::{json, Value};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -108,11 +108,22 @@ const FULL_RECONCILE_MS: u64 = 300_000;
 const RECONCILE_DEBOUNCE_MS: u64 = 5_000;
 const RECONCILE_MAX_WAIT_MS: u64 = 30_000;
 const MAX_PENDING_PATHS: usize = 2_000;
+const CHURN_BASE_MS: u64 = 60_000;
+const CHURN_MAX_MS: u64 = 30 * 60_000;
+const MAX_CHURN_PATHS: usize = 4_000;
 const COMPLETION_BATCH: usize = 128;
 
+#[derive(Debug)]
+struct PathChurn {
+    last_indexed: u64,
+    last_changed: u64,
+    interval: u64,
+}
 #[derive(Default, Debug)]
 struct PendingReconcile {
     paths: HashSet<PathBuf>,
+    deferred: HashMap<PathBuf, u64>,
+    churn: HashMap<PathBuf, PathChurn>,
     full: bool,
     first: u64,
     last: u64,
@@ -157,22 +168,33 @@ impl PendingReconcile {
         if !full && paths.is_empty() {
             return false;
         }
-        if self.first == 0 {
-            self.first = now;
+        let mut queued = full;
+        let mut batch = full;
+        for path in paths {
+            let already_deferred = self.deferred.contains_key(&path);
+            if self.defer(&path, now) {
+                queued |= !already_deferred;
+            } else if !self.full && !full {
+                self.paths.insert(path);
+                queued = true;
+                batch = true;
+            }
         }
-        self.last = now;
+        if batch {
+            if self.first == 0 {
+                self.first = now;
+            }
+            self.last = now;
+        }
         self.full |= full;
-        if !self.full {
-            self.paths.extend(paths);
-            self.full = self.paths.len() > MAX_PENDING_PATHS;
-        }
+        self.bound_pending(now);
         if self.full {
             self.paths.clear();
         }
-        true
+        queued
     }
-    fn deadline(&self, last_full: u64) -> Option<u64> {
-        if self.first == 0 {
+    fn batch_deadline(&self, last_full: u64) -> Option<u64> {
+        if self.first == 0 || (!self.full && self.paths.is_empty()) {
             return None;
         }
         let due = self
@@ -185,11 +207,99 @@ impl PendingReconcile {
             due
         })
     }
+    fn deadline(&self, last_full: u64) -> Option<u64> {
+        self.batch_deadline(last_full)
+            .into_iter()
+            .chain(self.deferred.values().copied())
+            .min()
+    }
     fn take_due(&mut self, now: u64, last_full: u64) -> Option<Self> {
-        if self.deadline(last_full).is_some_and(|due| now >= due) {
-            Some(std::mem::take(self))
-        } else {
-            None
+        if !self.deadline(last_full).is_some_and(|due| now >= due) {
+            return None;
+        }
+        let mut work = Self::default();
+        if self.batch_deadline(last_full).is_some_and(|due| now >= due) {
+            work.paths = std::mem::take(&mut self.paths);
+            work.full = std::mem::take(&mut self.full);
+            work.first = std::mem::take(&mut self.first);
+            work.last = std::mem::take(&mut self.last);
+        }
+        self.deferred.retain(|path, due| {
+            if now >= *due {
+                work.paths.insert(path.clone());
+                false
+            } else {
+                true
+            }
+        });
+        if work.first == 0 {
+            work.first = now;
+            work.last = now;
+        }
+        Some(work)
+    }
+    fn bound_pending(&mut self, now: u64) {
+        if self.paths.len() + self.deferred.len() > MAX_PENDING_PATHS {
+            self.full = true;
+            self.paths.clear();
+            self.deferred.clear();
+            if self.first == 0 {
+                self.first = now;
+            }
+            self.last = now;
+        }
+    }
+    // A deferred window has a fixed deadline. Further appends coalesce into
+    // that window instead of doubling on every event and starving the file.
+    fn defer(&mut self, path: &Path, now: u64) -> bool {
+        let Some(churn) = self.churn.get_mut(path) else {
+            return false;
+        };
+        if now.saturating_sub(churn.last_changed) > churn.interval {
+            churn.interval = CHURN_BASE_MS;
+        }
+        churn.last_changed = now;
+        if self.deferred.get(path).is_some_and(|due| now < *due) {
+            return true;
+        }
+        self.deferred.remove(path);
+        if now < churn.last_indexed.saturating_add(churn.interval) {
+            churn.interval = churn.interval.saturating_mul(2).min(CHURN_MAX_MS);
+            self.deferred.insert(
+                path.to_path_buf(),
+                churn.last_indexed.saturating_add(churn.interval),
+            );
+            self.paths.remove(path);
+            if self.paths.is_empty() && !self.full {
+                self.first = 0;
+                self.last = 0;
+            }
+            self.bound_pending(now);
+            return true;
+        }
+        false
+    }
+    fn indexed(&mut self, path: &Path, now: u64) {
+        let churn = self.churn.entry(path.to_path_buf()).or_insert(PathChurn {
+            last_indexed: now,
+            last_changed: now,
+            interval: CHURN_BASE_MS,
+        });
+        if now.saturating_sub(churn.last_changed) > churn.interval {
+            churn.interval = CHURN_BASE_MS;
+        }
+        churn.last_indexed = now;
+        churn.last_changed = now;
+        if self.churn.len() > MAX_CHURN_PATHS {
+            if let Some(oldest) = self
+                .churn
+                .iter()
+                .filter(|(path, _)| !self.deferred.contains_key(*path))
+                .min_by_key(|(_, churn)| churn.last_changed)
+                .map(|(path, _)| path.clone())
+            {
+                self.churn.remove(&oldest);
+            }
         }
     }
 }
@@ -782,10 +892,7 @@ impl KnowledgeCore {
                                 queued.first = now_ms();
                             }
                             queued.last = now_ms();
-                            if queued.paths.len() > MAX_PENDING_PATHS {
-                                queued.full = true;
-                                queued.paths.clear();
-                            }
+                            queued.bound_pending(now_ms());
                         }
                     }
                     if full {
@@ -798,7 +905,8 @@ impl KnowledgeCore {
                     if let Some(retry) = pending {
                         let mut queued = self.inner.pending.lock().unwrap();
                         queued.paths.extend(retry.paths);
-                        queued.full |= retry.full || queued.paths.len() > MAX_PENDING_PATHS;
+                        queued.full |= retry.full;
+                        queued.bound_pending(now_ms());
                         if queued.full {
                             queued.paths.clear();
                         }
@@ -984,12 +1092,17 @@ impl KnowledgeCore {
             .iter()
             .map(|r| PathBuf::from(string(r, "path")))
             .collect::<Vec<_>>();
+        let now = now_ms();
+        let mut pending = self.inner.pending.lock().unwrap();
+        // Also cover unstable files encountered by a full pass. An attempt
+        // which could not commit still paid hashing/extraction costs.
+        pending.indexed(&path, now);
         let event = Ok(notify::Event::new(notify::EventKind::Any).add_path(path));
-        if self.inner.pending.lock().unwrap().record(
+        if pending.record(
             &event,
             &roots,
             &self.inner.profile_roots.lock().unwrap(),
-            now_ms(),
+            now,
         ) {
             self.inner.wake.notify_waiters();
         }
@@ -998,6 +1111,15 @@ impl KnowledgeCore {
         &self,
         changed: &HashSet<PathBuf>,
         cancel: &Cancellation,
+    ) -> Result<(), String> {
+        self.run_incremental_with_clock(changed, cancel, now_ms)
+            .await
+    }
+    async fn run_incremental_with_clock(
+        &self,
+        changed: &HashSet<PathBuf>,
+        cancel: &Cancellation,
+        clock: impl Fn() -> u64,
     ) -> Result<(), String> {
         let db = self.database().await?;
         let roots = self.roots();
@@ -1065,6 +1187,16 @@ impl KnowledgeCore {
                     .await?;
                 }
                 for file in &paths {
+                    {
+                        let mut pending = self.inner.pending.lock().unwrap();
+                        let now = clock();
+                        // Gate the discovered files too: a directory event must
+                        // not bypass backoff for its continuously changing child.
+                        if pending.defer(Path::new(file), now) {
+                            continue;
+                        }
+                        pending.indexed(Path::new(file), now);
+                    }
                     let result = self.index_one(root, file, cancel, ocr.clone()).await;
                     cancel.check()?;
                     if let Err(error) = result {
