@@ -34,13 +34,17 @@ function* machOFiles(directory) {
 export function verifyMacOSResources(directory, policy) {
   const resources = []
   for (const file of machOFiles(directory)) {
-    const details = spawnSync('codesign', ['-d', '--verbose=4', file], { encoding: 'utf8' })
+    const details = spawnSync('codesign', ['-d', '--verbose=4', '-r-', file], { encoding: 'utf8' })
     const metadata = details.stdout + details.stderr
     const team = metadata.match(/^TeamIdentifier=(.+)$/m)?.[1]?.trim()
+    const requirement = metadata.match(/^(?:# )?designated => (.+)$/m)?.[1]?.trim()
     if (
       details.status !== 0 ||
       team !== policy.teamIdentifier ||
-      /^Signature=adhoc$/m.test(metadata)
+      /^Signature=adhoc$/m.test(metadata) ||
+      !requirement ||
+      /\bcdhash\b/.test(requirement) ||
+      !/\bcertificate\b/.test(requirement)
     )
       throw new Error(`Native resource must share the app signing team: ${file}`)
     execFileSync('codesign', ['--verify', '--strict', file])
@@ -108,8 +112,13 @@ export function verifyMacOSSigning(app, policy) {
     `-R=${policy.designatedRequirement}`,
     app,
   ])
+  const resourcesDirectory = join(app, 'Contents', 'Resources')
+  if (existsSync(resourcesDirectory))
+    for (const helper of policy.nativeHelpers ?? [])
+      if (!existsSync(join(resourcesDirectory, helper)))
+        throw new Error(`Missing native helper in packaged app: ${helper}`)
   return {
     ...signing,
-    nativeResources: verifyMacOSResources(join(app, 'Contents', 'Resources'), policy),
+    nativeResources: verifyMacOSResources(resourcesDirectory, policy),
   }
 }

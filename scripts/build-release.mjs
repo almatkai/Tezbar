@@ -8,6 +8,7 @@ import {
   copyFileSync,
   existsSync,
   unlinkSync,
+  rmSync,
 } from 'node:fs'
 import { dirname, join, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,6 +35,7 @@ for (let i = 2; i < process.argv.length; i++) {
   else throw new Error(`Unknown or incomplete release argument ${arg}`)
 }
 const base = JSON.parse(readFileSync(join(root, 'src-tauri/tauri.conf.json'), 'utf8'))
+const macOSPolicy = JSON.parse(readFileSync(join(root, 'src-tauri/macos-signing.json'), 'utf8'))
 const channel = values.channel ?? 'stable'
 const version = values.version ?? base.version
 const override = buildConfiguration(base, channel, version)
@@ -53,7 +55,7 @@ const configPath = join(directory, 'tauri-release.json')
 if (mode.unsigned) {
   override.bundle.createUpdaterArtifacts = false
 }
-if (process.platform === 'darwin')
+if (process.platform === 'darwin') {
   override.bundle.macOS = {
     signingIdentity: macOSSigningIdentity({
       localPreview: mode.localPreview,
@@ -62,6 +64,11 @@ if (process.platform === 'darwin')
         (mode.localPreview ? undefined : base.bundle.macOS?.signingIdentity),
     }),
   }
+  override.bundle.resources = {
+    ...base.bundle.resources,
+    ...Object.fromEntries(macOSPolicy.nativeHelpers.map((path) => [`../${path}`, path])),
+  }
+}
 if (process.platform === 'win32' && process.env.WINDOWS_CERTIFICATE_THUMBPRINT) {
   override.bundle.windows.certificateThumbprint = process.env.WINDOWS_CERTIFICATE_THUMBPRINT
   override.bundle.windows.digestAlgorithm = 'sha256'
@@ -146,6 +153,15 @@ if (flags.has('dry-run')) {
   })
   if (helpers.error || helpers.status !== 0)
     throw helpers.error ?? new Error('Native helper build failed')
+  if (process.platform === 'darwin') {
+    // Tauri may retain resources inside an existing .app. Only package the
+    // current resource inventory, never leftovers from a reused Cargo cache.
+    for (const target of ['src-tauri/target', 'target'])
+      rmSync(join(root, target, 'release/bundle/macos', `${PRODUCT_NAMES[channel]}.app`), {
+        recursive: true,
+        force: true,
+      })
+  }
   const result = spawnSync(
     process.execPath,
     [
@@ -186,10 +202,7 @@ if (flags.has('dry-run')) {
   const product = PRODUCT_NAMES[channel]
   const macOSSigning =
     process.platform === 'darwin' && !mode.localPreview
-      ? verifyMacOSSigning(
-          join(bundle, 'macos', `${product}.app`),
-          JSON.parse(readFileSync(join(root, 'src-tauri/macos-signing.json'), 'utf8'))
-        )
+      ? verifyMacOSSigning(join(bundle, 'macos', `${product}.app`), macOSPolicy)
       : undefined
   if (mode.unsigned && process.platform === 'darwin') {
     execFileSync(

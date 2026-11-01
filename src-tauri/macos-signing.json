@@ -1,5 +1,11 @@
 {
   "identifier": "com.tezbar.app",
   "teamIdentifier": "UBRTH86SZ3",
-  "designatedRequirement": "identifier \"com.tezbar.app\" and anchor apple generic and certificate leaf[subject.CN] = \"Apple Development: almat.2003@icloud.com (ABGRBU6DGZ)\" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */"
+  "designatedRequirement": "identifier \"com.tezbar.app\" and anchor apple generic and certificate leaf[subject.CN] = \"Apple Development: almat.2003@icloud.com (ABGRBU6DGZ)\" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */",
+  "nativeHelpers": [
+    "native/axhelper/axhelper",
+    "native/screenocr/screenocr-helper",
+    "native/color-picker/color-picker-helper",
+    "native/image-colors/image-colors-helper"
+  ]
 }

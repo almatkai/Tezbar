@@ -80,6 +80,8 @@ test(
         '-',
         'A distributed beta must retain a certificate identity across updates'
       )
+      for (const helper of policy.nativeHelpers)
+        assert.equal(config.bundle.resources[`../${helper}`], helper)
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
