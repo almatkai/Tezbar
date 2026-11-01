@@ -4982,7 +4982,7 @@ dependencies = [
 
 [[package]]
 name = "tezbar"
-version = "0.3.0-beta.4"
+version = "0.3.0-beta.5"
 dependencies = [
  "aes-gcm",
  "alloc-stdlib 0.2.2",
