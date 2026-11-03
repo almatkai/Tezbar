@@ -125,7 +125,6 @@ export default function AgentChatView({
   const threadRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
   const submittedBoot = useRef<string | null>(null)
-  const [chatKey, setChatKey] = useState(() => makeChatId())
   const userExplicitlyStoppedRef = useRef(false)
 
   const refreshHistory = useCallback(async (): Promise<ChatSessionSummary[]> => {
@@ -194,7 +193,6 @@ export default function AgentChatView({
     []
   )
   const chat = useChat<AgentUIMessage>({
-    id: session?.id ?? chatKey,
     transport,
     throttle: 32,
     onError(error) {
@@ -293,7 +291,6 @@ export default function AgentChatView({
       submissionRef.current = null
       sessionRef.current = null
       directoryRef.current = directory
-      setChatKey(makeChatId())
       setSession(null)
       setWorkingDirectory(directory)
       setMessages([])
@@ -382,6 +379,7 @@ export default function AgentChatView({
         metaRef.current = responseMeta(fresh)
         const now = Date.now()
         const meta = heuristicChatMeta(text)
+        const isNewSession = !sessionRef.current || sessionRef.current.turns.length === 0
         const current: ChatSession = sessionRef.current
           ? {
               ...sessionRef.current,
@@ -403,6 +401,28 @@ export default function AgentChatView({
             }
         sessionRef.current = current
         setSession(current)
+        if (isNewSession) {
+          void window.tezbar
+            .chatGenerateMeta({
+              id: current.id,
+              prompt: text,
+            })
+            .then((generated) => {
+              if (generated?.title && sessionRef.current?.id === current.id) {
+                const updated: ChatSession = {
+                  ...sessionRef.current,
+                  title: generated.title,
+                  icon: generated.icon || sessionRef.current.icon,
+                }
+                sessionRef.current = updated
+                if (mounted.current) {
+                  setSession(updated)
+                  void refreshHistory()
+                }
+              }
+            })
+            .catch(() => {})
+        }
         const userTurn: ChatTurn = {
           id: makeChatId(),
           role: 'user',

@@ -110,7 +110,7 @@ function cleanPromptSnippet(prompt: string): string {
   let cleaned = firstLine.trim()
 
   const prefixRegex =
-    /^(can you|could you|please|tell me|who is|who was|what is|what was|what are|where is|when is|when did|when was|how to|how do i|how does|why is|why does|explain|help me with|i need to|look up|подскажи пожалуйста|расскажи пожалуйста|подскажи|расскажи|пожалуйста|кто такой|кто такая|что такое|что за|как сделать|как настроить|как вообще|как|почему|зачем|объясни|найди|когда вышел|когда выйдет|когда)\s+/i
+    /^(can you please|could you please|please tell me|tell me|can you|could you|please|who is|who was|what is|what was|what are|where is|when is|when did|when was|how to|how do i|how does|why is|why does|explain|help me with|i need to|look up|show me|which|list|подскажи пожалуйста|расскажи пожалуйста|подскажи|расскажи|пожалуйста|кто такой|кто такая|что такое|что за|как сделать|как настроить|как вообще|как|почему|зачем|объясни|найди|когда вышел|когда выйдет|когда|какие|какой|какая|какое|покажи)\s+/i
 
   let previous = ''
   while (previous !== cleaned) {
@@ -164,6 +164,10 @@ export function heuristicChatMeta(
   }
   if (wordMatch(combined, 'api key|apikey|api-key|токен|token|auth|секрет|secret')) {
     return { title: cleanPromptSnippet(prompt) || 'API Key & Auth', icon: 'key' }
+  }
+  if (wordMatch(combined, 'port|ports|порт|порты|listening|слушает')) {
+    const raw = cleanPromptSnippet(prompt)
+    return { title: raw || 'Listening Ports', icon: 'cpu' }
   }
   if (wordMatch(combined, 'mcp')) {
     const raw = cleanPromptSnippet(prompt)

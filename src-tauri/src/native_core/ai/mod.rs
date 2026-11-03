@@ -713,11 +713,12 @@ fn clean_prompt_snippet(prompt: &str) -> String {
         "can you", "could you", "who is", "who was", "what is", "what was",
         "what are", "where is", "when is", "when did", "when was",
         "how to", "how do i", "how does", "why is", "why does", "explain",
-        "help me with", "i need to", "look up",
+        "help me with", "i need to", "look up", "show me", "which", "list",
         "подскажи пожалуйста", "расскажи пожалуйста", "подскажи", "расскажи",
         "пожалуйста", "кто такой", "кто такая", "что такое", "что за",
         "как сделать", "как настроить", "как вообще", "как", "почему", "зачем",
         "когда вышел", "когда выйдет", "когда", "объясни", "найди",
+        "какие", "какой", "какая", "какое", "покажи",
     ];
     let mut changed = true;
     while changed {
@@ -795,6 +796,13 @@ pub fn heuristic_meta(prompt: &str, answer: &str) -> Value {
             title = "API Key".into();
         }
         return json!({"title": title, "icon": "key"});
+    }
+    if combined.contains("port") || combined.contains("порт") || combined.contains("listening") || combined.contains("слушает") {
+        let mut title = clean_prompt_snippet(prompt);
+        if title == "New chat" {
+            title = "Listening Ports".into();
+        }
+        return json!({"title": title, "icon": "cpu"});
     }
     if combined.contains("mcp") {
         let mut title = clean_prompt_snippet(prompt);
