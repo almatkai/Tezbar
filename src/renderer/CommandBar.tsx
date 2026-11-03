@@ -3764,7 +3764,10 @@ export default function CommandBar({
 
       if (boot) {
         await modelSelectionSaveRef.current
-        onOpenAiChat(boot)
+        onOpenAiChat({
+          ...boot,
+          nonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        })
         setValue('  ')
         return
       }
@@ -4493,6 +4496,11 @@ export default function CommandBar({
               }
               setValue(newValue)
               const nextIsAiMode = commandBarInputMode(newValue, nextTerminalMode).isAiMode
+              if (nextIsAiMode) {
+                userNavigatedRef.current = false
+                aiChatSelectionActiveRef.current = false
+                setSelectedSearch(-1)
+              }
               if (
                 searchMeaningChanged ||
                 nextTerminalMode !== terminalMode ||

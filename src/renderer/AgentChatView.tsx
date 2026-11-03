@@ -523,7 +523,7 @@ export default function AgentChatView({
 
   const bootKey =
     boot.kind === 'submit'
-      ? `submit:${boot.workingDirectory ?? ''}:${boot.prompt}`
+      ? `submit:${boot.nonce ?? ''}:${boot.workingDirectory ?? ''}:${boot.prompt}`
       : boot.kind === 'resume'
         ? `resume:${boot.sessionId}`
         : boot.kind === 'newChat'
@@ -555,24 +555,27 @@ export default function AgentChatView({
           await attachScreen()
           return
         }
+        if (boot.kind === 'submit') {
+          await resetChat(boot.workingDirectory)
+          if (cancelled) return
+          if (submittedBoot.current !== bootKey) {
+            submittedBoot.current = bootKey
+            if (boot.workingDirectory) {
+              directoryRef.current = boot.workingDirectory
+              setWorkingDirectory(boot.workingDirectory)
+            }
+            await send(boot.prompt)
+          }
+          return
+        }
         const rows = await rowsPromise
         if (cancelled) return
         const recent = rows[0]
         if (
           recent &&
-          Date.now() - recent.updatedAt < CHAT_CONTINUATION_WINDOW_MS &&
-          (boot.kind !== 'submit' || !boot.workingDirectory)
+          Date.now() - recent.updatedAt < CHAT_CONTINUATION_WINDOW_MS
         )
           await loadSession(recent.id)
-        if (cancelled) return
-        if (boot.kind === 'submit' && submittedBoot.current !== bootKey) {
-          submittedBoot.current = bootKey
-          if (boot.workingDirectory) {
-            directoryRef.current = boot.workingDirectory
-            setWorkingDirectory(boot.workingDirectory)
-          }
-          await send(boot.prompt)
-        }
       } catch (error) {
         if (!cancelled)
           setUiError(error instanceof Error ? error.message : 'Could not initialize the agent.')
