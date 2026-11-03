@@ -37,7 +37,8 @@ import { RollingText } from './ui/RollingText'
 import { evaluateExpression, type CalcResult } from './calculator'
 import { buildColorConversionResults } from './colorConverter'
 import { parseCurrencyQuery } from './currency/parseCurrencyQuery'
-import type { ChatSessionSummary } from '../shared/chat'
+import type { ActiveAgentRunInfo, ChatSessionSummary } from '../shared/chat'
+import { heuristicChatMeta } from '../shared/chatMeta'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import {
@@ -101,7 +102,7 @@ import { RELEASE_NOTES_COMMAND_ID, withReleaseNotesResult } from './releaseNotes
 import {
   KNOWN_EXTENSION_APP_MAP,
   LauncherGlyph,
-  Squircle,
+  ChatSquircle,
   launcherIcon,
   normalizeIconKind,
 } from './launcherIcons'
@@ -1281,6 +1282,7 @@ function searchResultIconAsset(item: SearchResult): {
 }
 
 export default function CommandBar({
+  activeAgentRun,
   hasUnreadReleaseNotes,
   onOpenReleaseNotes,
   initialValue = '',
@@ -1302,6 +1304,7 @@ export default function CommandBar({
   onOpenTerminal,
   onOpenKnowledgeSettings,
 }: {
+  activeAgentRun?: ActiveAgentRunInfo | null
   hasUnreadReleaseNotes: boolean
   onOpenReleaseNotes: () => void
   initialValue?: string
@@ -1598,6 +1601,10 @@ export default function CommandBar({
   // explicitly selected the session. Hovering a row (or a stale search index)
   // must not turn a fresh `>` launch into an implicit restore of row 0.
   const terminalSessionSelectionActiveRef = useRef(false)
+  // An AI chat history row is only eligible for Enter after keyboard navigation
+  // has explicitly selected the session. Hovering a row (or a stale search index)
+  // must not turn a typed prompt into an implicit restore of row 0.
+  const aiChatSelectionActiveRef = useRef(false)
   const terminalSettingsOpenRef = useRef(terminalSettingsOpen)
   const launcherQueryHistoryRef = useRef<string[]>([])
   const lastSearchRequestId = useRef(0)
@@ -1673,6 +1680,7 @@ export default function CommandBar({
     setPrevInitialValue(initialValue)
     setTerminalMode(initialValue.startsWith('>'))
     terminalSessionSelectionActiveRef.current = false
+    aiChatSelectionActiveRef.current = false
     setValue(normalizedInitialValue)
     setSelectedSearch(
       initialValue.startsWith('>') ||
@@ -1826,15 +1834,48 @@ export default function CommandBar({
     return () => window.removeEventListener(RAYMES_QUICK_NOTE_SHORTCUT_EVENT, onQuickNoteShortcut)
   }, [onOpenAiChat])
 
+  const effectiveChatHistory = useMemo(() => {
+    let list = chatHistory
+    if (activeAgentRun?.busy && activeAgentRun.sessionId) {
+      const exists = chatHistory.some((c) => c.id === activeAgentRun.sessionId)
+      if (!exists) {
+        const activeItem: ChatSessionSummary = {
+          id: activeAgentRun.sessionId,
+          title: activeAgentRun.sessionTitle || 'Agent Task',
+          icon: activeAgentRun.sessionIcon,
+          turnCount: 1,
+          preview: activeAgentRun.streamingText || activeAgentRun.statusLabel || 'Generating…',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
+        list = [activeItem, ...chatHistory]
+      }
+    }
+    return list.map((chat) => {
+      const isGenerating = activeAgentRun?.busy && activeAgentRun.sessionId === chat.id
+      const meta = heuristicChatMeta(chat.preview || chat.title)
+      const icon = chat.icon || (isGenerating ? activeAgentRun?.sessionIcon : undefined) || meta.icon
+      const title =
+        (!chat.title || chat.title === chat.preview || chat.title === 'Agent Task')
+          ? meta.title
+          : chat.title
+      return {
+        ...chat,
+        icon,
+        title,
+      }
+    })
+  }, [chatHistory, activeAgentRun])
+
   const chatHistoryQuery = agentTask.trim().toLowerCase()
   const filteredChatHistory = useMemo(() => {
-    if (!chatHistoryQuery) return chatHistory
+    if (!chatHistoryQuery) return effectiveChatHistory
     const terms = chatHistoryQuery.split(/\s+/).filter(Boolean)
-    return chatHistory.filter((chat) => {
+    return effectiveChatHistory.filter((chat) => {
       const haystack = `${chat.title} ${chat.preview}`.toLowerCase()
       return terms.every((term) => haystack.includes(term))
     })
-  }, [chatHistory, chatHistoryQuery])
+  }, [effectiveChatHistory, chatHistoryQuery])
   const showChatHistory = isAiMode && filteredChatHistory.length > 0
   // AI mode with nothing to list still needs a body: an empty transparent
   // panel reads as a broken window rather than as "no saved conversations".
@@ -3517,6 +3558,7 @@ export default function CommandBar({
       }
       if (terminalModeRef.current) {
         terminalSessionSelectionActiveRef.current = false
+        aiChatSelectionActiveRef.current = false
         setValue('')
         setTerminalMode(false)
         setTerminalPrompt('')
@@ -3705,22 +3747,32 @@ export default function CommandBar({
         { aiTask: agentTask.trim(), aiWorkingDirectory },
         resolvedWorkingDirectory
       )
-      if (boot?.kind === 'newChat') {
-        onOpenAiChat(boot)
+
+      const selectedChat =
+        !aiWorkingDirectory &&
+        showChatHistory &&
+        aiChatSelectionActiveRef.current &&
+        selectedSearch >= 0
+          ? filteredChatHistory[selectedSearch]
+          : undefined
+
+      if (selectedChat) {
+        onOpenAiChat({ kind: 'resume', sessionId: selectedChat.id })
         setValue('  ')
         return
       }
-      if (!aiWorkingDirectory && showChatHistory) {
-        const selectedChat = filteredChatHistory[selectedSearch]
-        if (selectedChat) {
-          onOpenAiChat({ kind: 'resume', sessionId: selectedChat.id })
-          setValue('  ')
-          return
-        }
+
+      if (boot) {
+        await modelSelectionSaveRef.current
+        onOpenAiChat({
+          ...boot,
+          nonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        })
+        setValue('  ')
+        return
       }
-      if (!boot) return
-      await modelSelectionSaveRef.current
-      onOpenAiChat(boot)
+
+      onOpenAiChat({ kind: 'newChat', workingDirectory: resolvedWorkingDirectory })
       setValue('  ')
       return
     }
@@ -3914,6 +3966,7 @@ export default function CommandBar({
     if (terminalMode && e.key === 'Backspace' && !value) {
       e.preventDefault()
       terminalSessionSelectionActiveRef.current = false
+      aiChatSelectionActiveRef.current = false
       setTerminalMode(false)
       setTerminalPrompt('')
       terminalWorkingDirectoryRef.current = undefined
@@ -4060,6 +4113,7 @@ export default function CommandBar({
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         userNavigatedRef.current = true
+        aiChatSelectionActiveRef.current = true
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.min(i + 1, filteredChatHistory.length - 1))
       }
@@ -4067,6 +4121,9 @@ export default function CommandBar({
         if (selectedSearch < 0) return
         e.preventDefault()
         userNavigatedRef.current = true
+        if (selectedSearch <= 0) {
+          aiChatSelectionActiveRef.current = false
+        }
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.max(i - 1, -1))
       }
@@ -4138,10 +4195,13 @@ export default function CommandBar({
       }
       if (showChatHistory) {
         e.preventDefault()
+        userNavigatedRef.current = true
         setFollowSearchSelection(true)
-        setSelectedSearch((i) =>
-          e.shiftKey ? Math.max(i - 1, -1) : Math.min(i + 1, filteredChatHistory.length - 1)
-        )
+        setSelectedSearch((i) => {
+          const next = e.shiftKey ? Math.max(i - 1, -1) : Math.min(i + 1, filteredChatHistory.length - 1)
+          aiChatSelectionActiveRef.current = next >= 0
+          return next
+        })
         return
       }
       if (canEnterLauncherArgumentMode) {
@@ -4436,12 +4496,18 @@ export default function CommandBar({
               }
               setValue(newValue)
               const nextIsAiMode = commandBarInputMode(newValue, nextTerminalMode).isAiMode
+              if (nextIsAiMode) {
+                userNavigatedRef.current = false
+                aiChatSelectionActiveRef.current = false
+                setSelectedSearch(-1)
+              }
               if (
                 searchMeaningChanged ||
                 nextTerminalMode !== terminalMode ||
                 nextIsAiMode !== isAiMode
               ) {
                 userNavigatedRef.current = false
+                aiChatSelectionActiveRef.current = false
                 setFollowSuggestionSelection(true)
                 setSelectedSuggestion(0)
                 const nextDeepSearchMode = nextSearchQuery.mode === 'deep'
@@ -5000,9 +5066,11 @@ export default function CommandBar({
               <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5 select-none">
                 <ul className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5">
                   <li className="relative z-[1] px-2 py-2 text-[12px] text-ink-4">
-                    {chatHistoryLoaded
-                      ? 'No saved conversations yet. Type a question and press Enter to start one.'
-                      : 'Loading conversations…'}
+                    {chatHistoryQuery
+                      ? 'No matching conversations. Press Enter to ask AI as a new chat.'
+                      : chatHistoryLoaded
+                        ? 'No saved conversations yet. Type a question and press Enter to start one.'
+                        : 'Loading conversations…'}
                   </li>
                 </ul>
               </div>
@@ -5014,42 +5082,73 @@ export default function CommandBar({
               onWheelCapture={() => setFollowSearchSelection(false)}
               onMouseLeave={() => {
                 setFollowSearchSelection(false)
+                setSelectedSearch(-1)
+                aiChatSelectionActiveRef.current = false
               }}
             >
               <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5 select-none">
                 <GlideList
-                  selectedIndex={selectedSearch}
+                  selectedIndex={aiChatSelectionActiveRef.current ? selectedSearch : -1}
                   itemCount={filteredChatHistory.length}
                   followSelected={followSearchSelection}
                   className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5"
                   highlightClassName="glide-highlight--accent"
                 >
-                  {filteredChatHistory.map((chat, i) => (
-                    <li key={chat.id} className="relative z-[1]">
-                      <ListRow
-                        selected={i === selectedSearch}
-                        icon={<Squircle kind="chat" />}
-                        title={chat.title || 'Untitled Chat'}
-                        subtitle={chat.preview || 'No preview available'}
-                        accessory={
-                          <ListRowTag>
-                            {new Date(chat.updatedAt).toLocaleDateString([], {
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                          </ListRowTag>
-                        }
-                        onMouseMove={(e) => {
-                          handleRowMouseMove(e, i)
-                        }}
-                        onMouseDown={(ev) => ev.preventDefault()}
-                        onClick={() => {
-                          onOpenAiChat({ kind: 'resume', sessionId: chat.id })
-                          setValue('  ')
-                        }}
-                      />
-                    </li>
-                  ))}
+                  {filteredChatHistory.map((chat, i) => {
+                    const isGenerating =
+                      Boolean(activeAgentRun?.busy && activeAgentRun.sessionId === chat.id)
+                    return (
+                      <li key={chat.id} className="relative z-[1]">
+                        <ListRow
+                          selected={i === selectedSearch && aiChatSelectionActiveRef.current}
+                          icon={
+                            isGenerating ? (
+                              <div className="relative flex h-5 w-5 items-center justify-center">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/40 opacity-75" />
+                                <ChatSquircle icon={chat.icon} />
+                              </div>
+                            ) : (
+                              <ChatSquircle icon={chat.icon} />
+                            )
+                          }
+                          title={chat.title || 'Untitled Chat'}
+                          subtitle={chat.preview || 'No preview available'}
+                          accessory={
+                            isGenerating ? (
+                              <div className="flex items-center gap-1.5">
+                                {activeAgentRun?.waitingApproval ? (
+                                  <span className="font-medium text-amber-300 text-[11.5px]">
+                                    Waiting for approval…
+                                  </span>
+                                ) : (
+                                  <span className="tezbar-streaming-text font-medium text-[11.5px] max-w-[240px] truncate">
+                                    {activeAgentRun?.streamingText ||
+                                      activeAgentRun?.statusLabel ||
+                                      'Generating…'}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <ListRowTag>
+                                {new Date(chat.updatedAt).toLocaleDateString([], {
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}
+                              </ListRowTag>
+                            )
+                          }
+                          onMouseMove={(e) => {
+                            handleRowMouseMove(e, i)
+                          }}
+                          onMouseDown={(ev) => ev.preventDefault()}
+                          onClick={() => {
+                            onOpenAiChat({ kind: 'resume', sessionId: chat.id })
+                            setValue('  ')
+                          }}
+                        />
+                      </li>
+                    )
+                  })}
                 </GlideList>
               </div>
             </div>

@@ -328,24 +328,26 @@ export function NativeColorWheel({
   const marker = { left: `${50 + Math.sin(radians) * radius}%`, top: `${50 - Math.cos(radians) * radius}%` }
 
   return (
-    <div className="grid min-h-[420px] grid-cols-[minmax(0,1fr)_320px] gap-4">
-      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10 p-5">
-        <button
-          type="button"
-          className="relative aspect-square max-h-full w-full max-w-[720px] cursor-crosshair rounded-full bg-center bg-contain bg-no-repeat outline-none"
-          style={{ backgroundImage: COLOR_WHEEL_BACKGROUND }}
-          aria-label="Color wheel"
-          onPointerDown={(event) => {
-            dragging.current = true
-            event.currentTarget.setPointerCapture(event.pointerId)
-            updateFromPointer(event)
-          }}
-          onPointerMove={(event) => { if (dragging.current) updateFromPointer(event) }}
-          onPointerUp={() => { dragging.current = false; if (debounce.current) clearTimeout(debounce.current); void flush() }}
-          onPointerCancel={() => { dragging.current = false; if (debounce.current) clearTimeout(debounce.current); void flush() }}
-        >
-          <span className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_4px_14px_rgba(0,0,0,0.35)]" style={{ ...marker, background: data.preview }} />
-        </button>
+    <div className="grid min-h-[420px] max-h-[540px] grid-cols-[minmax(0,1fr)_320px] gap-4">
+      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10 p-6">
+        <div className="relative aspect-square h-full max-h-[380px] w-full max-w-[380px] flex items-center justify-center">
+          <button
+            type="button"
+            className="relative h-full w-full cursor-crosshair rounded-full bg-center bg-cover outline-none shadow-lg ring-1 ring-white/10"
+            style={{ backgroundImage: COLOR_WHEEL_BACKGROUND }}
+            aria-label="Color wheel"
+            onPointerDown={(event) => {
+              dragging.current = true
+              event.currentTarget.setPointerCapture(event.pointerId)
+              updateFromPointer(event)
+            }}
+            onPointerMove={(event) => { if (dragging.current) updateFromPointer(event) }}
+            onPointerUp={() => { dragging.current = false; if (debounce.current) clearTimeout(debounce.current); void flush() }}
+            onPointerCancel={() => { dragging.current = false; if (debounce.current) clearTimeout(debounce.current); void flush() }}
+          >
+            <span className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_4px_14px_rgba(0,0,0,0.35)]" style={{ ...marker, background: data.preview }} />
+          </button>
+        </div>
       </div>
       <aside className="flex min-h-0 flex-col overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10">
         <div className="flex items-center gap-3 border-b border-white/8 px-4 py-3">
@@ -475,26 +477,28 @@ function ColorWheelDetail({
   }
 
   return (
-    <div className="grid h-full min-h-[520px] grid-cols-[minmax(0,1fr)_320px] gap-4">
-      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10 p-5">
-        <button
-          type="button"
-          className="relative aspect-square max-h-full w-full max-w-[720px] cursor-crosshair rounded-full bg-center bg-contain bg-no-repeat outline-none"
-          style={{ backgroundImage: COLOR_WHEEL_BACKGROUND }}
-          aria-label={image.alt}
-          onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId)
-            pickFromPointer(event)
-          }}
-          onPointerMove={(event) => {
-            if (event.buttons === 1) pickFromPointer(event)
-          }}
-        >
-          <span
-            className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_4px_14px_rgba(0,0,0,0.35)]"
-            style={{ ...marker, background: formats[0]?.value ?? '#fff' }}
-          />
-        </button>
+    <div className="grid h-full min-h-[420px] max-h-[540px] grid-cols-[minmax(0,1fr)_320px] gap-4">
+      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10 p-6">
+        <div className="relative aspect-square h-full max-h-[380px] w-full max-w-[380px] flex items-center justify-center">
+          <button
+            type="button"
+            className="relative h-full w-full cursor-crosshair rounded-full bg-center bg-cover outline-none shadow-lg ring-1 ring-white/10"
+            style={{ backgroundImage: COLOR_WHEEL_BACKGROUND }}
+            aria-label={image.alt}
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId)
+              pickFromPointer(event)
+            }}
+            onPointerMove={(event) => {
+              if (event.buttons === 1) pickFromPointer(event)
+            }}
+          >
+            <span
+              className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_4px_14px_rgba(0,0,0,0.35)]"
+              style={{ ...marker, background: formats[0]?.value ?? '#fff' }}
+            />
+          </button>
+        </div>
       </div>
 
       <aside className="flex min-h-0 flex-col overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10">

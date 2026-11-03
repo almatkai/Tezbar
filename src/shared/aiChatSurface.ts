@@ -4,11 +4,11 @@
  * a fresh session.
  */
 export type AiChatBoot =
-  | { kind: 'submit'; prompt: string; workingDirectory?: string }
-  | { kind: 'panel' }
-  | { kind: 'newChat'; workingDirectory?: string }
-  | { kind: 'screen' }
-  | { kind: 'resume'; sessionId: string }
+  | { kind: 'submit'; prompt: string; workingDirectory?: string; nonce?: string }
+  | { kind: 'panel'; nonce?: string }
+  | { kind: 'newChat'; workingDirectory?: string; nonce?: string }
+  | { kind: 'screen'; nonce?: string }
+  | { kind: 'resume'; sessionId: string; nonce?: string }
 
 /** Dispatched from App when ⌘N fires on the command surface (quick note). */
 export const RAYMES_QUICK_NOTE_SHORTCUT_EVENT = 'tezbar:quick-note-shortcut'

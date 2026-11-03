@@ -36,6 +36,7 @@ pub const CHANNELS: &[&str] = &[
     "chat:get",
     "chat:append",
     "chat:update-title",
+    "chat:generate-meta",
     "chat:delete-turn",
     "chat:delete",
     "chat:clear",
@@ -81,6 +82,7 @@ struct Inner {
 #[derive(Default)]
 struct State {
     agent: Option<Run>,
+    agents: HashMap<String, Run>,
     answer: Option<Run>,
     approvals: HashMap<String, Approval>,
     device: Option<Value>,
@@ -202,6 +204,9 @@ impl AiCore {
             "stage" | "message" | "answer" | "approval"
         ) {
             let mut state = self.inner.state.lock().unwrap();
+            if let Some(run) = state.agents.get_mut(id) {
+                run.emitted = true;
+            }
             if let Some(run) = state.agent.as_mut().filter(|r| r.id == id) {
                 run.emitted = true;
             }
@@ -211,20 +216,40 @@ impl AiCore {
     }
     fn cancel_run(&self, expected: Option<&str>, take: bool) {
         let mut state = self.inner.state.lock().unwrap();
-        if expected.is_some_and(|id| !state.agent.as_ref().is_some_and(|r| r.id == id)) {
-            return;
-        }
-        if let Some(run) = &state.agent {
-            run.cancel.cancel();
-        }
-        state.approvals.clear();
-        if take {
-            state.agent = None;
+        if let Some(id) = expected {
+            if let Some(run) = state.agents.get(id) {
+                run.cancel.cancel();
+            }
+            if state.agent.as_ref().is_some_and(|r| r.id == id) {
+                if let Some(run) = &state.agent {
+                    run.cancel.cancel();
+                }
+                if take {
+                    state.agent = None;
+                }
+            }
+            if take {
+                state.agents.remove(id);
+            }
+            state.approvals.retain(|_, a| a.run_id != id);
+        } else {
+            for run in state.agents.values() {
+                run.cancel.cancel();
+            }
+            if let Some(run) = &state.agent {
+                run.cancel.cancel();
+            }
+            state.approvals.clear();
+            if take {
+                state.agent = None;
+                state.agents.clear();
+            }
         }
     }
     fn finish_run(&self, id: &str) {
         let mut state = self.inner.state.lock().unwrap();
         state.approvals.retain(|_, a| a.run_id != id);
+        state.agents.remove(id);
         if state.agent.as_ref().is_some_and(|r| r.id == id) {
             state.agent = None;
         }
@@ -245,6 +270,30 @@ impl AiCore {
                 .as_ref()
                 .is_some_and(|r| r.id == id && !r.emitted)
     }
+    async fn generate_chat_meta(&self, prompt: &str, answer: &str) -> CoreResult {
+        if let Ok(cfg) = self.cfg(Some("chat"), None).await {
+            let cancel = Cancel::new();
+            let mut prompt_content = format!("User prompt: {prompt}");
+            if !answer.is_empty() {
+                let snippet = if answer.len() > 300 { &answer[..300] } else { answer };
+                prompt_content.push_str(&format!("\nAssistant response snippet: {snippet}"));
+            }
+            let system_prompt = "You are a concise title and icon generator for a launcher chat assistant.\nGenerate a very short, descriptive conversation title (2-5 words, max 35 characters) and a single fitting theme icon identifier.\nRules:\n1. Output strictly valid JSON matching this schema: {\"title\": \"...\", \"icon\": \"...\"}\n2. \"title\" must be concise and descriptive in the language of the prompt (Russian if Russian, English if English). Do not use quotes or boilerplate questions like 'How to' or 'What is'.\n3. \"icon\" must be one of these theme keys: \"snippets\" (coding/dev/MCP), \"key\" (API keys/auth/passwords), \"cpu\" (system/hardware/CPU), \"trophy\" (sports/Messi/achievements), \"edit\" (writing/summaries/notes), \"ai\" (AI/LLM/prompts), \"search\" (research/lookup), \"weather\" (forecast), \"audio\" (music), \"terminal\" (bash/cli), or \"chat\" (general questions).\n4. Return ONLY the raw JSON object, no markdown, no backticks, no explanations.";
+            let messages = vec![
+                json!({"role": "system", "content": system_prompt}),
+                json!({"role": "user", "content": prompt_content}),
+            ];
+            let stream_req = self.stream(&cfg, messages, &cancel, |_| {});
+            if let Ok(Ok(raw)) = tokio::time::timeout(Duration::from_secs(8), stream_req).await {
+                cancel.cancel();
+                if let Some(parsed) = parse_meta_json(&raw) {
+                    return Ok(parsed);
+                }
+            }
+            cancel.cancel();
+        }
+        Ok(heuristic_meta(prompt, answer))
+    }
     async fn launch(
         &self,
         task: String,
@@ -261,12 +310,23 @@ impl AiCore {
             )
         });
         let cancel = Cancel::new();
-        self.cancel_run(None, true);
-        self.inner.state.lock().unwrap().agent = Some(Run {
+        let run = Run {
             id: id.clone(),
             cancel: cancel.clone(),
             emitted: false,
-        });
+        };
+        {
+            let mut state = self.inner.state.lock().unwrap();
+            state.agents.insert(
+                id.clone(),
+                Run {
+                    id: id.clone(),
+                    cancel: cancel.clone(),
+                    emitted: false,
+                },
+            );
+            state.agent = Some(run);
+        }
         self.agent_event(&id, json!({"type":"start","task":task}));
         let core = self.clone();
         let run = id.clone();
@@ -479,6 +539,19 @@ impl AiCore {
             }
             "chat:list" | "chat:get" | "chat:append" | "chat:update-title" | "chat:delete-turn"
             | "chat:delete" | "chat:clear" => chat::handle(&self.inner.ctx, channel, args).await,
+            "chat:generate-meta" => {
+                let id = a["id"].as_str().ok_or("Session id must be a string")?;
+                let prompt = a["prompt"].as_str().unwrap_or("").trim();
+                let answer = a["answer"].as_str().unwrap_or("").trim();
+                if prompt.is_empty() {
+                    return Err("Prompt is required".into());
+                }
+                let meta = self.generate_chat_meta(prompt, answer).await?;
+                let title = meta["title"].as_str().unwrap_or("New chat");
+                let icon = meta["icon"].as_str().unwrap_or("💬");
+                let _ = chat::update_title_and_icon(&self.inner.ctx, id, title, icon).await;
+                Ok(meta)
+            }
             "query" => {
                 let text = a.as_str().ok_or("Query must be a string")?.trim();
                 let intent = classify(text);
@@ -630,4 +703,174 @@ fn classify(input: &str) -> Value {
         return json!({"type":"command","command":input,"confidence":0.62});
     }
     json!({"type":"agent","input":input})
+}
+
+fn clean_prompt_snippet(prompt: &str) -> String {
+    let first_line = prompt.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+    let mut cleaned = first_line.trim().to_string();
+    let prefixes = [
+        "can you please", "could you please", "please tell me", "tell me",
+        "can you", "could you", "who is", "who was", "what is", "what was",
+        "what are", "where is", "when is", "when did", "when was",
+        "how to", "how do i", "how does", "why is", "why does", "explain",
+        "help me with", "i need to", "look up", "show me", "which", "list",
+        "подскажи пожалуйста", "расскажи пожалуйста", "скажи пожалуйста", "скажите пожалуйста",
+        "подскажи мне пожалуйста", "расскажи мне пожалуйста", "скажи мне пожалуйста", "скажите мне пожалуйста", "покажи мне пожалуйста",
+        "подскажи мне", "расскажи мне", "скажи мне", "скажите мне", "покажи мне",
+        "подскажи", "расскажи", "скажи", "скажите",
+        "пожалуйста", "кто такой", "кто такая", "что такое", "что за",
+        "как сделать", "как настроить", "как вообще", "как", "почему", "зачем",
+        "когда вышел", "когда выйдет", "когда", "объясни", "найди",
+        "какие", "какой", "какая", "какое", "покажи",
+    ];
+    let mut changed = true;
+    while changed {
+        changed = false;
+        let lower = cleaned.to_lowercase();
+        for p in &prefixes {
+            if lower.starts_with(p) && (lower.len() == p.len() || lower[p.len()..].starts_with(' ') || lower[p.len()..].starts_with(',')) {
+                cleaned = cleaned[p.len()..].trim_start_matches(|c: char| c.is_whitespace() || c == ',' || c == ':').to_string();
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    while cleaned.ends_with('?') || cleaned.ends_with('!') || cleaned.ends_with('.') || cleaned.ends_with(':') {
+        cleaned.pop();
+    }
+    cleaned = cleaned.trim().to_string();
+
+    let suffixes = [
+        "when it came out", "when did it come out", "when was it released",
+        "когда вышел", "когда выйдет", "как вообще генерить", "как генерить",
+        "как сделать", "как настроить", "как использовать",
+    ];
+    let mut changed_s = true;
+    while changed_s {
+        changed_s = false;
+        let lower = cleaned.to_lowercase();
+        for s in &suffixes {
+            if lower.ends_with(s) && (lower.len() == s.len() || lower[..lower.len() - s.len()].ends_with(' ')) {
+                cleaned = cleaned[..cleaned.len() - s.len()].trim_end().to_string();
+                changed_s = true;
+                break;
+            }
+        }
+    }
+
+    while cleaned.ends_with('?') || cleaned.ends_with('!') || cleaned.ends_with('.') || cleaned.ends_with(':') {
+        cleaned.pop();
+    }
+    cleaned = cleaned.trim().to_string();
+    if cleaned.is_empty() {
+        return "New chat".to_string();
+    }
+    let mut chars = cleaned.chars();
+    let first = chars.next().unwrap().to_uppercase().to_string();
+    let rest: String = chars.collect();
+    let capitalized = format!("{first}{rest}");
+    if capitalized.chars().count() > 36 {
+        let truncated: String = capitalized.chars().take(36).collect();
+        format!("{truncated}…")
+    } else {
+        capitalized
+    }
+}
+
+pub fn heuristic_meta(prompt: &str, answer: &str) -> Value {
+    let combined = format!("{prompt} {answer}").to_lowercase();
+
+    if combined.contains("messi") || combined.contains("месси") {
+        return json!({"title": "Lionel Messi", "icon": "trophy"});
+    }
+    if combined.contains("ronaldo") || combined.contains("роналду") || combined.contains("криштиану") {
+        return json!({"title": "Cristiano Ronaldo", "icon": "trophy"});
+    }
+    if combined.contains("cpu") || combined.contains("processor") || combined.contains("процессор") || combined.contains("нагрузк") {
+        if combined.contains("compiler") || combined.contains("build") || combined.contains("idle") || combined.contains("compil") {
+            return json!({"title": "CPU Usage & Compiler Memory", "icon": "cpu"});
+        }
+        return json!({"title": "CPU & Process Diagnostics", "icon": "cpu"});
+    }
+    if combined.contains("api key") || combined.contains("api-key") || combined.contains("apikey") || combined.contains("токен") || combined.contains("ключ") {
+        let mut title = clean_prompt_snippet(prompt);
+        if title == "New chat" {
+            title = "API Key".into();
+        }
+        return json!({"title": title, "icon": "key"});
+    }
+    if combined.contains("port") || combined.contains("порт") || combined.contains("listening") || combined.contains("слушает") {
+        let mut title = clean_prompt_snippet(prompt);
+        if title == "New chat" {
+            title = "Listening Ports".into();
+        }
+        return json!({"title": title, "icon": "cpu"});
+    }
+    if combined.contains("mcp") {
+        let mut title = clean_prompt_snippet(prompt);
+        if title == "New chat" {
+            title = "MCP Protocol".into();
+        } else {
+            title = title.replace("version", "Version");
+        }
+        return json!({"title": title, "icon": "snippets"});
+    }
+
+    let icon = if combined.contains("football") || combined.contains("soccer") || combined.contains("fifa") || combined.contains("футбол") {
+        "trophy"
+    } else if combined.contains("basketball") || combined.contains("nba") || combined.contains("баскетбол") {
+        "sports"
+    } else if combined.contains("tennis") || combined.contains("теннис") {
+        "sports"
+    } else if combined.contains("rust") || combined.contains("python") || combined.contains("typescript") || combined.contains("javascript") || combined.contains("golang") || combined.contains("react") || combined.contains("code") || combined.contains("кодинг") || combined.contains("баг") || combined.contains("ошибк") {
+        "snippets"
+    } else if combined.contains("mac") || combined.contains("terminal") || combined.contains("bash") || combined.contains("zsh") || combined.contains("linux") || combined.contains("windows") || combined.contains("диск") || combined.contains("ssd") || combined.contains("памят") || combined.contains("процесс") {
+        "cpu"
+    } else if combined.contains("weather") || combined.contains("rain") || combined.contains("snow") || combined.contains("погода") || combined.contains("дождь") || combined.contains("температур") {
+        "weather"
+    } else if combined.contains("music") || combined.contains("song") || combined.contains("spotify") || combined.contains("песн") || combined.contains("музык") || combined.contains("трек") {
+        "audio"
+    } else if combined.contains("crypto") || combined.contains("bitcoin") || combined.contains("btc") || combined.contains("eth") || combined.contains("валют") || combined.contains("деньг") || combined.contains("биткоин") || combined.contains("курс") {
+        "brew"
+    } else if combined.contains("ai") || combined.contains("gpt") || combined.contains("llm") || combined.contains("claude") || combined.contains("gemini") || combined.contains("нейросет") || combined.contains("модел") {
+        "ai"
+    } else if combined.contains("auth") || combined.contains("password") || combined.contains("пароль") || combined.contains("логин") || combined.contains("secret") {
+        "key"
+    } else if combined.contains("movie") || combined.contains("film") || combined.contains("фильм") || combined.contains("кино") || combined.contains("сериал") {
+        "picture"
+    } else if combined.contains("food") || combined.contains("coffee") || combined.contains("еда") || combined.contains("кофе") || combined.contains("рецепт") {
+        "coffee"
+    } else if combined.contains("write") || combined.contains("draft") || combined.contains("note") || combined.contains("стать") || combined.contains("письм") {
+        "edit"
+    } else {
+        "chat"
+    };
+
+    let title = clean_prompt_snippet(prompt);
+    json!({"title": title, "icon": icon})
+}
+
+fn parse_meta_json(raw: &str) -> Option<Value> {
+    let trimmed = raw.trim();
+    let unquoted = if let Some(stripped) = trimmed.strip_prefix("```json") {
+        stripped.strip_suffix("```").unwrap_or(stripped).trim()
+    } else if let Some(stripped) = trimmed.strip_prefix("```") {
+        stripped.strip_suffix("```").unwrap_or(stripped).trim()
+    } else {
+        trimmed
+    };
+    let start = unquoted.find('{')?;
+    let end = unquoted.rfind('}')?;
+    if end <= start {
+        return None;
+    }
+    let slice = &unquoted[start..=end];
+    let val: Value = serde_json::from_str(slice).ok()?;
+    let title = val["title"].as_str()?.trim();
+    let icon = val["icon"].as_str()?.trim();
+    if title.is_empty() || icon.is_empty() {
+        return None;
+    }
+    Some(json!({"title": title, "icon": icon}))
 }

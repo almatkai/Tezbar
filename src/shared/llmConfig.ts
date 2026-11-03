@@ -14,6 +14,8 @@ export type BuiltInProviderId =
   | 'deepseek'
   | 'antigravity'
 
+export type AgentApprovalMode = 'review' | 'default' | 'auto' | 'turbo'
+
 export type ProviderId = BuiltInProviderId | `custom:${string}`
 
 export type LlmTask = 'chat' | 'search' | 'action' | 'voice'
@@ -70,6 +72,8 @@ export type LlmConfigRecord = {
   memoryIncludePrivate?: boolean
   aiActionRequirePermission?: boolean
   aiActionRedactionEnabled?: boolean
+  /** Execution permission mode for the AI agent: review (always ask), default (ask sensitive), auto, turbo (never ask, guarded against destructive operations). */
+  agentApprovalMode?: AgentApprovalMode
   voiceSttModelId?: VoiceModelId
   raymesHotkey?: string
   /** Milliseconds to remember palette UI (e.g. Providers) after hide. Default 60000. Use 0 to always reset. */

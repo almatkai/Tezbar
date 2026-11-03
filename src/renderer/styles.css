@@ -729,6 +729,31 @@
     background: rgba(76, 68, 193, 0.08);
   }
 
+  @keyframes tezbar-text-shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  .tezbar-streaming-text {
+    display: inline-block;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(147, 197, 253, 0.95) 25%,
+      rgba(255, 255, 255, 1) 50%,
+      rgba(168, 85, 247, 0.95) 75%,
+      rgba(255, 255, 255, 0.6) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: tezbar-text-shimmer 2.2s linear infinite;
+  }
+
   /* The search header is flat chrome separated by a hairline, matching dark
      mode. The input is always focused, so it gets no ring of its own. */
   :root[data-theme='white'] .command-search :is(#command-input, .command-surface-input):focus-visible {

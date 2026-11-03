@@ -8,12 +8,13 @@ fn open(path: &Path) -> Result<Connection, String> {
     let db = Connection::open(path).map_err(err)?;
     db.busy_timeout(Duration::from_secs(10)).map_err(err)?;
     db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;
-      CREATE TABLE IF NOT EXISTS chat_sessions(id TEXT PRIMARY KEY,title TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,working_directory TEXT);
+      CREATE TABLE IF NOT EXISTS chat_sessions(id TEXT PRIMARY KEY,title TEXT NOT NULL,icon TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,working_directory TEXT);
       CREATE TABLE IF NOT EXISTS chat_turns(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,role TEXT NOT NULL,text TEXT NOT NULL,response_meta_json TEXT,stages_json TEXT,timeline_json TEXT,attachments_json TEXT,error TEXT,created_at INTEGER NOT NULL,FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE);
       CREATE INDEX IF NOT EXISTS idx_chat_turns_session ON chat_turns(session_id);
       CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);").map_err(err)?;
     for (table, col) in [
         ("chat_sessions", "working_directory"),
+        ("chat_sessions", "icon"),
         ("chat_turns", "attachments_json"),
         ("chat_turns", "response_meta_json"),
         ("chat_turns", "timeline_json"),
@@ -38,6 +39,9 @@ fn session_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let mut v = json!({"id":r.get::<_,String>(0)?,"title":r.get::<_,String>(1)?,"createdAt":r.get::<_,i64>(2)?,"updatedAt":r.get::<_,i64>(3)?});
     if let Some(cwd) = r.get::<_, Option<String>>(4)? {
         v["workingDirectory"] = json!(cwd);
+    }
+    if let Some(icon) = r.get::<_, Option<String>>(5)? {
+        v["icon"] = json!(icon);
     }
     Ok(v)
 }
@@ -96,12 +100,12 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
                 .filter(|v| *v > 0)
                 .unwrap_or(100)
                 .min(i64::MAX as u64) as i64;
-            let mut q=db.prepare("SELECT s.id,s.title,s.created_at,s.updated_at,s.working_directory,(SELECT COUNT(*) FROM chat_turns t WHERE t.session_id=s.id),(SELECT text FROM chat_turns t WHERE t.session_id=s.id AND t.role='user' ORDER BY created_at DESC LIMIT 1) FROM chat_sessions s ORDER BY updated_at DESC LIMIT ?").map_err(err)?;
+            let mut q=db.prepare("SELECT s.id,s.title,s.created_at,s.updated_at,s.working_directory,s.icon,(SELECT COUNT(*) FROM chat_turns t WHERE t.session_id=s.id),(SELECT text FROM chat_turns t WHERE t.session_id=s.id AND t.role='user' ORDER BY created_at DESC LIMIT 1) FROM chat_sessions s ORDER BY updated_at DESC LIMIT ?").map_err(err)?;
             let rows = q
                 .query_map([limit], |r| {
                     let mut v = session_row(r)?;
-                    v["turnCount"] = json!(r.get::<_, i64>(5)?);
-                    v["preview"] = json!(r.get::<_, Option<String>>(6)?.unwrap_or_default());
+                    v["turnCount"] = json!(r.get::<_, i64>(6)?);
+                    v["preview"] = json!(r.get::<_, Option<String>>(7)?.unwrap_or_default());
                     Ok(v)
                 })
                 .map_err(err)?
@@ -111,7 +115,7 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
         }
         "chat:get" => {
             let id = a.as_str().ok_or("Session id must be a string")?;
-            let row=db.query_row("SELECT id,title,created_at,updated_at,working_directory FROM chat_sessions WHERE id=?",[id],session_row).optional().map_err(err)?;
+            let row=db.query_row("SELECT id,title,created_at,updated_at,working_directory,icon FROM chat_sessions WHERE id=?",[id],session_row).optional().map_err(err)?;
             let Some(mut result) = row else {
                 return Ok(Value::Null);
             };
@@ -132,6 +136,7 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
             let turn = &a["turn"];
             let sid = required(session, "id")?;
             let title = required(session, "title")?;
+            let icon = session["icon"].as_str();
             let created = timestamp(session, "createdAt")?;
             let updated = timestamp(session, "updatedAt")?;
             if !session["workingDirectory"].is_null() && !session["workingDirectory"].is_string() {
@@ -145,7 +150,7 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
             let text = required(turn, "text")?;
             let at = timestamp(turn, "createdAt")?;
             let tx = db.transaction().map_err(err)?;
-            tx.execute("INSERT INTO chat_sessions(id,title,created_at,updated_at,working_directory) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,updated_at=excluded.updated_at,working_directory=excluded.working_directory",params![sid,title,created,updated,session["workingDirectory"].as_str()]).map_err(err)?;
+            tx.execute("INSERT INTO chat_sessions(id,title,icon,created_at,updated_at,working_directory) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,icon=COALESCE(excluded.icon,chat_sessions.icon),updated_at=excluded.updated_at,working_directory=excluded.working_directory",params![sid,title,icon,created,updated,session["workingDirectory"].as_str()]).map_err(err)?;
             let owner = tx
                 .query_row("SELECT session_id FROM chat_turns WHERE id=?", [tid], |r| {
                     r.get::<_, String>(0)
@@ -165,11 +170,21 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
             Ok(json!({"ok":true}))
         }
         "chat:update-title" => {
-            db.execute(
-                "UPDATE chat_sessions SET title=?,updated_at=? WHERE id=?",
-                params![required(a, "title")?, now_ms() as i64, required(a, "id")?],
-            )
-            .map_err(err)?;
+            let id = required(a, "id")?;
+            let title = required(a, "title")?;
+            if let Some(icon) = a["icon"].as_str() {
+                db.execute(
+                    "UPDATE chat_sessions SET title=?,icon=?,updated_at=? WHERE id=?",
+                    params![title, icon, now_ms() as i64, id],
+                )
+                .map_err(err)?;
+            } else {
+                db.execute(
+                    "UPDATE chat_sessions SET title=?,updated_at=? WHERE id=?",
+                    params![title, now_ms() as i64, id],
+                )
+                .map_err(err)?;
+            }
             Ok(json!({"ok":true}))
         }
         "chat:delete-turn" => {
@@ -225,6 +240,28 @@ pub async fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> CoreRes
         result
     }
 }
+pub async fn update_title_and_icon(
+    ctx: &CoreContext,
+    id: &str,
+    title: &str,
+    icon: &str,
+) -> CoreResult {
+    let path = ctx.paths.data_dir.join("chat/sessions.sqlite3");
+    let id = id.to_owned();
+    let title = title.to_owned();
+    let icon = icon.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let db = open(&path)?;
+        db.execute(
+            "UPDATE chat_sessions SET title=?,icon=?,updated_at=? WHERE id=?",
+            params![title, icon, now_ms() as i64, id],
+        )
+        .map_err(err)?;
+        Ok(json!({"ok":true}))
+    })
+    .await
+    .map_err(err)?
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,5 +293,41 @@ mod tests {
             .unwrap(),
             0
         );
+    }
+
+    #[test]
+    fn chat_stores_and_updates_session_icon() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sessions.sqlite3");
+        let payload = json!({
+            "session": {
+                "id": "s1",
+                "title": "Lionel Messi",
+                "icon": "⚽",
+                "createdAt": 100,
+                "updatedAt": 200,
+                "workingDirectory": "/tmp"
+            },
+            "turn": {
+                "id": "t1",
+                "role": "user",
+                "text": "who is messi?",
+                "createdAt": 100
+            }
+        });
+        operate(&path, "chat:append", &[payload]).unwrap();
+        let list = operate(&path, "chat:list", &[]).unwrap();
+        assert_eq!(list[0]["icon"], "⚽");
+        assert_eq!(list[0]["title"], "Lionel Messi");
+
+        operate(
+            &path,
+            "chat:update-title",
+            &[json!({"id": "s1", "title": "Messi Legend", "icon": "🏆"})],
+        )
+        .unwrap();
+        let session = operate(&path, "chat:get", &[json!("s1")]).unwrap();
+        assert_eq!(session["icon"], "🏆");
+        assert_eq!(session["title"], "Messi Legend");
     }
 }

@@ -123,6 +123,10 @@ impl AiCore {
         {
             return true;
         }
+        let mode = raw["agentApprovalMode"].as_str().unwrap_or("default");
+        if mode == "turbo" && !title.contains("Destructive") {
+            return true;
+        }
         let id = format!("approval-{}", uuid::Uuid::new_v4());
         let (tx, rx) = tokio::sync::oneshot::channel();
         {
@@ -131,6 +135,10 @@ impl AiCore {
                 .agent
                 .as_ref()
                 .is_some_and(|r| r.id == run_id && !r.cancel.is_cancelled())
+                && !state
+                    .agents
+                    .get(run_id)
+                    .is_some_and(|r| !r.cancel.is_cancelled())
             {
                 return false;
             }
@@ -201,7 +209,15 @@ impl AiCore {
             .unwrap()
             .agent
             .as_ref()
-            .is_some_and(|r| r.id == run && !r.cancel.is_cancelled());
+            .is_some_and(|r| r.id == run && !r.cancel.is_cancelled())
+            || self
+                .inner
+                .state
+                .lock()
+                .unwrap()
+                .agents
+                .get(run)
+                .is_some_and(|r| !r.cancel.is_cancelled());
         let _ = approval.reply.send(active && decision != "deny");
         Ok(json!({"ok":true}))
     }
@@ -263,6 +279,11 @@ impl AiCore {
                 .map(|a| json!(a))
                 .unwrap_or(json!([]))
                 .to_string(),
+        )
+        .env("TEZBAR_CONFIG_DIR", &self.inner.ctx.paths.config_dir)
+        .env(
+            "RAYMES_PI_APPROVAL_MODE",
+            raw["agentApprovalMode"].as_str().unwrap_or("default"),
         )
         .env("TEZBAR_KNOWLEDGE_ENDPOINT", gateway.0)
         .env("TEZBAR_KNOWLEDGE_TOKEN", gateway.1);

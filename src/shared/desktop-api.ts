@@ -469,10 +469,15 @@ export type RaymesApi = {
   chatList: (limit?: number) => Promise<ChatSessionSummary[]>
   chatGet: (id: string) => Promise<ChatSession | null>
   chatAppend: (payload: {
-    session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt' | 'workingDirectory'>
+    session: Pick<ChatSession, 'id' | 'title' | 'icon' | 'createdAt' | 'updatedAt' | 'workingDirectory'>
     turn: ChatTurn
   }) => Promise<{ ok: boolean; error?: string }>
-  chatUpdateTitle: (id: string, title: string) => Promise<{ ok: boolean }>
+  chatUpdateTitle: (id: string, title: string, icon?: string) => Promise<{ ok: boolean }>
+  chatGenerateMeta: (payload: {
+    id: string
+    prompt: string
+    answer?: string
+  }) => Promise<{ title: string; icon: string } | null>
   chatDeleteTurn: (sessionId: string, turnId: string) => Promise<{ ok: boolean; error?: string }>
   chatDelete: (id: string) => Promise<{ ok: boolean }>
   chatClear: () => Promise<{ ok: boolean }>

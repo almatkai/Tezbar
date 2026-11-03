@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import raymesPiPolicy, {
   isAutoAllowedBash,
+  isDestructiveBash,
   isPersistentlyAllowedBash,
   preferredIndexedSearchForBash,
 } from './raymes-pi-policy'
@@ -11,6 +12,7 @@ afterEach(() => {
   delete process.env.TEZBAR_KNOWLEDGE_TOKEN
   delete process.env.TOKENROUTER_API_KEY
   delete process.env.RAYMES_PI_PROVIDER_JSON
+  delete process.env.RAYMES_PI_APPROVAL_MODE
 })
 
 describe('Raymes Pi command policy', () => {
@@ -137,5 +139,131 @@ describe('Raymes Pi command policy', () => {
         { ui: { confirm } }
       )
     ).resolves.toBeUndefined()
+  })
+
+  it('correctly identifies destructive commands that could wipe data or the system', () => {
+    // Massive filesystem wipes
+    expect(isDestructiveBash('rm -rf /')).toBe(true)
+    expect(isDestructiveBash('rm -rf /*')).toBe(true)
+    expect(isDestructiveBash('rm -rf ~')).toBe(true)
+    expect(isDestructiveBash('rm -rf $HOME')).toBe(true)
+    expect(isDestructiveBash('rm -rf /Users')).toBe(true)
+    expect(isDestructiveBash('rm -rf /System')).toBe(true)
+    expect(isDestructiveBash('rm -rf /Library')).toBe(true)
+    expect(isDestructiveBash('rm -rf *')).toBe(true)
+    expect(isDestructiveBash('rd /s /q C:\\')).toBe(true)
+
+    // Database deletion / drops
+    expect(isDestructiveBash('DROP DATABASE production;')).toBe(true)
+    expect(isDestructiveBash('DROP TABLE users;')).toBe(true)
+    expect(isDestructiveBash('TRUNCATE TABLE logs;')).toBe(true)
+    expect(isDestructiveBash('rm -f data.sqlite')).toBe(true)
+    expect(isDestructiveBash('rm -rf ~/.tezbar')).toBe(true)
+
+    // Disk formatting / raw writing
+    expect(isDestructiveBash('mkfs.ext4 /dev/sda1')).toBe(true)
+    expect(isDestructiveBash('diskutil eraseDisk APFS MyDisk /dev/disk2')).toBe(true)
+    expect(isDestructiveBash('dd if=/dev/zero of=/dev/rdisk0')).toBe(true)
+
+    // System disruption
+    expect(isDestructiveBash(':(){ :|:& };:')).toBe(true)
+    expect(isDestructiveBash('shutdown -h now')).toBe(true)
+    expect(isDestructiveBash('reboot')).toBe(true)
+    expect(isDestructiveBash('chmod -R 000 /')).toBe(true)
+
+    // Safe commands
+    expect(isDestructiveBash('git status')).toBe(false)
+    expect(isDestructiveBash('npm test')).toBe(false)
+    expect(isDestructiveBash('rm -rf target/debug')).toBe(false)
+    expect(isDestructiveBash('rm -rf node_modules')).toBe(false)
+    expect(isDestructiveBash('mkdir -p build')).toBe(false)
+  })
+
+  it('respects approvalMode settings (review, default, auto, turbo)', async () => {
+    let handler:
+      | ((
+          event: { toolName: string; input?: { command?: unknown } },
+          ctx: { ui: { confirm: (title: string, cmd: string) => Promise<boolean> } }
+        ) => unknown)
+      | undefined
+    const pi = {
+      registerProvider: () => {},
+      registerTool: () => {},
+      on: (_event: string, callback: typeof handler) => {
+        handler = callback
+      },
+    } as unknown as Parameters<typeof raymesPiPolicy>[0]
+
+    let confirmCalls: string[] = []
+    const confirm = async (_title: string, cmd: string) => {
+      confirmCalls.push(cmd)
+      return true
+    }
+
+    // Mode: turbo (auto-allows non-destructive commands, asks on destructive)
+    process.env.RAYMES_PI_APPROVAL_MODE = 'turbo'
+    confirmCalls = []
+    raymesPiPolicy(pi)
+
+    const safeRes = await handler?.(
+      { toolName: 'bash', input: { command: 'cargo build' } },
+      { ui: { confirm } }
+    )
+    expect(safeRes).toBeUndefined()
+    expect(confirmCalls).toHaveLength(0)
+
+    const destructiveRes = await handler?.(
+      { toolName: 'bash', input: { command: 'rm -rf /' } },
+      { ui: { confirm } }
+    )
+    expect(destructiveRes).toBeUndefined()
+    expect(confirmCalls).toContain('rm -rf /')
+
+    // Mode: review (always asks, even for safe commands)
+    process.env.RAYMES_PI_APPROVAL_MODE = 'review'
+    confirmCalls = []
+    const reviewRes = await handler?.(
+      { toolName: 'bash', input: { command: 'pwd' } },
+      { ui: { confirm } }
+    )
+    expect(reviewRes).toBeUndefined()
+    expect(confirmCalls).toContain('pwd')
+
+    delete process.env.RAYMES_PI_APPROVAL_MODE
+  })
+
+  it('allows safe inspection commands like top without prompting in turbo mode', async () => {
+    let handler:
+      | ((
+          event: { toolName: string; input?: { command?: unknown } },
+          ctx: { ui: { confirm: (title: string, cmd: string) => Promise<boolean> } }
+        ) => unknown)
+      | undefined
+    const pi = {
+      registerProvider: () => {},
+      registerTool: () => {},
+      on: (_event: string, callback: typeof handler) => {
+        handler = callback
+      },
+    } as unknown as Parameters<typeof raymesPiPolicy>[0]
+
+    let confirmCalls: string[] = []
+    const confirm = async (_title: string, cmd: string) => {
+      confirmCalls.push(cmd)
+      return true
+    }
+
+    process.env.RAYMES_PI_APPROVAL_MODE = 'turbo'
+    confirmCalls = []
+    raymesPiPolicy(pi)
+
+    const topRes = await handler?.(
+      { toolName: 'bash', input: { command: 'top -l 2 -s 2 -n 10 -o cpu' } },
+      { ui: { confirm } }
+    )
+    expect(topRes).toBeUndefined()
+    expect(confirmCalls).toHaveLength(0)
+
+    delete process.env.RAYMES_PI_APPROVAL_MODE
   })
 })

@@ -37,6 +37,7 @@ import {
   updateChatSessionTitle,
   upsertChatSession,
 } from './chat/sessionStore'
+import { generateChatTitleAndIcon } from './chat/titleGenerator'
 import {
   IPC_CHANNELS,
   parseAiActionRequest,
@@ -134,6 +135,7 @@ function handleIpc(channel: string, listener: IpcHandleListener): void {
 }
 import { requestPermission, snapshotPermissions } from './permissions/manager'
 import { checkPiAgent, installPiAgent } from './agent/piInstall'
+import { isDestructiveBash } from './agent/raymes-pi-policy'
 import type { PermissionId } from '../shared/permissions'
 import { clearSafetyLog, listSafetyLog } from './safety/log'
 import { listSafetyDescriptors } from './safety/registry'
@@ -347,6 +349,11 @@ function requestAgentApproval(
     return Promise.resolve(true)
   }
 
+  const currentMode = readLLMConfig().agentApprovalMode ?? 'default'
+  if (currentMode === 'turbo' && !isDestructiveBash(request.command)) {
+    return Promise.resolve(true)
+  }
+
   const approvalId = `approval-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   const suggestedRule = suggestedApprovalRule(request.command)
 
@@ -460,6 +467,7 @@ function startAgentRun(
       raymesProviderJson: piProvider?.providerJson,
       raymesAlwaysAllowJson: JSON.stringify(getAgentAlwaysAllowedCommands()),
       raymesAlwaysAllowExactJson: JSON.stringify(getAgentAlwaysAllowedExactCommands()),
+      approvalMode: readLLMConfig().agentApprovalMode ?? 'default',
       requestApproval: (request: { title: string; command: string }) =>
         requestAgentApproval(sender, runId, ac.signal, request),
       signal: ac.signal,
@@ -1400,15 +1408,36 @@ export function registerIpcHandlers(
 
   handleIpc(CHAT_IPC.UPDATE_TITLE, async (_event, payload: unknown) => {
     if (!payload || typeof payload !== 'object') return { ok: false }
-    const body = payload as { id?: unknown; title?: unknown }
-    if (typeof body.id !== 'string' || typeof body.title !== 'string') {
+    const body = payload as { id?: unknown; title?: unknown; icon?: unknown }
+    if (typeof body.id !== 'string') {
       return { ok: false }
     }
+    const title = typeof body.title === 'string' ? body.title : undefined
+    const icon = typeof body.icon === 'string' ? body.icon : undefined
+    if (title === undefined && icon === undefined) return { ok: false }
     try {
-      await updateChatSessionTitle(body.id, body.title)
+      await updateChatSessionTitle(body.id, title ?? '', icon)
       return { ok: true }
     } catch {
       return { ok: false }
+    }
+  })
+
+  handleIpc(CHAT_IPC.GENERATE_META, async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') return null
+    const body = payload as { id?: unknown; prompt?: unknown; answer?: unknown }
+    if (typeof body.id !== 'string' || typeof body.prompt !== 'string') {
+      return null
+    }
+    try {
+      const meta = await generateChatTitleAndIcon(
+        body.prompt,
+        typeof body.answer === 'string' ? body.answer : undefined
+      )
+      await updateChatSessionTitle(body.id, meta.title, meta.icon)
+      return meta
+    } catch {
+      return null
     }
   })
 

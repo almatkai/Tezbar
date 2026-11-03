@@ -141,6 +141,7 @@ fn backend_request_timeout(channel: &str) -> Duration {
         "file:quick-look" => Duration::from_secs(24 * 60 * 60),
         "app:confirm-quit" => Duration::from_secs(10 * 60),
         "ai:action" => Duration::from_secs(16 * 60),
+        "chat:generate-meta" => Duration::from_secs(30),
         "voice:stt:transcribe" => Duration::from_secs(15 * 60),
         "pi:install" => Duration::from_secs(4 * 60),
         "llm-list-models" => Duration::from_secs(70),
@@ -261,13 +262,44 @@ struct SnapTargetRect {
     bottom: f64,
 }
 
+static IDLE_TRIM_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn emit_main_window_visibility(window: &WebviewWindow, visible: bool) {
     if window.label() == "main" {
         let _ = window.emit("window-visibility", visible);
-        if !visible {
+        if visible {
+            IDLE_TRIM_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        } else {
             let _ = window.emit("window-hidden", ());
+            schedule_idle_memory_trim(window);
         }
     }
+}
+
+fn schedule_idle_memory_trim(window: &WebviewWindow) {
+    let generation = IDLE_TRIM_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    let window_clone = window.clone();
+    let app = window.app_handle().clone();
+    tauri::async_runtime::spawn(async move {
+        // Wait 5 seconds of sustained idle state before reclaiming memory
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        if IDLE_TRIM_GENERATION.load(std::sync::atomic::Ordering::SeqCst) != generation {
+            return;
+        }
+        if window_clone.is_visible().unwrap_or(false) {
+            return;
+        }
+        // Tell Webview renderer to run JS garbage collection & trim client caches
+        let _ = window_clone.eval(
+            "window.dispatchEvent(new CustomEvent('tezbar-idle-trim')); if (window.gc) { window.gc(); }",
+        );
+        // Trim NativeCore (SQLite cache, search cache)
+        if let Some(core) = app.try_state::<std::sync::Arc<crate::native_core::NativeCore>>() {
+            core.trim_idle_memory().await;
+        } else {
+            crate::native_core::trim_os_process_memory();
+        }
+    });
 }
 
 pub(crate) fn show_main_window_native(window: &WebviewWindow) -> Result<(), String> {

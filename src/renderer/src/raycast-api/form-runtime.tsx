@@ -396,7 +396,11 @@ export const FormRuntime = forwardRef<FormRuntimeHandle, FormRuntimeProps>(funct
             )}
           </>
         ) : (
-          <div className="max-w-[640px] space-y-4 [&_.glass-field:focus-visible]:!outline-none [&_.glass-field:focus]:!shadow-[inset_0_0_0_1px_rgb(var(--c-text-4))] [&_.glass-field:focus-visible]:!shadow-[inset_0_0_0_1px_rgb(var(--c-text-4))]">
+          <div
+            className={`space-y-4 [&_.glass-field:focus-visible]:!outline-none [&_.glass-field:focus]:!shadow-[inset_0_0_0_1px_rgb(var(--c-text-4))] [&_.glass-field:focus-visible]:!shadow-[inset_0_0_0_1px_rgb(var(--c-text-4))] ${
+              nativeColorWheel ? 'w-full max-w-[960px]' : 'max-w-[640px]'
+            }`}
+          >
             {nativeColorWheel ? (
               <NativeColorWheel
                 data={nativeColorWheel}

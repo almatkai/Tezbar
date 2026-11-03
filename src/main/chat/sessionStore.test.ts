@@ -40,4 +40,31 @@ describe('chat session store', () => {
       }),
     ])
   })
+
+  it('persists and updates chat icon and title', async () => {
+    const { getChatSession, updateChatSessionTitle, upsertChatSession } = await import(
+      './sessionStore'
+    )
+    await upsertChatSession({
+      id: 'icon-chat',
+      title: 'Icon chat',
+      icon: '💻',
+      createdAt: 2,
+      updatedAt: 2,
+    })
+
+    await expect(getChatSession('icon-chat')).resolves.toMatchObject({
+      id: 'icon-chat',
+      title: 'Icon chat',
+      icon: '💻',
+    })
+
+    await updateChatSessionTitle('icon-chat', 'Updated title', '⚽')
+
+    await expect(getChatSession('icon-chat')).resolves.toMatchObject({
+      id: 'icon-chat',
+      title: 'Updated title',
+      icon: '⚽',
+    })
+  })
 })

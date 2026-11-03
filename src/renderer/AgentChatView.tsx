@@ -13,7 +13,7 @@ import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_AI_NEW_CHAT_EVENT } from '../shared/aiChatSurface'
 import { defaultModels, normalizeProviderModelList, providerTitle } from '../shared/aiProviders'
 import {
-  CHAT_CONTINUATION_WINDOW_MS,
+  type ActiveAgentRunInfo,
   type ChatResponseMeta,
   type ChatSession,
   type ChatSessionSummary,
@@ -22,6 +22,7 @@ import {
 import { formatLlmErrorMessage } from '../shared/llmErrors'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import { ModelPicker } from './ModelPicker'
+import { ApprovalModePicker } from './agentChat/ApprovalModePicker'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { Hint, Kbd, cx } from './ui/primitives'
 import {
@@ -31,14 +32,17 @@ import {
   CommandSurfaceHeader,
   type CommandSurfaceTaskActions,
 } from './ui/CommandSurface'
+import { ChatSquircle } from './launcherIcons'
+import { heuristicChatMeta } from '../shared/chatMeta'
 import { AgentMessage } from './agentChat/messages'
 import { readCachedChatHistory, writeCachedChatHistory } from './agentChat/historyCache'
-import { historyPlaceholder, makeChatId, summarizeChatTitle } from './agentChat/model'
+import { historyPlaceholder, makeChatId } from './agentChat/model'
 import { isNearScrollBottom } from './agentChat/streaming'
 import {
   agentMessageApproval,
   agentMessageError,
   agentMessageStages,
+  agentMessageText,
   agentMessageToTurn,
   chatTurnToAgentMessage,
   createNativeAgentTransport,
@@ -74,11 +78,15 @@ export default function AgentChatView({
   onBack,
   onOpenSettings,
   taskActions,
+  active = true,
+  onActiveRunChange,
 }: {
   boot: AiChatBoot
   onBack: () => void
   onOpenSettings: () => void
   taskActions?: CommandSurfaceTaskActions
+  active?: boolean
+  onActiveRunChange?: (run: ActiveAgentRunInfo | null) => void
 }): JSX.Element {
   const [session, setSession] = useState<ChatSession | null>(null)
   const [workingDirectory, setWorkingDirectory] = useState<string | undefined>(
@@ -117,6 +125,7 @@ export default function AgentChatView({
   const threadRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
   const submittedBoot = useRef<string | null>(null)
+  const userExplicitlyStoppedRef = useRef(false)
 
   const refreshHistory = useCallback(async (): Promise<ChatSessionSummary[]> => {
     try {
@@ -156,6 +165,7 @@ export default function AgentChatView({
           session: {
             id: next.id,
             title: next.title,
+            icon: next.icon,
             createdAt: next.createdAt,
             updatedAt: next.updatedAt,
             workingDirectory: next.workingDirectory,
@@ -190,23 +200,71 @@ export default function AgentChatView({
     },
     onFinish({ message, isAbort, isError }) {
       const current = sessionRef.current
-      if (!current || current.id !== message.metadata?.sessionId) return
-      const failure = isAbort
-        ? 'Stopped by you.'
-        : isError
-          ? agentMessageError(message) || lastErrorRef.current || 'The agent request failed.'
-          : undefined
+      const sessionId = message.metadata?.sessionId
+      const failure =
+        isAbort && userExplicitlyStoppedRef.current
+          ? 'Stopped by you.'
+          : isError
+            ? agentMessageError(message) || lastErrorRef.current || 'The agent request failed.'
+            : undefined
       const final = finalizeAgentMessage(message, failure)
-      if (mounted.current)
+      if (mounted.current && current && current.id === sessionId)
         chat.setMessages((previous) =>
           previous.map((item) => (item.id === message.id ? final : item))
         )
-      void persistTurn(agentMessageToTurn(final), current)
+      if (sessionId) {
+        if (current && current.id === sessionId) {
+          void persistTurn(agentMessageToTurn(final), current)
+        } else {
+          void (async () => {
+            const existing = await window.tezbar.chatGet(sessionId)
+            if (!existing) return
+            await window.tezbar.chatAppend({
+              session: existing,
+              turn: agentMessageToTurn(final),
+            })
+            if (mounted.current) void refreshHistory()
+          })().catch(() => {})
+        }
+      }
+
+      if (!isAbort && !isError && current && current.id === sessionId && current.turns.length <= 2) {
+        const userTurn = current.turns.find((t) => t.role === 'user')
+        if (userTurn?.text) {
+          const answerText = agentMessageText(final)
+          void window.tezbar
+            .chatGenerateMeta({
+              id: current.id,
+              prompt: userTurn.text,
+              answer: answerText || undefined,
+            })
+            .then((meta) => {
+              if (meta?.title && sessionRef.current?.id === current.id) {
+                const updated: ChatSession = {
+                  ...sessionRef.current,
+                  title: meta.title,
+                  icon: meta.icon,
+                }
+                sessionRef.current = updated
+                if (mounted.current) {
+                  setSession(updated)
+                  void refreshHistory()
+                }
+              }
+            })
+            .catch(() => {})
+        }
+      }
     },
   })
   const { stop, setMessages, clearError, sendMessage, regenerate, status } = chat
+  const fallbackMessages = useMemo(() => {
+    if (chat.messages.length > 0 || !session?.turns?.length) return []
+    return session.turns.map((turn) => chatTurnToAgentMessage(turn, session.id))
+  }, [chat.messages.length, session])
+  const activeMessages = chat.messages.length > 0 ? chat.messages : fallbackMessages
   const busy = preparing || status === 'submitted' || status === 'streaming'
-  const lastMessage = chat.messages.at(-1)
+  const lastMessage = activeMessages.at(-1)
   const activeMessage = lastMessage?.role === 'assistant' ? lastMessage : undefined
   const requestedApproval = activeMessage ? agentMessageApproval(activeMessage) : null
   const approval = requestedApproval?.approvalId !== resolvedApproval ? requestedApproval : null
@@ -218,12 +276,13 @@ export default function AgentChatView({
       : chat.status === 'streaming'
         ? lastStage?.status === 'running'
           ? lastStage.label
-          : 'Generating response…'
+          : 'Generating…'
         : chat.status === 'error' || (activeMessage && agentMessageError(activeMessage))
           ? 'Run failed'
           : 'Ready'
 
   const stopRun = useCallback(async (): Promise<void> => {
+    userExplicitlyStoppedRef.current = true
     viewRevision.current++
     submissionRef.current = null
     setPreparing(false)
@@ -233,7 +292,8 @@ export default function AgentChatView({
 
   const resetChat = useCallback(
     async (directory?: string): Promise<void> => {
-      await stopRun()
+      viewRevision.current++
+      submissionRef.current = null
       sessionRef.current = null
       directoryRef.current = directory
       setSession(null)
@@ -246,16 +306,39 @@ export default function AgentChatView({
       setSaveWarning(null)
       setHistoryOpen(false)
       setResolvedApproval(null)
+      setPreparing(false)
       followRef.current = true
       setFollowing(true)
-      focusInput()
+      if (mounted.current) focusInput()
     },
-    [stopRun, setMessages, clearError]
+    [setMessages, clearError]
   )
 
   const loadSession = useCallback(
-    async (id: string): Promise<void> => {
-      await stopRun()
+    async (id: string, force = false): Promise<void> => {
+      if (
+        !force &&
+        sessionRef.current?.id === id &&
+        chat.messages.length > 0 &&
+        chat.messages.length >= (sessionRef.current.turns?.length ?? 0)
+      ) {
+        if (mounted.current) {
+          setHistoryOpen(false)
+          followRef.current = true
+          setFollowing(true)
+          focusInput()
+        }
+        return
+      }
+      viewRevision.current++
+      submissionRef.current = null
+      setPreparing(false)
+      clearError()
+      setDraft('')
+      setAttachment(null)
+      setUiError(null)
+      setSaveWarning(null)
+      setHistoryOpen(false)
       const revision = viewRevision.current
       try {
         const full = await window.tezbar.chatGet(id)
@@ -268,24 +351,28 @@ export default function AgentChatView({
         setDraft('')
         setAttachment(null)
         setMessages(full.turns.map((turn) => chatTurnToAgentMessage(turn, full.id)))
-        clearError()
-        setUiError(null)
-        setHistoryOpen(false)
         setResolvedApproval(null)
         followRef.current = true
         setFollowing(true)
         focusInput()
       } catch (error) {
-        setUiError(error instanceof Error ? error.message : 'Could not open this conversation.')
+        if (mounted.current)
+          setUiError(error instanceof Error ? error.message : 'Could not open conversation.')
       }
     },
-    [stopRun, setMessages, clearError]
+    [clearError, setMessages, chat.messages.length]
   )
 
   const send = useCallback(
     async (input: string, image?: AgentInputImage | null): Promise<void> => {
       const text = input.trim()
-      if (!text || submissionRef.current || status === 'streaming' || status === 'submitted') return
+      if (
+        !text ||
+        submissionRef.current ||
+        (sessionRef.current && (status === 'streaming' || status === 'submitted'))
+      )
+        return
+      userExplicitlyStoppedRef.current = false
       const submission = makeChatId()
       const revision = viewRevision.current
       submissionRef.current = submission
@@ -301,16 +388,51 @@ export default function AgentChatView({
         setConfig(fresh)
         metaRef.current = responseMeta(fresh)
         const now = Date.now()
-        const current = sessionRef.current ?? {
-          id: makeChatId(),
-          title: summarizeChatTitle(text),
-          createdAt: now,
-          updatedAt: now,
-          workingDirectory: directoryRef.current,
-          turns: [],
-        }
+        const meta = heuristicChatMeta(text)
+        const isNewSession = !sessionRef.current || sessionRef.current.turns.length === 0
+        const current: ChatSession = sessionRef.current
+          ? {
+              ...sessionRef.current,
+              title:
+                sessionRef.current.turns.length === 0 ? meta.title : sessionRef.current.title,
+              icon:
+                sessionRef.current.turns.length === 0
+                  ? meta.icon
+                  : sessionRef.current.icon || meta.icon,
+            }
+          : {
+              id: makeChatId(),
+              title: meta.title,
+              icon: meta.icon,
+              createdAt: now,
+              updatedAt: now,
+              workingDirectory: directoryRef.current,
+              turns: [],
+            }
         sessionRef.current = current
         setSession(current)
+        if (isNewSession) {
+          void window.tezbar
+            .chatGenerateMeta({
+              id: current.id,
+              prompt: text,
+            })
+            .then((generated) => {
+              if (generated?.title && sessionRef.current?.id === current.id) {
+                const updated: ChatSession = {
+                  ...sessionRef.current,
+                  title: generated.title,
+                  icon: generated.icon || sessionRef.current.icon,
+                }
+                sessionRef.current = updated
+                if (mounted.current) {
+                  setSession(updated)
+                  void refreshHistory()
+                }
+              }
+            })
+            .catch(() => {})
+        }
         const userTurn: ChatTurn = {
           id: makeChatId(),
           role: 'user',
@@ -464,7 +586,7 @@ export default function AgentChatView({
 
   const bootKey =
     boot.kind === 'submit'
-      ? `submit:${boot.workingDirectory ?? ''}:${boot.prompt}`
+      ? `submit:${boot.nonce ?? ''}:${boot.workingDirectory ?? ''}:${boot.prompt}`
       : boot.kind === 'resume'
         ? `resume:${boot.sessionId}`
         : boot.kind === 'newChat'
@@ -484,7 +606,7 @@ export default function AgentChatView({
         await rowsPromise
         if (cancelled) return
         if (boot.kind === 'resume') {
-          await loadSession(boot.sessionId)
+          await loadSession(boot.sessionId, true)
           return
         }
         if (boot.kind === 'newChat') {
@@ -496,24 +618,20 @@ export default function AgentChatView({
           await attachScreen()
           return
         }
-        const rows = await rowsPromise
-        if (cancelled) return
-        const recent = rows[0]
-        if (
-          recent &&
-          Date.now() - recent.updatedAt < CHAT_CONTINUATION_WINDOW_MS &&
-          (boot.kind !== 'submit' || !boot.workingDirectory)
-        )
-          await loadSession(recent.id)
-        if (cancelled) return
-        if (boot.kind === 'submit' && submittedBoot.current !== bootKey) {
-          submittedBoot.current = bootKey
-          if (boot.workingDirectory) {
-            directoryRef.current = boot.workingDirectory
-            setWorkingDirectory(boot.workingDirectory)
+        if (boot.kind === 'submit') {
+          await resetChat(boot.workingDirectory)
+          if (cancelled) return
+          if (submittedBoot.current !== bootKey) {
+            submittedBoot.current = bootKey
+            if (boot.workingDirectory) {
+              directoryRef.current = boot.workingDirectory
+              setWorkingDirectory(boot.workingDirectory)
+            }
+            await send(boot.prompt)
           }
-          await send(boot.prompt)
+          return
         }
+        await resetChat()
       } catch (error) {
         if (!cancelled)
           setUiError(error instanceof Error ? error.message : 'Could not initialize the agent.')
@@ -570,13 +688,27 @@ export default function AgentChatView({
     return () => window.removeEventListener(RAYMES_AI_NEW_CHAT_EVENT, newChat)
   }, [resetChat])
   useEffect(() => {
+    if (active && mounted.current) {
+      focusInput()
+    }
+  }, [active])
+  useEffect(() => {
+    if (!active) return
     const onKey = (event: globalThis.KeyboardEvent): void => {
-      if (approval && (event.key === 'Escape' || event.key === 'Enter')) {
+      if (approval && event.key === 'Enter') {
         event.preventDefault()
         event.stopImmediatePropagation()
-        void resolveApproval(
-          event.key === 'Escape' ? 'deny' : event.metaKey || event.ctrlKey ? 'always' : 'once'
-        )
+        void resolveApproval(event.metaKey || event.ctrlKey ? 'always' : 'once')
+      } else if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key === '.' &&
+        busy
+      ) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        void stopRun()
       } else if (
         (event.metaKey || event.ctrlKey) &&
         event.shiftKey &&
@@ -589,25 +721,36 @@ export default function AgentChatView({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [approval, resolveApproval, attachScreen])
+  }, [active, approval, resolveApproval, attachScreen, busy, stopRun])
   useEffect(() => {
+    if (!active) return
     setCommandSurfaceEscapeConsumer(() => {
-      if (approval) {
-        void resolveApproval('deny')
-        return true
-      }
       if (historyOpen) {
         setHistoryOpen(false)
         return true
       }
-      if (busy) {
-        void stopRun()
-        return true
-      }
+      // Escape navigates to launcher without killing background agent execution or denying approval.
       return false
     })
     return () => setCommandSurfaceEscapeConsumer(null)
-  }, [approval, resolveApproval, historyOpen, busy, stopRun])
+  }, [active, historyOpen])
+
+  useEffect(() => {
+    if (busy && sessionRef.current?.id) {
+      const text = activeMessage ? agentMessageText(activeMessage) : undefined
+      onActiveRunChange?.({
+        sessionId: sessionRef.current.id,
+        sessionTitle: sessionRef.current.title,
+        sessionIcon: sessionRef.current.icon,
+        busy: true,
+        statusLabel,
+        streamingText: text || undefined,
+        waitingApproval: Boolean(approval),
+      })
+    } else {
+      onActiveRunChange?.(null)
+    }
+  }, [busy, statusLabel, activeMessage, approval, onActiveRunChange])
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -735,9 +878,7 @@ export default function AgentChatView({
           <CommandSurfaceAction
             title="Back (Esc)"
             aria-label="Back"
-            onClick={() => {
-              void stopRun().then(onBack)
-            }}
+            onClick={onBack}
           >
             <svg
               aria-hidden
@@ -777,13 +918,16 @@ export default function AgentChatView({
                   >
                     <button
                       type="button"
-                      className="min-w-0 flex-1 px-3 py-2 text-left"
-                      onClick={() => void loadSession(row.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-left"
+                      onClick={() => void loadSession(row.id, true)}
                     >
-                      <span className="block truncate text-[12px] text-ink-2">
-                        {row.title || 'Untitled chat'}
-                      </span>
-                      <span className="block truncate text-[10.5px] text-ink-4">{row.preview}</span>
+                      <ChatSquircle icon={row.icon} size={20} />
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-[12px] text-ink-2">
+                          {row.title || 'Untitled chat'}
+                        </span>
+                        <span className="block truncate text-[10.5px] text-ink-4">{row.preview}</span>
+                      </div>
                     </button>
                     <button
                       type="button"
@@ -820,15 +964,15 @@ export default function AgentChatView({
               setFollowing(value)
             }}
           >
-            {chat.messages.map((message, index) => (
+            {activeMessages.map((message, index) => (
               <AgentMessage
                 key={message.id}
                 message={message}
                 streaming={
-                  busy && index === chat.messages.length - 1 && message.role === 'assistant'
+                  busy && index === activeMessages.length - 1 && message.role === 'assistant'
                 }
                 onRetry={
-                  !busy && index === chat.messages.length - 1 && message.role === 'assistant'
+                  !busy && index === activeMessages.length - 1 && message.role === 'assistant'
                     ? () => void retry()
                     : undefined
                 }
@@ -843,7 +987,7 @@ export default function AgentChatView({
                 }
               />
             ))}
-            {!chat.messages.length && !busy ? (
+            {!activeMessages.length && !busy ? (
               <div className="flex flex-1 flex-col items-start justify-center gap-4 py-8">
                 <div className="max-w-md">
                   <h2 className="text-[19px] font-semibold leading-tight text-ink-1">
@@ -913,11 +1057,27 @@ export default function AgentChatView({
         {approval ? (
           <section
             aria-label="Command approval"
-            className="mx-4 mb-2 shrink-0 rounded-xl border border-amber-200/20 bg-amber-200/[0.05] p-3"
+            className="mx-4 mb-2 shrink-0 rounded-xl border border-amber-200/20 bg-amber-200/[0.05] p-3 shadow-lg"
           >
-            <p className="text-[12px] font-medium text-ink-1">
-              {approval.title || 'Allow this command?'}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[12px] font-medium text-ink-1">
+                {approval.title || 'Allow this command?'}
+              </p>
+              <ApprovalModePicker
+                mode={config.agentApprovalMode ?? 'default'}
+                disabled={approvalBusy}
+                direction="up"
+                onSelect={async (mode) => {
+                  const next = { ...config, agentApprovalMode: mode }
+                  setConfig(next)
+                  configRef.current = next
+                  await window.tezbar.setLlmConfig({ agentApprovalMode: mode })
+                  if (mode === 'turbo' || mode === 'auto') {
+                    void resolveApproval('once')
+                  }
+                }}
+              />
+            </div>
             <pre className="my-2 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/10 p-2 font-mono text-[11px] text-ink-2 select-text">
               {approval.command}
             </pre>
@@ -1031,7 +1191,7 @@ export default function AgentChatView({
                 <button
                   type="button"
                   aria-label="Stop agent"
-                  title="Stop (Esc)"
+                  title="Stop (⌘.)"
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/15 text-ink-1 hover:bg-white/[0.06]"
                   onClick={() => void stopRun()}
                 >
@@ -1092,7 +1252,19 @@ export default function AgentChatView({
             </>
           }
         />
-        <Hint label={busy ? 'Stop' : 'Send'} keys={<Kbd>{busy ? 'Esc' : '↵'}</Kbd>} />
+        {busy ? (
+          <Hint
+            label="Stop"
+            keys={
+              <>
+                <Kbd>⌘</Kbd>
+                <Kbd>.</Kbd>
+              </>
+            }
+          />
+        ) : (
+          <Hint label="Send" keys={<Kbd>↵</Kbd>} />
+        )}
         <Hint
           label="New chat"
           keys={
@@ -1102,7 +1274,7 @@ export default function AgentChatView({
             </>
           }
         />
-        {!busy ? <Hint label="Back" keys={<Kbd>Esc</Kbd>} /> : null}
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
       </CommandSurfaceFooter>
     </div>
   )
