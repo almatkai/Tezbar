@@ -266,6 +266,104 @@ export function isAutoAllowedBash(
   return parts.slice(0, -1).every(isSimpleCd)
 }
 
+/**
+ * Detect commands that could cause catastrophic system destruction, data loss,
+ * disk formatting, or database wipeouts.
+ */
+export function isDestructiveBash(command: string): boolean {
+  const trimmed = command.trim()
+  if (!trimmed) return false
+
+  // 1. Recursive mass deletion targeting root, home, system, or library directories
+  // Matches: rm -rf /, rm -rf ~, rm -rf $HOME, rm -rf /Users, rm -rf /System, rm -rf /etc, rm -rf /*, etc.
+  const rmTargetPattern =
+    /\b(?:rm|srm)\s+(?:-[a-zA-Z]*[rf][a-zA-Z]*\s+|--recursive\s+|--force\s+)*(?:\/|~|\$HOME|\$\{HOME\}|\/Users(?:\/[^/\s"']+)?(?:\/\*)?|\/System|\/Library|\/Applications|\/etc|\/var|\/usr|\/bin|\/sbin|\/dev|\/private|\/\*)(?:\s|$|[;&|])/i
+  if (rmTargetPattern.test(trimmed)) return true
+
+  // Bare `rm -rf *` or `rm -rf .*` without directory scope
+  if (
+    /\b(?:rm|srm)\s+(?:-[a-zA-Z]*[rf][a-zA-Z]*\s+|--recursive\s+|--force\s+)+(?:\*|\.\*|\.\.\/\*)(?:\s|$|[;&|])/i.test(
+      trimmed
+    )
+  ) {
+    return true
+  }
+
+  // Windows equivalents: rd /s /q C:\, Remove-Item -Recurse -Force C:\
+  if (/\b(?:rd|rmdir)\s+\/s(?:\s+\/q)?\s+(?:[a-zA-Z]:\\|\/)/i.test(trimmed)) return true
+  if (/\bRemove-Item\b.*-(?:Recurse|r)\b.*(?:[a-zA-Z]:\\|~|\$HOME)/i.test(trimmed)) return true
+
+  // 2. Database wipeouts and destructive SQL commands executed via CLI (sqlite3, psql, mysql, etc.)
+  // Matches: DROP DATABASE, DROP SCHEMA, DROP TABLE, TRUNCATE TABLE
+  if (/\b(?:DROP\s+(?:DATABASE|SCHEMA|TABLE)|TRUNCATE(?:\s+TABLE)?)\b/i.test(trimmed)) {
+    return true
+  }
+
+  // Mass deletion of database files (*.db, *.sqlite, *.sqlite3)
+  if (/\b(?:rm|unlink)\s+.*?\.(?:db|sqlite|sqlite3)\b/i.test(trimmed)) {
+    return true
+  }
+
+  // Deleting Tezbar's or user application data/configs
+  if (
+    /\b(?:rm|srm)\s+(?:-[a-zA-Z]*[rf][a-zA-Z]*\s+)*.*?(?:\.tezbar|\.t3|Library\/Application\s+Support\/Tezbar)/i.test(
+      trimmed
+    )
+  ) {
+    return true
+  }
+
+  // 3. Raw drive formatting and block-level disk destruction
+  // Matches: mkfs, fdisk, dd targeting raw disks, diskutil eraseDisk/eraseVolume
+  if (/\b(?:mkfs|mkfs\.[a-z0-9]+|fdisk|parted|gdisk)\b/i.test(trimmed)) return true
+  if (
+    /\bdiskutil\s+(?:eraseDisk|eraseVolume|partitionDisk|zeroDisk|randomDisk|apfs\s+deleteContainer)\b/i.test(
+      trimmed
+    )
+  ) {
+    return true
+  }
+  if (/\bdd\b.*?\bof=\/dev\/(?:r?disk|sd[a-z]|hd[a-z]|nvme[0-9])/i.test(trimmed)) return true
+
+  // 4. System crash, fork bomb, shutdown, reboot, or catastrophic privilege wipe
+  if (/:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/i.test(trimmed)) return true
+  if (/\b(?:shutdown|reboot|poweroff|halt|init\s+[06])\b/i.test(trimmed)) return true
+  if (
+    /\bchmod\s+(?:-[a-zA-Z]*R[a-zA-Z]*\s+)?(?:000|777)\s+(?:\/|~|\$HOME|\/Users|\/System)/i.test(
+      trimmed
+    )
+  ) {
+    return true
+  }
+  if (
+    /\bchown\s+(?:-[a-zA-Z]*R[a-zA-Z]*\s+).*?\s+(?:\/|~|\$HOME|\/Users|\/System)/i.test(trimmed)
+  ) {
+    return true
+  }
+
+  return false
+}
+
+/**
+ * Common non-destructive developer and exploration commands that are safe to auto-run in Auto mode.
+ */
+export function isSafeProjectBash(command: string): boolean {
+  const trimmed = command.trim()
+  if (!trimmed) return false
+  if (isDestructiveBash(trimmed)) return false
+
+  return (
+    /^(?:git\s+(?:status|diff|log|branch|show|remote|tag|rev-parse|describe|stash\s+list))\b/.test(
+      trimmed
+    ) ||
+    /^(?:npm|pnpm|yarn)\s+(?:test|run\s+[a-zA-Z0-9:_-]+|list|outdated|view)\b/.test(trimmed) ||
+    /^(?:cargo\s+(?:check|test|build|clippy|fmt))\b/.test(trimmed) ||
+    /^(?:go\s+(?:test|build|vet))\b/.test(trimmed) ||
+    /^(?:pytest|vitest|jest|tsc)\b/.test(trimmed) ||
+    /^(?:cat|head|tail|wc|echo|printf|date)\b/.test(trimmed)
+  )
+}
+
 export default function raymesPiPolicy(pi: ExtensionAPI): void {
   registerTokenRouterProvider(pi)
   registerRaymesProvider(pi)
@@ -470,6 +568,43 @@ export default function raymesPiPolicy(pi: ExtensionAPI): void {
       }
     }
 
+    const approvalMode = process.env['RAYMES_PI_APPROVAL_MODE'] || 'default'
+
+    if (approvalMode === 'review') {
+      const confirmed = await ctx.ui.confirm('Run bash command?', command)
+      if (confirmed) return undefined
+      return { block: true, reason: 'Bash command was not approved.' }
+    }
+
+    if (approvalMode === 'turbo') {
+      if (isDestructiveBash(command)) {
+        const confirmed = await ctx.ui.confirm(
+          '⚠️ Destructive command detected. Allow execution?',
+          command
+        )
+        if (confirmed) return undefined
+        return { block: true, reason: 'Destructive command blocked by safety policy.' }
+      }
+      return undefined
+    }
+
+    if (approvalMode === 'auto') {
+      if (isDestructiveBash(command)) {
+        const confirmed = await ctx.ui.confirm(
+          '⚠️ Destructive command detected. Allow execution?',
+          command
+        )
+        if (confirmed) return undefined
+        return { block: true, reason: 'Destructive command blocked by safety policy.' }
+      }
+      if (isAutoAllowedBash(command) || isSafeProjectBash(command)) return undefined
+
+      const confirmed = await ctx.ui.confirm('Run bash command?', command)
+      if (confirmed) return undefined
+      return { block: true, reason: 'Bash command was not approved.' }
+    }
+
+    // Default mode:
     if (isAutoAllowedBash(command)) return undefined
 
     const confirmed = await ctx.ui.confirm('Run bash command?', command)

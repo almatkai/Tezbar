@@ -121,7 +121,9 @@ export function createNativeAgentTransport(
   let activeCancel: (() => void) | undefined
   return {
     reconnectToStream: async () => null,
-    close: () => activeCancel?.(),
+    close: () => {
+      activeCancel = undefined
+    },
     async sendMessages({ messages, abortSignal, trigger, messageId }) {
       if (abortSignal?.aborted) throw new DOMException('Run cancelled', 'AbortError')
       const context = getContext()

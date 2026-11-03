@@ -460,6 +460,7 @@ function startAgentRun(
       raymesProviderJson: piProvider?.providerJson,
       raymesAlwaysAllowJson: JSON.stringify(getAgentAlwaysAllowedCommands()),
       raymesAlwaysAllowExactJson: JSON.stringify(getAgentAlwaysAllowedExactCommands()),
+      approvalMode: readLLMConfig().agentApprovalMode ?? 'default',
       requestApproval: (request: { title: string; command: string }) =>
         requestAgentApproval(sender, runId, ac.signal, request),
       signal: ac.signal,

@@ -39,6 +39,9 @@ export interface AgentInputImage {
   height?: number
 }
 
+import type { AgentApprovalMode } from './llmConfig'
+export type { AgentApprovalMode }
+
 export interface AgentRunRequest {
   /** Client-generated correlation id; lets the UI subscribe before submitting. */
   runId?: string
@@ -46,6 +49,8 @@ export interface AgentRunRequest {
   images?: AgentInputImage[]
   /** Existing directory used as the Pi subprocess cwd. */
   cwd?: string
+  /** Permission mode for command execution. */
+  approvalMode?: AgentApprovalMode
 }
 
 export type AgentApprovalDecision = 'deny' | 'once' | 'always'

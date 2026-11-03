@@ -344,7 +344,7 @@ function LauncherApp(): JSX.Element {
   const [terminalWorkingDirectory, setTerminalWorkingDirectory] = useState<string | undefined>()
   const [terminalDefaults, setTerminalDefaults] = useState<TerminalDefaults | undefined>()
   const [aiChatBoot, setAiChatBoot] = useState<AiChatBoot>({ kind: 'panel' })
-  const [aiChatKey, setAiChatKey] = useState(0)
+  const [hasVisitedAiChat, setHasVisitedAiChat] = useState(false)
   const [extensionsKey, setExtensionsKey] = useState(0)
   const [extensionRuntimeInitial, setExtensionRuntimeInitial] = useState<Extract<
     ExtensionRunCommandResult,
@@ -463,6 +463,12 @@ function LauncherApp(): JSX.Element {
 
   useEffect(() => {
     focusSurface(surface)
+  }, [surface])
+
+  useEffect(() => {
+    if (surface === 'ai-chat') {
+      setHasVisitedAiChat(true)
+    }
   }, [surface])
 
   useEffect(() => {
@@ -670,111 +676,118 @@ function LauncherApp(): JSX.Element {
       sheet={SHEET_SURFACES.has(surface)}
     >
       <LauncherResizeHandles />
-      <div
-        key={surface}
-        className="relative z-0 flex h-full min-h-0 w-full animate-tezbar-fade-in flex-col"
-      >
-        <Suspense fallback={<SurfaceFallback />}>
-          {!bootReady ? (
-            <SurfaceFallback />
-          ) : surface === 'onboarding' ? (
-            <OnboardingView onDone={returnToLauncher} />
-          ) : surface === 'release-notes' ? (
-            <ReleaseNotesView onBack={returnToLauncher} onRead={markReleaseNotesRead} />
-          ) : surface === 'settings' ? (
-            <SettingsView
-              initialTab={settingsInitialTab}
-              onBack={returnToLauncher}
-              onOpenPermissions={() => setSurface('permissions')}
-              onBrowseStore={() => setSurface('extensions')}
-            />
-          ) : surface === 'extensions' ? (
-            <ExtensionsView key={extensionsKey} onBack={returnToLauncher} />
-          ) : surface === 'extension-runtime' && extensionRuntimeInitial ? (
-            <ExtensionRuntimeView initial={extensionRuntimeInitial} onBack={returnToLauncher} />
-          ) : surface === 'system-monitor' ? (
-            <SystemMonitorView onBack={returnToLauncher} />
-          ) : surface === 'indexing' ? (
-            <IndexingView
-              onBack={returnToLauncher}
-              onOpenSettings={() => {
-                void openNativeSettings('knowledge')
-              }}
-            />
-          ) : surface === 'permissions' ? (
-            <PermissionsView onBack={() => setSurface('settings')} />
-          ) : surface === 'clipboard' ? (
-            <ClipboardView
-              onBack={returnToLauncher}
-              onSaveToVault={(draft) => {
-                setVaultEntry({ draft })
-                setSurface('vault')
-              }}
-            />
-          ) : surface === 'snippets' ? (
-            <SnippetsView onBack={returnToLauncher} />
-          ) : surface === 'vault' ? (
-            <VaultView
-              initialItemId={vaultEntry.itemId}
-              initialDraft={vaultEntry.draft}
-              onClose={() => (vaultEntry.draft ? setSurface('clipboard') : returnToLauncher())}
-            />
-          ) : surface === 'notes' ? (
-            <NotesView onBack={returnToLauncher} initialSelectedNoteId={notesInitialSelectedId} />
-          ) : surface === 'emoji-picker' ? (
-            <EmojiPickerView onBack={returnToLauncher} />
-          ) : surface === 'ai-chat' ? (
-            <AgentChatView
-              key={aiChatKey}
-              boot={aiChatBoot}
-              taskActions={{
-                onOpenIndexing: () => setSurface('indexing'),
-                onOpenExtensionRuntime: (initial) => {
-                  setExtensionRuntimeInitial(initial)
-                  setSurface('extension-runtime')
-                },
-                onOpenUpdate: () => {
-                  void openNativeSettings('general')
-                },
-              }}
-              onBack={() => setSurface('command')}
-              onOpenSettings={() => {
-                void openNativeSettings('ai')
-              }}
-            />
-          ) : surface === 'terminal' ? (
-            <TerminalView
-              embedded
-              initialCommand={terminalInitialCommand}
-              initialSessionId={terminalInitialSessionId}
-              workingDirectory={terminalWorkingDirectory}
-              defaults={terminalDefaults}
-              onBack={() => {
-                setTerminalInitialCommand(undefined)
-                setTerminalInitialSessionId(undefined)
-                setTerminalWorkingDirectory(undefined)
-                setCommandInitialValue('>')
-                setSurface('command')
-              }}
-            />
-          ) : (
-            <CommandBar
-              hasUnreadReleaseNotes={hasUnreadReleaseNotes}
-              onOpenReleaseNotes={() => {
-                setCommandInitialValue('')
-                setSurface('release-notes')
-              }}
-              initialValue={commandInitialValue}
-              initialSelectedChatId={commandInitialSelectedChatId}
-              onOpenAiChat={(nextBoot) => {
-                setAiChatBoot(nextBoot)
-                setCommandInitialValue('')
-                setCommandInitialSelectedChatId(
-                  nextBoot.kind === 'resume' ? nextBoot.sessionId : null
-                )
-                setAiChatKey((k) => k + 1)
-                setSurface('ai-chat')
-              }}
+      {hasVisitedAiChat || surface === 'ai-chat' ? (
+        <div
+          className={`relative z-0 h-full min-h-0 w-full flex-col ${
+            surface === 'ai-chat' ? 'flex animate-tezbar-fade-in' : 'hidden'
+          }`}
+        >
+          <AgentChatView
+            boot={aiChatBoot}
+            active={surface === 'ai-chat'}
+            taskActions={{
+              onOpenIndexing: () => setSurface('indexing'),
+              onOpenExtensionRuntime: (initial) => {
+                setExtensionRuntimeInitial(initial)
+                setSurface('extension-runtime')
+              },
+              onOpenUpdate: () => {
+                void openNativeSettings('general')
+              },
+            }}
+            onBack={() => setSurface('command')}
+            onOpenSettings={() => {
+              void openNativeSettings('ai')
+            }}
+          />
+        </div>
+      ) : null}
+      {surface !== 'ai-chat' ? (
+        <div
+          key={surface}
+          className="relative z-0 flex h-full min-h-0 w-full animate-tezbar-fade-in flex-col"
+        >
+          <Suspense fallback={<SurfaceFallback />}>
+            {!bootReady ? (
+              <SurfaceFallback />
+            ) : surface === 'onboarding' ? (
+              <OnboardingView onDone={returnToLauncher} />
+            ) : surface === 'release-notes' ? (
+              <ReleaseNotesView onBack={returnToLauncher} onRead={markReleaseNotesRead} />
+            ) : surface === 'settings' ? (
+              <SettingsView
+                initialTab={settingsInitialTab}
+                onBack={returnToLauncher}
+                onOpenPermissions={() => setSurface('permissions')}
+                onBrowseStore={() => setSurface('extensions')}
+              />
+            ) : surface === 'extensions' ? (
+              <ExtensionsView key={extensionsKey} onBack={returnToLauncher} />
+            ) : surface === 'extension-runtime' && extensionRuntimeInitial ? (
+              <ExtensionRuntimeView initial={extensionRuntimeInitial} onBack={returnToLauncher} />
+            ) : surface === 'system-monitor' ? (
+              <SystemMonitorView onBack={returnToLauncher} />
+            ) : surface === 'indexing' ? (
+              <IndexingView
+                onBack={returnToLauncher}
+                onOpenSettings={() => {
+                  void openNativeSettings('knowledge')
+                }}
+              />
+            ) : surface === 'permissions' ? (
+              <PermissionsView onBack={() => setSurface('settings')} />
+            ) : surface === 'clipboard' ? (
+              <ClipboardView
+                onBack={returnToLauncher}
+                onSaveToVault={(draft) => {
+                  setVaultEntry({ draft })
+                  setSurface('vault')
+                }}
+              />
+            ) : surface === 'snippets' ? (
+              <SnippetsView onBack={returnToLauncher} />
+            ) : surface === 'vault' ? (
+              <VaultView
+                initialItemId={vaultEntry.itemId}
+                initialDraft={vaultEntry.draft}
+                onClose={() => (vaultEntry.draft ? setSurface('clipboard') : returnToLauncher())}
+              />
+            ) : surface === 'notes' ? (
+              <NotesView onBack={returnToLauncher} initialSelectedNoteId={notesInitialSelectedId} />
+            ) : surface === 'emoji-picker' ? (
+              <EmojiPickerView onBack={returnToLauncher} />
+            ) : surface === 'terminal' ? (
+              <TerminalView
+                embedded
+                initialCommand={terminalInitialCommand}
+                initialSessionId={terminalInitialSessionId}
+                workingDirectory={terminalWorkingDirectory}
+                defaults={terminalDefaults}
+                onBack={() => {
+                  setTerminalInitialCommand(undefined)
+                  setTerminalInitialSessionId(undefined)
+                  setTerminalWorkingDirectory(undefined)
+                  setCommandInitialValue('>')
+                  setSurface('command')
+                }}
+              />
+            ) : (
+              <CommandBar
+                hasUnreadReleaseNotes={hasUnreadReleaseNotes}
+                onOpenReleaseNotes={() => {
+                  setCommandInitialValue('')
+                  setSurface('release-notes')
+                }}
+                initialValue={commandInitialValue}
+                initialSelectedChatId={commandInitialSelectedChatId}
+                onOpenAiChat={(nextBoot) => {
+                  setAiChatBoot(nextBoot)
+                  setCommandInitialValue('')
+                  setCommandInitialSelectedChatId(
+                    nextBoot.kind === 'resume' ? nextBoot.sessionId : null
+                  )
+                  setSurface('ai-chat')
+                }}
               onOpenSettings={() => {
                 setSettingsInitialTab('general')
                 void openNativeSettings('general')
@@ -836,6 +849,7 @@ function LauncherApp(): JSX.Element {
           )}
         </Suspense>
       </div>
+      ) : null}
     </LauncherFrame>
   )
 }

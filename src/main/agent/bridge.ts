@@ -90,6 +90,8 @@ export interface BridgeRunOptions {
   raymesAlwaysAllowJson?: string
   /** Persisted exact shell commands that the Tezbar policy may run without prompting. */
   raymesAlwaysAllowExactJson?: string
+  /** Permission mode for command execution ('review' | 'default' | 'auto' | 'turbo'). */
+  approvalMode?: string
   /** Resolve a Pi extension confirmation inside the active chat surface. */
   requestApproval?: (request: { title: string; command: string }) => Promise<boolean>
   /** Additional pi CLI args (advanced). */
@@ -166,6 +168,7 @@ function spawnRpc(options: {
   raymesProviderJson?: string
   raymesAlwaysAllowJson?: string
   raymesAlwaysAllowExactJson?: string
+  approvalMode?: string
   extraArgs: readonly string[]
   knowledgeEndpoint?: string
   knowledgeToken?: string
@@ -195,6 +198,7 @@ function spawnRpc(options: {
       ...(options.raymesAlwaysAllowExactJson
         ? { RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON: options.raymesAlwaysAllowExactJson }
         : {}),
+      ...(options.approvalMode ? { RAYMES_PI_APPROVAL_MODE: options.approvalMode } : {}),
       ...(options.knowledgeEndpoint
         ? { TEZBAR_KNOWLEDGE_ENDPOINT: options.knowledgeEndpoint }
         : {}),
@@ -498,6 +502,7 @@ export function createBridge(): Bridge {
         raymesProviderJson: options.raymesProviderJson,
         raymesAlwaysAllowJson: options.raymesAlwaysAllowJson,
         raymesAlwaysAllowExactJson: options.raymesAlwaysAllowExactJson,
+        approvalMode: options.approvalMode,
         knowledgeEndpoint: knowledgeGateway?.endpoint,
         knowledgeToken: knowledgeGateway?.token,
         extraArgs: options.extraArgs ?? [],

@@ -22,6 +22,7 @@ import {
 import { formatLlmErrorMessage } from '../shared/llmErrors'
 import type { LlmConfigRecord, ProviderId } from '../shared/llmConfig'
 import { ModelPicker } from './ModelPicker'
+import { ApprovalModePicker } from './agentChat/ApprovalModePicker'
 import { setCommandSurfaceEscapeConsumer } from './escapeGate'
 import { Hint, Kbd, cx } from './ui/primitives'
 import {
@@ -74,11 +75,13 @@ export default function AgentChatView({
   onBack,
   onOpenSettings,
   taskActions,
+  active = true,
 }: {
   boot: AiChatBoot
   onBack: () => void
   onOpenSettings: () => void
   taskActions?: CommandSurfaceTaskActions
+  active?: boolean
 }): JSX.Element {
   const [session, setSession] = useState<ChatSession | null>(null)
   const [workingDirectory, setWorkingDirectory] = useState<string | undefined>(
@@ -570,6 +573,12 @@ export default function AgentChatView({
     return () => window.removeEventListener(RAYMES_AI_NEW_CHAT_EVENT, newChat)
   }, [resetChat])
   useEffect(() => {
+    if (active && mounted.current) {
+      focusInput()
+    }
+  }, [active])
+  useEffect(() => {
+    if (!active) return
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (approval && (event.key === 'Escape' || event.key === 'Enter')) {
         event.preventDefault()
@@ -577,6 +586,16 @@ export default function AgentChatView({
         void resolveApproval(
           event.key === 'Escape' ? 'deny' : event.metaKey || event.ctrlKey ? 'always' : 'once'
         )
+      } else if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key === '.' &&
+        busy
+      ) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        void stopRun()
       } else if (
         (event.metaKey || event.ctrlKey) &&
         event.shiftKey &&
@@ -589,8 +608,9 @@ export default function AgentChatView({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [approval, resolveApproval, attachScreen])
+  }, [active, approval, resolveApproval, attachScreen, busy, stopRun])
   useEffect(() => {
+    if (!active) return
     setCommandSurfaceEscapeConsumer(() => {
       if (approval) {
         void resolveApproval('deny')
@@ -600,14 +620,11 @@ export default function AgentChatView({
         setHistoryOpen(false)
         return true
       }
-      if (busy) {
-        void stopRun()
-        return true
-      }
+      // Escape navigates to launcher without killing background agent execution.
       return false
     })
     return () => setCommandSurfaceEscapeConsumer(null)
-  }, [approval, resolveApproval, historyOpen, busy, stopRun])
+  }, [active, approval, resolveApproval, historyOpen])
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -690,6 +707,16 @@ export default function AgentChatView({
               onBeforeOpen={() => setHistoryOpen(false)}
             />
           </div>
+          <ApprovalModePicker
+            mode={config.agentApprovalMode ?? 'default'}
+            disabled={savingModel}
+            onSelect={(mode) => {
+              const next = { ...config, agentApprovalMode: mode }
+              setConfig(next)
+              configRef.current = next
+              void window.tezbar.setLlmConfig({ agentApprovalMode: mode })
+            }}
+          />
           <CommandSurfaceAction
             title="Chat history"
             aria-label="Chat history"
@@ -1031,7 +1058,7 @@ export default function AgentChatView({
                 <button
                   type="button"
                   aria-label="Stop agent"
-                  title="Stop (Esc)"
+                  title="Stop (⌘.)"
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/15 text-ink-1 hover:bg-white/[0.06]"
                   onClick={() => void stopRun()}
                 >

@@ -5,7 +5,14 @@ import {
   normalizeProviderModelList,
   recommendedModel,
 } from '../../shared/aiProviders'
-import type { AiProviderConfig, AiProviderModel, CustomAiProvider, LlmTask, ProviderId } from '../../shared/llmConfig'
+import type {
+  AgentApprovalMode,
+  AiProviderConfig,
+  AiProviderModel,
+  CustomAiProvider,
+  LlmTask,
+  ProviderId,
+} from '../../shared/llmConfig'
 import { readRawConfig } from './configStore'
 import type { ChatOptions, Delta, LLMProvider, Message, Tool } from './provider'
 
@@ -32,6 +39,7 @@ export type OpenRayLLMConfig = {
   aiActionRequirePermission?: boolean
   aiActionRedactionEnabled?: boolean
   uiStateRetentionMs?: number
+  agentApprovalMode?: AgentApprovalMode
 }
 
 type PiProviderBridge = {
@@ -188,6 +196,13 @@ function normalizeFromRaw(raw: Record<string, unknown>): OpenRayLLMConfig {
     aiActionRedactionEnabled:
       typeof raw.aiActionRedactionEnabled === 'boolean' ? raw.aiActionRedactionEnabled : undefined,
     uiStateRetentionMs: typeof raw.uiStateRetentionMs === 'number' ? raw.uiStateRetentionMs : undefined,
+    agentApprovalMode:
+      raw.agentApprovalMode === 'review' ||
+      raw.agentApprovalMode === 'default' ||
+      raw.agentApprovalMode === 'auto' ||
+      raw.agentApprovalMode === 'turbo'
+        ? raw.agentApprovalMode
+        : undefined,
   }
 }
 
