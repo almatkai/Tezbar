@@ -13,7 +13,6 @@ import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_AI_NEW_CHAT_EVENT } from '../shared/aiChatSurface'
 import { defaultModels, normalizeProviderModelList, providerTitle } from '../shared/aiProviders'
 import {
-  CHAT_CONTINUATION_WINDOW_MS,
   type ActiveAgentRunInfo,
   type ChatResponseMeta,
   type ChatSession,
@@ -126,6 +125,8 @@ export default function AgentChatView({
   const threadRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
   const submittedBoot = useRef<string | null>(null)
+  const [chatKey, setChatKey] = useState(() => makeChatId())
+  const userExplicitlyStoppedRef = useRef(false)
 
   const refreshHistory = useCallback(async (): Promise<ChatSessionSummary[]> => {
     try {
@@ -193,6 +194,7 @@ export default function AgentChatView({
     []
   )
   const chat = useChat<AgentUIMessage>({
+    id: session?.id ?? chatKey,
     transport,
     throttle: 32,
     onError(error) {
@@ -200,20 +202,35 @@ export default function AgentChatView({
     },
     onFinish({ message, isAbort, isError }) {
       const current = sessionRef.current
-      if (!current || current.id !== message.metadata?.sessionId) return
-      const failure = isAbort
-        ? 'Stopped by you.'
-        : isError
-          ? agentMessageError(message) || lastErrorRef.current || 'The agent request failed.'
-          : undefined
+      const sessionId = message.metadata?.sessionId
+      const failure =
+        isAbort && userExplicitlyStoppedRef.current
+          ? 'Stopped by you.'
+          : isError
+            ? agentMessageError(message) || lastErrorRef.current || 'The agent request failed.'
+            : undefined
       const final = finalizeAgentMessage(message, failure)
-      if (mounted.current)
+      if (mounted.current && current && current.id === sessionId)
         chat.setMessages((previous) =>
           previous.map((item) => (item.id === message.id ? final : item))
         )
-      void persistTurn(agentMessageToTurn(final), current)
+      if (sessionId) {
+        if (current && current.id === sessionId) {
+          void persistTurn(agentMessageToTurn(final), current)
+        } else {
+          void window.tezbar
+            .chatAppend({
+              session: { id: sessionId },
+              turn: agentMessageToTurn(final),
+            })
+            .then(() => {
+              if (mounted.current) void refreshHistory()
+            })
+            .catch(() => {})
+        }
+      }
 
-      if (!isAbort && !isError && current.turns.length <= 2) {
+      if (!isAbort && !isError && current && current.id === sessionId && current.turns.length <= 2) {
         const userTurn = current.turns.find((t) => t.role === 'user')
         if (userTurn?.text) {
           const answerText = agentMessageText(final)
@@ -262,6 +279,7 @@ export default function AgentChatView({
           : 'Ready'
 
   const stopRun = useCallback(async (): Promise<void> => {
+    userExplicitlyStoppedRef.current = true
     viewRevision.current++
     submissionRef.current = null
     setPreparing(false)
@@ -271,9 +289,11 @@ export default function AgentChatView({
 
   const resetChat = useCallback(
     async (directory?: string): Promise<void> => {
-      await stopRun()
+      viewRevision.current++
+      submissionRef.current = null
       sessionRef.current = null
       directoryRef.current = directory
+      setChatKey(makeChatId())
       setSession(null)
       setWorkingDirectory(directory)
       setMessages([])
@@ -284,11 +304,12 @@ export default function AgentChatView({
       setSaveWarning(null)
       setHistoryOpen(false)
       setResolvedApproval(null)
+      setPreparing(false)
       followRef.current = true
       setFollowing(true)
-      focusInput()
+      if (mounted.current) focusInput()
     },
-    [stopRun, setMessages, clearError]
+    [setMessages, clearError]
   )
 
   const loadSession = useCallback(
@@ -302,7 +323,15 @@ export default function AgentChatView({
         }
         return
       }
-      await stopRun()
+      viewRevision.current++
+      submissionRef.current = null
+      setPreparing(false)
+      clearError()
+      setDraft('')
+      setAttachment(null)
+      setUiError(null)
+      setSaveWarning(null)
+      setHistoryOpen(false)
       const revision = viewRevision.current
       try {
         const full = await window.tezbar.chatGet(id)
@@ -315,24 +344,28 @@ export default function AgentChatView({
         setDraft('')
         setAttachment(null)
         setMessages(full.turns.map((turn) => chatTurnToAgentMessage(turn, full.id)))
-        clearError()
-        setUiError(null)
-        setHistoryOpen(false)
         setResolvedApproval(null)
         followRef.current = true
         setFollowing(true)
         focusInput()
       } catch (error) {
-        setUiError(error instanceof Error ? error.message : 'Could not open this conversation.')
+        if (mounted.current)
+          setUiError(error instanceof Error ? error.message : 'Could not open conversation.')
       }
     },
-    [stopRun, setMessages, clearError]
+    [clearError, setMessages]
   )
 
   const send = useCallback(
     async (input: string, image?: AgentInputImage | null): Promise<void> => {
       const text = input.trim()
-      if (!text || submissionRef.current || status === 'streaming' || status === 'submitted') return
+      if (
+        !text ||
+        submissionRef.current ||
+        (sessionRef.current && (status === 'streaming' || status === 'submitted'))
+      )
+        return
+      userExplicitlyStoppedRef.current = false
       const submission = makeChatId()
       const revision = viewRevision.current
       submissionRef.current = submission
@@ -568,14 +601,7 @@ export default function AgentChatView({
           }
           return
         }
-        const rows = await rowsPromise
-        if (cancelled) return
-        const recent = rows[0]
-        if (
-          recent &&
-          Date.now() - recent.updatedAt < CHAT_CONTINUATION_WINDOW_MS
-        )
-          await loadSession(recent.id)
+        await resetChat()
       } catch (error) {
         if (!cancelled)
           setUiError(error instanceof Error ? error.message : 'Could not initialize the agent.')

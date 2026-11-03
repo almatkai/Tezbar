@@ -135,6 +135,10 @@ impl AiCore {
                 .agent
                 .as_ref()
                 .is_some_and(|r| r.id == run_id && !r.cancel.is_cancelled())
+                && !state
+                    .agents
+                    .get(run_id)
+                    .is_some_and(|r| !r.cancel.is_cancelled())
             {
                 return false;
             }
@@ -205,7 +209,15 @@ impl AiCore {
             .unwrap()
             .agent
             .as_ref()
-            .is_some_and(|r| r.id == run && !r.cancel.is_cancelled());
+            .is_some_and(|r| r.id == run && !r.cancel.is_cancelled())
+            || self
+                .inner
+                .state
+                .lock()
+                .unwrap()
+                .agents
+                .get(run)
+                .is_some_and(|r| !r.cancel.is_cancelled());
         let _ = approval.reply.send(active && decision != "deny");
         Ok(json!({"ok":true}))
     }

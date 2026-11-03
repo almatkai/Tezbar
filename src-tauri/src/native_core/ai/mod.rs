@@ -82,6 +82,7 @@ struct Inner {
 #[derive(Default)]
 struct State {
     agent: Option<Run>,
+    agents: HashMap<String, Run>,
     answer: Option<Run>,
     approvals: HashMap<String, Approval>,
     device: Option<Value>,
@@ -203,6 +204,9 @@ impl AiCore {
             "stage" | "message" | "answer" | "approval"
         ) {
             let mut state = self.inner.state.lock().unwrap();
+            if let Some(run) = state.agents.get_mut(id) {
+                run.emitted = true;
+            }
             if let Some(run) = state.agent.as_mut().filter(|r| r.id == id) {
                 run.emitted = true;
             }
@@ -212,20 +216,40 @@ impl AiCore {
     }
     fn cancel_run(&self, expected: Option<&str>, take: bool) {
         let mut state = self.inner.state.lock().unwrap();
-        if expected.is_some_and(|id| !state.agent.as_ref().is_some_and(|r| r.id == id)) {
-            return;
-        }
-        if let Some(run) = &state.agent {
-            run.cancel.cancel();
-        }
-        state.approvals.clear();
-        if take {
-            state.agent = None;
+        if let Some(id) = expected {
+            if let Some(run) = state.agents.get(id) {
+                run.cancel.cancel();
+            }
+            if state.agent.as_ref().is_some_and(|r| r.id == id) {
+                if let Some(run) = &state.agent {
+                    run.cancel.cancel();
+                }
+                if take {
+                    state.agent = None;
+                }
+            }
+            if take {
+                state.agents.remove(id);
+            }
+            state.approvals.retain(|_, a| a.run_id != id);
+        } else {
+            for run in state.agents.values() {
+                run.cancel.cancel();
+            }
+            if let Some(run) = &state.agent {
+                run.cancel.cancel();
+            }
+            state.approvals.clear();
+            if take {
+                state.agent = None;
+                state.agents.clear();
+            }
         }
     }
     fn finish_run(&self, id: &str) {
         let mut state = self.inner.state.lock().unwrap();
         state.approvals.retain(|_, a| a.run_id != id);
+        state.agents.remove(id);
         if state.agent.as_ref().is_some_and(|r| r.id == id) {
             state.agent = None;
         }
@@ -286,12 +310,23 @@ impl AiCore {
             )
         });
         let cancel = Cancel::new();
-        self.cancel_run(None, true);
-        self.inner.state.lock().unwrap().agent = Some(Run {
+        let run = Run {
             id: id.clone(),
             cancel: cancel.clone(),
             emitted: false,
-        });
+        };
+        {
+            let mut state = self.inner.state.lock().unwrap();
+            state.agents.insert(
+                id.clone(),
+                Run {
+                    id: id.clone(),
+                    cancel: cancel.clone(),
+                    emitted: false,
+                },
+            );
+            state.agent = Some(run);
+        }
         self.agent_event(&id, json!({"type":"start","task":task}));
         let core = self.clone();
         let run = id.clone();
