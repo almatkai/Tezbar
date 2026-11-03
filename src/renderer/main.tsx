@@ -12,6 +12,7 @@ import {
   TEZBAR_THEME_STORAGE_KEY,
   type TezbarThemePreference,
 } from './theme'
+import { trimExtensionImageCache } from './extensionImages'
 
 const App = lazy(() => import('./App'))
 
@@ -107,6 +108,21 @@ async function syncMainWindowRendering(): Promise<void> {
 
 void syncMainWindowRendering().catch((error: unknown) => {
   console.warn('[Tezbar] Failed to synchronize native window rendering:', error)
+})
+
+window.addEventListener('tezbar-idle-trim', () => {
+  try {
+    trimExtensionImageCache()
+  } catch (error) {
+    console.warn('[Tezbar] Failed to trim extension image cache:', error)
+  }
+  try {
+    if ('gc' in window && typeof (window as unknown as { gc: () => void }).gc === 'function') {
+      ;(window as unknown as { gc: () => void }).gc()
+    }
+  } catch {
+    // GC not exposed or restricted
+  }
 })
 
 // Native IPC effects are not safe to replay. React StrictMode deliberately

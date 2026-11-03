@@ -7,6 +7,17 @@ type ImageEntry = {
 }
 const images = new Map<string, ImageEntry>()
 
+export function trimExtensionImageCache(): void {
+  for (const [key, entry] of images.entries()) {
+    if (entry.users <= 0) {
+      if (entry.objectUrl) {
+        URL.revokeObjectURL(entry.objectUrl)
+      }
+      images.delete(key)
+    }
+  }
+}
+
 export type ExtensionImageLease = { source: Promise<string>; release: () => void }
 
 export function extensionImageSource(value: string): string {

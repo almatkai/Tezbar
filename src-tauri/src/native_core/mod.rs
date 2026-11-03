@@ -180,6 +180,12 @@ impl NativeCore {
             .await
     }
 
+    /// Releases idle in-memory caches, SQLite buffers, and requests OS memory relief.
+    pub async fn trim_idle_memory(&self) {
+        let _ = self.knowledge.shrink_memory().await;
+        trim_os_process_memory();
+    }
+
     async fn dispatch(&self, channel: &str, args: &[Value]) -> CoreResult {
         if self.closing.load(Ordering::Acquire) && channel != "core:terminal:exit" {
             return Err("Tezbar is shutting down".into());
@@ -266,6 +272,30 @@ impl NativeCore {
         if let Err(error) = launcher {
             log::warn!("Launcher shutdown: {error}");
         }
+    }
+}
+
+/// Trims native process allocations and requests the host OS to reclaim unused memory pages.
+pub fn trim_os_process_memory() {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        extern "C" {
+            fn malloc_zone_pressure_relief(zone: *mut std::ffi::c_void, goal: usize) -> usize;
+        }
+        let _ = malloc_zone_pressure_relief(std::ptr::null_mut(), 0);
+    }
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::System::Threading::{GetCurrentProcess, SetProcessWorkingSetSize};
+        let _ = SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_env = "gnu")]
+    unsafe {
+        extern "C" {
+            fn malloc_trim(pad: usize) -> i32;
+        }
+        let _ = malloc_trim(0);
     }
 }
 

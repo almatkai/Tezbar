@@ -320,6 +320,19 @@ fn semantic_counts_ready(settings: &Value, runtime: &Value) -> bool {
         && runtime["integrityState"] == "verified"
 }
 impl KnowledgeCore {
+    /// Instructs SQLite to release as much in-memory page and cache memory as possible.
+    pub async fn shrink_memory(&self) -> Result<(), String> {
+        if let Some(db) = self.inner.database.get() {
+            let _ = db
+                .call(|store| {
+                    let _ = store.db.execute_batch("PRAGMA shrink_memory;");
+                    Ok(())
+                })
+                .await;
+        }
+        Ok(())
+    }
+
     pub fn new(ctx: CoreContext) -> Self {
         let runtimes = EmbeddingVariantId::ALL.map(|v| Runtime::new_for_variant(ctx.clone(), v));
         let wake = Arc::new(Notify::new());

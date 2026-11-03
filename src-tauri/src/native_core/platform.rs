@@ -34,6 +34,7 @@ pub const CHANNELS: &[&str] = &[
     "core:platform:suppress-blur",
     "core:platform:update-launcher-hotkey",
     "core:platform:clear-webview-cache",
+    "core:platform:trim-memory",
     "core:platform:open-settings",
     "core:shortcut:update-command",
     "core:platform:quit",
@@ -357,7 +358,11 @@ impl PlatformCore {
                         .clear_all_browsing_data()
                         .map_err(|e| e.to_string())?;
                 }
-                Ok(json!({"ok":true}))
+                Ok(json!({ "ok": true }))
+            }
+            "core:platform:trim-memory" => {
+                crate::native_core::trim_os_process_memory();
+                Ok(json!({ "ok": true }))
             }
             "core:platform:selected-text" => selected_text().await.map(Value::String),
             "core:platform:screenshot" => {
