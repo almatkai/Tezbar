@@ -14,6 +14,7 @@ import { RAYMES_AI_NEW_CHAT_EVENT } from '../shared/aiChatSurface'
 import { defaultModels, normalizeProviderModelList, providerTitle } from '../shared/aiProviders'
 import {
   CHAT_CONTINUATION_WINDOW_MS,
+  type ActiveAgentRunInfo,
   type ChatResponseMeta,
   type ChatSession,
   type ChatSessionSummary,
@@ -40,6 +41,7 @@ import {
   agentMessageApproval,
   agentMessageError,
   agentMessageStages,
+  agentMessageText,
   agentMessageToTurn,
   chatTurnToAgentMessage,
   createNativeAgentTransport,
@@ -76,12 +78,14 @@ export default function AgentChatView({
   onOpenSettings,
   taskActions,
   active = true,
+  onActiveRunChange,
 }: {
   boot: AiChatBoot
   onBack: () => void
   onOpenSettings: () => void
   taskActions?: CommandSurfaceTaskActions
   active?: boolean
+  onActiveRunChange?: (run: ActiveAgentRunInfo | null) => void
 }): JSX.Element {
   const [session, setSession] = useState<ChatSession | null>(null)
   const [workingDirectory, setWorkingDirectory] = useState<string | undefined>(
@@ -258,6 +262,15 @@ export default function AgentChatView({
 
   const loadSession = useCallback(
     async (id: string): Promise<void> => {
+      if (sessionRef.current?.id === id) {
+        if (mounted.current) {
+          setHistoryOpen(false)
+          followRef.current = true
+          setFollowing(true)
+          focusInput()
+        }
+        return
+      }
       await stopRun()
       const revision = viewRevision.current
       try {
@@ -580,12 +593,10 @@ export default function AgentChatView({
   useEffect(() => {
     if (!active) return
     const onKey = (event: globalThis.KeyboardEvent): void => {
-      if (approval && (event.key === 'Escape' || event.key === 'Enter')) {
+      if (approval && event.key === 'Enter') {
         event.preventDefault()
         event.stopImmediatePropagation()
-        void resolveApproval(
-          event.key === 'Escape' ? 'deny' : event.metaKey || event.ctrlKey ? 'always' : 'once'
-        )
+        void resolveApproval(event.metaKey || event.ctrlKey ? 'always' : 'once')
       } else if (
         (event.metaKey || event.ctrlKey) &&
         !event.altKey &&
@@ -612,19 +623,31 @@ export default function AgentChatView({
   useEffect(() => {
     if (!active) return
     setCommandSurfaceEscapeConsumer(() => {
-      if (approval) {
-        void resolveApproval('deny')
-        return true
-      }
       if (historyOpen) {
         setHistoryOpen(false)
         return true
       }
-      // Escape navigates to launcher without killing background agent execution.
+      // Escape navigates to launcher without killing background agent execution or denying approval.
       return false
     })
     return () => setCommandSurfaceEscapeConsumer(null)
-  }, [active, approval, resolveApproval, historyOpen])
+  }, [active, historyOpen])
+
+  useEffect(() => {
+    if (busy && sessionRef.current?.id) {
+      const text = activeMessage ? agentMessageText(activeMessage) : undefined
+      onActiveRunChange?.({
+        sessionId: sessionRef.current.id,
+        sessionTitle: sessionRef.current.title,
+        busy: true,
+        statusLabel,
+        streamingText: text || undefined,
+        waitingApproval: Boolean(approval),
+      })
+    } else {
+      onActiveRunChange?.(null)
+    }
+  }, [busy, statusLabel, activeMessage, approval, onActiveRunChange])
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -707,16 +730,6 @@ export default function AgentChatView({
               onBeforeOpen={() => setHistoryOpen(false)}
             />
           </div>
-          <ApprovalModePicker
-            mode={config.agentApprovalMode ?? 'default'}
-            disabled={savingModel}
-            onSelect={(mode) => {
-              const next = { ...config, agentApprovalMode: mode }
-              setConfig(next)
-              configRef.current = next
-              void window.tezbar.setLlmConfig({ agentApprovalMode: mode })
-            }}
-          />
           <CommandSurfaceAction
             title="Chat history"
             aria-label="Chat history"
@@ -940,11 +953,27 @@ export default function AgentChatView({
         {approval ? (
           <section
             aria-label="Command approval"
-            className="mx-4 mb-2 shrink-0 rounded-xl border border-amber-200/20 bg-amber-200/[0.05] p-3"
+            className="mx-4 mb-2 shrink-0 rounded-xl border border-amber-200/20 bg-amber-200/[0.05] p-3 shadow-lg"
           >
-            <p className="text-[12px] font-medium text-ink-1">
-              {approval.title || 'Allow this command?'}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[12px] font-medium text-ink-1">
+                {approval.title || 'Allow this command?'}
+              </p>
+              <ApprovalModePicker
+                mode={config.agentApprovalMode ?? 'default'}
+                disabled={approvalBusy}
+                direction="up"
+                onSelect={async (mode) => {
+                  const next = { ...config, agentApprovalMode: mode }
+                  setConfig(next)
+                  configRef.current = next
+                  await window.tezbar.setLlmConfig({ agentApprovalMode: mode })
+                  if (mode === 'turbo') {
+                    void resolveApproval('once')
+                  }
+                }}
+              />
+            </div>
             <pre className="my-2 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/10 p-2 font-mono text-[11px] text-ink-2 select-text">
               {approval.command}
             </pre>

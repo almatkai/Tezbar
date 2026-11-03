@@ -37,7 +37,7 @@ import { RollingText } from './ui/RollingText'
 import { evaluateExpression, type CalcResult } from './calculator'
 import { buildColorConversionResults } from './colorConverter'
 import { parseCurrencyQuery } from './currency/parseCurrencyQuery'
-import type { ChatSessionSummary } from '../shared/chat'
+import type { ActiveAgentRunInfo, ChatSessionSummary } from '../shared/chat'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import {
@@ -1281,6 +1281,7 @@ function searchResultIconAsset(item: SearchResult): {
 }
 
 export default function CommandBar({
+  activeAgentRun,
   hasUnreadReleaseNotes,
   onOpenReleaseNotes,
   initialValue = '',
@@ -1302,6 +1303,7 @@ export default function CommandBar({
   onOpenTerminal,
   onOpenKnowledgeSettings,
 }: {
+  activeAgentRun?: ActiveAgentRunInfo | null
   hasUnreadReleaseNotes: boolean
   onOpenReleaseNotes: () => void
   initialValue?: string
@@ -1826,15 +1828,32 @@ export default function CommandBar({
     return () => window.removeEventListener(RAYMES_QUICK_NOTE_SHORTCUT_EVENT, onQuickNoteShortcut)
   }, [onOpenAiChat])
 
+  const effectiveChatHistory = useMemo(() => {
+    if (!activeAgentRun?.busy || !activeAgentRun.sessionId) return chatHistory
+    const exists = chatHistory.some((c) => c.id === activeAgentRun.sessionId)
+    if (exists) return chatHistory
+    const activeItem: ChatSessionSummary = {
+      id: activeAgentRun.sessionId,
+      title: activeAgentRun.sessionTitle || 'Agent Task',
+      turnCount: 1,
+      preview: activeAgentRun.streamingText || activeAgentRun.statusLabel || 'Generating response…',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    return [activeItem, ...chatHistory]
+  }, [chatHistory, activeAgentRun])
+
   const chatHistoryQuery = agentTask.trim().toLowerCase()
   const filteredChatHistory = useMemo(() => {
-    if (!chatHistoryQuery) return chatHistory
+    if (!chatHistoryQuery) return effectiveChatHistory
     const terms = chatHistoryQuery.split(/\s+/).filter(Boolean)
-    return chatHistory.filter((chat) => {
+    return effectiveChatHistory.filter((chat) => {
+      const isGenerating = activeAgentRun?.busy && activeAgentRun.sessionId === chat.id
+      if (isGenerating) return true
       const haystack = `${chat.title} ${chat.preview}`.toLowerCase()
       return terms.every((term) => haystack.includes(term))
     })
-  }, [chatHistory, chatHistoryQuery])
+  }, [effectiveChatHistory, chatHistoryQuery, activeAgentRun])
   const showChatHistory = isAiMode && filteredChatHistory.length > 0
   // AI mode with nothing to list still needs a body: an empty transparent
   // panel reads as a broken window rather than as "no saved conversations".
@@ -5024,32 +5043,83 @@ export default function CommandBar({
                   className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5"
                   highlightClassName="glide-highlight--accent"
                 >
-                  {filteredChatHistory.map((chat, i) => (
-                    <li key={chat.id} className="relative z-[1]">
-                      <ListRow
-                        selected={i === selectedSearch}
-                        icon={<Squircle kind="chat" />}
-                        title={chat.title || 'Untitled Chat'}
-                        subtitle={chat.preview || 'No preview available'}
-                        accessory={
-                          <ListRowTag>
-                            {new Date(chat.updatedAt).toLocaleDateString([], {
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                          </ListRowTag>
-                        }
-                        onMouseMove={(e) => {
-                          handleRowMouseMove(e, i)
-                        }}
-                        onMouseDown={(ev) => ev.preventDefault()}
-                        onClick={() => {
-                          onOpenAiChat({ kind: 'resume', sessionId: chat.id })
-                          setValue('  ')
-                        }}
-                      />
-                    </li>
-                  ))}
+                  {filteredChatHistory.map((chat, i) => {
+                    const isGenerating =
+                      Boolean(activeAgentRun?.busy && activeAgentRun.sessionId === chat.id)
+                    return (
+                      <li key={chat.id} className="relative z-[1]">
+                        <ListRow
+                          selected={i === selectedSearch}
+                          icon={
+                            isGenerating ? (
+                              <div className="relative flex h-5 w-5 items-center justify-center">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/40 opacity-75" />
+                                <Squircle kind="chat" />
+                              </div>
+                            ) : (
+                              <Squircle kind="chat" />
+                            )
+                          }
+                          title={chat.title || 'Untitled Chat'}
+                          subtitle={
+                            isGenerating ? (
+                              <span className="flex items-center gap-2">
+                                <span className="truncate">
+                                  {activeAgentRun?.waitingApproval ? (
+                                    <span className="font-medium text-amber-300">
+                                      Waiting for your approval…
+                                    </span>
+                                  ) : (
+                                    <span className="tezbar-streaming-text font-medium">
+                                      {activeAgentRun?.streamingText ||
+                                        activeAgentRun?.statusLabel ||
+                                        'Generating response…'}
+                                    </span>
+                                  )}
+                                </span>
+                              </span>
+                            ) : (
+                              chat.preview || 'No preview available'
+                            )
+                          }
+                          accessory={
+                            isGenerating ? (
+                              <div className="flex items-center gap-1.5">
+                                {activeAgentRun?.waitingApproval ? (
+                                  <span className="flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10.5px] font-medium text-amber-300">
+                                    Approval needed
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10.5px] font-medium text-accent">
+                                    <span className="relative flex h-1.5 w-1.5">
+                                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+                                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
+                                    </span>
+                                    Generating
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <ListRowTag>
+                                {new Date(chat.updatedAt).toLocaleDateString([], {
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}
+                              </ListRowTag>
+                            )
+                          }
+                          onMouseMove={(e) => {
+                            handleRowMouseMove(e, i)
+                          }}
+                          onMouseDown={(ev) => ev.preventDefault()}
+                          onClick={() => {
+                            onOpenAiChat({ kind: 'resume', sessionId: chat.id })
+                            setValue('  ')
+                          }}
+                        />
+                      </li>
+                    )
+                  })}
                 </GlideList>
               </div>
             </div>

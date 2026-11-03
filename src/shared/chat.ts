@@ -70,6 +70,16 @@ export interface ChatSessionSummary {
   preview: string
 }
 
+/** Live background execution status of an active agent task. */
+export interface ActiveAgentRunInfo {
+  sessionId: string
+  busy: boolean
+  sessionTitle?: string
+  statusLabel?: string
+  streamingText?: string
+  waitingApproval?: boolean
+}
+
 /**
  * How long after the *previous* turn the next user submission still counts
  * as a continuation. 30 seconds per product requirements — a user who

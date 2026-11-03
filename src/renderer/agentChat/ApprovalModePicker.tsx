@@ -7,6 +7,7 @@ export interface ApprovalModePickerProps {
   onSelect: (mode: AgentApprovalMode) => void
   disabled?: boolean
   className?: string
+  direction?: 'up' | 'down'
 }
 
 const APPROVAL_OPTIONS: Array<{
@@ -55,6 +56,7 @@ export function ApprovalModePicker({
   onSelect,
   disabled = false,
   className,
+  direction = 'down',
 }: ApprovalModePickerProps): JSX.Element {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -108,7 +110,10 @@ export function ApprovalModePicker({
       {open ? (
         <section
           aria-label="Choose permission mode"
-          className="tezbar-popover absolute right-0 top-9 z-50 flex w-72 flex-col gap-0.5 overflow-hidden rounded-xl border border-white/10 bg-[#161618]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-tezbar-fade-in"
+          className={cx(
+            'tezbar-popover absolute right-0 z-50 flex w-72 flex-col gap-0.5 overflow-hidden rounded-xl border border-white/10 bg-[#161618]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-tezbar-fade-in',
+            direction === 'up' ? 'bottom-9' : 'top-9'
+          )}
         >
           {APPROVAL_OPTIONS.map((option) => {
             const isSelected = mode === option.id

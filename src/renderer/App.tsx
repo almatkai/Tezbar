@@ -7,6 +7,7 @@ import { useLauncherScaleShortcuts } from './useLauncherScaleShortcuts'
 import { installWindowDrag } from './windowDrag'
 import { newItemEventFor } from './newItemShortcut'
 import type { VaultDraftSeed } from '../shared/vault'
+import type { ActiveAgentRunInfo } from '../shared/chat'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
 import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../shared/llmConfig'
@@ -344,6 +345,7 @@ function LauncherApp(): JSX.Element {
   const [terminalWorkingDirectory, setTerminalWorkingDirectory] = useState<string | undefined>()
   const [terminalDefaults, setTerminalDefaults] = useState<TerminalDefaults | undefined>()
   const [aiChatBoot, setAiChatBoot] = useState<AiChatBoot>({ kind: 'panel' })
+  const [activeAgentRun, setActiveAgentRun] = useState<ActiveAgentRunInfo | null>(null)
   const [hasVisitedAiChat, setHasVisitedAiChat] = useState(false)
   const [extensionsKey, setExtensionsKey] = useState(0)
   const [extensionRuntimeInitial, setExtensionRuntimeInitial] = useState<Extract<
@@ -699,6 +701,7 @@ function LauncherApp(): JSX.Element {
             onOpenSettings={() => {
               void openNativeSettings('ai')
             }}
+            onActiveRunChange={setActiveAgentRun}
           />
         </div>
       ) : null}
@@ -773,6 +776,7 @@ function LauncherApp(): JSX.Element {
               />
             ) : (
               <CommandBar
+                activeAgentRun={activeAgentRun}
                 hasUnreadReleaseNotes={hasUnreadReleaseNotes}
                 onOpenReleaseNotes={() => {
                   setCommandInitialValue('')
