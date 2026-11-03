@@ -775,9 +775,7 @@ export default function AgentChatView({
           <CommandSurfaceAction
             title="Back (Esc)"
             aria-label="Back"
-            onClick={() => {
-              void stopRun().then(onBack)
-            }}
+            onClick={onBack}
           >
             <svg
               aria-hidden
@@ -1148,7 +1146,19 @@ export default function AgentChatView({
             </>
           }
         />
-        <Hint label={busy ? 'Stop' : 'Send'} keys={<Kbd>{busy ? 'Esc' : '↵'}</Kbd>} />
+        {busy ? (
+          <Hint
+            label="Stop"
+            keys={
+              <>
+                <Kbd>⌘</Kbd>
+                <Kbd>.</Kbd>
+              </>
+            }
+          />
+        ) : (
+          <Hint label="Send" keys={<Kbd>↵</Kbd>} />
+        )}
         <Hint
           label="New chat"
           keys={
@@ -1158,7 +1168,7 @@ export default function AgentChatView({
             </>
           }
         />
-        {!busy ? <Hint label="Back" keys={<Kbd>Esc</Kbd>} /> : null}
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
       </CommandSurfaceFooter>
     </div>
   )
