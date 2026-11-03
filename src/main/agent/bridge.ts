@@ -36,7 +36,7 @@ import type { AgentInputImage, Stage } from '../../shared/agent'
 import { observe, type Observation } from './observer'
 import { buildPromptCommand } from './prompt'
 import { ensureKnowledgeAgentGateway } from '../knowledge/agent/gateway'
-import { piAgentDirectory } from '../profile'
+import { configurationDirectory, piAgentDirectory } from '../profile'
 
 const PI_BIN_CANDIDATES = [
   ...(process.env.PNPM_HOME
@@ -199,6 +199,7 @@ function spawnRpc(options: {
         ? { RAYMES_PI_ALWAYS_ALLOW_EXACT_JSON: options.raymesAlwaysAllowExactJson }
         : {}),
       ...(options.approvalMode ? { RAYMES_PI_APPROVAL_MODE: options.approvalMode } : {}),
+      TEZBAR_CONFIG_DIR: configurationDirectory(),
       ...(options.knowledgeEndpoint
         ? { TEZBAR_KNOWLEDGE_ENDPOINT: options.knowledgeEndpoint }
         : {}),

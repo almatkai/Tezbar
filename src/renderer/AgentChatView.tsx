@@ -968,7 +968,7 @@ export default function AgentChatView({
                   setConfig(next)
                   configRef.current = next
                   await window.tezbar.setLlmConfig({ agentApprovalMode: mode })
-                  if (mode === 'turbo') {
+                  if (mode === 'turbo' || mode === 'auto') {
                     void resolveApproval('once')
                   }
                 }}

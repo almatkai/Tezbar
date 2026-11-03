@@ -134,6 +134,7 @@ function handleIpc(channel: string, listener: IpcHandleListener): void {
 }
 import { requestPermission, snapshotPermissions } from './permissions/manager'
 import { checkPiAgent, installPiAgent } from './agent/piInstall'
+import { isDestructiveBash } from './agent/raymes-pi-policy'
 import type { PermissionId } from '../shared/permissions'
 import { clearSafetyLog, listSafetyLog } from './safety/log'
 import { listSafetyDescriptors } from './safety/registry'
@@ -344,6 +345,11 @@ function requestAgentApproval(
 ): Promise<boolean> {
   const exactCommand = request.command.trim()
   if (exactCommand && getAgentAlwaysAllowedExactCommands().includes(exactCommand)) {
+    return Promise.resolve(true)
+  }
+
+  const currentMode = readLLMConfig().agentApprovalMode ?? 'default'
+  if (currentMode === 'turbo' && !isDestructiveBash(request.command)) {
     return Promise.resolve(true)
   }
 

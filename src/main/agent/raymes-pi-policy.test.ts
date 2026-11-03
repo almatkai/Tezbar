@@ -231,4 +231,39 @@ describe('Raymes Pi command policy', () => {
 
     delete process.env.RAYMES_PI_APPROVAL_MODE
   })
+
+  it('allows safe inspection commands like top without prompting in turbo mode', async () => {
+    let handler:
+      | ((
+          event: { toolName: string; input?: { command?: unknown } },
+          ctx: { ui: { confirm: (title: string, cmd: string) => Promise<boolean> } }
+        ) => unknown)
+      | undefined
+    const pi = {
+      registerProvider: () => {},
+      registerTool: () => {},
+      on: (_event: string, callback: typeof handler) => {
+        handler = callback
+      },
+    } as unknown as Parameters<typeof raymesPiPolicy>[0]
+
+    let confirmCalls: string[] = []
+    const confirm = async (_title: string, cmd: string) => {
+      confirmCalls.push(cmd)
+      return true
+    }
+
+    process.env.RAYMES_PI_APPROVAL_MODE = 'turbo'
+    confirmCalls = []
+    raymesPiPolicy(pi)
+
+    const topRes = await handler?.(
+      { toolName: 'bash', input: { command: 'top -l 2 -s 2 -n 10 -o cpu' } },
+      { ui: { confirm } }
+    )
+    expect(topRes).toBeUndefined()
+    expect(confirmCalls).toHaveLength(0)
+
+    delete process.env.RAYMES_PI_APPROVAL_MODE
+  })
 })

@@ -123,6 +123,10 @@ impl AiCore {
         {
             return true;
         }
+        let mode = raw["agentApprovalMode"].as_str().unwrap_or("default");
+        if mode == "turbo" && !title.contains("Destructive") {
+            return true;
+        }
         let id = format!("approval-{}", uuid::Uuid::new_v4());
         let (tx, rx) = tokio::sync::oneshot::channel();
         {
@@ -263,6 +267,11 @@ impl AiCore {
                 .map(|a| json!(a))
                 .unwrap_or(json!([]))
                 .to_string(),
+        )
+        .env("TEZBAR_CONFIG_DIR", &self.inner.ctx.paths.config_dir)
+        .env(
+            "RAYMES_PI_APPROVAL_MODE",
+            raw["agentApprovalMode"].as_str().unwrap_or("default"),
         )
         .env("TEZBAR_KNOWLEDGE_ENDPOINT", gateway.0)
         .env("TEZBAR_KNOWLEDGE_TOKEN", gateway.1);

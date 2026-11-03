@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Type } from '@earendil-works/pi-ai'
 
 type ToolCallEvent = {
@@ -360,8 +362,39 @@ export function isSafeProjectBash(command: string): boolean {
     /^(?:cargo\s+(?:check|test|build|clippy|fmt))\b/.test(trimmed) ||
     /^(?:go\s+(?:test|build|vet))\b/.test(trimmed) ||
     /^(?:pytest|vitest|jest|tsc)\b/.test(trimmed) ||
-    /^(?:cat|head|tail|wc|echo|printf|date)\b/.test(trimmed)
+    /^(?:cat|head|tail|wc|echo|printf|date|top|ps|uptime|which|whereis|uname|sw_vers|df|du|free|lsof|env)\b/.test(
+      trimmed
+    )
   )
+}
+
+/**
+ * Dynamically resolves the current approval mode, checking the live on-disk
+ * configuration first if available so that mode switches in the UI take effect immediately.
+ */
+export function getCurrentApprovalMode(): string {
+  const configDir = process.env['TEZBAR_CONFIG_DIR']
+  if (configDir) {
+    try {
+      const configPath = join(configDir, 'config.json')
+      if (existsSync(configPath)) {
+        const raw = readFileSync(configPath, 'utf8')
+        const data = JSON.parse(raw) as Record<string, unknown>
+        if (
+          typeof data.agentApprovalMode === 'string' &&
+          (data.agentApprovalMode === 'turbo' ||
+            data.agentApprovalMode === 'auto' ||
+            data.agentApprovalMode === 'review' ||
+            data.agentApprovalMode === 'default')
+        ) {
+          return data.agentApprovalMode
+        }
+      }
+    } catch {
+      // Fall through to environment variable on read/parse error
+    }
+  }
+  return process.env['RAYMES_PI_APPROVAL_MODE'] || 'default'
 }
 
 export default function raymesPiPolicy(pi: ExtensionAPI): void {
@@ -568,7 +601,7 @@ export default function raymesPiPolicy(pi: ExtensionAPI): void {
       }
     }
 
-    const approvalMode = process.env['RAYMES_PI_APPROVAL_MODE'] || 'default'
+    const approvalMode = getCurrentApprovalMode()
 
     if (approvalMode === 'review') {
       const confirmed = await ctx.ui.confirm('Run bash command?', command)
