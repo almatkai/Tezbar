@@ -1600,6 +1600,10 @@ export default function CommandBar({
   // explicitly selected the session. Hovering a row (or a stale search index)
   // must not turn a fresh `>` launch into an implicit restore of row 0.
   const terminalSessionSelectionActiveRef = useRef(false)
+  // An AI chat history row is only eligible for Enter after keyboard navigation
+  // has explicitly selected the session. Hovering a row (or a stale search index)
+  // must not turn a typed prompt into an implicit restore of row 0.
+  const aiChatSelectionActiveRef = useRef(false)
   const terminalSettingsOpenRef = useRef(terminalSettingsOpen)
   const launcherQueryHistoryRef = useRef<string[]>([])
   const lastSearchRequestId = useRef(0)
@@ -1675,6 +1679,7 @@ export default function CommandBar({
     setPrevInitialValue(initialValue)
     setTerminalMode(initialValue.startsWith('>'))
     terminalSessionSelectionActiveRef.current = false
+    aiChatSelectionActiveRef.current = false
     setValue(normalizedInitialValue)
     setSelectedSearch(
       initialValue.startsWith('>') ||
@@ -1848,12 +1853,10 @@ export default function CommandBar({
     if (!chatHistoryQuery) return effectiveChatHistory
     const terms = chatHistoryQuery.split(/\s+/).filter(Boolean)
     return effectiveChatHistory.filter((chat) => {
-      const isGenerating = activeAgentRun?.busy && activeAgentRun.sessionId === chat.id
-      if (isGenerating) return true
       const haystack = `${chat.title} ${chat.preview}`.toLowerCase()
       return terms.every((term) => haystack.includes(term))
     })
-  }, [effectiveChatHistory, chatHistoryQuery, activeAgentRun])
+  }, [effectiveChatHistory, chatHistoryQuery])
   const showChatHistory = isAiMode && filteredChatHistory.length > 0
   // AI mode with nothing to list still needs a body: an empty transparent
   // panel reads as a broken window rather than as "no saved conversations".
@@ -3536,6 +3539,7 @@ export default function CommandBar({
       }
       if (terminalModeRef.current) {
         terminalSessionSelectionActiveRef.current = false
+        aiChatSelectionActiveRef.current = false
         setValue('')
         setTerminalMode(false)
         setTerminalPrompt('')
@@ -3724,22 +3728,29 @@ export default function CommandBar({
         { aiTask: agentTask.trim(), aiWorkingDirectory },
         resolvedWorkingDirectory
       )
-      if (boot?.kind === 'newChat') {
+
+      const selectedChat =
+        !aiWorkingDirectory &&
+        showChatHistory &&
+        aiChatSelectionActiveRef.current &&
+        selectedSearch >= 0
+          ? filteredChatHistory[selectedSearch]
+          : undefined
+
+      if (selectedChat) {
+        onOpenAiChat({ kind: 'resume', sessionId: selectedChat.id })
+        setValue('  ')
+        return
+      }
+
+      if (boot) {
+        await modelSelectionSaveRef.current
         onOpenAiChat(boot)
         setValue('  ')
         return
       }
-      if (!aiWorkingDirectory && showChatHistory) {
-        const selectedChat = filteredChatHistory[selectedSearch]
-        if (selectedChat) {
-          onOpenAiChat({ kind: 'resume', sessionId: selectedChat.id })
-          setValue('  ')
-          return
-        }
-      }
-      if (!boot) return
-      await modelSelectionSaveRef.current
-      onOpenAiChat(boot)
+
+      onOpenAiChat({ kind: 'newChat', workingDirectory: resolvedWorkingDirectory })
       setValue('  ')
       return
     }
@@ -3933,6 +3944,7 @@ export default function CommandBar({
     if (terminalMode && e.key === 'Backspace' && !value) {
       e.preventDefault()
       terminalSessionSelectionActiveRef.current = false
+      aiChatSelectionActiveRef.current = false
       setTerminalMode(false)
       setTerminalPrompt('')
       terminalWorkingDirectoryRef.current = undefined
@@ -4079,6 +4091,7 @@ export default function CommandBar({
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         userNavigatedRef.current = true
+        aiChatSelectionActiveRef.current = true
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.min(i + 1, filteredChatHistory.length - 1))
       }
@@ -4086,6 +4099,9 @@ export default function CommandBar({
         if (selectedSearch < 0) return
         e.preventDefault()
         userNavigatedRef.current = true
+        if (selectedSearch <= 0) {
+          aiChatSelectionActiveRef.current = false
+        }
         setFollowSearchSelection(true)
         setSelectedSearch((i) => Math.max(i - 1, -1))
       }
@@ -4157,10 +4173,13 @@ export default function CommandBar({
       }
       if (showChatHistory) {
         e.preventDefault()
+        userNavigatedRef.current = true
         setFollowSearchSelection(true)
-        setSelectedSearch((i) =>
-          e.shiftKey ? Math.max(i - 1, -1) : Math.min(i + 1, filteredChatHistory.length - 1)
-        )
+        setSelectedSearch((i) => {
+          const next = e.shiftKey ? Math.max(i - 1, -1) : Math.min(i + 1, filteredChatHistory.length - 1)
+          aiChatSelectionActiveRef.current = next >= 0
+          return next
+        })
         return
       }
       if (canEnterLauncherArgumentMode) {
@@ -4461,6 +4480,7 @@ export default function CommandBar({
                 nextIsAiMode !== isAiMode
               ) {
                 userNavigatedRef.current = false
+                aiChatSelectionActiveRef.current = false
                 setFollowSuggestionSelection(true)
                 setSelectedSuggestion(0)
                 const nextDeepSearchMode = nextSearchQuery.mode === 'deep'
@@ -5019,9 +5039,11 @@ export default function CommandBar({
               <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5 select-none">
                 <ul className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5">
                   <li className="relative z-[1] px-2 py-2 text-[12px] text-ink-4">
-                    {chatHistoryLoaded
-                      ? 'No saved conversations yet. Type a question and press Enter to start one.'
-                      : 'Loading conversations…'}
+                    {chatHistoryQuery
+                      ? 'No matching conversations. Press Enter to ask AI as a new chat.'
+                      : chatHistoryLoaded
+                        ? 'No saved conversations yet. Type a question and press Enter to start one.'
+                        : 'Loading conversations…'}
                   </li>
                 </ul>
               </div>
@@ -5033,11 +5055,13 @@ export default function CommandBar({
               onWheelCapture={() => setFollowSearchSelection(false)}
               onMouseLeave={() => {
                 setFollowSearchSelection(false)
+                setSelectedSearch(-1)
+                aiChatSelectionActiveRef.current = false
               }}
             >
               <div className="glass-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-1.5 select-none">
                 <GlideList
-                  selectedIndex={selectedSearch}
+                  selectedIndex={aiChatSelectionActiveRef.current ? selectedSearch : -1}
                   itemCount={filteredChatHistory.length}
                   followSelected={followSearchSelection}
                   className="min-h-0 flex-1 overflow-y-auto scroll-pt-1.5 pt-1.5"
@@ -5049,7 +5073,7 @@ export default function CommandBar({
                     return (
                       <li key={chat.id} className="relative z-[1]">
                         <ListRow
-                          selected={i === selectedSearch}
+                          selected={i === selectedSearch && aiChatSelectionActiveRef.current}
                           icon={
                             isGenerating ? (
                               <div className="relative flex h-5 w-5 items-center justify-center">

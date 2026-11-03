@@ -49,5 +49,18 @@ describe('command bar input mode', () => {
     expect(mode.isAiMode).toBe(true)
     expect(mode.aiWorkingDirectory).toBeUndefined()
     expect(mode.aiTask).toBe('explain this project')
+    expect(aiChatBootForInput(mode, undefined)).toEqual({
+      kind: 'submit',
+      prompt: 'explain this project',
+      workingDirectory: undefined,
+    })
+  })
+
+  it('returns null boot for empty AI mode prompt so newChat can be opened', () => {
+    const mode = commandBarInputMode(' ', false)
+
+    expect(mode.isAiMode).toBe(true)
+    expect(mode.aiTask).toBe('')
+    expect(aiChatBootForInput(mode, undefined)).toBeNull()
   })
 })
