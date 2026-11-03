@@ -42,8 +42,7 @@ Before submitting PRs or finalizing tasks:
 To prevent bloating everyday context with domain-specific procedures, detailed workflows are maintained as Agent Skills under `.agents/skills/`:
 
 - [release-guidelines](.agents/skills/release-guidelines/SKILL.md): **Release Guidelines Skill**
-  - Mandatory dual-platform release rule (Windows & macOS Apple Silicon must always be updated together in `latest.json`).
-  - Bidirectional Tailscale remote build workflow:
-    - If on Windows: connect to MacBook (`100.67.107.38`), build macOS artifacts, pull them to Windows (or direct upload), build Windows locally, release together.
-    - If on macOS: connect to Windows PC (`100.77.254.64`), build Windows artifacts, pull them to Mac (or direct upload), build macOS locally, release together.
-  - Tauri minisign signing and universal `latest.json` feed generation.
+  - **Категорический запрет на GitHub Actions**: все сборки выполняются строго локально (на Mac и через Tailscale SSH на Windows).
+  - **Dual-platform release rule**: Windows & macOS Apple Silicon всегда должны быть подписаны и обновлены вместе в одном `latest.json`.
+  - **Предотвращение редиректа в браузер (manualAvailable)**: `gh release create` и `publish-feed.mjs` ДОЛЖНЫ выполняться непрерывно в единой цепочке, после чего сразу обновляется `updates/<channel>.json`. Если релиз на GitHub появится раньше фида на `channel-<channel>`, приложение посчитает релиз ручным и перекинет пользователя в браузер вместо тихого автообновления.
+  - Пошаговый алгоритм удаленной сборки и публикации подробно расписан в [.agents/skills/release-guidelines/SKILL.md](.agents/skills/release-guidelines/SKILL.md).
