@@ -714,7 +714,10 @@ fn clean_prompt_snippet(prompt: &str) -> String {
         "what are", "where is", "when is", "when did", "when was",
         "how to", "how do i", "how does", "why is", "why does", "explain",
         "help me with", "i need to", "look up", "show me", "which", "list",
-        "подскажи пожалуйста", "расскажи пожалуйста", "подскажи", "расскажи",
+        "подскажи пожалуйста", "расскажи пожалуйста", "скажи пожалуйста", "скажите пожалуйста",
+        "подскажи мне пожалуйста", "расскажи мне пожалуйста", "скажи мне пожалуйста", "скажите мне пожалуйста", "покажи мне пожалуйста",
+        "подскажи мне", "расскажи мне", "скажи мне", "скажите мне", "покажи мне",
+        "подскажи", "расскажи", "скажи", "скажите",
         "пожалуйста", "кто такой", "кто такая", "что такое", "что за",
         "как сделать", "как настроить", "как вообще", "как", "почему", "зачем",
         "когда вышел", "когда выйдет", "когда", "объясни", "найди",
@@ -725,8 +728,8 @@ fn clean_prompt_snippet(prompt: &str) -> String {
         changed = false;
         let lower = cleaned.to_lowercase();
         for p in &prefixes {
-            if lower.starts_with(p) && (lower.len() == p.len() || lower[p.len()..].starts_with(' ')) {
-                cleaned = cleaned[p.len()..].trim_start().to_string();
+            if lower.starts_with(p) && (lower.len() == p.len() || lower[p.len()..].starts_with(' ') || lower[p.len()..].starts_with(',')) {
+                cleaned = cleaned[p.len()..].trim_start_matches(|c: char| c.is_whitespace() || c == ',' || c == ':').to_string();
                 changed = true;
                 break;
             }

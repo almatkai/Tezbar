@@ -110,12 +110,12 @@ function cleanPromptSnippet(prompt: string): string {
   let cleaned = firstLine.trim()
 
   const prefixRegex =
-    /^(can you please|could you please|please tell me|tell me|can you|could you|please|who is|who was|what is|what was|what are|where is|when is|when did|when was|how to|how do i|how does|why is|why does|explain|help me with|i need to|look up|show me|which|list|подскажи пожалуйста|расскажи пожалуйста|подскажи|расскажи|пожалуйста|кто такой|кто такая|что такое|что за|как сделать|как настроить|как вообще|как|почему|зачем|объясни|найди|когда вышел|когда выйдет|когда|какие|какой|какая|какое|покажи)\s+/i
+    /^(can you please|could you please|please tell me|tell me|can you|could you|please|who is|who was|what is|what was|what are|where is|when is|when did|when was|how to|how do i|how does|why is|why does|explain|help me with|i need to|look up|show me|which|list|подскажи пожалуйста|расскажи пожалуйста|скажи пожалуйста|скажите пожалуйста|подскажи мне пожалуйста|расскажи мне пожалуйста|скажи мне пожалуйста|скажите мне пожалуйста|покажи мне пожалуйста|подскажи мне|расскажи мне|скажи мне|скажите мне|покажи мне|подскажи|расскажи|скажи|скажите|пожалуйста|кто такой|кто такая|что такое|что за|как сделать|как настроить|как вообще|как|почему|зачем|объясни|найди|когда вышел|когда выйдет|когда|какие|какой|какая|какое|покажи)[,\s]+/i
 
   let previous = ''
   while (previous !== cleaned) {
     previous = cleaned
-    cleaned = cleaned.replace(prefixRegex, '')
+    cleaned = cleaned.replace(prefixRegex, '').replace(/^[,:\s]+/, '')
   }
 
   // Remove trailing punctuation first so trailing query clauses match

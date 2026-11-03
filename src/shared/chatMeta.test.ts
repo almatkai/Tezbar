@@ -45,6 +45,14 @@ describe('chatMeta', () => {
 
     const ru = heuristicChatMeta('Подскажи пожалуйста что такое квантовая запутанность?')
     expect(ru.title).toBe('Квантовая запутанность')
+
+    const ruPorts = heuristicChatMeta('Скажи Порты открыты t3 code')
+    expect(ruPorts.title).toBe('Порты открыты t3 code')
+    expect(ruPorts.icon).toBe('cpu')
+
+    const ruComma = heuristicChatMeta('Скажи, какие порты открыты?')
+    expect(ruComma.title).toBe('Порты открыты')
+    expect(ruComma.icon).toBe('cpu')
   })
 
   it('generates meta for MCP and API key queries from user prompts', () => {

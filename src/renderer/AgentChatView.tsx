@@ -216,15 +216,15 @@ export default function AgentChatView({
         if (current && current.id === sessionId) {
           void persistTurn(agentMessageToTurn(final), current)
         } else {
-          void window.tezbar
-            .chatAppend({
-              session: { id: sessionId },
+          void (async () => {
+            const existing = await window.tezbar.chatGet(sessionId)
+            if (!existing) return
+            await window.tezbar.chatAppend({
+              session: existing,
               turn: agentMessageToTurn(final),
             })
-            .then(() => {
-              if (mounted.current) void refreshHistory()
-            })
-            .catch(() => {})
+            if (mounted.current) void refreshHistory()
+          })().catch(() => {})
         }
       }
 
@@ -258,8 +258,13 @@ export default function AgentChatView({
     },
   })
   const { stop, setMessages, clearError, sendMessage, regenerate, status } = chat
+  const fallbackMessages = useMemo(() => {
+    if (chat.messages.length > 0 || !session?.turns?.length) return []
+    return session.turns.map((turn) => chatTurnToAgentMessage(turn, session.id))
+  }, [chat.messages.length, session])
+  const activeMessages = chat.messages.length > 0 ? chat.messages : fallbackMessages
   const busy = preparing || status === 'submitted' || status === 'streaming'
-  const lastMessage = chat.messages.at(-1)
+  const lastMessage = activeMessages.at(-1)
   const activeMessage = lastMessage?.role === 'assistant' ? lastMessage : undefined
   const requestedApproval = activeMessage ? agentMessageApproval(activeMessage) : null
   const approval = requestedApproval?.approvalId !== resolvedApproval ? requestedApproval : null
@@ -310,8 +315,13 @@ export default function AgentChatView({
   )
 
   const loadSession = useCallback(
-    async (id: string): Promise<void> => {
-      if (sessionRef.current?.id === id) {
+    async (id: string, force = false): Promise<void> => {
+      if (
+        !force &&
+        sessionRef.current?.id === id &&
+        chat.messages.length > 0 &&
+        chat.messages.length >= (sessionRef.current.turns?.length ?? 0)
+      ) {
         if (mounted.current) {
           setHistoryOpen(false)
           followRef.current = true
@@ -350,7 +360,7 @@ export default function AgentChatView({
           setUiError(error instanceof Error ? error.message : 'Could not open conversation.')
       }
     },
-    [clearError, setMessages]
+    [clearError, setMessages, chat.messages.length]
   )
 
   const send = useCallback(
@@ -596,7 +606,7 @@ export default function AgentChatView({
         await rowsPromise
         if (cancelled) return
         if (boot.kind === 'resume') {
-          await loadSession(boot.sessionId)
+          await loadSession(boot.sessionId, true)
           return
         }
         if (boot.kind === 'newChat') {
@@ -909,7 +919,7 @@ export default function AgentChatView({
                     <button
                       type="button"
                       className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-left"
-                      onClick={() => void loadSession(row.id)}
+                      onClick={() => void loadSession(row.id, true)}
                     >
                       <ChatSquircle icon={row.icon} size={20} />
                       <div className="min-w-0 flex-1">
@@ -954,15 +964,15 @@ export default function AgentChatView({
               setFollowing(value)
             }}
           >
-            {chat.messages.map((message, index) => (
+            {activeMessages.map((message, index) => (
               <AgentMessage
                 key={message.id}
                 message={message}
                 streaming={
-                  busy && index === chat.messages.length - 1 && message.role === 'assistant'
+                  busy && index === activeMessages.length - 1 && message.role === 'assistant'
                 }
                 onRetry={
-                  !busy && index === chat.messages.length - 1 && message.role === 'assistant'
+                  !busy && index === activeMessages.length - 1 && message.role === 'assistant'
                     ? () => void retry()
                     : undefined
                 }
@@ -977,7 +987,7 @@ export default function AgentChatView({
                 }
               />
             ))}
-            {!chat.messages.length && !busy ? (
+            {!activeMessages.length && !busy ? (
               <div className="flex flex-1 flex-col items-start justify-center gap-4 py-8">
                 <div className="max-w-md">
                   <h2 className="text-[19px] font-semibold leading-tight text-ink-1">
