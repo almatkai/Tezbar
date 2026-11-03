@@ -101,7 +101,7 @@ import { RELEASE_NOTES_COMMAND_ID, withReleaseNotesResult } from './releaseNotes
 import {
   KNOWN_EXTENSION_APP_MAP,
   LauncherGlyph,
-  Squircle,
+  ChatSquircle,
   launcherIcon,
   normalizeIconKind,
 } from './launcherIcons'
@@ -5078,10 +5078,10 @@ export default function CommandBar({
                             isGenerating ? (
                               <div className="relative flex h-5 w-5 items-center justify-center">
                                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/40 opacity-75" />
-                                <Squircle kind="chat" />
+                                <ChatSquircle icon={chat.icon} />
                               </div>
                             ) : (
-                              <Squircle kind="chat" />
+                              <ChatSquircle icon={chat.icon} />
                             )
                           }
                           title={chat.title || 'Untitled Chat'}

@@ -33,9 +33,11 @@ import {
   CommandSurfaceHeader,
   type CommandSurfaceTaskActions,
 } from './ui/CommandSurface'
+import { ChatSquircle } from './launcherIcons'
+import { heuristicChatMeta } from '../shared/chatMeta'
 import { AgentMessage } from './agentChat/messages'
 import { readCachedChatHistory, writeCachedChatHistory } from './agentChat/historyCache'
-import { historyPlaceholder, makeChatId, summarizeChatTitle } from './agentChat/model'
+import { historyPlaceholder, makeChatId } from './agentChat/model'
 import { isNearScrollBottom } from './agentChat/streaming'
 import {
   agentMessageApproval,
@@ -163,6 +165,7 @@ export default function AgentChatView({
           session: {
             id: next.id,
             title: next.title,
+            icon: next.icon,
             createdAt: next.createdAt,
             updatedAt: next.updatedAt,
             workingDirectory: next.workingDirectory,
@@ -209,6 +212,34 @@ export default function AgentChatView({
           previous.map((item) => (item.id === message.id ? final : item))
         )
       void persistTurn(agentMessageToTurn(final), current)
+
+      if (!isAbort && !isError && current.turns.length <= 2) {
+        const userTurn = current.turns.find((t) => t.role === 'user')
+        if (userTurn?.text) {
+          const answerText = agentMessageText(final)
+          void window.tezbar
+            .chatGenerateMeta({
+              id: current.id,
+              prompt: userTurn.text,
+              answer: answerText || undefined,
+            })
+            .then((meta) => {
+              if (meta?.title && sessionRef.current?.id === current.id) {
+                const updated: ChatSession = {
+                  ...sessionRef.current,
+                  title: meta.title,
+                  icon: meta.icon,
+                }
+                sessionRef.current = updated
+                if (mounted.current) {
+                  setSession(updated)
+                  void refreshHistory()
+                }
+              }
+            })
+            .catch(() => {})
+        }
+      }
     },
   })
   const { stop, setMessages, clearError, sendMessage, regenerate, status } = chat
@@ -317,14 +348,26 @@ export default function AgentChatView({
         setConfig(fresh)
         metaRef.current = responseMeta(fresh)
         const now = Date.now()
-        const current = sessionRef.current ?? {
-          id: makeChatId(),
-          title: summarizeChatTitle(text),
-          createdAt: now,
-          updatedAt: now,
-          workingDirectory: directoryRef.current,
-          turns: [],
-        }
+        const meta = heuristicChatMeta(text)
+        const current: ChatSession = sessionRef.current
+          ? {
+              ...sessionRef.current,
+              title:
+                sessionRef.current.turns.length === 0 ? meta.title : sessionRef.current.title,
+              icon:
+                sessionRef.current.turns.length === 0
+                  ? meta.icon
+                  : sessionRef.current.icon || meta.icon,
+            }
+          : {
+              id: makeChatId(),
+              title: meta.title,
+              icon: meta.icon,
+              createdAt: now,
+              updatedAt: now,
+              workingDirectory: directoryRef.current,
+              turns: [],
+            }
         sessionRef.current = current
         setSession(current)
         const userTurn: ChatTurn = {
@@ -815,13 +858,16 @@ export default function AgentChatView({
                   >
                     <button
                       type="button"
-                      className="min-w-0 flex-1 px-3 py-2 text-left"
+                      className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-left"
                       onClick={() => void loadSession(row.id)}
                     >
-                      <span className="block truncate text-[12px] text-ink-2">
-                        {row.title || 'Untitled chat'}
-                      </span>
-                      <span className="block truncate text-[10.5px] text-ink-4">{row.preview}</span>
+                      <ChatSquircle icon={row.icon} size={20} />
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-[12px] text-ink-2">
+                          {row.title || 'Untitled chat'}
+                        </span>
+                        <span className="block truncate text-[10.5px] text-ink-4">{row.preview}</span>
+                      </div>
                     </button>
                     <button
                       type="button"

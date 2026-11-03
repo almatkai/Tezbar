@@ -422,7 +422,10 @@ export function initTauriBridge(): void {
     chatList: (limit?: number) => callBackend('chat:list', limit),
     chatGet: (id: string) => callBackend('chat:get', id),
     chatAppend: (payload: any) => callBackend('chat:append', payload),
-    chatUpdateTitle: (id: string, title: string) => callBackend('chat:update-title', { id, title }),
+    chatUpdateTitle: (id: string, title: string, icon?: string) =>
+      callBackend('chat:update-title', { id, title, icon }),
+    chatGenerateMeta: (payload: { id: string; prompt: string; answer?: string }) =>
+      callBackend('chat:generate-meta', payload),
     chatDeleteTurn: (sessionId: string, turnId: string) =>
       callBackend('chat:delete-turn', { sessionId, turnId }),
     chatDelete: (id: string) => callBackend('chat:delete', id),

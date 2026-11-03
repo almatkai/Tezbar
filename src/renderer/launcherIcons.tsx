@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { isEmoji } from '../shared/chatMeta'
 import { cx } from './ui/primitives'
 
 /* Launcher icon set: 24px line glyphs drawn white on a solid colored
@@ -594,4 +595,38 @@ export function Squircle({
       <LauncherGlyph kind={kind} size={Math.round(size * 0.58)} />
     </span>
   )
+}
+
+/** Squircle icon specifically for chat sessions — renders emoji or icon kind */
+export function ChatSquircle({
+  icon,
+  size = 22,
+  className,
+}: {
+  icon?: string
+  size?: number
+  className?: string
+}): JSX.Element {
+  if (icon && isEmoji(icon)) {
+    return (
+      <span
+        aria-hidden
+        className={cx(
+          'squircle grid shrink-0 place-items-center select-none leading-none',
+          className
+        )}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: Math.round(size * 0.27),
+          backgroundColor: 'rgba(139, 92, 246, 0.22)',
+          border: '1px solid rgba(139, 92, 246, 0.35)',
+          fontSize: Math.round(size * 0.58),
+        }}
+      >
+        {icon}
+      </span>
+    )
+  }
+  return <Squircle kind={icon || 'chat'} size={size} className={className} />
 }

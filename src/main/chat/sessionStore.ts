@@ -12,10 +12,12 @@ import type {
   ChatSessionSummary,
   ChatTurn,
 } from '../../shared/chat'
+import { heuristicChatMeta } from '../../shared/chatMeta'
 
 type SessionRow = {
   id: string
   title: string
+  icon: string | null
   created_at: number
   updated_at: number
   working_directory: string | null
@@ -198,6 +200,11 @@ class ChatSessionDatabase {
       // Existing and newly-created databases already have the column.
     }
     try {
+      this.db.exec(`ALTER TABLE chat_sessions ADD COLUMN icon TEXT;`)
+    } catch {
+      // Existing and newly-created databases already have the column.
+    }
+    try {
       this.db.exec(`ALTER TABLE chat_turns ADD COLUMN attachments_json TEXT;`)
     } catch {
       // Existing and newly-created databases already have the column.
@@ -217,8 +224,11 @@ class ChatSessionDatabase {
   listSessions(limit = 100): ChatSessionSummary[] {
     const rows = this.db
       .prepare(
-        `SELECT s.id, s.title, s.created_at, s.updated_at, s.working_directory,
+        `SELECT s.id, s.title, s.icon, s.created_at, s.updated_at, s.working_directory,
                 (SELECT COUNT(*) FROM chat_turns t WHERE t.session_id = s.id) AS turn_count,
+                (SELECT t.text FROM chat_turns t
+                   WHERE t.session_id = s.id AND t.role = 'user'
+                   ORDER BY t.created_at ASC LIMIT 1) AS first_prompt,
                 (SELECT t.text FROM chat_turns t
                    WHERE t.session_id = s.id AND t.role = 'user'
                    ORDER BY t.created_at DESC LIMIT 1) AS preview
@@ -226,22 +236,34 @@ class ChatSessionDatabase {
          ORDER BY s.updated_at DESC
          LIMIT ?`
       )
-      .all(limit) as Array<SessionRow & { turn_count: number | bigint; preview: string | null }>
-    return rows.map((r) => ({
-      id: r.id,
-      title: r.title,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-      turnCount: Number(r.turn_count),
-      workingDirectory: r.working_directory ?? undefined,
-      preview: r.preview ?? '',
-    }))
+      .all(limit) as Array<SessionRow & { turn_count: number | bigint; preview: string | null; first_prompt: string | null }>
+    return rows.map((r) => {
+      let icon = r.icon ?? undefined
+      let title = r.title
+      if (!icon || (r.first_prompt && (title === r.first_prompt || title === r.preview))) {
+        const meta = heuristicChatMeta(r.first_prompt || r.preview || title)
+        if (!icon) icon = meta.icon
+        if (r.first_prompt && (title === r.first_prompt || title === r.preview)) {
+          title = meta.title
+        }
+      }
+      return {
+        id: r.id,
+        title,
+        icon,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        turnCount: Number(r.turn_count),
+        workingDirectory: r.working_directory ?? undefined,
+        preview: r.preview ?? '',
+      }
+    })
   }
 
   getSession(id: string): ChatSession | null {
     const sessionRow = this.db
       .prepare(
-        `SELECT id, title, created_at, updated_at, working_directory FROM chat_sessions WHERE id = ?`
+        `SELECT id, title, icon, created_at, updated_at, working_directory FROM chat_sessions WHERE id = ?`
       )
       .get(id) as SessionRow | undefined
     if (!sessionRow) return null
@@ -254,6 +276,7 @@ class ChatSessionDatabase {
     return {
       id: sessionRow.id,
       title: sessionRow.title,
+      icon: sessionRow.icon ?? undefined,
       createdAt: sessionRow.created_at,
       updatedAt: sessionRow.updated_at,
       workingDirectory: sessionRow.working_directory ?? undefined,
@@ -272,20 +295,22 @@ class ChatSessionDatabase {
   }
 
   upsertSession(
-    session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt' | 'workingDirectory'>
+    session: Pick<ChatSession, 'id' | 'title' | 'icon' | 'createdAt' | 'updatedAt' | 'workingDirectory'>
   ): void {
     this.db
       .prepare(
-        `INSERT INTO chat_sessions(id, title, created_at, updated_at, working_directory)
-         VALUES(?, ?, ?, ?, ?)
+        `INSERT INTO chat_sessions(id, title, icon, created_at, updated_at, working_directory)
+         VALUES(?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            title = excluded.title,
+           icon = COALESCE(excluded.icon, chat_sessions.icon),
            updated_at = excluded.updated_at,
            working_directory = excluded.working_directory`
       )
       .run(
         session.id,
         session.title,
+        session.icon ?? null,
         session.createdAt,
         session.updatedAt,
         session.workingDirectory ?? null
@@ -330,10 +355,16 @@ class ChatSessionDatabase {
       .run(Math.max(turn.createdAt, Date.now()), sessionId)
   }
 
-  updateTitle(sessionId: string, title: string): void {
-    this.db
-      .prepare(`UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?`)
-      .run(title, Date.now(), sessionId)
+  updateTitle(sessionId: string, title: string, icon?: string): void {
+    if (icon !== undefined) {
+      this.db
+        .prepare(`UPDATE chat_sessions SET title = ?, icon = ?, updated_at = ? WHERE id = ?`)
+        .run(title, icon, Date.now(), sessionId)
+    } else {
+      this.db
+        .prepare(`UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?`)
+        .run(title, Date.now(), sessionId)
+    }
   }
 
   deleteTurn(sessionId: string, turnId: string): boolean {
@@ -381,7 +412,7 @@ export async function getChatSession(id: string): Promise<ChatSession | null> {
 }
 
 export async function upsertChatSession(
-  session: Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt' | 'workingDirectory'>
+  session: Pick<ChatSession, 'id' | 'title' | 'icon' | 'createdAt' | 'updatedAt' | 'workingDirectory'>
 ): Promise<void> {
   await store().ensureInitialized()
   store().upsertSession(session)
@@ -392,9 +423,13 @@ export async function appendChatTurn(sessionId: string, turn: ChatTurn): Promise
   store().appendTurn(sessionId, turn)
 }
 
-export async function updateChatSessionTitle(sessionId: string, title: string): Promise<void> {
+export async function updateChatSessionTitle(
+  sessionId: string,
+  title: string,
+  icon?: string
+): Promise<void> {
   await store().ensureInitialized()
-  store().updateTitle(sessionId, title)
+  store().updateTitle(sessionId, title, icon)
 }
 
 export async function deleteChatTurn(sessionId: string, turnId: string): Promise<boolean> {

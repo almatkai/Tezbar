@@ -51,6 +51,7 @@ export interface ChatTurn {
 export interface ChatSession {
   id: string
   title: string
+  icon?: string
   createdAt: number
   updatedAt: number
   /** Directory where Pi starts for every agent turn in this conversation. */
@@ -62,6 +63,7 @@ export interface ChatSession {
 export interface ChatSessionSummary {
   id: string
   title: string
+  icon?: string
   createdAt: number
   updatedAt: number
   turnCount: number
@@ -99,6 +101,7 @@ export const CHAT_IPC = {
   GET: 'chat:get',
   APPEND: 'chat:append',
   UPDATE_TITLE: 'chat:update-title',
+  GENERATE_META: 'chat:generate-meta',
   DELETE_TURN: 'chat:delete-turn',
   DELETE: 'chat:delete',
   CLEAR: 'chat:clear',
