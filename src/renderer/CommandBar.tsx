@@ -5061,41 +5061,19 @@ export default function CommandBar({
                             )
                           }
                           title={chat.title || 'Untitled Chat'}
-                          subtitle={
-                            isGenerating ? (
-                              <span className="flex items-center gap-2">
-                                <span className="truncate">
-                                  {activeAgentRun?.waitingApproval ? (
-                                    <span className="font-medium text-amber-300">
-                                      Waiting for your approval…
-                                    </span>
-                                  ) : (
-                                    <span className="tezbar-streaming-text font-medium">
-                                      {activeAgentRun?.streamingText ||
-                                        activeAgentRun?.statusLabel ||
-                                        'Generating response…'}
-                                    </span>
-                                  )}
-                                </span>
-                              </span>
-                            ) : (
-                              chat.preview || 'No preview available'
-                            )
-                          }
+                          subtitle={chat.preview || 'No preview available'}
                           accessory={
                             isGenerating ? (
                               <div className="flex items-center gap-1.5">
                                 {activeAgentRun?.waitingApproval ? (
-                                  <span className="flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10.5px] font-medium text-amber-300">
-                                    Approval needed
+                                  <span className="font-medium text-amber-300 text-[11.5px]">
+                                    Waiting for approval…
                                   </span>
                                 ) : (
-                                  <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10.5px] font-medium text-accent">
-                                    <span className="relative flex h-1.5 w-1.5">
-                                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
-                                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
-                                    </span>
-                                    Generating
+                                  <span className="tezbar-streaming-text font-medium text-[11.5px] max-w-[240px] truncate">
+                                    {activeAgentRun?.streamingText ||
+                                      activeAgentRun?.statusLabel ||
+                                      'Generating response…'}
                                   </span>
                                 )}
                               </div>
