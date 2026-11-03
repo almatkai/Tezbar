@@ -12,6 +12,94 @@ export function isEmoji(str?: string | null): boolean {
   return /\p{Extended_Pictographic}/u.test(trimmed)
 }
 
+export function chatIconToSquircleKind(icon?: string | null): string {
+  if (!icon) return 'chat'
+  const trimmed = icon.trim().toLowerCase()
+  switch (trimmed) {
+    case '⚡':
+    case 'code':
+    case 'coding':
+    case 'dev':
+    case 'mcp':
+    case 'script':
+    case 'snippets':
+      return 'snippets'
+    case '🔑':
+    case 'key':
+    case 'api-key':
+    case 'apikey':
+    case 'token':
+    case 'auth':
+    case 'password':
+      return 'key'
+    case '💻':
+    case 'cpu':
+    case 'hardware':
+    case 'system':
+    case 'mac':
+    case 'pc':
+      return 'cpu'
+    case '⚽':
+    case '🏀':
+    case '🎾':
+    case 'sport':
+    case 'sports':
+    case 'football':
+    case 'soccer':
+    case 'messi':
+    case 'ronaldo':
+    case 'trophy':
+      return 'trophy'
+    case '📝':
+    case '✍️':
+    case 'edit':
+    case 'pencil':
+    case 'draft':
+    case 'notes':
+    case 'note':
+    case 'writing':
+      return 'edit'
+    case '🤖':
+    case 'ai':
+    case 'llm':
+    case 'sparkles':
+      return 'ai'
+    case '📋':
+    case 'clipboard':
+      return 'clipboard'
+    case '☀️':
+    case 'weather':
+    case 'sun':
+      return 'weather'
+    case '🎵':
+    case 'music':
+    case 'audio':
+      return 'audio'
+    case '💰':
+    case 'finance':
+    case 'crypto':
+    case 'money':
+      return 'brew'
+    case '🔍':
+    case 'search':
+    case 'web':
+      return 'search'
+    case '⚙️':
+    case 'settings':
+    case 'config':
+      return 'settings'
+    case '📁':
+    case 'folder':
+    case 'files':
+      return 'finder'
+    case '💬':
+    case 'chat':
+      return 'chat'
+    default:
+      return trimmed || 'chat'
+  }
+}
+
 function wordMatch(text: string, pattern: string): boolean {
   const regex = new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${pattern})(?:[^\\p{L}\\p{N}]|$)`, 'iu')
   return regex.test(text)
@@ -63,56 +151,56 @@ export function heuristicChatMeta(
 
   // Specific high-frequency topic heuristics
   if (wordMatch(combined, 'messi|месси')) {
-    return { title: 'Lionel Messi', icon: '⚽' }
+    return { title: 'Lionel Messi', icon: 'trophy' }
   }
   if (wordMatch(combined, 'ronaldo|роналду|криштиану')) {
-    return { title: 'Cristiano Ronaldo', icon: '⚽' }
+    return { title: 'Cristiano Ronaldo', icon: 'trophy' }
   }
   if (wordMatch(combined, 'cpu|processor|процессор|память|ram|htop|activity monitor|нагрузк[а-я]*')) {
     if (wordMatch(combined, 'compiler|build|compil[a-z]*|idle|rustc|clang|gcc')) {
-      return { title: 'CPU Usage & Compiler Memory', icon: '💻' }
+      return { title: 'CPU Usage & Compiler Memory', icon: 'cpu' }
     }
-    return { title: 'CPU & Process Diagnostics', icon: '💻' }
+    return { title: 'CPU & Process Diagnostics', icon: 'cpu' }
   }
   if (wordMatch(combined, 'api key|apikey|api-key|токен|token|auth|секрет|secret')) {
-    return { title: cleanPromptSnippet(prompt) || 'API Key & Auth', icon: '🔑' }
+    return { title: cleanPromptSnippet(prompt) || 'API Key & Auth', icon: 'key' }
   }
   if (wordMatch(combined, 'mcp')) {
     const raw = cleanPromptSnippet(prompt)
     const title = raw ? raw.replace(/\bversion\b/gi, 'Version') : 'MCP Protocol'
-    return { title, icon: '⚡' }
+    return { title, icon: 'snippets' }
   }
 
   // General keyword categories
-  let icon = '💬'
+  let icon = 'chat'
   if (wordMatch(combined, 'football|soccer|fifa|champions league|футбол')) {
-    icon = '⚽'
+    icon = 'trophy'
   } else if (wordMatch(combined, 'nba|basketball|баскетбол')) {
-    icon = '🏀'
+    icon = 'sports'
   } else if (wordMatch(combined, 'tennis|теннис')) {
-    icon = '🎾'
+    icon = 'sports'
   } else if (wordMatch(combined, 'rust|python|typescript|javascript|golang|c\\+\\+|react|vue|node|bun|docker|k8s|git|github|api|backend|frontend|mcp|кодинг|баг|ошибк[а-я]*')) {
-    icon = '⚡'
+    icon = 'snippets'
   } else if (wordMatch(combined, 'cpu|mac|gpu|ram|terminal|bash|zsh|shell|linux|windows|диск|ssd|памят[а-я]*|процесс[а-я]*')) {
-    icon = '💻'
+    icon = 'cpu'
   } else if (wordMatch(combined, 'weather|rain|snow|temperature|погода|дождь|снег|температур[а-я]*')) {
-    icon = '☀️'
+    icon = 'weather'
   } else if (wordMatch(combined, 'music|song|album|spotify|artist|песн[а-я]*|музык[а-я]*|трек[а-я]*')) {
-    icon = '🎵'
+    icon = 'audio'
   } else if (wordMatch(combined, 'crypto|bitcoin|btc|eth|finance|stock|dollar|валют[а-я]*|деньг[а-я]*|биткоин|курс')) {
-    icon = '💰'
+    icon = 'brew'
   } else if (wordMatch(combined, 'ai|gpt|llm|claude|gemini|deepseek|ollama|нейросет[а-я]*|модел[а-я]*')) {
-    icon = '🤖'
+    icon = 'ai'
   } else if (wordMatch(combined, 'write|essay|summary|draft|article|письм[а-я]*|стать[а-я]*|сочинени[а-я]*|пересказ')) {
-    icon = '📝'
+    icon = 'edit'
   } else if (wordMatch(combined, 'translate|english|russian|spanish|перевод[а-я]*|язык[а-я]*')) {
-    icon = '🌐'
+    icon = 'finder'
   } else if (wordMatch(combined, 'movie|film|cinema|фильм[а-я]*|кино|сериал[а-я]*')) {
-    icon = '🎬'
+    icon = 'picture'
   } else if (wordMatch(combined, 'recipe|food|cooking|coffee|еда|рецепт[а-я]*|кофе')) {
-    icon = '☕'
+    icon = 'coffee'
   } else if (wordMatch(combined, 'search|find|where|поиск|найди')) {
-    icon = '🔍'
+    icon = 'search'
   }
 
   const cleanedTitle = cleanPromptSnippet(prompt)

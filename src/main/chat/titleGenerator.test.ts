@@ -8,7 +8,7 @@ vi.mock('../llm/registry', () => ({
 describe('generateChatTitleAndIcon', () => {
   it('falls back to heuristic when no LLM provider is available', async () => {
     const meta = await generateChatTitleAndIcon('What is using the most CPU?')
-    expect(meta.icon).toBe('💻')
+    expect(meta.icon).toBe('cpu')
     expect(meta.title).toBe('CPU & Process Diagnostics')
   })
 

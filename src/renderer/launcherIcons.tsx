@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { isEmoji } from '../shared/chatMeta'
 import { cx } from './ui/primitives'
 
 /* Launcher icon set: 24px line glyphs drawn white on a solid colored
@@ -153,6 +152,30 @@ const PIPETTE = (
   </>
 )
 
+const PENCIL = (
+  <>
+    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    <path d="m15 5 4 4" />
+  </>
+)
+
+const TROPHY = (
+  <>
+    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+    <path d="M4 22h16" />
+    <path d="M10 14.66V17c0 .55-.45 1-1 1H8v4h8v-4h-1c-.55 0-1-.45-1-1v-2.34" />
+    <path d="M6 4h12v5a6 6 0 0 1-12 0V4Z" />
+  </>
+)
+
+const SUN = (
+  <>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+  </>
+)
+
 const CALENDAR = (
   <>
     <rect width="18" height="18" x="3" y="4" rx="2" />
@@ -251,7 +274,15 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
   },
   extensions: { color: ORANGE, glyph: BLOCKS },
   snippets: { color: TEAL, glyph: BRACES },
+  code: { color: TEAL, glyph: BRACES },
   notes: { color: AMBER, glyph: NOTE },
+  edit: { color: ROSE, glyph: PENCIL },
+  pencil: { color: ROSE, glyph: PENCIL },
+  trophy: { color: AMBER, glyph: TROPHY },
+  sports: { color: AMBER, glyph: TROPHY },
+  weather: { color: AMBER, glyph: SUN },
+  sun: { color: AMBER, glyph: SUN },
+  ai: { color: CYAN, glyph: SPARKLES },
   emoji: {
     color: AMBER,
     glyph: (
@@ -264,6 +295,14 @@ const ICONS: Record<string, { color: string; glyph: ReactNode }> = {
   clipboard: { color: SLATE, glyph: CLIPBOARD },
   terminal: { color: GRAPHITE, glyph: TERMINAL },
   key: {
+    color: GREEN,
+    glyph: KEY,
+  },
+  token: {
+    color: GREEN,
+    glyph: KEY,
+  },
+  auth: {
     color: GREEN,
     glyph: KEY,
   },
@@ -597,7 +636,95 @@ export function Squircle({
   )
 }
 
-/** Squircle icon specifically for chat sessions — renders emoji or icon kind */
+export function chatIconToSquircleKind(icon?: string | null): string {
+  if (!icon) return 'chat'
+  const trimmed = icon.trim().toLowerCase()
+  switch (trimmed) {
+    case '⚡':
+    case 'code':
+    case 'coding':
+    case 'dev':
+    case 'mcp':
+    case 'script':
+      return 'snippets'
+    case '🔑':
+    case 'key':
+    case 'api-key':
+    case 'apikey':
+    case 'token':
+    case 'auth':
+    case 'password':
+      return 'key'
+    case '💻':
+    case 'cpu':
+    case 'hardware':
+    case 'system':
+    case 'mac':
+    case 'pc':
+      return 'cpu'
+    case '⚽':
+    case '🏀':
+    case '🎾':
+    case 'sport':
+    case 'sports':
+    case 'football':
+    case 'soccer':
+    case 'messi':
+    case 'ronaldo':
+    case 'trophy':
+      return 'trophy'
+    case '📝':
+    case '✍️':
+    case 'edit':
+    case 'pencil':
+    case 'draft':
+    case 'notes':
+    case 'note':
+    case 'writing':
+      return 'edit'
+    case '🤖':
+    case 'ai':
+    case 'llm':
+    case 'sparkles':
+      return 'ai'
+    case '📋':
+    case 'clipboard':
+      return 'clipboard'
+    case '☀️':
+    case 'weather':
+    case 'sun':
+      return 'weather'
+    case '🎵':
+    case 'music':
+    case 'audio':
+      return 'audio'
+    case '💰':
+    case 'finance':
+    case 'crypto':
+    case 'money':
+      return 'brew'
+    case '🔍':
+    case 'search':
+    case 'web':
+      return 'search'
+    case '⚙️':
+    case 'settings':
+    case 'config':
+      return 'settings'
+    case '📁':
+    case 'folder':
+    case 'files':
+      return 'finder'
+    case '💬':
+    case 'chat':
+      return 'chat'
+    default:
+      if (hasCustomLauncherIcon(trimmed)) return trimmed
+      return 'chat'
+  }
+}
+
+/** Solid colored squircle with a white glyph for chat sessions */
 export function ChatSquircle({
   icon,
   size = 22,
@@ -607,26 +734,6 @@ export function ChatSquircle({
   size?: number
   className?: string
 }): JSX.Element {
-  if (icon && isEmoji(icon)) {
-    return (
-      <span
-        aria-hidden
-        className={cx(
-          'squircle grid shrink-0 place-items-center select-none leading-none',
-          className
-        )}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: Math.round(size * 0.27),
-          backgroundColor: 'rgba(139, 92, 246, 0.22)',
-          border: '1px solid rgba(139, 92, 246, 0.35)',
-          fontSize: Math.round(size * 0.58),
-        }}
-      >
-        {icon}
-      </span>
-    )
-  }
-  return <Squircle kind={icon || 'chat'} size={size} className={className} />
+  const kind = chatIconToSquircleKind(icon)
+  return <Squircle kind={kind} size={size} className={className} />
 }

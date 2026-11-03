@@ -254,7 +254,7 @@ impl AiCore {
                 let snippet = if answer.len() > 300 { &answer[..300] } else { answer };
                 prompt_content.push_str(&format!("\nAssistant response snippet: {snippet}"));
             }
-            let system_prompt = "You are a concise title and icon generator for a launcher chat assistant.\nGenerate a very short, descriptive conversation title (2-5 words, max 35 characters) and a single fitting emoji icon.\nRules:\n1. Output strictly valid JSON matching this schema: {\"title\": \"...\", \"icon\": \"...\"}\n2. \"title\" must be concise and descriptive in the language of the prompt (Russian if Russian, English if English). Do not use quotes or boilerplate questions like 'How to' or 'What is'.\n3. \"icon\" must be exactly ONE emoji character matching the topic (e.g. 💻 for CPU/code, ⚽ for soccer/Messi, ⚡ for dev/scripts, ☀️ for weather, 🔑 for API keys/auth, 💰 for crypto/money, 📝 for notes/writing, 🤖 for AI/LLM).\n4. Return ONLY the raw JSON object, no markdown, no backticks, no explanations.";
+            let system_prompt = "You are a concise title and icon generator for a launcher chat assistant.\nGenerate a very short, descriptive conversation title (2-5 words, max 35 characters) and a single fitting theme icon identifier.\nRules:\n1. Output strictly valid JSON matching this schema: {\"title\": \"...\", \"icon\": \"...\"}\n2. \"title\" must be concise and descriptive in the language of the prompt (Russian if Russian, English if English). Do not use quotes or boilerplate questions like 'How to' or 'What is'.\n3. \"icon\" must be one of these theme keys: \"snippets\" (coding/dev/MCP), \"key\" (API keys/auth/passwords), \"cpu\" (system/hardware/CPU), \"trophy\" (sports/Messi/achievements), \"edit\" (writing/summaries/notes), \"ai\" (AI/LLM/prompts), \"search\" (research/lookup), \"weather\" (forecast), \"audio\" (music), \"terminal\" (bash/cli), or \"chat\" (general questions).\n4. Return ONLY the raw JSON object, no markdown, no backticks, no explanations.";
             let messages = vec![
                 json!({"role": "system", "content": system_prompt}),
                 json!({"role": "user", "content": prompt_content}),
@@ -743,23 +743,23 @@ pub fn heuristic_meta(prompt: &str, answer: &str) -> Value {
     let combined = format!("{prompt} {answer}").to_lowercase();
 
     if combined.contains("messi") || combined.contains("месси") {
-        return json!({"title": "Lionel Messi", "icon": "⚽"});
+        return json!({"title": "Lionel Messi", "icon": "trophy"});
     }
     if combined.contains("ronaldo") || combined.contains("роналду") || combined.contains("криштиану") {
-        return json!({"title": "Cristiano Ronaldo", "icon": "⚽"});
+        return json!({"title": "Cristiano Ronaldo", "icon": "trophy"});
     }
     if combined.contains("cpu") || combined.contains("processor") || combined.contains("процессор") || combined.contains("нагрузк") {
         if combined.contains("compiler") || combined.contains("build") || combined.contains("idle") || combined.contains("compil") {
-            return json!({"title": "CPU Usage & Compiler Memory", "icon": "💻"});
+            return json!({"title": "CPU Usage & Compiler Memory", "icon": "cpu"});
         }
-        return json!({"title": "CPU & Process Diagnostics", "icon": "💻"});
+        return json!({"title": "CPU & Process Diagnostics", "icon": "cpu"});
     }
     if combined.contains("api key") || combined.contains("api-key") || combined.contains("apikey") || combined.contains("токен") || combined.contains("ключ") {
         let mut title = clean_prompt_snippet(prompt);
         if title == "New chat" {
             title = "API Key".into();
         }
-        return json!({"title": title, "icon": "🔑"});
+        return json!({"title": title, "icon": "key"});
     }
     if combined.contains("mcp") {
         let mut title = clean_prompt_snippet(prompt);
@@ -768,35 +768,37 @@ pub fn heuristic_meta(prompt: &str, answer: &str) -> Value {
         } else {
             title = title.replace("version", "Version");
         }
-        return json!({"title": title, "icon": "⚡"});
+        return json!({"title": title, "icon": "snippets"});
     }
 
     let icon = if combined.contains("football") || combined.contains("soccer") || combined.contains("fifa") || combined.contains("футбол") {
-        "⚽"
+        "trophy"
     } else if combined.contains("basketball") || combined.contains("nba") || combined.contains("баскетбол") {
-        "🏀"
+        "sports"
     } else if combined.contains("tennis") || combined.contains("теннис") {
-        "🎾"
+        "sports"
     } else if combined.contains("rust") || combined.contains("python") || combined.contains("typescript") || combined.contains("javascript") || combined.contains("golang") || combined.contains("react") || combined.contains("code") || combined.contains("кодинг") || combined.contains("баг") || combined.contains("ошибк") {
-        "⚡"
+        "snippets"
     } else if combined.contains("mac") || combined.contains("terminal") || combined.contains("bash") || combined.contains("zsh") || combined.contains("linux") || combined.contains("windows") || combined.contains("диск") || combined.contains("ssd") || combined.contains("памят") || combined.contains("процесс") {
-        "💻"
+        "cpu"
     } else if combined.contains("weather") || combined.contains("rain") || combined.contains("snow") || combined.contains("погода") || combined.contains("дождь") || combined.contains("температур") {
-        "☀️"
+        "weather"
     } else if combined.contains("music") || combined.contains("song") || combined.contains("spotify") || combined.contains("песн") || combined.contains("музык") || combined.contains("трек") {
-        "🎵"
+        "audio"
     } else if combined.contains("crypto") || combined.contains("bitcoin") || combined.contains("btc") || combined.contains("eth") || combined.contains("валют") || combined.contains("деньг") || combined.contains("биткоин") || combined.contains("курс") {
-        "💰"
+        "brew"
     } else if combined.contains("ai") || combined.contains("gpt") || combined.contains("llm") || combined.contains("claude") || combined.contains("gemini") || combined.contains("нейросет") || combined.contains("модел") {
-        "🤖"
+        "ai"
     } else if combined.contains("auth") || combined.contains("password") || combined.contains("пароль") || combined.contains("логин") || combined.contains("secret") {
-        "🔑"
+        "key"
     } else if combined.contains("movie") || combined.contains("film") || combined.contains("фильм") || combined.contains("кино") || combined.contains("сериал") {
-        "🎬"
+        "picture"
     } else if combined.contains("food") || combined.contains("coffee") || combined.contains("еда") || combined.contains("кофе") || combined.contains("рецепт") {
-        "☕"
+        "coffee"
+    } else if combined.contains("write") || combined.contains("draft") || combined.contains("note") || combined.contains("стать") || combined.contains("письм") {
+        "edit"
     } else {
-        "💬"
+        "chat"
     };
 
     let title = clean_prompt_snippet(prompt);
