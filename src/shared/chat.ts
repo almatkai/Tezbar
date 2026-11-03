@@ -77,6 +77,7 @@ export interface ActiveAgentRunInfo {
   sessionId: string
   busy: boolean
   sessionTitle?: string
+  sessionIcon?: string
   statusLabel?: string
   streamingText?: string
   waitingApproval?: boolean

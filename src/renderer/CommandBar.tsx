@@ -38,6 +38,7 @@ import { evaluateExpression, type CalcResult } from './calculator'
 import { buildColorConversionResults } from './colorConverter'
 import { parseCurrencyQuery } from './currency/parseCurrencyQuery'
 import type { ActiveAgentRunInfo, ChatSessionSummary } from '../shared/chat'
+import { heuristicChatMeta } from '../shared/chatMeta'
 import type { AiChatBoot } from '../shared/aiChatSurface'
 import { RAYMES_QUICK_NOTE_SHORTCUT_EVENT } from '../shared/aiChatSurface'
 import {
@@ -1834,18 +1835,36 @@ export default function CommandBar({
   }, [onOpenAiChat])
 
   const effectiveChatHistory = useMemo(() => {
-    if (!activeAgentRun?.busy || !activeAgentRun.sessionId) return chatHistory
-    const exists = chatHistory.some((c) => c.id === activeAgentRun.sessionId)
-    if (exists) return chatHistory
-    const activeItem: ChatSessionSummary = {
-      id: activeAgentRun.sessionId,
-      title: activeAgentRun.sessionTitle || 'Agent Task',
-      turnCount: 1,
-      preview: activeAgentRun.streamingText || activeAgentRun.statusLabel || 'Generating response…',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+    let list = chatHistory
+    if (activeAgentRun?.busy && activeAgentRun.sessionId) {
+      const exists = chatHistory.some((c) => c.id === activeAgentRun.sessionId)
+      if (!exists) {
+        const activeItem: ChatSessionSummary = {
+          id: activeAgentRun.sessionId,
+          title: activeAgentRun.sessionTitle || 'Agent Task',
+          icon: activeAgentRun.sessionIcon,
+          turnCount: 1,
+          preview: activeAgentRun.streamingText || activeAgentRun.statusLabel || 'Generating response…',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
+        list = [activeItem, ...chatHistory]
+      }
     }
-    return [activeItem, ...chatHistory]
+    return list.map((chat) => {
+      const isGenerating = activeAgentRun?.busy && activeAgentRun.sessionId === chat.id
+      const meta = heuristicChatMeta(chat.preview || chat.title)
+      const icon = chat.icon || (isGenerating ? activeAgentRun?.sessionIcon : undefined) || meta.icon
+      const title =
+        (!chat.title || chat.title === chat.preview || chat.title === 'Agent Task')
+          ? meta.title
+          : chat.title
+      return {
+        ...chat,
+        icon,
+        title,
+      }
+    })
   }, [chatHistory, activeAgentRun])
 
   const chatHistoryQuery = agentTask.trim().toLowerCase()

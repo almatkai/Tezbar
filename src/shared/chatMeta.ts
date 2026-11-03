@@ -22,7 +22,7 @@ function cleanPromptSnippet(prompt: string): string {
   let cleaned = firstLine.trim()
 
   const prefixRegex =
-    /^(can you|could you|please|tell me|who is|who was|what is|what was|what are|where is|how to|how do i|how does|why is|why does|explain|help me with|i need to|look up|подскажи|расскажи|пожалуйста|кто такой|кто такая|что такое|что за|как сделать|как настроить|почему|зачем|объясни|найди)\s+/i
+    /^(can you|could you|please|tell me|who is|who was|what is|what was|what are|where is|when is|when did|when was|how to|how do i|how does|why is|why does|explain|help me with|i need to|look up|подскажи пожалуйста|расскажи пожалуйста|подскажи|расскажи|пожалуйста|кто такой|кто такая|что такое|что за|как сделать|как настроить|как вообще|как|почему|зачем|объясни|найди|когда вышел|когда выйдет|когда)\s+/i
 
   let previous = ''
   while (previous !== cleaned) {
@@ -30,7 +30,18 @@ function cleanPromptSnippet(prompt: string): string {
     cleaned = cleaned.replace(prefixRegex, '')
   }
 
+  // Remove trailing punctuation first so trailing query clauses match
   cleaned = cleaned.replace(/[\?\!\.\:\;]+$/g, '').trim()
+
+  // Strip common trailing query clauses
+  cleaned = cleaned
+    .replace(
+      /\s+(when it came out|when did it come out|when was it released|когда вышел|когда выйдет|как вообще генерить|как генерить|как сделать|как настроить|как использовать)$/i,
+      ''
+    )
+    .replace(/[\?\!\.\:\;]+$/g, '')
+    .trim()
+
   if (!cleaned) return ''
 
   // Capitalize first letter
@@ -63,6 +74,14 @@ export function heuristicChatMeta(
     }
     return { title: 'CPU & Process Diagnostics', icon: '💻' }
   }
+  if (wordMatch(combined, 'api key|apikey|api-key|токен|token|auth|секрет|secret')) {
+    return { title: cleanPromptSnippet(prompt) || 'API Key & Auth', icon: '🔑' }
+  }
+  if (wordMatch(combined, 'mcp')) {
+    const raw = cleanPromptSnippet(prompt)
+    const title = raw ? raw.replace(/\bversion\b/gi, 'Version') : 'MCP Protocol'
+    return { title, icon: '⚡' }
+  }
 
   // General keyword categories
   let icon = '💬'
@@ -72,7 +91,7 @@ export function heuristicChatMeta(
     icon = '🏀'
   } else if (wordMatch(combined, 'tennis|теннис')) {
     icon = '🎾'
-  } else if (wordMatch(combined, 'rust|python|typescript|javascript|golang|c\\+\\+|react|vue|node|bun|docker|k8s|git|github|api|backend|frontend|кодинг|баг|ошибк[а-я]*')) {
+  } else if (wordMatch(combined, 'rust|python|typescript|javascript|golang|c\\+\\+|react|vue|node|bun|docker|k8s|git|github|api|backend|frontend|mcp|кодинг|баг|ошибк[а-я]*')) {
     icon = '⚡'
   } else if (wordMatch(combined, 'cpu|mac|gpu|ram|terminal|bash|zsh|shell|linux|windows|диск|ssd|памят[а-я]*|процесс[а-я]*')) {
     icon = '💻'

@@ -682,6 +682,7 @@ export default function AgentChatView({
       onActiveRunChange?.({
         sessionId: sessionRef.current.id,
         sessionTitle: sessionRef.current.title,
+        sessionIcon: sessionRef.current.icon,
         busy: true,
         statusLabel,
         streamingText: text || undefined,

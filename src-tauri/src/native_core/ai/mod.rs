@@ -36,6 +36,7 @@ pub const CHANNELS: &[&str] = &[
     "chat:get",
     "chat:append",
     "chat:update-title",
+    "chat:generate-meta",
     "chat:delete-turn",
     "chat:delete",
     "chat:clear",
@@ -244,6 +245,30 @@ impl AiCore {
                 .agent
                 .as_ref()
                 .is_some_and(|r| r.id == id && !r.emitted)
+    }
+    async fn generate_chat_meta(&self, prompt: &str, answer: &str) -> CoreResult {
+        if let Ok(cfg) = self.cfg(Some("chat"), None).await {
+            let cancel = Cancel::new();
+            let mut prompt_content = format!("User prompt: {prompt}");
+            if !answer.is_empty() {
+                let snippet = if answer.len() > 300 { &answer[..300] } else { answer };
+                prompt_content.push_str(&format!("\nAssistant response snippet: {snippet}"));
+            }
+            let system_prompt = "You are a concise title and icon generator for a launcher chat assistant.\nGenerate a very short, descriptive conversation title (2-5 words, max 35 characters) and a single fitting emoji icon.\nRules:\n1. Output strictly valid JSON matching this schema: {\"title\": \"...\", \"icon\": \"...\"}\n2. \"title\" must be concise and descriptive in the language of the prompt (Russian if Russian, English if English). Do not use quotes or boilerplate questions like 'How to' or 'What is'.\n3. \"icon\" must be exactly ONE emoji character matching the topic (e.g. 💻 for CPU/code, ⚽ for soccer/Messi, ⚡ for dev/scripts, ☀️ for weather, 🔑 for API keys/auth, 💰 for crypto/money, 📝 for notes/writing, 🤖 for AI/LLM).\n4. Return ONLY the raw JSON object, no markdown, no backticks, no explanations.";
+            let messages = vec![
+                json!({"role": "system", "content": system_prompt}),
+                json!({"role": "user", "content": prompt_content}),
+            ];
+            let stream_req = self.stream(&cfg, messages, &cancel, |_| {});
+            if let Ok(Ok(raw)) = tokio::time::timeout(Duration::from_secs(8), stream_req).await {
+                cancel.cancel();
+                if let Some(parsed) = parse_meta_json(&raw) {
+                    return Ok(parsed);
+                }
+            }
+            cancel.cancel();
+        }
+        Ok(heuristic_meta(prompt, answer))
     }
     async fn launch(
         &self,
@@ -479,6 +504,19 @@ impl AiCore {
             }
             "chat:list" | "chat:get" | "chat:append" | "chat:update-title" | "chat:delete-turn"
             | "chat:delete" | "chat:clear" => chat::handle(&self.inner.ctx, channel, args).await,
+            "chat:generate-meta" => {
+                let id = a["id"].as_str().ok_or("Session id must be a string")?;
+                let prompt = a["prompt"].as_str().unwrap_or("").trim();
+                let answer = a["answer"].as_str().unwrap_or("").trim();
+                if prompt.is_empty() {
+                    return Err("Prompt is required".into());
+                }
+                let meta = self.generate_chat_meta(prompt, answer).await?;
+                let title = meta["title"].as_str().unwrap_or("New chat");
+                let icon = meta["icon"].as_str().unwrap_or("💬");
+                let _ = chat::update_title_and_icon(&self.inner.ctx, id, title, icon).await;
+                Ok(meta)
+            }
             "query" => {
                 let text = a.as_str().ok_or("Query must be a string")?.trim();
                 let intent = classify(text);
@@ -630,4 +668,161 @@ fn classify(input: &str) -> Value {
         return json!({"type":"command","command":input,"confidence":0.62});
     }
     json!({"type":"agent","input":input})
+}
+
+fn clean_prompt_snippet(prompt: &str) -> String {
+    let first_line = prompt.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+    let mut cleaned = first_line.trim().to_string();
+    let prefixes = [
+        "can you please", "could you please", "please tell me", "tell me",
+        "can you", "could you", "who is", "who was", "what is", "what was",
+        "what are", "where is", "when is", "when did", "when was",
+        "how to", "how do i", "how does", "why is", "why does", "explain",
+        "help me with", "i need to", "look up",
+        "подскажи пожалуйста", "расскажи пожалуйста", "подскажи", "расскажи",
+        "пожалуйста", "кто такой", "кто такая", "что такое", "что за",
+        "как сделать", "как настроить", "как вообще", "как", "почему", "зачем",
+        "когда вышел", "когда выйдет", "когда", "объясни", "найди",
+    ];
+    let mut changed = true;
+    while changed {
+        changed = false;
+        let lower = cleaned.to_lowercase();
+        for p in &prefixes {
+            if lower.starts_with(p) && (lower.len() == p.len() || lower[p.len()..].starts_with(' ')) {
+                cleaned = cleaned[p.len()..].trim_start().to_string();
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    while cleaned.ends_with('?') || cleaned.ends_with('!') || cleaned.ends_with('.') || cleaned.ends_with(':') {
+        cleaned.pop();
+    }
+    cleaned = cleaned.trim().to_string();
+
+    let suffixes = [
+        "when it came out", "when did it come out", "when was it released",
+        "когда вышел", "когда выйдет", "как вообще генерить", "как генерить",
+        "как сделать", "как настроить", "как использовать",
+    ];
+    let mut changed_s = true;
+    while changed_s {
+        changed_s = false;
+        let lower = cleaned.to_lowercase();
+        for s in &suffixes {
+            if lower.ends_with(s) && (lower.len() == s.len() || lower[..lower.len() - s.len()].ends_with(' ')) {
+                cleaned = cleaned[..cleaned.len() - s.len()].trim_end().to_string();
+                changed_s = true;
+                break;
+            }
+        }
+    }
+
+    while cleaned.ends_with('?') || cleaned.ends_with('!') || cleaned.ends_with('.') || cleaned.ends_with(':') {
+        cleaned.pop();
+    }
+    cleaned = cleaned.trim().to_string();
+    if cleaned.is_empty() {
+        return "New chat".to_string();
+    }
+    let mut chars = cleaned.chars();
+    let first = chars.next().unwrap().to_uppercase().to_string();
+    let rest: String = chars.collect();
+    let capitalized = format!("{first}{rest}");
+    if capitalized.chars().count() > 36 {
+        let truncated: String = capitalized.chars().take(36).collect();
+        format!("{truncated}…")
+    } else {
+        capitalized
+    }
+}
+
+pub fn heuristic_meta(prompt: &str, answer: &str) -> Value {
+    let combined = format!("{prompt} {answer}").to_lowercase();
+
+    if combined.contains("messi") || combined.contains("месси") {
+        return json!({"title": "Lionel Messi", "icon": "⚽"});
+    }
+    if combined.contains("ronaldo") || combined.contains("роналду") || combined.contains("криштиану") {
+        return json!({"title": "Cristiano Ronaldo", "icon": "⚽"});
+    }
+    if combined.contains("cpu") || combined.contains("processor") || combined.contains("процессор") || combined.contains("нагрузк") {
+        if combined.contains("compiler") || combined.contains("build") || combined.contains("idle") || combined.contains("compil") {
+            return json!({"title": "CPU Usage & Compiler Memory", "icon": "💻"});
+        }
+        return json!({"title": "CPU & Process Diagnostics", "icon": "💻"});
+    }
+    if combined.contains("api key") || combined.contains("api-key") || combined.contains("apikey") || combined.contains("токен") || combined.contains("ключ") {
+        let mut title = clean_prompt_snippet(prompt);
+        if title == "New chat" {
+            title = "API Key".into();
+        }
+        return json!({"title": title, "icon": "🔑"});
+    }
+    if combined.contains("mcp") {
+        let mut title = clean_prompt_snippet(prompt);
+        if title == "New chat" {
+            title = "MCP Protocol".into();
+        } else {
+            title = title.replace("version", "Version");
+        }
+        return json!({"title": title, "icon": "⚡"});
+    }
+
+    let icon = if combined.contains("football") || combined.contains("soccer") || combined.contains("fifa") || combined.contains("футбол") {
+        "⚽"
+    } else if combined.contains("basketball") || combined.contains("nba") || combined.contains("баскетбол") {
+        "🏀"
+    } else if combined.contains("tennis") || combined.contains("теннис") {
+        "🎾"
+    } else if combined.contains("rust") || combined.contains("python") || combined.contains("typescript") || combined.contains("javascript") || combined.contains("golang") || combined.contains("react") || combined.contains("code") || combined.contains("кодинг") || combined.contains("баг") || combined.contains("ошибк") {
+        "⚡"
+    } else if combined.contains("mac") || combined.contains("terminal") || combined.contains("bash") || combined.contains("zsh") || combined.contains("linux") || combined.contains("windows") || combined.contains("диск") || combined.contains("ssd") || combined.contains("памят") || combined.contains("процесс") {
+        "💻"
+    } else if combined.contains("weather") || combined.contains("rain") || combined.contains("snow") || combined.contains("погода") || combined.contains("дождь") || combined.contains("температур") {
+        "☀️"
+    } else if combined.contains("music") || combined.contains("song") || combined.contains("spotify") || combined.contains("песн") || combined.contains("музык") || combined.contains("трек") {
+        "🎵"
+    } else if combined.contains("crypto") || combined.contains("bitcoin") || combined.contains("btc") || combined.contains("eth") || combined.contains("валют") || combined.contains("деньг") || combined.contains("биткоин") || combined.contains("курс") {
+        "💰"
+    } else if combined.contains("ai") || combined.contains("gpt") || combined.contains("llm") || combined.contains("claude") || combined.contains("gemini") || combined.contains("нейросет") || combined.contains("модел") {
+        "🤖"
+    } else if combined.contains("auth") || combined.contains("password") || combined.contains("пароль") || combined.contains("логин") || combined.contains("secret") {
+        "🔑"
+    } else if combined.contains("movie") || combined.contains("film") || combined.contains("фильм") || combined.contains("кино") || combined.contains("сериал") {
+        "🎬"
+    } else if combined.contains("food") || combined.contains("coffee") || combined.contains("еда") || combined.contains("кофе") || combined.contains("рецепт") {
+        "☕"
+    } else {
+        "💬"
+    };
+
+    let title = clean_prompt_snippet(prompt);
+    json!({"title": title, "icon": icon})
+}
+
+fn parse_meta_json(raw: &str) -> Option<Value> {
+    let trimmed = raw.trim();
+    let unquoted = if let Some(stripped) = trimmed.strip_prefix("```json") {
+        stripped.strip_suffix("```").unwrap_or(stripped).trim()
+    } else if let Some(stripped) = trimmed.strip_prefix("```") {
+        stripped.strip_suffix("```").unwrap_or(stripped).trim()
+    } else {
+        trimmed
+    };
+    let start = unquoted.find('{')?;
+    let end = unquoted.rfind('}')?;
+    if end <= start {
+        return None;
+    }
+    let slice = &unquoted[start..=end];
+    let val: Value = serde_json::from_str(slice).ok()?;
+    let title = val["title"].as_str()?.trim();
+    let icon = val["icon"].as_str()?.trim();
+    if title.is_empty() || icon.is_empty() {
+        return None;
+    }
+    Some(json!({"title": title, "icon": icon}))
 }

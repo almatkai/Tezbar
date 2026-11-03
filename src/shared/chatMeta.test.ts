@@ -46,4 +46,14 @@ describe('chatMeta', () => {
     const ru = heuristicChatMeta('Подскажи пожалуйста что такое квантовая запутанность?')
     expect(ru.title).toBe('Квантовая запутанность')
   })
+
+  it('generates meta for MCP and API key queries from user prompts', () => {
+    const mcp = heuristicChatMeta('MCP version 2 when it came out?')
+    expect(mcp.icon).toBe('⚡')
+    expect(mcp.title).toBe('MCP Version 2')
+
+    const apiKey = heuristicChatMeta('API Key как вообще генерить')
+    expect(apiKey.icon).toBe('🔑')
+    expect(apiKey.title).toBe('API Key')
+  })
 })

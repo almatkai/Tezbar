@@ -141,6 +141,7 @@ fn backend_request_timeout(channel: &str) -> Duration {
         "file:quick-look" => Duration::from_secs(24 * 60 * 60),
         "app:confirm-quit" => Duration::from_secs(10 * 60),
         "ai:action" => Duration::from_secs(16 * 60),
+        "chat:generate-meta" => Duration::from_secs(30),
         "voice:stt:transcribe" => Duration::from_secs(15 * 60),
         "pi:install" => Duration::from_secs(4 * 60),
         "llm-list-models" => Duration::from_secs(70),
