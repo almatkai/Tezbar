@@ -8,6 +8,19 @@ Welcome to the Tezbar project! This document outlines general guidelines and poi
 
 ---
 
+## ⚠️ СТРОГОЕ ПРАВИЛО: НИКАКИХ БИЛДОВ НА GITHUB ACTIONS — ТОЛЬКО ЛОКАЛЬНО ЧЕРЕЗ TAILSCALE
+
+- **НИКОГДА НЕ ЗАПУСКАТЬ СБОРКИ НА GITHUB ACTIONS / CI СЕРВЕРАХ**: Запрещено тратить GitHub Actions кредиты на сборку приложений (`pnpm build`, `tauri build`, релизные workflow).
+- **ВСЕ СБОРКИ ДЕЛАЮТСЯ ТОЛЬКО ЛОКАЛЬНО**:
+  - На этом MacBook (Apple Silicon): сборка локально через скрипты проекта (`node scripts/build-release.mjs ...`).
+  - На Windows-компьютере / ноутбуке (или любом другом ноутбуке/MacBook): **находи машину через Tailscale** (`tailscale status`), они всегда подключены к единой сети Tailscale.
+  - **Удаленная сборка через Tailscale SSH**:
+    - Проверить активные устройства: `tailscale status` (например, Windows PC `desktop-ob83s8j` на `100.77.254.64` или ноутбук `ako` на `100.73.150.54`).
+    - Подключиться по SSH к удаленной машине через Tailscale, стянуть актуальную ветку, собрать билд локально на ней и забрать готовые артефакты через `scp`.
+    - Подробный воркфлоу расписан в [.agents/skills/release-guidelines/SKILL.md](.agents/skills/release-guidelines/SKILL.md).
+
+---
+
 ## 1. Core Architecture & Stack
 - **Framework**: Tauri v2 (Rust backend in `src-tauri/`) with Web frontend (`src/renderer/`).
 - **Runtime / Package Manager**: Node.js 22+ with `pnpm`.
