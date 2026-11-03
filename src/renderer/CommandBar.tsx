@@ -1844,7 +1844,7 @@ export default function CommandBar({
           title: activeAgentRun.sessionTitle || 'Agent Task',
           icon: activeAgentRun.sessionIcon,
           turnCount: 1,
-          preview: activeAgentRun.streamingText || activeAgentRun.statusLabel || 'Generating response…',
+          preview: activeAgentRun.streamingText || activeAgentRun.statusLabel || 'Generating…',
           createdAt: Date.now(),
           updatedAt: Date.now(),
         }
@@ -5124,7 +5124,7 @@ export default function CommandBar({
                                   <span className="tezbar-streaming-text font-medium text-[11.5px] max-w-[240px] truncate">
                                     {activeAgentRun?.streamingText ||
                                       activeAgentRun?.statusLabel ||
-                                      'Generating response…'}
+                                      'Generating…'}
                                   </span>
                                 )}
                               </div>

@@ -271,7 +271,7 @@ export default function AgentChatView({
       : chat.status === 'streaming'
         ? lastStage?.status === 'running'
           ? lastStage.label
-          : 'Generating response…'
+          : 'Generating…'
         : chat.status === 'error' || (activeMessage && agentMessageError(activeMessage))
           ? 'Run failed'
           : 'Ready'
