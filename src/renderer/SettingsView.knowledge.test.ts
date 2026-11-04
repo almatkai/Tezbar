@@ -584,6 +584,160 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     }
   )
 
+  it.each([
+    ['add-then-remove-provider', false],
+    ['remove-selected-then-remove-active-provider', false],
+    ['add-then-remove-provider', true],
+    ['remove-selected-then-remove-active-provider', true],
+  ] as const)(
+    'flushes pending model edits before removing their custom provider: %s (pending save fails: %s)',
+    async (mode, failPending) => {
+      let failNext = false
+      const activeCustom = mode === 'remove-selected-then-remove-active-provider'
+      let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+        provider: activeCustom ? 'custom:x' : 'ollama',
+        model: activeCustom ? 'x-a' : 'llama-o',
+        customProviders: [{ id: 'custom:x', title: 'Fixture X', baseURL: 'http://127.0.0.1:9/v1' }],
+        providerSelectedModels: { ollama: 'llama-o', 'custom:x': 'x-a' },
+        taskProviderOverrides: { chat: activeCustom ? 'custom:x' : 'ollama' },
+        taskModelOverrides: { chat: activeCustom ? 'x-a' : 'llama-o' },
+        providerConfigs: {
+          'custom:x': {
+            apiKey: 'k',
+            baseURL: 'http://127.0.0.1:9/v1',
+            openaiCompatibleBaseURL: 'http://127.0.0.1:9/v1',
+          },
+        },
+        providerModels: {
+          ollama: [{ id: 'llama-o', capabilities: ['tools'] }],
+          'custom:x': ['x-a', 'x-b'].map((id) => ({ id, capabilities: ['tools'] })),
+        },
+      }
+      Object.assign(window.tezbar, {
+        listPiExtensions: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+        getLlmConfig: async () => config,
+        setLlmConfig: async (patch: typeof config) => {
+          if (failNext) {
+            failNext = false
+            throw new Error('fixture superseded edit failed')
+          }
+          config = { ...config, ...patch }
+          return { ok: true }
+        },
+      })
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai' }))
+      )
+      await advance(50)
+      if (!activeCustom) {
+        const tab = [...container.querySelectorAll('button')].find((b) =>
+          b.textContent?.includes('Fixture X')
+        )
+        expect(tab, 'custom tab').toBeDefined()
+        await act(async () => tab!.click())
+        await advance(400)
+      }
+      expect(container.textContent).toContain('Remove provider')
+      failNext = failPending
+      if (mode === 'add-then-remove-provider') {
+        await input(
+          container.querySelector<HTMLInputElement>('input[placeholder="Add model id"]')!,
+          'x-z'
+        )
+        await click('Add')
+        await advance(50)
+      } else if (activeCustom) {
+        const row = [...container.querySelectorAll('li')].find(
+          (li) => li.querySelector('span')?.textContent === 'x-a'
+        )!
+        await act(async () =>
+          [...row.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!.click()
+        )
+        await advance(50)
+      }
+      await click('Remove provider')
+      await advance(500)
+      if (failPending) {
+        const { drainSettingsOwners, retryRetiredSettingsOwners } =
+          await import('./settingsLifecycle')
+        await act(async () => {
+          await expect(drainSettingsOwners()).resolves.toBeUndefined()
+        })
+        expect(container.textContent).not.toContain('Could not save')
+        await act(async () => {
+          root.unmount()
+          await retryRetiredSettingsOwners()
+        })
+        root = createRoot(container)
+      }
+      expect(config.provider).toBe('ollama')
+      expect(config.model).toBe('llama-o')
+      expect(config.providerSelectedModels?.ollama).toBe('llama-o')
+      expect(config.taskProviderOverrides?.chat).toBe('ollama')
+      expect(config.taskModelOverrides?.chat).toBe('llama-o')
+      expect(Object.keys(config.providerSelectedModels ?? {})).not.toContain('custom:x')
+      expect(config.customProviders?.some((p) => p.id === 'custom:x')).toBe(false)
+    }
+  )
+
+  it('preserves peer credentials when retrying a failed provider removal', async () => {
+    const { retryRetiredSettingsOwners } = await import('./settingsLifecycle')
+    let failNext = false
+    let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+      provider: 'custom:x',
+      model: 'x-a',
+      customProviders: ['x', 'y'].map((id) => ({
+        id: `custom:${id}`,
+        title: `Fixture ${id.toUpperCase()}`,
+        baseURL: 'http://127.0.0.1:9/v1',
+      })),
+      providerSelectedModels: { ollama: 'llama-o', 'custom:x': 'x-a', 'custom:y': 'y-a' },
+      taskProviderOverrides: { chat: 'custom:x' },
+      taskModelOverrides: { chat: 'x-a' },
+      providerConfigs: { 'custom:x': { apiKey: 'fixture-x' }, 'custom:y': { apiKey: 'peer-old' } },
+      providerModels: {
+        ollama: [{ id: 'llama-o', capabilities: ['tools'] }],
+        'custom:x': [{ id: 'x-a', capabilities: ['tools'] }],
+        'custom:y': [{ id: 'y-a', capabilities: ['tools'] }],
+      },
+    }
+    Object.assign(window.tezbar, {
+      listPiExtensions: async () => [],
+      aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+      getLlmConfig: async () => config,
+      setLlmConfig: async (patch: typeof config) => {
+        if (failNext) {
+          failNext = false
+          throw new Error('fixture removal failed')
+        }
+        config = { ...config, ...patch }
+        return { ok: true }
+      },
+    })
+    await act(async () => root.render(createElement(SettingsView, { ...props, initialTab: 'ai' })))
+    failNext = true
+    await click('Remove provider')
+    await advance(500)
+    const tab = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Fixture Y')
+    )!
+    await act(async () => tab.click())
+    await advance(400)
+    await input(container.querySelector<HTMLInputElement>('input[type="password"]')!, 'peer-new')
+    await advance(500)
+    expect(config.providerConfigs?.['custom:y']?.apiKey).toBe('peer-new')
+    await act(async () => {
+      root.unmount()
+      await retryRetiredSettingsOwners()
+    })
+    root = createRoot(container)
+    expect(config.providerConfigs?.['custom:y']?.apiKey).toBe('peer-new')
+    expect(config.providerConfigs?.['custom:x']).toBeUndefined()
+    expect(config.customProviders?.some((p) => p.id === 'custom:x')).toBe(false)
+    expect(config.model).toBe('llama-o')
+  })
+
   it.each(['choose-after-remove', 'remove-after-add'] as const)(
     'preserves the effective explicit model choice when combined with removal: %s',
     async (action) => {
