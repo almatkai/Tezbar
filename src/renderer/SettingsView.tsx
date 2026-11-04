@@ -1431,7 +1431,11 @@ export default function SettingsView({
   const aiWrites = useRef<Promise<unknown>>(Promise.resolve())
   const failedAiProviders = useRef(new Set<string>())
   const failedAiWrites = useRef(new Map<string, { revision: number; retry: () => void }>())
-  const writeAiPatch = (patch: LlmConfigRecord, scope?: AiPatchOverrides): void => {
+  const writeAiPatch = (
+    patch: LlmConfigRecord,
+    scope?: AiPatchOverrides,
+    origin?: number
+  ): void => {
     // A successful deletion also supersedes that provider's failed drafts,
     // including drafts retained by an earlier Settings view.
     const providers = scope?.removedProvider
@@ -1446,6 +1450,7 @@ export default function SettingsView({
         providerConfigs: { ...current.providerConfigs, ...patch.providerConfigs },
       }
       const selections = { ...patch.providerSelectedModels }
+      delete next.providerSelectedModels
       for (const { provider } of scope?.removedModels ?? []) {
         const removed = scope!
           .removedModels!.filter((m) => m.provider === provider)
@@ -1485,6 +1490,36 @@ export default function SettingsView({
           }
         }
       }
+      // Retrying a peer draft must not restore providers removed after that
+      // draft. Keep its first revision across repeated failures; a new Create
+      // action has its own later revision and is still allowed.
+      const liveProviders = new Set<string>(current.customProviders?.map((p) => p.id))
+      const gone = (id: string): boolean =>
+        !scope?.removedProvider &&
+        id.startsWith('custom:') &&
+        !liveProviders.has(id) &&
+        hasNewerSettingsSave(id, origin ?? revision)
+      const goneIds = new Set(
+        [
+          ...(patch.customProviders?.map((p) => p.id) ?? []),
+          ...Object.keys(patch.providerConfigs ?? {}),
+          ...Object.keys(patch.providerModels ?? {}),
+          ...Object.keys(selections),
+        ].filter(gone)
+      )
+      if (goneIds.size) {
+        next.customProviders = next.customProviders?.filter((p) => !goneIds.has(p.id))
+        next.providerModels = { ...next.providerModels }
+        for (const id of goneIds) {
+          delete next.providerConfigs[id as ProviderId]
+          delete next.providerModels[id as ProviderId]
+          delete selections[id as ProviderId]
+        }
+      }
+      if (patch.provider && gone(patch.provider)) {
+        delete next.provider
+        delete next.model
+      }
       if (Object.keys(selections).length) {
         next.providerSelectedModels = {
           ...current.providerSelectedModels,
@@ -1499,7 +1534,7 @@ export default function SettingsView({
             chat: selections[chatProvider],
           }
       }
-      if (patch.provider) {
+      if (patch.provider && !gone(patch.provider)) {
         next.model = selections[patch.provider] ?? next.model
         next.taskProviderOverrides = { ...current.taskProviderOverrides, chat: patch.provider }
         next.taskModelOverrides = { ...current.taskModelOverrides, chat: next.model }
@@ -1519,7 +1554,10 @@ export default function SettingsView({
     aiWrites.current = promise.catch(() => {
       for (const id of providers) {
         failedAiProviders.current.add(id)
-        failedAiWrites.current.set(id, { revision, retry: () => writeAiPatch(patch, scope) })
+        failedAiWrites.current.set(id, {
+          revision,
+          retry: () => writeAiPatch(patch, scope, origin ?? revision),
+        })
       }
       setMsg({
         tone: 'error',

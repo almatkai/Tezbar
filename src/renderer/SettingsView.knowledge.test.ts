@@ -681,6 +681,167 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     }
   )
 
+  it.each([
+    ['peer-edit', false],
+    ['peer-edit', true],
+    ['provider-creation', false],
+    ['provider-creation', true],
+  ] as const)(
+    'keeps a deleted provider absent when retrying an older %s (retry fails again: %s)',
+    async (scenario, retryFails) => {
+      const { drainSettingsOwners, retryRetiredSettingsOwners } =
+        await import('./settingsLifecycle')
+      let failNext = false
+      let failAll = false
+      let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+        provider: 'ollama',
+        model: 'llama-o',
+        customProviders: [{ id: 'custom:x', title: 'Fixture X' }],
+        providerSelectedModels: { ollama: 'llama-o', 'custom:x': 'x-a' },
+        taskProviderOverrides: { chat: 'ollama' },
+        taskModelOverrides: { chat: 'llama-o' },
+        providerConfigs: {
+          ollama: { baseURL: 'http://127.0.0.1:11434' },
+          'custom:x': { apiKey: 'fixture-x', baseURL: 'http://127.0.0.1:9/v1' },
+        },
+        providerModels: {
+          ollama: [{ id: 'llama-o', capabilities: ['tools'] }],
+          'custom:x': [{ id: 'x-a', capabilities: ['tools'] }],
+        },
+      }
+      Object.assign(window.tezbar, {
+        listPiExtensions: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+        getLlmConfig: async () => config,
+        setLlmConfig: async (patch: typeof config) => {
+          if (failNext || failAll) {
+            failNext = false
+            throw new Error('fixture draft failed')
+          }
+          config = { ...config, ...patch }
+          return { ok: true }
+        },
+      })
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai' }))
+      )
+      await advance(50)
+      const removed = scenario === 'peer-edit' ? 'custom:x' : 'custom:zed'
+      if (scenario === 'peer-edit') {
+        const url = [...container.querySelectorAll<HTMLInputElement>('input')].find(
+          (i) => i.value === 'http://127.0.0.1:11434'
+        )!
+        failNext = true
+        await input(url, 'http://127.0.0.1:22222')
+        const tab = [...container.querySelectorAll('button')].find((b) =>
+          b.textContent?.includes('Fixture X')
+        )!
+        await act(async () => tab.click())
+      } else {
+        await click('+ Add custom provider')
+        await input(
+          container.querySelector<HTMLInputElement>(
+            'input[placeholder="Provider name (e.g. Model)"]'
+          )!,
+          'Zed'
+        )
+        failNext = true
+        await click('Create')
+      }
+      await advance(500)
+      await click('Remove provider')
+      await advance(500)
+      expect(config.customProviders?.some((p) => p.id === removed)).toBe(false)
+      await act(async () => {
+        await expect(drainSettingsOwners()).rejects.toThrow('Settings save failed')
+        root.unmount()
+      })
+      root = createRoot(container)
+      if (retryFails) {
+        failAll = true
+        await act(async () => {
+          await expect(retryRetiredSettingsOwners()).rejects.toThrow('Settings save failed')
+        })
+        failAll = false
+      }
+      await act(async () => {
+        await retryRetiredSettingsOwners()
+        await expect(drainSettingsOwners()).resolves.toBeUndefined()
+      })
+      expect(config.customProviders?.some((p) => p.id === removed)).toBe(false)
+      expect(config.providerConfigs?.[removed]).toBeUndefined()
+      expect(config.providerModels?.[removed]).toBeUndefined()
+      expect(config.providerSelectedModels?.[removed]).toBeUndefined()
+      expect(config.provider).toBe('ollama')
+      expect(config.model).toBe('llama-o')
+      expect(config.taskProviderOverrides?.chat).toBe('ollama')
+      expect(config.taskModelOverrides?.chat).toBe('llama-o')
+      if (scenario === 'peer-edit')
+        expect(config.providerConfigs?.ollama?.baseURL).toBe('http://127.0.0.1:22222')
+    }
+  )
+
+  it.each([false, true])(
+    'allows an intentional custom-provider creation after a failed save (remove and recreate: %s)',
+    async (recreate) => {
+      const { retryRetiredSettingsOwners } = await import('./settingsLifecycle')
+      let failNext = false
+      let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+        provider: 'ollama',
+        model: 'llama-o',
+        providerSelectedModels: { ollama: 'llama-o' },
+        providerModels: { ollama: [{ id: 'llama-o', capabilities: ['tools'] }] },
+        providerConfigs: { ollama: { baseURL: 'http://127.0.0.1:11434' } },
+      }
+      Object.assign(window.tezbar, {
+        listPiExtensions: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+        getLlmConfig: async () => config,
+        setLlmConfig: async (patch: typeof config) => {
+          if (failNext) {
+            failNext = false
+            throw new Error('fixture create failed')
+          }
+          config = { ...config, ...patch }
+          return { ok: true }
+        },
+      })
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai' }))
+      )
+      const create = async () => {
+        await click('+ Add custom provider')
+        await input(
+          container.querySelector<HTMLInputElement>(
+            'input[placeholder="Provider name (e.g. Model)"]'
+          )!,
+          'Zed'
+        )
+        await click('Create')
+        await advance(500)
+      }
+      failNext = true
+      await create()
+      if (recreate) {
+        await click('Remove provider')
+        await advance(500)
+        expect(config.customProviders?.some((p) => p.id === 'custom:zed')).toBe(false)
+        await create()
+      }
+      await act(async () => {
+        root.unmount()
+        await retryRetiredSettingsOwners()
+      })
+      root = createRoot(container)
+      expect(config.customProviders?.filter((p) => p.id === 'custom:zed')).toHaveLength(1)
+      expect(config.providerConfigs?.['custom:zed']).toBeDefined()
+      expect(config.providerModels?.['custom:zed']).toBeDefined()
+      expect(config.providerSelectedModels?.['custom:zed']).toBeDefined()
+      expect(config.provider).toBe('custom:zed')
+      expect(config.taskProviderOverrides?.chat).toBe('custom:zed')
+    }
+  )
+
   it('preserves peer credentials when retrying a failed provider removal', async () => {
     const { retryRetiredSettingsOwners } = await import('./settingsLifecycle')
     let failNext = false
