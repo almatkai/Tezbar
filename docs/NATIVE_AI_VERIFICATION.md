@@ -1,11 +1,12 @@
 # Native AI implementation verification
 
-Tested implementation: `a28c5647dc589a33b60b2c80ca082246c1f0bf75` on
+Tested implementation: `8f70d2e7cf7beac2129155402587b82fded9c35b` on
 `feat/native-rust-agent`, in the existing
 `/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent` worktree.
 This documentation update is a **docs-only follow-up to that tested ancestor**;
 it does not change the archived implementation. Starting point was clean
-`9fe0576`, whose implementation ancestor was `118cb7b`.
+`5271fd7`, whose tested implementation ancestor was `a28c564`. This repair addresses
+all six N-R1–N-R6 findings in the unchanged full runtime report.
 
 No push, PR, merge, release, Actions run, desktop application launch/install,
 production credential/profile access or paid/live model call was performed.
@@ -21,29 +22,26 @@ are confined to documentation.
 | Check | Observed result |
 | --- | --- |
 | `pnpm typecheck` | Pass, renderer and main TypeScript projects |
-| `pnpm test` | 905 passed, 9 skipped; 124 files passed, 2 skipped; 0 failed |
+| `pnpm test` | 916 passed, 9 skipped; 124 files passed, 2 skipped; 0 failed |
 | `pnpm build:frontend` | Pass |
-| `CARGO_BUILD_JOBS=2 cargo +1.98.0 test --manifest-path src-tauri/Cargo.toml --lib --locked -- --test-threads=2` | 591 passed, 9 ignored, 0 failed; 166.74 s |
+| `CARGO_BUILD_JOBS=2 cargo +1.98.0 test --manifest-path src-tauri/Cargo.toml --lib --locked -- --test-threads=2` | 598 passed, 9 ignored, 0 failed; 158.12 s |
 | `CARGO_BUILD_JOBS=2 cargo +1.85.0 check --manifest-path src-tauri/Cargo.toml --lib --locked --offline` | Pass; declared MSRV unchanged |
 | `RUSTUP_TOOLCHAIN=1.98.0 CARGO_BUILD_JOBS=2 node scripts/check-backend-lifecycle.mjs` | 1 passed, 0 failed |
 | `git diff --check` | Pass |
 
 Final logs retained locally:
 
-- `/private/tmp/tezbar-repair-typecheck-final.log`
-- `/private/tmp/tezbar-repair-ts-final2.log`
-- `/private/tmp/tezbar-repair-frontend-final.log`
-- `/private/tmp/tezbar-repair-a28c564-macos.log`
-- `/private/tmp/tezbar-repair-a28c564-msrv.log`
-- `/private/tmp/tezbar-repair-a28c564-lifecycle.log`
+- `/private/tmp/tezbar-nr-typecheck-final.log`
+- `/private/tmp/tezbar-nr-ts-final.log`
+- `/private/tmp/tezbar-nr-frontend-final.log`
+- `/private/tmp/tezbar-nr-macos-final.log`
+- `/private/tmp/tezbar-nr-msrv-final.log`
+- `/private/tmp/tezbar-nr-lifecycle-final.log`
 
-An intermediate full run failed the newly added deletion assertion because chat
-storage IPC represents a refused append as `{ok:false}`, not an outer IPC error.
-The assertion was corrected to verify that real contract, then passed for both
-delete and clear in the final full suite. During self-review, the Chat empty-delta
-path was also corrected so an empty fragment does not become a premature `{}`;
-the permanent two-codec streamed-argument regression and final full suites include
-that fix. Intermediate logs are not the final-source evidence above.
+Early focused runs exposed invalid placeholder image bytes in the new OCR fixture
+and test-harness omissions. They were corrected to use a valid canonical PNG and
+the real bridge close adapter. The final full suites include the corrected
+regressions; earlier logs are not substituted for final-source evidence.
 
 ## Windows x64 — exact committed archive
 
@@ -56,11 +54,11 @@ Created with `git archive --format=tar.gz` from the tested commit above, then
 copied to the task temp root. SHA-256 was checked on Windows before extraction:
 
 ```text
-7114613d6480318ca95dc30bb84d4695c19ac9ecdb960ccdafcbbf0d7eae5b58
+cb6c63ca3f2440ca896ce5454d333b6043bdd7411028a2a40e2a26ae89749f0a
 ```
 
-Local archive: `/private/tmp/source-a28c564.tar.gz`.
-Staging: `C:\Users\User\AppData\Local\Temp\tezbar-native-c7271bc-20261104\rev-a28c564`.
+Local archive: `/private/tmp/source-8f70d2e.tar.gz`.
+Staging: `C:\Users\User\AppData\Local\Temp\tezbar-native-c7271bc-20261104\rev-8f70d2e`.
 Only the sibling `rust-target` task cache was shared. Native output was redirected
 inside `cmd.exe /d /c` to avoid PowerShell native-stderr false failures.
 
@@ -70,17 +68,20 @@ inside `cmd.exe /d /c` to avoid PowerShell native-stderr false failures.
 | Frozen/offline pnpm dependencies, `--ignore-scripts` | Pass in isolated staging |
 | `pnpm build:backend` | Pass, backend resources staged from the same archive |
 | `cargo check --manifest-path src-tauri/Cargo.toml --lib --locked` | Pass, non-test Windows library |
-| `cargo test --manifest-path src-tauri/Cargo.toml --lib --locked -- --test-threads=2` | 520 passed, 8 ignored, 0 failed; 108.76 s; exit 0 |
+| `cargo test --manifest-path src-tauri/Cargo.toml --lib --locked -- --test-threads=2` | 527 passed, 8 ignored, 0 failed; 107.49 s; exit 0 |
 | Release checkout status afterward | Clean, read-only status check |
 
-The real Windows run includes the corrected npm layout `npx` + `npx.cmd` test,
+The real Windows run includes the N-R1/N-R3/N-R4/N-R5 native regressions,
+including actual model-body shell summaries and fixture OCR through the parent
+route. N-R2/N-R6 renderer seams are covered by the TypeScript suite above. It also
+includes the corrected npm layout `npx` + `npx.cmd` test,
 Windows DPAPI temporary-profile roundtrip, process tree/Unicode tests, all 13 wire
 re-review regressions, private-host DNS pinning, key-loss reset and cached-era
 startup crash fixtures. Windows behavior was exercised on Windows.
 
-Local captured result: `/private/tmp/tezbar-repair-windows-final.log`.
-Full copied native log: `/private/tmp/tezbar-repair-a28c564-windows-rust-full.log`.
-Recipe: `/private/tmp/tezbar-native-ai-a28c564-windows.ps1`, run through the
+Local captured result: `/private/tmp/tezbar-nr-windows-final.log`.
+Full copied native log: `/private/tmp/tezbar-nr-8f70d2e-windows-rust-full.log`.
+Recipe: `/private/tmp/tezbar-native-ai-8f70d2e-windows.ps1`, run through the
 previously inspected `/private/tmp/tezbar-native-remote.py` helper. Staging retains
 `install.log`, `backend.log`, `rust-check.log` and `rust-full.log`.
 
@@ -132,11 +133,12 @@ account entitlements, quota or undocumented upstream behavior. OpenCode's upstre
 free-tier restrictions remain respected and actionable. Windows OCR and semantic
 UI Automation are separate pre-existing platform gaps.
 
-Initial Opus reviews and the 118cb7b re-review reports remain unchanged under
-`docs/reviews`. All W1–W15, N1–N8 and U1–U3 repairs are recorded with regressions
+Initial Opus reviews, the 118cb7b re-review reports and the full runtime
+a28c564 report remain unchanged under `docs/reviews`. All N-R1–N-R6, W1–W15,
+N1–N8 and U1–U3 repairs are recorded with regressions
 in `docs/reviews/NATIVE_AI_REVIEW_FIXES.md`. The coordinator must obtain fresh
 Claude Opus 5.5 wire, standards and **full runtime** closure against the repaired
-source. The unfinished runtime fixture notes do not replace that gate. This
+source. Passing fixtures and the repair ledger do not replace that gate. This
 document does not mark review closure, live-provider interop or release approval
 complete. Older private-resource OAuth grants without trust-zone provenance may
 require one new sign-in; locked/denied OS key-store access never enables reset.
