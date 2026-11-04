@@ -137,6 +137,9 @@ fn connection_mut<'a>(record: &'a mut Value, id: &str) -> Result<&'a mut Value, 
 fn key(ext: &str, conn: &str) -> String {
     format!("{}:{ext}:{conn}", ext.len())
 }
+fn provider_key(ext: &str, provider: &str) -> String {
+    format!("provider{}:{ext}:{provider}", ext.len())
+}
 fn prefix(ext: &str) -> String {
     format!("{}:{ext}:", ext.len())
 }
@@ -1276,12 +1279,12 @@ impl AiCore {
                         }
                     }
                     for p in record["providers"].as_array_mut().into_iter().flatten() {
-                        let pid = format!("provider:{}", s(&p["id"]));
+                        let pid = s(&p["id"]).to_string();
                         for (k, v) in p["headers"].as_object_mut().into_iter().flatten() {
                             if let Some(literal) = v.as_str() {
                                 if manifest::secret_key(k, literal) {
                                     core.inner.extensions.secrets.put(
-                                        &key(&rid, &pid),
+                                        &provider_key(&rid, &pid),
                                         k,
                                         Some(literal),
                                     )?;
@@ -1378,7 +1381,7 @@ impl AiCore {
                     }
                     for p in r["providers"].as_array().into_iter().flatten() {
                         core.inner.extensions.secrets.put(
-                            &key(&id, &format!("provider:{}", s(&p["id"]))),
+                            &provider_key(&id, s(&p["id"])),
                             "",
                             None,
                         )?;
@@ -1493,9 +1496,36 @@ impl AiCore {
                     .ok_or("Secret value is required")?
                     .to_string();
                 let connection = arg(args, 3).as_str().map(str::to_string);
+                let provider = arg(args, 3)["providerId"].as_str().map(str::to_string);
                 let core = self.clone();
                 self.ext_edit(move |data| {
                     let r = record_mut(data, &id)?;
+                    if name.len() > 200 || value.len() > 128 * 1024 {
+                        return Err("Secret name or value exceeds its limit".into());
+                    }
+                    if let Some(provider) = provider {
+                        let p = r["providers"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .find(|p| p["id"] == provider)
+                            .ok_or("Provider was removed")?;
+                        if !p["headers"]
+                            .as_object()
+                            .into_iter()
+                            .flatten()
+                            .any(|(_, value)| value["secret"] == name)
+                        {
+                            return Err("Provider secret is not declared".into());
+                        }
+                        core.inner.extensions.secrets.put(
+                            &provider_key(&id, &provider),
+                            &name,
+                            Some(&value),
+                        )?;
+                        r["enabled"] = json!(false);
+                        return Ok(json!({"hasValue":true}));
+                    }
                     let cid = connection
                         .or_else(|| r["connections"][0]["id"].as_str().map(str::to_string))
                         .ok_or("Connection is required")?;

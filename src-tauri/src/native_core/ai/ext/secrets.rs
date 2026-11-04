@@ -99,7 +99,7 @@ impl Secrets {
         )
     }
 }
-#[cfg(not(test))]
+#[cfg(any(not(test), windows))]
 struct OsKey {
     path: PathBuf,
 }
@@ -140,7 +140,7 @@ impl KeyStore for OsKey {
         .map_err(|_| "Couldn't remove connection secret key".into())
     }
 }
-#[cfg(all(not(test), windows))]
+#[cfg(windows)]
 impl KeyStore for OsKey {
     fn load(&self) -> Result<Option<VaultKey>, String> {
         if !self.path.exists() {
@@ -172,7 +172,7 @@ impl KeyStore for OsKey {
         Ok(())
     }
 }
-#[cfg(all(not(test), windows))]
+#[cfg(windows)]
 fn dpapi(bytes: &[u8], encrypt: bool) -> Result<Vec<u8>, String> {
     #[repr(C)]
     struct Blob {
@@ -311,4 +311,21 @@ mod tests {
             .is_err());
         assert!(!other.path().join("ai-extension-secrets.bin").exists());
     }
+}
+
+#[cfg(all(test, windows))]
+#[test]
+fn windows_dpapi_key_roundtrip_uses_only_an_isolated_temp_profile() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = OsKey {
+        path: directory.path().join("connection-key.bin"),
+    };
+    assert!(store.load().unwrap().is_none());
+    let key = [42u8; 32];
+    store.save(&key).unwrap();
+    let encrypted = std::fs::read(&store.path).unwrap();
+    assert!(!encrypted.windows(key.len()).any(|window| window == key));
+    assert_eq!(store.load().unwrap(), Some(key));
+    store.delete().unwrap();
+    assert!(!store.path.exists());
 }

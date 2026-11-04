@@ -52,6 +52,11 @@ pub fn parse(text: &str) -> CoreResult {
     if v.get("connections").is_none() {
         v["connections"] = json!([])
     }
+    for kind in ["connections", "prompts", "commands", "agents", "providers"] {
+        if v.get(kind).is_some_and(|value| !value.is_array()) {
+            return Err(format!("{kind} must be an array"));
+        }
+    }
     let mut ids = std::collections::HashSet::new();
     for c in v["connections"].as_array().into_iter().flatten() {
         validate_connection(c)?;
@@ -84,7 +89,11 @@ pub fn parse(text: &str) -> CoreResult {
             }
         }
     }
+    let mut providers = std::collections::HashSet::new();
     for provider in v["providers"].as_array().into_iter().flatten() {
+        if !providers.insert(s(&provider["id"]).to_string()) {
+            return Err("Provider IDs must be unique".into());
+        }
         if !s(&provider["id"]).starts_with("custom:") || s(&provider["title"]).trim().is_empty() {
             return Err("Custom providers need an ID starting with custom: and a title".into());
         }

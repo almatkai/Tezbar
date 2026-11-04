@@ -27,14 +27,14 @@ export type AiConnection = {
     tools?: {
       name: string
       description?: string
-      inputSchema?: { properties?: Record<string, unknown> }
+      inputSchema?: Record<string, unknown> & { properties?: Record<string, unknown> }
     }[]
   }
   catalog?: {
     tools?: {
       name: string
       description?: string
-      inputSchema?: { properties?: Record<string, unknown> }
+      inputSchema?: Record<string, unknown> & { properties?: Record<string, unknown> }
     }[]
     resources?: { name: string }[]
     prompts?: { name: string }[]
@@ -52,7 +52,13 @@ export type AiExtension = {
   importWarnings?: string[]
   commands?: { name: string; prompt: string }[]
   agents?: { id: string; name: string; instructions: string; tools?: string[] }[]
-  providers?: { id: string; title: string; baseURL: string; protocol?: string }[]
+  providers?: {
+    id: string
+    title: string
+    baseURL: string
+    protocol?: string
+    headers?: Record<string, string | { secret: string; label?: string }>
+  }[]
   prompts?: {
     name: string
     title?: string

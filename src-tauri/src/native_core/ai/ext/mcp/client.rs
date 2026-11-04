@@ -608,7 +608,7 @@ impl Client {
                 self.http_request(&v, Some(&id), &mirrors).await
             }
         };
-        let result = tokio::select! {biased;_=self.stop.cancelled()=>Err("Connection was disabled".into()),_=cancel.cancelled()=>Err("Operation cancelled".into()),r=tokio::time::timeout(timeout,work)=>r.map_err(|_|"Connection timed out. The outcome of this call is unknown.".to_string()).and_then(|v|v)};
+        let result = tokio::select! {biased;_=self.stop.cancelled()=>Err(if self.crashed.load(std::sync::atomic::Ordering::SeqCst){"Connection lost. The outcome of this call is unknown.".into()}else{"Connection was disabled".into()}),_=cancel.cancelled()=>Err("Operation cancelled".into()),r=tokio::time::timeout(timeout,work)=>r.map_err(|_|"Connection timed out. The outcome of this call is unknown.".to_string()).and_then(|v|v)};
         self.pending.lock().unwrap().remove(&id);
         if result.is_err() && (self.input.is_some() || *self.version.lock().unwrap() != MODERN) {
             let _ = tokio::time::timeout(

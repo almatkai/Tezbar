@@ -57,7 +57,7 @@ impl AiCore {
     ) -> Result<serde_json::Map<String, Value>, String> {
         let values = if let Some(id) = provider["_extensionId"].as_str() {
             let core = self.clone();
-            let namespace = key(id, &format!("provider:{}", s(&provider["id"])));
+            let namespace = provider_key(id, s(&provider["id"]));
             tokio::task::spawn_blocking(move || core.inner.extensions.secrets.values(&namespace))
                 .await
                 .map_err(err)??

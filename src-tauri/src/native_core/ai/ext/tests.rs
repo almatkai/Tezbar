@@ -974,3 +974,124 @@ async fn catalog_notification_keeps_run_snapshot_immutable_and_requires_changed_
         core.shutdown().await;
     }
 }
+
+#[tokio::test]
+async fn provider_secret_references_can_be_filled_without_a_connection_and_do_not_alias_connection_ids(
+) {
+    let (_dir, core, _) = fixture();
+    let manifest = json!({"manifestVersion":1,"id":"provider-secrets","name":"Provider fixture","connections":[],"providers":[{"id":"custom:fixture","title":"Fixture","baseURL":"https://example.invalid/v1","protocol":"openai-chat","headers":{"Authorization":{"secret":"MODEL_AUTH"}},"models":[{"id":"fixture"}]}]});
+    core.handle("ai-extensions:add", &[manifest])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_ne!(
+        provider_key("provider-secrets", "custom:fixture"),
+        key("provider-secrets", "provider:custom:fixture")
+    );
+    core.handle(
+        "ai-extensions:set-secret",
+        &[
+            json!("provider-secrets"),
+            json!("MODEL_AUTH"),
+            json!("fixture-secret-header"),
+            json!({"providerId":"custom:fixture"}),
+        ],
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(core
+        .handle(
+            "ai-extensions:set-secret",
+            &[
+                json!("provider-secrets"),
+                json!("UNDECLARED"),
+                json!("fixture"),
+                json!({"providerId":"custom:fixture"})
+            ]
+        )
+        .await
+        .unwrap()
+        .is_err());
+    core.handle(
+        "ai-extensions:set-enabled",
+        &[json!("provider-secrets"), json!(true)],
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let config = core.extension_config(json!({}), None).await.unwrap();
+    let provider = &config["customProviders"][0];
+    assert_eq!(
+        core.extension_provider_headers(provider).await.unwrap()["Authorization"],
+        "fixture-secret-header"
+    );
+    assert!(!core
+        .handle("ai-extensions:list", &[])
+        .await
+        .unwrap()
+        .unwrap()
+        .to_string()
+        .contains("fixture-secret-header"));
+    for field in ["connections", "prompts", "commands", "agents", "providers"] {
+        let mut malformed = json!({"manifestVersion":1,"id":"bad","name":"Bad"});
+        malformed[field] = json!("wrong type");
+        assert!(manifest::parse(&malformed.to_string()).is_err());
+    }
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn stdio_crash_and_stdout_flood_report_unknown_without_replaying_effects() {
+    for legacy in [false, true] {
+        for failure in ["crash", "flood"] {
+            let (dir, core, _) = fixture();
+            let binary = program(dir.path());
+            let marker = dir.path().join("effects");
+            let args = if legacy {
+                vec!["legacy", failure]
+            } else {
+                vec![failure]
+            };
+            core.handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"failure","name":"Failure fixture","connections":[{"id":"stdio","name":"Server","transport":"stdio","command":binary,"args":args,"env":{"FIXTURE_MARKER":marker},"toolPolicy":"allowReadOnly"}]})]).await.unwrap().unwrap();
+            assert_eq!(
+                core.handle("ai-extensions:test", &[json!("failure")])
+                    .await
+                    .unwrap()
+                    .unwrap()["ok"],
+                true
+            );
+            core.handle(
+                "ai-extensions:set-enabled",
+                &[json!("failure"), json!(true)],
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            let snapshot = core
+                .extension_snapshot(&core.inner.ctx.paths.home_dir)
+                .await
+                .unwrap();
+            let entry = snapshot
+                .values()
+                .find(|entry| entry.descriptor["name"] == "echo")
+                .unwrap();
+            let error = tokio::time::timeout(
+                Duration::from_secs(5),
+                core.extension_call(
+                    entry,
+                    json!({"text":"effect"}),
+                    "agent-failure",
+                    &Cancel::new(),
+                    Some("auto"),
+                ),
+            )
+            .await
+            .unwrap()
+            .unwrap_err();
+            assert!(error.contains("outcome of this call is unknown"), "{error}");
+            assert_eq!(std::fs::read_to_string(&marker).unwrap().lines().count(), 1);
+            core.shutdown().await;
+        }
+    }
+}

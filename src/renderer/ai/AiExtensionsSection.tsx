@@ -30,6 +30,7 @@ export function AiExtensionsSection(): JSX.Element {
   >([])
   const [signIn, setSignIn] = useState<{ extension: string; connection: string } | null>(null)
   const [information, setInformation] = useState('')
+  const [providerSecrets, setProviderSecrets] = useState<Record<string, string>>({})
 
   const [paste, setPaste] = useState('')
   const [preview, setPreview] = useState<{
@@ -727,6 +728,57 @@ export function AiExtensionsSection(): JSX.Element {
                           ))}
                       </div>
                     ))}
+                {e.providers?.map((provider) => (
+                  <div key={provider.id} className="space-y-2">
+                    <p>
+                      {provider.title} · {provider.baseURL}
+                    </p>
+                    {Object.entries(provider.headers || {})
+                      .filter(
+                        (entry): entry is [string, { secret: string; label?: string }] =>
+                          typeof entry[1] !== 'string'
+                      )
+                      .map(([header, reference]) => {
+                        const key = JSON.stringify([e.id, provider.id, reference.secret])
+                        return (
+                          <label className="block" key={header}>
+                            {reference.label || header}
+                            <TextField
+                              type="password"
+                              autoComplete="off"
+                              value={providerSecrets[key] || ''}
+                              onChange={(event) =>
+                                setProviderSecrets((values) => ({
+                                  ...values,
+                                  [key]: event.target.value,
+                                }))
+                              }
+                            />
+                            <Button
+                              disabled={!providerSecrets[key] || !!busy}
+                              onClick={() =>
+                                void run(e.id, async () => {
+                                  await request(
+                                    'set-secret',
+                                    e.id,
+                                    reference.secret,
+                                    providerSecrets[key],
+                                    { providerId: provider.id }
+                                  )
+                                  setProviderSecrets((values) => ({ ...values, [key]: '' }))
+                                  setInformation(
+                                    'Key saved. Enable the extension to use this provider.'
+                                  )
+                                })
+                              }
+                            >
+                              Save key
+                            </Button>
+                          </label>
+                        )
+                      })}
+                  </div>
+                ))}
                 {e.connections.map((c) => (
                   <p className="text-[11px] text-ink-3" key={`${c.id}:summary`}>
                     Asks:{' '}
