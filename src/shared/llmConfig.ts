@@ -61,6 +61,8 @@ export type CustomAiProvider = {
 }
 
 export type LlmConfigRecord = {
+  /** Read-only native credential availability; values never contain credentials. */
+  nativeProviderCredentials?: Partial<Record<ProviderId, { hasValue: boolean; source: string }>>
   provider?: ProviderId
   customProviders?: CustomAiProvider[]
   providerConfigs?: Partial<Record<ProviderId, AiProviderConfig>>
@@ -84,7 +86,7 @@ export type LlmConfigRecord = {
   aiActionRedactionEnabled?: boolean
   /** Execution permission mode for the AI agent: review (always ask), default (ask sensitive), auto, turbo (never ask, guarded against destructive operations). */
   agentApprovalMode?: AgentApprovalMode
-  /** auto uses native text/tool runtime for OpenAI-compatible providers; pi forces compatibility mode. */
+  /** Legacy persisted preference. All values use the native Rust runtime. */
   agentRuntime?: AgentRuntime
   voiceSttModelId?: VoiceModelId
   raymesHotkey?: string

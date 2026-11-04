@@ -30,7 +30,7 @@ export type AgentTimelineItem = { type: 'text'; text: string } | { type: 'stage'
 
 export interface AgentInputImage {
   type: 'image'
-  /** Raw base64 bytes. Data-URL prefixes are accepted and stripped before RPC. */
+  /** Raw base64 bytes. Data-URL prefixes are accepted and stripped before the request. */
   data: string
   mimeType: 'image/png' | 'image/jpeg' | 'image/webp'
   width?: number
@@ -88,11 +88,12 @@ export type AgentRunEvent =
       suggestedRule?: string
       /** False when this runtime only supports one-time approval. */
       canRemember?: boolean
+      rememberKind?: 'tool' | 'command'
     }
   | { type: 'done'; runId: string }
   | { type: 'error'; runId: string; message: string }
-  /** One line from the pi subprocess stderr (config, auth, model errors, …). */
-  | { type: 'log'; runId: string; source: 'stderr'; line: string }
+  /** A bounded, source-labelled native diagnostic. */
+  | { type: 'log'; runId: string; source: 'stderr' | 'native'; line: string }
 
 /** IPC channel names. Shared so main + preload + renderer cannot drift. */
 export const AGENT_IPC = {

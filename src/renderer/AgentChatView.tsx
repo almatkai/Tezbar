@@ -1,3 +1,4 @@
+import { ProjectExtensionNotice } from './ai/ProjectExtensionNotice'
 import { useComposerExtensions } from './ai/ComposerExtensions'
 import { Chat, useChat } from '@ai-sdk/react'
 import {
@@ -118,14 +119,40 @@ export default function AgentChatView({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [savingModel, setSavingModel] = useState(false)
   const [draft, setDraft] = useState('')
-  const commands = useComposerExtensions(draft, setDraft, workingDirectory, (id) => {
+  const [pendingProfile, setPendingProfile] = useState('')
+  const profileRef = useRef('')
+  const profileSaveRef = useRef<Promise<unknown> | null>(null)
+  const [attachment, setAttachment] = useState<AgentInputImage | null>(null)
+  const [promptImages, setPromptImages] = useState<AgentInputImage[]>([])
+  const selectProfile = (id: string): void => {
+    profileRef.current = id
+    setPendingProfile(id)
     if (session) {
-      const next = { ...session, agentProfileId: id }
+      const next = { ...session, agentProfileId: id || undefined }
       selectedConversation.current!.session = next
       setSession(next)
+      profileSaveRef.current = (profileSaveRef.current || Promise.resolve())
+        .catch(() => {})
+        .then(() => window.tezbar.chatUpdateTitle(next.id, next.title, next.icon, id))
+        .catch(() => {
+          if (selectedConversation.current?.session?.id === next.id)
+            setSaveWarning(
+              'Could not save the agent profile. It will be saved with the next message.'
+            )
+        })
     }
-  })
-  const [attachment, setAttachment] = useState<AgentInputImage | null>(null)
+  }
+  const commands = useComposerExtensions(
+    draft,
+    setDraft,
+    workingDirectory,
+    selectProfile,
+    (images) => {
+      setAttachment(images[0] || null)
+      setPromptImages(images.slice(1, 4))
+    },
+    session?.id || boot.nonce
+  )
   const [capturing, setCapturing] = useState(false)
   const [preparing, setPreparing] = useState(false)
   const [uiError, setUiError] = useState<string | null>(null)
@@ -222,7 +249,7 @@ export default function AgentChatView({
             createdAt: next.createdAt,
             updatedAt: next.updatedAt,
             workingDirectory: next.workingDirectory,
-            agentProfileId: next.agentProfileId,
+            agentProfileId: next.agentProfileId || '',
           },
           turn,
         })
@@ -383,6 +410,9 @@ export default function AgentChatView({
     viewRevision.current++
     setDraft('')
     setAttachment(null)
+    setPromptImages([])
+    profileRef.current = ''
+    setPendingProfile('')
     setUiError(null)
     setSaveWarning(null)
     setHistoryOpen(false)
@@ -426,7 +456,11 @@ export default function AgentChatView({
   )
 
   const send = useCallback(
-    async (input: string, image?: AgentInputImage | null): Promise<void> => {
+    async (
+      input: string,
+      image?: AgentInputImage | null,
+      extra: AgentInputImage[] = []
+    ): Promise<void> => {
       const owner = selectedConversation.current!
       const text = input.trim()
       if (
@@ -448,7 +482,8 @@ export default function AgentChatView({
       owner.lastError = undefined
       try {
         await modelSaveRef.current
-        const fresh = await window.tezbar.getLlmConfig()
+        await profileSaveRef.current
+        const fresh = await window.tezbar.getLlmConfig(owner.workingDirectory)
         if (!mounted.current || owner.submission !== submission) return
         configRef.current = fresh
         setConfig(fresh)
@@ -469,6 +504,7 @@ export default function AgentChatView({
               createdAt: now,
               updatedAt: now,
               workingDirectory: owner.workingDirectory,
+              agentProfileId: profileRef.current || undefined,
               turns: [],
             }
         owner.session = current
@@ -479,24 +515,21 @@ export default function AgentChatView({
           role: 'user',
           text,
           createdAt: now,
-          attachments: image
-            ? [
-                {
-                  kind: 'image',
-                  name: 'Active screen',
-                  mimeType: image.mimeType,
-                  data: image.data,
-                  width: image.width,
-                  height: image.height,
-                },
-              ]
-            : undefined,
+          attachments: (image ? [image, ...extra] : extra).slice(0, 4).map((image) => ({
+            kind: 'image' as const,
+            name: 'Attached image',
+            mimeType: image.mimeType,
+            data: image.data,
+            width: image.width,
+            height: image.height,
+          })),
         }
         await persistTurn(userTurn, owner)
         if (!mounted.current || owner.submission !== submission) return
         if (selectedConversation.current === owner) {
           setDraft('')
           setAttachment(null)
+          setPromptImages([])
           followRef.current = true
           setFollowing(true)
         }
@@ -530,7 +563,7 @@ export default function AgentChatView({
     notifyConversation(owner)
     try {
       await modelSaveRef.current
-      const fresh = await window.tezbar.getLlmConfig()
+      const fresh = await window.tezbar.getLlmConfig(owner.workingDirectory)
       if (!mounted.current || owner.submission !== submission) return
       configRef.current = fresh
       setConfig(fresh)
@@ -641,7 +674,7 @@ export default function AgentChatView({
       const result = await window.tezbar.setLlmConfig(patch)
       if (result && !result.ok)
         throw new Error(result.error || 'Could not save the selected model.')
-      const fresh = await window.tezbar.getLlmConfig()
+      const fresh = await window.tezbar.getLlmConfig(owner.workingDirectory)
       configRef.current = fresh
       setConfig(fresh)
     })()
@@ -678,37 +711,27 @@ export default function AgentChatView({
         void send(boot.prompt)
       }
     }
-    const revision = viewRevision.current
     void refreshHistory()
-    void window.tezbar
-      .getLlmConfig()
-      .then((fresh) => {
-        if (!mounted.current || revision !== viewRevision.current) return
-        configRef.current = fresh
-        setConfig(fresh)
-      })
-      .catch((error) => {
-        if (mounted.current && revision === viewRevision.current)
-          setUiError(error instanceof Error ? error.message : 'Could not initialize the agent.')
-      })
     // Boot is an explicit navigation event, not a render-time object identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootKey])
 
   useEffect(() => {
     const reload = (): void => {
+      const revision = viewRevision.current
       void window.tezbar
-        .getLlmConfig()
+        .getLlmConfig(selectedConversation.current?.workingDirectory)
         .then((fresh) => {
-          if (mounted.current) {
+          if (mounted.current && revision === viewRevision.current) {
             configRef.current = fresh
             setConfig(fresh)
           }
         })
         .catch(() => {})
     }
+    reload()
     return window.tezbar.onLlmConfigChanged(reload)
-  }, [])
+  }, [workingDirectory])
   useEffect(() => {
     if (!busy) return
     const started = Date.now()
@@ -880,7 +903,7 @@ export default function AgentChatView({
   }
   const submit = (event: FormEvent): void => {
     event.preventDefault()
-    void send(draft, attachment)
+    void send(draft, attachment, promptImages)
   }
   const chatProvider = (config.taskProviderOverrides?.chat ??
     config.provider ??
@@ -930,6 +953,16 @@ export default function AgentChatView({
               onBeforeOpen={() => setHistoryOpen(false)}
             />
           </div>
+          {(session?.agentProfileId || pendingProfile) && (
+            <button
+              type="button"
+              className="max-w-32 truncate text-[11px] text-ink-2"
+              aria-label="Remove agent profile"
+              onClick={() => selectProfile('')}
+            >
+              {(session?.agentProfileId || pendingProfile).split('::').pop()} ×
+            </button>
+          )}
           <CommandSurfaceAction
             title="Chat history"
             aria-label="Chat history"
@@ -1201,10 +1234,16 @@ export default function AgentChatView({
                   type="button"
                   disabled={approvalBusy}
                   className={smallButton}
-                  title="Remember only this exact command"
+                  title={
+                    approval.rememberKind === 'tool'
+                      ? 'Remember this tool definition'
+                      : 'Remember only this exact command'
+                  }
                   onClick={() => void resolveApproval('always')}
                 >
-                  Always allow this command
+                  {approval.rememberKind === 'tool'
+                    ? 'Always allow this tool'
+                    : 'Always allow this command'}
                 </button>
               )}
             </div>
@@ -1229,6 +1268,7 @@ export default function AgentChatView({
 
         <form onSubmit={submit} className="shrink-0 px-3.5 pb-3.5 pt-2" aria-label="Agent composer">
           <div className="agent-composer mx-auto max-w-[780px] rounded-xl border border-white/[0.12] bg-white/[0.035] p-2 focus-within:border-white/25">
+            <ProjectExtensionNotice cwd={workingDirectory} onReview={onOpenSettings} />
             {commands.menu}
             {attachment ? (
               <div className="mb-2 flex items-center gap-3 px-2 pt-1">
@@ -1237,12 +1277,19 @@ export default function AgentChatView({
                   alt="Attached active screen"
                   className="h-12 w-20 rounded-lg object-cover"
                 />
-                <span className="flex-1 text-[11px] text-ink-3">Active screen</span>
+                <span className="flex-1 text-[11px] text-ink-3">
+                  {promptImages.length
+                    ? `${promptImages.length + 1} attached images`
+                    : 'Attached image'}
+                </span>
                 <button
                   type="button"
                   className={smallButton}
                   aria-label="Remove attached screen"
-                  onClick={() => setAttachment(null)}
+                  onClick={() => {
+                    setAttachment(null)
+                    setPromptImages([])
+                  }}
                 >
                   Remove
                 </button>

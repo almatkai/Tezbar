@@ -41,6 +41,23 @@ describe('isAiProviderConfigured', () => {
   })
 })
 
+it('does not infer Antigravity or OpenCode authentication from a model list', () => {
+  const config: LlmConfigRecord = {
+    providerModels: {
+      antigravity: [{ id: 'fixture', capabilities: ['tools'] }],
+      opencode: [{ id: 'fixture', capabilities: ['tools'] }],
+    },
+  }
+  expect(isAiProviderConfigured(config, 'antigravity')).toBe(false)
+  expect(isAiProviderConfigured(config, 'opencode')).toBe(false)
+  config.nativeProviderCredentials = {
+    antigravity: { hasValue: true, source: 'accounts' },
+    opencode: { hasValue: true, source: 'opencode' },
+  }
+  expect(isAiProviderConfigured(config, 'antigravity')).toBe(true)
+  expect(isAiProviderConfigured(config, 'opencode')).toBe(true)
+})
+
 describe('normalizeProviderModelList', () => {
   it('removes legacy context capability while preserving context window size', () => {
     const models = normalizeProviderModelList('deepseek', [
@@ -70,12 +87,7 @@ describe('normalizeProviderModelList', () => {
       { id: 'gpt-4.1', capabilities: ['tools'] },
     ])
 
-    expect(models.map((m) => m.id)).toEqual([
-      'gpt-5-mini',
-      'auto',
-      'claude-opus-4.5',
-      'gpt-4.1',
-    ])
+    expect(models.map((m) => m.id)).toEqual(['gpt-5-mini', 'auto', 'claude-opus-4.5', 'gpt-4.1'])
   })
 
   it('does not resurrect a recommended model the user removed', () => {

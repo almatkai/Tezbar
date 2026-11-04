@@ -7,14 +7,36 @@ export type AiConnection = {
   cwd?: string
   url?: string
   env?: Record<string, string | { secret: string; label?: string }>
-  auth?: { type: 'none' | 'token'; secret?: string }
+  auth?: {
+    type: 'none' | 'token' | 'oauth'
+    secret?: string
+    header?: string
+    clientId?: string
+    scopes?: string
+  }
   toolPolicy?: 'ask' | 'allowReadOnly' | 'allow'
   allowAllConfirmation?: string
   timeoutSeconds?: number
   tested?: boolean
   needsReview?: boolean
+  disabledTools?: Record<string, boolean>
+  error?: string
+  allowances?: Record<string, string>
+  modelNames?: Record<string, string>
+  previousCatalog?: {
+    tools?: {
+      name: string
+      description?: string
+      inputSchema?: { properties?: Record<string, unknown> }
+    }[]
+  }
   catalog?: {
-    tools?: { name: string; description?: string }[]
+    tools?: {
+      name: string
+      description?: string
+      inputSchema?: { properties?: Record<string, unknown> }
+    }[]
+    resources?: { name: string }[]
     prompts?: { name: string }[]
     warnings?: string[]
   }
@@ -24,8 +46,13 @@ export type AiExtension = {
   id: string
   name: string
   enabled?: boolean
+  error?: string
   connections: AiConnection[]
   instructions?: string
+  importWarnings?: string[]
+  commands?: { name: string; prompt: string }[]
+  agents?: { id: string; name: string; instructions: string; tools?: string[] }[]
+  providers?: { id: string; title: string; baseURL: string; protocol?: string }[]
   prompts?: {
     name: string
     title?: string
@@ -34,6 +61,13 @@ export type AiExtension = {
   }[]
 }
 export type AiExtensionsState = {
+  project?: {
+    folder: string
+    path: string
+    entryHash: string
+    error?: string
+    preview: AiExtension
+  }
   extensions: AiExtension[]
   globalInstructions: string
   useAgentsMd: boolean

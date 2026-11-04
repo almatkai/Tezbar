@@ -585,3 +585,53 @@ describe('agent conversation ownership', () => {
     vi.doUnmock('../useLauncherScaleShortcuts')
   })
 })
+
+it('selects a profile before the first turn and labels remembered extension tools', async () => {
+  Object.assign(api, {
+    aiExtensions: async (action: string) =>
+      action === 'composer-items'
+        ? [
+            {
+              extensionId: 'mine',
+              extensionName: 'Mine',
+              kind: 'agents',
+              name: 'reviewer',
+              id: 'mine::reviewer',
+            },
+          ]
+        : { extensions: [] },
+  })
+  await render()
+  const input = container.querySelector('textarea')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, '/')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await tick()
+  expect(container.querySelector('[role="listbox"]')).toBeTruthy()
+  await act(async () =>
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    )
+  )
+  expect(runs).toHaveLength(0)
+  expect(container.querySelector('[aria-label="Remove agent profile"]')?.textContent).toContain(
+    'reviewer'
+  )
+  await send('Review the fixture')
+  expect(runs[0]?.agentProfileId).toBe('mine::reviewer')
+  await emit({
+    type: 'approval',
+    runId: runs[0]!.runId!,
+    approvalId: 'tool-approval',
+    title: 'Allow Fixture to use read?',
+    command: '{}',
+    canRemember: true,
+    rememberKind: 'tool',
+  })
+  expect(
+    [...container.querySelectorAll('button')].some(
+      (b) => b.textContent?.trim() === 'Always allow this tool'
+    )
+  ).toBe(true)
+})

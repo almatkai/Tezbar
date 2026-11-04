@@ -228,7 +228,7 @@ export function initTauriBridge(): void {
     getSelectedVoiceModel: () => callBackend('voice:model:get-selected'),
     setSelectedVoiceModel: (modelId: any) => callBackend('voice:model:set-selected', { modelId }),
 
-    getLlmConfig: () => callBackend('llm-config-get'),
+    getLlmConfig: (cwd?: string) => callBackend('llm-config-get', cwd),
     setLlmConfig: (patch: any) => callBackend('llm-config-set', patch),
     getLlmProviderStatuses: () => callBackend('llm-provider-statuses'),
     listPiExtensions: () => callBackend('pi-extensions:list'),
@@ -401,6 +401,8 @@ export function initTauriBridge(): void {
     resumeKnowledgeIndexing: () => callBackend('knowledge:index:resume'),
     onKnowledgeStatus: (listener) => setupEventListener('knowledge:status', listener),
 
+    aiAccounts: (action, ...args) => callBackend(`ai-accounts:antigravity:${action}`, ...args),
+    onAiExtensionsChanged: (listener) => setupEventListener('ai-extensions-changed', listener),
     aiExtensions: (action, ...args) => callBackend(`ai-extensions:${action}`, ...args),
     agentRun: (request) => callBackend('agent:run', request),
     captureActiveScreen: async () => {
@@ -423,8 +425,8 @@ export function initTauriBridge(): void {
     chatList: (limit?: number) => callBackend('chat:list', limit),
     chatGet: (id: string) => callBackend('chat:get', id),
     chatAppend: (payload: any) => callBackend('chat:append', payload),
-    chatUpdateTitle: (id: string, title: string, icon?: string) =>
-      callBackend('chat:update-title', { id, title, icon }),
+    chatUpdateTitle: (id: string, title: string, icon?: string, agentProfileId?: string) =>
+      callBackend('chat:update-title', { id, title, icon, agentProfileId }),
     chatGenerateMeta: (payload: { id: string; prompt: string; answer?: string }) =>
       callBackend('chat:generate-meta', payload),
     chatDeleteTurn: (sessionId: string, turnId: string) =>

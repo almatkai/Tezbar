@@ -20,13 +20,17 @@ import { GlideList } from './ui/GlideList'
 const ROWS: { id: ProviderId; title: string; subtitle: string }[] = [
   { id: 'openai', title: 'OpenAI', subtitle: 'Chat Completions API or compatible' },
   { id: 'deepseek', title: 'DeepSeek', subtitle: 'DeepSeek-V4, V3, and R1 via the official API' },
-  { id: 'openai-compatible', title: 'OpenAI Compatible', subtitle: 'Any endpoint that speaks OpenAI Chat API' },
+  {
+    id: 'openai-compatible',
+    title: 'OpenAI Compatible',
+    subtitle: 'Any endpoint that speaks OpenAI Chat API',
+  },
   { id: 'tokenrouter', title: 'TokenRouter', subtitle: 'TokenRouter OpenAI-compatible gateway' },
-  { id: 'gemini', title: 'Gemini', subtitle: 'Google Gemini via OpenAI-compatible endpoint' },
+  { id: 'gemini', title: 'Gemini', subtitle: 'Google Gemini API' },
   { id: 'anthropic', title: 'Anthropic', subtitle: 'Claude via the official API' },
   { id: 'ollama', title: 'Ollama', subtitle: 'Local models running on this machine' },
   { id: 'copilot', title: 'GitHub Copilot', subtitle: 'PAT, OAuth, or device flow sign-in' },
-  { id: 'opencode', title: 'OpenCode', subtitle: 'opencode.ai via CLI' },
+  { id: 'opencode', title: 'OpenCode', subtitle: 'OpenCode API' },
 ]
 
 const DEFAULT_MODEL: Partial<Record<ProviderId, string>> = {
@@ -61,7 +65,9 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
   const [model, setModel] = useState('')
   const [copilotToken, setCopilotToken] = useState('')
   const [oauthClientId, setOauthClientId] = useState('')
-  const [msg, setMsg] = useState<{ tone: 'success' | 'error' | 'neutral'; text: string } | null>(null)
+  const [msg, setMsg] = useState<{ tone: 'success' | 'error' | 'neutral'; text: string } | null>(
+    null
+  )
   const [deviceBusy, setDeviceBusy] = useState(false)
   const [deviceUserCode, setDeviceUserCode] = useState('')
   const [modelOptions, setModelOptions] = useState<string[]>([])
@@ -130,6 +136,11 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
       patch.model = model.trim() || defaultModelForProvider(id)
     }
     if (id === 'opencode') {
+      patch.apiKey = apiKey
+      patch.providerConfigs = {
+        ...cfg.providerConfigs,
+        opencode: { ...cfg.providerConfigs?.opencode, apiKey },
+      }
       patch.model = model.trim() || defaultModelForProvider(id)
     }
     await window.tezbar.setLlmConfig(patch)
@@ -167,7 +178,10 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
         if (r.status === 'success') {
           setDeviceUserCode('')
           setMsg({ tone: 'success', text: 'GitHub sign-in complete' })
-          setCopilotToken(r.access_token)
+          const saved = await window.tezbar.getLlmConfig()
+          setCopilotToken(
+            saved.providerConfigs?.copilot?.copilotGithubToken || saved.copilotGithubToken || ''
+          )
           setOauthClientId(cid || r.client_id)
           await onReload()
           void loadModels()
@@ -221,7 +235,12 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
         />
       </div>
       <div className="glass-card min-h-0 flex-1 overflow-y-auto px-4 py-3 pr-[calc(0.5rem+2px)] animate-tezbar-scale-in">
-        {id === 'openai' || id === 'anthropic' || id === 'openai-compatible' || id === 'tokenrouter' || id === 'gemini' || id === 'deepseek' ? (
+        {id === 'openai' ||
+        id === 'anthropic' ||
+        id === 'openai-compatible' ||
+        id === 'tokenrouter' ||
+        id === 'gemini' ||
+        id === 'deepseek' ? (
           <div className="space-y-3">
             <div>
               <FieldLabel>API key</FieldLabel>
@@ -244,7 +263,9 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
               />
             </div>
             <div>
-              <FieldLabel>Base URL <span className="normal-case tracking-normal text-ink-4">(optional)</span></FieldLabel>
+              <FieldLabel>
+                Base URL <span className="normal-case tracking-normal text-ink-4">(optional)</span>
+              </FieldLabel>
               <TextField
                 value={baseURL}
                 onChange={(e) => setBaseURL(e.target.value)}
@@ -297,9 +318,18 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
 
         {id === 'opencode' ? (
           <div className="space-y-3">
+            <label className="block text-[12px] text-ink-3">
+              API key
+              <TextField
+                type="password"
+                autoComplete="off"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={cfg.nativeProviderCredentials?.opencode?.hasValue ? 'Saved' : ''}
+              />
+            </label>
             <p className="text-[12px] leading-relaxed text-ink-3">
-              Uses the local <code className="font-mono text-ink-2">opencode</code> CLI to access opencode.ai models.
-              Make sure the CLI is installed and configured.
+              Add a supported OpenCode API key. Free-tier chat requires OpenCode itself.
             </p>
             <ModelPicker
               id={id}
@@ -315,13 +345,15 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
         {id === 'copilot' ? (
           <div className="space-y-3">
             <p className="text-[12px] leading-relaxed text-ink-3">
-              Use a GitHub token with Copilot Chat access, or sign in via the built-in GitHub device flow.
-              Need to use your own OAuth app? Open{' '}
+              Use a GitHub token with Copilot Chat access, or sign in via the built-in GitHub device
+              flow. Need to use your own OAuth app? Open{' '}
               <button
                 type="button"
                 className="text-accent-strong underline-offset-2 transition hover:underline"
                 onClick={() =>
-                  void window.tezbar.openExternalUrl('https://github.com/settings/developers#oauth-apps')
+                  void window.tezbar.openExternalUrl(
+                    'https://github.com/settings/developers#oauth-apps'
+                  )
                 }
               >
                 developer settings
@@ -371,11 +403,7 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
               modelsLoading={modelsLoading}
               onRefresh={() => void loadModels()}
             />
-            <Button
-              disabled={deviceBusy}
-              onClick={() => void startDeviceSignIn()}
-              fullWidth
-            >
+            <Button disabled={deviceBusy} onClick={() => void startDeviceSignIn()} fullWidth>
               {deviceBusy ? 'Waiting for GitHub…' : 'Sign in with GitHub'}
             </Button>
           </div>
@@ -383,7 +411,9 @@ function ProviderDetail({ id, cfg, connected, onBack, onReload }: DetailProps): 
 
         {msg ? (
           <div className="mt-3">
-            <Message tone={msg.tone === 'success' ? 'success' : msg.tone === 'error' ? 'error' : 'neutral'}>
+            <Message
+              tone={msg.tone === 'success' ? 'success' : msg.tone === 'error' ? 'error' : 'neutral'}
+            >
               {msg.text}
             </Message>
           </div>
@@ -604,7 +634,15 @@ export default function ProvidersView({ onBack }: { onBack: () => void }): JSX.E
           </div>
           <div className="glass-card shrink-0 px-4 py-2 animate-tezbar-scale-in">
             <HintBar>
-              <Hint label="Navigate" keys={<><Kbd>↑</Kbd><Kbd>↓</Kbd></>} />
+              <Hint
+                label="Navigate"
+                keys={
+                  <>
+                    <Kbd>↑</Kbd>
+                    <Kbd>↓</Kbd>
+                  </>
+                }
+              />
               <Hint label="Open" keys={<Kbd>↵</Kbd>} />
               <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
             </HintBar>

@@ -1,3 +1,4 @@
+import { AiAccountsPanel } from './ai/AiAccountsPanel'
 import { AiExtensionsSection } from './ai/AiExtensionsSection'
 import {
   useCallback,
@@ -643,6 +644,9 @@ export default function SettingsView({
   const [actionRedactionEnabled, setActionRedactionEnabled] = useState(true)
   const [aiProvider, setAiProvider] = useState<ProviderId>('ollama')
   const [aiApiKey, setAiApiKey] = useState('')
+  const [nativeCredentials, setNativeCredentials] = useState<
+    LlmConfigRecord['nativeProviderCredentials']
+  >({})
   const [aiBaseURL, setAiBaseURL] = useState('')
   const [aiProviderConfigs, setAiProviderConfigs] = useState<
     Partial<Record<ProviderId, AiProviderConfig>>
@@ -802,6 +806,7 @@ export default function SettingsView({
 
   const reload = useCallback(async () => {
     const c = (await window.tezbar.getLlmConfig()) as LlmConfigRecord
+    setNativeCredentials(c.nativeProviderCredentials || {})
     setRunOnboardingNextLaunch(c.hasCompletedOnboarding === false)
     const provider = c.provider ?? 'ollama'
     const configuredProviders = c.customProviders ?? []
@@ -892,6 +897,16 @@ export default function SettingsView({
   useEffect(() => {
     void reload()
   }, [reload])
+  useEffect(
+    () =>
+      window.tezbar.onAiExtensionsChanged?.(() => {
+        void window.tezbar
+          .getLlmConfig()
+          .then((c) => setNativeCredentials(c.nativeProviderCredentials || {}))
+          .catch(() => {})
+      }),
+    []
+  )
 
   useEffect(() => {
     return () => {
@@ -1122,15 +1137,11 @@ export default function SettingsView({
         if (r.status === 'success') {
           setGithubDeviceUserCode('')
           setMsg({ tone: 'success', text: 'GitHub sign-in complete' })
-          setAiApiKey(r.access_token)
-          setAiProviderConfigs((prev) => ({
-            ...prev,
-            copilot: {
-              ...prev.copilot,
-              copilotGithubToken: r.access_token,
-              githubOAuthClientId: cid || r.client_id,
-            },
-          }))
+          const saved = await window.tezbar.getLlmConfig()
+          setAiApiKey(
+            saved.providerConfigs?.copilot?.copilotGithubToken || saved.copilotGithubToken || ''
+          )
+          setAiProviderConfigs(saved.providerConfigs || {})
           finished = true
           break
         }
@@ -2004,6 +2015,15 @@ export default function SettingsView({
                       const isActive = provider.id === activeAiProvider
                       const isSelected = provider.id === aiProvider
                       const isConfig = (() => {
+                        if (provider.id === 'antigravity')
+                          return nativeCredentials?.antigravity?.hasValue === true
+                        if (provider.id === 'opencode')
+                          return Boolean(
+                            (provider.id === aiProvider
+                              ? aiApiKey
+                              : aiProviderConfigs.opencode?.apiKey
+                            )?.trim() || nativeCredentials?.opencode?.hasValue
+                          )
                         if (provider.id === aiProvider) {
                           return isProviderConfigured(
                             aiProvider,
@@ -2152,22 +2172,20 @@ export default function SettingsView({
 
                     {/* Provider-specific config fields */}
                     <div className="space-y-3">
-                      {aiProvider === 'antigravity' ? (
-                        <div className="rounded-tezbar-row border border-sky-400/25 bg-sky-500/10 p-3 text-[12px] text-sky-200">
-                          Uses your linked Google Antigravity account. This unofficial integration
-                          is not endorsed by Google.
-                        </div>
-                      ) : null}
+                      {aiProvider === 'antigravity' ? <AiAccountsPanel /> : null}
 
                       {aiProvider !== 'ollama' && aiProvider !== 'antigravity' ? (
                         <SettingsRow
                           label={aiProvider === 'copilot' ? 'GitHub Token' : 'API Key'}
                           detail={
-                            aiProvider === 'copilot'
-                              ? 'Use a GitHub token or OAuth access token with Copilot Chat access.'
-                              : isCustomProvider(aiProvider) || aiProvider === 'openai-compatible'
-                                ? 'Optional. Stored in local config. Leave blank for local runners like model-runner or Ollama.'
-                                : 'Stored in the local Tezbar config and used by the selected provider.'
+                            aiProvider === 'opencode' &&
+                            nativeCredentials?.opencode?.source === 'opencode'
+                              ? "Found in OpenCode's settings"
+                              : aiProvider === 'copilot'
+                                ? 'Use a GitHub token or OAuth access token with Copilot Chat access.'
+                                : isCustomProvider(aiProvider) || aiProvider === 'openai-compatible'
+                                  ? 'Optional. Stored in local config. Leave blank for local runners like model-runner or Ollama.'
+                                  : 'Stored in the local Tezbar config and used by the selected provider.'
                           }
                         >
                           {aiProvider === 'copilot' ? (

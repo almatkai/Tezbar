@@ -18,22 +18,22 @@ const APPROVAL_OPTIONS: Array<{
   {
     id: 'review',
     title: 'Request Review',
-    subtitle: 'Every command requires approval.',
+    subtitle: 'Ask before every tool and command.',
   },
   {
     id: 'default',
     title: 'Default',
-    subtitle: 'Ask before sensitive operations.',
+    subtitle: 'Read in the working folder; ask before writes and other commands.',
   },
   {
     id: 'auto',
     title: 'Auto (Preview)',
-    subtitle: 'Automatically decide if commands run.',
+    subtitle: 'Read outside the folder and change files inside it.',
   },
   {
     id: 'turbo',
     title: 'Turbo',
-    subtitle: 'Run all commands without restrictions.',
+    subtitle: 'Change files outside the folder and run other commands.',
   },
 ]
 
@@ -101,9 +101,19 @@ export function ApprovalModePicker({
         <svg
           viewBox="0 0 16 16"
           aria-hidden="true"
-          className={cx('h-3 w-3 shrink-0 text-ink-4 transition-transform duration-150', open && 'rotate-180')}
+          className={cx(
+            'h-3 w-3 shrink-0 text-ink-4 transition-transform duration-150',
+            open && 'rotate-180'
+          )}
         >
-          <path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="m4 6 4 4 4-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </button>
 
@@ -133,8 +143,12 @@ export function ApprovalModePicker({
                 )}
               >
                 <div className="flex flex-col pr-2">
-                  <span className="text-[13px] font-medium text-ink-1 leading-snug">{option.title}</span>
-                  <span className="text-[11.5px] text-ink-3 leading-snug mt-0.5">{option.subtitle}</span>
+                  <span className="text-[13px] font-medium text-ink-1 leading-snug">
+                    {option.title}
+                  </span>
+                  <span className="text-[11.5px] text-ink-3 leading-snug mt-0.5">
+                    {option.subtitle}
+                  </span>
                 </div>
                 {isSelected ? (
                   <svg
@@ -155,6 +169,10 @@ export function ApprovalModePicker({
               </button>
             )
           })}
+          <p className="px-3 py-2 text-[11px] text-ink-3">
+            Sensitive files, destructive commands and complex shell syntax require review in every
+            mode. Extension tools follow their own settings.
+          </p>
         </section>
       ) : null}
     </div>

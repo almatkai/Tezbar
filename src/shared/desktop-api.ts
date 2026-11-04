@@ -85,7 +85,7 @@ export type GithubPollResult =
   | { status: 'slow_down' }
   | {
       status: 'success'
-      access_token: string
+      access_token?: string
       refresh_token?: string
       expires_in?: number
       client_id: string
@@ -255,7 +255,7 @@ export type RaymesApi = {
   onStreamToken: (listener: (token: string) => void) => () => void
   onStreamDone: (listener: () => void) => () => void
   onStreamError: (listener: (message: string) => void) => () => void
-  getLlmConfig: () => Promise<LlmConfigRecord>
+  getLlmConfig: (cwd?: string) => Promise<LlmConfigRecord>
   setLlmConfig: (patch: LlmConfigRecord) => Promise<void | HotkeyUpdateResult>
   getLlmProviderStatuses: () => Promise<ProviderConnectionStatuses>
   listPiExtensions: () => Promise<PiExtensionItem[]>
@@ -445,6 +445,8 @@ export type RaymesApi = {
     ) => void
   ) => () => void
   /** Kick off a pi-backed agent run. Events stream via `onAgentEvent`. */
+  aiAccounts: (action: string, ...args: unknown[]) => Promise<unknown>
+  onAiExtensionsChanged: (listener: () => void) => () => void
   aiExtensions: (action: string, ...args: unknown[]) => Promise<unknown>
   agentRun: (
     request: string | AgentRunRequest
@@ -476,7 +478,12 @@ export type RaymesApi = {
     >
     turn: ChatTurn
   }) => Promise<{ ok: boolean; error?: string }>
-  chatUpdateTitle: (id: string, title: string, icon?: string) => Promise<{ ok: boolean }>
+  chatUpdateTitle: (
+    id: string,
+    title: string,
+    icon?: string,
+    agentProfileId?: string
+  ) => Promise<{ ok: boolean }>
   chatGenerateMeta: (payload: {
     id: string
     prompt: string

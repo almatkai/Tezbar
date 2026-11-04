@@ -1,12 +1,15 @@
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useState, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { Button, TextField } from '../ui/primitives'
 import { extensionRequest as request } from './api'
+import type { AgentInputImage } from '../../shared/agent'
 import type { ComposerItem } from '../../shared/aiExtensions'
 export function useComposerExtensions(
   draft: string,
   setDraft: (text: string) => void,
   cwd: string | undefined,
-  onProfile: (id: string) => void
+  onProfile: (id: string) => void,
+  onImages?: (images: AgentInputImage[]) => void,
+  scope?: string
 ): {
   menu: ReactNode
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => boolean
@@ -18,42 +21,70 @@ export function useComposerExtensions(
   const [prompt, setPrompt] = useState<ComposerItem | null>(null)
   const [arguments_, setArguments] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
+  const generation = useRef(0)
+  const currentDraft = useRef(draft)
+  currentDraft.current = draft
   useEffect(() => {
-    if (typeof window.tezbar.aiExtensions === 'function')
-      void request<ComposerItem[]>('composer-items', cwd)
-        .then(setItems)
-        .catch(() => {})
-  }, [cwd])
+    generation.current++
+    setPrompt(null)
+    setError('')
+  }, [cwd, scope])
+  useEffect(() => {
+    let cancelled = false
+    setItems([])
+    const refresh = (): void => {
+      if (typeof window.tezbar.aiExtensions === 'function')
+        void request<ComposerItem[]>('composer-items', cwd)
+          .then((items) => {
+            if (!cancelled) setItems(items)
+          })
+          .catch(() => {})
+    }
+    refresh()
+    const unsubscribe = window.tezbar.onAiExtensionsChanged?.(refresh)
+    return () => {
+      cancelled = true
+      generation.current++
+      unsubscribe?.()
+    }
+  }, [cwd, scope])
   useEffect(() => {
     setIndex(0)
     setDismissed(false)
   }, [draft])
   const filtered =
-    !dismissed && /^\/[\w-]*$/.test(draft)
+    !dismissed && /^\/[\p{L}\p{N}_-]*$/u.test(draft)
       ? items.filter((i) => (i.name || '').toLowerCase().startsWith(draft.slice(1).toLowerCase()))
       : []
   const resolve = async (item: ComposerItem, args: Record<string, string>): Promise<void> => {
+    const requestId = ++generation.current
+    const originalDraft = draft
     try {
-      const result = await request<{ text: string }>(
+      const result = await request<{ text: string; images?: AgentInputImage[] }>(
         item.kind === 'resources' ? 'read-resource' : 'prompt-resolve',
-        item,
+        { ...item, cwd },
         args
       )
+      if (requestId !== generation.current || currentDraft.current !== originalDraft) return
       setDraft(result.text)
+      if (result.images?.length) onImages?.(result.images)
       setPrompt(null)
       setError('')
       document.getElementById('ai-chat-input')?.focus()
     } catch (e) {
+      if (requestId !== generation.current) return
       setError(e instanceof Error ? e.message : String(e))
     }
   }
   const choose = (item: ComposerItem): void => {
     if (item.kind === 'agents') {
+      generation.current++
       onProfile(item.id || item.name)
       setDraft('')
       return
     }
     if (item.arguments?.length) {
+      generation.current++
       setPrompt(item)
       setArguments({})
       setDismissed(true)
@@ -66,6 +97,7 @@ export function useComposerExtensions(
     if (event.key === 'Escape') {
       event.preventDefault()
       setDismissed(true)
+      generation.current++
       return true
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -98,7 +130,7 @@ export function useComposerExtensions(
                 id={`ai-command-${i}`}
                 key={`${item.extensionId}:${item.connectionId}:${item.kind}:${item.name}`}
                 aria-selected={i === index}
-                className={`block w-full px-3 py-1.5 text-left ${i === index ? 'bg-white/10 text-ink-1' : 'text-ink-2'}`}
+                className={`block w-full px-3 py-1.5 text-left ${i === index ? 'bg-ink-4/15 text-ink-1' : 'text-ink-2'}`}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => choose(item)}
               >
@@ -119,6 +151,13 @@ export function useComposerExtensions(
                   value={arguments_[arg.name] || ''}
                   onChange={(e) => setArguments((a) => ({ ...a, [arg.name]: e.target.value }))}
                   onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault()
+                      generation.current++
+                      setPrompt(null)
+                      document.getElementById('ai-chat-input')?.focus()
+                      return
+                    }
                     if (e.key !== 'Enter') return
                     e.preventDefault()
                     const next = e.currentTarget
@@ -131,11 +170,21 @@ export function useComposerExtensions(
               </label>
             ))}
             <Button onClick={() => void resolve(prompt, arguments_)}>Insert in draft</Button>
-            <Button variant="quiet" onClick={() => setPrompt(null)}>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                generation.current++
+                setPrompt(null)
+              }}
+            >
               Cancel
             </Button>
-            {error && <p role="alert">{error}</p>}
           </div>
+        )}
+        {error && (
+          <p role="alert" className="text-red-400">
+            {error}
+          </p>
         )}
       </>
     ),
