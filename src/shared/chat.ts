@@ -56,6 +56,7 @@ export interface ChatSession {
   updatedAt: number
   /** Directory where Pi starts for every agent turn in this conversation. */
   workingDirectory?: string
+  agentProfileId?: string
   turns: ChatTurn[]
 }
 

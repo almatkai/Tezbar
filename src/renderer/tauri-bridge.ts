@@ -401,6 +401,7 @@ export function initTauriBridge(): void {
     resumeKnowledgeIndexing: () => callBackend('knowledge:index:resume'),
     onKnowledgeStatus: (listener) => setupEventListener('knowledge:status', listener),
 
+    aiExtensions: (action, ...args) => callBackend(`ai-extensions:${action}`, ...args),
     agentRun: (request) => callBackend('agent:run', request),
     captureActiveScreen: async () => {
       const bytes = (await invoke('screenshot')) as number[]

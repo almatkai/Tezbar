@@ -44,6 +44,19 @@ export interface AgentRunRequest {
   /** Client-generated correlation id; lets the UI subscribe before submitting. */
   runId?: string
   task: string
+  sessionId?: string
+  userTurnId?: string
+  assistantTurnId?: string
+  priorTurnIds?: string[]
+  priorTurns?: {
+    id: string
+    role: 'user' | 'assistant'
+    text: string
+    error?: string
+    hasImages?: boolean
+  }[]
+  instructions?: string
+  agentProfileId?: string
   images?: AgentInputImage[]
   /** Allows text-only runtimes to reject history whose images cannot be represented. */
   historyHasImages?: boolean

@@ -3,7 +3,7 @@ import type { AiModelCapability, AiProviderModel, BuiltInProviderId, LlmConfigRe
 export const AI_PROVIDER_ROWS: Array<{ id: BuiltInProviderId; title: string; subtitle: string }> = [
   { id: 'openai', title: 'OpenAI', subtitle: 'Official OpenAI API' },
   { id: 'deepseek', title: 'DeepSeek', subtitle: 'DeepSeek V4 Flash and Pro' },
-  { id: 'antigravity', title: 'Antigravity', subtitle: 'Google Antigravity via Pi Agent' },
+  { id: 'antigravity', title: 'Antigravity', subtitle: 'Google Antigravity' },
   { id: 'openai-compatible', title: 'OpenAI Compatible', subtitle: 'Custom OpenAI-style endpoint' },
   { id: 'tokenrouter', title: 'TokenRouter', subtitle: 'TokenRouter OpenAI-compatible gateway' },
   { id: 'gemini', title: 'Gemini', subtitle: 'Google Gemini via OpenAI-compatible API' },
@@ -225,6 +225,8 @@ export function normalizeModelList(models: AiProviderModel[], fallbackId: string
             )
           : inferCapabilities(model.id),
       }
+      if (model.protocol) next.protocol = model.protocol
+      if (model.maxTokens) next.maxTokens = model.maxTokens
       if (typeof model.contextWindow === 'number' && Number.isFinite(model.contextWindow)) {
         next.contextWindow = Math.max(0, Math.round(model.contextWindow))
       }

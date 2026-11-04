@@ -22,22 +22,27 @@ export type ProviderId = BuiltInProviderId | `custom:${string}`
 
 export type LlmTask = 'chat' | 'search' | 'action' | 'voice'
 
+export type AiProtocol = 'openai-chat' | 'openai-responses' | 'anthropic' | 'gemini' | 'ollama'
+
 export type AiModelCapability = 'vision' | 'thinking' | 'tools'
 
 export type AiProviderModel = {
   id: string
   capabilities: AiModelCapability[]
   contextWindow?: number
-/** When false, the model was added by the user (not returned by live provider
- *  discovery). Provider-catalog REPLACE (copilot) keeps these entries across a
- *  refresh; entries without the flag or with `true` are treated as
- *  provider-owned and are dropped when they disappear from the live catalog. */
+  protocol?: AiProtocol
+  maxTokens?: number
+  /** When false, the model was added by the user (not returned by live provider
+   *  discovery). Provider-catalog REPLACE (copilot) keeps these entries across a
+   *  refresh; entries without the flag or with `true` are treated as
+   *  provider-owned and are dropped when they disappear from the live catalog. */
   discovered?: boolean
   /** When true, the model is hidden from the AI-mode model picker but kept in the Settings list. */
   hiddenFromPicker?: boolean
 }
 
 export type AiProviderConfig = {
+  protocol?: AiProtocol
   apiKey?: string
   baseURL?: string
   openaiCompatibleBaseURL?: string
@@ -50,6 +55,9 @@ export type CustomAiProvider = {
   id: `custom:${string}`
   title: string
   subtitle?: string
+  protocol?: AiProtocol
+  baseURL?: string
+  headers?: Record<string, string | { secret: string }>
 }
 
 export type LlmConfigRecord = {
@@ -88,7 +96,15 @@ export type LlmConfigRecord = {
   aiModeTimeoutMs?: number
   /** Milliseconds of inactivity before terminal mode returns to the main CommandBar. 0 disables it. */
   terminalModeTimeoutMs?: number
-  settingsInitialTab?: 'general' | 'ai' | 'voice' | 'knowledge' | 'extensions' | 'permissions' | 'storage' | 'advanced'
+  settingsInitialTab?:
+    | 'general'
+    | 'ai'
+    | 'voice'
+    | 'knowledge'
+    | 'extensions'
+    | 'permissions'
+    | 'storage'
+    | 'advanced'
   /** Set once the first-run onboarding tour has been completed or skipped. */
   hasCompletedOnboarding?: boolean
 }

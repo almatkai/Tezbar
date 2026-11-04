@@ -1,3 +1,4 @@
+import { useComposerExtensions } from './ai/ComposerExtensions'
 import { Chat, useChat } from '@ai-sdk/react'
 import {
   useCallback,
@@ -117,6 +118,13 @@ export default function AgentChatView({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [savingModel, setSavingModel] = useState(false)
   const [draft, setDraft] = useState('')
+  const commands = useComposerExtensions(draft, setDraft, workingDirectory, (id) => {
+    if (session) {
+      const next = { ...session, agentProfileId: id }
+      selectedConversation.current!.session = next
+      setSession(next)
+    }
+  })
   const [attachment, setAttachment] = useState<AgentInputImage | null>(null)
   const [capturing, setCapturing] = useState(false)
   const [preparing, setPreparing] = useState(false)
@@ -214,6 +222,7 @@ export default function AgentChatView({
             createdAt: next.createdAt,
             updatedAt: next.updatedAt,
             workingDirectory: next.workingDirectory,
+            agentProfileId: next.agentProfileId,
           },
           turn,
         })
@@ -1220,6 +1229,7 @@ export default function AgentChatView({
 
         <form onSubmit={submit} className="shrink-0 px-3.5 pb-3.5 pt-2" aria-label="Agent composer">
           <div className="agent-composer mx-auto max-w-[780px] rounded-xl border border-white/[0.12] bg-white/[0.035] p-2 focus-within:border-white/25">
+            {commands.menu}
             {attachment ? (
               <div className="mb-2 flex items-center gap-3 px-2 pt-1">
                 <img
@@ -1269,7 +1279,10 @@ export default function AgentChatView({
                 rows={1}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={enterToSubmit}
+                aria-activedescendant={commands.activeDescendant}
+                onKeyDown={(event) => {
+                  if (!commands.onKeyDown(event)) enterToSubmit(event)
+                }}
                 placeholder="Message Agent"
                 className="block max-h-[120px] min-h-7 min-w-0 flex-1 resize-none bg-transparent px-1 py-1 text-[13px] leading-5 text-ink-1 outline-none placeholder:text-ink-4"
                 autoComplete="off"

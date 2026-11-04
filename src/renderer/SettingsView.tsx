@@ -1,3 +1,4 @@
+import { AiExtensionsSection } from './ai/AiExtensionsSection'
 import {
   useCallback,
   useEffect,
@@ -34,7 +35,6 @@ import type { KnowledgeDepth, KnowledgeRootDepth } from '../shared/knowledge'
 import { KnowledgeEmbeddingSettings } from './KnowledgeEmbeddingSettings'
 import { useKnowledgeSettings } from './useKnowledgeSettings'
 import { LauncherAppearanceSettings } from './LauncherAppearance'
-import type { PiExtensionItem } from '../shared/desktop-api'
 import {
   Button,
   cx,
@@ -49,7 +49,12 @@ import {
 import { CurrencySettings } from './CurrencySettings'
 import ExtensionsSettingsTab from './ExtensionsSettingsTab'
 import { AppUpdateSettings } from './AppUpdateSettings'
-import { applyTezbarTheme, isTezbarThemePreference, TEZBAR_THEME_STORAGE_KEY, type TezbarThemePreference } from './theme'
+import {
+  applyTezbarTheme,
+  isTezbarThemePreference,
+  TEZBAR_THEME_STORAGE_KEY,
+  type TezbarThemePreference,
+} from './theme'
 
 type SettingsTab =
   | 'general'
@@ -698,27 +703,6 @@ export default function SettingsView({
   // Mutation busy state must not lock out snapshot recovery.
   const [knowledgeBusy, setKnowledgeBusy] = useState(false)
   const [knowledgeMessage, setKnowledgeMessage] = useState<string | null>(null)
-  const [piExtensions, setPiExtensions] = useState<PiExtensionItem[]>([])
-  const [piExtensionsLoading, setPiExtensionsLoading] = useState(false)
-
-  const loadPiExtensions = useCallback(async () => {
-    setPiExtensionsLoading(true)
-    try {
-      const list = await window.tezbar.listPiExtensions()
-      setPiExtensions(list)
-    } catch {
-      /* ignore */
-    } finally {
-      setPiExtensionsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (activeTab === 'ai') {
-      void loadPiExtensions()
-    }
-  }, [activeTab, loadPiExtensions])
-
   const loadAiModels = useCallback(
     async (provider: ProviderId, baseURLOverride?: string, apiKeyOverride?: string) => {
       setAiModelsLoading(true)
@@ -940,7 +924,6 @@ export default function SettingsView({
     return () => window.clearTimeout(timer)
   }, [aiBaseURL, aiProvider, loadAiModels])
 
-
   const saveHotkey = useCallback(async (accelerator: string) => {
     try {
       const result = await window.tezbar.setLlmConfig({ raymesHotkey: accelerator })
@@ -1058,10 +1041,11 @@ export default function SettingsView({
                 apiKey,
                 baseURL: baseURL || defaultBaseUrl(provider),
               }
-    const providerConfigs: Partial<Record<ProviderId, AiProviderConfig>> = overrides?.providerConfigs ?? {
-      ...aiProviderConfigs,
-      [provider]: providerConfig,
-    }
+    const providerConfigs: Partial<Record<ProviderId, AiProviderConfig>> =
+      overrides?.providerConfigs ?? {
+        ...aiProviderConfigs,
+        [provider]: providerConfig,
+      }
 
     const activeProvider = overrides?.activeProvider ?? activeAiProvider
     const activeModel = providerSelectedModels[activeProvider] ?? recommendedModel(activeProvider)
@@ -1290,7 +1274,12 @@ export default function SettingsView({
       id = `custom:${slug}-${suffix}`
       suffix += 1
     }
-    const provider: CustomAiProvider = { id, title, subtitle: 'Custom OpenAI-compatible endpoint' }
+    const provider: CustomAiProvider = {
+      id,
+      title,
+      subtitle: 'Custom provider',
+      protocol: 'openai-chat',
+    }
     const nextCustomList = [...customProviders, provider]
     const nextModels = { ...aiProviderModels, [id]: [] }
     const nextSelected = { ...aiProviderSelectedModels, [id]: '' }
@@ -1367,9 +1356,7 @@ export default function SettingsView({
       fallbackConfig.baseURL ??
       defaultBaseUrl(nextCurrent)
     const nextModel =
-      nextSelected[nextCurrent] ??
-      nextModels[nextCurrent]?.[0]?.id ??
-      recommendedModel(nextCurrent)
+      nextSelected[nextCurrent] ?? nextModels[nextCurrent]?.[0]?.id ?? recommendedModel(nextCurrent)
 
     setAiApiKey(nextKey)
     setAiBaseURL(nextBase)
@@ -1495,7 +1482,8 @@ export default function SettingsView({
         const target = e.target as HTMLElement | null
         // Let native controls handle Enter; preventing it also prevents button
         // activation and select interaction in the Knowledge settings.
-        if (target?.closest('button, select, [role="button"], [role="radio"], [role="switch"]')) return
+        if (target?.closest('button, select, [role="button"], [role="radio"], [role="switch"]'))
+          return
         if (target && target.tagName === 'TEXTAREA') return
         if (target && target.getAttribute('placeholder') === 'Add model id') return
         // The add-provider dialog handles its own Enter (adds the provider).
@@ -1982,7 +1970,9 @@ export default function SettingsView({
                         )}
                       />
                       {themePreference === mode.id ? (
-                        <span className="theme-choice__check absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black leading-none">✓</span>
+                        <span className="theme-choice__check absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black leading-none">
+                          ✓
+                        </span>
                       ) : null}
                       {mode.label}
                     </button>
@@ -2010,62 +2000,62 @@ export default function SettingsView({
                     AI Providers
                   </div>
                   <div className="space-y-1 overflow-y-auto flex-1 min-h-0 pr-1">
-                      {availableProviders.map((provider) => {
-                        const isActive = provider.id === activeAiProvider
-                        const isSelected = provider.id === aiProvider
-                        const isConfig = (() => {
-                          if (provider.id === aiProvider) {
-                            return isProviderConfigured(
-                              aiProvider,
-                              aiApiKey,
-                              aiBaseURL,
-                              currentAiModels
-                            )
-                          }
-                          return checkProviderConfigured(
-                            provider.id,
-                            aiProviderConfigs,
-                            aiProviderModels
+                    {availableProviders.map((provider) => {
+                      const isActive = provider.id === activeAiProvider
+                      const isSelected = provider.id === aiProvider
+                      const isConfig = (() => {
+                        if (provider.id === aiProvider) {
+                          return isProviderConfigured(
+                            aiProvider,
+                            aiApiKey,
+                            aiBaseURL,
+                            currentAiModels
                           )
-                        })()
-
-                        return (
-                          <button
-                            key={provider.id}
-                            type="button"
-                            onClick={() => selectAiProvider(provider.id)}
-                            className={cx(
-                              'w-full flex items-center justify-between px-2.5 py-2 rounded-tezbar-row border text-[12px] transition text-left',
-                              isSelected
-                                ? 'border-accent/45 bg-accent/10 text-ink-1'
-                                : 'border-transparent text-ink-3 hover:bg-white/[0.04] hover:text-ink-2'
-                            )}
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-semibold truncate">{provider.title}</span>
-                                {isActive ? (
-                                  <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-1 py-[1px] text-[8px] font-semibold text-emerald-300">
-                                    Active
-                                  </span>
-                                ) : null}
-                              </div>
-                              <span className="text-[10px] text-ink-4 block truncate mt-0.5">
-                                {provider.subtitle}
-                              </span>
-                            </div>
-
-                            <span
-                              className={cx(
-                                'ml-2 h-2.5 w-2.5 rounded-full shrink-0 border border-black/20',
-                                isConfig ? 'bg-emerald-400' : 'bg-amber-400'
-                              )}
-                              title={isConfig ? 'Configured' : 'Setup required'}
-                            />
-                          </button>
+                        }
+                        return checkProviderConfigured(
+                          provider.id,
+                          aiProviderConfigs,
+                          aiProviderModels
                         )
-                      })}
-                    </div>
+                      })()
+
+                      return (
+                        <button
+                          key={provider.id}
+                          type="button"
+                          onClick={() => selectAiProvider(provider.id)}
+                          className={cx(
+                            'w-full flex items-center justify-between px-2.5 py-2 rounded-tezbar-row border text-[12px] transition text-left',
+                            isSelected
+                              ? 'border-accent/45 bg-accent/10 text-ink-1'
+                              : 'border-transparent text-ink-3 hover:bg-white/[0.04] hover:text-ink-2'
+                          )}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold truncate">{provider.title}</span>
+                              {isActive ? (
+                                <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-1 py-[1px] text-[8px] font-semibold text-emerald-300">
+                                  Active
+                                </span>
+                              ) : null}
+                            </div>
+                            <span className="text-[10px] text-ink-4 block truncate mt-0.5">
+                              {provider.subtitle}
+                            </span>
+                          </div>
+
+                          <span
+                            className={cx(
+                              'ml-2 h-2.5 w-2.5 rounded-full shrink-0 border border-black/20',
+                              isConfig ? 'bg-emerald-400' : 'bg-amber-400'
+                            )}
+                            title={isConfig ? 'Configured' : 'Setup required'}
+                          />
+                        </button>
+                      )
+                    })}
+                  </div>
 
                   {/* Add Custom Provider */}
                   <div className="pt-2 mt-2 border-t border-white/[0.07] shrink-0">
@@ -2133,10 +2123,7 @@ export default function SettingsView({
 
                       <div className="flex items-center gap-2">
                         {isCustomProvider(aiProvider) ? (
-                          <Button
-                            variant="danger"
-                            onClick={() => removeCustomProvider(aiProvider)}
-                          >
+                          <Button variant="danger" onClick={() => removeCustomProvider(aiProvider)}>
                             Remove provider
                           </Button>
                         ) : null}
@@ -2165,23 +2152,14 @@ export default function SettingsView({
 
                     {/* Provider-specific config fields */}
                     <div className="space-y-3">
-                      {aiProvider === 'opencode' ? (
-                        <div className="p-3 rounded-tezbar-row border border-blue-500/10 bg-blue-500/5 text-[12px] text-ink-2">
-                          Uses the local{' '}
-                          <code className="font-mono bg-white/[0.05] px-1 py-0.5 rounded">
-                            opencode
-                          </code>{' '}
-                          CLI. Ensure that you have it installed and configured on your machine.
-                        </div>
-                      ) : null}
-
                       {aiProvider === 'antigravity' ? (
                         <div className="rounded-tezbar-row border border-sky-400/25 bg-sky-500/10 p-3 text-[12px] text-sky-200">
-                          Uses your authenticated Google account managed by Pi Agent (~/.pi/agent/auth.json). Gemini and Claude models are available without an API key.
+                          Uses your linked Google Antigravity account. This unofficial integration
+                          is not endorsed by Google.
                         </div>
                       ) : null}
 
-                      {aiProvider !== 'ollama' && aiProvider !== 'opencode' && aiProvider !== 'antigravity' ? (
+                      {aiProvider !== 'ollama' && aiProvider !== 'antigravity' ? (
                         <SettingsRow
                           label={aiProvider === 'copilot' ? 'GitHub Token' : 'API Key'}
                           detail={
@@ -2267,7 +2245,9 @@ export default function SettingsView({
                         </SettingsRow>
                       ) : null}
 
-                      {aiProvider !== 'copilot' && aiProvider !== 'opencode' && aiProvider !== 'antigravity' ? (
+                      {aiProvider !== 'copilot' &&
+                      aiProvider !== 'opencode' &&
+                      aiProvider !== 'antigravity' ? (
                         <SettingsRow
                           label="Base URL"
                           detail={
@@ -2501,65 +2481,8 @@ export default function SettingsView({
                 </div>
               </SettingsRow>
 
-              {/* Pi Agent Extensions */}
               <Divider />
-              <div className="rounded-tezbar-row border border-white/10 bg-white/[0.015] p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-[13px] font-semibold text-ink-1">Pi Agent Extensions</h3>
-                      <span className="rounded-tezbar-chip border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300">
-                        {piExtensions.length} active
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-ink-3 mt-0.5">
-                      Installed packages and extension scripts loaded by the local Pi agent runtime.
-                    </p>
-                  </div>
-                  <Button variant="quiet" disabled={piExtensionsLoading} onClick={() => void loadPiExtensions()}>
-                    {piExtensionsLoading ? 'Refreshing…' : 'Refresh'}
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
-                  {piExtensions.map((ext) => (
-                    <div
-                      key={ext.id}
-                      className="flex flex-col justify-between rounded-tezbar-row border border-white/[0.07] bg-white/[0.025] p-3 transition hover:border-white/15"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
-                            <span className="font-semibold text-[12px] text-ink-1 truncate">{ext.name}</span>
-                          </div>
-                          <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9.5px] font-mono text-ink-3 shrink-0">
-                            {ext.version}
-                          </span>
-                        </div>
-                        {ext.description ? (
-                          <p className="text-[11px] text-ink-3 mt-1.5 line-clamp-2 leading-relaxed">
-                            {ext.description}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      {ext.features && ext.features.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 mt-2.5 pt-2 border-t border-white/[0.04]">
-                          {ext.features.map((feature, idx) => (
-                            <span
-                              key={idx}
-                              className="rounded-tezbar-chip bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 text-[9px] font-medium text-ink-2"
-                            >
-                              {feature}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <AiExtensionsSection />
 
               {/* AI settings now autosave — no global button. */}
               <div className="mt-4 flex items-center">
@@ -3103,9 +3026,7 @@ export default function SettingsView({
                   <div className="rounded-tezbar-row border border-white/[0.07] bg-white/[0.02] p-3 opacity-60">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[12px] font-semibold text-ink-2">Tezbar Cloud</p>
-                      <span className="text-[11px] text-ink-4">
-                        Coming later
-                      </span>
+                      <span className="text-[11px] text-ink-4">Coming later</span>
                     </div>
                     <p className="mt-1 text-[10.5px] leading-snug text-ink-4">
                       Disabled. Files are never uploaded.

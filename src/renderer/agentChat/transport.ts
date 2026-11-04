@@ -2,7 +2,8 @@ import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai'
 import type { AgentInputImage, AgentRunEvent, Stage } from '../../shared/agent'
 import type { ChatResponseMeta, ChatSession, ChatTurn } from '../../shared/chat'
 import type { RaymesApi } from '../../shared/desktop-api'
-import { buildAgentPromptFromChat, makeChatId } from './model'
+import { makeChatId } from './model'
+import { CHAT_CONTEXT_MAX_TURNS } from '../../shared/chat'
 
 export type AgentMessageData = {
   stage: Stage
@@ -134,7 +135,9 @@ export function createNativeAgentTransport(
       const turns = messages
         .slice(0, lastUserIndex + 1)
         .map((message) => agentMessageToTurn(message))
-      const task = buildAgentPromptFromChat({ ...context.session, turns }, prompt)
+      const task = prompt
+      const assistantTurnId =
+        trigger === 'regenerate-message' && messageId ? messageId : makeChatId()
       const images: AgentInputImage[] = lastUser.parts.flatMap((part) => {
         if (part.type !== 'file') return []
         const match = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/s.exec(part.url)
@@ -148,7 +151,9 @@ export function createNativeAgentTransport(
         priorMessages.some((message) => message.parts.some((part) => part.type === 'file')) ||
         context.session.turns.some((turn) => priorIds.has(turn.id) && !!turn.attachments?.length)
       if (lastUser.parts.filter((part) => part.type === 'file').length !== images.length)
-        throw new Error('Unsupported attachment. Attach a PNG, JPEG or WebP image with embedded data.')
+        throw new Error(
+          'Unsupported attachment. Attach a PNG, JPEG or WebP image with embedded data.'
+        )
       const runId = `agent-${makeChatId()}`
       let cancel = (): void => {}
       const stream = new ReadableStream<UIMessageChunk>({
@@ -221,7 +226,7 @@ export function createNativeAgentTransport(
           }, 30_000)
           emit({
             type: 'start',
-            messageId: trigger === 'regenerate-message' && messageId ? messageId : makeChatId(),
+            messageId: assistantTurnId,
             messageMetadata: {
               ...context.responseMeta,
               sessionId: context.session.id,
@@ -286,6 +291,31 @@ export function createNativeAgentTransport(
               return api.agentRun({
                 runId,
                 task,
+                sessionId: context.session.id,
+                agentProfileId: context.session.agentProfileId,
+                userTurnId: lastUser.id,
+                assistantTurnId,
+                priorTurnIds: turns
+                  .slice(0, -1)
+                  .slice(-CHAT_CONTEXT_MAX_TURNS)
+                  .map((turn) => turn.id),
+                priorTurns: turns
+                  .slice(0, -1)
+                  .slice(-CHAT_CONTEXT_MAX_TURNS)
+                  .map((turn) => ({
+                    id: turn.id,
+                    role: turn.role,
+                    text: turn.text,
+                    error: turn.error,
+                    hasImages:
+                      !!context.session.turns.find((saved) => saved.id === turn.id)?.attachments
+                        ?.length ||
+                      priorMessages.some(
+                        (message) =>
+                          message.id === turn.id &&
+                          message.parts.some((part) => part.type === 'file')
+                      ),
+                  })),
                 cwd: context.session.workingDirectory,
                 images: images.length ? images : undefined,
                 ...(historyHasImages ? { historyHasImages: true } : {}),

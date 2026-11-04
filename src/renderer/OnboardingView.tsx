@@ -710,98 +710,6 @@ function buildProviderPatch(
   return patch
 }
 
-function PiRow(): JSX.Element {
-  const [status, setStatus] = useState<'checking' | 'ready' | 'missing' | 'installing'>('checking')
-  const [version, setVersion] = useState<string | undefined>()
-  const [failure, setFailure] = useState<{ text: string; url?: string } | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    window.tezbar
-      .checkPiAgent()
-      .then((result) => {
-        if (cancelled) return
-        setStatus(result.installed ? 'ready' : 'missing')
-        setVersion(result.version)
-      })
-      .catch(() => {
-        if (!cancelled) setStatus('missing')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const install = async (): Promise<void> => {
-    setStatus('installing')
-    setFailure(null)
-    try {
-      const result = await window.tezbar.installPiAgent()
-      if (result.ok) {
-        setVersion(result.version)
-        setStatus('ready')
-        return
-      }
-      setStatus('missing')
-      setFailure({
-        text:
-          result.reason === 'no-package-manager'
-            ? 'Installing Pi needs Node.js (npm), which isn’t on this machine.'
-            : result.error,
-        url: result.officialUrl,
-      })
-    } catch (error) {
-      setStatus('missing')
-      setFailure({ text: error instanceof Error ? error.message : 'The install didn’t finish.' })
-    }
-  }
-
-  return (
-    <div className="rounded-tezbar-row border border-white/[0.07] bg-white/[0.02] px-4 py-3">
-      <div className="flex items-center gap-3">
-        <span
-          className={cx(
-            'h-2 w-2 shrink-0 rounded-full',
-            status === 'ready' ? 'bg-emerald-400' : status === 'missing' ? 'bg-amber-300' : 'bg-ink-4 animate-pulse'
-          )}
-          aria-hidden
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-[12.5px] font-medium text-ink-1">Pi agent</p>
-          <p className="text-[11.5px] text-ink-3">
-            {status === 'checking'
-              ? `Looking for Pi on ${MACHINE}…`
-              : status === 'installing'
-                ? 'Installing @mariozechner/pi-coding-agent… this can take a minute.'
-                : status === 'ready'
-                  ? `Installed${version ? `, version ${version}` : ''}. Tezbar will use it for AI chat.`
-                  : 'Not installed. Tezbar can install it with npm.'}
-          </p>
-        </div>
-        {status === 'missing' || status === 'installing' ? (
-          <Button variant="ghost" onClick={() => void install()} disabled={status === 'installing'}>
-            {status === 'installing' ? 'Installing…' : 'Install Pi'}
-          </Button>
-        ) : null}
-      </div>
-      {failure ? (
-        <div className="mt-2 flex items-start justify-between gap-3 pl-5">
-          <p className="line-clamp-2 text-[11.5px] leading-snug text-rose-300">{failure.text}</p>
-          {failure.url ? (
-            <button
-              type="button"
-              className="shrink-0 text-[11.5px] text-accent-strong underline-offset-2 hover:underline"
-              onClick={() => void window.tezbar.openExternalUrl(failure.url as string)}
-            >
-              Install instructions
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
 function AiStep({ onSummary }: { onSummary: (summary: StepSummary) => void }): JSX.Element {
   const [config, setConfig] = useState<LlmConfigRecord | null>(null)
   const [connected, setConnected] = useState<{ provider: ProviderId; model: string } | null>(null)
@@ -877,7 +785,6 @@ function AiStep({ onSummary }: { onSummary: (summary: StepSummary) => void }): J
       </StepHeading>
 
       <div className="mt-5 space-y-3">
-        <PiRow />
 
         {connected && !editing ? (
           <div className="onboarding-cycle-in flex items-center gap-3 rounded-tezbar-row border border-emerald-400/20 bg-emerald-400/[0.05] px-4 py-3">

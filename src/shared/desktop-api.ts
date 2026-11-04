@@ -445,6 +445,7 @@ export type RaymesApi = {
     ) => void
   ) => () => void
   /** Kick off a pi-backed agent run. Events stream via `onAgentEvent`. */
+  aiExtensions: (action: string, ...args: unknown[]) => Promise<unknown>
   agentRun: (
     request: string | AgentRunRequest
   ) => Promise<{ ok: boolean; runId?: string; error?: string }>
@@ -469,7 +470,10 @@ export type RaymesApi = {
   chatList: (limit?: number) => Promise<ChatSessionSummary[]>
   chatGet: (id: string) => Promise<ChatSession | null>
   chatAppend: (payload: {
-    session: Pick<ChatSession, 'id' | 'title' | 'icon' | 'createdAt' | 'updatedAt' | 'workingDirectory'>
+    session: Pick<
+      ChatSession,
+      'id' | 'title' | 'icon' | 'createdAt' | 'updatedAt' | 'workingDirectory' | 'agentProfileId'
+    >
     turn: ChatTurn
   }) => Promise<{ ok: boolean; error?: string }>
   chatUpdateTitle: (id: string, title: string, icon?: string) => Promise<{ ok: boolean }>
