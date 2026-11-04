@@ -318,13 +318,13 @@ saves. Full TypeScript suite: 918 passed, 9 skipped; typecheck and frontend buil
 passed. Exact native/renderer sources and logs are in the verification record.
 This follow-up also remains pending fresh Opus 5.5 closure.
 
-## Full Opus closure audits at `1623d47` — follow-up repairs pending
+## Full Opus closure audits at `1623d47` — original finding inventory
 
 All three Claude Opus 5.5 audits completed after the account-limit reset. The
 unchanged reports are `native-ai-opus-{wire,runtime,standards}-1623d47.md`.
 They close the original P0/P1/P2 findings and previous repairs on their reported
-triggers. Eighteen concrete P3 variants remain; the migration is not declared
-complete. S1, S7 and S10 include unproven platform effects and require regression
+triggers. Eighteen concrete P3 variants remained at that audit; their repairs and final
+validation are recorded below. The migration is not declared complete. S1, S7 and S10 include unproven platform effects and require regression
 probes rather than assumptions. Every other finding has call-path or fixture
 evidence in its report.
 
@@ -381,3 +381,23 @@ DPAPI codes were checked against current primary Microsoft documentation:
 and [Winerror security codes](https://learn.microsoft.com/en-us/windows/win32/com/com-error-codes-4).
 Only the two explicitly classified permanent codes permit reset; corruption can
 produce other codes, which remain refused rather than being guessed permanent.
+
+
+### Exact-source validation of the eighteen repairs
+
+Final implementation `21d3e911a03bbea64ffb39324d6822ca343f9ad7` passed all
+required gates: macOS Rust 606 passed / 9 existing ignores; Windows Rust 536
+passed / 8 existing ignores; renderer 926 passed / 9 existing skips; typecheck,
+frontend build, Rust 1.85 offline lib check and backend lifecycle check passed.
+No bug was skipped or ignored to pass. The Windows stage verified all 1,781
+tracked files against the final commit's full SHA-256 manifest before
+building, then rechecked non-generated inputs afterward, using a cached immutable
+archive plus committed overlay, not a newly transferred full archive. Exact tree/hash identities, platform commands, retained
+logs and limitations are in [NATIVE_AI_VERIFICATION.md](../NATIVE_AI_VERIFICATION.md).
+
+This ledger and verification update are a **docs-only follow-up** to that tested
+implementation. All eighteen implementation dispositions remain **pending the
+parent's fresh targeted Claude Opus 5.5 re-review**, including regressions on the
+touched wire/redaction, MCP/security/process and Settings/runtime paths. None of
+the original completed audit reports was changed. Overall migration completion
+is not declared.

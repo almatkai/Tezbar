@@ -1,5 +1,135 @@
 # Native AI implementation verification
 
+## Eighteen closure-audit repairs — final source `21d3e91`
+
+Validated implementation: `21d3e911a03bbea64ffb39324d6822ca343f9ad7`, tree
+`ef522242f9f06e69ae7b501b0dae2c8727d32461`, on existing
+`feat/native-rust-agent` in `/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent`.
+Started clean at `31bc3e29879e54c24725da2bc77a1454d406c168`, the docs-only
+successor of reviewed `1623d47`. Authorized base remains `e246752149dbbede5e44720a0e35a3eacf2d66a9`
+(`v0.3.0-beta.7`); no branch, worktree, origin/main or dev transition was made.
+This verification/ledger follow-up changes **documentation only after that tested
+source**. All code and build inputs remain byte-identical to `21d3e91`.
+
+All eighteen N-W1–N-W5, S1–S10 and C-R1–C-R3 findings have implementation repairs
+and permanent regression evidence in the [repair ledger](reviews/NATIVE_AI_REVIEW_FIXES.md).
+**Fresh targeted Claude Opus 5.5 review of all eighteen repairs and touched-path
+regressions remains required with the parent. This is not overall migration
+closure, reviewer sign-off or release approval.** The three completed
+`native-ai-opus-{wire,standards,runtime}-1623d47.md` reports are unchanged
+(`git diff --quiet 31bc3e2..21d3e91 --` those three reports succeeds).
+
+Implementation commits: `5dddcb4` (eighteen repairs), `c4b8888` (destroy even if
+launcher restoration fails), `96a55cf` (unique revocation archives/rollback),
+`74c13ed` (shared Settings ordering and deterministic Windows fixtures),
+`21d3e91` (cache unchanged redaction regexes to preserve the bounded stderr tail).
+No delegation, push, PR, release, Actions, app installation/launch, production
+profile/key read, paid model call or third-party MCP service was used. Tests used
+fixture profiles/keys, loopback servers and owned processes. One bounded XERJ
+attempt returned an irrelevant hit; subsequent searches used rg/direct paths,
+without index repair.
+
+### macOS Apple Silicon — 2026-11-04/05
+
+All checks below cover final implementation `21d3e91`. A full-file SHA-256
+manifest comparison also verified all 1,781 tracked worktree files against that
+committed archive after the checks; no source edits occurred during the final
+runs. Tests were serialized with respect to native builds.
+
+| Required check | Final observed result |
+| --- | --- |
+| `pnpm typecheck` | Pass |
+| `pnpm test` | 926 passed, 9 existing skips, 0 failed; 125 files passed, 2 skipped |
+| `pnpm build:frontend` | Pass |
+| `CARGO_BUILD_JOBS=2 cargo +1.98.0 test --manifest-path src-tauri/Cargo.toml --lib --locked -- --test-threads=2` | 606 passed, 9 existing ignores, 0 failed; 154.49 s |
+| `CARGO_BUILD_JOBS=2 cargo +1.85.0 check --manifest-path src-tauri/Cargo.toml --lib --locked --offline` | Pass |
+| `RUSTUP_TOOLCHAIN=1.98.0 CARGO_BUILD_JOBS=2 node scripts/check-backend-lifecycle.mjs` | 1 passed, 0 failed |
+| `git diff --check` | Pass |
+
+Final local logs:
+
+- `/private/tmp/tezbar-18-final-typecheck.log`
+- `/private/tmp/tezbar-18-final-ts.log`
+- `/private/tmp/tezbar-18-final-frontend.log`
+- `/private/tmp/tezbar-18-final-macos.log`
+- `/private/tmp/tezbar-18-final-msrv.log`
+- `/private/tmp/tezbar-18-final-lifecycle.log`
+
+### Windows x64 — exact committed files, 2026-11-05
+
+Authorized SSH host `User@100.77.254.64` (`DESKTOP-OB83S8J`), Rust 1.90.0,
+`CARGO_BUILD_JOBS=2`, `--test-threads=2`. Unique stage:
+`C:\Users\User\AppData\Local\Temp\tezbar-native-c7271bc-20261104\rev-21d3e91-closure18`.
+The release checkout `C:\Users\User\Desktop\Tezbar` was not edited or used for
+these builds; no Windows git worktree was created.
+
+Staging used the verified cached immutable `8f70d2e` archive plus a `git archive`
+overlay of all 31 changed tracked files through `21d3e91` (zero deleted paths).
+**This was full final-file manifest verification, not transfer or hashing of a
+new full source archive.** Before building, Windows verified every one of the
+1,781 expected tracked files against the final committed snapshot and refused
+unexpected files. After building, all 1,775 non-generated tracked inputs were
+rechecked. `pnpm build:backend` regenerates six tracked `dist-backend/` paths,
+so post-build verification excludes that generated output directory. The full
+pre-build check includes it.
+
+| Item | SHA-256 / identity |
+| --- | --- |
+| Cached `source-8f70d2e.tar.gz` | `cb6c63ca3f2440ca896ce5454d333b6043bdd7411028a2a40e2a26ae89749f0a` |
+| `overlay-21d3e91.tar.gz` | `92700ed97cc1dacdf10050172941270ec3aec753ed4aa726ad73c09b7ddce414` |
+| `manifest-21d3e91.json` | `e0b472a777a05aec9065e9d0378134f4c8ebc33c6b55dc773d8965add56b0270` |
+| Manifest commit | `21d3e911a03bbea64ffb39324d6822ca343f9ad7` |
+| Manifest tree | `ef522242f9f06e69ae7b501b0dae2c8727d32461` |
+
+The stage installed dependencies with frozen/offline pnpm and `--ignore-scripts`,
+built backend resources, then ran non-test `cargo check --manifest-path
+src-tauri/Cargo.toml --lib --locked` and the full corresponding `cargo test`
+command. Both passed. Full Windows suite: **536 passed, 8 existing ignores,
+0 failed, 102.66 s, exit 0**. The two focused startup-tail regressions also passed
+independently before the full run.
+
+The full run includes actual DPAPI wrong-entropy decryption failure and explicit
+archive/reset; a sharing-denied key replacement that preserves key, ciphertext
+and revocations; compiled exact argv recording through relative exe/cmd/PATHEXT
+paths; trailing backslashes, spaces, empty/following arguments; and the gated
+in-flight MCP call, independent Test probe and retired-client disable cases.
+Windows owned Job tests remain enabled. No new skips or ignores were added.
+
+Retained local Windows evidence:
+
+- `/private/tmp/tezbar-18-21d3e91-windows.log` — manifest identity and full run result
+- `/private/tmp/tezbar-18-post-build.log` — post-build non-generated input verification
+- `/private/tmp/tezbar-18-windows-21d3e91-logs/rust-check.log`
+- `/private/tmp/tezbar-18-windows-21d3e91-logs/rust-full.log`
+- `/private/tmp/tezbar-18-windows-21d3e91-logs/startup-focused.log`
+- `/private/tmp/tezbar-18-windows-21d3e91-logs/failed-start-focused.log`
+
+### Failures investigated and remaining limits
+
+Earlier Windows runs exposed invalid-parameter (87) from a deliberately truncated
+DPAPI blob; that code correctly remains refused. The permanent-failure fixture
+now protects a structurally valid blob with wrong entropy and exercises actual
+CryptUnprotectData through the production key loader. A timing-based slow-call
+fixture was replaced with an explicit owned release gate. More significantly,
+Windows proved that compiling six scrub regexes per line consumed the stderr
+drain grace and lost the traceback tail; caching the identical patterns repaired
+that production path. Both modern/cached-era startup regressions now pass on
+Windows. Early local test assertion/harness errors were corrected, and two
+launcher recovery deadline failures occurred in overlapping exploratory runs;
+the final serialized complete suite passes without changing those tests or
+quarantining bugs. Only final-source results above are acceptance evidence.
+
+No desktop window was launched. C-R1 hide/restore/destroy ordering and C-R2's
+native unacknowledged-close fallback are source-verified against pinned Tauri
+2.11.2; renderer tests exercise the real bridge, acknowledgements, long writes,
+failed saves, default consumer, Permissions and remounted save queues, not OS
+window/event delivery. Actual NAT64/intranet and upstream provider acceptance
+remain untested; resolver-policy and loopback fixtures establish Tezbar's side.
+Windows OCR remains unsupported as documented. No new provider/model fallback
+was added. The parent's fresh Opus review remains the next required gate.
+
+## Historical verification — `8f70d2e` / `ae2fe00`
+
 Native validation source: `8f70d2e7cf7beac2129155402587b82fded9c35b` on
 `feat/native-rust-agent`, in the existing
 `/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent` worktree.
